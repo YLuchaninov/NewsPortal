@@ -1,0 +1,18 @@
+{
+  "name": "@newsportal/fetchers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "run:once": "node --import tsx src/cli/run-once.ts",
+    "start": "node --import tsx src/main.ts",
+    "test:rss-smoke": "node --import tsx src/cli/test-rss-smoke.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@newsportal/contracts": "workspace:*",
+    "fastify": "^5.6.0",
+    "imapflow": "^1.2.13",
+    "pg": "^8.16.3"
+  }
+}

@@ -1,0 +1,36 @@
+services:
+  postgres:
+    env_file:
+      - ../../.env.dev
+
+  redis:
+    env_file:
+      - ../../.env.dev
+
+  migrate:
+    env_file:
+      - ../../.env.dev
+
+  relay:
+    env_file:
+      - ../../.env.dev
+
+  fetchers:
+    env_file:
+      - ../../.env.dev
+
+  worker:
+    env_file:
+      - ../../.env.dev
+
+  api:
+    env_file:
+      - ../../.env.dev
+
+  web:
+    env_file:
+      - ../../.env.dev
+
+  admin:
+    env_file:
+      - ../../.env.dev

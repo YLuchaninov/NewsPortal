@@ -1,0 +1,299 @@
+---
+import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { APP_SHELL_STYLES, formatScore } from "@newsportal/ui";
+
+import { resolveWebSession } from "../lib/server/auth";
+
+export const prerender = false;
+const session = await resolveWebSession(Astro.request);
+const runtimeConfig = readRuntimeConfig(import.meta.env);
+const sdk = createNewsPortalSdk({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  fetchImpl: fetch
+});
+
+const articles = await sdk.listArticles<Array<Record<string, unknown>>>();
+const interests = session ? await sdk.listInterests<Array<Record<string, unknown>>>(session.userId) : [];
+const notifications = session
+  ? await sdk.listNotifications<Array<Record<string, unknown>>>(session.userId)
+  : [];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{DEFAULT_BRAND_CONFIG.productName} Web MVP</title>
+    <style is:global>{APP_SHELL_STYLES}</style>
+  </head>
+  <body>
+    <main>
+      <div class="np-shell">
+        <section class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient};`}>
+          <p class="np-subtle">User-facing local MVP</p>
+          <h1 class="np-heading">{DEFAULT_BRAND_CONFIG.productName}</h1>
+          <p>{DEFAULT_BRAND_CONFIG.tagline}</p>
+          {
+            session ? (
+              <div>
+                <span class="np-pill">userId: {session.userId}</span>
+                <span class="np-pill">provider: {session.identity.provider}</span>
+                <span class="np-pill">anonymous: {String(session.identity.isAnonymous)}</span>
+                <form method="post" action="/api/auth/logout" style="margin-top: 16px;">
+                  <button type="submit" class="np-button secondary">Sign Out</button>
+                </form>
+              </div>
+            ) : (
+              <div class="np-grid two" style="align-items: start;">
+                <div>
+                  <p class="np-subtle">
+                    Anonymous Firebase bootstrap is required before interests, reactions, and
+                    notification channels become writable.
+                  </p>
+                  <button id="bootstrap-session" class="np-button" type="button">
+                    Start Anonymous Session
+                  </button>
+                </div>
+                <div class="np-card">
+                  <strong>Local MVP behavior</strong>
+                  <p class="np-subtle">
+                    The page stays server-rendered, while session bootstrap happens via the BFF.
+                  </p>
+                </div>
+              </div>
+            )
+          }
+        </section>
+
+        <section class="np-grid two">
+          <article class="np-card">
+            <h2>Interests</h2>
+            {
+              session ? (
+                <>
+                  <form method="post" action="/api/interests">
+                    <label>
+                      Description
+                      <textarea name="description" rows="3" placeholder="AI policy updates in the EU"></textarea>
+                    </label>
+                    <label>
+                      Positive prototypes
+                      <textarea name="positive_texts" rows="4" placeholder="EU AI Act&#10;Brussels regulation"></textarea>
+                    </label>
+                    <label>
+                      Negative prototypes
+                      <textarea name="negative_texts" rows="3" placeholder="sports&#10;celebrity gossip"></textarea>
+                    </label>
+                    <label>
+                      Places
+                      <input name="places" placeholder="Brussels, Warsaw" />
+                    </label>
+                    <label>
+                      Languages
+                      <input name="languages_allowed" value="en" />
+                    </label>
+                    <label>
+                      Priority
+                      <input name="priority" type="number" value="1" min="0.1" max="1" step="0.1" />
+                    </label>
+                    <input type="submit" value="Create Interest" />
+                  </form>
+                  <div style="margin-top: 20px;">
+                    {interests.length === 0 ? (
+                      <p class="np-subtle">No interests yet.</p>
+                    ) : (
+                      interests.map((interest) => (
+                        <article class="np-card" style="margin-top: 12px;">
+                          <strong>{String(interest.description ?? "Untitled interest")}</strong>
+                          <div class="np-subtle">
+                            status: {String(interest.compile_status ?? "pending")} | version:{" "}
+                            {String(interest.version ?? "-")}
+                          </div>
+                          <form method="post" action={`/api/interests/${interest.interest_id}`}>
+                            <input type="hidden" name="enabled" value={String(!(interest.enabled === true))} />
+                            <input
+                              type="hidden"
+                              name="_action"
+                              value="update"
+                            />
+                            <button type="submit" class="np-button secondary">
+                              {interest.enabled === true ? "Disable" : "Enable"}
+                            </button>
+                          </form>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p class="np-subtle">Bootstrap a session first.</p>
+              )
+            }
+          </article>
+
+          <article class="np-card">
+            <h2>Preferences & Channels</h2>
+            {
+              session ? (
+                <>
+                  <form method="post" action="/api/preferences">
+                    <label>
+                      Theme preference
+                      <select name="themePreference">
+                        <option value="system">System</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                      </select>
+                    </label>
+                    <input type="submit" value="Save Theme" />
+                  </form>
+                  <form method="post" action="/api/notification-channels" style="margin-top: 18px;">
+                    <input type="hidden" name="channelType" value="telegram" />
+                    <label>
+                      Telegram chat ID
+                      <input name="chatId" placeholder="123456789" />
+                    </label>
+                    <input type="submit" value="Connect Telegram" />
+                  </form>
+                  <form method="post" action="/api/notification-channels">
+                    <input type="hidden" name="channelType" value="email_digest" />
+                    <label>
+                      Digest email
+                      <input
+                        name="email"
+                        value={session.identity.email ?? ""}
+                        placeholder="user@example.com"
+                      />
+                    </label>
+                    <input type="submit" value="Connect Email Digest" />
+                  </form>
+                </>
+              ) : (
+                <p class="np-subtle">Session required.</p>
+              )
+            }
+          </article>
+        </section>
+
+        <section class="np-card">
+          <h2>Matched News Feed</h2>
+          <div class="np-grid two">
+            {articles.map((article) => (
+              <article class="np-card">
+                <div>
+                  <span class="np-pill">{String(article.lang ?? "n/a")}</span>
+                  <span class="np-pill">{String(article.processing_state ?? "raw")}</span>
+                  <span class="np-pill">{String(article.visibility_state ?? "visible")}</span>
+                </div>
+                <h3>{String(article.title ?? "Untitled article")}</h3>
+                <p class="np-subtle">{String(article.lead ?? "")}</p>
+                <p class="np-subtle">
+                  likes: {String(article.like_count ?? 0)} | dislikes: {String(article.dislike_count ?? 0)}
+                </p>
+                {session ? (
+                  <div class="np-grid two">
+                    <form method="post" action="/api/reactions">
+                      <input type="hidden" name="docId" value={String(article.doc_id)} />
+                      <input type="hidden" name="reactionType" value="like" />
+                      <input type="submit" value="Like" />
+                    </form>
+                    <form method="post" action="/api/reactions">
+                      <input type="hidden" name="docId" value={String(article.doc_id)} />
+                      <input type="hidden" name="reactionType" value="dislike" />
+                      <input type="submit" value="Dislike" />
+                    </form>
+                  </div>
+                ) : null}
+                <a href={`${runtimeConfig.publicApiBaseUrl}/articles/${String(article.doc_id)}`} target="_blank">
+                  Open raw article payload
+                </a>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section class="np-card">
+          <h2>Notification History</h2>
+          {session ? (
+            notifications.length === 0 ? (
+              <p class="np-subtle">No notifications yet.</p>
+            ) : (
+              <table class="np-table">
+                <thead>
+                  <tr>
+                    <th>Article</th>
+                    <th>Channel</th>
+                    <th>Status</th>
+                    <th>Decision</th>
+                    <th>Feedback</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notifications.map((notification) => (
+                    <tr>
+                      <td>{String(notification.article_title ?? notification.doc_id)}</td>
+                      <td>{String(notification.channel_type ?? "-")}</td>
+                      <td>{String(notification.status ?? "-")}</td>
+                      <td>{String(notification.decision_reason ?? "-")}</td>
+                      <td>
+                        <div class="np-grid two">
+                          <form method="post" action="/api/feedback">
+                            <input type="hidden" name="notificationId" value={String(notification.notification_id)} />
+                            <input type="hidden" name="docId" value={String(notification.doc_id)} />
+                            <input type="hidden" name="interestId" value={String(notification.interest_id ?? "")} />
+                            <input type="hidden" name="feedbackValue" value="helpful" />
+                            <button type="submit" class="np-button secondary">Helpful</button>
+                          </form>
+                          <form method="post" action="/api/feedback">
+                            <input type="hidden" name="notificationId" value={String(notification.notification_id)} />
+                            <input type="hidden" name="docId" value={String(notification.doc_id)} />
+                            <input type="hidden" name="interestId" value={String(notification.interest_id ?? "")} />
+                            <input type="hidden" name="feedbackValue" value="not_helpful" />
+                            <button type="submit" class="np-button secondary">Not Helpful</button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          ) : (
+            <p class="np-subtle">Sign in anonymously to see notification history.</p>
+          )}
+        </section>
+
+        <section class="np-card">
+          <h2>Explainability</h2>
+          <p class="np-subtle">
+            Open the API explain payload for any article and inspect criterion scores, interest scores,
+            LLM review logs, and notification records in one place.
+          </p>
+          <div>
+            {articles.slice(0, 5).map((article) => (
+              <a class="np-pill" href={`${runtimeConfig.publicApiBaseUrl}/articles/${String(article.doc_id)}/explain`} target="_blank">
+                explain {String(article.doc_id).slice(0, 8)}
+              </a>
+            ))}
+          </div>
+          <p class="np-subtle">Formatting helper example: current top score {formatScore(Number(articles[0]?.like_count ?? 0))}</p>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const button = document.getElementById("bootstrap-session");
+      if (button) {
+        button.addEventListener("click", async () => {
+          const response = await fetch("/api/auth/bootstrap", {
+            method: "POST"
+          });
+          if (response.ok) {
+            window.location.reload();
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

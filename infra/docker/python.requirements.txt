@@ -1,0 +1,9 @@
+bullmq==2.19.6
+fastapi==0.116.1
+hnswlib==0.8.0
+numpy==2.3.3
+psycopg[binary]==3.2.9
+pywebpush==2.0.3
+redis==6.4.0
+sentence-transformers==5.1.2
+uvicorn[standard]==0.35.0

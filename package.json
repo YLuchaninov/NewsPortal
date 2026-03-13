@@ -1,0 +1,40 @@
+{
+  "name": "news-portal",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "check:scaffold": "node infra/scripts/check-scaffold.mjs",
+    "db:migrate": "pnpm --filter @newsportal/relay migrate",
+    "db:seed:outbox-smoke": "pnpm --filter @newsportal/relay seed:outbox-smoke",
+    "fetch:rss:once": "pnpm --filter @newsportal/fetchers run:once",
+    "index:check:event-cluster-centroids": "PYTHONPATH=. python -m services.indexer.app.main check-event-cluster-centroids",
+    "index:check:interest-centroids": "PYTHONPATH=. python -m services.indexer.app.main check-interest-centroids",
+    "index:rebuild:event-cluster-centroids": "PYTHONPATH=. python -m services.indexer.app.main rebuild-event-cluster-centroids",
+    "index:rebuild:interest-centroids": "PYTHONPATH=. python -m services.indexer.app.main rebuild-interest-centroids",
+    "test:criterion-compile:smoke": "PYTHONPATH=. python -m services.workers.app.smoke criterion-compile",
+    "test:criterion-compile:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke criterion-compile",
+    "test:cluster-match-notify:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke cluster-match-notify",
+    "test:cluster-match-notify:smoke": "PYTHONPATH=. python -m services.workers.app.smoke cluster-match-notify",
+    "test:embed:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke embed",
+    "test:embed:smoke": "PYTHONPATH=. python -m services.workers.app.smoke embed",
+    "test:ingest:compose": "docker compose -f infra/docker/compose.yml exec -T fetchers pnpm --filter @newsportal/fetchers test:rss-smoke",
+    "test:interest-compile:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke interest-compile",
+    "test:migrations:smoke": "pnpm --filter @newsportal/relay test:migrations",
+    "test:normalize-dedup:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke normalize-dedup",
+    "test:normalize-dedup:smoke": "PYTHONPATH=. python -m services.workers.app.smoke normalize-dedup",
+    "test:interest-compile:smoke": "PYTHONPATH=. python -m services.workers.app.smoke interest-compile",
+    "test:relay": "pnpm --filter @newsportal/relay test:relay",
+    "test:relay:phase45:compose": "docker compose -f infra/docker/compose.yml exec -T relay pnpm --filter @newsportal/relay test:phase45-routing",
+    "test:relay:phase3": "pnpm --filter @newsportal/relay test:phase3-routing",
+    "test:relay:compose": "docker compose -f infra/docker/compose.yml exec -T relay pnpm --filter @newsportal/relay test:relay",
+    "test:relay:phase3:compose": "docker compose -f infra/docker/compose.yml exec -T relay pnpm --filter @newsportal/relay test:phase3-routing",
+    "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.7",
+    "@types/node": "^24.0.1",
+    "@types/pg": "^8.15.6",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  }
+}

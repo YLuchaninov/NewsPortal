@@ -29,6 +29,8 @@ Icon?
 .direnv/
 !.env.example
 !.env*.example
+.env.dev
+.env.prod
 !**/.env.example
 !**/.env*.example
 

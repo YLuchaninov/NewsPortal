@@ -1,0 +1,30 @@
+services:
+  relay:
+    env_file:
+      - ../../.env.prod
+    restart: unless-stopped
+
+  fetchers:
+    env_file:
+      - ../../.env.prod
+    restart: unless-stopped
+
+  worker:
+    env_file:
+      - ../../.env.prod
+    restart: unless-stopped
+
+  api:
+    env_file:
+      - ../../.env.prod
+    restart: unless-stopped
+
+  web:
+    env_file:
+      - ../../.env.prod
+    restart: unless-stopped
+
+  admin:
+    env_file:
+      - ../../.env.prod
+    restart: unless-stopped

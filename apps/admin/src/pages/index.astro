@@ -1,0 +1,273 @@
+---
+import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { APP_SHELL_STYLES } from "@newsportal/ui";
+
+import { resolveAdminSession } from "../lib/server/auth";
+
+export const prerender = false;
+const runtimeConfig = readRuntimeConfig(import.meta.env);
+const session = await resolveAdminSession(Astro.request);
+const sdk = createNewsPortalSdk({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  fetchImpl: fetch
+});
+
+const [summary, channels, clusters, articles, reindexJobs, llmTemplates, interestTemplates] =
+  session
+    ? await Promise.all([
+        sdk.getDashboardSummary<Record<string, unknown>>(),
+        sdk.listChannels<Array<Record<string, unknown>>>(),
+        sdk.listClusters<Array<Record<string, unknown>>>(),
+        sdk.listArticles<Array<Record<string, unknown>>>(),
+        sdk.listReindexJobs<Array<Record<string, unknown>>>(),
+        sdk.listLlmTemplates<Array<Record<string, unknown>>>(),
+        sdk.listInterestTemplates<Array<Record<string, unknown>>>()
+      ])
+    : [null, [], [], [], [], [], []];
+const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{DEFAULT_BRAND_CONFIG.productName} Admin MVP</title>
+    <style is:global>{APP_SHELL_STYLES}</style>
+  </head>
+  <body>
+    <main>
+      <div class="np-shell">
+        <section class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient};`}>
+          <p class="np-subtle">Operational console</p>
+          <h1 class="np-heading">{DEFAULT_BRAND_CONFIG.productName} Admin</h1>
+          {
+            session ? (
+              <div>
+                <span class="np-pill">admin userId: {session.userId}</span>
+                <span class="np-pill">roles: {session.roles.join(", ") || "none"}</span>
+                <form method="post" action="/api/auth/logout" style="margin-top: 16px;">
+                  <button type="submit" class="np-button secondary">Sign Out</button>
+                </form>
+              </div>
+            ) : (
+              <form method="post" action="/api/auth/sign-in" class="np-card">
+                <label>
+                  Admin email
+                  <input name="email" type="email" placeholder="admin@example.com" />
+                </label>
+                <label>
+                  Password
+                  <input name="password" type="password" />
+                </label>
+                <input type="submit" value="Sign In with Firebase" />
+                <p class="np-subtle">
+                  The Firebase identity must map to a local `admin` role in PostgreSQL.
+                </p>
+              </form>
+            )
+          }
+        </section>
+
+        {
+          session ? (
+            <>
+              <section class="np-grid two">
+                <article class="np-card">
+                  <h2>KPI</h2>
+                  <div class="np-grid two">
+                    <div><strong>{String(summary?.active_news ?? 0)}</strong><br />Active news</div>
+                    <div><strong>{String(summary?.processed_total ?? 0)}</strong><br />Processed total</div>
+                    <div><strong>{String(summary?.processed_today ?? 0)}</strong><br />Processed today</div>
+                    <div><strong>{String(summary?.total_users ?? 0)}</strong><br />Total users</div>
+                  </div>
+                </article>
+
+                <article class="np-card">
+                  <h2>Reindex</h2>
+                  <form method="post" action="/api/admin/reindex">
+                    <label>
+                      Index name
+                      <select name="indexName">
+                        <option value="interest_centroids">interest_centroids</option>
+                      </select>
+                    </label>
+                    <input type="submit" value="Queue Reindex" />
+                  </form>
+                  <div style="margin-top: 16px;">
+                    {adminReindexJobs.map((job) => (
+                      <div class="np-pill">
+                        {String(job.index_name)}: {String(job.status)}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </section>
+
+              <section class="np-grid two">
+                <article class="np-card">
+                  <h2>Channels</h2>
+                  <form method="post" action="/api/admin/channels">
+                    <label>
+                      Provider
+                      <select name="providerType">
+                        <option value="rss">RSS</option>
+                        <option value="website">Website</option>
+                        <option value="api">API</option>
+                        <option value="email_imap">Email IMAP</option>
+                      </select>
+                    </label>
+                    <label>
+                      Name
+                      <input name="name" placeholder="Reuters World RSS" />
+                    </label>
+                    <label>
+                      Fetch URL
+                      <input name="fetchUrl" placeholder="https://example.com/feed.xml" />
+                    </label>
+                    <label>
+                      Language
+                      <input name="language" value="en" />
+                    </label>
+                    <input type="submit" value="Create Channel" />
+                  </form>
+                  <table class="np-table" style="margin-top: 18px;">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Provider</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {channels.map((channel) => (
+                        <tr>
+                          <td>{String(channel.name)}</td>
+                          <td>{String(channel.provider_type)}</td>
+                          <td>{channel.is_active === true ? "active" : "paused"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </article>
+
+                <article class="np-card">
+                  <h2>Prompt & Interest Templates</h2>
+                  <form method="post" action="/api/admin/templates">
+                    <input type="hidden" name="kind" value="llm" />
+                    <label>
+                      Template name
+                      <input name="name" placeholder="Gray zone review" />
+                    </label>
+                    <label>
+                      Scope
+                      <select name="scope">
+                        <option value="interests">interests</option>
+                        <option value="criteria">criteria</option>
+                        <option value="global">global</option>
+                      </select>
+                    </label>
+                    <label>
+                      Template text
+                      <textarea
+                        name="templateText"
+                        rows="6"
+                        placeholder='Return JSON {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}'
+                      ></textarea>
+                    </label>
+                    <input type="submit" value="Save LLM Template" />
+                  </form>
+                  <form method="post" action="/api/admin/templates" style="margin-top: 18px;">
+                    <input type="hidden" name="kind" value="interest" />
+                    <label>
+                      Interest template name
+                      <input name="name" placeholder="AI policy" />
+                    </label>
+                    <label>
+                      Description
+                      <textarea name="description" rows="3"></textarea>
+                    </label>
+                    <label>
+                      Positive prototypes
+                      <textarea name="positive_texts" rows="3"></textarea>
+                    </label>
+                    <label>
+                      Negative prototypes
+                      <textarea name="negative_texts" rows="3"></textarea>
+                    </label>
+                    <input type="submit" value="Save Interest Template" />
+                  </form>
+                  <p class="np-subtle" style="margin-top: 16px;">
+                    Active LLM templates: {llmTemplates.length} | active interest templates: {interestTemplates.length}
+                  </p>
+                </article>
+              </section>
+
+              <section class="np-grid two">
+                <article class="np-card">
+                  <h2>Recent Articles</h2>
+                  <table class="np-table">
+                    <thead>
+                      <tr>
+                        <th>Title</th>
+                        <th>State</th>
+                        <th>Moderation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {articles.slice(0, 10).map((article) => (
+                        <tr>
+                          <td>
+                            <div>{String(article.title)}</div>
+                            <div class="np-subtle">{String(article.lead ?? "")}</div>
+                          </td>
+                          <td>{String(article.processing_state)}</td>
+                          <td>
+                            <div class="np-grid two">
+                              <form method="post" action="/api/admin/moderation">
+                                <input type="hidden" name="docId" value={String(article.doc_id)} />
+                                <input type="hidden" name="actionType" value="block" />
+                                <button type="submit" class="np-button secondary">Block</button>
+                              </form>
+                              <form method="post" action="/api/admin/moderation">
+                                <input type="hidden" name="docId" value={String(article.doc_id)} />
+                                <input type="hidden" name="actionType" value="unblock" />
+                                <button type="submit" class="np-button secondary">Unblock</button>
+                              </form>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </article>
+
+                <article class="np-card">
+                  <h2>Clusters</h2>
+                  <table class="np-table">
+                    <thead>
+                      <tr>
+                        <th>Cluster</th>
+                        <th>Articles</th>
+                        <th>Places</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clusters.map((cluster) => (
+                        <tr>
+                          <td>{String(cluster.primary_title ?? cluster.cluster_id)}</td>
+                          <td>{String(cluster.article_count ?? 0)}</td>
+                          <td>{Array.isArray(cluster.top_places) ? cluster.top_places.join(", ") : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </article>
+              </section>
+            </>
+          ) : null
+        }
+      </div>
+    </main>
+  </body>
+</html>
