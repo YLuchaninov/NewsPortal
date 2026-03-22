@@ -190,9 +190,9 @@ export async function resolveWebSession(request: Request): Promise<(AuthSession 
 }
 
 export function buildSessionCookie(value: string): string {
-  return `${WEB_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`;
+  return `${WEB_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
 }
 
 export function buildExpiredSessionCookie(): string {
-  return `${WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 }

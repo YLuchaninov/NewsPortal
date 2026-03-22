@@ -1,0 +1,167 @@
+version: 21
+mode: Minimal
+initialized: true
+core:
+  style: compact-strict-polished-blueprint-capability-planning
+  installed_files:
+    - AGENTS.md
+    - docs/work.md
+    - docs/blueprint.md
+    - docs/verification.md
+    - docs/history.md
+    - .aidp/os.yaml
+coordination:
+  multi_agent_allowed: false
+planning:
+  requirements_driven_capability_design: true
+  capabilities_can_span_multiple_stages: true
+  stages_must_be_planned_separately: true
+  stage_done_is_not_capability_complete: true
+  create_next_stage_before_implementation_when_needed: true
+project:
+  name: newsportal
+  placeholder_values_present: false
+  shape: polyglot-monorepo
+  runtime_surfaces:
+    - apps/web
+    - apps/admin
+    - services/fetchers
+    - services/relay
+    - services/api
+    - services/workers
+    - services/ml
+    - services/indexer
+  delivery_surfaces:
+    - infra/docker/compose.yml
+    - infra/docker/compose.dev.yml
+    - infra/docker/compose.prod.yml
+    - infra/nginx/default.conf
+    - README.md
+  entry_points:
+    - apps/web/src/pages/api/health.ts
+    - apps/admin/src/pages/api/health.ts
+    - services/fetchers/src/main.ts
+    - services/relay/src/main.ts
+    - services/api/app/main.py
+    - services/workers/app/main.py
+    - services/indexer/app/main.py
+capabilities:
+  build: true
+  lint: true
+  typecheck: true
+  unit_tests: true
+  integration_tests: true
+  smoke_tests: true
+  packaging: false
+  deploy: false
+  database: true
+  migrations: true
+commands:
+  install: "pnpm install"
+  dev: "pnpm dev:mvp:internal"
+  build: "pnpm build"
+  lint: "pnpm lint"
+  typecheck: "pnpm typecheck"
+  unit_tests: "pnpm unit_tests"
+  integration_tests: "pnpm integration_tests"
+  smoke: "pnpm integration_tests"
+  ingest_smoke: "pnpm test:ingest:compose"
+  ingest_multi_compose: "pnpm test:ingest:multi:compose"
+  ingest_soak_compose: "pnpm test:ingest:soak:compose"
+  package_release: ""
+  deploy: ""
+risk_defaults:
+  low: локальная целевая проверка
+  medium: статическая проверка плюс поведенческая проверка по затронутой границе
+  high: полный релевантный gate-набор плюс усиленная проверка границ и остаточных рисков
+work_kinds:
+  - Stage
+  - Patch
+  - Sweep
+  - Spike
+states:
+  - planned
+  - ready
+  - active
+  - blocked
+  - done
+  - archived
+allowed_transitions:
+  - planned->ready
+  - ready->active
+  - active->blocked
+  - blocked->ready
+  - active->done
+  - done->archived
+context_hygiene:
+  short_current_memory: true
+  durable_full_history: true
+  current_memory_target_lines: 20-40
+  recent_changes_max_bullets: 8
+  auto_compress_triggers:
+    - item_done
+    - item_archiving
+    - primary_item_changed
+    - work_doc_exceeds_limits
+    - recent_changes_overflow
+    - stale_completed_detail_in_live_doc
+    - stale_capability_line_after_replan
+    - meaningful_handoff_or_session_end
+  compression_command: RUN CONTEXT COMPRESSION NOW
+handoff:
+  required_after_meaningful_work: true
+  required_fields:
+    - current_item_status
+    - next_recommended_action
+    - proven_state
+    - unproven_or_blocked_state
+    - scope_or_coordination_warning
+audit_mode:
+  enabled: true
+  optional: true
+  default_mode: read_only
+  audit_command: RUN CONSISTENCY AUDIT NOW
+  apply_command: APPLY APPROVED AUDIT FIXES NOW
+  approval_required_for_apply: true
+  safe_fix_scope:
+    - move_completed_detail_to_history
+    - normalize_required_sections
+    - add_missing_empty_required_blocks
+    - shrink_current_memory_preserving_meaning
+    - archive_done_item_with_durable_history
+    - remove_obvious_live_doc_duplication
+  forbidden_fix_scope:
+    - change_architecture_or_invariants
+    - change_risk_level_without_human_decision
+    - redefine_work_intent_by_guesswork
+    - redefine_scope_semantics
+    - rewrite_proof_policy_meaning
+    - change_machine_facts_by_guesswork
+maintenance:
+  agent_managed_core: true
+  work_sync_required_after_meaningful_change: true
+  stage_and_capability_sync_required: true
+  context_compression_required_on_trigger: true
+  audit_request_driven: true
+authority:
+  order:
+    - AGENTS.md
+    - docs/blueprint.md
+    - .aidp/os.yaml
+    - docs/verification.md
+    - docs/work.md
+    - docs/history.md
+  preserve_blueprint_truth_on_execution_conflict: true
+deep_contract_docs:
+  allowed: true
+  required_when_touched: true
+  temporary_docs_must_merge_into_history_or_stable_contract: true
+setup_mode:
+  enabled_until_core_is_initialized: true
+  implementation_forbidden_while_uninitialized: true
+  initialization_requires:
+    - real_project_name
+    - real_commands_or_explicit_proof_gaps
+    - real_blueprint_content
+    - real_work_state
+    - placeholders_removed_or_replaced

@@ -1,5 +1,87 @@
 # Master Blueprint: zero-shot система фильтрации, персонализации и нотификаций новостей
 
+## Runtime-core summary
+
+Этот документ остается главным human-readable source of truth для NewsPortal. Разделы ниже содержат полный master blueprint; текущий summary нужен как быстрый reload для runtime core и должен читаться вместе с детальными разделами ниже, а не вместо них.
+
+### Назначение системы
+
+NewsPortal строится как zero-shot система фильтрации, персонализации, event clustering и нотификаций новостей для одного B2C white-label-ready продукта на рынках USA и Евросоюза.
+
+### Product meaning
+
+Система должна принимать поток новостей из нескольких типов источников, нормализовать и дедуплицировать контент, находить совпадения по system criteria и user interests без retrain, объяснимо доставлять важные события пользователю и сохранять управляемую эксплуатационную стоимость.
+
+### Technical model
+
+- polyglot monorepo с Astro apps, Node fetch/relay services и Python NLP/indexing services;
+- PostgreSQL как единственный source of truth;
+- Redis + BullMQ только как transport layer;
+- HNSW indices, snapshots, model cache и прочие derived artifacts пересобираемы;
+- shared contracts, SDK, UI и config вынесены в `packages/*`.
+
+### Operating model
+
+Основной путь данных выглядит так:
+
+`source channel -> Node fetcher -> PostgreSQL -> outbox_events -> relay -> BullMQ -> Python workers -> PostgreSQL/HNSW derived state -> Astro web/admin, API и notification dispatch`
+
+Главный write principle: пользовательский и сервисный command path сначала фиксирует бизнес-изменение в PostgreSQL, затем публикует outbox event; тяжелая обработка выполняется асинхронно worker-ами, а UI читает результат из PostgreSQL.
+
+### Capability model
+
+Долговременная capability-модель системы разбита на пять линий развития:
+
+- platform foundation;
+- ingest foundation;
+- NLP foundation;
+- matching and notification;
+- explainability and operations.
+
+Эти линии могут реализовываться по stages, но их архитектурный смысл должен оставаться стабильным.
+
+### Core invariants
+
+- PostgreSQL является единственным source of truth для критичных бизнес-данных.
+- Redis и BullMQ используются только как transport, coordination и retry layer.
+- Система остается zero-shot only: без online learning, retrain по кликам и training pipeline.
+- Тяжелая NLP/matching logic не уходит в frontend runtimes и не становится sync internal REST path.
+- Derived state обязан быть rebuildable из PostgreSQL.
+
+### Boundary map
+
+- UI/BFF и пользовательские команды отделены от тяжелой асинхронной обработки.
+- PostgreSQL truth отделен от derived state в HNSW, snapshots, cache и queue state.
+- Node fetch/relay responsibilities отделены от Python NLP/indexer responsibilities.
+- Public/read API и explain surfaces отделены от внутреннего pipeline orchestration.
+
+### Structural rules
+
+- `apps/*` содержат только Astro product surfaces.
+- `services/fetchers` и `services/relay` несут Node/TypeScript ingest and routing responsibilities.
+- `services/api`, `services/workers`, `services/ml`, `services/indexer` несут Python read, processing, ML и rebuild responsibilities.
+- `packages/*` хранят shared contracts, SDK, UI primitives и config.
+- `database/*` хранит DDL, migrations и seeds; `infra/docker/*` задает официальный Compose baseline.
+- Queue payload design остается тонким и ID-based.
+
+### Forbidden shortcuts
+
+- Нельзя вводить SQLite как основную БД.
+- Нельзя использовать `pgvector` как primary ANN baseline.
+- Нельзя превращать внутренний REST между Astro/Node и Python в основной heavy-processing transport.
+- Нельзя класть большие article payload в очереди.
+- Нельзя переносить тяжелую NLP/matching logic в frontend runtime.
+- Нельзя допускать неконтролируемые admin operations без аудита.
+
+### Risk zones
+
+- Queue consistency и outbox/inbox semantics: риск потери событий, дублирующей обработки и рассинхронизации статусов; минимум proof — relay/migration/worker smoke на реальном пути PostgreSQL -> BullMQ -> consumer.
+- Derived indices и compiled state: риск drift между PostgreSQL и HNSW-derived слоями; минимум proof — targeted rebuild/check commands и smoke pipeline вокруг embeddings, clustering или compile flow.
+- Auth/session bridge и notification delivery: риск сломанного пользовательского command/read path между Astro, API и dispatch layer; минимум proof — targeted endpoint и compose-level validation для затронутой поверхности.
+- Gray-zone LLM review и suppression: риск ложных решений и непрозрачной логики в чувствительной зоне; минимум proof — targeted worker smoke плюс честная фиксация residual gaps.
+
+Остальная часть документа ниже остается детальным, долговременным архитектурным reference без радикального переписывания под runtime-core summary.
+
 ## 1. Назначение документа
 
 Этот документ является сводным master blueprint для проектирования и реализации системы zero-shot фильтрации новостей, event clustering, персонализации и нотификаций.
@@ -825,6 +907,7 @@ Notification delivery adapter.
 
 В MVP пользователь по умолчанию создается через Firebase Anonymous Auth при первом входе.
 Admin-пользователи должны использовать неанонимный Firebase sign-in и получать локальную роль `admin`.
+Для internal/dev bootstrap допускается env-driven allowlist (`ADMIN_ALLOWLIST_EMAILS`), которая может выдать локальную роль `admin` при первом успешном sign-in; для repeatable internal tests exact allowlisted email может использоваться и через `+alias` variant того же адреса. После bootstrap источником истины для authorization все равно остается PostgreSQL.
 
 ### 11.3. UserProfile
 
@@ -2412,6 +2495,7 @@ Baseline recommendation:
 - внешний auth provider отвечает за identity proof;
 - Firebase Anonymous Auth используется только для end-user MVP flows;
 - admin доступ разрешен только для неанонимных Firebase identities, сопоставленных с локальной ролью `admin`;
+- для internal/dev baseline допускается first-login bootstrap локальной роли `admin` через `ADMIN_ALLOWLIST_EMAILS`, включая repeatable `+alias` sign-in для exact allowlisted email, но сама роль хранится и проверяется в PostgreSQL;
 - PostgreSQL хранит роли приложения и бизнес-профиль;
 - Node/Astro runtime маппит внешний subject на локального user.
 
@@ -2424,9 +2508,10 @@ Baseline recommendation:
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_CLIENT_CONFIG`
 - `FIREBASE_ADMIN_CREDENTIALS`
+- `ADMIN_ALLOWLIST_EMAILS`
 - `YOUTUBE_API_KEY`
-- `LLM_API_KEY`
-- `LLM_MODEL`
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL`
 - `IMAP_HOST`
 - `IMAP_PORT`
 - `IMAP_USERNAME`
@@ -2446,6 +2531,10 @@ Baseline recommendation:
 - `.env.example`
 - `.env.dev`
 - `.env.prod`
+
+Canonical internal/dev command path должен явно загружать `.env.dev`:
+
+- `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml ...`
 
 При необходимости вместо файлов можно использовать:
 

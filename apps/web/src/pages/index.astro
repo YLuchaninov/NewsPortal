@@ -1,7 +1,7 @@
 ---
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
-import { APP_SHELL_STYLES, formatScore } from "@newsportal/ui";
+import { APP_SHELL_STYLES } from "@newsportal/ui";
 
 import { resolveWebSession } from "../lib/server/auth";
 
@@ -25,7 +25,7 @@ const notifications = session
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <title>{DEFAULT_BRAND_CONFIG.productName} Web MVP</title>
-    <style is:global>{APP_SHELL_STYLES}</style>
+    <style is:global set:html={APP_SHELL_STYLES}></style>
   </head>
   <body>
     <main>
@@ -277,7 +277,6 @@ const notifications = session
               </a>
             ))}
           </div>
-          <p class="np-subtle">Formatting helper example: current top score {formatScore(Number(articles[0]?.like_count ?? 0))}</p>
         </section>
       </div>
     </main>

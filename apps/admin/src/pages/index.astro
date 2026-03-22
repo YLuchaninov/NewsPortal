@@ -26,6 +26,83 @@ const [summary, channels, clusters, articles, reindexJobs, llmTemplates, interes
       ])
     : [null, [], [], [], [], [], []];
 const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asPositiveInteger(value: unknown, fallback: number): number {
+  const parsed =
+    typeof value === "number" && Number.isInteger(value) ? value : Number.parseInt(String(value ?? ""), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function asBooleanString(value: boolean): string {
+  return value ? "true" : "false";
+}
+
+function formatTimestamp(value: unknown): string {
+  if (!value) {
+    return "never";
+  }
+
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString("en-US");
+}
+
+const rssChannels = (channels as Array<Record<string, unknown>>)
+  .filter((channel) => String(channel.provider_type ?? "") === "rss")
+  .map((channel) => {
+    const config = asRecord(channel.config_json);
+
+    return {
+      channelId: String(channel.channel_id ?? ""),
+      name: String(channel.name ?? ""),
+      fetchUrl: String(channel.fetch_url ?? ""),
+      language: String(channel.language ?? "en"),
+      isActive: channel.is_active === true,
+      pollIntervalSeconds: asPositiveInteger(channel.poll_interval_seconds, 300),
+      maxItemsPerPoll: asPositiveInteger(config.maxItemsPerPoll, 20),
+      requestTimeoutMs: asPositiveInteger(config.requestTimeoutMs, 10000),
+      userAgent: String(config.userAgent ?? "NewsPortalFetchers/0.1 (+https://newsportal.local)"),
+      preferContentEncoded: config.preferContentEncoded !== false,
+      lastFetchAt: formatTimestamp(channel.last_fetch_at),
+      lastSuccessAt: formatTimestamp(channel.last_success_at),
+      lastErrorAt: formatTimestamp(channel.last_error_at),
+      lastErrorMessage: String(channel.last_error_message ?? "")
+    };
+  });
+
+const bulkRssPlaceholder = JSON.stringify(
+  [
+    {
+      name: "Reuters World RSS",
+      fetchUrl: "https://example.com/world.xml",
+      language: "en",
+      pollIntervalSeconds: 300,
+      maxItemsPerPoll: 25,
+      requestTimeoutMs: 4000,
+      userAgent: "NewsPortalFetchers/admin-import",
+      preferContentEncoded: true,
+      isActive: true
+    },
+    {
+      name: "EU Policy RSS",
+      fetchUrl: "https://example.com/eu.xml",
+      language: "en",
+      pollIntervalSeconds: 600,
+      maxItemsPerPoll: 15,
+      requestTimeoutMs: 3000,
+      userAgent: "NewsPortalFetchers/admin-import",
+      preferContentEncoded: false,
+      isActive: true
+    }
+  ],
+  null,
+  2
+);
 ---
 
 <html lang="en">
@@ -33,7 +110,7 @@ const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <title>{DEFAULT_BRAND_CONFIG.productName} Admin MVP</title>
-    <style is:global>{APP_SHELL_STYLES}</style>
+    <style is:global set:html={APP_SHELL_STYLES}></style>
   </head>
   <body>
     <main>
@@ -62,7 +139,8 @@ const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
                 </label>
                 <input type="submit" value="Sign In with Firebase" />
                 <p class="np-subtle">
-                  The Firebase identity must map to a local `admin` role in PostgreSQL.
+                  Allowlisted emails from `ADMIN_ALLOWLIST_EMAILS` receive the local `admin` role on
+                  first successful Firebase sign-in; PostgreSQL remains the authorization source of truth.
                 </p>
               </form>
             )
@@ -108,43 +186,193 @@ const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
                 <article class="np-card">
                   <h2>Channels</h2>
                   <form method="post" action="/api/admin/channels">
+                    <input type="hidden" name="providerType" value="rss" />
                     <label>
-                      Provider
-                      <select name="providerType">
-                        <option value="rss">RSS</option>
-                        <option value="website">Website</option>
-                        <option value="api">API</option>
-                        <option value="email_imap">Email IMAP</option>
-                      </select>
-                    </label>
-                    <label>
-                      Name
+                      RSS channel name
                       <input name="name" placeholder="Reuters World RSS" />
                     </label>
                     <label>
-                      Fetch URL
+                      RSS feed URL
                       <input name="fetchUrl" placeholder="https://example.com/feed.xml" />
                     </label>
                     <label>
                       Language
                       <input name="language" value="en" />
                     </label>
-                    <input type="submit" value="Create Channel" />
+                    <label>
+                      Poll interval (seconds)
+                      <input name="pollIntervalSeconds" value="300" inputmode="numeric" />
+                    </label>
+                    <label>
+                      Max items per poll
+                      <input name="maxItemsPerPoll" value="20" inputmode="numeric" />
+                    </label>
+                    <label>
+                      Request timeout (ms)
+                      <input name="requestTimeoutMs" value="10000" inputmode="numeric" />
+                    </label>
+                    <label>
+                      User agent
+                      <input name="userAgent" value="NewsPortalFetchers/admin" />
+                    </label>
+                    <label>
+                      Prefer `content:encoded`
+                      <select name="preferContentEncoded">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label>
+                      Active
+                      <select name="isActive">
+                        <option value="true">active</option>
+                        <option value="false">paused</option>
+                      </select>
+                    </label>
+                    <input type="submit" value="Create RSS Channel" />
                   </form>
+                  <form method="post" action="/api/admin/channels/bulk" style="margin-top: 18px;">
+                    <label>
+                      Bulk RSS import JSON
+                      <textarea
+                        name="channelsJson"
+                        rows="14"
+                        placeholder={bulkRssPlaceholder}
+                      ></textarea>
+                    </label>
+                    <input type="submit" value="Import RSS Channels" />
+                  </form>
+                  <p class="np-subtle" style="margin-top: 12px;">
+                    Internal MVP acceptance uses an RSS-first ingest surface. Website/API/IMAP channel
+                    onboarding stays outside this admin flow until it has dedicated proof.
+                  </p>
+                  <p class="np-subtle">
+                    Visible RSS channels: {rssChannels.length}. Bulk payload accepts the same RSS
+                    fields as the single-channel form and rejects partially invalid rows.
+                  </p>
                   <table class="np-table" style="margin-top: 18px;">
                     <thead>
                       <tr>
                         <th>Name</th>
-                        <th>Provider</th>
+                        <th>Fetch</th>
+                        <th>Schedule</th>
                         <th>Status</th>
+                        <th>Last Success</th>
+                        <th>Last Error</th>
+                        <th>Controls</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {channels.map((channel) => (
+                      {rssChannels.map((channel) => (
                         <tr>
-                          <td>{String(channel.name)}</td>
-                          <td>{String(channel.provider_type)}</td>
-                          <td>{channel.is_active === true ? "active" : "paused"}</td>
+                          <td>
+                            <div>{channel.name}</div>
+                            <div class="np-subtle">rss / {channel.language || "-"}</div>
+                          </td>
+                          <td>
+                            <div>{channel.fetchUrl}</div>
+                            <div class="np-subtle">last fetch: {channel.lastFetchAt}</div>
+                          </td>
+                          <td>
+                            <div>{channel.pollIntervalSeconds}s / {channel.maxItemsPerPoll} items</div>
+                            <div class="np-subtle">
+                              timeout: {channel.requestTimeoutMs}ms | content:encoded: {String(channel.preferContentEncoded)}
+                            </div>
+                          </td>
+                          <td>{channel.isActive ? "active" : "paused"}</td>
+                          <td>{channel.lastSuccessAt}</td>
+                          <td>
+                            <div>{channel.lastErrorAt}</div>
+                            <div class="np-subtle">{channel.lastErrorMessage || "none"}</div>
+                          </td>
+                          <td>
+                            <form method="post" action="/api/admin/channels" style="margin-bottom: 12px;">
+                              <input type="hidden" name="channelId" value={channel.channelId} />
+                              <input type="hidden" name="providerType" value="rss" />
+                              <input type="hidden" name="name" value={channel.name} />
+                              <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
+                              <input type="hidden" name="language" value={channel.language} />
+                              <input type="hidden" name="pollIntervalSeconds" value={String(channel.pollIntervalSeconds)} />
+                              <input type="hidden" name="maxItemsPerPoll" value={String(channel.maxItemsPerPoll)} />
+                              <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
+                              <input type="hidden" name="userAgent" value={channel.userAgent} />
+                              <input
+                                type="hidden"
+                                name="preferContentEncoded"
+                                value={asBooleanString(channel.preferContentEncoded)}
+                              />
+                              <input
+                                type="hidden"
+                                name="isActive"
+                                value={asBooleanString(!channel.isActive)}
+                              />
+                              <button type="submit" class="np-button secondary">
+                                {channel.isActive ? "Pause" : "Resume"}
+                              </button>
+                            </form>
+                            <details>
+                              <summary>Edit</summary>
+                              <form method="post" action="/api/admin/channels" style="margin-top: 12px;">
+                                <input type="hidden" name="channelId" value={channel.channelId} />
+                                <input type="hidden" name="providerType" value="rss" />
+                                <label>
+                                  Name
+                                  <input name="name" value={channel.name} />
+                                </label>
+                                <label>
+                                  Feed URL
+                                  <input name="fetchUrl" value={channel.fetchUrl} />
+                                </label>
+                                <label>
+                                  Language
+                                  <input name="language" value={channel.language} />
+                                </label>
+                                <label>
+                                  Poll interval (seconds)
+                                  <input
+                                    name="pollIntervalSeconds"
+                                    value={String(channel.pollIntervalSeconds)}
+                                    inputmode="numeric"
+                                  />
+                                </label>
+                                <label>
+                                  Max items per poll
+                                  <input
+                                    name="maxItemsPerPoll"
+                                    value={String(channel.maxItemsPerPoll)}
+                                    inputmode="numeric"
+                                  />
+                                </label>
+                                <label>
+                                  Request timeout (ms)
+                                  <input
+                                    name="requestTimeoutMs"
+                                    value={String(channel.requestTimeoutMs)}
+                                    inputmode="numeric"
+                                  />
+                                </label>
+                                <label>
+                                  User agent
+                                  <input name="userAgent" value={channel.userAgent} />
+                                </label>
+                                <label>
+                                  Prefer `content:encoded`
+                                  <select name="preferContentEncoded">
+                                    <option value="true" selected={channel.preferContentEncoded}>true</option>
+                                    <option value="false" selected={!channel.preferContentEncoded}>false</option>
+                                  </select>
+                                </label>
+                                <label>
+                                  Active
+                                  <select name="isActive">
+                                    <option value="true" selected={channel.isActive}>active</option>
+                                    <option value="false" selected={!channel.isActive}>paused</option>
+                                  </select>
+                                </label>
+                                <button type="submit" class="np-button secondary">Save RSS Settings</button>
+                              </form>
+                            </details>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

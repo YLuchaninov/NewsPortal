@@ -23,6 +23,7 @@ import {
   stripHtmlTags,
   type ParsedRssItem
 } from "./rss";
+import { runWithConcurrency } from "./scheduler";
 
 interface SourceChannelRow {
   channelId: string;
@@ -209,11 +210,23 @@ class FetcherService {
 
     try {
       const channels = await this.loadDueChannels();
-      for (const channel of channels) {
-        this.state.lastChannelId = channel.channelId;
-        await this.pollChannel(channel.channelId);
-      }
-      this.state.lastError = null;
+      const results = await runWithConcurrency(
+        channels,
+        this.config.fetchersConcurrency,
+        async (channel) => {
+          this.state.lastChannelId = channel.channelId;
+          await this.pollChannelSafely(channel.channelId);
+        }
+      );
+      const failedChannels = results.filter(
+        (result): result is Extract<(typeof results)[number], { status: "rejected" }> =>
+          result.status === "rejected"
+      );
+
+      this.state.lastError =
+        failedChannels.length > 0
+          ? `${failedChannels.length} of ${channels.length} due channel(s) failed during the last poll.`
+          : null;
     } catch (error) {
       this.state.lastError =
         error instanceof Error ? error.message : "Unknown fetchers poll failure";
@@ -221,6 +234,18 @@ class FetcherService {
     } finally {
       this.state.isPolling = false;
       this.state.lastPollCompletedAt = new Date().toISOString();
+    }
+  }
+
+  private async pollChannelSafely(channelId: string): Promise<void> {
+    try {
+      await this.pollChannel(channelId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown fetcher channel failure";
+      await this.markChannelFailure(channelId, message, new Date().toISOString()).catch(
+        () => undefined
+      );
+      throw error;
     }
   }
 
@@ -307,7 +332,12 @@ class FetcherService {
       let ingestedCount = 0;
       let duplicateCount = 0;
       for (const item of items) {
-        const persisted = await this.persistRssItem(channel, item, parsedFeed.language);
+        const persisted = await this.persistRssItem(
+          channel,
+          item,
+          parsedFeed.language,
+          rssConfig.preferContentEncoded
+        );
         if (persisted) {
           ingestedCount += 1;
         } else {
@@ -676,7 +706,8 @@ class FetcherService {
   private async persistRssItem(
     channel: SourceChannelRow,
     item: ParsedRssItem,
-    feedLanguage: string | null
+    feedLanguage: string | null,
+    preferContentEncoded: boolean
   ): Promise<boolean> {
     if (!item.url) {
       return false;
@@ -688,7 +719,9 @@ class FetcherService {
     const { lang, confidence } = pickLanguageHint(channel.language, feedLanguage);
     const title = normalizeWhitespace(item.title);
     const lead = derivePlaintextLead(item.summaryHtml, item.contentHtml);
-    const body = derivePlaintextBody(item.contentHtml, item.summaryHtml);
+    const body = preferContentEncoded
+      ? derivePlaintextBody(item.contentHtml, item.summaryHtml)
+      : derivePlaintextBody(item.summaryHtml, item.contentHtml);
     return this.persistArticle({
       channel,
       externalArticleId,

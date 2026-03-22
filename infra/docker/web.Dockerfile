@@ -23,5 +23,6 @@ COPY apps/web/tsconfig.json apps/web/tsconfig.json
 COPY apps/web/src apps/web/src
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @newsportal/web build
 
 CMD ["pnpm", "--filter", "@newsportal/web", "start"]

@@ -59,9 +59,13 @@ def send_email_digest(config_json: dict[str, Any], title: str, body: str) -> Del
     if not parsed.hostname:
         return DeliveryAttempt(status="failed", detail="SMTP url is invalid.")
 
+    scheme = parsed.scheme.lower()
+    if scheme not in {"smtp", "smtps", "smtp+starttls"}:
+        return DeliveryAttempt(status="failed", detail=f"Unsupported SMTP scheme: {parsed.scheme}")
+
     username = parsed.username or ""
     password = parsed.password or ""
-    port = parsed.port or (465 if parsed.scheme == "smtps" else 587)
+    port = parsed.port or (465 if scheme == "smtps" else 587)
     message = EmailMessage()
     message["Subject"] = title[:255]
     message["From"] = os.getenv("EMAIL_DIGEST_FROM", username or "newsportal@example.test")
@@ -69,14 +73,15 @@ def send_email_digest(config_json: dict[str, Any], title: str, body: str) -> Del
     message.set_content(body)
 
     try:
-        if parsed.scheme == "smtps":
+        if scheme == "smtps":
             with smtplib.SMTP_SSL(parsed.hostname, port, context=ssl.create_default_context()) as client:
                 if username:
                     client.login(username, password)
                 client.send_message(message)
         else:
             with smtplib.SMTP(parsed.hostname, port, timeout=20) as client:
-                client.starttls(context=ssl.create_default_context())
+                if scheme == "smtp+starttls":
+                    client.starttls(context=ssl.create_default_context())
                 if username:
                     client.login(username, password)
                 client.send_message(message)

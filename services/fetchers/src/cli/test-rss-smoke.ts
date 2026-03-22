@@ -15,6 +15,16 @@ interface WaitOptions {
   pollIntervalMs: number;
 }
 
+const PROCESSING_STATE_ORDER: Record<string, number> = {
+  raw: 0,
+  normalized: 1,
+  deduped: 2,
+  embedded: 3,
+  clustered: 4,
+  matched: 5,
+  notified: 6
+};
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -141,18 +151,21 @@ async function seedSmokeChannel(pool: Pool, fetchUrl: string): Promise<string> {
 async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<void> {
   await waitForCondition(
     async () => {
-      const result = await pool.query<{ count: string }>(
+      const result = await pool.query<{ processingState: string | null }>(
         `
-          select count(*)::text as count
+          select processing_state as "processingState"
           from articles
-          where
-            channel_id = $1
-            and processing_state = 'deduped'
+          where channel_id = $1
+          order by ingested_at desc
+          limit 1
         `,
         [channelId]
       );
 
-      return result.rows[0]?.count === "1";
+      const processingState = result.rows[0]?.processingState ?? "raw";
+      return (
+        (PROCESSING_STATE_ORDER[processingState] ?? 0) >= PROCESSING_STATE_ORDER.deduped
+      );
     },
     {
       timeoutMs: 20000,
@@ -188,8 +201,10 @@ async function assertSmokeRows(pool: Pool, channelId: string): Promise<void> {
 
   const article = articleResult.rows[0];
 
-  if (article.processingState !== "deduped") {
-    throw new Error(`Expected article.processing_state to be deduped, got ${article.processingState}.`);
+  if ((PROCESSING_STATE_ORDER[article.processingState] ?? 0) < PROCESSING_STATE_ORDER.deduped) {
+    throw new Error(
+      `Expected article.processing_state to reach deduped or later, got ${article.processingState}.`
+    );
   }
 
   if (!article.canonicalDocId || !article.familyId) {

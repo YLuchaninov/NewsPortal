@@ -4,6 +4,8 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "check:scaffold": "node infra/scripts/check-scaffold.mjs",
+    "dev:mvp:internal": "docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d postgres redis mailpit migrate relay fetchers worker api web admin nginx",
+    "dev:mvp:internal:down": "docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml down -v --remove-orphans",
     "db:migrate": "pnpm --filter @newsportal/relay migrate",
     "db:seed:outbox-smoke": "pnpm --filter @newsportal/relay seed:outbox-smoke",
     "fetch:rss:once": "pnpm --filter @newsportal/fetchers run:once",
@@ -11,6 +13,10 @@
     "index:check:interest-centroids": "PYTHONPATH=. python -m services.indexer.app.main check-interest-centroids",
     "index:rebuild:event-cluster-centroids": "PYTHONPATH=. python -m services.indexer.app.main rebuild-event-cluster-centroids",
     "index:rebuild:interest-centroids": "PYTHONPATH=. python -m services.indexer.app.main rebuild-interest-centroids",
+    "integration_tests": "pnpm test:mvp:internal",
+    "lint": "pnpm lint:ts && pnpm lint:py",
+    "lint:py": "python -m ruff check services",
+    "lint:ts": "eslint --max-warnings=0 \"apps/**/*.{astro,ts,tsx}\" \"packages/**/*.ts\" \"services/**/*.{ts,tsx}\" \"infra/scripts/**/*.{js,mjs}\"",
     "test:criterion-compile:smoke": "PYTHONPATH=. python -m services.workers.app.smoke criterion-compile",
     "test:criterion-compile:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke criterion-compile",
     "test:cluster-match-notify:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke cluster-match-notify",
@@ -18,6 +24,8 @@
     "test:embed:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke embed",
     "test:embed:smoke": "PYTHONPATH=. python -m services.workers.app.smoke embed",
     "test:ingest:compose": "docker compose -f infra/docker/compose.yml exec -T fetchers pnpm --filter @newsportal/fetchers test:rss-smoke",
+    "test:ingest:multi:compose": "node infra/scripts/test-rss-multi-flow.mjs --channel-count=24",
+    "test:ingest:soak:compose": "node infra/scripts/test-rss-multi-flow.mjs --channel-count=60",
     "test:interest-compile:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke interest-compile",
     "test:migrations:smoke": "pnpm --filter @newsportal/relay test:migrations",
     "test:normalize-dedup:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke normalize-dedup",
@@ -28,12 +36,22 @@
     "test:relay:phase3": "pnpm --filter @newsportal/relay test:phase3-routing",
     "test:relay:compose": "docker compose -f infra/docker/compose.yml exec -T relay pnpm --filter @newsportal/relay test:relay",
     "test:relay:phase3:compose": "docker compose -f infra/docker/compose.yml exec -T relay pnpm --filter @newsportal/relay test:phase3-routing",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "test:mvp:internal": "node infra/scripts/test-mvp-internal.mjs",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "unit_tests": "pnpm unit_tests:ts && pnpm unit_tests:py",
+    "unit_tests:py": "PYTHONPATH=. python -m unittest discover -s tests/unit/python -p 'test_*.py'",
+    "unit_tests:ts": "node --import tsx --test \"tests/unit/ts/**/*.test.ts\""
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.7",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.1",
     "@types/pg": "^8.15.6",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
+    "eslint": "^10.1.0",
+    "eslint-plugin-astro": "^1.6.0",
+    "globals": "^17.4.0",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2"
   }

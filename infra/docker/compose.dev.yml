@@ -1,4 +1,17 @@
 services:
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8025/api/v1/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   postgres:
     env_file:
       - ../../.env.dev
@@ -18,6 +31,8 @@ services:
   fetchers:
     env_file:
       - ../../.env.dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   worker:
     env_file:

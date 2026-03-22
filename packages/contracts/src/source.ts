@@ -7,6 +7,20 @@ export interface RssChannelConfig {
   preferContentEncoded: boolean;
 }
 
+export interface RssAdminChannelInput {
+  channelId?: string;
+  providerType?: "rss";
+  name: string;
+  fetchUrl: string;
+  language?: string | null;
+  isActive?: boolean;
+  pollIntervalSeconds?: number;
+  maxItemsPerPoll?: number;
+  requestTimeoutMs?: number;
+  userAgent?: string;
+  preferContentEncoded?: boolean;
+}
+
 export interface WebsiteChannelConfig {
   maxItemsPerPoll: number;
   requestTimeoutMs: number;

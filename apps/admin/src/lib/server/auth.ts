@@ -10,6 +10,58 @@ interface FirebaseLookupUser {
   providerUserInfo?: Array<{ providerId?: string }>;
 }
 
+function normalizeEmail(email: string | null | undefined): string {
+  return String(email ?? "").trim().toLowerCase();
+}
+
+function splitEmailParts(email: string): { local: string; domain: string } | null {
+  const normalized = normalizeEmail(email);
+  const atIndex = normalized.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex === normalized.length - 1) {
+    return null;
+  }
+
+  return {
+    local: normalized.slice(0, atIndex),
+    domain: normalized.slice(atIndex + 1)
+  };
+}
+
+function isPlusAliasOf(baseEmail: string, candidateEmail: string): boolean {
+  const base = splitEmailParts(baseEmail);
+  const candidate = splitEmailParts(candidateEmail);
+  if (!base || !candidate) {
+    return false;
+  }
+
+  return (
+    base.domain === candidate.domain &&
+    candidate.local.startsWith(`${base.local}+`)
+  );
+}
+
+function readAdminAllowlist(): string[] {
+  return String(process.env.ADMIN_ALLOWLIST_EMAILS ?? "")
+    .split(",")
+    .map((entry) => normalizeEmail(entry))
+    .filter(Boolean);
+}
+
+function isEmailAllowlisted(email: string | null | undefined): boolean {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return false;
+  }
+
+  return readAdminAllowlist().some((entry) => {
+    if (entry.startsWith("@")) {
+      return normalizedEmail.endsWith(entry);
+    }
+
+    return normalizedEmail === entry || isPlusAliasOf(entry, normalizedEmail);
+  });
+}
+
 function parseCookies(cookieHeader: string | null): Record<string, string> {
   if (!cookieHeader) {
     return {};
@@ -142,6 +194,19 @@ async function syncLocalAdminUser(identity: AuthIdentity): Promise<{ userId: str
     [userId]
   );
 
+  if (isEmailAllowlisted(identity.email)) {
+    await pool.query(
+      `
+        insert into user_roles (user_id, role_id)
+        select $1, role_id
+        from roles
+        where role_name = 'admin'
+        on conflict (user_id, role_id) do nothing
+      `,
+      [userId]
+    );
+  }
+
   const roles = await queryRows<{ role_name: string }>(
     `
       select r.role_name
@@ -153,7 +218,9 @@ async function syncLocalAdminUser(identity: AuthIdentity): Promise<{ userId: str
   );
   const roleNames = roles.map((row) => row.role_name);
   if (!roleNames.includes("admin")) {
-    throw new Error("Local admin role is not assigned for this Firebase identity.");
+    throw new Error(
+      "Local admin role is not assigned for this Firebase identity. Add the email to ADMIN_ALLOWLIST_EMAILS for first-run bootstrap or assign the role explicitly."
+    );
   }
 
   return {
@@ -202,9 +269,9 @@ export async function createAdminSession(
 }
 
 export function buildAdminSessionCookie(value: string): string {
-  return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`;
+  return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
 }
 
 export function buildExpiredAdminSessionCookie(): string {
-  return `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 }

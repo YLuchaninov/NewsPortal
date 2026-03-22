@@ -134,6 +134,10 @@ function parseDate(rawValue: string | null): string | null {
 }
 
 export function parseRssFeed(xml: string): ParsedRssFeed {
+  if (!/<rss[\s>]/i.test(xml) || !/<channel[\s>]/i.test(xml)) {
+    throw new Error("Invalid RSS feed: expected <rss> and <channel> markup.");
+  }
+
   const channelBlockMatch = xml.match(/<channel(?:\s[^>]*)?>([\s\S]*?)<\/channel>/i);
   const channelBlock = channelBlockMatch?.[1] ?? xml;
   const itemBlocks = Array.from(xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi));

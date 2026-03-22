@@ -181,6 +181,8 @@ def list_channels() -> list[dict[str, Any]]:
           sc.fetch_url,
           sc.language,
           sc.is_active,
+          sc.poll_interval_seconds,
+          sc.config_json,
           sc.last_fetch_at,
           sc.last_success_at,
           sc.last_error_at,

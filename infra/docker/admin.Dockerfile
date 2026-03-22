@@ -23,5 +23,6 @@ COPY apps/admin/tsconfig.json apps/admin/tsconfig.json
 COPY apps/admin/src apps/admin/src
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @newsportal/admin build
 
 CMD ["pnpm", "--filter", "@newsportal/admin", "start"]

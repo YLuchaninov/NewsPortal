@@ -3,6 +3,7 @@ export interface FetchersConfig {
   fetchersPort: number;
   fetchersPollIntervalMs: number;
   fetchersBatchSize: number;
+  fetchersConcurrency: number;
   defaultRequestTimeoutMs: number;
   defaultUserAgent: string;
 }
@@ -44,7 +45,8 @@ export function loadFetchersConfig(): FetchersConfig {
     databaseUrl: buildPostgresUrl(),
     fetchersPort: readNumber("FETCHERS_PORT", 4100),
     fetchersPollIntervalMs: readNumber("FETCHERS_POLL_INTERVAL_MS", 5000),
-    fetchersBatchSize: readNumber("FETCHERS_BATCH_SIZE", 10),
+    fetchersBatchSize: readNumber("FETCHERS_BATCH_SIZE", 100),
+    fetchersConcurrency: Math.max(1, Math.floor(readNumber("FETCHERS_CONCURRENCY", 4))),
     defaultRequestTimeoutMs: readNumber("FETCHERS_REQUEST_TIMEOUT_MS", 10000),
     defaultUserAgent:
       process.env.FETCHERS_USER_AGENT ??
