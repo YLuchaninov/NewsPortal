@@ -1,4 +1,4 @@
-version: 21
+version: 23
 mode: Minimal
 initialized: true
 core:
@@ -7,17 +7,24 @@ core:
     - AGENTS.md
     - docs/work.md
     - docs/blueprint.md
+    - docs/engineering.md
     - docs/verification.md
     - docs/history.md
     - .aidp/os.yaml
 coordination:
   multi_agent_allowed: false
+  single_worktree_truth_required: true
+  secondary_active_item_requires_explicit_reason: true
+  secondary_active_item_short_overlap_only: true
 planning:
   requirements_driven_capability_design: true
   capabilities_can_span_multiple_stages: true
   stages_must_be_planned_separately: true
   stage_done_is_not_capability_complete: true
+  capability_completion_may_include_implementation_and_operator_closure: true
   create_next_stage_before_implementation_when_needed: true
+  stage_dependency_enforcement: true
+  dependency_override_requires_human_approval: true
 project:
   name: newsportal
   placeholder_values_present: false
@@ -37,6 +44,7 @@ project:
     - infra/docker/compose.prod.yml
     - infra/nginx/default.conf
     - README.md
+    - docs/contracts/test-access-and-fixtures.md
   entry_points:
     - apps/web/src/pages/api/health.ts
     - apps/admin/src/pages/api/health.ts
@@ -59,6 +67,11 @@ capabilities:
 commands:
   install: "pnpm install"
   dev: "pnpm dev:mvp:internal"
+  dev_no_build: "pnpm dev:mvp:internal:no-build"
+  dev_stop: "pnpm dev:mvp:internal:stop"
+  dev_down: "pnpm dev:mvp:internal:down"
+  dev_down_volumes: "pnpm dev:mvp:internal:down:volumes"
+  dev_logs: "pnpm dev:mvp:internal:logs"
   build: "pnpm build"
   lint: "pnpm lint"
   typecheck: "pnpm typecheck"
@@ -68,6 +81,7 @@ commands:
   ingest_smoke: "pnpm test:ingest:compose"
   ingest_multi_compose: "pnpm test:ingest:multi:compose"
   ingest_soak_compose: "pnpm test:ingest:soak:compose"
+  cluster_match_notify_compose: "pnpm test:cluster-match-notify:compose"
   package_release: ""
   deploy: ""
 risk_defaults:
@@ -141,6 +155,7 @@ maintenance:
   agent_managed_core: true
   work_sync_required_after_meaningful_change: true
   stage_and_capability_sync_required: true
+  worktree_coherence_check_required: true
   context_compression_required_on_trigger: true
   audit_request_driven: true
 authority:
@@ -148,6 +163,7 @@ authority:
     - AGENTS.md
     - docs/blueprint.md
     - .aidp/os.yaml
+    - docs/engineering.md
     - docs/verification.md
     - docs/work.md
     - docs/history.md
@@ -156,6 +172,9 @@ deep_contract_docs:
   allowed: true
   required_when_touched: true
   temporary_docs_must_merge_into_history_or_stable_contract: true
+  preferred_locations:
+    - docs/contracts/
+  templates_included: false
 setup_mode:
   enabled_until_core_is_initialized: true
   implementation_forbidden_while_uninitialized: true
@@ -163,5 +182,27 @@ setup_mode:
     - real_project_name
     - real_commands_or_explicit_proof_gaps
     - real_blueprint_content
+    - real_engineering_content
     - real_work_state
     - placeholders_removed_or_replaced
+proof_contours:
+  fast_gate: smallest honest local proof
+  structural_gate: boundary- or refactor-sensitive proof
+  release_gate: releasable build or promotion proof
+  delivery_gate: packaging, deployment, migration, or environment delivery proof
+  runtime_smoke_gate: minimal real runtime proof
+engineering_defaults:
+  preserve_behavior_unless_intentionally_changed: true
+  keep_boundaries_clean: true
+  avoid_god_objects: true
+  prefer_explicit_contracts: true
+  refactor_requires_proof: true
+  dedicated_engineering_file_required: true
+test_access:
+  declared_environments_required: true
+  production_like_requires_explicit_human_approval: true
+  declared_identities_or_fixture_procedures_required: true
+  ad_hoc_persistent_test_entities_forbidden: true
+  persistent_test_artifacts_must_be_tracked: true
+  cleanup_status_must_be_visible_for_stateful_testing: true
+  recommended_deep_contract: docs/contracts/test-access-and-fixtures.md

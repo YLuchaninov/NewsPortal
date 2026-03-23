@@ -214,13 +214,17 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
     command: ["pnpm", "--filter", "@newsportal/web", "start"]
     environment:
       WEB_PORT: ${WEB_PORT:-4321}
+      NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
       NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
       NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
       APP_SECRET: ${APP_SECRET:-}
       POSTGRES_DB: ${POSTGRES_DB:-newsportal}
       POSTGRES_USER: ${POSTGRES_USER:-newsportal}
@@ -241,9 +245,12 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/admin.Dockerfile
+      args:
+        NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
     command: ["pnpm", "--filter", "@newsportal/admin", "start"]
     environment:
       ADMIN_PORT: ${ADMIN_PORT:-4322}
+      NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
       NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
       NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}

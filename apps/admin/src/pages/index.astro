@@ -1,19 +1,55 @@
 ---
+import { CHANNEL_SCHEDULE_PRESETS } from "@newsportal/contracts";
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { APP_SHELL_STYLES } from "@newsportal/ui";
 
 import { resolveAdminSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
 
 export const prerender = false;
-const runtimeConfig = readRuntimeConfig(import.meta.env);
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/"
+});
 const session = await resolveAdminSession(Astro.request);
+const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({
   baseUrl: runtimeConfig.apiBaseUrl,
   fetchImpl: fetch
 });
 
-const [summary, channels, clusters, articles, reindexJobs, llmTemplates, interestTemplates] =
+function normalizeForwardedPrefix(value: string | null): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized === "/") {
+    return "";
+  }
+  return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
+}
+
+const forwardedPrefix = normalizeForwardedPrefix(Astro.request.headers.get("x-forwarded-prefix"));
+const pageBasePath = forwardedPrefix
+  ? `${forwardedPrefix}/`
+  : Astro.url.pathname.endsWith("/")
+    ? Astro.url.pathname
+    : `${Astro.url.pathname}/`;
+
+function resolvePageAppPath(target: string): string {
+  const resolved = new URL(String(target).replace(/^\/+/, ""), `http://app${pageBasePath}`);
+  return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+}
+
+const bffPaths = {
+  authLogout: resolvePageAppPath("bff/auth/logout"),
+  authSignIn: resolvePageAppPath("bff/auth/sign-in"),
+  channels: resolvePageAppPath("bff/admin/channels"),
+  channelsBulk: resolvePageAppPath("bff/admin/channels/bulk"),
+  channelsSchedule: resolvePageAppPath("bff/admin/channels/schedule"),
+  moderation: resolvePageAppPath("bff/admin/moderation"),
+  reindex: resolvePageAppPath("bff/admin/reindex"),
+  templates: resolvePageAppPath("bff/admin/templates")
+};
+
+const [summary, channels, clusters, articles, reindexJobs, llmTemplates, interestTemplates, fetchRuns, llmReviews, llmUsageSummary] =
   session
     ? await Promise.all([
         sdk.getDashboardSummary<Record<string, unknown>>(),
@@ -22,10 +58,17 @@ const [summary, channels, clusters, articles, reindexJobs, llmTemplates, interes
         sdk.listArticles<Array<Record<string, unknown>>>(),
         sdk.listReindexJobs<Array<Record<string, unknown>>>(),
         sdk.listLlmTemplates<Array<Record<string, unknown>>>(),
-        sdk.listInterestTemplates<Array<Record<string, unknown>>>()
+        sdk.listInterestTemplates<Array<Record<string, unknown>>>(),
+        sdk.listFetchRuns<Array<Record<string, unknown>>>(),
+        sdk.listLlmReviews<Array<Record<string, unknown>>>(),
+        sdk.getLlmUsageSummary<Record<string, unknown>>()
       ])
-    : [null, [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], {}];
 const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
+const adminFetchRuns = fetchRuns as Array<Record<string, unknown>>;
+const adminLlmReviews = llmReviews as Array<Record<string, unknown>>;
+const llmUsage24h = asRecord((llmUsageSummary as Record<string, unknown>)["24h"]);
+const llmUsage7d = asRecord((llmUsageSummary as Record<string, unknown>)["7d"]);
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value)
@@ -41,6 +84,20 @@ function asPositiveInteger(value: unknown, fallback: number): number {
 
 function asBooleanString(value: boolean): string {
   return value ? "true" : "false";
+}
+
+function formatJson(value: unknown): string {
+  try {
+    return JSON.stringify(value ?? {}, null, 2);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function formatDecimal(value: unknown, digits = 2): string {
+  const numericValue =
+    typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(numericValue) ? numericValue.toFixed(digits) : "0.00";
 }
 
 function formatTimestamp(value: unknown): string {
@@ -64,6 +121,14 @@ const rssChannels = (channels as Array<Record<string, unknown>>)
       language: String(channel.language ?? "en"),
       isActive: channel.is_active === true,
       pollIntervalSeconds: asPositiveInteger(channel.poll_interval_seconds, 300),
+      adaptiveEnabled: channel.adaptive_enabled !== false,
+      effectivePollIntervalSeconds: asPositiveInteger(channel.effective_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300)),
+      maxPollIntervalSeconds: asPositiveInteger(channel.max_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300) * 16),
+      nextDueAt: formatTimestamp(channel.next_due_at),
+      lastResultKind: String(channel.last_result_kind ?? "never"),
+      overdueSeconds: asPositiveInteger(channel.overdue_seconds, 0),
+      needsAttention: channel.needs_attention === true,
+      recentFailureCount24h: asPositiveInteger(channel.recent_failure_count_24h, 0),
       maxItemsPerPoll: asPositiveInteger(config.maxItemsPerPoll, 20),
       requestTimeoutMs: asPositiveInteger(config.requestTimeoutMs, 10000),
       userAgent: String(config.userAgent ?? "NewsPortalFetchers/0.1 (+https://newsportal.local)"),
@@ -74,6 +139,21 @@ const rssChannels = (channels as Array<Record<string, unknown>>)
       lastErrorMessage: String(channel.last_error_message ?? "")
     };
   });
+const allChannels = (channels as Array<Record<string, unknown>>).map((channel) => ({
+  channelId: String(channel.channel_id ?? ""),
+  providerType: String(channel.provider_type ?? ""),
+  name: String(channel.name ?? ""),
+  pollIntervalSeconds: asPositiveInteger(channel.poll_interval_seconds, 300),
+  effectivePollIntervalSeconds: asPositiveInteger(channel.effective_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300)),
+  maxPollIntervalSeconds: asPositiveInteger(channel.max_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300) * 16),
+  nextDueAt: formatTimestamp(channel.next_due_at),
+  overdueSeconds: asPositiveInteger(channel.overdue_seconds, 0),
+  adaptiveEnabled: channel.adaptive_enabled !== false,
+  lastResultKind: String(channel.last_result_kind ?? "never"),
+  recentFailureCount24h: asPositiveInteger(channel.recent_failure_count_24h, 0),
+  needsAttention: channel.needs_attention === true,
+  lastFetchAt: formatTimestamp(channel.last_fetch_at)
+}));
 
 const bulkRssPlaceholder = JSON.stringify(
   [
@@ -82,6 +162,8 @@ const bulkRssPlaceholder = JSON.stringify(
       fetchUrl: "https://example.com/world.xml",
       language: "en",
       pollIntervalSeconds: 300,
+      adaptiveEnabled: true,
+      maxPollIntervalSeconds: 3600,
       maxItemsPerPoll: 25,
       requestTimeoutMs: 4000,
       userAgent: "NewsPortalFetchers/admin-import",
@@ -93,6 +175,8 @@ const bulkRssPlaceholder = JSON.stringify(
       fetchUrl: "https://example.com/eu.xml",
       language: "en",
       pollIntervalSeconds: 600,
+      adaptiveEnabled: true,
+      maxPollIntervalSeconds: 86400,
       maxItemsPerPoll: 15,
       requestTimeoutMs: 3000,
       userAgent: "NewsPortalFetchers/admin-import",
@@ -103,6 +187,7 @@ const bulkRssPlaceholder = JSON.stringify(
   null,
   2
 );
+const flashTone = flash?.status === "error" ? "var(--np-danger)" : "var(--np-success)";
 ---
 
 <html lang="en">
@@ -115,7 +200,18 @@ const bulkRssPlaceholder = JSON.stringify(
   <body>
     <main>
       <div class="np-shell">
-        <section class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient};`}>
+        {flash ? (
+          <div
+            class="np-card"
+            role={flash.status === "error" ? "alert" : "status"}
+            aria-live="polite"
+            style={`border-left: 4px solid ${flashTone}; margin-bottom: 16px;`}
+          >
+            <strong>{flash.status === "error" ? "Action failed" : "Action complete"}</strong>
+            <p style="margin-bottom: 0;">{flash.message}</p>
+          </div>
+        ) : null}
+        <section id="auth" class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient}; scroll-margin-top: 24px;`}>
           <p class="np-subtle">Operational console</p>
           <h1 class="np-heading">{DEFAULT_BRAND_CONFIG.productName} Admin</h1>
           {
@@ -123,12 +219,12 @@ const bulkRssPlaceholder = JSON.stringify(
               <div>
                 <span class="np-pill">admin userId: {session.userId}</span>
                 <span class="np-pill">roles: {session.roles.join(", ") || "none"}</span>
-                <form method="post" action="/api/auth/logout" style="margin-top: 16px;">
+                <form method="post" action={bffPaths.authLogout} style="margin-top: 16px;">
                   <button type="submit" class="np-button secondary">Sign Out</button>
                 </form>
               </div>
             ) : (
-              <form method="post" action="/api/auth/sign-in" class="np-card">
+              <form method="post" action={bffPaths.authSignIn} class="np-card">
                 <label>
                   Admin email
                   <input name="email" type="email" placeholder="admin@example.com" />
@@ -158,12 +254,20 @@ const bulkRssPlaceholder = JSON.stringify(
                     <div><strong>{String(summary?.processed_total ?? 0)}</strong><br />Processed total</div>
                     <div><strong>{String(summary?.processed_today ?? 0)}</strong><br />Processed today</div>
                     <div><strong>{String(summary?.total_users ?? 0)}</strong><br />Total users</div>
+                    <div><strong>{String(summary?.overdue_channels ?? 0)}</strong><br />Overdue channels</div>
+                    <div><strong>{String(summary?.adapted_channels ?? 0)}</strong><br />Adapted channels</div>
+                    <div><strong>{String(summary?.attention_channels ?? 0)}</strong><br />Needs attention</div>
+                    <div><strong>{String(summary?.fetch_median_duration_ms_24h ?? 0)}</strong><br />Median fetch ms (24h)</div>
+                    <div><strong>{String(summary?.fetch_new_content_24h ?? 0)}</strong><br />New content (24h)</div>
+                    <div><strong>{String(summary?.fetch_no_change_24h ?? 0)}</strong><br />No change (24h)</div>
+                    <div><strong>{String(summary?.fetch_failures_24h ?? 0)}</strong><br />Fetch failures (24h)</div>
+                    <div><strong>{String(summary?.llm_review_count_24h ?? 0)}</strong><br />LLM reviews (24h)</div>
                   </div>
                 </article>
 
-                <article class="np-card">
+                <article id="reindex" class="np-card" style="scroll-margin-top: 24px;">
                   <h2>Reindex</h2>
-                  <form method="post" action="/api/admin/reindex">
+                  <form method="post" action={bffPaths.reindex}>
                     <label>
                       Index name
                       <select name="indexName">
@@ -183,9 +287,9 @@ const bulkRssPlaceholder = JSON.stringify(
               </section>
 
               <section class="np-grid two">
-                <article class="np-card">
+                <article id="channels" class="np-card" style="scroll-margin-top: 24px;">
                   <h2>Channels</h2>
-                  <form method="post" action="/api/admin/channels">
+                  <form method="post" action={bffPaths.channels}>
                     <input type="hidden" name="providerType" value="rss" />
                     <label>
                       RSS channel name
@@ -202,6 +306,17 @@ const bulkRssPlaceholder = JSON.stringify(
                     <label>
                       Poll interval (seconds)
                       <input name="pollIntervalSeconds" value="300" inputmode="numeric" />
+                    </label>
+                    <label>
+                      Adaptive scheduling
+                      <select name="adaptiveEnabled">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label>
+                      Max adaptive interval (seconds)
+                      <input name="maxPollIntervalSeconds" value="3600" inputmode="numeric" />
                     </label>
                     <label>
                       Max items per poll
@@ -231,7 +346,7 @@ const bulkRssPlaceholder = JSON.stringify(
                     </label>
                     <input type="submit" value="Create RSS Channel" />
                   </form>
-                  <form method="post" action="/api/admin/channels/bulk" style="margin-top: 18px;">
+                  <form method="post" action={bffPaths.channelsBulk} style="margin-top: 18px;">
                     <label>
                       Bulk RSS import JSON
                       <textarea
@@ -250,6 +365,40 @@ const bulkRssPlaceholder = JSON.stringify(
                     Visible RSS channels: {rssChannels.length}. Bulk payload accepts the same RSS
                     fields as the single-channel form and rejects partially invalid rows.
                   </p>
+                  <form method="post" action={bffPaths.channelsSchedule} style="margin-top: 18px;">
+                    <label>
+                      Bulk schedule provider
+                      <select name="providerType">
+                        <option value="rss">rss</option>
+                        <option value="website">website</option>
+                        <option value="api">api</option>
+                        <option value="email_imap">email_imap</option>
+                      </select>
+                    </label>
+                    <label>
+                      Base poll interval (seconds)
+                      <input name="pollIntervalSeconds" value="900" inputmode="numeric" />
+                    </label>
+                    <label>
+                      Adaptive scheduling
+                      <select name="adaptiveEnabled">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label>
+                      Max adaptive interval (seconds)
+                      <input name="maxPollIntervalSeconds" value="86400" inputmode="numeric" />
+                    </label>
+                    <button type="submit" class="np-button secondary">Apply Provider Schedule</button>
+                  </form>
+                  <div style="margin-top: 12px;">
+                    {Object.entries(CHANNEL_SCHEDULE_PRESETS).map(([label, seconds]) => (
+                      <span class="np-pill">
+                        {label}: {seconds}s
+                      </span>
+                    ))}
+                  </div>
                   <table class="np-table" style="margin-top: 18px;">
                     <thead>
                       <tr>
@@ -274,25 +423,38 @@ const bulkRssPlaceholder = JSON.stringify(
                             <div class="np-subtle">last fetch: {channel.lastFetchAt}</div>
                           </td>
                           <td>
-                            <div>{channel.pollIntervalSeconds}s / {channel.maxItemsPerPoll} items</div>
+                            <div>{channel.pollIntervalSeconds}s base / {channel.effectivePollIntervalSeconds}s effective</div>
                             <div class="np-subtle">
-                              timeout: {channel.requestTimeoutMs}ms | content:encoded: {String(channel.preferContentEncoded)}
+                              next due: {channel.nextDueAt} | max: {channel.maxPollIntervalSeconds}s
+                            </div>
+                            <div class="np-subtle">
+                              timeout: {channel.requestTimeoutMs}ms | adaptive: {String(channel.adaptiveEnabled)} | content:encoded: {String(channel.preferContentEncoded)}
                             </div>
                           </td>
-                          <td>{channel.isActive ? "active" : "paused"}</td>
+                          <td>
+                            <div>{channel.isActive ? "active" : "paused"}</div>
+                            <div class="np-subtle">
+                              {channel.lastResultKind} | overdue: {channel.overdueSeconds}s
+                            </div>
+                            <div class="np-subtle">
+                              failures(24h): {channel.recentFailureCount24h} | attention: {String(channel.needsAttention)}
+                            </div>
+                          </td>
                           <td>{channel.lastSuccessAt}</td>
                           <td>
                             <div>{channel.lastErrorAt}</div>
                             <div class="np-subtle">{channel.lastErrorMessage || "none"}</div>
                           </td>
                           <td>
-                            <form method="post" action="/api/admin/channels" style="margin-bottom: 12px;">
+                            <form method="post" action={bffPaths.channels} style="margin-bottom: 12px;">
                               <input type="hidden" name="channelId" value={channel.channelId} />
                               <input type="hidden" name="providerType" value="rss" />
                               <input type="hidden" name="name" value={channel.name} />
                               <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
                               <input type="hidden" name="language" value={channel.language} />
                               <input type="hidden" name="pollIntervalSeconds" value={String(channel.pollIntervalSeconds)} />
+                              <input type="hidden" name="adaptiveEnabled" value={asBooleanString(channel.adaptiveEnabled)} />
+                              <input type="hidden" name="maxPollIntervalSeconds" value={String(channel.maxPollIntervalSeconds)} />
                               <input type="hidden" name="maxItemsPerPoll" value={String(channel.maxItemsPerPoll)} />
                               <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
                               <input type="hidden" name="userAgent" value={channel.userAgent} />
@@ -312,7 +474,7 @@ const bulkRssPlaceholder = JSON.stringify(
                             </form>
                             <details>
                               <summary>Edit</summary>
-                              <form method="post" action="/api/admin/channels" style="margin-top: 12px;">
+                              <form method="post" action={bffPaths.channels} style="margin-top: 12px;">
                                 <input type="hidden" name="channelId" value={channel.channelId} />
                                 <input type="hidden" name="providerType" value="rss" />
                                 <label>
@@ -332,6 +494,21 @@ const bulkRssPlaceholder = JSON.stringify(
                                   <input
                                     name="pollIntervalSeconds"
                                     value={String(channel.pollIntervalSeconds)}
+                                    inputmode="numeric"
+                                  />
+                                </label>
+                                <label>
+                                  Adaptive scheduling
+                                  <select name="adaptiveEnabled">
+                                    <option value="true" selected={channel.adaptiveEnabled}>true</option>
+                                    <option value="false" selected={!channel.adaptiveEnabled}>false</option>
+                                  </select>
+                                </label>
+                                <label>
+                                  Max adaptive interval (seconds)
+                                  <input
+                                    name="maxPollIntervalSeconds"
+                                    value={String(channel.maxPollIntervalSeconds)}
                                     inputmode="numeric"
                                   />
                                 </label>
@@ -379,9 +556,9 @@ const bulkRssPlaceholder = JSON.stringify(
                   </table>
                 </article>
 
-                <article class="np-card">
+                <article id="templates" class="np-card" style="scroll-margin-top: 24px;">
                   <h2>Prompt & Interest Templates</h2>
-                  <form method="post" action="/api/admin/templates">
+                  <form method="post" action={bffPaths.templates}>
                     <input type="hidden" name="kind" value="llm" />
                     <label>
                       Template name
@@ -405,7 +582,7 @@ const bulkRssPlaceholder = JSON.stringify(
                     </label>
                     <input type="submit" value="Save LLM Template" />
                   </form>
-                  <form method="post" action="/api/admin/templates" style="margin-top: 18px;">
+                  <form method="post" action={bffPaths.templates} style="margin-top: 18px;">
                     <input type="hidden" name="kind" value="interest" />
                     <label>
                       Interest template name
@@ -433,6 +610,105 @@ const bulkRssPlaceholder = JSON.stringify(
 
               <section class="np-grid two">
                 <article class="np-card">
+                  <h2>Scheduler Health</h2>
+                  <p class="np-subtle">
+                    Provider-aware overview across RSS, website, API and IMAP channels.
+                  </p>
+                  <table class="np-table">
+                    <thead>
+                      <tr>
+                        <th>Channel</th>
+                        <th>Schedule</th>
+                        <th>State</th>
+                        <th>Last Fetch</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allChannels.length === 0 ? (
+                        <tr>
+                          <td colspan="4" class="np-subtle">No channels available.</td>
+                        </tr>
+                      ) : (
+                        allChannels.slice(0, 12).map((channel) => (
+                          <tr>
+                            <td>
+                              <div>{channel.name}</div>
+                              <div class="np-subtle">{channel.providerType}</div>
+                            </td>
+                            <td>
+                              <div>
+                                {channel.pollIntervalSeconds}s base / {channel.effectivePollIntervalSeconds}s effective
+                              </div>
+                              <div class="np-subtle">
+                                max: {channel.maxPollIntervalSeconds}s | next due: {channel.nextDueAt}
+                              </div>
+                            </td>
+                            <td>
+                              <div>{channel.lastResultKind}</div>
+                              <div class="np-subtle">
+                                adaptive: {String(channel.adaptiveEnabled)} | overdue: {channel.overdueSeconds}s
+                              </div>
+                              <div class="np-subtle">
+                                failures(24h): {channel.recentFailureCount24h} | attention: {String(channel.needsAttention)}
+                              </div>
+                            </td>
+                            <td>{channel.lastFetchAt}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </article>
+
+                <article class="np-card">
+                  <h2>LLM Usage Summary</h2>
+                  <div class="np-grid two">
+                    <div>
+                      <strong>{String(llmUsage24h.review_count ?? 0)}</strong>
+                      <br />
+                      Reviews (24h)
+                    </div>
+                    <div>
+                      <strong>{String(llmUsage24h.total_tokens ?? 0)}</strong>
+                      <br />
+                      Tokens (24h)
+                    </div>
+                    <div>
+                      <strong>{formatDecimal(llmUsage24h.cost_estimate_usd, 4)}</strong>
+                      <br />
+                      Cost USD (24h)
+                    </div>
+                    <div>
+                      <strong>{formatDecimal(llmUsage24h.avg_latency_ms, 0)}</strong>
+                      <br />
+                      Avg latency ms (24h)
+                    </div>
+                    <div>
+                      <strong>{String(llmUsage7d.review_count ?? 0)}</strong>
+                      <br />
+                      Reviews (7d)
+                    </div>
+                    <div>
+                      <strong>{String(llmUsage7d.total_tokens ?? 0)}</strong>
+                      <br />
+                      Tokens (7d)
+                    </div>
+                    <div>
+                      <strong>{formatDecimal(llmUsage7d.cost_estimate_usd, 4)}</strong>
+                      <br />
+                      Cost USD (7d)
+                    </div>
+                    <div>
+                      <strong>{formatDecimal(llmUsage7d.avg_latency_ms, 0)}</strong>
+                      <br />
+                      Avg latency ms (7d)
+                    </div>
+                  </div>
+                </article>
+              </section>
+
+              <section class="np-grid two">
+                <article id="articles" class="np-card" style="scroll-margin-top: 24px;">
                   <h2>Recent Articles</h2>
                   <table class="np-table">
                     <thead>
@@ -452,12 +728,12 @@ const bulkRssPlaceholder = JSON.stringify(
                           <td>{String(article.processing_state)}</td>
                           <td>
                             <div class="np-grid two">
-                              <form method="post" action="/api/admin/moderation">
+                              <form method="post" action={bffPaths.moderation}>
                                 <input type="hidden" name="docId" value={String(article.doc_id)} />
                                 <input type="hidden" name="actionType" value="block" />
                                 <button type="submit" class="np-button secondary">Block</button>
                               </form>
-                              <form method="post" action="/api/admin/moderation">
+                              <form method="post" action={bffPaths.moderation}>
                                 <input type="hidden" name="docId" value={String(article.doc_id)} />
                                 <input type="hidden" name="actionType" value="unblock" />
                                 <button type="submit" class="np-button secondary">Unblock</button>
@@ -488,6 +764,107 @@ const bulkRssPlaceholder = JSON.stringify(
                           <td>{Array.isArray(cluster.top_places) ? cluster.top_places.join(", ") : ""}</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </article>
+              </section>
+
+              <section class="np-grid two">
+                <article class="np-card">
+                  <h2>Recent Fetch Runs</h2>
+                  <table class="np-table">
+                    <thead>
+                      <tr>
+                        <th>Channel</th>
+                        <th>Outcome</th>
+                        <th>Counts</th>
+                        <th>Timing</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminFetchRuns.length === 0 ? (
+                        <tr>
+                          <td colspan="4" class="np-subtle">No fetch runs logged yet.</td>
+                        </tr>
+                      ) : (
+                        adminFetchRuns.slice(0, 12).map((run) => (
+                          <tr>
+                            <td>
+                              <div>{String(run.channel_name ?? run.channel_id ?? "-")}</div>
+                              <div class="np-subtle">{String(run.provider_type ?? "-")}</div>
+                            </td>
+                            <td>
+                              <div>{String(run.outcome_kind ?? "-")}</div>
+                              <div class="np-subtle">
+                                http: {String(run.http_status ?? "-")} | retry-after: {String(run.retry_after_seconds ?? "-")}
+                              </div>
+                            </td>
+                            <td>
+                              <div>
+                                fetched: {String(run.fetched_item_count ?? 0)} | new: {String(run.new_article_count ?? 0)}
+                              </div>
+                              <div class="np-subtle">
+                                dupes: {String(run.duplicate_suppressed_count ?? 0)} | cursor changed: {String(run.cursor_changed ?? false)}
+                              </div>
+                            </td>
+                            <td>
+                              <div>{formatTimestamp(run.started_at)}</div>
+                              <div class="np-subtle">
+                                duration: {String(run.fetch_duration_ms ?? 0)}ms
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </article>
+
+                <article class="np-card">
+                  <h2>Recent LLM Reviews</h2>
+                  <table class="np-table">
+                    <thead>
+                      <tr>
+                        <th>Article</th>
+                        <th>Decision</th>
+                        <th>Usage</th>
+                        <th>Latency</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminLlmReviews.length === 0 ? (
+                        <tr>
+                          <td colspan="4" class="np-subtle">No LLM reviews yet.</td>
+                        </tr>
+                      ) : (
+                        adminLlmReviews.slice(0, 12).map((review) => (
+                          <tr>
+                            <td>
+                              <div>{String(review.article_title ?? review.doc_id ?? "-")}</div>
+                              <div class="np-subtle">{formatTimestamp(review.created_at)}</div>
+                            </td>
+                            <td>
+                              <div>{String(review.review_decision ?? "-")}</div>
+                              <div class="np-subtle">{String(review.model_name ?? "-")}</div>
+                            </td>
+                            <td>
+                              <div>
+                                prompt: {String(review.prompt_tokens ?? "-")} | completion: {String(review.completion_tokens ?? "-")}
+                              </div>
+                              <div class="np-subtle">
+                                total: {String(review.total_tokens ?? "-")} | cost: {formatDecimal(review.cost_estimate_usd, 4)}
+                              </div>
+                            </td>
+                            <td>
+                              <div>{String(review.provider_latency_ms ?? "-")}ms</div>
+                              <details>
+                                <summary>Usage payload</summary>
+                                <pre>{formatJson(review.provider_usage_json)}</pre>
+                              </details>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </article>

@@ -20,18 +20,58 @@ export const DEFAULT_BRAND_CONFIG: BrandConfig = {
 };
 
 export interface RuntimeConfig {
+  appBaseUrl: string;
   apiBaseUrl: string;
   publicApiBaseUrl: string;
   firebaseProjectId: string;
   firebaseWebApiKey: string;
+  webPushVapidPublicKey: string;
 }
 
-export function readRuntimeConfig(env: Record<string, string | undefined>): RuntimeConfig {
-  const apiBaseUrl = env.NEWSPORTAL_API_BASE_URL ?? "http://127.0.0.1:8000";
+export interface RuntimeConfigOptions {
+  defaultAppBaseUrl?: string;
+  defaultApiBaseUrl?: string;
+}
+
+function normalizeBaseUrl(rawValue: string): string {
+  const normalized = new URL(rawValue);
+  if (!normalized.pathname.endsWith("/")) {
+    normalized.pathname = `${normalized.pathname}/`;
+  }
+  return normalized.toString();
+}
+
+function normalizeAppTarget(target: string): string {
+  const normalized = String(target).trim();
+  if (!normalized || normalized === "/") {
+    return "";
+  }
+  return normalized.replace(/^\/+/, "");
+}
+
+export function resolveAppUrl(appBaseUrl: string, target = "/"): URL {
+  return new URL(normalizeAppTarget(target), normalizeBaseUrl(appBaseUrl));
+}
+
+export function resolveAppHref(appBaseUrl: string, target = "/"): string {
+  const resolvedUrl = resolveAppUrl(appBaseUrl, target);
+  return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
+}
+
+export function readRuntimeConfig(
+  env: Record<string, string | undefined>,
+  options: RuntimeConfigOptions = {}
+): RuntimeConfig {
+  const appBaseUrl = normalizeBaseUrl(
+    env.NEWSPORTAL_APP_BASE_URL ?? options.defaultAppBaseUrl ?? "http://127.0.0.1:4321/"
+  );
+  const apiBaseUrl = env.NEWSPORTAL_API_BASE_URL ?? options.defaultApiBaseUrl ?? "http://127.0.0.1:8000";
   return {
+    appBaseUrl,
     apiBaseUrl,
     publicApiBaseUrl: env.NEWSPORTAL_PUBLIC_API_BASE_URL ?? apiBaseUrl,
     firebaseProjectId: env.FIREBASE_PROJECT_ID ?? "",
-    firebaseWebApiKey: env.FIREBASE_WEB_API_KEY ?? ""
+    firebaseWebApiKey: env.FIREBASE_WEB_API_KEY ?? "",
+    webPushVapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? ""
   };
 }

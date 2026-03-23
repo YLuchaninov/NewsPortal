@@ -27,11 +27,27 @@ test("parseRssAdminChannelInput normalizes RSS admin payload fields", () => {
     language: "en",
     isActive: false,
     pollIntervalSeconds: 600,
+    adaptiveEnabled: true,
+    maxPollIntervalSeconds: 9600,
     maxItemsPerPoll: 25,
     requestTimeoutMs: 4000,
     userAgent: "NewsPortalFetchers/admin",
     preferContentEncoded: false
   });
+});
+
+test("parseRssAdminChannelInput accepts explicit adaptive scheduling fields", () => {
+  const channel = parseRssAdminChannelInput({
+    name: "Daily policy digest",
+    fetchUrl: "https://example.com/daily.xml",
+    pollIntervalSeconds: "86400",
+    adaptiveEnabled: "false",
+    maxPollIntervalSeconds: "604800"
+  });
+
+  assert.equal(channel.adaptiveEnabled, false);
+  assert.equal(channel.pollIntervalSeconds, 86400);
+  assert.equal(channel.maxPollIntervalSeconds, 604800);
 });
 
 test("parseRssAdminChannelInput rejects non-RSS providers and invalid fetch URLs", () => {

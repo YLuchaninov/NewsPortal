@@ -3,21 +3,122 @@ import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { APP_SHELL_STYLES } from "@newsportal/ui";
 
+import { queryOne, queryRows } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
-const runtimeConfig = readRuntimeConfig(import.meta.env);
+const flash = readFlash(Astro.url);
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4321/"
+});
 const sdk = createNewsPortalSdk({
   baseUrl: runtimeConfig.apiBaseUrl,
   fetchImpl: fetch
 });
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) {
+  pageBaseUrl.pathname = `${pageBaseUrl.pathname}/`;
+}
 
-const articles = await sdk.listArticles<Array<Record<string, unknown>>>();
-const interests = session ? await sdk.listInterests<Array<Record<string, unknown>>>(session.userId) : [];
+function resolvePageAppPath(target: string): string {
+  const resolved = new URL(String(target).replace(/^\/+/, ""), pageBaseUrl);
+  return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("bff/auth/logout"),
+  feedback: resolvePageAppPath("bff/feedback"),
+  interests: resolvePageAppPath("bff/interests"),
+  interest: (interestId: string) => resolvePageAppPath(`bff/interests/${interestId}`),
+  notificationChannels: resolvePageAppPath("bff/notification-channels"),
+  preferences: resolvePageAppPath("bff/preferences"),
+  reactions: resolvePageAppPath("bff/reactions")
+};
+
+type ViewRow = Record<string, unknown>;
+
+const articles = await sdk.listArticles<Array<ViewRow>>();
+const interests = session ? await sdk.listInterests<Array<ViewRow>>(session.userId) : [];
 const notifications = session
-  ? await sdk.listNotifications<Array<Record<string, unknown>>>(session.userId)
+  ? await sdk.listNotifications<Array<ViewRow>>(session.userId)
   : [];
+const [profile, configuredChannels] = session
+  ? await Promise.all([
+      queryOne<ViewRow>(
+        `
+          select theme_preference, notification_preferences
+          from user_profiles
+          where user_id = $1
+        `,
+        [session.userId]
+      ),
+      queryRows<ViewRow>(
+        `
+          select
+            unc.*,
+            last_delivery.status as last_status,
+            last_delivery.sent_at as last_sent_at,
+            last_delivery.delivery_payload_json as last_delivery_payload_json
+          from user_notification_channels unc
+          left join lateral (
+            select
+              status,
+              sent_at,
+              delivery_payload_json
+            from notification_log nl
+            where nl.user_id = unc.user_id
+              and nl.channel_type = unc.channel_type
+            order by nl.created_at desc
+            limit 1
+          ) last_delivery on true
+          where unc.user_id = $1
+          order by unc.channel_type, unc.created_at desc
+        `,
+        [session.userId]
+      )
+    ])
+  : [null, []];
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+}
+
+function asCsv(value: unknown): string {
+  return asStringList(value).join(", ");
+}
+
+function asLines(value: unknown): string {
+  return asStringList(value).join("\n");
+}
+
+function formatTimestamp(value: unknown): string {
+  if (!value) {
+    return "never";
+  }
+
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString("en-US");
+}
+
+const notificationPreferences = asRecord(profile?.notification_preferences);
+const themePreference = String(profile?.theme_preference ?? "system");
+const preferenceState = {
+  webPush: notificationPreferences.web_push !== false,
+  telegram: notificationPreferences.telegram !== false,
+  weeklyEmailDigest: notificationPreferences.weekly_email_digest !== false
+};
+const flashTone = flash?.status === "error" ? "var(--np-danger)" : "var(--np-success)";
 ---
 
 <html lang="en">
@@ -30,7 +131,18 @@ const notifications = session
   <body>
     <main>
       <div class="np-shell">
-        <section class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient};`}>
+        {flash ? (
+          <div
+            class="np-card"
+            role={flash.status === "error" ? "alert" : "status"}
+            aria-live="polite"
+            style={`border-left: 4px solid ${flashTone}; margin-bottom: 16px;`}
+          >
+            <strong>{flash.status === "error" ? "Action failed" : "Action complete"}</strong>
+            <p style="margin-bottom: 0;">{flash.message}</p>
+          </div>
+        ) : null}
+        <section id="auth" class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient}; scroll-margin-top: 24px;`}>
           <p class="np-subtle">User-facing local MVP</p>
           <h1 class="np-heading">{DEFAULT_BRAND_CONFIG.productName}</h1>
           <p>{DEFAULT_BRAND_CONFIG.tagline}</p>
@@ -40,7 +152,7 @@ const notifications = session
                 <span class="np-pill">userId: {session.userId}</span>
                 <span class="np-pill">provider: {session.identity.provider}</span>
                 <span class="np-pill">anonymous: {String(session.identity.isAnonymous)}</span>
-                <form method="post" action="/api/auth/logout" style="margin-top: 16px;">
+                <form method="post" action={bffPaths.authLogout} style="margin-top: 16px;">
                   <button type="submit" class="np-button secondary">Sign Out</button>
                 </form>
               </div>
@@ -67,12 +179,12 @@ const notifications = session
         </section>
 
         <section class="np-grid two">
-          <article class="np-card">
+          <article id="interests" class="np-card" style="scroll-margin-top: 24px;">
             <h2>Interests</h2>
             {
               session ? (
                 <>
-                  <form method="post" action="/api/interests">
+                  <form method="post" action={bffPaths.interests}>
                     <label>
                       Description
                       <textarea name="description" rows="3" placeholder="AI policy updates in the EU"></textarea>
@@ -94,6 +206,22 @@ const notifications = session
                       <input name="languages_allowed" value="en" />
                     </label>
                     <label>
+                      Must-have terms
+                      <input name="must_have_terms" placeholder="policy, regulation" />
+                    </label>
+                    <label>
+                      Must-not-have terms
+                      <input name="must_not_have_terms" placeholder="sports, celebrity" />
+                    </label>
+                    <label>
+                      Required short tokens
+                      <input name="short_tokens_required" placeholder="EU, AI" />
+                    </label>
+                    <label>
+                      Forbidden short tokens
+                      <input name="short_tokens_forbidden" placeholder="NBA, NFL" />
+                    </label>
+                    <label>
                       Priority
                       <input name="priority" type="number" value="1" min="0.1" max="1" step="0.1" />
                     </label>
@@ -108,19 +236,92 @@ const notifications = session
                           <strong>{String(interest.description ?? "Untitled interest")}</strong>
                           <div class="np-subtle">
                             status: {String(interest.compile_status ?? "pending")} | version:{" "}
-                            {String(interest.version ?? "-")}
+                            {String(interest.version ?? "-")} | enabled: {String(interest.enabled === true)}
                           </div>
-                          <form method="post" action={`/api/interests/${interest.interest_id}`}>
-                            <input type="hidden" name="enabled" value={String(!(interest.enabled === true))} />
-                            <input
-                              type="hidden"
-                              name="_action"
-                              value="update"
-                            />
-                            <button type="submit" class="np-button secondary">
-                              {interest.enabled === true ? "Disable" : "Enable"}
-                            </button>
-                          </form>
+                          <div class="np-subtle">
+                            compiled at: {formatTimestamp(interest.compiled_at)} | compile error:{" "}
+                            {String(interest.error_text ?? "none")}
+                          </div>
+                          <details style="margin-top: 12px;">
+                            <summary>Edit / clone / delete</summary>
+                            <form
+                              method="post"
+                              action={bffPaths.interest(String(interest.interest_id))}
+                              style="margin-top: 12px;"
+                            >
+                              <input type="hidden" name="_action" value="update" />
+                              <label>
+                                Description
+                                <textarea name="description" rows="2">{String(interest.description ?? "")}</textarea>
+                              </label>
+                              <label>
+                                Positive prototypes
+                                <textarea name="positive_texts" rows="4">{asLines(interest.positive_texts)}</textarea>
+                              </label>
+                              <label>
+                                Negative prototypes
+                                <textarea name="negative_texts" rows="3">{asLines(interest.negative_texts)}</textarea>
+                              </label>
+                              <label>
+                                Places
+                                <input name="places" value={asCsv(interest.places)} />
+                              </label>
+                              <label>
+                                Languages
+                                <input name="languages_allowed" value={asCsv(interest.languages_allowed)} />
+                              </label>
+                              <label>
+                                Must-have terms
+                                <input name="must_have_terms" value={asCsv(interest.must_have_terms)} />
+                              </label>
+                              <label>
+                                Must-not-have terms
+                                <input name="must_not_have_terms" value={asCsv(interest.must_not_have_terms)} />
+                              </label>
+                              <label>
+                                Required short tokens
+                                <input name="short_tokens_required" value={asCsv(interest.short_tokens_required)} />
+                              </label>
+                              <label>
+                                Forbidden short tokens
+                                <input name="short_tokens_forbidden" value={asCsv(interest.short_tokens_forbidden)} />
+                              </label>
+                              <label>
+                                Priority
+                                <input
+                                  name="priority"
+                                  type="number"
+                                  min="0.1"
+                                  max="1"
+                                  step="0.1"
+                                  value={String(interest.priority ?? 1)}
+                                />
+                              </label>
+                              <label>
+                                Enabled
+                                <select name="enabled">
+                                  <option value="true" selected={interest.enabled === true}>true</option>
+                                  <option value="false" selected={interest.enabled !== true}>false</option>
+                                </select>
+                              </label>
+                              <button type="submit" class="np-button secondary">Save Interest</button>
+                            </form>
+                            <div class="np-grid two" style="margin-top: 12px;">
+                              <form method="post" action={bffPaths.interest(String(interest.interest_id))}>
+                                <input type="hidden" name="_action" value="clone" />
+                                <input
+                                  type="hidden"
+                                  name="description"
+                                  value={`Copy of ${String(interest.description ?? "interest")}`}
+                                />
+                                <button type="submit" class="np-button secondary">Clone</button>
+                              </form>
+                              <form method="post" action={bffPaths.interest(String(interest.interest_id))}>
+                                <input type="hidden" name="_action" value="delete" />
+                                <button type="submit" class="np-button secondary">Delete</button>
+                              </form>
+                            </div>
+                          </details>
                         </article>
                       ))
                     )}
@@ -132,42 +333,126 @@ const notifications = session
             }
           </article>
 
-          <article class="np-card">
+          <article id="preferences" class="np-card" style="scroll-margin-top: 24px;">
             <h2>Preferences & Channels</h2>
             {
               session ? (
                 <>
-                  <form method="post" action="/api/preferences">
+                  <form method="post" action={bffPaths.preferences}>
                     <label>
                       Theme preference
                       <select name="themePreference">
-                        <option value="system">System</option>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
+                        <option value="system" selected={themePreference === "system"}>System</option>
+                        <option value="light" selected={themePreference === "light"}>Light</option>
+                        <option value="dark" selected={themePreference === "dark"}>Dark</option>
                       </select>
                     </label>
-                    <input type="submit" value="Save Theme" />
-                  </form>
-                  <form method="post" action="/api/notification-channels" style="margin-top: 18px;">
-                    <input type="hidden" name="channelType" value="telegram" />
                     <label>
-                      Telegram chat ID
-                      <input name="chatId" placeholder="123456789" />
+                      Web push enabled
+                      <select name="webPushEnabled">
+                        <option value="true" selected={preferenceState.webPush}>true</option>
+                        <option value="false" selected={!preferenceState.webPush}>false</option>
+                      </select>
                     </label>
-                    <input type="submit" value="Connect Telegram" />
-                  </form>
-                  <form method="post" action="/api/notification-channels">
-                    <input type="hidden" name="channelType" value="email_digest" />
                     <label>
-                      Digest email
-                      <input
-                        name="email"
-                        value={session.identity.email ?? ""}
-                        placeholder="user@example.com"
-                      />
+                      Telegram enabled
+                      <select name="telegramEnabled">
+                        <option value="true" selected={preferenceState.telegram}>true</option>
+                        <option value="false" selected={!preferenceState.telegram}>false</option>
+                      </select>
                     </label>
-                    <input type="submit" value="Connect Email Digest" />
+                    <label>
+                      Weekly email digest enabled
+                      <select name="weeklyEmailDigestEnabled">
+                        <option value="true" selected={preferenceState.weeklyEmailDigest}>true</option>
+                        <option value="false" selected={!preferenceState.weeklyEmailDigest}>false</option>
+                      </select>
+                    </label>
+                    <input type="submit" value="Save Preferences" />
                   </form>
+
+                  <div class="np-grid two" style="margin-top: 18px;">
+                    <div class="np-card">
+                      <strong>Web Push</strong>
+                      <p class="np-subtle">
+                        {runtimeConfig.webPushVapidPublicKey
+                          ? "Register the browser subscription for manual push testing."
+                          : "WEB_PUSH_VAPID_PUBLIC_KEY is not configured for the web app."}
+                      </p>
+                      <button
+                        id="connect-web-push"
+                        class="np-button secondary"
+                        type="button"
+                        disabled={!runtimeConfig.webPushVapidPublicKey}
+                        data-vapid-key={runtimeConfig.webPushVapidPublicKey}
+                      >
+                        Connect Web Push
+                      </button>
+                      <p id="web-push-status" class="np-subtle" style="margin-top: 12px;"></p>
+                    </div>
+
+                    <div>
+                      <form method="post" action={bffPaths.notificationChannels} style="margin-top: 0;">
+                        <input type="hidden" name="channelType" value="telegram" />
+                        <label>
+                          Telegram chat ID
+                          <input name="chatId" placeholder="123456789" />
+                        </label>
+                        <input type="submit" value="Connect Telegram" />
+                      </form>
+                      <form method="post" action={bffPaths.notificationChannels}>
+                        <input type="hidden" name="channelType" value="email_digest" />
+                        <label>
+                          Digest email
+                          <input
+                            name="email"
+                            value={session.identity.email ?? ""}
+                            placeholder="user@example.com"
+                          />
+                        </label>
+                        <input type="submit" value="Connect Email Digest" />
+                      </form>
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 18px;">
+                    {configuredChannels.length === 0 ? (
+                      <p class="np-subtle">No notification channels configured yet.</p>
+                    ) : (
+                      <table class="np-table">
+                        <thead>
+                          <tr>
+                            <th>Channel</th>
+                            <th>Verified</th>
+                            <th>Last Delivery</th>
+                            <th>Detail</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {configuredChannels.map((channel) => {
+                            const configJson = asRecord(channel.config_json);
+                            const deliveryPayload = asRecord(channel.last_delivery_payload_json);
+                            return (
+                              <tr>
+                                <td>
+                                  <div>{String(channel.channel_type ?? "-")}</div>
+                                  <div class="np-subtle">
+                                    {String(configJson.email ?? configJson.chat_id ?? "browser subscription")}
+                                  </div>
+                                </td>
+                                <td>{formatTimestamp(channel.verified_at)}</td>
+                                <td>
+                                  <div>{String(channel.last_status ?? "never")}</div>
+                                  <div class="np-subtle">{formatTimestamp(channel.last_sent_at)}</div>
+                                </td>
+                                <td>{String(deliveryPayload.detail ?? "-")}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </>
               ) : (
                 <p class="np-subtle">Session required.</p>
@@ -176,7 +461,7 @@ const notifications = session
           </article>
         </section>
 
-        <section class="np-card">
+        <section id="feed" class="np-card" style="scroll-margin-top: 24px;">
           <h2>Matched News Feed</h2>
           <div class="np-grid two">
             {articles.map((article) => (
@@ -193,12 +478,12 @@ const notifications = session
                 </p>
                 {session ? (
                   <div class="np-grid two">
-                    <form method="post" action="/api/reactions">
+                    <form method="post" action={bffPaths.reactions}>
                       <input type="hidden" name="docId" value={String(article.doc_id)} />
                       <input type="hidden" name="reactionType" value="like" />
                       <input type="submit" value="Like" />
                     </form>
-                    <form method="post" action="/api/reactions">
+                    <form method="post" action={bffPaths.reactions}>
                       <input type="hidden" name="docId" value={String(article.doc_id)} />
                       <input type="hidden" name="reactionType" value="dislike" />
                       <input type="submit" value="Dislike" />
@@ -213,7 +498,7 @@ const notifications = session
           </div>
         </section>
 
-        <section class="np-card">
+        <section id="notifications" class="np-card" style="scroll-margin-top: 24px;">
           <h2>Notification History</h2>
           {session ? (
             notifications.length === 0 ? (
@@ -238,14 +523,14 @@ const notifications = session
                       <td>{String(notification.decision_reason ?? "-")}</td>
                       <td>
                         <div class="np-grid two">
-                          <form method="post" action="/api/feedback">
+                          <form method="post" action={bffPaths.feedback}>
                             <input type="hidden" name="notificationId" value={String(notification.notification_id)} />
                             <input type="hidden" name="docId" value={String(notification.doc_id)} />
                             <input type="hidden" name="interestId" value={String(notification.interest_id ?? "")} />
                             <input type="hidden" name="feedbackValue" value="helpful" />
                             <button type="submit" class="np-button secondary">Helpful</button>
                           </form>
-                          <form method="post" action="/api/feedback">
+                          <form method="post" action={bffPaths.feedback}>
                             <input type="hidden" name="notificationId" value={String(notification.notification_id)} />
                             <input type="hidden" name="docId" value={String(notification.doc_id)} />
                             <input type="hidden" name="interestId" value={String(notification.interest_id ?? "")} />
@@ -281,15 +566,85 @@ const notifications = session
       </div>
     </main>
 
-    <script>
-      const button = document.getElementById("bootstrap-session");
-      if (button) {
-        button.addEventListener("click", async () => {
-          const response = await fetch("/api/auth/bootstrap", {
+    <script
+      is:inline
+      define:vars={{
+        authBootstrapPath: bffPaths.authBootstrap,
+        notificationChannelsPath: bffPaths.notificationChannels,
+        webPushVapidPublicKey: runtimeConfig.webPushVapidPublicKey
+      }}
+    >
+      const bootstrapButton = document.getElementById("bootstrap-session");
+      if (bootstrapButton) {
+        bootstrapButton.addEventListener("click", async () => {
+          const response = await fetch(authBootstrapPath, {
             method: "POST"
           });
           if (response.ok) {
             window.location.reload();
+          }
+        });
+      }
+
+      function urlBase64ToUint8Array(value) {
+        const padding = "=".repeat((4 - (value.length % 4 || 4)) % 4);
+        const base64 = (value + padding).replaceAll("-", "+").replaceAll("_", "/");
+        const raw = window.atob(base64);
+        return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+      }
+
+      const webPushButton = document.getElementById("connect-web-push");
+      const webPushStatus = document.getElementById("web-push-status");
+      if (webPushButton && webPushStatus) {
+        webPushButton.addEventListener("click", async () => {
+          if (!webPushVapidPublicKey) {
+            webPushStatus.textContent = "WEB_PUSH_VAPID_PUBLIC_KEY is missing.";
+            return;
+          }
+
+          if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+            webPushStatus.textContent = "This browser does not support Web Push.";
+            return;
+          }
+
+          try {
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") {
+              webPushStatus.textContent = "Notification permission was not granted.";
+              return;
+            }
+
+            const registration = await navigator.serviceWorker.register("/sw.js");
+            let subscription = await registration.pushManager.getSubscription();
+            if (!subscription) {
+              subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(webPushVapidPublicKey)
+              });
+            }
+
+            const body = new URLSearchParams({
+              channelType: "web_push",
+              subscription: JSON.stringify(subscription.toJSON())
+            });
+            const response = await fetch(notificationChannelsPath, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+              },
+              body
+            });
+
+            if (!response.ok) {
+              const payload = await response.json().catch(() => ({}));
+              throw new Error(payload.error || `HTTP ${response.status}`);
+            }
+
+            webPushStatus.textContent = "Web push subscription connected.";
+            window.location.reload();
+          } catch (error) {
+            webPushStatus.textContent =
+              error instanceof Error ? error.message : "Failed to register web push.";
           }
         });
       }

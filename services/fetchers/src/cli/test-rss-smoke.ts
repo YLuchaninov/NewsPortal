@@ -67,6 +67,7 @@ async function startFixtureServer(feedXml: string): Promise<{
         request.headers["if-modified-since"] === lastModified
       ) {
         response.writeHead(304, {
+          Connection: "close",
           ETag: etag,
           "Last-Modified": lastModified
         });
@@ -76,6 +77,7 @@ async function startFixtureServer(feedXml: string): Promise<{
 
       response.writeHead(200, {
         "content-type": "application/rss+xml; charset=utf-8",
+        Connection: "close",
         ETag: etag,
         "Last-Modified": lastModified
       });
@@ -282,19 +284,64 @@ async function assertIdempotentRefetch(
   pool: Pool,
   channelId: string
 ): Promise<void> {
-  await service.pollChannel(channelId);
-
-  const articleResult = await pool.query<{ count: string }>(
+  const beforeCounts = await pool.query<{ articleCount: string; outboxCount: string }>(
     `
-      select count(*)::text as count
-      from articles
-      where channel_id = $1
+      select
+        (
+          select count(*)::text
+          from articles
+          where channel_id = $1
+        ) as "articleCount",
+        (
+          select count(*)::text
+          from outbox_events
+          where
+            aggregate_type = 'article'
+            and aggregate_id in (
+              select doc_id
+              from articles
+              where channel_id = $1
+            )
+            and event_type in ('article.ingest.requested', 'article.normalized')
+            and status = 'published'
+        ) as "outboxCount"
     `,
     [channelId]
   );
 
-  if (articleResult.rows[0]?.count !== "1") {
+  await service.pollChannel(channelId);
+
+  const afterCounts = await pool.query<{ articleCount: string; outboxCount: string }>(
+    `
+      select
+        (
+          select count(*)::text
+          from articles
+          where channel_id = $1
+        ) as "articleCount",
+        (
+          select count(*)::text
+          from outbox_events
+          where
+            aggregate_type = 'article'
+            and aggregate_id in (
+              select doc_id
+              from articles
+              where channel_id = $1
+            )
+            and event_type in ('article.ingest.requested', 'article.normalized')
+            and status = 'published'
+        ) as "outboxCount"
+    `,
+    [channelId]
+  );
+
+  if (afterCounts.rows[0]?.articleCount !== beforeCounts.rows[0]?.articleCount) {
     throw new Error("Expected RSS refetch to avoid creating duplicate article rows.");
+  }
+
+  if (afterCounts.rows[0]?.outboxCount !== beforeCounts.rows[0]?.outboxCount) {
+    throw new Error("Expected RSS refetch to avoid creating duplicate article outbox rows.");
   }
 }
 

@@ -3,15 +3,31 @@ import { randomUUID } from "node:crypto";
 
 import { REINDEX_REQUESTED_EVENT } from "@newsportal/contracts";
 
-import { resolveAdminSession } from "../../../lib/server/auth";
+import {
+  buildFlashRedirect,
+  requestPrefersHtmlNavigation
+} from "../../../lib/server/browser-flow";
+import {
+  buildExpiredAdminSessionCookie,
+  resolveAdminSession
+} from "../../../lib/server/auth";
 import { getPool } from "../../../lib/server/db";
 import { insertOutboxEvent } from "../../../lib/server/outbox";
 import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
+  const browserRequest = requestPrefersHtmlNavigation(request);
   const session = await resolveAdminSession(request);
   if (!session || !session.roles.includes("admin")) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "auth",
+        status: "error",
+        message: "Please sign in as an admin to continue.",
+        setCookie: buildExpiredAdminSessionCookie()
+      });
+    }
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 
@@ -62,6 +78,13 @@ export const POST: APIRoute = async ({ request }) => {
     await client.query("commit");
   } catch (error) {
     await client.query("rollback");
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "reindex",
+        status: "error",
+        message: "Unable to queue reindex right now."
+      });
+    }
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Failed to queue reindex."
@@ -72,6 +95,14 @@ export const POST: APIRoute = async ({ request }) => {
     );
   } finally {
     client.release();
+  }
+
+  if (browserRequest) {
+    return buildFlashRedirect(request, {
+      section: "reindex",
+      status: "success",
+      message: "Reindex queued"
+    });
   }
 
   return Response.json({ reindexJobId }, { status: 201 });

@@ -11,6 +11,50 @@
 
 ## Completed items
 
+### 2026-03-23 — P-PROCESS-CLEANUP-1 — Очистка stale process residue после v2 migration
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: после перехода на runtime-core v2 в live docs оставался переходный migration residue, а в корне репозитория лежал системный `.DS_Store`.
+- Что изменилось:
+  - удален root `.DS_Store`;
+  - `docs/work.md` сжат обратно к product-relevant live state без лишнего migration noise в `Why now` и `Recently changed`;
+  - `docs/verification.md` очищен от слишком узкой привязки к `init/` и теперь фиксирует generic stale-runtime-path cleanup rule.
+- Что проверено:
+  - `git diff --check`
+  - targeted `rg` review по surviving docs на stale migration/process residue
+  - отсутствие `.DS_Store` в корне репозитория
+- Риски или gaps:
+  - архивные references к старым стадиям process migration и прошлому удалению `init/` сохранены намеренно как historical truth, а не считаются мусором.
+- Follow-up:
+  - none
+
+### 2026-03-23 — C-AI-PROCESS-V2-MIGRATION — Миграция runtime core на v2 и русификация surviving docs
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь запросил перевести агентную разработку на новую версию process docs из `init/`, сохранить текущее live/archive состояние, мигрировать schema process-файлов и оставить surviving project documentation на русском.
+- Что изменилось:
+  - runtime core переведен на 7-file model: добавлен `docs/engineering.md`, а `AGENTS.md`, `docs/verification.md`, `docs/work.md` и `.aidp/os.yaml` синхронизированы с новой v2 schema;
+  - `docs/blueprint.md` сохранен как master blueprint без template rewrite; в него добавлены только durable ссылки на companion docs `docs/engineering.md`, `docs/verification.md` и `docs/contracts/test-access-and-fixtures.md`;
+  - добавлены repo-specific deep contract docs `docs/contracts/README.md` и `docs/contracts/test-access-and-fixtures.md`, которые фиксируют stateful backend test access, fixture creation и cleanup discipline;
+  - `docs/work.md` мигрирован на новую live-state schema с `Primary active item`, `Secondary active item`, `Worktree coherence`, `Test artifacts and cleanup state` и explicit mixed-worktree truth;
+  - `README.md` и `firebase_setup.md` синхронизированы с 7-file runtime core и новым engineering/test-access layering;
+  - директория `init/` удалена после merge, но прежние архивные записи о ее прошлых состояниях сохранены как исторический факт.
+- Разбивка по stages:
+  - `S-AI-PROCESS-V2-1` — adopt new core contract in place
+  - `S-AI-PROCESS-V2-2` — migrate live state and archive data to new schema
+  - `S-AI-PROCESS-V2-3` — finish Russian documentation sweep, add contract docs and retire `init/`
+- Что проверено:
+  - `git diff --check`
+  - `pnpm check:scaffold`
+  - targeted `rg` consistency checks по surviving docs на старый 6-file runtime core, stale read/authority order, placeholder-like package text и runtime-ссылки на `init/`
+- Риски или gaps:
+  - `docs/history.md` намеренно сохраняет historical references к прошлому 6-file core и более раннему удалению `init/`; это архивная правда, а не текущий runtime contract;
+  - migration сознательно не меняла application behavior, service boundaries или уже существующие product/proof gaps вроде `test:normalize-dedup:compose`.
+- Follow-up:
+  - truthful next product work остается прежним: разбор blocker в `pnpm integration_tests` / `test:normalize-dedup:compose`, затем повторный full acceptance для `C-MVP-MANUAL-READINESS`.
+
 ### 2026-03-22 — C-PROCESS-PROOF-AUDIT — Full process-proof audit
 
 - Тип записи: capability archive

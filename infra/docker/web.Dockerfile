@@ -2,6 +2,9 @@ FROM node:22-alpine
 
 WORKDIR /workspace
 
+ARG NEWSPORTAL_APP_BASE_URL=http://127.0.0.1:4321/
+ENV NEWSPORTAL_APP_BASE_URL=$NEWSPORTAL_APP_BASE_URL
+
 RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json ./

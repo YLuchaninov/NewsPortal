@@ -3,10 +3,17 @@ import { randomUUID } from "node:crypto";
 
 import { INTEREST_COMPILE_REQUESTED_EVENT } from "@newsportal/contracts";
 
+import {
+  buildFlashRedirect,
+  requestPrefersHtmlNavigation
+} from "../../lib/server/browser-flow";
 import { getPool, queryRows } from "../../lib/server/db";
 import { insertOutboxEvent } from "../../lib/server/outbox";
 import { readRequestPayload } from "../../lib/server/request";
-import { resolveWebSession } from "../../lib/server/auth";
+import {
+  buildExpiredSessionCookie,
+  resolveWebSession
+} from "../../lib/server/auth";
 
 export const prerender = false;
 export const GET: APIRoute = async ({ request }) => {
@@ -28,14 +35,30 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
+  const browserRequest = requestPrefersHtmlNavigation(request);
   const session = await resolveWebSession(request);
   if (!session) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "auth",
+        status: "error",
+        message: "Please start a session to continue.",
+        setCookie: buildExpiredSessionCookie()
+      });
+    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   const payload = await readRequestPayload(request);
   const description = String(payload.description ?? "").trim();
   if (!description) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "interests",
+        status: "error",
+        message: "Description is required."
+      });
+    }
     return Response.json({ error: "Description is required." }, { status: 400 });
   }
 
@@ -119,6 +142,13 @@ export const POST: APIRoute = async ({ request }) => {
     await client.query("commit");
   } catch (error) {
     await client.query("rollback");
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "interests",
+        status: "error",
+        message: "Unable to create interest right now."
+      });
+    }
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Failed to create interest."
@@ -129,6 +159,14 @@ export const POST: APIRoute = async ({ request }) => {
     );
   } finally {
     client.release();
+  }
+
+  if (browserRequest) {
+    return buildFlashRedirect(request, {
+      section: "interests",
+      status: "success",
+      message: "Interest created"
+    });
   }
 
   return Response.json({ interestId }, { status: 201 });

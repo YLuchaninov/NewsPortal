@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  normalizeMaxPollIntervalSeconds,
   parseRssChannelConfig,
   type RssChannelConfig
 } from "@newsportal/contracts";
@@ -18,6 +19,8 @@ export interface NormalizedRssAdminChannelInput {
   language: string | null;
   isActive: boolean;
   pollIntervalSeconds: number;
+  adaptiveEnabled: boolean;
+  maxPollIntervalSeconds: number;
   maxItemsPerPoll: number;
   requestTimeoutMs: number;
   userAgent: string;
@@ -80,6 +83,21 @@ function readPositiveInteger(value: unknown, fallback: number, fieldName: string
   return parsed;
 }
 
+function readOptionalPositiveInteger(value: unknown, fieldName: string): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed =
+    typeof value === "number" && Number.isInteger(value) ? value : Number.parseInt(String(value), 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`RSS channel field "${fieldName}" must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
 function validateHttpUrl(rawUrl: string): string {
   let parsed: URL;
 
@@ -124,6 +142,15 @@ export function parseRssAdminChannelInput(payload: Record<string, unknown>): Nor
   }
 
   const config = normalizeRssConfig(payload);
+  const pollIntervalSeconds = readPositiveInteger(
+    payload.pollIntervalSeconds,
+    DEFAULT_POLL_INTERVAL_SECONDS,
+    "pollIntervalSeconds"
+  );
+  const maxPollIntervalSeconds = normalizeMaxPollIntervalSeconds(
+    pollIntervalSeconds,
+    readOptionalPositiveInteger(payload.maxPollIntervalSeconds, "maxPollIntervalSeconds")
+  );
 
   return {
     channelId: readOptionalString(payload.channelId) ?? undefined,
@@ -132,11 +159,9 @@ export function parseRssAdminChannelInput(payload: Record<string, unknown>): Nor
     fetchUrl: validateHttpUrl(readRequiredString(payload.fetchUrl, "fetchUrl")),
     language: readOptionalString(payload.language) ?? DEFAULT_LANGUAGE,
     isActive: readBoolean(payload.isActive, true, "isActive"),
-    pollIntervalSeconds: readPositiveInteger(
-      payload.pollIntervalSeconds,
-      DEFAULT_POLL_INTERVAL_SECONDS,
-      "pollIntervalSeconds"
-    ),
+    pollIntervalSeconds,
+    adaptiveEnabled: readBoolean(payload.adaptiveEnabled, true, "adaptiveEnabled"),
+    maxPollIntervalSeconds,
     maxItemsPerPoll: config.maxItemsPerPoll,
     requestTimeoutMs: config.requestTimeoutMs,
     userAgent: config.userAgent,
@@ -223,6 +248,43 @@ export async function upsertRssChannels(
         if (updateResult.rowCount !== 1) {
           throw new Error(`RSS channel ${channel.channelId} was not found.`);
         }
+        await client.query(
+          `
+            insert into source_channel_runtime_state (
+              channel_id,
+              adaptive_enabled,
+              effective_poll_interval_seconds,
+              max_poll_interval_seconds,
+              next_due_at,
+              adaptive_step,
+              last_result_kind,
+              consecutive_no_change_polls,
+              consecutive_failures,
+              adaptive_reason,
+              updated_at
+            )
+            values ($1, $2, $3, $4, now() + make_interval(secs => $3), 0, null, 0, 0, 'manual_schedule_reset', now())
+            on conflict (channel_id)
+            do update
+            set
+              adaptive_enabled = excluded.adaptive_enabled,
+              effective_poll_interval_seconds = excluded.effective_poll_interval_seconds,
+              max_poll_interval_seconds = excluded.max_poll_interval_seconds,
+              next_due_at = excluded.next_due_at,
+              adaptive_step = excluded.adaptive_step,
+              last_result_kind = excluded.last_result_kind,
+              consecutive_no_change_polls = excluded.consecutive_no_change_polls,
+              consecutive_failures = excluded.consecutive_failures,
+              adaptive_reason = excluded.adaptive_reason,
+              updated_at = excluded.updated_at
+          `,
+          [
+            channel.channelId,
+            channel.adaptiveEnabled,
+            channel.pollIntervalSeconds,
+            channel.maxPollIntervalSeconds
+          ]
+        );
         updatedChannelIds.push(channel.channelId);
         continue;
       }
@@ -252,6 +314,31 @@ export async function upsertRssChannels(
           channel.isActive,
           channel.pollIntervalSeconds,
           configJson
+        ]
+      );
+      await client.query(
+        `
+          insert into source_channel_runtime_state (
+            channel_id,
+            adaptive_enabled,
+            effective_poll_interval_seconds,
+            max_poll_interval_seconds,
+            next_due_at,
+            adaptive_step,
+            last_result_kind,
+            consecutive_no_change_polls,
+            consecutive_failures,
+            adaptive_reason,
+            updated_at
+          )
+          values ($1, $2, $3, $4, now(), 0, null, 0, 0, null, now())
+          on conflict (channel_id) do nothing
+        `,
+        [
+          channelId,
+          channel.adaptiveEnabled,
+          channel.pollIntervalSeconds,
+          channel.maxPollIntervalSeconds
         ]
       );
       createdChannelIds.push(channelId);

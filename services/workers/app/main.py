@@ -39,6 +39,10 @@ from ml.app import (
 )
 from .delivery import dispatch_channel_message
 from .gemini import review_with_gemini
+from .notification_preferences import (
+    is_channel_enabled_by_preferences,
+    normalize_notification_preferences,
+)
 from .scoring import (
     compute_cluster_same_event_score,
     compute_criterion_final_score,
@@ -1592,6 +1596,24 @@ async def fetch_user_notification_channels(
     return list(await cursor.fetchall())
 
 
+async def fetch_user_notification_preferences(
+    cursor: psycopg.AsyncCursor[Any],
+    user_id: uuid.UUID,
+) -> dict[str, bool]:
+    await cursor.execute(
+        """
+        select notification_preferences
+        from user_profiles
+        where user_id = %s
+        limit 1
+        """,
+        (user_id,),
+    )
+    row = await cursor.fetchone()
+    preferences = row.get("notification_preferences") if row else {}
+    return normalize_notification_preferences(preferences if isinstance(preferences, dict) else None)
+
+
 async def insert_notification_log_row(
     cursor: psycopg.AsyncCursor[Any],
     *,
@@ -2664,15 +2686,35 @@ async def process_notify(job: Job, _job_token: str) -> dict[str, Any]:
 
                     title = str(article.get("title") or "News update")
                     body = str(article.get("lead") or article.get("body") or "")[:500]
+                    notification_preferences = await fetch_user_notification_preferences(
+                        cursor, user_id
+                    )
                     channels = await fetch_user_notification_channels(cursor, user_id)
                     for channel in channels:
+                        channel_type = str(channel["channel_type"])
+                        if not is_channel_enabled_by_preferences(
+                            channel_type, notification_preferences
+                        ):
+                            await insert_notification_suppression(
+                                cursor,
+                                user_id=user_id,
+                                interest_id=interest_id,
+                                notification_id=None,
+                                doc_id=article["doc_id"],
+                                family_id=article.get("family_id"),
+                                cluster_id=cluster_id,
+                                reason=f"preference_disabled:{channel_type}",
+                            )
+                            suppressed_count += 1
+                            continue
+
                         notification_id = await insert_notification_log_row(
                             cursor,
                             user_id=user_id,
                             interest_id=interest_id,
                             doc_id=article["doc_id"],
                             cluster_id=cluster_id,
-                            channel_type=str(channel["channel_type"]),
+                            channel_type=channel_type,
                             status="queued",
                             title=title,
                             body=body,
@@ -2680,7 +2722,7 @@ async def process_notify(job: Job, _job_token: str) -> dict[str, Any]:
                             delivery_payload_json={"interestMatchId": str(match_row["interest_match_id"])},
                         )
                         attempt = dispatch_channel_message(
-                            str(channel["channel_type"]),
+                            channel_type,
                             coerce_json_object(channel.get("config_json")),
                             title,
                             body,
@@ -2816,9 +2858,15 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                       llm_model,
                       decision,
                       score,
+                      provider_latency_ms,
+                      prompt_tokens,
+                      completion_tokens,
+                      total_tokens,
+                      cost_estimate_usd,
+                      provider_usage_json,
                       response_json
                     )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
                     returning review_id
                     """,
                     (
@@ -2830,6 +2878,12 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                         review_result.model,
                         review_result.decision,
                         review_result.score,
+                        review_result.provider_latency_ms,
+                        review_result.prompt_tokens,
+                        review_result.completion_tokens,
+                        review_result.total_tokens,
+                        review_result.cost_estimate_usd,
+                        Json(make_json_safe(review_result.provider_usage_json)),
                         Json(make_json_safe(review_result.response_json)),
                     ),
                 )

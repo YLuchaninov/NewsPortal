@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Replace With Real Feed 1",
+    "providerType": "rss",
+    "fetchUrl": "https://example.com/feed-1.xml",
+    "language": "en",
+    "pollIntervalSeconds": 300,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 3600,
+    "maxItemsPerPoll": 20,
+    "requestTimeoutMs": 5000,
+    "userAgent": "NewsPortalFetchers/manual-mvp",
+    "preferContentEncoded": true,
+    "isActive": true
+  },
+  {
+    "name": "Replace With Real Feed 2",
+    "providerType": "rss",
+    "fetchUrl": "https://example.com/feed-2.xml",
+    "language": "en",
+    "pollIntervalSeconds": 86400,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 259200,
+    "maxItemsPerPoll": 20,
+    "requestTimeoutMs": 5000,
+    "userAgent": "NewsPortalFetchers/manual-mvp",
+    "preferContentEncoded": true,
+    "isActive": true
+  },
+  {
+    "name": "Replace With Real Feed 3",
+    "providerType": "rss",
+    "fetchUrl": "https://example.com/feed-3.xml",
+    "language": "en",
+    "pollIntervalSeconds": 259200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 604800,
+    "maxItemsPerPoll": 20,
+    "requestTimeoutMs": 5000,
+    "userAgent": "NewsPortalFetchers/manual-mvp",
+    "preferContentEncoded": true,
+    "isActive": true
+  }
+]

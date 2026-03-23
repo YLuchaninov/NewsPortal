@@ -1,9 +1,20 @@
 import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
 
+import {
+  buildFlashRedirect,
+  requestPrefersHtmlNavigation
+} from "../../lib/server/browser-flow";
 import { getPool, queryRows } from "../../lib/server/db";
 import { readRequestPayload } from "../../lib/server/request";
-import { resolveWebSession } from "../../lib/server/auth";
+import {
+  buildExpiredSessionCookie,
+  resolveWebSession
+} from "../../lib/server/auth";
+import {
+  parseNotificationChannelConfig,
+  type NotificationChannelType
+} from "../../lib/server/notification-channels";
 
 export const prerender = false;
 export const GET: APIRoute = async ({ request }) => {
@@ -25,25 +36,57 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
+  const browserRequest = requestPrefersHtmlNavigation(request);
   const session = await resolveWebSession(request);
   if (!session) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "auth",
+        status: "error",
+        message: "Please start a session to continue.",
+        setCookie: buildExpiredSessionCookie()
+      });
+    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   const payload = await readRequestPayload(request);
-  const channelType = String(payload.channelType ?? "");
+  const channelType = String(payload.channelType ?? "") as NotificationChannelType;
   if (!["web_push", "telegram", "email_digest"].includes(channelType)) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "preferences",
+        status: "error",
+        message: "Invalid channel type."
+      });
+    }
     return Response.json({ error: "Invalid channel type." }, { status: 400 });
   }
 
-  const configJson =
-    channelType === "telegram"
-      ? { chat_id: String(payload.chatId ?? "") }
-      : channelType === "email_digest"
-        ? { email: String(payload.email ?? session.identity.email ?? "") }
-        : {
-            subscription: payload.subscription ? JSON.parse(String(payload.subscription)) : {}
-          };
+  let configJson: Record<string, unknown>;
+  try {
+    configJson = parseNotificationChannelConfig(
+      channelType,
+      payload,
+      session.identity.email ?? null
+    );
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Invalid notification channel payload.";
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "preferences",
+        status: "error",
+        message: errorMessage
+      });
+    }
+    return Response.json(
+      {
+        error: errorMessage
+      },
+      { status: 400 }
+    );
+  }
 
   const pool = getPool();
   const existing = await pool.query<{ channel_binding_id: string }>(
@@ -70,6 +113,13 @@ export const POST: APIRoute = async ({ request }) => {
       `,
       [existing.rows[0].channel_binding_id, session.userId, JSON.stringify(configJson)]
     );
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "preferences",
+        status: "success",
+        message: "Channel connected"
+      });
+    }
     return Response.json({ updated: true });
   }
 
@@ -87,6 +137,14 @@ export const POST: APIRoute = async ({ request }) => {
     `,
     [randomUUID(), session.userId, channelType, JSON.stringify(configJson)]
   );
+
+  if (browserRequest) {
+    return buildFlashRedirect(request, {
+      section: "preferences",
+      status: "success",
+      message: "Channel connected"
+    });
+  }
 
   return Response.json({ created: true }, { status: 201 });
 };

@@ -115,6 +115,66 @@ function extractCookie(setCookies) {
   return cookie.split(";")[0];
 }
 
+function readHeader(headers, name) {
+  const value = headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function assertFlashRedirect(response, { origin, pathname = "/", section, status, message }) {
+  if (response.status !== 303) {
+    throw new Error(`Expected 303 redirect, got ${response.status}.`);
+  }
+
+  const locationHeader = readHeader(response.headers, "location");
+  if (!locationHeader) {
+    throw new Error("Expected Location header for browser redirect.");
+  }
+
+  const location = new URL(locationHeader);
+  if (location.origin !== origin) {
+    throw new Error(`Expected redirect origin ${origin}, got ${location.origin}.`);
+  }
+  if (location.pathname !== pathname) {
+    throw new Error(`Expected redirect to ${pathname}, got ${location.pathname}.`);
+  }
+  if (location.hash !== `#${section}`) {
+    throw new Error(`Expected redirect hash #${section}, got ${location.hash || "<none>"}.`);
+  }
+  if (location.searchParams.get("flash_status") !== status) {
+    throw new Error(
+      `Expected flash_status=${status}, got ${location.searchParams.get("flash_status") || "<none>"}.`
+    );
+  }
+  if (location.searchParams.get("flash_message") !== message) {
+    throw new Error(
+      `Expected flash_message=${message}, got ${location.searchParams.get("flash_message") || "<none>"}.`
+    );
+  }
+}
+
+async function assertHtmlContains(url, snippets) {
+  const response = await sendRequest(url);
+  if (response.status !== 200) {
+    throw new Error(`Expected ${url} to respond with 200, got ${response.status}.`);
+  }
+
+  for (const snippet of snippets) {
+    if (!response.text.includes(snippet)) {
+      throw new Error(`Expected HTML from ${url} to include ${snippet}.`);
+    }
+  }
+}
+
+function assertExpiredCookie(response, cookieName) {
+  const setCookie = readHeader(response.headers, "set-cookie");
+  if (!setCookie.includes(`${cookieName}=`)) {
+    throw new Error(`Expected Set-Cookie for ${cookieName}.`);
+  }
+  if (!setCookie.includes("Max-Age=0")) {
+    throw new Error(`Expected ${cookieName} to be expired, got ${setCookie}.`);
+  }
+}
+
 function parseJsonResponse(text, responseMeta) {
   const json = text ? JSON.parse(text) : null;
   if (responseMeta.status < 200 || responseMeta.status >= 300) {
@@ -166,6 +226,27 @@ async function sendRequest(url, { method = "GET", headers = {}, body = "" } = {}
       request.write(body);
     }
     request.end();
+  });
+}
+
+async function postBrowserForm(url, payload, { cookie } = {}) {
+  const target = new URL(url);
+  const body = new URLSearchParams(
+    Object.entries(payload).map(([key, value]) => [key, String(value)])
+  ).toString();
+
+  return sendRequest(url, {
+    method: "POST",
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      Origin: target.origin,
+      Referer: `${target.origin}/`,
+      "Sec-Fetch-Mode": "navigate",
+      ...(cookie ? { Cookie: cookie } : {}),
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Length": Buffer.byteLength(body).toString()
+    },
+    body
   });
 }
 
@@ -428,9 +509,59 @@ async function main() {
     runCommand("pnpm", ["test:criterion-compile:compose"]);
     runCommand("pnpm", ["test:cluster-match-notify:compose"]);
 
+    log("Checking browser-style web auth redirects.");
+    const webBrowserBootstrap = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/auth/bootstrap",
+      {}
+    );
+    assertFlashRedirect(webBrowserBootstrap, {
+      origin: "http://127.0.0.1:4321",
+      section: "auth",
+      status: "success",
+      message: "Session started."
+    });
+    const webBrowserCookie = extractCookie(webBrowserBootstrap.headers["set-cookie"]);
+    const browserWebSession = await fetchJson("http://127.0.0.1:4321/bff/session", {
+      cookie: webBrowserCookie
+    });
+    if (!browserWebSession?.session?.userId) {
+      throw new Error("Browser web bootstrap did not create a readable session.");
+    }
+    const webBrowserLogout = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/auth/logout",
+      {},
+      {
+        cookie: webBrowserCookie
+      }
+    );
+    assertFlashRedirect(webBrowserLogout, {
+      origin: "http://127.0.0.1:4321",
+      section: "auth",
+      status: "success",
+      message: "Signed out."
+    });
+    assertExpiredCookie(webBrowserLogout, "np_web_session");
+
+    const staleWebPreferences = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/preferences",
+      {
+        themePreference: "dark"
+      },
+      {
+        cookie: "np_web_session=stale"
+      }
+    );
+    assertFlashRedirect(staleWebPreferences, {
+      origin: "http://127.0.0.1:4321",
+      section: "auth",
+      status: "error",
+      message: "Please start a session to continue."
+    });
+    assertExpiredCookie(staleWebPreferences, "np_web_session");
+
     log("Bootstrapping anonymous web session.");
     const webBootstrap = await postForm(
-      "http://127.0.0.1:4321/api/auth/bootstrap",
+      "http://127.0.0.1:4321/bff/auth/bootstrap",
       {}
     );
     const webCookie = webBootstrap.cookie;
@@ -439,9 +570,28 @@ async function main() {
       throw new Error("Web bootstrap did not return a session cookie and user id.");
     }
 
+    const webPreferenceRedirect = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/preferences",
+      {
+        themePreference: "light",
+        webPushEnabled: "true",
+        telegramEnabled: "true",
+        weeklyEmailDigestEnabled: "true"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    assertFlashRedirect(webPreferenceRedirect, {
+      origin: "http://127.0.0.1:4321",
+      section: "preferences",
+      status: "success",
+      message: "Preferences saved"
+    });
+
     log("Creating interest and email digest channel.");
     await postForm(
-      "http://127.0.0.1:4321/api/interests",
+      "http://127.0.0.1:4321/bff/interests",
       {
         description: "AI policy changes in the European Union",
         positive_texts: "EU AI policy\nEuropean AI regulation\nBrussels AI rules",
@@ -456,7 +606,7 @@ async function main() {
       }
     );
     await postForm(
-      "http://127.0.0.1:4321/api/notification-channels",
+      "http://127.0.0.1:4321/bff/notification-channels",
       {
         channelType: "email_digest",
         email: notificationEmail
@@ -468,7 +618,7 @@ async function main() {
 
     await waitFor(
       "compiled user interest",
-      async () => fetchJson("http://127.0.0.1:4321/api/interests", { cookie: webCookie }),
+      async () => fetchJson("http://127.0.0.1:4321/bff/interests", { cookie: webCookie }),
       (payload) =>
         Array.isArray(payload?.interests) &&
         payload.interests.some((interest) => interest.compile_status === "compiled")
@@ -477,9 +627,77 @@ async function main() {
     log("Creating allowlisted Firebase admin identity.");
     await ensureFirebasePasswordUser(firebaseApiKey, adminEmail, adminPassword);
 
+    log("Checking browser-style admin auth redirects.");
+    const adminBrowserFailure = await postBrowserForm(
+      "http://127.0.0.1:4322/bff/auth/sign-in",
+      {
+        email: adminEmail,
+        password: `${adminPassword}-wrong`
+      }
+    );
+    assertFlashRedirect(adminBrowserFailure, {
+      origin: "http://127.0.0.1:4322",
+      section: "auth",
+      status: "error",
+      message: "Unable to sign in with those credentials."
+    });
+    assertExpiredCookie(adminBrowserFailure, "np_admin_session");
+
+    const adminBrowserSignIn = await postBrowserForm(
+      "http://127.0.0.1:4322/bff/auth/sign-in",
+      {
+        email: adminEmail,
+        password: adminPassword
+      }
+    );
+    assertFlashRedirect(adminBrowserSignIn, {
+      origin: "http://127.0.0.1:4322",
+      section: "auth",
+      status: "success",
+      message: "Signed in."
+    });
+    const adminBrowserCookie = extractCookie(adminBrowserSignIn.headers["set-cookie"]);
+    const browserAdminSession = await fetchJson("http://127.0.0.1:4322/bff/session", {
+      cookie: adminBrowserCookie
+    });
+    if (!browserAdminSession?.session?.roles?.includes?.("admin")) {
+      throw new Error("Browser admin sign-in did not create an admin session.");
+    }
+    const adminBrowserLogout = await postBrowserForm(
+      "http://127.0.0.1:4322/bff/auth/logout",
+      {},
+      {
+        cookie: adminBrowserCookie
+      }
+    );
+    assertFlashRedirect(adminBrowserLogout, {
+      origin: "http://127.0.0.1:4322",
+      section: "auth",
+      status: "success",
+      message: "Signed out."
+    });
+    assertExpiredCookie(adminBrowserLogout, "np_admin_session");
+
+    const staleAdminReindex = await postBrowserForm(
+      "http://127.0.0.1:4322/bff/admin/reindex",
+      {
+        indexName: "interest_centroids"
+      },
+      {
+        cookie: "np_admin_session=stale"
+      }
+    );
+    assertFlashRedirect(staleAdminReindex, {
+      origin: "http://127.0.0.1:4322",
+      section: "auth",
+      status: "error",
+      message: "Please sign in as an admin to continue."
+    });
+    assertExpiredCookie(staleAdminReindex, "np_admin_session");
+
     log("Signing in through the admin app.");
     const adminSignIn = await postForm(
-      "http://127.0.0.1:4322/api/auth/sign-in",
+      "http://127.0.0.1:4322/bff/auth/sign-in",
       {
         email: adminEmail,
         password: adminPassword
@@ -490,16 +708,101 @@ async function main() {
       throw new Error("Admin sign-in did not return a session cookie.");
     }
 
-    const adminSession = await fetchJson("http://127.0.0.1:4322/api/session", {
+    const adminSession = await fetchJson("http://127.0.0.1:4322/bff/session", {
       cookie: adminCookie
     });
     if (!adminSession?.session?.roles?.includes?.("admin")) {
       throw new Error("Admin session does not contain the admin role after allowlist bootstrap.");
     }
 
+    const adminReindexRedirect = await postBrowserForm(
+      "http://127.0.0.1:4322/bff/admin/reindex",
+      {
+        indexName: "interest_centroids"
+      },
+      {
+        cookie: adminCookie
+      }
+    );
+    assertFlashRedirect(adminReindexRedirect, {
+      origin: "http://127.0.0.1:4322",
+      section: "reindex",
+      status: "success",
+      message: "Reindex queued"
+    });
+
+    log("Checking nginx-routed web/admin BFF surfaces.");
+    await assertHtmlContains("http://127.0.0.1:8080/", [
+      'fetch("/bff/auth/bootstrap"',
+      'action="/bff/preferences"',
+      'action="/bff/notification-channels"'
+    ]);
+    await assertHtmlContains("http://127.0.0.1:8080/admin/", [
+      'action="/admin/bff/auth/sign-in"',
+      'action="/admin/bff/admin/reindex"',
+      'action="/admin/bff/admin/channels"'
+    ]);
+
+    const nginxArticles = await fetchJson("http://127.0.0.1:8080/api/articles");
+    if (!Array.isArray(nginxArticles)) {
+      throw new Error("Expected nginx /api/articles to resolve to the public API array response.");
+    }
+
+    const nginxWebBootstrap = await postBrowserForm("http://127.0.0.1:8080/bff/auth/bootstrap", {});
+    assertFlashRedirect(nginxWebBootstrap, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/",
+      section: "auth",
+      status: "success",
+      message: "Session started."
+    });
+    const nginxWebCookie = extractCookie(nginxWebBootstrap.headers["set-cookie"]);
+    const nginxWebSession = await fetchJson("http://127.0.0.1:8080/bff/session", {
+      cookie: nginxWebCookie
+    });
+    if (!nginxWebSession?.session?.userId) {
+      throw new Error("Nginx web bootstrap did not create a readable session.");
+    }
+
+    const nginxAdminSignIn = await postBrowserForm(
+      "http://127.0.0.1:8080/admin/bff/auth/sign-in",
+      {
+        email: adminEmail,
+        password: adminPassword
+      }
+    );
+    assertFlashRedirect(nginxAdminSignIn, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/admin/",
+      section: "auth",
+      status: "success",
+      message: "Signed in."
+    });
+    const nginxAdminCookie = extractCookie(nginxAdminSignIn.headers["set-cookie"]);
+    const nginxAdminSession = await fetchJson("http://127.0.0.1:8080/admin/bff/session", {
+      cookie: nginxAdminCookie
+    });
+    if (!nginxAdminSession?.session?.roles?.includes?.("admin")) {
+      throw new Error("Nginx admin sign-in did not create an admin session.");
+    }
+    const nginxAdminLogout = await postBrowserForm(
+      "http://127.0.0.1:8080/admin/bff/auth/logout",
+      {},
+      {
+        cookie: nginxAdminCookie
+      }
+    );
+    assertFlashRedirect(nginxAdminLogout, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/admin/",
+      section: "auth",
+      status: "success",
+      message: "Signed out."
+    });
+
     log("Creating RSS channel through the admin surface.");
     const adminChannel = await postForm(
-      "http://127.0.0.1:4322/api/admin/channels",
+      "http://127.0.0.1:4322/bff/admin/channels",
       {
         providerType: "rss",
         name: `Internal MVP RSS ${runId}`,
@@ -607,7 +910,7 @@ async function main() {
 
     log("Exercising moderation block/unblock and verifying audit trail.");
     await postForm(
-      "http://127.0.0.1:4322/api/admin/moderation",
+      "http://127.0.0.1:4322/bff/admin/moderation",
       {
         docId,
         actionType: "block",
@@ -624,7 +927,7 @@ async function main() {
     );
 
     await postForm(
-      "http://127.0.0.1:4322/api/admin/moderation",
+      "http://127.0.0.1:4322/bff/admin/moderation",
       {
         docId,
         actionType: "unblock",

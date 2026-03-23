@@ -3,15 +3,31 @@ import { randomUUID } from "node:crypto";
 
 import { NOTIFICATION_FEEDBACK_RECORDED_EVENT } from "@newsportal/contracts";
 
+import {
+  buildFlashRedirect,
+  requestPrefersHtmlNavigation
+} from "../../lib/server/browser-flow";
 import { getPool } from "../../lib/server/db";
 import { insertOutboxEvent } from "../../lib/server/outbox";
 import { readRequestPayload } from "../../lib/server/request";
-import { resolveWebSession } from "../../lib/server/auth";
+import {
+  buildExpiredSessionCookie,
+  resolveWebSession
+} from "../../lib/server/auth";
 
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
+  const browserRequest = requestPrefersHtmlNavigation(request);
   const session = await resolveWebSession(request);
   if (!session) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "auth",
+        status: "error",
+        message: "Please start a session to continue.",
+        setCookie: buildExpiredSessionCookie()
+      });
+    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -21,6 +37,13 @@ export const POST: APIRoute = async ({ request }) => {
   const interestId = String(payload.interestId ?? "");
   const feedbackValue = String(payload.feedbackValue ?? "");
   if (!notificationId || !docId || !["helpful", "not_helpful"].includes(feedbackValue)) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "notifications",
+        status: "error",
+        message: "Invalid feedback payload."
+      });
+    }
     return Response.json({ error: "Invalid feedback payload." }, { status: 400 });
   }
 
@@ -70,6 +93,13 @@ export const POST: APIRoute = async ({ request }) => {
     await client.query("commit");
   } catch (error) {
     await client.query("rollback");
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "notifications",
+        status: "error",
+        message: "Unable to record feedback right now."
+      });
+    }
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Failed to record feedback."
@@ -80,6 +110,14 @@ export const POST: APIRoute = async ({ request }) => {
     );
   } finally {
     client.release();
+  }
+
+  if (browserRequest) {
+    return buildFlashRedirect(request, {
+      section: "notifications",
+      status: "success",
+      message: "Feedback recorded"
+    });
   }
 
   return Response.json({ ok: true });

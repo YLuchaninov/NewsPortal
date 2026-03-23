@@ -1,14 +1,30 @@
 import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
 
-import { resolveAdminSession } from "../../../lib/server/auth";
+import {
+  buildFlashRedirect,
+  requestPrefersHtmlNavigation
+} from "../../../lib/server/browser-flow";
+import {
+  buildExpiredAdminSessionCookie,
+  resolveAdminSession
+} from "../../../lib/server/auth";
 import { getPool } from "../../../lib/server/db";
 import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
+  const browserRequest = requestPrefersHtmlNavigation(request);
   const session = await resolveAdminSession(request);
   if (!session || !session.roles.includes("admin")) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "auth",
+        status: "error",
+        message: "Please sign in as an admin to continue.",
+        setCookie: buildExpiredAdminSessionCookie()
+      });
+    }
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 
@@ -17,6 +33,13 @@ export const POST: APIRoute = async ({ request }) => {
   const actionType = String(payload.actionType ?? "");
   const reason = String(payload.reason ?? "");
   if (!docId || !["block", "unblock"].includes(actionType)) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "articles",
+        status: "error",
+        message: "Invalid moderation payload."
+      });
+    }
     return Response.json({ error: "Invalid moderation payload." }, { status: 400 });
   }
 
@@ -63,6 +86,13 @@ export const POST: APIRoute = async ({ request }) => {
     await client.query("commit");
   } catch (error) {
     await client.query("rollback");
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "articles",
+        status: "error",
+        message: "Unable to update article moderation right now."
+      });
+    }
     return Response.json(
       {
         error: error instanceof Error ? error.message : "Moderation failed."
@@ -73,6 +103,14 @@ export const POST: APIRoute = async ({ request }) => {
     );
   } finally {
     client.release();
+  }
+
+  if (browserRequest) {
+    return buildFlashRedirect(request, {
+      section: "articles",
+      status: "success",
+      message: actionType === "block" ? "Article blocked" : "Article unblocked"
+    });
   }
 
   return Response.json({ ok: true });

@@ -1,4 +1,38 @@
 export type SourceProviderType = "rss" | "website" | "api" | "email_imap" | "youtube";
+export type NormalizedFetchOutcome =
+  | "new_content"
+  | "no_change"
+  | "rate_limited"
+  | "transient_failure"
+  | "hard_failure";
+
+export const MAX_SOURCE_CHANNEL_POLL_INTERVAL_SECONDS = 604800;
+export const DEFAULT_SOURCE_CHANNEL_ADAPTIVE_MAX_CAP_SECONDS = 259200;
+export const CHANNEL_SCHEDULE_PRESETS = {
+  fast: 300,
+  normal: 900,
+  slow: 3600,
+  daily: 86400,
+  three_day: 259200
+} as const;
+
+export interface SourceChannelRuntimeState {
+  adaptiveEnabled: boolean;
+  effectivePollIntervalSeconds: number;
+  maxPollIntervalSeconds: number;
+  nextDueAt: string | null;
+  adaptiveStep: number;
+  lastResultKind: NormalizedFetchOutcome | null;
+  consecutiveNoChangePolls: number;
+  consecutiveFailures: number;
+  adaptiveReason: string | null;
+}
+
+export interface SourceChannelSchedulePatch {
+  pollIntervalSeconds: number;
+  adaptiveEnabled?: boolean;
+  maxPollIntervalSeconds?: number | null;
+}
 
 export interface RssChannelConfig {
   maxItemsPerPoll: number;
@@ -15,6 +49,8 @@ export interface RssAdminChannelInput {
   language?: string | null;
   isActive?: boolean;
   pollIntervalSeconds?: number;
+  adaptiveEnabled?: boolean;
+  maxPollIntervalSeconds?: number | null;
   maxItemsPerPoll?: number;
   requestTimeoutMs?: number;
   userAgent?: string;
@@ -124,6 +160,36 @@ function readPositiveInteger(
   }
 
   return value;
+}
+
+export function defaultMaxPollIntervalSeconds(basePollIntervalSeconds: number): number {
+  if (!Number.isInteger(basePollIntervalSeconds) || basePollIntervalSeconds <= 0) {
+    throw new Error("Base poll interval must be a positive integer.");
+  }
+
+  return Math.min(
+    basePollIntervalSeconds * 16,
+    DEFAULT_SOURCE_CHANNEL_ADAPTIVE_MAX_CAP_SECONDS
+  );
+}
+
+export function normalizeMaxPollIntervalSeconds(
+  basePollIntervalSeconds: number,
+  maxPollIntervalSeconds: number | null | undefined
+): number {
+  const fallback = defaultMaxPollIntervalSeconds(basePollIntervalSeconds);
+  if (maxPollIntervalSeconds == null) {
+    return fallback;
+  }
+
+  if (!Number.isInteger(maxPollIntervalSeconds) || maxPollIntervalSeconds <= 0) {
+    throw new Error('Source channel config field "maxPollIntervalSeconds" must be a positive integer.');
+  }
+
+  return Math.max(
+    basePollIntervalSeconds,
+    Math.min(maxPollIntervalSeconds, MAX_SOURCE_CHANNEL_POLL_INTERVAL_SECONDS)
+  );
 }
 
 function readBoolean(value: unknown, fallback: boolean, fieldName: string): boolean {

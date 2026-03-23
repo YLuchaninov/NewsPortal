@@ -1,6 +1,13 @@
 import type { APIRoute } from "astro";
 
-import { resolveAdminSession } from "../../../../lib/server/auth";
+import {
+  buildFlashRedirect,
+  requestPrefersHtmlNavigation
+} from "../../../../lib/server/browser-flow";
+import {
+  buildExpiredAdminSessionCookie,
+  resolveAdminSession
+} from "../../../../lib/server/auth";
 import { getPool } from "../../../../lib/server/db";
 import {
   parseBulkRssAdminChannelInputs,
@@ -41,8 +48,17 @@ async function readBulkPayload(request: Request): Promise<unknown> {
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  const browserRequest = requestPrefersHtmlNavigation(request);
   const session = await resolveAdminSession(request);
   if (!session || !session.roles.includes("admin")) {
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "auth",
+        status: "error",
+        message: "Please sign in as an admin to continue.",
+        setCookie: buildExpiredAdminSessionCookie()
+      });
+    }
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 
@@ -51,6 +67,14 @@ export const POST: APIRoute = async ({ request }) => {
     const channels = parseBulkRssAdminChannelInputs(payload);
     const result = await upsertRssChannels(getPool(), channels);
 
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "channels",
+        status: "success",
+        message: "Channels imported"
+      });
+    }
+
     return Response.json({
       createdChannelIds: result.createdChannelIds,
       updatedChannelIds: result.updatedChannelIds,
@@ -58,9 +82,18 @@ export const POST: APIRoute = async ({ request }) => {
       updatedCount: result.updatedChannelIds.length
     });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to import RSS channels.";
+    if (browserRequest) {
+      return buildFlashRedirect(request, {
+        section: "channels",
+        status: "error",
+        message: errorMessage
+      });
+    }
     return Response.json(
       {
-        error: error instanceof Error ? error.message : "Failed to import RSS channels."
+        error: errorMessage
       },
       {
         status: 400

@@ -164,7 +164,70 @@ def get_dashboard_summary() -> dict[str, Any]:
           (select count(*)::int from articles where ingested_at >= now() - interval '1 day') as processed_today,
           (select count(*)::int from users) as total_users,
           (select count(*)::int from source_channels where is_active = true) as active_channels,
-          (select count(*)::int from reindex_jobs where status = 'queued') as queued_reindex_jobs
+          (select count(*)::int from reindex_jobs where status = 'queued') as queued_reindex_jobs,
+          (
+            select count(*)::int
+            from source_channels sc
+            left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+            where sc.is_active = true
+              and coalesce(
+                scrs.next_due_at,
+                case
+                  when sc.last_fetch_at is null then now()
+                  else sc.last_fetch_at + make_interval(secs => sc.poll_interval_seconds)
+                end
+              ) <= now()
+          ) as overdue_channels,
+          (
+            select count(*)::int
+            from source_channels sc
+            join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+            where sc.is_active = true
+              and scrs.effective_poll_interval_seconds > sc.poll_interval_seconds
+          ) as adapted_channels,
+          (
+            select count(*)::int
+            from source_channel_runtime_state
+            where last_result_kind = 'hard_failure' or consecutive_failures >= 2
+          ) as attention_channels,
+          (
+            select coalesce(percentile_disc(0.5) within group (order by fetch_duration_ms), 0)::int
+            from channel_fetch_runs
+            where started_at >= now() - interval '24 hours'
+          ) as fetch_median_duration_ms_24h,
+          (
+            select count(*)::int
+            from channel_fetch_runs
+            where started_at >= now() - interval '24 hours'
+              and outcome_kind = 'new_content'
+          ) as fetch_new_content_24h,
+          (
+            select count(*)::int
+            from channel_fetch_runs
+            where started_at >= now() - interval '24 hours'
+              and outcome_kind = 'no_change'
+          ) as fetch_no_change_24h,
+          (
+            select count(*)::int
+            from channel_fetch_runs
+            where started_at >= now() - interval '24 hours'
+              and outcome_kind in ('rate_limited', 'transient_failure', 'hard_failure')
+          ) as fetch_failures_24h,
+          (
+            select count(*)::int
+            from llm_review_log
+            where created_at >= now() - interval '24 hours'
+          ) as llm_review_count_24h,
+          (
+            select coalesce(sum(total_tokens), 0)::int
+            from llm_review_log
+            where created_at >= now() - interval '24 hours'
+          ) as llm_total_tokens_24h,
+          (
+            select coalesce(sum(cost_estimate_usd), 0)::float
+            from llm_review_log
+            where created_at >= now() - interval '24 hours'
+          ) as llm_cost_usd_24h
         """
     )
     return counts or {}
@@ -187,10 +250,69 @@ def list_channels() -> list[dict[str, Any]]:
           sc.last_success_at,
           sc.last_error_at,
           sc.last_error_message,
+          coalesce(scrs.adaptive_enabled, true) as adaptive_enabled,
+          coalesce(scrs.effective_poll_interval_seconds, sc.poll_interval_seconds) as effective_poll_interval_seconds,
+          coalesce(scrs.max_poll_interval_seconds, least(sc.poll_interval_seconds * 16, 259200)) as max_poll_interval_seconds,
+          coalesce(
+            scrs.next_due_at,
+            case
+              when sc.last_fetch_at is null then now()
+              else sc.last_fetch_at + make_interval(secs => sc.poll_interval_seconds)
+            end
+          ) as next_due_at,
+          scrs.adaptive_step,
+          scrs.last_result_kind,
+          scrs.consecutive_no_change_polls,
+          scrs.consecutive_failures,
+          scrs.adaptive_reason,
+          greatest(
+            0,
+            extract(
+              epoch from (
+                now() - coalesce(
+                  scrs.next_due_at,
+                  case
+                    when sc.last_fetch_at is null then now()
+                    else sc.last_fetch_at + make_interval(secs => sc.poll_interval_seconds)
+                  end
+                )
+              )
+            )
+          )::int as overdue_seconds,
+          (
+            coalesce(scrs.last_result_kind, '') = 'hard_failure'
+            or coalesce(scrs.consecutive_failures, 0) >= 2
+          ) as needs_attention,
+          last_run.started_at as last_run_started_at,
+          last_run.outcome_kind as last_run_outcome_kind,
+          last_run.fetch_duration_ms as last_run_duration_ms,
+          last_run.error_text as last_run_error_text,
+          recent_runs.recent_failure_count_24h,
           sp.provider_id,
           sp.name as provider_name
         from source_channels sc
         left join source_providers sp on sp.provider_id = sc.provider_id
+        left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+        left join lateral (
+          select
+            started_at,
+            outcome_kind,
+            fetch_duration_ms,
+            error_text
+          from channel_fetch_runs cfr
+          where cfr.channel_id = sc.channel_id
+          order by cfr.started_at desc
+          limit 1
+        ) last_run on true
+        left join lateral (
+          select
+            count(*) filter (
+              where outcome_kind in ('rate_limited', 'transient_failure', 'hard_failure')
+            )::int as recent_failure_count_24h
+          from channel_fetch_runs cfr
+          where cfr.channel_id = sc.channel_id
+            and cfr.started_at >= now() - interval '24 hours'
+        ) recent_runs on true
         order by sc.updated_at desc, sc.created_at desc
         """
     )
@@ -285,6 +407,96 @@ def list_reindex_jobs(limit: int = Query(default=20, ge=1, le=100)) -> list[dict
         """,
         (limit,),
     )
+
+
+@app.get("/maintenance/fetch-runs")
+def list_fetch_runs(
+    limit: int = Query(default=50, ge=1, le=200),
+    channel_id: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    if channel_id:
+        return query_all(
+            """
+            select *
+            from channel_fetch_runs
+            where channel_id = %s
+            order by started_at desc
+            limit %s
+            """,
+            (channel_id, limit),
+        )
+
+    return query_all(
+        """
+        select *
+        from channel_fetch_runs
+        order by started_at desc
+        limit %s
+        """,
+        (limit,),
+    )
+
+
+@app.get("/maintenance/llm-reviews")
+def list_llm_reviews(limit: int = Query(default=50, ge=1, le=200)) -> list[dict[str, Any]]:
+    return query_all(
+        """
+        select
+          lr.*,
+          a.title as article_title
+        from llm_review_log lr
+        join articles a on a.doc_id = lr.doc_id
+        order by lr.created_at desc
+        limit %s
+        """,
+        (limit,),
+    )
+
+
+@app.get("/maintenance/llm-usage-summary")
+def get_llm_usage_summary() -> dict[str, Any]:
+    rows = query_all(
+        """
+        select
+          window_name,
+          review_count,
+          total_tokens,
+          prompt_tokens,
+          completion_tokens,
+          cost_estimate_usd
+        from (
+          select
+            '24h'::text as window_name,
+            count(*)::int as review_count,
+            coalesce(sum(total_tokens), 0)::int as total_tokens,
+            coalesce(sum(prompt_tokens), 0)::int as prompt_tokens,
+            coalesce(sum(completion_tokens), 0)::int as completion_tokens,
+            coalesce(sum(cost_estimate_usd), 0)::float as cost_estimate_usd
+          from llm_review_log
+          where created_at >= now() - interval '24 hours'
+          union all
+          select
+            '7d'::text as window_name,
+            count(*)::int as review_count,
+            coalesce(sum(total_tokens), 0)::int as total_tokens,
+            coalesce(sum(prompt_tokens), 0)::int as prompt_tokens,
+            coalesce(sum(completion_tokens), 0)::int as completion_tokens,
+            coalesce(sum(cost_estimate_usd), 0)::float as cost_estimate_usd
+          from llm_review_log
+          where created_at >= now() - interval '7 days'
+        ) usage_windows
+        """
+    )
+    return {
+        row["window_name"]: {
+            "review_count": row["review_count"],
+            "total_tokens": row["total_tokens"],
+            "prompt_tokens": row["prompt_tokens"],
+            "completion_tokens": row["completion_tokens"],
+            "cost_estimate_usd": row["cost_estimate_usd"],
+        }
+        for row in rows
+    }
 
 
 @app.get("/maintenance/outbox")

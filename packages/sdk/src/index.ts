@@ -24,6 +24,14 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
     listClusters: <T>() => getJson<T>("/clusters"),
     listLlmTemplates: <T>() => getJson<T>("/templates/llm"),
     listInterestTemplates: <T>() => getJson<T>("/templates/interests"),
+    listFetchRuns: <T>(channelId?: string) =>
+      getJson<T>(
+        channelId
+          ? `/maintenance/fetch-runs?channel_id=${encodeURIComponent(channelId)}`
+          : "/maintenance/fetch-runs"
+      ),
+    listLlmReviews: <T>() => getJson<T>("/maintenance/llm-reviews"),
+    getLlmUsageSummary: <T>() => getJson<T>("/maintenance/llm-usage-summary"),
     listReindexJobs: <T>() => getJson<T>("/maintenance/reindex-jobs"),
     listNotifications: <T>(userId: string) => getJson<T>(`/users/${userId}/notifications`),
     listInterests: <T>(userId: string) => getJson<T>(`/users/${userId}/interests`)

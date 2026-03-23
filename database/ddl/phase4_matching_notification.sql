@@ -142,6 +142,12 @@ create table if not exists llm_review_log (
   llm_model text not null,
   decision text not null,
   score double precision not null default 0,
+  provider_latency_ms integer,
+  prompt_tokens integer,
+  completion_tokens integer,
+  total_tokens integer,
+  cost_estimate_usd numeric(12, 6),
+  provider_usage_json jsonb not null default '{}'::jsonb,
   response_json jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   constraint llm_review_log_scope_check
@@ -149,7 +155,17 @@ create table if not exists llm_review_log (
   constraint llm_review_log_decision_check
     check (decision in ('approve', 'reject', 'uncertain')),
   constraint llm_review_log_prompt_version_check
-    check (prompt_version > 0)
+    check (prompt_version > 0),
+  constraint llm_review_log_provider_latency_ms_check
+    check (provider_latency_ms is null or provider_latency_ms >= 0),
+  constraint llm_review_log_prompt_tokens_check
+    check (prompt_tokens is null or prompt_tokens >= 0),
+  constraint llm_review_log_completion_tokens_check
+    check (completion_tokens is null or completion_tokens >= 0),
+  constraint llm_review_log_total_tokens_check
+    check (total_tokens is null or total_tokens >= 0),
+  constraint llm_review_log_cost_estimate_usd_check
+    check (cost_estimate_usd is null or cost_estimate_usd >= 0)
 );
 
 create index if not exists llm_review_log_doc_id_created_at_idx

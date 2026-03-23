@@ -1,6 +1,11 @@
-# Firebase Setup for NewsPortal
+# Настройка Firebase для NewsPortal
 
 Этот файл фиксирует точный маршрут по Firebase Console для текущего состояния репозитория NewsPortal.
+
+Используй его вместе с:
+
+- `docs/engineering.md` — для общей engineering discipline;
+- `docs/contracts/test-access-and-fixtures.md` — для правил по test identities, fixture residue и cleanup, если во время настройки или proof-run создаются persistent локальные артефакты.
 
 Актуально для репозитория на 2026-03-22. Названия кнопок в консоли Firebase могут немного отличаться визуально, но путь через `Project settings`, `Your apps` и `Authentication` должен оставаться тем же.
 

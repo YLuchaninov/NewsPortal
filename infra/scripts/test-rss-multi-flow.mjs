@@ -438,6 +438,7 @@ async function startFixtureServer(fixtures) {
       setTimeout(() => {
         response.writeHead(200, {
           "content-type": "application/rss+xml; charset=utf-8",
+          Connection: "close",
           ETag: etag,
           "Last-Modified": lastModified
         });
@@ -453,6 +454,7 @@ async function startFixtureServer(fixtures) {
     ) {
       fixture.notModifiedCount += 1;
       response.writeHead(304, {
+        Connection: "close",
         ETag: etag,
         "Last-Modified": lastModified
       });
@@ -463,6 +465,7 @@ async function startFixtureServer(fixtures) {
     if (fixture.profile === "invalid_xml") {
       response.writeHead(200, {
         "content-type": "application/rss+xml; charset=utf-8",
+        Connection: "close",
         ETag: etag,
         "Last-Modified": lastModified
       });
@@ -472,6 +475,7 @@ async function startFixtureServer(fixtures) {
 
     response.writeHead(200, {
       "content-type": "application/rss+xml; charset=utf-8",
+      Connection: "close",
       ETag: etag,
       "Last-Modified": lastModified
     });
@@ -611,7 +615,7 @@ async function main() {
 
     log("Bootstrapping admin identity.");
     await ensureFirebasePasswordUser(firebaseApiKey, adminEmail, adminPassword);
-    const adminSignIn = await postForm("http://127.0.0.1:4322/api/auth/sign-in", {
+    const adminSignIn = await postForm("http://127.0.0.1:4322/bff/auth/sign-in", {
       email: adminEmail,
       password: adminPassword
     });
@@ -623,7 +627,7 @@ async function main() {
     log("Creating RSS channels through the admin bulk endpoint.");
     const bulkPayload = buildBulkChannels(fixtures, fixtureServer.port);
     const bulkResponse = await postJson(
-      "http://127.0.0.1:4322/api/admin/channels/bulk",
+      "http://127.0.0.1:4322/bff/admin/channels/bulk",
       {
         channels: bulkPayload
       },
@@ -791,8 +795,26 @@ async function main() {
       throw new Error("Expected every failing RSS fixture to persist a non-empty last_error_message.");
     }
 
+    await waitFor(
+      "all multi-RSS channels to become due for the second fetch",
+      async () => {
+        const rows = queryPostgresRows(
+          env,
+          `
+            select count(*)::int
+            from source_channels
+            where
+              name like ${sqlLiteral(`RSS multi ${runId}%`)}
+              and last_fetch_at <= now() - interval '1 second'
+          `
+        )[0] ?? ["0"];
+
+        return Number.parseInt(rows[0] ?? "0", 10);
+      },
+      (dueCount) => dueCount === options.channelCount
+    );
+
     log("Running the second fetch cycle for idempotency and 304 coverage.");
-    await new Promise((resolve) => setTimeout(resolve, 1500));
     runCompose(
       "exec",
       "-T",
@@ -804,24 +826,49 @@ async function main() {
     );
 
     await waitFor(
-      "stable article counts after second fetch",
+      "stable article and outbox counts after second fetch",
       async () => {
         const rows = queryPostgresRows(
           env,
           `
-            select count(*)::int
-            from articles
-            where channel_id in (
-              select channel_id
-              from source_channels
-              where name like ${sqlLiteral(`RSS multi ${runId}%`)}
-            )
+            select
+              (
+                select count(*)::int
+                from articles
+                where channel_id in (
+                  select channel_id
+                  from source_channels
+                  where name like ${sqlLiteral(`RSS multi ${runId}%`)}
+                )
+              ),
+              (
+                select count(*)::int
+                from outbox_events
+                where
+                  aggregate_type = 'article'
+                  and aggregate_id in (
+                    select doc_id
+                    from articles
+                    where channel_id in (
+                      select channel_id
+                      from source_channels
+                      where name like ${sqlLiteral(`RSS multi ${runId}%`)}
+                    )
+                  )
+                  and event_type in ('article.ingest.requested', 'article.normalized')
+                  and status = 'published'
+              )
           `
-        )[0] ?? ["0"];
+        )[0] ?? ["0", "0"];
 
-        return Number.parseInt(rows[0] ?? "0", 10);
+        return {
+          articleCount: Number.parseInt(rows[0] ?? "0", 10),
+          outboxCount: Number.parseInt(rows[1] ?? "0", 10)
+        };
       },
-      (articleCount) => articleCount === firstArticleCount
+      (summary) =>
+        summary.articleCount === firstArticleCount &&
+        summary.outboxCount === publishedOutboxCount
     );
 
     verifyFixtureServerState(fixtures);

@@ -28,14 +28,17 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 
 - [docs/blueprint.md](docs/blueprint.md)
 - [AGENTS.md](AGENTS.md)
+- [docs/engineering.md](docs/engineering.md)
+- [docs/verification.md](docs/verification.md)
 
 ## AI runtime-core
 
-В репозитории используется компактный AI runtime-core из шести файлов:
+В репозитории используется компактный AI runtime-core из семи файлов:
 
 - `AGENTS.md`
 - `docs/work.md`
 - `docs/blueprint.md`
+- `docs/engineering.md`
 - `docs/verification.md`
 - `docs/history.md`
 - `.aidp/os.yaml`
@@ -45,9 +48,20 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 1. `AGENTS.md`
 2. `docs/work.md`
 3. `docs/blueprint.md`
-4. `docs/verification.md`
-5. `.aidp/os.yaml`
-6. `docs/history.md` только при необходимости durable historical detail
+4. `docs/engineering.md`
+5. `docs/verification.md`
+6. `.aidp/os.yaml`
+7. `docs/history.md` только при необходимости durable historical detail
+
+Authority order для конфликтов между runtime-файлами:
+
+1. `AGENTS.md`
+2. `docs/blueprint.md`
+3. `.aidp/os.yaml`
+4. `docs/engineering.md`
+5. `docs/verification.md`
+6. `docs/work.md`
+7. `docs/history.md`
 
 Различие режимов:
 
@@ -55,6 +69,8 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 - `normal mode` используется для обычной работы, где каждое изменение начинается с явного work item.
 
 После инициализации runtime core полностью живет в корне репозитория и в `docs/`/`.aidp/`; отдельная template-директория для повседневной работы не нужна.
+
+Для stateful backend testing и fixture cleanup используй deep contract doc [docs/contracts/test-access-and-fixtures.md](docs/contracts/test-access-and-fixtures.md).
 
 ## Базовая структура
 
@@ -98,6 +114,12 @@ infra/
    pnpm dev:mvp:internal
    ```
 
+   Если контейнеры и образы уже актуальны и нужен запуск без rebuild:
+
+   ```sh
+   pnpm dev:mvp:internal:no-build
+   ```
+
 4. Проверить локальные health endpoints:
 
    ```sh
@@ -123,11 +145,16 @@ infra/
 
    `pnpm test:mvp:internal` сохранен как backward-compatible alias implementation path под этим gate.
 
-7. При необходимости остановить compose.dev stack вручную:
+7. Управление compose.dev stack вручную:
 
    ```sh
+   pnpm dev:mvp:internal:stop
    pnpm dev:mvp:internal:down
+   pnpm dev:mvp:internal:down:volumes
+   pnpm dev:mvp:internal:logs
    ```
+
+   `stop` останавливает контейнеры без удаления, `down` удаляет stack без стирания volumes, `down:volumes` удаляет stack вместе с volumes, `logs` показывает compose-логи. Для конкретных сервисов можно передать имена после `--`, например `pnpm dev:mvp:internal:logs -- web api`.
 
 ## Root QA Gates
 
@@ -140,13 +167,42 @@ infra/
 
 ## Internal MVP Notes
 
-- `pnpm dev:mvp:internal` использует `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml`.
+- `pnpm dev:mvp:internal` использует `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml`; `pnpm dev:mvp:internal:no-build` поднимает тот же stack без rebuild, а `pnpm dev:mvp:internal:stop`, `pnpm dev:mvp:internal:down`, `pnpm dev:mvp:internal:down:volumes` и `pnpm dev:mvp:internal:logs` закрывают повседневный lifecycle stack-а.
+- В compose-based SSR `NEWSPORTAL_API_BASE_URL` должен указывать на внутренний service DNS `http://api:8000`, а `NEWSPORTAL_PUBLIC_API_BASE_URL` остается host/browser-facing URL вроде `http://127.0.0.1:8000`.
+- Для Astro SSR/BFF теперь используются отдельные app base URLs: `NEWSPORTAL_WEB_APP_BASE_URL` и `NEWSPORTAL_ADMIN_APP_BASE_URL`; compose прокидывает их в контейнеры как `NEWSPORTAL_APP_BASE_URL`, чтобы redirects и trusted host reconstruction не деградировали в `http://localhost/`.
 - `apps/web` и `apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
+- Browser/session routes `web` и `admin` больше не делят `/api/*` c Python API: public/read API остается на `/api/*`, а Astro BFF живет на `/bff/*`; через nginx admin surface доступен на `/admin/`, поэтому его browser/BFF paths снаружи имеют вид `/admin/bff/*`.
 - Для first-run admin bootstrap используется `ADMIN_ALLOWLIST_EMAILS`; allowlisted email получает локальную роль `admin` при первом успешном Firebase sign-in, а exact allowlisted address допускает repeatable `+alias` sign-in для internal tests. После bootstrap PostgreSQL остается источником истины для authorization.
 - Internal MVP acceptance фиксируется как RSS-first ingest path. Website/API/IMAP остаются в кодовой базе, но не считаются доказанными этим acceptance gate.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
+- `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
+- Admin surface показывает provider-agnostic scheduling health, append-only fetch history и LLM usage rollups; read-model API дополнена `/maintenance/fetch-runs`, `/maintenance/llm-reviews` и `/maintenance/llm-usage-summary`.
+- Web surface умеет подключать `web_push` через service worker `/sw.js`; для browser subscription нужен `WEB_PUSH_VAPID_PUBLIC_KEY`, а notify worker дополнительно учитывает `user_profiles.notification_preferences`.
 - Локальный `email_digest` delivery path идет через SMTP sink `mailpit`; для compose baseline используется `smtp://mailpit:1025`, а UI sink доступен на `http://127.0.0.1:8025`.
 - Root `pnpm integration_tests` делегирует на этот же internal MVP acceptance path и не расширяет proof scope beyond RSS-first ingest.
+
+## Manual MVP Readiness
+
+Для ручного MVP прогона теперь есть консистентный baseline:
+
+- admin умеет создавать и bulk-import RSS channels с `adaptiveEnabled` и `maxPollIntervalSeconds`;
+- provider-wide scheduling patch позволяет массово назначать `fast=300`, `normal=900`, `slow=3600`, `daily=86400`, `three_day=259200`;
+- fetchers сохраняют `source_channel_runtime_state` и append-only `channel_fetch_runs`, поэтому overdue/adaptive/failed каналы видны отдельно от `source_channels.last_*`;
+- worker пишет first-class Gemini usage/cost поля в `llm_review_log`;
+- web показывает configured notification channels, working `notification_preferences`, browser-side `web_push` connect flow и расширенный lifecycle interests.
+
+Минимальный manual checklist:
+
+1. Поднимите stack через `pnpm dev:mvp:internal`.
+2. Импортируйте RSS channels через admin single/bulk form, используя шаблон [infra/scripts/manual-rss-bundle.template.json](infra/scripts/manual-rss-bundle.template.json).
+3. Назначьте часть каналов на `fast`, часть на `daily` и часть на `three_day`, затем проверьте `next due`, `overdue`, `recent failures` и fetch history в admin.
+4. В `web` создайте anonymous session, подключите `web_push`, включите нужные `notification_preferences`, создайте или отредактируйте interest и дождитесь compile/update path.
+5. Проверьте admin summary, recent fetch runs, recent LLM reviews и delivery state по user channels.
+
+Ограничение baseline:
+
+- фактический browser receipt для `web_push` остается manual-only proof item;
+- repo не содержит канонического списка real RSS feeds, только импортный template; реальные feed URLs оператор подставляет сам.
 
 ## Targeted Smokes
 
@@ -207,7 +263,11 @@ infra/
 - `pnpm db:migrate`
 - `pnpm db:seed:outbox-smoke`
 - `pnpm dev:mvp:internal`
+- `pnpm dev:mvp:internal:no-build`
+- `pnpm dev:mvp:internal:stop`
 - `pnpm dev:mvp:internal:down`
+- `pnpm dev:mvp:internal:down:volumes`
+- `pnpm dev:mvp:internal:logs`
 - `pnpm fetch:rss:once`
 - `pnpm index:check:interest-centroids`
 - `pnpm index:check:event-cluster-centroids`
@@ -241,13 +301,13 @@ infra/
 
 ## Health endpoints
 
-- `web`: `http://127.0.0.1:4321/api/health`
-- `admin`: `http://127.0.0.1:4322/api/health`
+- `web`: `http://127.0.0.1:4321/`
+- `admin`: `http://127.0.0.1:4322/`
 - `nginx`: `http://127.0.0.1:8080/health`
 - `api`: `http://127.0.0.1:8000/health`
 - `relay`: `http://127.0.0.1:4000/health`
 - `fetchers`: контейнерный health endpoint `http://127.0.0.1:4100/health`
-- `mailpit`: `http://127.0.0.1:8025`
+- `mailpit`: `http://127.0.0.1:8025/`
 - `postgres`: `127.0.0.1:55432`
 - `redis`: `127.0.0.1:56379`
 
@@ -275,7 +335,7 @@ Ingest smoke test создает временный RSS channel внутри run
 Отдельные multi-channel proofs через `pnpm test:ingest:multi:compose` и `pnpm test:ingest:soak:compose` поднимают host-side synthetic RSS fixture server, создают RSS каналы через admin bulk endpoint и дополнительно доказывают:
 
 - bounded-concurrency scheduler не abort-ит весь batch из-за `invalid_xml` или `timeout` канала;
-- `not_modified` fixtures действительно отдают `304`, а повторный fetch сохраняет stable article count;
+- `not_modified` fixtures действительно отдают `304`, а повторный fetch проходит через `next_due_at`-aware second cycle со stable article count;
 - full RSS-only path `admin -> source_channels -> fetchers -> relay -> workers` остается green на 24 и 60 feeds.
 
 Полезные verification queries после smoke test:
