@@ -225,6 +225,8 @@ Work item может стать `done`, только если:
 - runtime/process/core files синхронизированы;
 - residual gaps записаны честно, а не замолчаны.
 
+Capability не считается cleanly closed, если его durable completed detail к концу текущего sync cycle все еще не перенесен в `docs/history.md`.
+
 ## Когда обновлять этот файл
 
 Обновляй этот файл только тогда, когда меняется durable proof truth:

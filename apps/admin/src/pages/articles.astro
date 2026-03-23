@@ -1,0 +1,113 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+
+export const prerender = false;
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+if (!session) return Astro.redirect("/");
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+
+const fp = (() => {
+  const v = String(Astro.request.headers.get("x-forwarded-prefix") ?? "").trim();
+  return (!v || v === "/") ? "" : `/${v.replace(/^\/+|\/+$/g, "")}`;
+})();
+const pb = fp ? `${fp}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
+const rpa = (t: string) => new URL(String(t).replace(/^\/+/, ""), `http://app${pb}`).pathname;
+
+const bffPaths = { moderation: rpa("bff/admin/moderation") };
+
+type R = Record<string, unknown>;
+const articles = await sdk.listArticles<R[]>();
+
+
+const stateColor: Record<string, string> = {
+  published: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  blocked: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  normalized: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+};
+---
+
+<AdminShell title="Articles — Admin" session={session} flash={flash} activeNav="articles">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Articles</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-5">
+    <div>
+      <h1 class="text-xl font-bold">Articles</h1>
+      <p class="text-sm text-muted-foreground mt-0.5">{(articles as R[]).length} article{(articles as R[]).length !== 1 ? "s" : ""} — block/unblock to moderate</p>
+    </div>
+
+    <div class="rounded-xl border border-border bg-card overflow-hidden">
+      {(articles as R[]).length === 0 ? (
+        <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles yet</p>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border">
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Title</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">State</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Reactions</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Moderation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(articles as R[]).map((a) => (
+                <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <td class="px-4 py-3 max-w-[300px]">
+                    <div class="font-medium text-xs line-clamp-2">{String(a.title ?? "Untitled")}</div>
+                    <div class="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{String(a.lead ?? "")}</div>
+                  </td>
+                  <td class="px-4 py-3 hidden sm:table-cell">
+                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${stateColor[String(a.processing_state)] ?? "bg-muted text-muted-foreground"}`}>
+                      {String(a.processing_state ?? "raw")}
+                    </span>
+                    {a.visibility_state && a.visibility_state !== "visible" && (
+                      <span class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                        {String(a.visibility_state)}
+                      </span>
+                    )}
+                  </td>
+                  <td class="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
+                    👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-1.5">
+                      <form method="post" action={bffPaths.moderation}>
+                        <input type="hidden" name="docId" value={String(a.doc_id)} />
+                        <input type="hidden" name="actionType" value="block" />
+                        <button type="submit" class="h-7 px-2.5 rounded-md border border-red-200 text-red-600 text-xs hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors">
+                          Block
+                        </button>
+                      </form>
+                      <form method="post" action={bffPaths.moderation}>
+                        <input type="hidden" name="docId" value={String(a.doc_id)} />
+                        <input type="hidden" name="actionType" value="unblock" />
+                        <button type="submit" class="h-7 px-2.5 rounded-md border border-emerald-200 text-emerald-700 text-xs hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20 transition-colors">
+                          Unblock
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
+</AdminShell>
+

@@ -1,5 +1,7 @@
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
+import react from "@astrojs/react";
+import tailwindcss from "@tailwindcss/vite";
 
 function toAllowedDomain(urlValue) {
   const url = new URL(urlValue);
@@ -27,6 +29,7 @@ export default defineConfig({
   adapter: node({
     mode: "standalone"
   }),
+  integrations: [react()],
   output: "server",
   security: {
     checkOrigin: false,
@@ -35,5 +38,8 @@ export default defineConfig({
   server: {
     host: true,
     port: 4321
+  },
+  vite: {
+    plugins: [tailwindcss()]
   }
 });

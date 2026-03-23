@@ -1,0 +1,63 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import Shell from "../layouts/Shell.astro";
+import { InterestManager } from "../components/InterestManager";
+import { queryOne } from "../lib/server/db";
+import { resolveWebSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+
+export const prerender = false;
+const session = await resolveWebSession(Astro.request);
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+const flash = readFlash(Astro.url);
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
+function resolvePageAppPath(t: string) {
+  return new URL(t.replace(/^\/+/, ""), pageBaseUrl).pathname;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("../bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("../bff/auth/logout"),
+  preferences: resolvePageAppPath("../bff/preferences"),
+  interests: resolvePageAppPath("../bff/interests"),
+  interest: (id: string) => resolvePageAppPath(`../bff/interests/${id}`),
+};
+
+type ViewRow = Record<string, unknown>;
+const [interests, profile] = await Promise.all([
+  sdk.listInterests<ViewRow[]>(session.userId),
+  queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
+]);
+
+const themePreference = String(profile?.theme_preference ?? "system");
+const themeClass = themePreference === "dark" ? "dark" : "";
+---
+
+<Shell
+  title="Interests — NewsPortal"
+  session={session}
+  themeClass={themeClass}
+  currentTheme={themePreference}
+  flash={flash}
+  activeNav="interests"
+  bffPreferencesPath={bffPaths.preferences}
+  bffLogoutPath={bffPaths.authLogout}
+  bffBootstrapPath={bffPaths.authBootstrap}
+>
+  <InterestManager
+    interests={interests as any[]}
+    interestsPath={bffPaths.interests}
+    interestPath={bffPaths.interest}
+    client:load
+  />
+</Shell>
+

@@ -10,11 +10,22 @@
   },
   "dependencies": {
     "@astrojs/node": "^9.5.5",
+    "@astrojs/react": "^5.0.1",
     "@newsportal/config": "workspace:*",
     "@newsportal/contracts": "workspace:*",
     "@newsportal/sdk": "workspace:*",
     "@newsportal/ui": "workspace:*",
+    "@tailwindcss/vite": "^4.2.2",
     "astro": "^5.13.4",
-    "pg": "^8.16.3"
+    "lucide-react": "^1.0.1",
+    "pg": "^8.16.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "sonner": "^2.0.7",
+    "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
   }
 }

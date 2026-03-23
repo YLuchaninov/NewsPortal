@@ -1,113 +1,52 @@
-export const APP_SHELL_STYLES = `
-:root {
-  color-scheme: light;
-  --np-bg: #f3ede4;
-  --np-surface: #fffaf3;
-  --np-border: rgba(62, 32, 17, 0.14);
-  --np-text: #2b1d13;
-  --np-muted: #6c5648;
-  --np-accent: #c45c2f;
-  --np-accent-strong: #9f431d;
-  --np-success: #2a7d45;
-  --np-danger: #aa3a2a;
-  --np-shadow: 0 20px 45px rgba(65, 38, 20, 0.1);
-  font-family: "Georgia", "Times New Roman", serif;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  background: var(--np-bg);
-  color: var(--np-text);
-}
-a { color: inherit; }
-main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 20px 80px;
-}
-.np-shell {
-  display: grid;
-  gap: 20px;
-}
-.np-card {
-  background: var(--np-surface);
-  border: 1px solid var(--np-border);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: var(--np-shadow);
-}
-.np-grid {
-  display: grid;
-  gap: 20px;
-}
-.np-grid.two {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-.np-heading {
-  margin: 0 0 10px;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 1;
-}
-.np-subtle {
-  color: var(--np-muted);
-}
-.np-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--np-border);
-  font-size: 0.85rem;
-  margin-right: 8px;
-  margin-bottom: 8px;
-}
-.np-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.np-table th,
-.np-table td {
-  border-bottom: 1px solid var(--np-border);
-  padding: 10px 8px;
-  text-align: left;
-  vertical-align: top;
-}
-.np-button,
-button,
-input[type="submit"] {
-  background: var(--np-accent);
-  border: none;
-  color: white;
-  border-radius: 999px;
-  padding: 10px 16px;
-  cursor: pointer;
-  font: inherit;
-}
-.np-button.secondary {
-  background: transparent;
-  border: 1px solid var(--np-border);
-  color: var(--np-text);
-}
-input,
-select,
-textarea {
-  width: 100%;
-  border: 1px solid var(--np-border);
-  border-radius: 14px;
-  padding: 10px 12px;
-  font: inherit;
-  background: #fff;
-}
-label {
-  display: grid;
-  gap: 6px;
-  font-size: 0.95rem;
-}
-form {
-  display: grid;
-  gap: 12px;
-}
-`;
+// UI components
+export { Button, buttonVariants } from "./components/ui/button";
+export type { ButtonProps } from "./components/ui/button";
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "./components/ui/card";
+export { Badge, badgeVariants } from "./components/ui/badge";
+export type { BadgeProps } from "./components/ui/badge";
+export { Input } from "./components/ui/input";
+export { Label } from "./components/ui/label";
+export { Textarea } from "./components/ui/textarea";
+export {
+  Select, SelectGroup, SelectValue, SelectTrigger, SelectContent,
+  SelectLabel, SelectItem, SelectSeparator, SelectScrollUpButton, SelectScrollDownButton,
+} from "./components/ui/select";
+export { Separator } from "./components/ui/separator";
+export { Skeleton } from "./components/ui/skeleton";
+export { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar";
+export { Switch } from "./components/ui/switch";
+export { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+export {
+  Dialog, DialogPortal, DialogOverlay, DialogTrigger, DialogClose,
+  DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+} from "./components/ui/dialog";
+export {
+  Sheet, SheetPortal, SheetOverlay, SheetTrigger, SheetClose, SheetContent,
+  SheetHeader, SheetFooter, SheetTitle, SheetDescription,
+} from "./components/ui/sheet";
+export {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuCheckboxItem, DropdownMenuRadioItem, DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenuShortcut, DropdownMenuGroup, DropdownMenuPortal, DropdownMenuSub,
+  DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuRadioGroup,
+} from "./components/ui/dropdown-menu";
+export {
+  AlertDialog, AlertDialogPortal, AlertDialogOverlay, AlertDialogTrigger, AlertDialogContent,
+  AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription,
+  AlertDialogAction, AlertDialogCancel,
+} from "./components/ui/alert-dialog";
+export {
+  Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption,
+} from "./components/ui/table";
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/ui/tooltip";
+export { ScrollArea, ScrollBar } from "./components/ui/scroll-area";
+export { Toaster } from "./components/ui/sonner";
+
+// Utilities
+export { cn } from "./lib/utils";
+
+// Legacy — kept for backward compatibility during migration
+export const APP_SHELL_STYLES = "";
 
 export function formatScore(value: number | null | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) {

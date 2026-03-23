@@ -1,38 +1,23 @@
 ---
-import { CHANNEL_SCHEDULE_PRESETS } from "@newsportal/contracts";
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
-import { APP_SHELL_STYLES } from "@newsportal/ui";
-
+import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 
 export const prerender = false;
-const runtimeConfig = readRuntimeConfig(process.env, {
-  defaultAppBaseUrl: "http://127.0.0.1:4322/"
-});
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({
-  baseUrl: runtimeConfig.apiBaseUrl,
-  fetchImpl: fetch
-});
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 function normalizeForwardedPrefix(value: string | null): string {
   const normalized = String(value ?? "").trim();
-  if (!normalized || normalized === "/") {
-    return "";
-  }
+  if (!normalized || normalized === "/") return "";
   return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
 }
-
 const forwardedPrefix = normalizeForwardedPrefix(Astro.request.headers.get("x-forwarded-prefix"));
-const pageBasePath = forwardedPrefix
-  ? `${forwardedPrefix}/`
-  : Astro.url.pathname.endsWith("/")
-    ? Astro.url.pathname
-    : `${Astro.url.pathname}/`;
-
+const pageBasePath = forwardedPrefix ? `${forwardedPrefix}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
 function resolvePageAppPath(target: string): string {
   const resolved = new URL(String(target).replace(/^\/+/, ""), `http://app${pageBasePath}`);
   return `${resolved.pathname}${resolved.search}${resolved.hash}`;
@@ -41,838 +26,146 @@ function resolvePageAppPath(target: string): string {
 const bffPaths = {
   authLogout: resolvePageAppPath("bff/auth/logout"),
   authSignIn: resolvePageAppPath("bff/auth/sign-in"),
-  channels: resolvePageAppPath("bff/admin/channels"),
-  channelsBulk: resolvePageAppPath("bff/admin/channels/bulk"),
-  channelsSchedule: resolvePageAppPath("bff/admin/channels/schedule"),
-  moderation: resolvePageAppPath("bff/admin/moderation"),
-  reindex: resolvePageAppPath("bff/admin/reindex"),
-  templates: resolvePageAppPath("bff/admin/templates")
 };
 
-const [summary, channels, clusters, articles, reindexJobs, llmTemplates, interestTemplates, fetchRuns, llmReviews, llmUsageSummary] =
-  session
-    ? await Promise.all([
-        sdk.getDashboardSummary<Record<string, unknown>>(),
-        sdk.listChannels<Array<Record<string, unknown>>>(),
-        sdk.listClusters<Array<Record<string, unknown>>>(),
-        sdk.listArticles<Array<Record<string, unknown>>>(),
-        sdk.listReindexJobs<Array<Record<string, unknown>>>(),
-        sdk.listLlmTemplates<Array<Record<string, unknown>>>(),
-        sdk.listInterestTemplates<Array<Record<string, unknown>>>(),
-        sdk.listFetchRuns<Array<Record<string, unknown>>>(),
-        sdk.listLlmReviews<Array<Record<string, unknown>>>(),
-        sdk.getLlmUsageSummary<Record<string, unknown>>()
-      ])
-    : [null, [], [], [], [], [], [], [], [], {}];
-const adminReindexJobs = reindexJobs as Array<Record<string, unknown>>;
-const adminFetchRuns = fetchRuns as Array<Record<string, unknown>>;
-const adminLlmReviews = llmReviews as Array<Record<string, unknown>>;
-const llmUsage24h = asRecord((llmUsageSummary as Record<string, unknown>)["24h"]);
-const llmUsage7d = asRecord((llmUsageSummary as Record<string, unknown>)["7d"]);
+type R = Record<string, unknown>;
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+const [summary, fetchRuns] = session
+  ? await Promise.all([
+      sdk.getDashboardSummary<R>(),
+      sdk.listFetchRuns<R[]>(),
+    ])
+  : [null, []];
+
+function formatTimestamp(v: unknown): string {
+  if (!v) return "never";
+  const d = new Date(String(v));
+  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function asPositiveInteger(value: unknown, fallback: number): number {
-  const parsed =
-    typeof value === "number" && Number.isInteger(value) ? value : Number.parseInt(String(value ?? ""), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function asBooleanString(value: boolean): string {
-  return value ? "true" : "false";
-}
-
-function formatJson(value: unknown): string {
-  try {
-    return JSON.stringify(value ?? {}, null, 2);
-  } catch {
-    return String(value ?? "");
-  }
-}
-
-function formatDecimal(value: unknown, digits = 2): string {
-  const numericValue =
-    typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
-  return Number.isFinite(numericValue) ? numericValue.toFixed(digits) : "0.00";
-}
-
-function formatTimestamp(value: unknown): string {
-  if (!value) {
-    return "never";
-  }
-
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString("en-US");
-}
-
-const rssChannels = (channels as Array<Record<string, unknown>>)
-  .filter((channel) => String(channel.provider_type ?? "") === "rss")
-  .map((channel) => {
-    const config = asRecord(channel.config_json);
-
-    return {
-      channelId: String(channel.channel_id ?? ""),
-      name: String(channel.name ?? ""),
-      fetchUrl: String(channel.fetch_url ?? ""),
-      language: String(channel.language ?? "en"),
-      isActive: channel.is_active === true,
-      pollIntervalSeconds: asPositiveInteger(channel.poll_interval_seconds, 300),
-      adaptiveEnabled: channel.adaptive_enabled !== false,
-      effectivePollIntervalSeconds: asPositiveInteger(channel.effective_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300)),
-      maxPollIntervalSeconds: asPositiveInteger(channel.max_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300) * 16),
-      nextDueAt: formatTimestamp(channel.next_due_at),
-      lastResultKind: String(channel.last_result_kind ?? "never"),
-      overdueSeconds: asPositiveInteger(channel.overdue_seconds, 0),
-      needsAttention: channel.needs_attention === true,
-      recentFailureCount24h: asPositiveInteger(channel.recent_failure_count_24h, 0),
-      maxItemsPerPoll: asPositiveInteger(config.maxItemsPerPoll, 20),
-      requestTimeoutMs: asPositiveInteger(config.requestTimeoutMs, 10000),
-      userAgent: String(config.userAgent ?? "NewsPortalFetchers/0.1 (+https://newsportal.local)"),
-      preferContentEncoded: config.preferContentEncoded !== false,
-      lastFetchAt: formatTimestamp(channel.last_fetch_at),
-      lastSuccessAt: formatTimestamp(channel.last_success_at),
-      lastErrorAt: formatTimestamp(channel.last_error_at),
-      lastErrorMessage: String(channel.last_error_message ?? "")
-    };
-  });
-const allChannels = (channels as Array<Record<string, unknown>>).map((channel) => ({
-  channelId: String(channel.channel_id ?? ""),
-  providerType: String(channel.provider_type ?? ""),
-  name: String(channel.name ?? ""),
-  pollIntervalSeconds: asPositiveInteger(channel.poll_interval_seconds, 300),
-  effectivePollIntervalSeconds: asPositiveInteger(channel.effective_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300)),
-  maxPollIntervalSeconds: asPositiveInteger(channel.max_poll_interval_seconds, asPositiveInteger(channel.poll_interval_seconds, 300) * 16),
-  nextDueAt: formatTimestamp(channel.next_due_at),
-  overdueSeconds: asPositiveInteger(channel.overdue_seconds, 0),
-  adaptiveEnabled: channel.adaptive_enabled !== false,
-  lastResultKind: String(channel.last_result_kind ?? "never"),
-  recentFailureCount24h: asPositiveInteger(channel.recent_failure_count_24h, 0),
-  needsAttention: channel.needs_attention === true,
-  lastFetchAt: formatTimestamp(channel.last_fetch_at)
-}));
-
-const bulkRssPlaceholder = JSON.stringify(
-  [
-    {
-      name: "Reuters World RSS",
-      fetchUrl: "https://example.com/world.xml",
-      language: "en",
-      pollIntervalSeconds: 300,
-      adaptiveEnabled: true,
-      maxPollIntervalSeconds: 3600,
-      maxItemsPerPoll: 25,
-      requestTimeoutMs: 4000,
-      userAgent: "NewsPortalFetchers/admin-import",
-      preferContentEncoded: true,
-      isActive: true
-    },
-    {
-      name: "EU Policy RSS",
-      fetchUrl: "https://example.com/eu.xml",
-      language: "en",
-      pollIntervalSeconds: 600,
-      adaptiveEnabled: true,
-      maxPollIntervalSeconds: 86400,
-      maxItemsPerPoll: 15,
-      requestTimeoutMs: 3000,
-      userAgent: "NewsPortalFetchers/admin-import",
-      preferContentEncoded: false,
-      isActive: true
-    }
-  ],
-  null,
-  2
-);
-const flashTone = flash?.status === "error" ? "var(--np-danger)" : "var(--np-success)";
+const kpiCards = !summary ? [] : [
+  { label: "Active News", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
+  { label: "Processed Today", value: String(summary.processed_today ?? 0), color: "text-blue-500" },
+  { label: "Total Users", value: String(summary.total_users ?? 0), color: "text-violet-500" },
+  { label: "Overdue Channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
+  { label: "Fetch Failures 24h", value: String(summary.fetch_failures_24h ?? 0), color: (summary.fetch_failures_24h as number) > 0 ? "text-red-500" : "text-muted-foreground" },
+  { label: "LLM Reviews 24h", value: String(summary.llm_review_count_24h ?? 0), color: "text-primary" },
+  { label: "New Content 24h", value: String(summary.fetch_new_content_24h ?? 0), color: "text-cyan-500" },
+  { label: "Needs Attention", value: String(summary.attention_channels ?? 0), color: (summary.attention_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
+];
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>{DEFAULT_BRAND_CONFIG.productName} Admin MVP</title>
-    <style is:global set:html={APP_SHELL_STYLES}></style>
-  </head>
-  <body>
-    <main>
-      <div class="np-shell">
-        {flash ? (
-          <div
-            class="np-card"
-            role={flash.status === "error" ? "alert" : "status"}
-            aria-live="polite"
-            style={`border-left: 4px solid ${flashTone}; margin-bottom: 16px;`}
-          >
-            <strong>{flash.status === "error" ? "Action failed" : "Action complete"}</strong>
-            <p style="margin-bottom: 0;">{flash.message}</p>
+<AdminShell title={`Dashboard — ${DEFAULT_BRAND_CONFIG.productName} Admin`} session={session} flash={flash} activeNav="dashboard">
+  <Fragment slot="header-title">
+    <h1 class="text-sm font-semibold text-foreground">Dashboard</h1>
+  </Fragment>
+
+  {!session ? (
+    <div class="flex items-center justify-center min-h-[calc(100vh-56px)]">
+      <div class="w-full max-w-sm">
+        <div class="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div class="mb-6 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold mx-auto mb-3">N</span>
+            <h2 class="text-lg font-semibold">{DEFAULT_BRAND_CONFIG.productName} Admin</h2>
+            <p class="text-sm text-muted-foreground mt-1">Sign in to continue</p>
           </div>
-        ) : null}
-        <section id="auth" class="np-card" style={`background:${DEFAULT_BRAND_CONFIG.backgroundGradient}; scroll-margin-top: 24px;`}>
-          <p class="np-subtle">Operational console</p>
-          <h1 class="np-heading">{DEFAULT_BRAND_CONFIG.productName} Admin</h1>
-          {
-            session ? (
-              <div>
-                <span class="np-pill">admin userId: {session.userId}</span>
-                <span class="np-pill">roles: {session.roles.join(", ") || "none"}</span>
-                <form method="post" action={bffPaths.authLogout} style="margin-top: 16px;">
-                  <button type="submit" class="np-button secondary">Sign Out</button>
-                </form>
-              </div>
-            ) : (
-              <form method="post" action={bffPaths.authSignIn} class="np-card">
-                <label>
-                  Admin email
-                  <input name="email" type="email" placeholder="admin@example.com" />
-                </label>
-                <label>
-                  Password
-                  <input name="password" type="password" />
-                </label>
-                <input type="submit" value="Sign In with Firebase" />
-                <p class="np-subtle">
-                  Allowlisted emails from `ADMIN_ALLOWLIST_EMAILS` receive the local `admin` role on
-                  first successful Firebase sign-in; PostgreSQL remains the authorization source of truth.
-                </p>
-              </form>
-            )
-          }
-        </section>
-
-        {
-          session ? (
-            <>
-              <section class="np-grid two">
-                <article class="np-card">
-                  <h2>KPI</h2>
-                  <div class="np-grid two">
-                    <div><strong>{String(summary?.active_news ?? 0)}</strong><br />Active news</div>
-                    <div><strong>{String(summary?.processed_total ?? 0)}</strong><br />Processed total</div>
-                    <div><strong>{String(summary?.processed_today ?? 0)}</strong><br />Processed today</div>
-                    <div><strong>{String(summary?.total_users ?? 0)}</strong><br />Total users</div>
-                    <div><strong>{String(summary?.overdue_channels ?? 0)}</strong><br />Overdue channels</div>
-                    <div><strong>{String(summary?.adapted_channels ?? 0)}</strong><br />Adapted channels</div>
-                    <div><strong>{String(summary?.attention_channels ?? 0)}</strong><br />Needs attention</div>
-                    <div><strong>{String(summary?.fetch_median_duration_ms_24h ?? 0)}</strong><br />Median fetch ms (24h)</div>
-                    <div><strong>{String(summary?.fetch_new_content_24h ?? 0)}</strong><br />New content (24h)</div>
-                    <div><strong>{String(summary?.fetch_no_change_24h ?? 0)}</strong><br />No change (24h)</div>
-                    <div><strong>{String(summary?.fetch_failures_24h ?? 0)}</strong><br />Fetch failures (24h)</div>
-                    <div><strong>{String(summary?.llm_review_count_24h ?? 0)}</strong><br />LLM reviews (24h)</div>
-                  </div>
-                </article>
-
-                <article id="reindex" class="np-card" style="scroll-margin-top: 24px;">
-                  <h2>Reindex</h2>
-                  <form method="post" action={bffPaths.reindex}>
-                    <label>
-                      Index name
-                      <select name="indexName">
-                        <option value="interest_centroids">interest_centroids</option>
-                      </select>
-                    </label>
-                    <input type="submit" value="Queue Reindex" />
-                  </form>
-                  <div style="margin-top: 16px;">
-                    {adminReindexJobs.map((job) => (
-                      <div class="np-pill">
-                        {String(job.index_name)}: {String(job.status)}
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              </section>
-
-              <section class="np-grid two">
-                <article id="channels" class="np-card" style="scroll-margin-top: 24px;">
-                  <h2>Channels</h2>
-                  <form method="post" action={bffPaths.channels}>
-                    <input type="hidden" name="providerType" value="rss" />
-                    <label>
-                      RSS channel name
-                      <input name="name" placeholder="Reuters World RSS" />
-                    </label>
-                    <label>
-                      RSS feed URL
-                      <input name="fetchUrl" placeholder="https://example.com/feed.xml" />
-                    </label>
-                    <label>
-                      Language
-                      <input name="language" value="en" />
-                    </label>
-                    <label>
-                      Poll interval (seconds)
-                      <input name="pollIntervalSeconds" value="300" inputmode="numeric" />
-                    </label>
-                    <label>
-                      Adaptive scheduling
-                      <select name="adaptiveEnabled">
-                        <option value="true">true</option>
-                        <option value="false">false</option>
-                      </select>
-                    </label>
-                    <label>
-                      Max adaptive interval (seconds)
-                      <input name="maxPollIntervalSeconds" value="3600" inputmode="numeric" />
-                    </label>
-                    <label>
-                      Max items per poll
-                      <input name="maxItemsPerPoll" value="20" inputmode="numeric" />
-                    </label>
-                    <label>
-                      Request timeout (ms)
-                      <input name="requestTimeoutMs" value="10000" inputmode="numeric" />
-                    </label>
-                    <label>
-                      User agent
-                      <input name="userAgent" value="NewsPortalFetchers/admin" />
-                    </label>
-                    <label>
-                      Prefer `content:encoded`
-                      <select name="preferContentEncoded">
-                        <option value="true">true</option>
-                        <option value="false">false</option>
-                      </select>
-                    </label>
-                    <label>
-                      Active
-                      <select name="isActive">
-                        <option value="true">active</option>
-                        <option value="false">paused</option>
-                      </select>
-                    </label>
-                    <input type="submit" value="Create RSS Channel" />
-                  </form>
-                  <form method="post" action={bffPaths.channelsBulk} style="margin-top: 18px;">
-                    <label>
-                      Bulk RSS import JSON
-                      <textarea
-                        name="channelsJson"
-                        rows="14"
-                        placeholder={bulkRssPlaceholder}
-                      ></textarea>
-                    </label>
-                    <input type="submit" value="Import RSS Channels" />
-                  </form>
-                  <p class="np-subtle" style="margin-top: 12px;">
-                    Internal MVP acceptance uses an RSS-first ingest surface. Website/API/IMAP channel
-                    onboarding stays outside this admin flow until it has dedicated proof.
-                  </p>
-                  <p class="np-subtle">
-                    Visible RSS channels: {rssChannels.length}. Bulk payload accepts the same RSS
-                    fields as the single-channel form and rejects partially invalid rows.
-                  </p>
-                  <form method="post" action={bffPaths.channelsSchedule} style="margin-top: 18px;">
-                    <label>
-                      Bulk schedule provider
-                      <select name="providerType">
-                        <option value="rss">rss</option>
-                        <option value="website">website</option>
-                        <option value="api">api</option>
-                        <option value="email_imap">email_imap</option>
-                      </select>
-                    </label>
-                    <label>
-                      Base poll interval (seconds)
-                      <input name="pollIntervalSeconds" value="900" inputmode="numeric" />
-                    </label>
-                    <label>
-                      Adaptive scheduling
-                      <select name="adaptiveEnabled">
-                        <option value="true">true</option>
-                        <option value="false">false</option>
-                      </select>
-                    </label>
-                    <label>
-                      Max adaptive interval (seconds)
-                      <input name="maxPollIntervalSeconds" value="86400" inputmode="numeric" />
-                    </label>
-                    <button type="submit" class="np-button secondary">Apply Provider Schedule</button>
-                  </form>
-                  <div style="margin-top: 12px;">
-                    {Object.entries(CHANNEL_SCHEDULE_PRESETS).map(([label, seconds]) => (
-                      <span class="np-pill">
-                        {label}: {seconds}s
-                      </span>
-                    ))}
-                  </div>
-                  <table class="np-table" style="margin-top: 18px;">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Fetch</th>
-                        <th>Schedule</th>
-                        <th>Status</th>
-                        <th>Last Success</th>
-                        <th>Last Error</th>
-                        <th>Controls</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rssChannels.map((channel) => (
-                        <tr>
-                          <td>
-                            <div>{channel.name}</div>
-                            <div class="np-subtle">rss / {channel.language || "-"}</div>
-                          </td>
-                          <td>
-                            <div>{channel.fetchUrl}</div>
-                            <div class="np-subtle">last fetch: {channel.lastFetchAt}</div>
-                          </td>
-                          <td>
-                            <div>{channel.pollIntervalSeconds}s base / {channel.effectivePollIntervalSeconds}s effective</div>
-                            <div class="np-subtle">
-                              next due: {channel.nextDueAt} | max: {channel.maxPollIntervalSeconds}s
-                            </div>
-                            <div class="np-subtle">
-                              timeout: {channel.requestTimeoutMs}ms | adaptive: {String(channel.adaptiveEnabled)} | content:encoded: {String(channel.preferContentEncoded)}
-                            </div>
-                          </td>
-                          <td>
-                            <div>{channel.isActive ? "active" : "paused"}</div>
-                            <div class="np-subtle">
-                              {channel.lastResultKind} | overdue: {channel.overdueSeconds}s
-                            </div>
-                            <div class="np-subtle">
-                              failures(24h): {channel.recentFailureCount24h} | attention: {String(channel.needsAttention)}
-                            </div>
-                          </td>
-                          <td>{channel.lastSuccessAt}</td>
-                          <td>
-                            <div>{channel.lastErrorAt}</div>
-                            <div class="np-subtle">{channel.lastErrorMessage || "none"}</div>
-                          </td>
-                          <td>
-                            <form method="post" action={bffPaths.channels} style="margin-bottom: 12px;">
-                              <input type="hidden" name="channelId" value={channel.channelId} />
-                              <input type="hidden" name="providerType" value="rss" />
-                              <input type="hidden" name="name" value={channel.name} />
-                              <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
-                              <input type="hidden" name="language" value={channel.language} />
-                              <input type="hidden" name="pollIntervalSeconds" value={String(channel.pollIntervalSeconds)} />
-                              <input type="hidden" name="adaptiveEnabled" value={asBooleanString(channel.adaptiveEnabled)} />
-                              <input type="hidden" name="maxPollIntervalSeconds" value={String(channel.maxPollIntervalSeconds)} />
-                              <input type="hidden" name="maxItemsPerPoll" value={String(channel.maxItemsPerPoll)} />
-                              <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
-                              <input type="hidden" name="userAgent" value={channel.userAgent} />
-                              <input
-                                type="hidden"
-                                name="preferContentEncoded"
-                                value={asBooleanString(channel.preferContentEncoded)}
-                              />
-                              <input
-                                type="hidden"
-                                name="isActive"
-                                value={asBooleanString(!channel.isActive)}
-                              />
-                              <button type="submit" class="np-button secondary">
-                                {channel.isActive ? "Pause" : "Resume"}
-                              </button>
-                            </form>
-                            <details>
-                              <summary>Edit</summary>
-                              <form method="post" action={bffPaths.channels} style="margin-top: 12px;">
-                                <input type="hidden" name="channelId" value={channel.channelId} />
-                                <input type="hidden" name="providerType" value="rss" />
-                                <label>
-                                  Name
-                                  <input name="name" value={channel.name} />
-                                </label>
-                                <label>
-                                  Feed URL
-                                  <input name="fetchUrl" value={channel.fetchUrl} />
-                                </label>
-                                <label>
-                                  Language
-                                  <input name="language" value={channel.language} />
-                                </label>
-                                <label>
-                                  Poll interval (seconds)
-                                  <input
-                                    name="pollIntervalSeconds"
-                                    value={String(channel.pollIntervalSeconds)}
-                                    inputmode="numeric"
-                                  />
-                                </label>
-                                <label>
-                                  Adaptive scheduling
-                                  <select name="adaptiveEnabled">
-                                    <option value="true" selected={channel.adaptiveEnabled}>true</option>
-                                    <option value="false" selected={!channel.adaptiveEnabled}>false</option>
-                                  </select>
-                                </label>
-                                <label>
-                                  Max adaptive interval (seconds)
-                                  <input
-                                    name="maxPollIntervalSeconds"
-                                    value={String(channel.maxPollIntervalSeconds)}
-                                    inputmode="numeric"
-                                  />
-                                </label>
-                                <label>
-                                  Max items per poll
-                                  <input
-                                    name="maxItemsPerPoll"
-                                    value={String(channel.maxItemsPerPoll)}
-                                    inputmode="numeric"
-                                  />
-                                </label>
-                                <label>
-                                  Request timeout (ms)
-                                  <input
-                                    name="requestTimeoutMs"
-                                    value={String(channel.requestTimeoutMs)}
-                                    inputmode="numeric"
-                                  />
-                                </label>
-                                <label>
-                                  User agent
-                                  <input name="userAgent" value={channel.userAgent} />
-                                </label>
-                                <label>
-                                  Prefer `content:encoded`
-                                  <select name="preferContentEncoded">
-                                    <option value="true" selected={channel.preferContentEncoded}>true</option>
-                                    <option value="false" selected={!channel.preferContentEncoded}>false</option>
-                                  </select>
-                                </label>
-                                <label>
-                                  Active
-                                  <select name="isActive">
-                                    <option value="true" selected={channel.isActive}>active</option>
-                                    <option value="false" selected={!channel.isActive}>paused</option>
-                                  </select>
-                                </label>
-                                <button type="submit" class="np-button secondary">Save RSS Settings</button>
-                              </form>
-                            </details>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </article>
-
-                <article id="templates" class="np-card" style="scroll-margin-top: 24px;">
-                  <h2>Prompt & Interest Templates</h2>
-                  <form method="post" action={bffPaths.templates}>
-                    <input type="hidden" name="kind" value="llm" />
-                    <label>
-                      Template name
-                      <input name="name" placeholder="Gray zone review" />
-                    </label>
-                    <label>
-                      Scope
-                      <select name="scope">
-                        <option value="interests">interests</option>
-                        <option value="criteria">criteria</option>
-                        <option value="global">global</option>
-                      </select>
-                    </label>
-                    <label>
-                      Template text
-                      <textarea
-                        name="templateText"
-                        rows="6"
-                        placeholder='Return JSON {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}'
-                      ></textarea>
-                    </label>
-                    <input type="submit" value="Save LLM Template" />
-                  </form>
-                  <form method="post" action={bffPaths.templates} style="margin-top: 18px;">
-                    <input type="hidden" name="kind" value="interest" />
-                    <label>
-                      Interest template name
-                      <input name="name" placeholder="AI policy" />
-                    </label>
-                    <label>
-                      Description
-                      <textarea name="description" rows="3"></textarea>
-                    </label>
-                    <label>
-                      Positive prototypes
-                      <textarea name="positive_texts" rows="3"></textarea>
-                    </label>
-                    <label>
-                      Negative prototypes
-                      <textarea name="negative_texts" rows="3"></textarea>
-                    </label>
-                    <input type="submit" value="Save Interest Template" />
-                  </form>
-                  <p class="np-subtle" style="margin-top: 16px;">
-                    Active LLM templates: {llmTemplates.length} | active interest templates: {interestTemplates.length}
-                  </p>
-                </article>
-              </section>
-
-              <section class="np-grid two">
-                <article class="np-card">
-                  <h2>Scheduler Health</h2>
-                  <p class="np-subtle">
-                    Provider-aware overview across RSS, website, API and IMAP channels.
-                  </p>
-                  <table class="np-table">
-                    <thead>
-                      <tr>
-                        <th>Channel</th>
-                        <th>Schedule</th>
-                        <th>State</th>
-                        <th>Last Fetch</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allChannels.length === 0 ? (
-                        <tr>
-                          <td colspan="4" class="np-subtle">No channels available.</td>
-                        </tr>
-                      ) : (
-                        allChannels.slice(0, 12).map((channel) => (
-                          <tr>
-                            <td>
-                              <div>{channel.name}</div>
-                              <div class="np-subtle">{channel.providerType}</div>
-                            </td>
-                            <td>
-                              <div>
-                                {channel.pollIntervalSeconds}s base / {channel.effectivePollIntervalSeconds}s effective
-                              </div>
-                              <div class="np-subtle">
-                                max: {channel.maxPollIntervalSeconds}s | next due: {channel.nextDueAt}
-                              </div>
-                            </td>
-                            <td>
-                              <div>{channel.lastResultKind}</div>
-                              <div class="np-subtle">
-                                adaptive: {String(channel.adaptiveEnabled)} | overdue: {channel.overdueSeconds}s
-                              </div>
-                              <div class="np-subtle">
-                                failures(24h): {channel.recentFailureCount24h} | attention: {String(channel.needsAttention)}
-                              </div>
-                            </td>
-                            <td>{channel.lastFetchAt}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </article>
-
-                <article class="np-card">
-                  <h2>LLM Usage Summary</h2>
-                  <div class="np-grid two">
-                    <div>
-                      <strong>{String(llmUsage24h.review_count ?? 0)}</strong>
-                      <br />
-                      Reviews (24h)
-                    </div>
-                    <div>
-                      <strong>{String(llmUsage24h.total_tokens ?? 0)}</strong>
-                      <br />
-                      Tokens (24h)
-                    </div>
-                    <div>
-                      <strong>{formatDecimal(llmUsage24h.cost_estimate_usd, 4)}</strong>
-                      <br />
-                      Cost USD (24h)
-                    </div>
-                    <div>
-                      <strong>{formatDecimal(llmUsage24h.avg_latency_ms, 0)}</strong>
-                      <br />
-                      Avg latency ms (24h)
-                    </div>
-                    <div>
-                      <strong>{String(llmUsage7d.review_count ?? 0)}</strong>
-                      <br />
-                      Reviews (7d)
-                    </div>
-                    <div>
-                      <strong>{String(llmUsage7d.total_tokens ?? 0)}</strong>
-                      <br />
-                      Tokens (7d)
-                    </div>
-                    <div>
-                      <strong>{formatDecimal(llmUsage7d.cost_estimate_usd, 4)}</strong>
-                      <br />
-                      Cost USD (7d)
-                    </div>
-                    <div>
-                      <strong>{formatDecimal(llmUsage7d.avg_latency_ms, 0)}</strong>
-                      <br />
-                      Avg latency ms (7d)
-                    </div>
-                  </div>
-                </article>
-              </section>
-
-              <section class="np-grid two">
-                <article id="articles" class="np-card" style="scroll-margin-top: 24px;">
-                  <h2>Recent Articles</h2>
-                  <table class="np-table">
-                    <thead>
-                      <tr>
-                        <th>Title</th>
-                        <th>State</th>
-                        <th>Moderation</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {articles.slice(0, 10).map((article) => (
-                        <tr>
-                          <td>
-                            <div>{String(article.title)}</div>
-                            <div class="np-subtle">{String(article.lead ?? "")}</div>
-                          </td>
-                          <td>{String(article.processing_state)}</td>
-                          <td>
-                            <div class="np-grid two">
-                              <form method="post" action={bffPaths.moderation}>
-                                <input type="hidden" name="docId" value={String(article.doc_id)} />
-                                <input type="hidden" name="actionType" value="block" />
-                                <button type="submit" class="np-button secondary">Block</button>
-                              </form>
-                              <form method="post" action={bffPaths.moderation}>
-                                <input type="hidden" name="docId" value={String(article.doc_id)} />
-                                <input type="hidden" name="actionType" value="unblock" />
-                                <button type="submit" class="np-button secondary">Unblock</button>
-                              </form>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </article>
-
-                <article class="np-card">
-                  <h2>Clusters</h2>
-                  <table class="np-table">
-                    <thead>
-                      <tr>
-                        <th>Cluster</th>
-                        <th>Articles</th>
-                        <th>Places</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clusters.map((cluster) => (
-                        <tr>
-                          <td>{String(cluster.primary_title ?? cluster.cluster_id)}</td>
-                          <td>{String(cluster.article_count ?? 0)}</td>
-                          <td>{Array.isArray(cluster.top_places) ? cluster.top_places.join(", ") : ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </article>
-              </section>
-
-              <section class="np-grid two">
-                <article class="np-card">
-                  <h2>Recent Fetch Runs</h2>
-                  <table class="np-table">
-                    <thead>
-                      <tr>
-                        <th>Channel</th>
-                        <th>Outcome</th>
-                        <th>Counts</th>
-                        <th>Timing</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adminFetchRuns.length === 0 ? (
-                        <tr>
-                          <td colspan="4" class="np-subtle">No fetch runs logged yet.</td>
-                        </tr>
-                      ) : (
-                        adminFetchRuns.slice(0, 12).map((run) => (
-                          <tr>
-                            <td>
-                              <div>{String(run.channel_name ?? run.channel_id ?? "-")}</div>
-                              <div class="np-subtle">{String(run.provider_type ?? "-")}</div>
-                            </td>
-                            <td>
-                              <div>{String(run.outcome_kind ?? "-")}</div>
-                              <div class="np-subtle">
-                                http: {String(run.http_status ?? "-")} | retry-after: {String(run.retry_after_seconds ?? "-")}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                fetched: {String(run.fetched_item_count ?? 0)} | new: {String(run.new_article_count ?? 0)}
-                              </div>
-                              <div class="np-subtle">
-                                dupes: {String(run.duplicate_suppressed_count ?? 0)} | cursor changed: {String(run.cursor_changed ?? false)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>{formatTimestamp(run.started_at)}</div>
-                              <div class="np-subtle">
-                                duration: {String(run.fetch_duration_ms ?? 0)}ms
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </article>
-
-                <article class="np-card">
-                  <h2>Recent LLM Reviews</h2>
-                  <table class="np-table">
-                    <thead>
-                      <tr>
-                        <th>Article</th>
-                        <th>Decision</th>
-                        <th>Usage</th>
-                        <th>Latency</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adminLlmReviews.length === 0 ? (
-                        <tr>
-                          <td colspan="4" class="np-subtle">No LLM reviews yet.</td>
-                        </tr>
-                      ) : (
-                        adminLlmReviews.slice(0, 12).map((review) => (
-                          <tr>
-                            <td>
-                              <div>{String(review.article_title ?? review.doc_id ?? "-")}</div>
-                              <div class="np-subtle">{formatTimestamp(review.created_at)}</div>
-                            </td>
-                            <td>
-                              <div>{String(review.review_decision ?? "-")}</div>
-                              <div class="np-subtle">{String(review.model_name ?? "-")}</div>
-                            </td>
-                            <td>
-                              <div>
-                                prompt: {String(review.prompt_tokens ?? "-")} | completion: {String(review.completion_tokens ?? "-")}
-                              </div>
-                              <div class="np-subtle">
-                                total: {String(review.total_tokens ?? "-")} | cost: {formatDecimal(review.cost_estimate_usd, 4)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>{String(review.provider_latency_ms ?? "-")}ms</div>
-                              <details>
-                                <summary>Usage payload</summary>
-                                <pre>{formatJson(review.provider_usage_json)}</pre>
-                              </details>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </article>
-              </section>
-            </>
-          ) : null
-        }
+          <form method="post" action={bffPaths.authSignIn} class="grid gap-3">
+            <div class="grid gap-1.5">
+              <label class="text-sm font-medium" for="email">Email</label>
+              <input id="email" name="email" type="email" placeholder="admin@example.com" required
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </div>
+            <div class="grid gap-1.5">
+              <label class="text-sm font-medium" for="password">Password</label>
+              <input id="password" name="password" type="password" required
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </div>
+            <button type="submit" class="mt-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+              Sign In
+            </button>
+          </form>
+        </div>
       </div>
-    </main>
-  </body>
-</html>
+    </div>
+  ) : (
+    <div class="space-y-6">
+      <!-- KPI grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {kpiCards.map(({ label, value, color }) => (
+          <div class="rounded-xl border border-border bg-card p-4">
+            <p class="text-xs text-muted-foreground mb-1">{label}</p>
+            <p class={`text-2xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <!-- Quick navigation -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { href: "/channels", label: "Channels", desc: "Manage RSS feeds" },
+          { href: "/articles", label: "Articles", desc: "Moderate content" },
+          { href: "/clusters", label: "Clusters", desc: "Event clusters" },
+          { href: "/templates", label: "Templates", desc: "LLM prompts" },
+          { href: "/observability", label: "Observability", desc: "Fetch & LLM logs" },
+          { href: "/reindex", label: "Reindex", desc: "Rebuild indices" },
+        ].map(({ href, label, desc }) => (
+          <a href={href} class="rounded-xl border border-border bg-card p-4 hover:bg-accent hover:border-primary/20 transition-all group">
+            <p class="font-medium text-sm group-hover:text-primary transition-colors">{label}</p>
+            <p class="text-xs text-muted-foreground mt-0.5">{desc}</p>
+          </a>
+        ))}
+      </div>
+
+      <!-- Recent Fetch Runs -->
+      <div class="rounded-xl border border-border bg-card overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 class="font-semibold text-sm">Recent Fetch Runs</h2>
+          <a href="/observability" class="text-xs text-primary hover:underline">View all →</a>
+        </div>
+        {(fetchRuns as R[]).length === 0 ? (
+          <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border">
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Channel</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Outcome</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Counts</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(fetchRuns as R[]).slice(0, 8).map((run) => (
+                  <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td class="px-4 py-2.5">
+                      <div class="font-medium text-xs truncate max-w-[120px]">{String(run.channel_name ?? run.channel_id ?? "—")}</div>
+                      <div class="text-[10px] text-muted-foreground">{String(run.provider_type ?? "—")}</div>
+                    </td>
+                    <td class="px-4 py-2.5">
+                      <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        String(run.outcome_kind) === "new_content"
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                          : String(run.outcome_kind) === "error"
+                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        {String(run.outcome_kind ?? "—")}
+                      </span>
+                    </td>
+                    <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">
+                      +{String(run.new_article_count ?? 0)} new
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-muted-foreground">
+                      {formatTimestamp(run.started_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )}
+</AdminShell>

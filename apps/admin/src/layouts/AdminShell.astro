@@ -1,0 +1,211 @@
+---
+import "../styles/globals.css";
+import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
+import { AdminFlashToast } from "../components/AdminFlashToast";
+
+export interface Props {
+  title?: string;
+  session?: { userId: string; roles: string[] } | null;
+  flash?: { status: "success" | "error"; message: string } | null;
+  activeNav?: string;
+}
+
+const {
+  title = `${DEFAULT_BRAND_CONFIG.productName} Admin`,
+  session,
+  flash,
+  activeNav,
+} = Astro.props;
+
+const navGroups = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/", label: "Dashboard", icon: "grid", key: "dashboard" },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { href: "/articles", label: "Articles", icon: "newspaper", key: "articles" },
+      { href: "/clusters", label: "Clusters", icon: "layers", key: "clusters" },
+    ],
+  },
+  {
+    label: "Sources",
+    items: [
+      { href: "/channels", label: "Channels", icon: "rss", key: "channels" },
+    ],
+  },
+  {
+    label: "AI",
+    items: [
+      { href: "/templates", label: "Templates", icon: "file-text", key: "templates" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { href: "/reindex", label: "Reindex", icon: "refresh-cw", key: "reindex" },
+      { href: "/observability", label: "Observability", icon: "activity", key: "observability" },
+    ],
+  },
+] as const;
+
+// Lucide-like SVG icons as inline strings
+const icons: Record<string, string> = {
+  grid: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>`,
+  newspaper: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>`,
+  layers: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>`,
+  rss: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>`,
+  "file-text": `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`,
+  "refresh-cw": `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>`,
+  activity: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>`,
+};
+---
+
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body class="min-h-screen bg-background text-foreground antialiased">
+    <div class="flex h-screen overflow-hidden">
+
+      <!-- Sidebar -->
+      <aside id="sidebar" class="hidden md:flex flex-col w-56 shrink-0 border-r border-border bg-card overflow-y-auto">
+        <!-- Logo -->
+        <div class="flex h-14 items-center gap-2.5 px-4 border-b border-border shrink-0">
+          <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">N</span>
+          <div>
+            <p class="text-sm font-semibold leading-none">{DEFAULT_BRAND_CONFIG.productName}</p>
+            <p class="text-[10px] text-muted-foreground">Admin Console</p>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-2 py-3 space-y-4">
+          {navGroups.map((group) => (
+            <div>
+              <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
+              {group.items.map(({ href, label, icon, key }) => (
+                <a
+                  href={href}
+                  class={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
+                    activeNav === key
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <span class="shrink-0" set:html={icons[icon]} />
+                  {label}
+                </a>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <!-- User section -->
+        {session && (
+          <div class="px-2 py-3 border-t border-border mt-auto shrink-0">
+            <div class="flex items-center gap-2 px-2 py-2 rounded-md bg-muted/50">
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-medium">
+                {session.userId.charAt(0).toUpperCase()}
+              </span>
+              <div class="flex-1 overflow-hidden">
+                <p class="text-xs font-medium truncate">Admin</p>
+                <p class="text-[10px] text-muted-foreground truncate">
+                  {session.roles.join(", ") || "viewer"}
+                </p>
+              </div>
+            </div>
+            <form method="post" action="/bff/auth/logout" class="mt-2">
+              <button type="submit" class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                Sign out
+              </button>
+            </form>
+          </div>
+        )}
+      </aside>
+
+      <!-- Main content -->
+      <div class="flex flex-col flex-1 overflow-hidden">
+        <!-- Top bar -->
+        <header class="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-6">
+          <!-- Mobile menu button -->
+          <button
+            type="button"
+            id="mobile-sidebar-btn"
+            class="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+          </button>
+
+          <div class="flex-1">
+            <slot name="header-title" />
+          </div>
+
+          <!-- Header actions -->
+          <div class="flex items-center gap-2">
+            <slot name="header-actions" />
+          </div>
+        </header>
+
+        <!-- Page content -->
+        <main class="flex-1 overflow-y-auto">
+          <AdminFlashToast flash={flash} client:load />
+          <div class="p-4 md:p-6">
+            <slot />
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Mobile sidebar overlay -->
+    <div id="mobile-sidebar-overlay" class="hidden fixed inset-0 z-50 bg-black/50 md:hidden">
+      <aside class="flex flex-col w-64 h-full bg-card border-r border-border overflow-y-auto">
+        <div class="flex h-14 items-center justify-between gap-2.5 px-4 border-b border-border shrink-0">
+          <div class="flex items-center gap-2.5">
+            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">N</span>
+            <p class="text-sm font-semibold">{DEFAULT_BRAND_CONFIG.productName} Admin</p>
+          </div>
+          <button type="button" id="close-mobile-sidebar" class="text-muted-foreground hover:text-foreground">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <nav class="flex-1 px-2 py-3 space-y-4">
+          {navGroups.map((group) => (
+            <div>
+              <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
+              {group.items.map(({ href, label, icon, key }) => (
+                <a href={href} class={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
+                  activeNav === key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}>
+                  <span class="shrink-0" set:html={icons[icon]} />
+                  {label}
+                </a>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
+    </div>
+
+    <script>
+      const btn = document.getElementById("mobile-sidebar-btn");
+      const overlay = document.getElementById("mobile-sidebar-overlay");
+      const closeBtn = document.getElementById("close-mobile-sidebar");
+      btn?.addEventListener("click", () => overlay?.classList.remove("hidden"));
+      closeBtn?.addEventListener("click", () => overlay?.classList.add("hidden"));
+      overlay?.addEventListener("click", (e) => {
+        if (e.target === overlay) overlay.classList.add("hidden");
+      });
+    </script>
+  </body>
+</html>
+

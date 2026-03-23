@@ -158,6 +158,8 @@ maintenance:
   worktree_coherence_check_required: true
   context_compression_required_on_trigger: true
   audit_request_driven: true
+  archive_sync_required_on_done: true
+  capability_archive_required_when_no_live_next_stage: true
 authority:
   order:
     - AGENTS.md
@@ -174,7 +176,7 @@ deep_contract_docs:
   temporary_docs_must_merge_into_history_or_stable_contract: true
   preferred_locations:
     - docs/contracts/
-  templates_included: false
+  templates_included: true
 setup_mode:
   enabled_until_core_is_initialized: true
   implementation_forbidden_while_uninitialized: true

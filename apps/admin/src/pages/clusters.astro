@@ -1,0 +1,62 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+
+export const prerender = false;
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+if (!session) return Astro.redirect("/");
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+type R = Record<string, unknown>;
+const clusters = await sdk.listClusters<R[]>();
+---
+
+<AdminShell title="Clusters — Admin" session={session} flash={flash} activeNav="clusters">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Clusters</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-5">
+    <div>
+      <h1 class="text-xl font-bold">Event Clusters</h1>
+      <p class="text-sm text-muted-foreground mt-0.5">{(clusters as R[]).length} cluster{(clusters as R[]).length !== 1 ? "s" : ""}</p>
+    </div>
+
+    {(clusters as R[]).length === 0 ? (
+      <div class="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-border bg-card">
+        <p class="font-medium text-sm">No clusters yet</p>
+        <p class="text-xs text-muted-foreground mt-1">Clusters are built automatically as articles are processed</p>
+      </div>
+    ) : (
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {(clusters as R[]).map((cluster) => (
+          <div class="rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-colors">
+            <p class="font-medium text-sm line-clamp-2">
+              {String(cluster.primary_title ?? cluster.cluster_id ?? "Unnamed cluster")}
+            </p>
+            <div class="flex items-center gap-3 mt-2">
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-secondary text-secondary-foreground">
+                {String(cluster.article_count ?? 0)} articles
+              </span>
+              {Array.isArray(cluster.top_places) && (cluster.top_places as string[]).length > 0 && (
+                <span class="text-xs text-muted-foreground truncate">
+                  {(cluster.top_places as string[]).slice(0, 3).join(", ")}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+</AdminShell>
+

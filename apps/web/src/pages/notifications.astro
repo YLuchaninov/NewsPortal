@@ -1,0 +1,132 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import Shell from "../layouts/Shell.astro";
+import { queryOne } from "../lib/server/db";
+import { resolveWebSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+
+export const prerender = false;
+const session = await resolveWebSession(Astro.request);
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+const flash = readFlash(Astro.url);
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
+function resolvePageAppPath(t: string) {
+  return new URL(t.replace(/^\/+/, ""), pageBaseUrl).pathname;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("../bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("../bff/auth/logout"),
+  preferences: resolvePageAppPath("../bff/preferences"),
+  feedback: resolvePageAppPath("../bff/feedback"),
+};
+
+type ViewRow = Record<string, unknown>;
+const [notifications, profile] = await Promise.all([
+  sdk.listNotifications<ViewRow[]>(session.userId),
+  queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
+]);
+
+const themePreference = String(profile?.theme_preference ?? "system");
+const themeClass = themePreference === "dark" ? "dark" : "";
+---
+
+<Shell
+  title="Notifications — NewsPortal"
+  session={session}
+  themeClass={themeClass}
+  currentTheme={themePreference}
+  flash={flash}
+  activeNav="notifications"
+  bffPreferencesPath={bffPaths.preferences}
+  bffLogoutPath={bffPaths.authLogout}
+  bffBootstrapPath={bffPaths.authBootstrap}
+>
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold tracking-tight">Notification History</h1>
+    <p class="text-muted-foreground mt-1">Articles that were matched to your interests and delivered</p>
+  </div>
+
+  {(notifications as ViewRow[]).length === 0 ? (
+    <div class="flex flex-col items-center justify-center py-24 text-center">
+      <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+        </svg>
+      </div>
+      <p class="font-semibold text-lg">No notifications yet</p>
+      <p class="text-muted-foreground text-sm mt-1 max-w-sm">
+        Add interests and configure your notification channels in Settings to start receiving alerts
+      </p>
+      <a href="/settings" class="mt-4 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+        Go to Settings
+      </a>
+    </div>
+  ) : (
+    <div class="rounded-xl border border-border overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-border bg-muted/50">
+            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Article</th>
+            <th class="px-4 py-3 text-left font-medium text-muted-foreground hidden sm:table-cell">Channel</th>
+            <th class="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Status</th>
+            <th class="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">Decision</th>
+            <th class="px-4 py-3 text-left font-medium text-muted-foreground">Feedback</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(notifications as ViewRow[]).map((n) => (
+            <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+              <td class="px-4 py-3">
+                <div class="font-medium line-clamp-1">{String(n.article_title ?? n.doc_id ?? "—")}</div>
+              </td>
+              <td class="px-4 py-3 hidden sm:table-cell">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-secondary text-secondary-foreground">
+                  {String(n.channel_type ?? "—")}
+                </span>
+              </td>
+              <td class="px-4 py-3 hidden md:table-cell text-muted-foreground">
+                {String(n.status ?? "—")}
+              </td>
+              <td class="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs max-w-[200px] truncate">
+                {String(n.decision_reason ?? "—")}
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1">
+                  <form method="post" action={bffPaths.feedback}>
+                    <input type="hidden" name="notificationId" value={String(n.notification_id)} />
+                    <input type="hidden" name="docId" value={String(n.doc_id)} />
+                    <input type="hidden" name="interestId" value={String(n.interest_id ?? "")} />
+                    <input type="hidden" name="feedbackValue" value="helpful" />
+                    <button type="submit" title="Helpful" class="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-300 transition-colors text-muted-foreground">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/></svg>
+                    </button>
+                  </form>
+                  <form method="post" action={bffPaths.feedback}>
+                    <input type="hidden" name="notificationId" value={String(n.notification_id)} />
+                    <input type="hidden" name="docId" value={String(n.doc_id)} />
+                    <input type="hidden" name="interestId" value={String(n.interest_id ?? "")} />
+                    <input type="hidden" name="feedbackValue" value="not_helpful" />
+                    <button type="submit" title="Not helpful" class="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors text-muted-foreground">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z"/></svg>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</Shell>
+

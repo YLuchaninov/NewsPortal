@@ -1,0 +1,161 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+
+export const prerender = false;
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+if (!session) return Astro.redirect("/");
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+
+type R = Record<string, unknown>;
+const [fetchRuns, llmReviews, llmUsageSummary] = await Promise.all([
+  sdk.listFetchRuns<R[]>(),
+  sdk.listLlmReviews<R[]>(),
+  sdk.getLlmUsageSummary<R>(),
+]);
+
+function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
+const llmUsage24h = asRecord((llmUsageSummary as R)["24h"]);
+const llmUsage7d = asRecord((llmUsageSummary as R)["7d"]);
+
+function fmt(v: unknown) {
+  if (!v) return "—";
+  const d = new Date(String(v));
+  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+function fmtD(v: unknown, decimals = 2): string {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+  return isFinite(n) ? n.toFixed(decimals) : "0";
+}
+---
+
+<AdminShell title="Observability — Admin" session={session} flash={flash} activeNav="observability">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Observability</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <h1 class="text-xl font-bold">Observability</h1>
+
+    <!-- LLM Usage Summary -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {[
+        { label: "Reviews (24h)", value: String(llmUsage24h.review_count ?? 0) },
+        { label: "Tokens (24h)", value: String(llmUsage24h.total_tokens ?? 0) },
+        { label: "Cost USD (24h)", value: `$${fmtD(llmUsage24h.cost_estimate_usd, 4)}` },
+        { label: "Avg latency (24h)", value: `${fmtD(llmUsage24h.avg_latency_ms, 0)}ms` },
+        { label: "Reviews (7d)", value: String(llmUsage7d.review_count ?? 0) },
+        { label: "Tokens (7d)", value: String(llmUsage7d.total_tokens ?? 0) },
+        { label: "Cost USD (7d)", value: `$${fmtD(llmUsage7d.cost_estimate_usd, 4)}` },
+        { label: "Avg latency (7d)", value: `${fmtD(llmUsage7d.avg_latency_ms, 0)}ms` },
+      ].map(({ label, value }) => (
+        <div class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs text-muted-foreground mb-1">{label}</p>
+          <p class="text-lg font-bold">{value}</p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Fetch Runs -->
+    <div class="rounded-xl border border-border bg-card overflow-hidden">
+      <div class="px-4 py-3 border-b border-border">
+        <h2 class="font-semibold text-sm">Fetch Runs</h2>
+      </div>
+      {(fetchRuns as R[]).length === 0 ? (
+        <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border">
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Channel</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Outcome</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Counts</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Started</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(fetchRuns as R[]).slice(0, 25).map((run) => (
+                <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <td class="px-4 py-2.5">
+                    <div class="text-xs font-medium">{String(run.channel_name ?? run.channel_id ?? "—")}</div>
+                    <div class="text-[10px] text-muted-foreground">{String(run.provider_type ?? "—")}</div>
+                  </td>
+                  <td class="px-4 py-2.5">
+                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      String(run.outcome_kind) === "new_content" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                      : String(run.outcome_kind) === "error" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                      : "bg-muted text-muted-foreground"
+                    }`}>{String(run.outcome_kind ?? "—")}</span>
+                  </td>
+                  <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">
+                    {String(run.fetched_item_count ?? 0)} fetched / {String(run.new_article_count ?? 0)} new / {String(run.duplicate_suppressed_count ?? 0)} dupes
+                  </td>
+                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{fmt(run.started_at)}</td>
+                  <td class="px-4 py-2.5 hidden md:table-cell text-xs text-muted-foreground">{String(run.fetch_duration_ms ?? "—")}ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+
+    <!-- LLM Reviews -->
+    <div class="rounded-xl border border-border bg-card overflow-hidden">
+      <div class="px-4 py-3 border-b border-border">
+        <h2 class="font-semibold text-sm">LLM Reviews</h2>
+      </div>
+      {(llmReviews as R[]).length === 0 ? (
+        <p class="px-4 py-6 text-sm text-muted-foreground text-center">No LLM reviews yet</p>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border">
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Article</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Decision</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Tokens</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(llmReviews as R[]).slice(0, 25).map((r) => (
+                <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <td class="px-4 py-2.5">
+                    <div class="text-xs font-medium line-clamp-1">{String(r.article_title ?? r.doc_id ?? "—")}</div>
+                    <div class="text-[10px] text-muted-foreground">{fmt(r.created_at)}</div>
+                  </td>
+                  <td class="px-4 py-2.5">
+                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      String(r.review_decision) === "approve" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                      : String(r.review_decision) === "reject" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                      : "bg-muted text-muted-foreground"
+                    }`}>{String(r.review_decision ?? "—")}</span>
+                    <div class="text-[10px] text-muted-foreground">{String(r.model_name ?? "")}</div>
+                  </td>
+                  <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">
+                    {String(r.total_tokens ?? "—")} / ${fmtD(r.cost_estimate_usd, 4)}
+                  </td>
+                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{String(r.provider_latency_ms ?? "—")}ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
+</AdminShell>
+

@@ -68,7 +68,8 @@ Authority order для конфликтов между runtime-файлами:
 - `setup mode` используется только для первичной инициализации или переинициализации runtime core;
 - `normal mode` используется для обычной работы, где каждое изменение начинается с явного work item.
 
-После инициализации runtime core полностью живет в корне репозитория и в `docs/`/`.aidp/`; отдельная template-директория для повседневной работы не нужна.
+Authoritative runtime core живет только в корне репозитория и в `docs/`/`.aidp/`.
+Временный refresh source package уже retired после verified transfer-audit.
 
 Для stateful backend testing и fixture cleanup используй deep contract doc [docs/contracts/test-access-and-fixtures.md](docs/contracts/test-access-and-fixtures.md).
 

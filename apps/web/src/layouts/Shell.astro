@@ -1,0 +1,184 @@
+---
+import "../styles/globals.css";
+import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
+import { FlashToast } from "../components/FlashToast";
+import { ThemeToggle } from "../components/ThemeToggle";
+
+export interface Props {
+  title?: string;
+  session?: { userId: string; identity: { provider: string; isAnonymous: boolean; email?: string | null } } | null;
+  themeClass?: string;
+  currentTheme?: string;
+  flash?: { status: "success" | "error"; message: string } | null;
+  activeNav?: "feed" | "interests" | "notifications" | "settings";
+  bffPreferencesPath?: string;
+  bffLogoutPath?: string;
+  bffBootstrapPath?: string;
+}
+
+const {
+  title = DEFAULT_BRAND_CONFIG.productName,
+  session,
+  themeClass = "",
+  currentTheme = "system",
+  flash,
+  activeNav,
+  bffPreferencesPath = "/bff/preferences",
+  bffLogoutPath = "/bff/auth/logout",
+  bffBootstrapPath = "/bff/auth/bootstrap",
+} = Astro.props;
+
+const navItems = [
+  { href: "/", label: "Feed", key: "feed" },
+  { href: "/interests", label: "Interests", key: "interests" },
+  { href: "/notifications", label: "Notifications", key: "notifications" },
+  { href: "/settings", label: "Settings", key: "settings" },
+] as const;
+---
+
+<html lang="en" class={themeClass}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="min-h-screen bg-background text-foreground antialiased">
+
+    <!-- Top navigation bar -->
+    <header class="sticky top-0 z-40 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <div class="mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6">
+
+        <!-- Logo -->
+        <a href="/" class="flex items-center gap-2 mr-6 shrink-0">
+          <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">N</span>
+          <span class="hidden sm:block font-semibold text-foreground">{DEFAULT_BRAND_CONFIG.productName}</span>
+        </a>
+
+        <!-- Desktop Nav -->
+        <nav class="hidden md:flex items-center gap-1 flex-1">
+          {navItems.map(({ href, label, key }) => (
+            <a
+              href={href}
+              class={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+                activeNav === key
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              }`}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <!-- Right side controls -->
+        <div class="flex items-center gap-2 ml-auto">
+          <!-- Theme toggle -->
+          {session && (
+            <ThemeToggle
+              currentTheme={currentTheme}
+              bffPath={bffPreferencesPath}
+              client:load
+            />
+          )}
+
+          <!-- User section -->
+          {session ? (
+            <div class="flex items-center gap-2">
+              <div class="hidden sm:flex flex-col items-end">
+                <span class="text-xs font-medium leading-none">
+                  {session.identity.isAnonymous ? "Anonymous" : (session.identity.email ?? "User")}
+                </span>
+                <span class="text-[10px] text-muted-foreground">{session.identity.provider}</span>
+              </div>
+              <form method="post" action={bffLogoutPath}>
+                <button
+                  type="submit"
+                  class="inline-flex h-8 items-center rounded-md px-3 text-sm border border-input hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  Sign out
+                </button>
+              </form>
+            </div>
+          ) : (
+            <form method="post" action={bffBootstrapPath} id="bootstrap-form">
+              <button
+                type="button"
+                id="bootstrap-btn"
+                class="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+              >
+                Get Started
+              </button>
+            </form>
+          )}
+
+          <!-- Mobile menu button -->
+          <button
+            type="button"
+            id="mobile-menu-btn"
+            class="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent transition-colors"
+            aria-label="Toggle menu"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile nav -->
+      <div id="mobile-nav" class="hidden md:hidden border-t border-border bg-card px-4 pb-3 pt-2">
+        {navItems.map(({ href, label, key }) => (
+          <a
+            href={href}
+            class={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              activeNav === key
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            }`}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+    </header>
+
+    <!-- Flash toast (client island) -->
+    <FlashToast flash={flash} client:load />
+
+    <!-- Page content -->
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <slot />
+    </main>
+
+    <script>
+      // Mobile menu toggle
+      const btn = document.getElementById("mobile-menu-btn");
+      const nav = document.getElementById("mobile-nav");
+      btn?.addEventListener("click", () => {
+        nav?.classList.toggle("hidden");
+      });
+
+      // Bootstrap button fetch enhancement
+      const bootstrapBtn = document.getElementById("bootstrap-btn");
+      bootstrapBtn?.addEventListener("click", async () => {
+        const form = document.getElementById("bootstrap-form") as HTMLFormElement;
+        const action = form?.action;
+        if (!action) return;
+        bootstrapBtn.textContent = "Starting...";
+        try {
+          await fetch(action, { method: "POST" });
+          window.location.reload();
+        } catch {
+          window.location.reload();
+        }
+      });
+    </script>
+  </body>
+</html>
+

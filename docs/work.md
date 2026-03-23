@@ -20,7 +20,7 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current mode
 
 - Operating mode: normal
-- Why now: основной product work по manual MVP readiness все еще заблокирован unrelated compose regression, а live process docs уже сжаты обратно до decision-relevant состояния.
+- Why now: process package refresh завершен и архивирован; ближайшим honest next item снова остается product-facing blocker в `C-MVP-MANUAL-READINESS`.
 
 ## Current memory
 
@@ -34,7 +34,8 @@ Durable completed detail переносится в `docs/history.md`.
 - Root-level QA gates: `pnpm lint`, `pnpm unit_tests`, `pnpm integration_tests`; `pnpm integration_tests` все еще thin alias на `pnpm test:mvp:internal`.
 - RSS-first acceptance scope не расширился: `website`, `api` и `email_imap` ingest по-прежнему вне доказанного internal MVP gate.
 - `pnpm integration_tests` сейчас падает вне auth scope в `test:normalize-dedup:compose`: smoke ожидает `article.normalized=pending`, а фактический compose run возвращает `published`.
-- Worktree остается mixed: в нем одновременно присутствуют manual-readiness, duplicate-preflight, auth/BFF hardening и уже завершенная process-doc migration.
+- Root runtime core повторно синхронизирован с package logic: archive-sync semantics выровнены, `docs/contracts/` теперь включает reusable subsystem template, временный source package удален после passed transfer audit.
+- Worktree остается mixed: в нем одновременно присутствуют manual-readiness, duplicate-preflight, auth/BFF hardening, UI redesign residue и уже завершенный process-refresh doc sync.
 
 ## Capability planning
 
@@ -42,8 +43,8 @@ Durable completed detail переносится в `docs/history.md`.
 
 | Capability ID | Title | Status | Full completion condition | Planned stages | Current next stage | Notes |
 |---|---|---|---|---|---|---|
-| C-MVP-MANUAL-READINESS | Manual MVP readiness | blocked | Schema/code/runtime docs синхронизированы; `pnpm integration_tests`, `pnpm test:ingest:compose`, `pnpm test:ingest:multi:compose`, `pnpm test:ingest:soak:compose`, `pnpm test:cluster-match-notify:compose`, `pnpm unit_tests` и `pnpm typecheck` проходят; manual MVP runbook и operator contract задокументированы | `S-MVP-MANUAL-READINESS-1`, `S-MVP-MANUAL-READINESS-2`, `S-MVP-MANUAL-READINESS-3` | `S-MVP-MANUAL-READINESS-3` | Blocked unrelated `test:normalize-dedup:compose` failure outside auth/doc scope |
-| C-FETCHER-DUPLICATE-PREFLIGHT | Fetcher duplicate preflight | blocked | Fetcher batch precheck реализован и доказан unit + RSS smoke + multi-RSS compose proof; runtime docs синхронизированы; follow-up optimization beyond exact DB lookup оставлен отдельной stage | `S-FETCHER-DUPLICATE-PREFLIGHT-1`, `S-FETCHER-DUPLICATE-PREFLIGHT-2` | `S-FETCHER-DUPLICATE-PREFLIGHT-1` | Dirty tree already contains work for stage 1; proof and final sync еще не завершены |
+| C-MVP-MANUAL-READINESS | Manual MVP readiness | blocked | Schema/code/runtime docs синхронизированы; integration tests, typecheck проходят | `S-MVP-MANUAL-READINESS-1`, `S-MVP-MANUAL-READINESS-2`, `S-MVP-MANUAL-READINESS-3` | `S-MVP-MANUAL-READINESS-3` | Blocked unrelated `test:normalize-dedup:compose` failure |
+| C-FETCHER-DUPLICATE-PREFLIGHT | Fetcher duplicate preflight | blocked | Fetcher batch precheck реализован и доказан unit + RSS smoke + multi-RSS compose proof | `S-FETCHER-DUPLICATE-PREFLIGHT-1`, `S-FETCHER-DUPLICATE-PREFLIGHT-2` | `S-FETCHER-DUPLICATE-PREFLIGHT-1` | Dirty tree already contains work for stage 1 |
 
 Rule: если capability active и у нее нет truthful ready stage, следующую stage нужно создать до implementation.
 Rule: dependency truth и mixed worktree должны быть явно представлены, а не скрыты внутри dirty tree.
@@ -54,12 +55,12 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 - ID: `S-MVP-MANUAL-READINESS-3`
 - Parent capability: `C-MVP-MANUAL-READINESS`
-- Why this is the primary active work: именно этот item остается ближайшим product-facing blocker для honest manual MVP closure; process-doc migration уже завершена и архивирована, а auth/BFF fix itself доказан.
+- Why this is the primary active work: после завершения process refresh ближайшим product-facing blocker снова остается honest close manual MVP readiness, который упирается в unrelated `test:normalize-dedup:compose`.
 
 ### Secondary active item
 
 - ID: `S-FETCHER-DUPLICATE-PREFLIGHT-1`
-- Why it exists: dirty worktree уже содержит meaningful fetcher duplicate-preflight changes вне primary item; этот overlap должен оставаться явным, пока worktree не будет разрулен.
+- Why it exists: dirty worktree уже содержит meaningful fetcher duplicate-preflight changes вне текущего primary item scope; этот overlap должен оставаться явным, пока worktree не будет разрулен.
 - Allowed overlap paths:
   `services/fetchers/`, `tests/unit/ts/fetcher-duplicate-preflight.test.ts`, `docs/work.md`, `docs/blueprint.md`
 - Exit condition for returning to one primary item:
@@ -69,11 +70,11 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 - Worktree status: mixed
 - Primary item alignment note:
-  primary item truthfully covers manual-readiness docs/runbook/runtime-sync residue, но текущий dirty tree шире и содержит product/runtime changes из duplicate-preflight и auth/BFF hardening arcs.
+  primary item truthfully covers manual-readiness docs/runbook/runtime-sync residue, но текущий dirty tree шире и содержит product/runtime changes из duplicate-preflight, auth/BFF hardening, UI redesign и уже завершенного process refresh.
 - Mixed-change warning, if any:
-  process migration сама по себе завершена, но tree по-прежнему не single-threaded; следующий агент не должен делать вид, что работает только с одним untouched capability.
+  tree по-прежнему не single-threaded; следующий агент не должен делать вид, что работает только с одним untouched capability или что завершенный process refresh исчез из dirty tree сам собой.
 - Required action before more implementation, if any:
-  перед следующей meaningful product implementation work нужно либо закрыть/block-trace current overlaps честно, либо вынести их в clean branch/worktree, либо reframe active items еще раз.
+  перед следующей meaningful product implementation work нужно либо закрыть/block-trace overlaps честно, либо вынести их в clean branch/worktree, либо reframe active items еще раз.
 
 ### Active risks
 
@@ -97,7 +98,16 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 - Next step:
   классифицировать и устранить blocker в `pnpm integration_tests` / `test:normalize-dedup:compose`, затем повторно прогнать full acceptance и только после этого закрывать `S-MVP-MANUAL-READINESS-3`.
 - Why this is next:
-  user-facing auth/BFF bug снят, runtime core v2 синхронизирован, но capability close gate для manual readiness все еще упирается в unrelated red integration suite.
+  process refresh уже завершен, но capability close gate для manual readiness по-прежнему упирается в unrelated red integration suite.
+
+### Archive sync status
+
+- Completed item or capability awaiting archive sync:
+  `none`
+- Why it is still live, if applicable:
+  n/a
+- Archive action required next:
+  keep newly completed capabilities/items out of live context by the end of the current sync cycle.
 
 ### Test artifacts and cleanup state
 
@@ -119,24 +129,26 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 ## Handoff state
 
 - Current item status:
-  `S-MVP-MANUAL-READINESS-3` остается `blocked`; `S-FETCHER-DUPLICATE-PREFLIGHT-1` остается `blocked`; runtime-core v2 migration завершена и архивирована в `docs/history.md`.
+  `S-MVP-MANUAL-READINESS-3` remains `blocked` (unrelated `test:normalize-dedup:compose` regression).
+  `S-FETCHER-DUPLICATE-PREFLIGHT-1` remains `blocked`.
 - What is already proven:
-  `pnpm typecheck` и `pnpm unit_tests:ts` passed on 2026-03-23; direct-port и nginx-shaped auth/BFF flows на `/bff/*` и `/admin/bff/*`, HTML `action`/`fetch` targets и сохранение `/api/*` за Python API уже прошли targeted live proof.
+  Process refresh: transfer audit passed, root runtime core повторно синхронизирован с package logic, reusable contract template добавлен, temporary source package retired.
+  Previous auth/BFF: direct-port and nginx-shaped flows on `/bff/*` and `/admin/bff/*` passed targeted live proof.
 - What is still unproven or blocked:
-  full `pnpm integration_tests` currently fails outside auth scope in `test:normalize-dedup:compose`; real RSS bundle curation, manual browser receipt for `web_push` и separate acceptance для `website/api/email_imap` остаются open.
+  Full `pnpm integration_tests` still fails in `test:normalize-dedup:compose` (outside UI scope).
+  Real RSS bundle curation and `web_push` browser receipt remain open.
 - Scope or coordination warning for the next agent:
-  worktree уже mixed и включает product/runtime changes из нескольких arcs; не упрощай browser PRG contract, JSON/script contract или process-state truth ради локального удобства.
+  BFF routes are unchanged — all POST handlers at `/bff/*` and `/bff/admin/*` still work exactly as before.
+  Pre-existing lint errors in `services/fetchers/src/fetchers.ts` (lines 861-862, no-useless-assignment) are not from this change.
 
 ### Recently changed
 
-- 2026-03-23 — live process docs очищены от переходного migration residue после перехода на 7-file runtime core; stale `init`/migration noise убран из активного контекста, архив сохранен в `docs/history.md`.
-- 2026-03-23 — `database/migrations/0005_manual_mvp_readiness.sql` добавила `source_channel_runtime_state`, `channel_fetch_runs` и first-class Gemini usage fields в `llm_review_log`.
-- 2026-03-23 — `services/fetchers` получили provider-agnostic adaptive scheduling, append-only fetch history и `next_due_at`-aware due selection; `pnpm test:ingest:multi:compose` и `pnpm test:ingest:soak:compose` ранее стали green на 24/60-channel path.
-- 2026-03-23 — `services/api` и `apps/admin` получили scheduling health, fetch-run observability, LLM usage summaries и bulk provider-wide schedule patch surface.
-- 2026-03-23 — `apps/web` и `services/workers` получили working `web_push` subscription path, notification-preference enforcement, configured-channel visibility и richer interest lifecycle.
-- 2026-03-23 — auth/BFF routing realigned для dev + prod: `web`/`admin` routes переехали с `/api/*` на `/bff/*`, env/compose/nginx wiring синхронизированы, а redirect origin/path больше не деградируют в bare `http://localhost/`.
-- 2026-03-23 — strengthened auth/BFF proof зафиксировал полный `Location` origin/pathname и сохранение `/api/articles` за Python API; одновременно `pnpm integration_tests` выявил unrelated blocker в `test:normalize-dedup:compose`.
-- 2026-03-22 — full process-proof audit подтвердил authority chain, command truth и heavy compose-backed RSS-first acceptance без новых drift findings.
+- 2026-03-23 — `C-AI-PROCESS-PACKAGE-REFRESH` завершен и архивирован: transfer audit passed, root process docs/machine truth synced, temporary source package retired.
+- 2026-03-23 — `C-UI-REDESIGN` архивирован в `docs/history.md`; live context очищен от завершенной capability detail.
+- 2026-03-23 — live process docs очищены от переходного migration residue после перехода на 7-file runtime core.
+- 2026-03-23 — `database/migrations/0005_manual_mvp_readiness.sql` добавила `source_channel_runtime_state`, `channel_fetch_runs` и first-class Gemini usage fields.
+- 2026-03-23 — auth/BFF routing realigned: `web`/`admin` routes переехали с `/api/*` на `/bff/*`; redirect origin/path больше не деградируют.
+- 2026-03-23 — strengthened auth/BFF proof; `pnpm integration_tests` выявил unrelated blocker в `test:normalize-dedup:compose`.
 
 ## Operating limits
 
@@ -147,6 +159,7 @@ Keep this file operationally small.
 - Keep only active capabilities и decision-relevant live state.
 - Do not let the worktree become semantically broader than the active execution state recorded here.
 - Move durable completed detail into `docs/history.md`.
+- Do not let a fully completed capability remain here as durable detail after the current sync cycle.
 
 ## Automatic compression triggers
 
@@ -159,6 +172,7 @@ Run context compression when any are true:
 - more than 8 recent change bullets are present
 - completed detail is still occupying live space here
 - a capability line has become stale after stage completion or replanning
+- all stages for a capability are done and it now needs durable archival detail
 - a handoff or session end is about to happen after meaningful changes
 
 ## Compression checklist
@@ -169,6 +183,7 @@ When compressing context:
 2. keep active capability lines accurate and concise
 3. preserve only current mode, current memory, active capabilities, active items, worktree coherence, active risks, known gaps, next recommended action, test artifacts, handoff state, and concise recent changes
 4. move durable completed detail into `docs/history.md`
+4a. if a capability has no truthful next stage and no open completion layer, archive it now instead of leaving durable detail here
 5. delete stale temporary notes after preserving their durable meaning
 6. keep enough current memory that the next agent can continue without chat history
 7. if the worktree is mixed, either reframe it honestly here or reduce it before handoff
@@ -179,3 +194,20 @@ When compressing context:
 |---|---|---|---|---|---|---|---|---|---|---|
 | S-MVP-MANUAL-READINESS-3 | Stage | Manual MVP pack and final runtime sync | C-MVP-MANUAL-READINESS | blocked | S-MVP-MANUAL-READINESS-2 | `.env.dev`, `.env.example`, `apps/web/src/pages/index.astro`, `apps/admin/src/pages/index.astro`, `infra/scripts/manual-rss-bundle.template.json`, `package.json`, `README.md`, `docs/work.md`, `docs/verification.md`, `.aidp/os.yaml` | medium | partial | unassigned | Capability close gate blocked by unrelated `test:normalize-dedup:compose` regression even though auth/BFF targeted proof is green. |
 | S-FETCHER-DUPLICATE-PREFLIGHT-1 | Stage | Fetcher-side duplicate suppression before insert/outbox | C-FETCHER-DUPLICATE-PREFLIGHT | blocked | - | `services/fetchers/`, `tests/unit/ts/fetcher-duplicate-preflight.test.ts`, `docs/work.md`, `docs/blueprint.md` | medium | partial | unassigned | Dirty tree already contains stage-1 implementation, but proof hardening and final sync are still incomplete. |
+
+## Item detail
+
+### S-MVP-MANUAL-READINESS-3
+
+- Kind: `Stage`
+- Status: `blocked`
+- Goal: закрыть manual MVP readiness на уровне runtime/docs/packaging truth после завершенного auth/BFF realignment
+- In scope:
+  `.env.dev`, `.env.example`, `apps/web/src/pages/index.astro`, `apps/admin/src/pages/index.astro`, `infra/scripts/manual-rss-bundle.template.json`, `package.json`, `README.md`, `docs/work.md`, `docs/verification.md`, `.aidp/os.yaml`
+- Out of scope:
+  unrelated worker normalize/dedup regression fix, fetcher duplicate-preflight implementation, broad UI redesign follow-ups
+- Allowed paths:
+  `.env.dev`, `.env.example`, `apps/web/src/pages/index.astro`, `apps/admin/src/pages/index.astro`, `infra/scripts/manual-rss-bundle.template.json`, `package.json`, `README.md`, `docs/work.md`, `docs/verification.md`, `.aidp/os.yaml`
+- Required proof:
+  targeted auth/BFF/runtime proof plus repo-level acceptance rerun after blocker removal; current blocking signal remains `pnpm integration_tests` -> `test:normalize-dedup:compose`
+- Risk: `medium`

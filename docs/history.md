@@ -5,11 +5,55 @@
 ## Правила
 
 - Completed detail переносится сюда, а не накапливается в `docs/work.md`.
+- Когда completed item или capability больше не имеет truthful live next stage, archive sync должен происходить в текущем sync cycle, а не когда-нибудь потом.
 - Завершенные записи не переоткрываются; для нового запроса создается новый work item.
 - Запись должна сохранять причинно-следственную связь без опоры на chat history.
+- Архив должен сохранять достаточно detail, чтобы completed item можно было понять без chat history.
 - Активный контекст сжимается, архив — нет.
+- Audit может предлагать перенос detail сюда, но не должен молча переписывать исторический смысл без явного approval.
 
 ## Completed items
+
+### 2026-03-23 — C-AI-PROCESS-PACKAGE-REFRESH — Refresh package transfer and source-package retirement
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь запросил обновить агентные инструкции и связанную документацию из package в `init/`, но удалить package только после проверки всех связей и логики переноса.
+- Что изменилось:
+  - собран explicit transfer audit между `init/**` и root runtime core;
+  - archive-sync semantics синхронизированы между `AGENTS.md`, `docs/work.md`, `docs/history.md`, `docs/verification.md` и `.aidp/os.yaml`;
+  - `docs/contracts/README.md` расширен naming/template guidance, а в root добавлен `docs/contracts/SUBSYSTEM-CONTRACT-TEMPLATE.md`;
+  - `README.md` синхронизирован сначала с временным pre-delete состоянием, затем с финальным after-retirement состоянием;
+  - source package удален только после passed pre-delete audit, а live context очищен от process-refresh residue.
+- Что проверено:
+  - `git diff --check -- AGENTS.md README.md docs .aidp init`
+  - `pnpm check:scaffold`
+  - targeted `rg` consistency checks по archive-sync semantics, template availability и runtime references
+  - explicit transfer audit с решением `migrate` / `already covered` / `do not migrate` для relevant `init/**`
+- Риски или gaps:
+  - `docs/history.md` намеренно сохраняет historical references к прошлым фазам удаления/возврата `init/`; это архивная правда, а не текущий runtime contract;
+  - capability не решает unrelated product blockers вроде `test:normalize-dedup:compose` и mixed product worktree.
+- Follow-up:
+  - truthful next item остается прежним: разбор blocker в `pnpm integration_tests` / `test:normalize-dedup:compose`, затем повторный full acceptance для `C-MVP-MANUAL-READINESS`.
+
+### 2026-03-23 — C-UI-REDESIGN — Full UI/UX redesign
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь запросил полный UI/UX redesign для web portal и admin panel без изменения существующих BFF/runtime boundaries.
+- Что изменилось:
+  - в `packages/ui` собрана реальная shadcn/ui component library;
+  - `apps/web` переведен на multi-page shell с темами, toast-ами, interests/notifications/settings surfaces;
+  - `apps/admin` переведен на sidebar-driven multi-page admin shell с новыми operational screens;
+  - build/type surfaces для web/admin/ui синхронизированы под новый UI baseline.
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm unit_tests:ts`
+- Риски или gaps:
+  - manual browser verification для dark mode, sonner toasts, web-push connect flow и mobile admin sidebar остается вне automated proof;
+  - full `pnpm integration_tests` по-прежнему блокируется unrelated `test:normalize-dedup:compose`, а не UI change itself.
+- Follow-up:
+  - none; дальнейшие UI задачи должны открываться новыми work items.
 
 ### 2026-03-23 — P-PROCESS-CLEANUP-1 — Очистка stale process residue после v2 migration
 

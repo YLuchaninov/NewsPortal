@@ -1,0 +1,87 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+
+export const prerender = false;
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+if (!session) return Astro.redirect("/");
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+
+const forwardedPrefixVal = String(Astro.request.headers.get("x-forwarded-prefix") ?? "").trim();
+const normalizedPrefix = (!forwardedPrefixVal || forwardedPrefixVal === "/") ? "" : `/${forwardedPrefixVal.replace(/^\/+|\/+$/g, "")}`;
+const basePathVal = normalizedPrefix ? `${normalizedPrefix}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
+const reindexBffPath = new URL("bff/admin/reindex", `http://app${basePathVal}`).pathname;
+
+type ReindexRow = Record<string, unknown>;
+const reindexJobs = await sdk.listReindexJobs<ReindexRow[]>();
+---
+
+<AdminShell title="Reindex — Admin" session={session} flash={flash} activeNav="reindex">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Reindex</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6 max-w-xl">
+    <div>
+      <h1 class="text-xl font-bold">Reindex</h1>
+      <p class="text-sm text-muted-foreground mt-0.5">Queue a rebuild of derived indices</p>
+    </div>
+
+    <div class="rounded-xl border border-border bg-card p-5">
+      <h2 class="font-semibold text-sm mb-4">Queue Reindex Job</h2>
+      <form method="post" action={reindexBffPath} class="grid gap-3">
+        <div class="grid gap-1.5">
+          <label class="text-sm font-medium" for="indexName">Index name</label>
+          <select id="indexName" name="indexName"
+            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <option value="interest_centroids">interest_centroids</option>
+          </select>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Reindexing runs asynchronously in the background. The job status appears below once queued.
+        </p>
+        <button type="submit" class="h-9 w-fit px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+          Queue Reindex
+        </button>
+      </form>
+    </div>
+
+    <!-- Jobs list -->
+    {(reindexJobs as ReindexRow[]).length > 0 && (
+      <div class="rounded-xl border border-border bg-card overflow-hidden">
+        <div class="px-4 py-3 border-b border-border">
+          <p class="text-sm font-semibold">Recent Jobs</p>
+        </div>
+        <div class="divide-y divide-border">
+          {(reindexJobs as ReindexRow[]).map((job) => (
+            <div class="flex items-center justify-between px-4 py-3">
+              <div>
+                <p class="text-sm font-medium">{String(job.index_name ?? "—")}</p>
+                {job.created_at && <p class="text-xs text-muted-foreground">{new Date(String(job.created_at)).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>}
+              </div>
+              <span class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                String(job.status) === "completed" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                : String(job.status) === "failed" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                : String(job.status) === "running" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                : "bg-muted text-muted-foreground"
+              }`}>
+                {String(job.status ?? "pending")}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</AdminShell>
+
