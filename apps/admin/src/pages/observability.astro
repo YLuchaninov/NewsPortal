@@ -3,15 +3,17 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash } from "../lib/server/browser-flow";
+import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
-if (!session) return Astro.redirect("/");
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) return Astro.redirect(appPath("/"));
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const pagePaths = { dashboard: appPath("/") };
 
 type R = Record<string, unknown>;
 const [fetchRuns, llmReviews, llmUsageSummary] = await Promise.all([
@@ -38,7 +40,7 @@ function fmtD(v: unknown, decimals = 2): string {
 <AdminShell title="Observability — Admin" session={session} flash={flash} activeNav="observability">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
-      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
       <span class="text-foreground font-medium">Observability</span>
     </nav>
@@ -158,4 +160,3 @@ function fmtD(v: unknown, decimals = 2): string {
     </div>
   </div>
 </AdminShell>
-

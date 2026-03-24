@@ -3,20 +3,18 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash } from "../lib/server/browser-flow";
+import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
-if (!session) return Astro.redirect("/");
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) return Astro.redirect(appPath("/"));
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
-
-const forwardedPrefixVal = String(Astro.request.headers.get("x-forwarded-prefix") ?? "").trim();
-const normalizedPrefix = (!forwardedPrefixVal || forwardedPrefixVal === "/") ? "" : `/${forwardedPrefixVal.replace(/^\/+|\/+$/g, "")}`;
-const basePathVal = normalizedPrefix ? `${normalizedPrefix}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
-const reindexBffPath = new URL("bff/admin/reindex", `http://app${basePathVal}`).pathname;
+const reindexBffPath = appPath("/bff/admin/reindex");
+const pagePaths = { dashboard: appPath("/") };
 
 type ReindexRow = Record<string, unknown>;
 const reindexJobs = await sdk.listReindexJobs<ReindexRow[]>();
@@ -25,7 +23,7 @@ const reindexJobs = await sdk.listReindexJobs<ReindexRow[]>();
 <AdminShell title="Reindex — Admin" session={session} flash={flash} activeNav="reindex">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
-      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
       <span class="text-foreground font-medium">Reindex</span>
     </nav>
@@ -84,4 +82,3 @@ const reindexJobs = await sdk.listReindexJobs<ReindexRow[]>();
     )}
   </div>
 </AdminShell>
-

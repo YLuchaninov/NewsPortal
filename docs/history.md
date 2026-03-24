@@ -14,6 +14,48 @@
 
 ## Completed items
 
+### 2026-03-24 — C-NORMALIZE-DEDUP-BLOCKER — Compose normalize/dedup blocker resolution
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: `pnpm integration_tests` падал в `test:normalize-dedup:compose`, хотя targeted auth/BFF proofs были green. Investigation показал, что blocker был вызван stale proof expectations в full compose baseline, а не missing backend route или очевидной worker regression.
+- Что изменилось:
+  - code inspection по `services/workers/app/main.py` и `services/relay/src/relay.ts` подтвердил ownership: worker пишет outbox rows со status default `pending`, а live relay в `pnpm test:mvp:internal` может успеть перевести `article.normalized` в `published` до smoke verification;
+  - `services/workers/app/smoke.py` ослаблен до truthful contract: article может уже уйти дальше `deduped`, а `article.normalized` допустим в `pending` или `published`;
+  - `infra/scripts/test-mvp-internal.mjs` исправлен под реальную nginx/browser truth: logged-out `/` и `/admin/` теперь проверяются по корректным snippets, а authenticated `/settings`, `/admin/reindex` и `/admin/channels` валидируются cookie-aware requests;
+  - full compose acceptance rerun подтвердил, что normalize/dedup blocker снят и repo-level gate снова green.
+- Что проверено:
+  - `pnpm integration_tests`
+  - `git diff --check`
+- Риски или gaps:
+  - capability не расширяет acceptance truth beyond current RSS-first internal MVP scope; `website`, `api` и `email_imap` ingest по-прежнему требуют отдельного capability/proof;
+  - manual browser receipt для `web_push` и curated real-feed RSS bundle остаются operator-side follow-up, а не частью этой blocker remediation.
+- Follow-up:
+  - truthful next item возвращается к `S-MVP-MANUAL-READINESS-3`, который теперь снова `ready`;
+  - если later выяснится новый normalize/dedup regression, нужен новый work item, а не reopening этой архивной capability.
+
+### 2026-03-24 — SW-ADMIN-APP-PATHS-1 — Admin browser-path hardening for import and adjacent flows
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь сообщил, что bulk import падает с `404: Not found` на `/channels/bff/admin/channels/bulk`; расследование показало, что backend route существует, а admin UI строит часть links/forms/redirects как page-relative пути и теряет app root или nginx `/admin` prefix.
+- Что изменилось:
+  - в `apps/admin/src/lib/server/browser-flow.ts` добавлен shared helper `resolveAdminAppPath`, который строит browser-visible пути от truthful admin app base и учитывает `x-forwarded-prefix`;
+  - `apps/admin/src/layouts/AdminShell.astro` переведен на shared helper для sidebar/mobile navigation и logout action;
+  - `apps/admin/src/pages/index.astro`, `articles.astro`, `channels.astro`, `templates.astro`, `reindex.astro`, `observability.astro` и `clusters.astro` переведены на shared helper для form actions, breadcrumbs, quick links и auth redirects;
+  - точечная regression-proof проверка добавлена в `tests/unit/ts/app-routing.test.ts` для direct-port root и nginx-shaped `/admin` paths, включая bulk-import URL.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/app-routing.test.ts`
+  - `pnpm typecheck`
+  - `git diff --check`
+  - `rg -n 'href="/|action="/|Astro.redirect\\("/|Astro.redirect\\('/ apps/admin/src` (no matches)
+- Риски или gaps:
+  - sweep не меняет backend semantics import/template/moderation/reindex handlers; он исправляет только browser-visible path generation в admin app;
+  - full `pnpm integration_tests` по-прежнему blocked unrelated failure в `test:normalize-dedup:compose`, поэтому repo-wide green acceptance не восстановлен этой работой.
+- Follow-up:
+  - truthful next background item возвращается к `S-MVP-MANUAL-READINESS-3` / `C-MVP-MANUAL-READINESS`, если пользователь снова захочет двигать blocked acceptance path;
+  - если понадобится такой же prefix-safe helper для других app surfaces, это должно открываться отдельным work item, а не тихим продолжением текущего sweep.
+
 ### 2026-03-23 — C-AI-PROCESS-PACKAGE-REFRESH — Refresh package transfer and source-package retirement
 
 - Тип записи: capability archive

@@ -2,6 +2,7 @@
 import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
 import { AdminFlashToast } from "../components/AdminFlashToast";
+import { resolveAdminAppPath } from "../lib/server/browser-flow";
 
 export interface Props {
   title?: string;
@@ -16,6 +17,8 @@ const {
   flash,
   activeNav,
 } = Astro.props;
+
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
 
 const navGroups = [
   {
@@ -94,7 +97,7 @@ const icons: Record<string, string> = {
               <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
               {group.items.map(({ href, label, icon, key }) => (
                 <a
-                  href={href}
+                  href={appPath(href)}
                   class={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
                     activeNav === key
                       ? "bg-primary/15 text-primary"
@@ -123,7 +126,7 @@ const icons: Record<string, string> = {
                 </p>
               </div>
             </div>
-            <form method="post" action="/bff/auth/logout" class="mt-2">
+            <form method="post" action={appPath("/bff/auth/logout")} class="mt-2">
               <button type="submit" class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                 Sign out
@@ -183,7 +186,7 @@ const icons: Record<string, string> = {
             <div>
               <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
               {group.items.map(({ href, label, icon, key }) => (
-                <a href={href} class={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
+                <a href={appPath(href)} class={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
                   activeNav === key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}>
                   <span class="shrink-0" set:html={icons[icon]} />
@@ -208,4 +211,3 @@ const icons: Record<string, string> = {
     </script>
   </body>
 </html>
-

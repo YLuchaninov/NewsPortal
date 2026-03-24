@@ -4,29 +4,25 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash } from "../lib/server/browser-flow";
+import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
-if (!session) return Astro.redirect("/");
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) return Astro.redirect(appPath("/"));
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
-const forwardedPrefix = (() => {
-  const v = String(Astro.request.headers.get("x-forwarded-prefix") ?? "").trim();
-  return (!v || v === "/") ? "" : `/${v.replace(/^\/+|\/+$/g, "")}`;
-})();
-const pageBasePath = forwardedPrefix ? `${forwardedPrefix}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
-function rpa(t: string) {
-  return new URL(String(t).replace(/^\/+/, ""), `http://app${pageBasePath}`).pathname;
-}
-
 const bffPaths = {
-  channels: rpa("bff/admin/channels"),
-  channelsBulk: rpa("bff/admin/channels/bulk"),
-  channelsSchedule: rpa("bff/admin/channels/schedule"),
+  channels: appPath("/bff/admin/channels"),
+  channelsBulk: appPath("/bff/admin/channels/bulk"),
+  channelsSchedule: appPath("/bff/admin/channels/schedule"),
+};
+
+const pagePaths = {
+  dashboard: appPath("/"),
 };
 
 type R = Record<string, unknown>;
@@ -80,7 +76,7 @@ const bulkPlaceholder = JSON.stringify([{
 <AdminShell title="Channels — Admin" session={session} flash={flash} activeNav="channels">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
-      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
       <span class="text-foreground font-medium">Channels</span>
     </nav>
@@ -270,4 +266,3 @@ const bulkPlaceholder = JSON.stringify([{
     </div>
   </div>
 </AdminShell>
-

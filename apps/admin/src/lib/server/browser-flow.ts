@@ -1,4 +1,4 @@
-import { readRuntimeConfig } from "@newsportal/config";
+import { readRuntimeConfig, resolveAppHref } from "@newsportal/config";
 
 export type FlashStatus = "success" | "error";
 
@@ -21,6 +21,14 @@ function normalizeForwardedPrefix(value: string | null): string {
     return "";
   }
   return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
+}
+
+export function resolveAdminAppPath(request: Request, target = "/"): string {
+  const forwardedPrefix = normalizeForwardedPrefix(
+    request.headers.get("x-forwarded-prefix")
+  );
+  const appBaseUrl = `http://app${forwardedPrefix ? `${forwardedPrefix}/` : "/"}`;
+  return resolveAppHref(appBaseUrl, target);
 }
 
 function inferAppHomePath(pathname: string, forwardedPrefix = ""): string {

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { resolveAppHref } from "../../../packages/config/src/index.ts";
-import { buildFlashRedirect as buildAdminFlashRedirect } from "../../../apps/admin/src/lib/server/browser-flow.ts";
+import {
+  buildFlashRedirect as buildAdminFlashRedirect,
+  resolveAdminAppPath
+} from "../../../apps/admin/src/lib/server/browser-flow.ts";
 import { buildFlashRedirect as buildWebFlashRedirect } from "../../../apps/web/src/lib/server/browser-flow.ts";
 
 function withAppBaseUrl(appBaseUrl: string, run: () => void) {
@@ -63,4 +66,34 @@ test("admin flash redirects preserve nginx-style /admin base path from the curre
       "http://127.0.0.1:8080/admin/?flash_status=success&flash_message=Signed+in.#auth"
     );
   });
+});
+
+test("resolveAdminAppPath keeps admin links and BFF actions rooted at the app base", () => {
+  const directPortRequest = new Request("http://127.0.0.1:4322/channels");
+  assert.equal(
+    resolveAdminAppPath(directPortRequest, "/channels"),
+    "/channels"
+  );
+  assert.equal(
+    resolveAdminAppPath(directPortRequest, "/bff/admin/channels/bulk"),
+    "/bff/admin/channels/bulk"
+  );
+
+  const proxiedRequest = new Request("http://admin:4322/channels", {
+    headers: {
+      "x-forwarded-prefix": "/admin"
+    }
+  });
+  assert.equal(
+    resolveAdminAppPath(proxiedRequest, "/channels"),
+    "/admin/channels"
+  );
+  assert.equal(
+    resolveAdminAppPath(proxiedRequest, "/bff/auth/logout"),
+    "/admin/bff/auth/logout"
+  );
+  assert.equal(
+    resolveAdminAppPath(proxiedRequest, "/bff/admin/channels/bulk"),
+    "/admin/bff/admin/channels/bulk"
+  );
 });

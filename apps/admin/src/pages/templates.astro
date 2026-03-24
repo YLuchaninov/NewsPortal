@@ -3,23 +3,18 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash } from "../lib/server/browser-flow";
+import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
-if (!session) return Astro.redirect("/");
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) return Astro.redirect(appPath("/"));
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
-
-const fp = (() => {
-  const v = String(Astro.request.headers.get("x-forwarded-prefix") ?? "").trim();
-  return (!v || v === "/") ? "" : `/${v.replace(/^\/+|\/+$/g, "")}`;
-})();
-const pb = fp ? `${fp}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
-const rpa = (t: string) => new URL(String(t).replace(/^\/+/, ""), `http://app${pb}`).pathname;
-const bffPaths = { templates: rpa("bff/admin/templates") };
+const bffPaths = { templates: appPath("/bff/admin/templates") };
+const pagePaths = { dashboard: appPath("/") };
 
 type R = Record<string, unknown>;
 const [llmTemplates, interestTemplates] = await Promise.all([
@@ -31,7 +26,7 @@ const [llmTemplates, interestTemplates] = await Promise.all([
 <AdminShell title="Templates — Admin" session={session} flash={flash} activeNav="templates">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
-      <a href="/" class="hover:text-foreground">Dashboard</a>
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
       <span class="text-foreground font-medium">Templates</span>
     </nav>
@@ -149,4 +144,3 @@ const [llmTemplates, interestTemplates] = await Promise.all([
     </div>
   </div>
 </AdminShell>
-

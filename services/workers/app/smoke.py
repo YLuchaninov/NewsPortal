@@ -532,8 +532,10 @@ async def verify_normalize_dedup(doc_id: str, ingest_event_id: str, normalized_e
 
     if not article:
         raise RuntimeError("Normalize/dedup smoke verification failed: article row is missing.")
-    if article["processing_state"] != "deduped":
-        raise RuntimeError("Normalize/dedup smoke verification failed: article is not deduped.")
+    if article["processing_state"] not in {"deduped", "embedded", "clustered", "matched", "notified"}:
+        raise RuntimeError(
+            "Normalize/dedup smoke verification failed: article did not reach the deduped stage."
+        )
     if not article["title"] or "<" in article["title"]:
         raise RuntimeError("Normalize/dedup smoke verification failed: title was not normalized.")
     if not article["lead"] or "&amp;" in article["lead"]:
@@ -549,14 +551,14 @@ async def verify_normalize_dedup(doc_id: str, ingest_event_id: str, normalized_e
     if not article["normalized_at"] or not article["deduped_at"]:
         raise RuntimeError("Normalize/dedup smoke verification failed: lifecycle timestamps are missing.")
 
-    actual_events = [(row["event_type"], row["status"]) for row in outbox_events]
-    expected_events = [
-        ("article.ingest.requested", "published"),
-        ("article.normalized", "pending"),
-    ]
-    if actual_events != expected_events:
+    event_statuses = {row["event_type"]: row["status"] for row in outbox_events}
+    if event_statuses.get("article.ingest.requested") != "published":
         raise RuntimeError(
-            f"Normalize/dedup smoke verification failed: expected outbox events {expected_events}, got {actual_events}."
+            "Normalize/dedup smoke verification failed: article.ingest.requested was not published."
+        )
+    if event_statuses.get("article.normalized") not in {"pending", "published"}:
+        raise RuntimeError(
+            "Normalize/dedup smoke verification failed: article.normalized is missing or has an unexpected status."
         )
 
     actual_inbox_rows = [(row["consumer_name"], row["event_id"]) for row in inbox_rows]

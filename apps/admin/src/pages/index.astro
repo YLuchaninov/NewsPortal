@@ -3,29 +3,27 @@ import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash } from "../lib/server/browser-flow";
+import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
-
-function normalizeForwardedPrefix(value: string | null): string {
-  const normalized = String(value ?? "").trim();
-  if (!normalized || normalized === "/") return "";
-  return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
-}
-const forwardedPrefix = normalizeForwardedPrefix(Astro.request.headers.get("x-forwarded-prefix"));
-const pageBasePath = forwardedPrefix ? `${forwardedPrefix}/` : (Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`);
-function resolvePageAppPath(target: string): string {
-  const resolved = new URL(String(target).replace(/^\/+/, ""), `http://app${pageBasePath}`);
-  return `${resolved.pathname}${resolved.search}${resolved.hash}`;
-}
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
 
 const bffPaths = {
-  authLogout: resolvePageAppPath("bff/auth/logout"),
-  authSignIn: resolvePageAppPath("bff/auth/sign-in"),
+  authLogout: appPath("/bff/auth/logout"),
+  authSignIn: appPath("/bff/auth/sign-in"),
+};
+
+const pagePaths = {
+  channels: appPath("/channels"),
+  articles: appPath("/articles"),
+  clusters: appPath("/clusters"),
+  templates: appPath("/templates"),
+  observability: appPath("/observability"),
+  reindex: appPath("/reindex"),
 };
 
 type R = Record<string, unknown>;
@@ -102,12 +100,12 @@ const kpiCards = !summary ? [] : [
       <!-- Quick navigation -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { href: "/channels", label: "Channels", desc: "Manage RSS feeds" },
-          { href: "/articles", label: "Articles", desc: "Moderate content" },
-          { href: "/clusters", label: "Clusters", desc: "Event clusters" },
-          { href: "/templates", label: "Templates", desc: "LLM prompts" },
-          { href: "/observability", label: "Observability", desc: "Fetch & LLM logs" },
-          { href: "/reindex", label: "Reindex", desc: "Rebuild indices" },
+          { href: pagePaths.channels, label: "Channels", desc: "Manage RSS feeds" },
+          { href: pagePaths.articles, label: "Articles", desc: "Moderate content" },
+          { href: pagePaths.clusters, label: "Clusters", desc: "Event clusters" },
+          { href: pagePaths.templates, label: "Templates", desc: "LLM prompts" },
+          { href: pagePaths.observability, label: "Observability", desc: "Fetch & LLM logs" },
+          { href: pagePaths.reindex, label: "Reindex", desc: "Rebuild indices" },
         ].map(({ href, label, desc }) => (
           <a href={href} class="rounded-xl border border-border bg-card p-4 hover:bg-accent hover:border-primary/20 transition-all group">
             <p class="font-medium text-sm group-hover:text-primary transition-colors">{label}</p>
@@ -120,7 +118,7 @@ const kpiCards = !summary ? [] : [
       <div class="rounded-xl border border-border bg-card overflow-hidden">
         <div class="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 class="font-semibold text-sm">Recent Fetch Runs</h2>
-          <a href="/observability" class="text-xs text-primary hover:underline">View all →</a>
+          <a href={pagePaths.observability} class="text-xs text-primary hover:underline">View all →</a>
         </div>
         {(fetchRuns as R[]).length === 0 ? (
           <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>

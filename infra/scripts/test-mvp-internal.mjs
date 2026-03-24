@@ -152,8 +152,10 @@ function assertFlashRedirect(response, { origin, pathname = "/", section, status
   }
 }
 
-async function assertHtmlContains(url, snippets) {
-  const response = await sendRequest(url);
+async function assertHtmlContains(url, snippets, { cookie } = {}) {
+  const response = await sendRequest(url, {
+    headers: cookie ? { Cookie: cookie } : {}
+  });
   if (response.status !== 200) {
     throw new Error(`Expected ${url} to respond with 200, got ${response.status}.`);
   }
@@ -733,14 +735,14 @@ async function main() {
 
     log("Checking nginx-routed web/admin BFF surfaces.");
     await assertHtmlContains("http://127.0.0.1:8080/", [
-      'fetch("/bff/auth/bootstrap"',
-      'action="/bff/preferences"',
-      'action="/bff/notification-channels"'
+      'action="/bff/auth/bootstrap"',
+      'id="bootstrap-form"',
+      'href="/settings"'
     ]);
     await assertHtmlContains("http://127.0.0.1:8080/admin/", [
       'action="/admin/bff/auth/sign-in"',
-      'action="/admin/bff/admin/reindex"',
-      'action="/admin/bff/admin/channels"'
+      'href="/admin/reindex"',
+      'href="/admin/channels"'
     ]);
 
     const nginxArticles = await fetchJson("http://127.0.0.1:8080/api/articles");
@@ -763,6 +765,11 @@ async function main() {
     if (!nginxWebSession?.session?.userId) {
       throw new Error("Nginx web bootstrap did not create a readable session.");
     }
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/settings",
+      ['action="/bff/preferences"', 'action="/bff/notification-channels"'],
+      { cookie: nginxWebCookie }
+    );
 
     const nginxAdminSignIn = await postBrowserForm(
       "http://127.0.0.1:8080/admin/bff/auth/sign-in",
@@ -785,6 +792,20 @@ async function main() {
     if (!nginxAdminSession?.session?.roles?.includes?.("admin")) {
       throw new Error("Nginx admin sign-in did not create an admin session.");
     }
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/reindex",
+      ['action="/admin/bff/admin/reindex"'],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/channels",
+      [
+        'action="/admin/bff/admin/channels"',
+        'action="/admin/bff/admin/channels/bulk"',
+        'action="/admin/bff/admin/channels/schedule"'
+      ],
+      { cookie: nginxAdminCookie }
+    );
     const nginxAdminLogout = await postBrowserForm(
       "http://127.0.0.1:8080/admin/bff/auth/logout",
       {},
