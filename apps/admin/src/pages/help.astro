@@ -1,0 +1,320 @@
+---
+import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const pagePaths = {
+  dashboard: appPath("/"),
+  channels: appPath("/channels"),
+  llmTemplates: appPath("/templates/llm"),
+  interestTemplates: appPath("/templates/interests"),
+  articles: appPath("/articles"),
+  clusters: appPath("/clusters"),
+  reindex: appPath("/reindex"),
+  observability: appPath("/observability"),
+};
+---
+
+<AdminShell title={`Help — ${DEFAULT_BRAND_CONFIG.productName} Admin`} session={session} flash={flash} activeNav="help">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Help</span>
+    </nav>
+  </Fragment>
+
+  <div class="max-w-4xl space-y-8">
+    <div>
+      <h1 class="text-2xl font-bold">Admin Guide</h1>
+      <p class="text-sm text-muted-foreground mt-1">
+        Everything you need to know about configuring and operating {DEFAULT_BRAND_CONFIG.productName}.
+      </p>
+    </div>
+
+    <!-- Table of Contents -->
+    <nav class="rounded-xl border border-border bg-card p-4">
+      <p class="text-sm font-semibold mb-2">On this page</p>
+      <ul class="grid gap-1 sm:grid-cols-2 text-sm">
+        <li><a href="#overview" class="text-primary hover:underline">System Overview</a></li>
+        <li><a href="#channels" class="text-primary hover:underline">Channels &amp; RSS Feeds</a></li>
+        <li><a href="#templates" class="text-primary hover:underline">LLM &amp; Interest Templates</a></li>
+        <li><a href="#gray-zone" class="text-primary hover:underline">Gray Zone &amp; AI Review</a></li>
+        <li><a href="#articles" class="text-primary hover:underline">Articles &amp; Moderation</a></li>
+        <li><a href="#clusters" class="text-primary hover:underline">Event Clusters</a></li>
+        <li><a href="#reindex" class="text-primary hover:underline">Reindex &amp; Maintenance</a></li>
+        <li><a href="#observability" class="text-primary hover:underline">Observability &amp; Costs</a></li>
+      </ul>
+    </nav>
+
+    <!-- System Overview -->
+    <section id="overview" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">System Overview</h2>
+      <p class="text-sm text-muted-foreground">
+        {DEFAULT_BRAND_CONFIG.productName} is a zero-shot news filtering, personalization, and notification system.
+        It ingests articles from RSS feeds, processes them through an NLP pipeline, matches them against
+        user interests and system criteria, and delivers notifications via web push, Telegram, or email digest.
+      </p>
+      <div class="rounded-xl border border-border bg-card p-4">
+        <p class="text-xs font-semibold mb-2">Data flow</p>
+        <div class="flex items-center gap-2 flex-wrap text-xs">
+          {[
+            { label: "RSS Feeds", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
+            { label: "→" },
+            { label: "Fetchers", color: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300" },
+            { label: "→" },
+            { label: "PostgreSQL", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" },
+            { label: "→" },
+            { label: "Normalize & Dedup", color: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+            { label: "→" },
+            { label: "Embed & Cluster", color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300" },
+            { label: "→" },
+            { label: "Match & Score", color: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300" },
+            { label: "→" },
+            { label: "Notify", color: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300" },
+          ].map(({ label, color }) =>
+            color
+              ? <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${color}`}>{label}</span>
+              : <span class="text-muted-foreground">{label}</span>
+          )}
+        </div>
+        <p class="text-[11px] text-muted-foreground mt-3">
+          All heavy processing happens asynchronously via BullMQ queues. The UI never waits for NLP operations.
+          PostgreSQL is the single source of truth; Redis is only used as a transport layer.
+        </p>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="rounded-md border border-border bg-card p-3">
+          <p class="font-medium text-xs mb-1">Zero-shot</p>
+          <p class="text-[11px] text-muted-foreground">No training required. Users change interests instantly — the system matches using pre-computed embeddings.</p>
+        </div>
+        <div class="rounded-md border border-border bg-card p-3">
+          <p class="font-medium text-xs mb-1">Explainable</p>
+          <p class="text-[11px] text-muted-foreground">Every matching decision includes score breakdowns — positive, negative, lexical, and meta components.</p>
+        </div>
+        <div class="rounded-md border border-border bg-card p-3">
+          <p class="font-medium text-xs mb-1">Cost-efficient</p>
+          <p class="text-[11px] text-muted-foreground">LLM calls happen only for gray-zone articles. All other matching is local CPU using open-source models.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Channels -->
+    <section id="channels" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Channels &amp; RSS Feeds</h2>
+      <p class="text-sm text-muted-foreground">
+        <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> are news sources.
+        Currently the system supports RSS feeds, with website, API, and email sources planned.
+      </p>
+      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
+        <p class="text-xs font-semibold">Setting up your first channel</p>
+        <ol class="list-decimal list-inside text-xs text-muted-foreground space-y-1.5">
+          <li>Go to <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> and click <strong>Add RSS Channel</strong>.</li>
+          <li>Enter a descriptive name (e.g. "Reuters World News") and the feed URL.</li>
+          <li>Set the poll interval — how often the system checks for new articles. <code class="rounded bg-muted px-1 py-0.5">300</code> = every 5 minutes.</li>
+          <li>Enable <strong>Adaptive</strong> mode (recommended) — the system slows down polling when a feed is quiet and speeds up when new content appears.</li>
+          <li>Click <strong>Create Channel</strong>. The system starts polling immediately if set to Active.</li>
+        </ol>
+      </div>
+      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
+        <p class="text-xs font-semibold">Bulk import example</p>
+        <p class="text-xs text-muted-foreground">To add many feeds at once, paste a JSON array in the Bulk Import form:</p>
+        <pre class="text-[11px] font-mono bg-muted/30 rounded-md p-3 overflow-x-auto">{JSON.stringify([
+  {
+    "name": "Reuters World News",
+    "fetchUrl": "https://feeds.reuters.com/reuters/worldNews",
+    "language": "en",
+    "pollIntervalSeconds": 300,
+    "adaptiveEnabled": true,
+    "isActive": true
+  },
+  {
+    "name": "BBC Technology",
+    "fetchUrl": "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "language": "en",
+    "pollIntervalSeconds": 600,
+    "adaptiveEnabled": true,
+    "isActive": true
+  }
+], null, 2)}</pre>
+      </div>
+    </section>
+
+    <!-- Templates -->
+    <section id="templates" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">LLM &amp; Interest Templates</h2>
+      <p class="text-sm text-muted-foreground">
+        <a href={pagePaths.llmTemplates} class="text-primary hover:underline">LLM Templates</a> configure AI review prompts,
+        while <a href={pagePaths.interestTemplates} class="text-primary hover:underline">Interest Templates</a> manage predefined user topic options.
+      </p>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl border border-border bg-card p-4 space-y-2">
+          <p class="text-xs font-semibold">🤖 LLM Templates</p>
+          <p class="text-[11px] text-muted-foreground">
+            When an article's relevance score falls in the gray zone (0.45–0.72), the system sends it
+            to an external LLM (like Google Gemini) for review. LLM templates define the exact prompt.
+          </p>
+          <p class="text-[11px] font-medium mt-2">Scopes:</p>
+          <ul class="text-[11px] text-muted-foreground space-y-0.5 list-disc list-inside">
+            <li><code class="rounded bg-muted px-1 py-0.5">interests</code> — for user interest reviews</li>
+            <li><code class="rounded bg-muted px-1 py-0.5">criteria</code> — for system criterion reviews</li>
+            <li><code class="rounded bg-muted px-1 py-0.5">global</code> — fallback when no specific template exists</li>
+          </ul>
+          <p class="text-[11px] font-medium mt-2">Expected JSON response:</p>
+          <pre class="text-[10px] font-mono bg-muted/30 rounded-md p-2">{"{"}"decision": "approve|reject|uncertain",
+  "score": 0.0,
+  "reason": "..."{"}"}</pre>
+        </div>
+
+        <div class="rounded-xl border border-border bg-card p-4 space-y-2">
+          <p class="text-xs font-semibold">📋 Interest Templates</p>
+          <p class="text-[11px] text-muted-foreground">
+            Predefined topics that users see when browsing available interests.
+            Each template has positive and negative prototypes — example headlines that teach
+            the system what to match.
+          </p>
+          <p class="text-[11px] font-medium mt-2">Example: "AI Policy" template</p>
+          <div class="text-[11px] text-muted-foreground">
+            <p class="font-medium text-emerald-600 dark:text-emerald-400">✓ Positive prototypes (SHOULD match):</p>
+            <ul class="list-disc list-inside ml-2 space-y-0.5">
+              <li>EU passes landmark AI regulation act</li>
+              <li>US government proposes AI safety framework</li>
+              <li>China announces national AI strategy update</li>
+            </ul>
+            <p class="font-medium text-red-500 mt-1.5">✗ Negative prototypes (should NOT match):</p>
+            <ul class="list-disc list-inside ml-2 space-y-0.5">
+              <li>New iPhone AI assistant features released</li>
+              <li>Google unveils latest AI chatbot upgrade</li>
+              <li>AI startup raises $100M funding round</li>
+            </ul>
+          </div>
+          <p class="text-[10px] text-muted-foreground mt-2 italic">
+            Negatives are critical — without them, false positives increase dramatically.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gray Zone -->
+    <section id="gray-zone" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Gray Zone &amp; AI Review</h2>
+      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
+        <p class="text-sm text-muted-foreground">
+          The matching engine scores each article on a 0–1 scale against criteria and user interests:
+        </p>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <div class="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 p-3 text-center">
+            <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">≥ 0.72</p>
+            <p class="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">Relevant</p>
+            <p class="text-[10px] text-muted-foreground mt-0.5">Confidently matched — may trigger notification</p>
+          </div>
+          <div class="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3 text-center">
+            <p class="text-lg font-bold text-amber-600 dark:text-amber-400">0.45 – 0.72</p>
+            <p class="text-[11px] font-medium text-amber-800 dark:text-amber-300">Gray Zone</p>
+            <p class="text-[10px] text-muted-foreground mt-0.5">Uncertain — sent to LLM for review</p>
+          </div>
+          <div class="rounded-md bg-muted border border-border p-3 text-center">
+            <p class="text-lg font-bold text-muted-foreground">≤ 0.45</p>
+            <p class="text-[11px] font-medium">Irrelevant</p>
+            <p class="text-[10px] text-muted-foreground mt-0.5">Confidently not a match — ignored</p>
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          The LLM's response (<code class="rounded bg-muted px-1 py-0.5">approve</code>,
+          <code class="rounded bg-muted px-1 py-0.5">reject</code>, or
+          <code class="rounded bg-muted px-1 py-0.5">uncertain</code>) determines the final action.
+          <code class="rounded bg-muted px-1 py-0.5">uncertain</code> defaults to "don't notify" for safety.
+        </p>
+        <p class="text-xs text-muted-foreground">
+          <strong>LLM costs are controlled</strong> — only gray-zone articles trigger API calls. All other
+          matching uses local CPU with open-source embedding models. Monitor your spend on the
+          <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page.
+        </p>
+      </div>
+    </section>
+
+    <!-- Articles -->
+    <section id="articles" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Articles &amp; Moderation</h2>
+      <p class="text-sm text-muted-foreground">
+        The <a href={pagePaths.articles} class="text-primary hover:underline">Articles</a> page shows all
+        ingested content with state badges and moderation controls.
+      </p>
+      <div class="rounded-xl border border-border bg-card p-4">
+        <p class="text-xs font-semibold mb-2">Article lifecycle</p>
+        <div class="flex items-center gap-2 flex-wrap text-xs">
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">pending</span>
+          <span class="text-muted-foreground">→</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">normalized</span>
+          <span class="text-muted-foreground">→</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">published</span>
+        </div>
+        <p class="text-[11px] text-muted-foreground mt-2">
+          <strong>Block</strong> removes an article from user feeds. <strong>Unblock</strong> restores it.
+          All moderation actions are logged to the audit trail.
+        </p>
+      </div>
+    </section>
+
+    <!-- Clusters -->
+    <section id="clusters" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Event Clusters</h2>
+      <p class="text-sm text-muted-foreground">
+        <a href={pagePaths.clusters} class="text-primary hover:underline">Clusters</a> group articles
+        that cover the same real-world event. The system builds clusters automatically — you don't need to configure anything.
+      </p>
+      <p class="text-xs text-muted-foreground">
+        Clusters use a combined score: 55% semantic similarity + 20% entity overlap + 15% geographic match + 10% time proximity.
+        Articles scoring ≥ 0.78 join an existing cluster; others start a new one.
+      </p>
+    </section>
+
+    <!-- Reindex -->
+    <section id="reindex" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Reindex &amp; Maintenance</h2>
+      <p class="text-sm text-muted-foreground">
+        The <a href={pagePaths.reindex} class="text-primary hover:underline">Reindex</a> page lets you
+        rebuild derived indices. This is safe — it recalculates lookup structures without deleting any data.
+      </p>
+      <div class="rounded-md border border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
+        <p class="text-xs"><strong>When to reindex:</strong> After major changes to interest templates, if matching quality seems degraded, or after a database restore. Reindexing runs in the background and typically takes a few minutes.</p>
+      </div>
+    </section>
+
+    <!-- Observability -->
+    <section id="observability" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Observability &amp; Costs</h2>
+      <p class="text-sm text-muted-foreground">
+        The <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page
+        shows two key things: RSS fetch performance and LLM review costs.
+      </p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="rounded-md border border-border bg-card p-3">
+          <p class="font-medium text-xs mb-1">Fetch Runs</p>
+          <p class="text-[11px] text-muted-foreground">Each row is one poll of a channel. Outcomes: <strong>new_content</strong> (found articles), <strong>no_change</strong> (feed unchanged), <strong>error</strong> (failed). High error counts → check that channel.</p>
+        </div>
+        <div class="rounded-md border border-border bg-card p-3">
+          <p class="font-medium text-xs mb-1">LLM Reviews</p>
+          <p class="text-[11px] text-muted-foreground">Each row is one gray-zone AI review. Shows the article, decision (approve/reject/uncertain), tokens consumed, cost, and latency. Use this to monitor your AI spend.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</AdminShell>

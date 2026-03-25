@@ -1,0 +1,145 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../../../../layouts/AdminShell.astro";
+import { AdminConfirmAction } from "../../../../components/AdminConfirmAction";
+import { InterestTemplateEditorForm } from "../../../../components/InterestTemplateEditorForm";
+import { resolveAdminSession } from "../../../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+type R = Record<string, unknown>;
+const interestTemplateId = String(Astro.params.interestTemplateId ?? "");
+const template = await sdk.getInterestTemplate<R>(interestTemplateId);
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+
+function asLines(value: unknown): string {
+  return Array.isArray(value) ? (value as unknown[]).map((entry) => String(entry ?? "")).join("\n") : "";
+}
+
+const isActive = template.is_active === true;
+---
+
+<AdminShell title="Edit Interest Template — Admin" session={session} flash={flash} activeNav="interest-templates">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/templates/interests")} class="hover:text-foreground">Interest Templates</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Edit</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(template.name ?? "Interest template")}</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Use this editor for deeper topic curation, including optional lexical hints and activation state, without cluttering the catalog list.
+        </p>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+          <p class="mt-2 text-sm font-semibold">{isActive ? "Active" : "Archived"}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Positive examples</p>
+          <p class="mt-2 text-sm font-semibold">{Array.isArray(template.positive_texts) ? (template.positive_texts as unknown[]).length : 0}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Priority</p>
+          <p class="mt-2 text-sm font-semibold">{String(template.priority ?? 1)}</p>
+        </div>
+      </div>
+    </div>
+
+    <InterestTemplateEditorForm
+      action={appPath("/bff/admin/templates")}
+      mode="edit"
+      redirectTo={currentPath}
+      cancelHref={appPath("/templates/interests")}
+      value={{
+        interestTemplateId,
+        name: String(template.name ?? ""),
+        description: String(template.description ?? ""),
+        positiveTexts: asLines(template.positive_texts),
+        negativeTexts: asLines(template.negative_texts),
+        mustHaveTerms: asLines(template.must_have_terms),
+        mustNotHaveTerms: asLines(template.must_not_have_terms),
+        places: asLines(template.places),
+        languagesAllowed: asLines(template.languages_allowed),
+        shortTokensRequired: asLines(template.short_tokens_required),
+        shortTokensForbidden: asLines(template.short_tokens_forbidden),
+        priority: String(template.priority ?? 1),
+        isActive,
+      }}
+    />
+
+    <section class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="max-w-2xl">
+          <h2 class="text-base font-semibold text-foreground">Danger zone</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Archive when a topic should leave the active catalog but remain recoverable. Delete only when the topic should disappear from the admin library completely.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <AdminConfirmAction
+            action={appPath("/bff/admin/templates")}
+            title={isActive ? "Archive template" : "Reactivate template"}
+            description={isActive
+              ? "Archived templates stay visible to operators but stop appearing in the active predefined-topic catalog."
+              : "Reactivating the template puts it back into the active predefined-topic catalog."}
+            triggerLabel={isActive ? "Archive" : "Activate"}
+            confirmLabel={isActive ? "Archive template" : "Activate template"}
+            fields={[
+              { name: "kind", value: "interest" },
+              { name: "intent", value: isActive ? "archive" : "activate" },
+              { name: "interestTemplateId", value: interestTemplateId },
+              { name: "redirectTo", value: currentPath },
+            ]}
+            triggerClassName={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
+            confirmClassName={isActive ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-emerald-600 text-white hover:bg-emerald-600/90"}
+            client:load
+          />
+          <AdminConfirmAction
+            action={appPath("/bff/admin/templates")}
+            title="Delete template"
+            description="Delete permanently only when this predefined topic should be removed from the admin library entirely."
+            triggerLabel="Delete"
+            confirmLabel="Delete template"
+            fields={[
+              { name: "kind", value: "interest" },
+              { name: "intent", value: "delete" },
+              { name: "interestTemplateId", value: interestTemplateId },
+              { name: "redirectTo", value: appPath("/templates/interests") },
+            ]}
+            triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+            client:load
+          />
+        </div>
+      </div>
+    </section>
+  </div>
+</AdminShell>

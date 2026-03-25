@@ -1,21 +1,45 @@
 ---
+import { DEFAULT_PAGE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-if (!session) return Astro.redirect(appPath("/"));
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const pagePaths = { dashboard: appPath("/") };
+const CLUSTERS_PAGE_SIZE = 12;
 type R = Record<string, unknown>;
-const clusters = await sdk.listClusters<R[]>();
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const clusters = await sdk.listClustersPage<R>({ page, pageSize: CLUSTERS_PAGE_SIZE });
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <AdminShell title="Clusters — Admin" session={session} flash={flash} activeNav="clusters">
@@ -30,17 +54,47 @@ const clusters = await sdk.listClusters<R[]>();
   <div class="space-y-5">
     <div>
       <h1 class="text-xl font-bold">Event Clusters</h1>
-      <p class="text-sm text-muted-foreground mt-0.5">{(clusters as R[]).length} cluster{(clusters as R[]).length !== 1 ? "s" : ""}</p>
+      <p class="text-sm text-muted-foreground mt-0.5">
+        {clusters.total} cluster{clusters.total !== 1 ? "s" : ""} total
+        {clusters.total > 0 && ` — page ${clusters.page} of ${Math.max(clusters.totalPages, 1)}`}
+      </p>
     </div>
 
-    {(clusters as R[]).length === 0 ? (
+    <!-- Clusters explanation -->
+    <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
+      <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
+        <span class="text-sm font-medium">What are event clusters?</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+      </summary>
+      <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
+        <p class="text-xs">When multiple articles cover the <strong>same real-world event</strong>, the system automatically groups them into clusters. This prevents users from receiving multiple notifications about the same story.</p>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <div class="rounded-md border border-border bg-card p-2.5">
+            <p class="font-medium text-foreground text-[11px] mb-0.5">How clustering works</p>
+            <p class="text-[11px]">Articles are compared using semantic similarity (55%), named entities (20%), geographic overlap (15%), and time proximity (10%). If the combined score is ≥ 0.78, the article joins an existing cluster.</p>
+          </div>
+          <div class="rounded-md border border-border bg-card p-2.5">
+            <p class="font-medium text-foreground text-[11px] mb-0.5">Why it matters</p>
+            <p class="text-[11px]">Clustering enables notification suppression — once a user is notified about an event, follow-up articles in the same cluster won't trigger duplicate alerts.</p>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    {clusters.total === 0 ? (
       <div class="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-border bg-card">
         <p class="font-medium text-sm">No clusters yet</p>
         <p class="text-xs text-muted-foreground mt-1">Clusters are built automatically as articles are processed</p>
       </div>
     ) : (
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {(clusters as R[]).map((cluster) => (
+        {clusters.items.length === 0 ? (
+          <div class="sm:col-span-2 lg:col-span-3 flex flex-col items-center justify-center py-16 text-center rounded-xl border border-border bg-card">
+            <p class="font-medium text-sm">No clusters on this page</p>
+            <p class="text-xs text-muted-foreground mt-1">Use the pager below to return to a page with cluster cards</p>
+          </div>
+        ) : clusters.items.map((cluster) => (
           <div class="rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-colors">
             <p class="font-medium text-sm line-clamp-2">
               {String(cluster.primary_title ?? cluster.cluster_id ?? "Unnamed cluster")}
@@ -58,6 +112,16 @@ const clusters = await sdk.listClusters<R[]>();
           </div>
         ))}
       </div>
+    )}
+    {(clusters.hasPrev || clusters.hasNext) && (
+      <PaginationNav
+        page={clusters.page}
+        totalPages={clusters.totalPages}
+        hasPrev={clusters.hasPrev}
+        hasNext={clusters.hasNext}
+        prevHref={resolvePageHref(clusters.page - 1)}
+        nextHref={resolvePageHref(clusters.page + 1)}
+      />
     )}
   </div>
 </AdminShell>

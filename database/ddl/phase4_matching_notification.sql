@@ -193,6 +193,9 @@ create index if not exists criterion_match_results_doc_id_idx
 create index if not exists criterion_match_results_criterion_id_idx
   on criterion_match_results (criterion_id, created_at desc);
 
+create unique index if not exists criterion_match_results_doc_criterion_unique
+  on criterion_match_results (doc_id, criterion_id);
+
 create table if not exists interest_match_results (
   interest_match_id uuid primary key default gen_random_uuid(),
   doc_id uuid not null references articles (doc_id) on delete cascade,
@@ -217,6 +220,9 @@ create index if not exists interest_match_results_doc_id_idx
 
 create index if not exists interest_match_results_user_interest_idx
   on interest_match_results (user_id, interest_id, created_at desc);
+
+create unique index if not exists interest_match_results_doc_interest_unique
+  on interest_match_results (doc_id, interest_id);
 
 create table if not exists notification_log (
   notification_id uuid primary key default gen_random_uuid(),

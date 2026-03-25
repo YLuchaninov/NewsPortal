@@ -1,0 +1,140 @@
+---
+import "../styles/globals.css";
+import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminRedirectPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const flash = readFlash(Astro.url);
+const nextPath = resolveAdminRedirectPath(
+  Astro.request,
+  Astro.url.searchParams.get("next"),
+  "/"
+);
+const signInAction = resolveAdminAppPath(Astro.request, "/bff/auth/sign-in");
+
+if (session) {
+  return Astro.redirect(nextPath);
+}
+---
+
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign In — {DEFAULT_BRAND_CONFIG.productName} Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body class="min-h-screen bg-background text-foreground antialiased">
+    <main class="relative isolate min-h-screen overflow-hidden">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.16),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.12),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,1))]"></div>
+      <div class="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] [background-size:28px_28px]"></div>
+
+      <div class="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center px-6 py-12">
+        <div class="grid w-full gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+          <section class="hidden rounded-[2rem] border border-white/10 bg-white/5 p-10 shadow-2xl shadow-black/30 backdrop-blur md:block">
+            <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.24em] text-slate-300">
+              <span class="inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
+              Admin operations
+            </div>
+            <h1 class="mt-8 max-w-xl text-4xl font-semibold tracking-tight text-white">
+              Manage sources, templates, and moderation without losing your place.
+            </h1>
+            <p class="mt-4 max-w-2xl text-base leading-7 text-slate-300">
+              The redesigned admin console keeps creation, editing, and operational actions on dedicated screens,
+              with safer confirmations and clearer workflow guidance for every entity.
+            </p>
+            <div class="mt-10 grid gap-4 md:grid-cols-3">
+              <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <p class="text-sm font-medium text-white">Dedicated CRUD flows</p>
+                <p class="mt-2 text-sm text-slate-400">List, create, and edit screens stay separate, so the shell never drops you back to the dashboard.</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <p class="text-sm font-medium text-white">Safer operations</p>
+                <p class="mt-2 text-sm text-slate-400">Destructive actions are explicit, reversible when possible, and explained before they run.</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <p class="text-sm font-medium text-white">Context preserved</p>
+                <p class="mt-2 text-sm text-slate-400">After sign-in you return to the page you intended to use, including filtered and paginated list views.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="mx-auto w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-950/70 p-8 shadow-2xl shadow-black/40 backdrop-blur">
+            <div class="mb-8 text-center">
+              <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-xl font-bold text-slate-950">
+                N
+              </span>
+              <p class="mt-5 text-xs font-medium uppercase tracking-[0.28em] text-slate-400">
+                {DEFAULT_BRAND_CONFIG.productName}
+              </p>
+              <h2 class="mt-2 text-2xl font-semibold text-white">Admin sign in</h2>
+              <p class="mt-2 text-sm text-slate-400">
+                Continue to the protected admin workspace.
+              </p>
+            </div>
+
+            {flash && (
+              <div class:list={[
+                "mb-5 rounded-2xl border px-4 py-3 text-sm",
+                flash.status === "success"
+                  ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                  : "border-rose-400/30 bg-rose-500/10 text-rose-200",
+              ]}>
+                {flash.message}
+              </div>
+            )}
+
+            <form method="post" action={signInAction} class="grid gap-4">
+              <input type="hidden" name="next" value={nextPath} />
+
+              <label class="grid gap-1.5">
+                <span class="text-sm font-medium text-slate-200">Email</span>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="admin@example.com"
+                  required
+                  class="flex h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white shadow-sm outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </label>
+
+              <label class="grid gap-1.5">
+                <span class="text-sm font-medium text-slate-200">Password</span>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                  class="flex h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white shadow-sm outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </label>
+
+              <button
+                type="submit"
+                class="mt-2 inline-flex h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+              >
+                Sign in
+              </button>
+            </form>
+
+            <p class="mt-6 text-center text-xs text-slate-500">
+              You will be returned to the page you originally tried to open after authentication.
+            </p>
+          </section>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

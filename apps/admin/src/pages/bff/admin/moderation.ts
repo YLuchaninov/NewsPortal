@@ -2,8 +2,10 @@ import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
 
 import {
+  buildAdminSignInPath,
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
+  requestPrefersHtmlNavigation,
+  resolveAdminRedirectPath,
 } from "../../../lib/server/browser-flow";
 import {
   buildExpiredAdminSessionCookie,
@@ -15,6 +17,12 @@ import { readRequestPayload } from "../../../lib/server/request";
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
+  const payload = await readRequestPayload(request);
+  const redirectTo = resolveAdminRedirectPath(
+    request,
+    String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
+    "/articles"
+  );
   const session = await resolveAdminSession(request);
   if (!session || !session.roles.includes("admin")) {
     if (browserRequest) {
@@ -22,13 +30,13 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "error",
         message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie()
+        setCookie: buildExpiredAdminSessionCookie(),
+        redirectTo: buildAdminSignInPath(request, redirectTo)
       });
     }
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 
-  const payload = await readRequestPayload(request);
   const docId = String(payload.docId ?? "");
   const actionType = String(payload.actionType ?? "");
   const reason = String(payload.reason ?? "");
@@ -37,7 +45,8 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "articles",
         status: "error",
-        message: "Invalid moderation payload."
+        message: "Invalid moderation payload.",
+        redirectTo
       });
     }
     return Response.json({ error: "Invalid moderation payload." }, { status: 400 });
@@ -90,7 +99,8 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "articles",
         status: "error",
-        message: "Unable to update article moderation right now."
+        message: "Unable to update article moderation right now.",
+        redirectTo
       });
     }
     return Response.json(
@@ -109,7 +119,8 @@ export const POST: APIRoute = async ({ request }) => {
     return buildFlashRedirect(request, {
       section: "articles",
       status: "success",
-      message: actionType === "block" ? "Article blocked" : "Article unblocked"
+      message: actionType === "block" ? "Article blocked" : "Article unblocked",
+      redirectTo
     });
   }
 

@@ -43,7 +43,7 @@ Code, который "выглядит готовым", не считается 
 - `pnpm unit_tests`
   Запускает deterministic root-level unit suites: `node:test` + `tsx` для pure TS logic и `unittest` для pure Python helpers без DB/Redis/Docker dependency. На текущем baseline этот gate покрывает adaptive scheduler transitions, admin scheduling parsing, web-push subscription validation, Gemini usage parsing/cost helpers и notification-preference filtering helpers.
 - `pnpm integration_tests`
-  Канонический root-level behavioral gate. Сейчас это thin alias на `pnpm test:mvp:internal`: он поднимает canonical `compose.yml + compose.dev.yml` baseline с `.env.dev`, прогоняет ключевые relay/fetcher/worker smoke paths и поверх них доказывает internal MVP happy path: anonymous web bootstrap, allowlisted admin sign-in, RSS ingest, notification delivery в локальный SMTP sink и moderation audit. Дополнительно этот gate проверяет browser-safe `303` + flash redirect semantics на Astro BFF paths `/bff/*` и `/admin/bff/*`, валидирует полный `Location` origin/pathname и подтверждает, что nginx ingress оставляет `/api/*` за Python API.
+  Канонический root-level behavioral gate. Сейчас это thin alias на `pnpm test:mvp:internal`: он поднимает canonical `compose.yml + compose.dev.yml` baseline с `.env.dev`, прогоняет ключевые relay/fetcher/worker smoke paths и поверх них доказывает internal MVP happy path: anonymous web bootstrap, allowlisted admin sign-in, RSS ingest, notification delivery в локальный SMTP sink и moderation audit. Дополнительно этот gate проверяет browser-safe `303` + flash redirect semantics на Astro BFF paths `/bff/*` и `/admin/bff/*`, валидирует полный `Location` origin/pathname, подтверждает dedicated admin sign-in contract и preserved `next` redirects для logged-out `/admin/*` pages, проверяет split admin CRUD HTML for `/admin/channels`, `/admin/channels/new`, `/admin/templates/llm` и `/admin/templates/interests`, подтверждает, что nginx ingress оставляет `/api/*` за Python API, и также требует source-link proof для public feed: `/feed` должен отдавать article `url`, а user-facing feed HTML не должен уводить на `/articles/:doc_id/explain`.
 
 ### Delivery Proof
 
@@ -81,6 +81,7 @@ Code, который "выглядит готовым", не считается 
 | Interest compile | `pnpm test:interest-compile:smoke` / `pnpm test:interest-compile:compose` | Локальная или compose-среда с DB/Redis | Compiled interest path работает и обновляет derived state корректно. |
 | Criterion compile | `pnpm test:criterion-compile:smoke` / `pnpm test:criterion-compile:compose` | Локальная или compose-среда с DB/Redis | Compiled criterion path работает и обновляет derived state корректно. |
 | Cluster/match/notify | `pnpm test:cluster-match-notify:smoke` / `pnpm test:cluster-match-notify:compose` | Локальная или compose-среда с DB/Redis | Event clustering, matching и notify chain выполняются end-to-end на доступном baseline. |
+| Historical reindex/backfill | `PYTHONPATH=. python -m services.workers.app.smoke reindex-backfill` | Локальная или compose-среда с DB/Redis и актуальными migrations | Reindex rebuilds the derived interest index, rematches already persisted articles without duplicating match rows, and keeps retro-notification delivery suppressed during DB repair. |
 | Index consistency | `pnpm index:check:interest-centroids` / `pnpm index:check:event-cluster-centroids` | Актуальные данные и derived index directories | Derived centroid registries не дрейфуют относительно ожиданий. |
 
 ## Gate Taxonomy
@@ -168,6 +169,16 @@ Smallest honest local proof для обычной итерации.
 
 Если релевантно несколько контуров, комбинируй их честно.
 
+Для dashboard/feed/listing contract changes минимум включает reconciliation proof:
+
+- summary KPI, который описывает public feed backlog, должен быть сверяем с paginated public feed `total` на одном и том же локальном dataset;
+- labels вроде `today`, `24h`, `active` не считаются доказанными, если backend semantics и UI wording расходятся.
+- для staged pagination rollout каждый upgraded list endpoint должен отдельно доказать `page/pageSize/total/totalPages/hasNext/hasPrev` и overrange empty-page semantics на live dataset, а не только на unit mocks.
+- если rollout временно сохраняет legacy raw callers без `page/pageSize`, нужна явная compatibility proof, пока все consumers не будут переведены на paginated contract.
+- capability closeout для listing-consistency также должен доказать, что user-facing wording больше не называет feed-eligible записи `published` или `matched-only`, если runtime truth на этом read model включает `matched` и `notified`.
+- для historical reindex/backfill минимум включает duplicate-safe proof для `criterion_match_results` / `interest_match_results` и явную проверку, что repair mode не рассылает retro-notifications.
+- для admin auth/CRUD contract changes минимум включает redirect unit coverage плюс runtime proof для logged-out redirect на dedicated sign-in и signed-in HTML checks на затронутых list/create/edit screens под прямым app path и/или nginx-shaped `/admin` ingress.
+
 ## Failure Signals and Rerun Guidance
 
 Когда gate важен для work item, в `docs/work.md` должно быть явно видно:
@@ -181,6 +192,7 @@ Smallest honest local proof для обычной итерации.
 - если docs/process cleanup оставляет stale read order, authority order, runtime-core file list, template placeholder или неактуальные runtime-path references, work item не может считаться завершенным; после фикса нужно rerun targeted `rg` consistency check;
 - если integration gate падает вне текущего scope, failure может остаться blocking residual gap только при честной фиксации в `docs/work.md`;
 - если stateful testing создало persistent artifacts без cleanup truth, это тоже failing signal, а не "мелочь после теста".
+- если dashboard summary и public feed больше не сходятся по одному и тому же declared filter set, listing-consistency work item не может считаться завершенным; после фикса нужна повторная live reconciliation проверка.
 
 ## Capability Completion Proof
 

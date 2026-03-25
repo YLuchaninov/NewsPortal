@@ -41,6 +41,11 @@ export {
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/ui/tooltip";
 export { ScrollArea, ScrollBar } from "./components/ui/scroll-area";
 export { Toaster } from "./components/ui/sonner";
+export { Collapsible, CollapsibleTrigger, CollapsibleContent } from "./components/ui/collapsible";
+export { InfoCallout } from "./components/ui/info-callout";
+export { HelpTooltip } from "./components/ui/help-tooltip";
+export { FormField } from "./components/ui/form-field";
+export { PaginationNav } from "./components/ui/pagination-nav";
 
 // Utilities
 export { cn } from "./lib/utils";

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  countRssChannelsRequiringOverwriteConfirmation,
   parseBulkRssAdminChannelInputs,
-  parseRssAdminChannelInput
+  parseRssAdminChannelInput,
+  resolveRssChannelDeleteMode
 } from "../../../apps/admin/src/lib/server/rss-channels.ts";
 
 test("parseRssAdminChannelInput normalizes RSS admin payload fields", () => {
@@ -87,4 +89,26 @@ test("parseBulkRssAdminChannelInputs rejects partially invalid payloads", () => 
       ]),
     /index 1 is invalid/
   );
+});
+
+test("resolveRssChannelDeleteMode archives channels with historical articles", () => {
+  assert.equal(resolveRssChannelDeleteMode(0), "delete");
+  assert.equal(resolveRssChannelDeleteMode(1), "archive");
+  assert.equal(resolveRssChannelDeleteMode(24), "archive");
+});
+
+test("countRssChannelsRequiringOverwriteConfirmation flags updates in bulk payloads", () => {
+  const channels = parseBulkRssAdminChannelInputs([
+    {
+      name: "Create me",
+      fetchUrl: "https://example.com/create.xml"
+    },
+    {
+      channelId: "channel-123",
+      name: "Update me",
+      fetchUrl: "https://example.com/update.xml"
+    }
+  ]);
+
+  assert.equal(countRssChannelsRequiringOverwriteConfirmation(channels), 1);
 });

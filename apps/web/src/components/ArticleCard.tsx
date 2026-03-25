@@ -19,10 +19,25 @@ interface ArticleCardProps {
   article: Article;
   isLoggedIn: boolean;
   reactionsPath: string;
-  publicApiBaseUrl: string;
 }
 
-export function ArticleCard({ article, isLoggedIn, reactionsPath, publicApiBaseUrl }: ArticleCardProps) {
+export function resolveSafeArticleHref(url?: string): string | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const resolved = new URL(url);
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") {
+      return null;
+    }
+    return resolved.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function ArticleCard({ article, isLoggedIn, reactionsPath }: ArticleCardProps) {
   const [likes, setLikes] = useState(Number(article.like_count ?? 0));
   const [dislikes, setDislikes] = useState(Number(article.dislike_count ?? 0));
   const [reacted, setReacted] = useState<"like" | "dislike" | null>(null);
@@ -40,18 +55,53 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath, publicApiBaseU
     });
   }
 
-  const stateColor: Record<string, string> = {
-    published: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-    pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-    blocked: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-    normalized: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  const stateMeta: Record<string, { className: string; label: string }> = {
+    raw: {
+      className: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+      label: "raw",
+    },
+    pending: {
+      className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+      label: "pending",
+    },
+    normalized: {
+      className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+      label: "normalized",
+    },
+    deduped: {
+      className: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+      label: "deduped",
+    },
+    embedded: {
+      className: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+      label: "embedded",
+    },
+    clustered: {
+      className: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+      label: "clustered",
+    },
+    matched: {
+      className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+      label: "matched",
+    },
+    notified: {
+      className: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
+      label: "notified",
+    },
+    blocked: {
+      className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      label: "blocked",
+    },
   };
 
-  const stateClass = stateColor[String(article.processing_state)] ?? "bg-muted text-muted-foreground";
-
-  return (
-    <article className="group flex flex-col bg-card rounded-xl border border-border overflow-hidden hover:shadow-md hover:border-primary/20 transition-all duration-200">
-      {/* Gradient thumbnail */}
+  const stateKey = String(article.processing_state ?? "raw");
+  const state = stateMeta[stateKey] ?? {
+    className: "bg-muted text-muted-foreground",
+    label: stateKey,
+  };
+  const sourceHref = resolveSafeArticleHref(article.url);
+  const previewContent = (
+    <>
       <div
         className="h-40 bg-gradient-to-br from-primary/10 via-accent to-secondary flex items-center justify-center"
         aria-hidden="true"
@@ -62,15 +112,14 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath, publicApiBaseU
       </div>
 
       <div className="flex flex-col flex-1 p-4 gap-3">
-        {/* Meta badges */}
         <div className="flex flex-wrap gap-1.5">
           {article.lang && (
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-secondary text-secondary-foreground">
               {String(article.lang).toUpperCase()}
             </span>
           )}
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${stateClass}`}>
-            {String(article.processing_state ?? "raw")}
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${state.className}`}>
+            {state.label}
           </span>
           {article.visibility_state && article.visibility_state !== "visible" && (
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">
@@ -79,20 +128,38 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath, publicApiBaseU
           )}
         </div>
 
-        {/* Title */}
         <h3 className="font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
           {String(article.title ?? "Untitled article")}
         </h3>
 
-        {/* Lead */}
         {article.lead && (
           <p className="text-sm text-muted-foreground line-clamp-3 flex-1">
             {String(article.lead)}
           </p>
         )}
+      </div>
+    </>
+  );
 
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-border mt-auto">
+  return (
+    <article className="group flex flex-col bg-card rounded-xl border border-border overflow-hidden hover:shadow-md hover:border-primary/20 transition-all duration-200">
+      {sourceHref ? (
+        <a
+          href={sourceHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-1 flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          {previewContent}
+        </a>
+      ) : (
+        <div className="flex flex-1 flex-col">
+          {previewContent}
+        </div>
+      )}
+
+      <div className="px-4 pb-4">
+        <div className="flex items-center justify-between pt-2 border-t border-border">
           <div className="flex items-center gap-3">
             {isLoggedIn && (
               <>
@@ -126,18 +193,28 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath, publicApiBaseU
               </span>
             )}
           </div>
-          <a
-            href={`${publicApiBaseUrl}/articles/${article.doc_id}/explain`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-primary transition-colors"
-            title="View explain"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          {sourceHref ? (
+            <a
+              href={sourceHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors"
+              title="Open original article"
+              aria-label="Open original article"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : (
+            <span
+              className="text-muted-foreground/50"
+              title="Original article link unavailable"
+              aria-hidden="true"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </span>
+          )}
         </div>
       </div>
     </article>
   );
 }
-

@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 
 import { buildExpiredAdminSessionCookie } from "../../../lib/server/auth";
 import {
+  buildAdminSignInPath,
   buildFlashRedirect,
   requestPrefersHtmlNavigation
 } from "../../../lib/server/browser-flow";
@@ -14,7 +15,8 @@ export const POST: APIRoute = async ({ request }) => {
       section: "auth",
       status: "success",
       message: "Signed out.",
-      setCookie: buildExpiredAdminSessionCookie()
+      setCookie: buildExpiredAdminSessionCookie(),
+      redirectTo: buildAdminSignInPath(request)
     });
   }
 

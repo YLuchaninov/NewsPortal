@@ -14,6 +14,194 @@
 
 ## Completed items
 
+### 2026-03-25 — C-MVP-MANUAL-READINESS — Manual MVP baseline is now closed on a green runtime/docs sync
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: после снятия unrelated acceptance blocker-а capability все еще оставался live из-за финального closeout шага `S-MVP-MANUAL-READINESS-3`; пользователь попросил проверить и закрыть этот остаточный runtime/docs/manual-pack layer по фактическому состоянию репозитория.
+- Что изменилось:
+  - capability now truthfully closes around a durable operator-facing baseline: `README.md` держит manual MVP checklist для `pnpm dev:mvp:internal`, RSS import via `infra/scripts/manual-rss-bundle.template.json`, scheduling/fetch-history verification, `web_push` connect flow и admin delivery/LLM checks;
+  - repo сохраняет explicit manual RSS bundle template вместо притворства, будто real feed list already ships in-tree; `.env.example`, `.env.dev`, `package.json` commands и `.aidp/os.yaml` остаются согласованными вокруг canonical internal MVP compose/proof baseline;
+  - current entry surfaces already match the readiness pack without новых in-scope fixes в closeout phase: public feed читает paginated `/feed` contract с truthful feed wording/source links, а admin dashboard требует dedicated sign-in и ведет операторов к channel create/import, templates, observability, reindex и help surfaces;
+  - final `S-MVP-MANUAL-READINESS-3` audit не нашел дополнительного runtime/docs/manual-pack drift внутри allowed paths beyond the already-present in-scope changes, поэтому capability больше не должна висеть как pseudo-active lane в `docs/work.md`.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/app-routing.test.ts tests/unit/ts/article-card-links.test.ts tests/unit/ts/sdk-pagination.test.ts`
+  - `pnpm typecheck`
+  - `git diff --check`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - фактический browser receipt для `web_push` по-прежнему остается manual-only proof item и не превращается этим capability в automated close gate;
+  - repo по-прежнему хранит только template bundle, а не canonical real RSS feed list; для настоящего manual run оператор должен подставить реальные feed URLs;
+  - RSS-first acceptance scope по-прежнему не расширен на `website`, `api` и `email_imap` ingest.
+- Follow-up:
+  - truthful next product work возвращается к новому explicit MVP bugfix item, если пользователь сообщит следующий дефект;
+  - `C-FETCHER-DUPLICATE-PREFLIGHT` остается отдельной blocked capability и не должен молча подмешиваться в архивированный manual-readiness lane.
+
+### 2026-03-25 — C-ADMIN-UX — Admin auth and CRUD redesign now follow dedicated workflow-first routes
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь попросил перестроить admin UX вокруг дружелюбного workflow-first CRUD, потому что entity management было неконсистентным: формы смешивались со списками, created entities нельзя было полноценно edit/delete, browser redirects выбрасывали обратно на dashboard, а logged-out auth показывался поверх dashboard shell.
+- Что изменилось:
+  - admin auth вынесен на dedicated `/sign-in` surface без dashboard shell; protected admin pages и stale admin BFF POST flows теперь редиректят туда с preserved `next=<requested path>`, а logout возвращает на sign-in вместо root dashboard;
+  - shared admin redirect contract стал context-preserving: browser POST flows принимают `redirectTo`, create success ведет на entity edit screen, update остается на текущем edit/list screen, а list-row actions возвращают пользователя в текущий paginated context;
+  - channels, LLM templates и interest templates переведены на separate list/create/edit screens (`/channels`, `/channels/new`, `/channels/import`, `/channels/:id/edit`, `/templates/llm`, `/templates/llm/new`, `/templates/llm/:id/edit`, `/templates/interests`, `/templates/interests/new`, `/templates/interests/:id/edit`) вместо прежних mixed list+form surfaces;
+  - admin navigation и page IA теперь truthfully разделяют Dashboard, Channels, LLM Templates, Interest Templates, Articles, Clusters, Reindex, Observability и Help, а `/templates` становится thin redirect к `/templates/llm`;
+  - Python API + SDK получили single-record read contracts для `getChannel`, `getLlmTemplate` и `getInterestTemplate`, чтобы edit screens читали canonical truth без ad hoc local state;
+  - channel destructive semantics стали safe-by-default: unused RSS channels hard-delete, channels с linked articles архивируются через `is_active = false` и runtime-state pause instead of violating `on delete restrict`; bulk import теперь требует явного overwrite confirmation, если payload обновляет существующие каналы по `channelId`;
+  - template management получил consistent intents `save | archive | activate | delete`, full-page editor forms на shared `packages/ui` primitives и confirm dialogs для destructive/archive actions; articles, bulk schedule и reindex тоже переведены на shared confirmation flows.
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `node --import tsx --test tests/unit/ts/app-routing.test.ts tests/unit/ts/admin-rss-channels.test.ts`
+  - `git diff --check`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - admin copy в этом capability intentionally оставлен на английском; локализация или white-label copy refinement требуют нового item;
+  - `criteria` и реальные `user_interests` intentionally excluded from this redesign slice, поэтому capability не меняет их admin workflow semantics;
+  - destructive row actions на list screens rely on hydrated client islands for the dialog UX, хотя server-side BFF contracts уже safe и tested без silent hard-delete shortcuts.
+- Follow-up:
+  - truthful next ready work возвращается к `S-MVP-MANUAL-READINESS-3` на уже green baseline;
+  - если user later захочет дополнительный admin polish, deeper filtering/search on list screens, или surfaced controls для `criteria` / `user_interests`, это должны быть новые bounded items, а не reopening archived capability.
+
+### 2026-03-25 — C-HISTORICAL-REINDEX — Historical reindex now repairs persisted DB rows safely
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь явно попросил, чтобы после добавления новых interests и AI templates reindexing затрагивал не только derived index, но и уже существующие статьи в PostgreSQL; прежний maintenance flow пересобирал только `interest_centroids` и не запускал rematch/LLM replay по historical rows.
+- Что изменилось:
+  - admin reindex surface теперь truthfully различает `rebuild` и `backfill`: BFF пишет `job_kind` и `options_json` в `reindex_jobs`, UI объясняет режим historical repair, а recent jobs показывают mode и coarse progress;
+  - worker `process_reindex` теперь понимает `rebuild`, `backfill` и `repair`, умеет батчами переигрывать уже существующие статьи, повторно запускать criteria/interest matching и gray-zone LLM review с текущими templates, и при backfill policy intentionally не шлет retro notifications;
+  - `criterion_match_results` и `interest_match_results` переведены на duplicate-safe semantics: новая migration `0006_reindex_backfill_upserts.sql` чистит legacy дубли и добавляет unique indexes, а worker matching paths пишут через upsert вместо бесконечного накопления одинаковых historical rows;
+  - compose smoke harness получил отдельный `reindex-backfill` сценарий, который ограничивает replay одной seeded статьей, подтверждает отсутствие duplicated matches, неизменность notification count и завершение `reindex_jobs` в `completed`.
+- Что проверено:
+  - `pnpm unit_tests:ts`
+  - `PYTHONPATH=. python -m unittest discover -s tests/unit/python -p 'test_*.py'`
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `pnpm db:migrate`
+  - `docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke reindex-backfill`
+  - `git diff --check`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - admin UI специально не экспонирует operator-only `repair` mode или doc-targeted backfill filters, хотя worker runtime их уже поддерживает для controlled proofs и future maintenance follow-ups;
+  - backfill behavior доказан функционально на bounded compose smoke и полном internal acceptance rerun, но не имеет отдельного soak/perf proof для очень больших historical datasets;
+  - retro-notification resend остается запрещенным shortcut-ом: если когда-нибудь понадобится resend legacy notifications, это должен быть новый явный item с отдельной operator approval и proof.
+- Follow-up:
+  - следующий truthful item должен быть новым explicit bind; наиболее очевидные live candidates остаются `S-MVP-MANUAL-READINESS-3` и `S-ADMIN-UX-2`;
+  - если операторам понадобится surfaced `repair` mode, doc-targeted replay controls или performance tuning для large historical backfills, это должно открываться новым bounded item, а не переоткрытием этой capability.
+
+### 2026-03-25 — P-MVP-BUGFIX-1 — Public feed article clicks open the original source
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь начал MVP bugfix lane и первым дефектом указал, что клики по статьям в public feed ведут не туда: user-facing карточка фактически уводила в debug/explain endpoint вместо оригинального источника.
+- Что изменилось:
+  - `GET /feed` теперь проецирует stored `articles.url` для feed-eligible items без изменения feed eligibility или pagination semantics;
+  - `apps/web/src/components/ArticleCard.tsx` теперь разрешает только browser-safe `http(s)` source URLs, делает preview area и explicit external-link affordance user-facing ссылками на оригинальную статью и убирает explain/debug target с public feed;
+  - добавлен targeted TS guard `tests/unit/ts/article-card-links.test.ts` для safe/unsafe article URLs;
+  - canonical internal MVP acceptance script теперь отдельно проверяет, что `/feed` отдает source `url`, а public web feed HTML содержит source target и не содержит `/articles/:doc_id/explain`.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/article-card-links.test.ts`
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `git diff --check`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - notification history links и настоящий internal web article detail screen остаются вне этого patch;
+  - для non-`http(s)` article URLs public feed намеренно не строит clickable fallback и оставляет карточку non-link, пока не появится отдельный user-facing detail route.
+- Follow-up:
+  - следующий MVP bugfix нужно снова bind-ить отдельным item;
+  - если пользователь захочет internal article detail screens, это должен быть новый bounded follow-up, а не тихое продолжение этого patch.
+
+### 2026-03-25 — SW-WORKTREE-CLOSEOUT-1 — Isolate the staged closeout lane from user-owned residue
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: после архивирования `C-LISTING-CONSISTENCY`, `S-ADMIN-UX-1` и `P-FETCHERS-LINT-1` dirty tree оставался semantically mixed: completed product/doc/lint work, ready follow-up items и user-authored docs/assets лежали рядом и повышали риск accidental scope drift.
+- Что изменилось:
+  - archived product/doc/lint files из listing-consistency, admin UX stage 1 и fetchers lint patch собраны в один staged closeout lane без unstaged in-scope хвоста;
+  - `EXAMPLES.md`, `HOW_TO_USE.md` и `docs/data_scripts/*` намеренно оставлены вне этого lane как user-owned residue;
+  - `docs/work.md` синхронизирован так, чтобы live state больше не описывал дерево как mixed execution lane и сразу возвращал следующий выбор к одному explicit item.
+- Что проверено:
+  - `git status --short`
+  - `git diff --cached --name-only`
+  - `git diff --name-only`
+- Риски или gaps:
+  - staged closeout lane изолирован, но еще не landed/exported отдельным commit или user decision;
+  - isolated residue files остаются за пределами product closeout proof и не должны молча попадать в следующую feature lane.
+- Follow-up:
+  - truthful next work снова сводится к одному выбору: `S-ADMIN-UX-2` или `S-MVP-MANUAL-READINESS-3`, с сохранением residue вне product scope до отдельного решения пользователя.
+
+### 2026-03-25 — S-ADMIN-UX-1 — Shared admin help primitives and first-wave surface polish
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после возврата primary work к `C-ADMIN-UX` dirty tree уже truthfully содержал first-wave admin UX polish на нескольких surfaces, но stage все еще не был закрыт: Help page оставалась плохо discoverable, interactive forms дублировали field/help/collapsible markup, а финальный runtime proof по `/admin/help` и `/admin/templates` отсутствовал.
+- Что изменилось:
+  - admin shell navigation теперь делает Help page first-class surface через sidebar/mobile navigation, а dedicated `apps/admin/src/pages/help.astro` перестала быть скрытой страницей;
+  - interactive admin forms для template management и bulk channel import переведены на shared `packages/ui` primitives: `FormField`, `Input`, `Textarea` и `Collapsible`, вместо повторяющегося inline field/help/collapse markup;
+  - stage closeout сохранил и truthfully принял более широкий stage-1 admin slice, уже присутствовавший в dirty tree: contextual help / pagination / copy polish на dashboard, channels, templates, articles, clusters, observability, reindex и help surfaces;
+  - live runtime docs синхронизированы: `docs/work.md` больше не держит stage-1 detail как active state и вместо этого указывает следующий truthful stage `S-ADMIN-UX-2`.
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `git diff --check`
+  - `pnpm integration_tests`
+  - `pnpm dev:mvp:internal:no-build`
+  - targeted signed-in nginx HTML probe for `/admin/help` and `/admin/templates`
+  - `pnpm dev:mvp:internal:down`
+- Риски или gaps:
+  - `S-ADMIN-UX-2` и `S-ADMIN-UX-3` остаются untouched; capability `C-ADMIN-UX` не считается complete;
+  - acceptance suite закрывает admin auth flow, `/admin/reindex` и `/admin/channels`; help/templates получили отдельный targeted probe именно в этом closeout.
+- Follow-up:
+  - truthful next stage for the capability is `S-ADMIN-UX-2`, focused on guided workflows, stronger empty/error states and remaining page-level consistency.
+
+### 2026-03-25 — P-FETCHERS-LINT-1 — Clear repo-level fetchers lint blocker
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: `pnpm lint` оставался красным из-за unrelated IMAP fetcher warning про useless pre-assignment, и без этого `C-ADMIN-UX` не мог получить truthful green baseline even after the UI slice was ready.
+- Что изменилось:
+  - в `services/fetchers/src/fetchers.ts` удалено бесполезное предварительное присваивание `ingestedCount` / `duplicateCount`; fetcher теперь читает persisted counts напрямую из `persistInputsWithPreflight(...)` перед `markChannelSuccess(...)`;
+  - patch intentionally не меняет ingest semantics и не смешивается с blocked duplicate-preflight capability.
+- Что проверено:
+  - `pnpm lint`
+  - `pnpm typecheck`
+- Риски или gaps:
+  - patch не заменяет отдельную capability `C-FETCHER-DUPLICATE-PREFLIGHT`; любые дальнейшие fetcher behavior changes требуют нового item.
+- Follow-up:
+  - none; repo-level lint blocker для текущего tree снят.
+
+### 2026-03-24 — C-LISTING-CONSISTENCY — Dashboard/feed count alignment and repo-wide pagination rollout
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь увидел, что public-facing feed и dashboard/admin surfaces считают разные множества записей, а табличные list surfaces обрываются локальными лимитами и не показывают truthful totals.
+- Что изменилось:
+  - введен canonical public feed read model `/feed` с семантикой `visibility_state = visible` и `processing_state in ('matched', 'notified')`; dashboard KPI для feed backlog выровнен по тому же множеству;
+  - shared paginated envelope `items/page/pageSize/total/totalPages/hasNext/hasPrev` стал canonical contract для migrated list endpoints и SDK methods;
+  - paginated contract раскатан на admin/web list surfaces: articles, channels, observability tables, reindex jobs, notifications, settings connected channels, clusters, templates, interests и dashboard fetch-run preview;
+  - repeated pager markup вынесен в shared `PaginationNav` внутри `packages/ui`;
+  - final glossary cleanup убрал stale `published` и matched-only wording с article/feed surfaces; public feed header теперь описывает truthful `articles in feed`, а admin article legend объясняет exact runtime `processing_state` values через `matched` и `notified`;
+  - durable docs обновлены: blueprint теперь фиксирует feed-eligible wording и paginated envelope как canonical contract, verification требует explicit wording proof и compatibility proof для legacy raw callers.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/sdk-pagination.test.ts`
+  - `pnpm typecheck`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build api web admin`
+  - live reconciliation against local runtime:
+    `GET /dashboard/summary` and `GET /feed?page=1&pageSize=20` returned the same backlog total on the same dataset (`active_news = 3619`, `feed.total = 3619`, `items.length = 20`, `totalPages = 181`)
+  - public web HTML probe for `http://127.0.0.1:4321/?page=2` confirmed the new feed copy (`articles in feed`), removed stale `matched article` wording, and kept `PaginationNav` visible with `Previous` / `Next`
+  - signed-in admin HTML probe for `http://127.0.0.1:4322/articles` confirmed the updated legend copy (`matched`, `notified`) plus moderation form actions and the absence of a stale `published` label
+  - `pnpm integration_tests`
+  - targeted code audit confirmed no table still uses local row-limit slicing for pagination semantics; remaining `.slice(...)` calls in listing pages are content truncation only
+- Риски или gaps:
+  - admin dashboard root labels were not fetched separately under a signed-in browser session in the final pass; however admin auth/BFF flow, `reindex`, `channels`, and the touched `articles` page were runtime-verified through the acceptance gate plus the targeted probe;
+  - legacy raw array responses for some endpoints without `page/pageSize` are intentionally still present as rollout compatibility for old callers and documented as non-canonical behavior until a future cleanup item retires them.
+- Follow-up:
+  - truthful next work returns to user reprioritization between paused `C-ADMIN-UX` and ready `C-MVP-MANUAL-READINESS`;
+  - if legacy raw list compatibility should be removed later, that must open a new capability or patch rather than reopening this archived rollout.
+
 ### 2026-03-24 — C-NORMALIZE-DEDUP-BLOCKER — Compose normalize/dedup blocker resolution
 
 - Тип записи: capability archive

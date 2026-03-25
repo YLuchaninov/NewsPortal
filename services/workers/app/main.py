@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urlparse
 
@@ -266,6 +267,20 @@ def coerce_positive_int(value: Any, fallback: int = 1) -> int:
     return parsed if parsed > 0 else fallback
 
 
+def coerce_bool(value: Any, fallback: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().casefold()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return fallback
+
+
 def advance_processing_state(current_state: str | None, target_state: str) -> str:
     current_rank = PROCESSING_STATE_ORDER.get(current_state or "raw", 0)
     target_rank = PROCESSING_STATE_ORDER[target_state]
@@ -367,6 +382,52 @@ async def insert_outbox_event(
             Json(make_json_safe(payload)),
         ),
     )
+
+
+async def ensure_published_outbox_event(
+    *,
+    event_id: str,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    payload: dict[str, Any],
+) -> None:
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    insert into outbox_events (
+                      event_id,
+                      event_type,
+                      aggregate_type,
+                      aggregate_id,
+                      payload_json,
+                      status,
+                      published_at,
+                      attempt_count,
+                      error_message
+                    )
+                    values (%s, %s, %s, %s, %s::jsonb, 'published', now(), 1, null)
+                    on conflict (event_id) do update
+                    set
+                      event_type = excluded.event_type,
+                      aggregate_type = excluded.aggregate_type,
+                      aggregate_id = excluded.aggregate_id,
+                      payload_json = excluded.payload_json,
+                      status = 'published',
+                      published_at = now(),
+                      attempt_count = greatest(outbox_events.attempt_count, 1),
+                      error_message = null
+                    """,
+                    (
+                        event_id,
+                        event_type,
+                        aggregate_type,
+                        aggregate_id,
+                        Json(make_json_safe(payload)),
+                    ),
+                )
 
 
 async def fetch_article_for_update(
@@ -2216,6 +2277,7 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
 async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
+    historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Criteria match worker expected eventId and docId.")
@@ -2319,6 +2381,16 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                           explain_json
                         )
                         values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                        on conflict (doc_id, criterion_id) do update
+                        set
+                          score_pos = excluded.score_pos,
+                          score_neg = excluded.score_neg,
+                          score_lex = excluded.score_lex,
+                          score_meta = excluded.score_meta,
+                          score_final = excluded.score_final,
+                          decision = excluded.decision,
+                          explain_json = excluded.explain_json,
+                          created_at = now()
                         """,
                         (
                             article["doc_id"],
@@ -2332,7 +2404,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                             Json(make_json_safe(explain_json)),
                         ),
                     )
-                    if decision == "gray_zone" and prompt_template is not None:
+                    if decision == "gray_zone" and prompt_template is not None and not historical_backfill:
                         await insert_outbox_event(
                             cursor,
                             LLM_REVIEW_REQUESTED_EVENT,
@@ -2360,6 +2432,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
 async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
+    historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Interest match worker expected eventId and docId.")
@@ -2521,6 +2594,19 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                           explain_json
                         )
                         values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                        on conflict (doc_id, interest_id) do update
+                        set
+                          user_id = excluded.user_id,
+                          event_cluster_id = excluded.event_cluster_id,
+                          score_pos = excluded.score_pos,
+                          score_neg = excluded.score_neg,
+                          score_meta = excluded.score_meta,
+                          score_novel = excluded.score_novel,
+                          score_interest = excluded.score_interest,
+                          score_user = excluded.score_user,
+                          decision = excluded.decision,
+                          explain_json = excluded.explain_json,
+                          created_at = now()
                         """,
                         (
                             row["doc_id"],
@@ -2549,7 +2635,7 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                     """,
                     (next_state, article["doc_id"]),
                 )
-                if should_trigger_notify:
+                if should_trigger_notify and not historical_backfill:
                     await insert_outbox_event(
                         cursor,
                         ARTICLE_INTERESTS_MATCHED_EVENT,
@@ -2769,6 +2855,7 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
     doc_id = str(job.data.get("docId"))
     scope = str(job.data.get("scope") or "interest")
     target_id = str(job.data.get("targetId"))
+    historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
     raw_prompt_template_id = job.data.get("promptTemplateId")
     prompt_template_id = str(raw_prompt_template_id).strip() if raw_prompt_template_id else None
 
@@ -2946,7 +3033,7 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                             target_id,
                         ),
                     )
-                    if review_result.decision == "approve":
+                    if review_result.decision == "approve" and not historical_backfill:
                         await insert_outbox_event(
                             cursor,
                             ARTICLE_INTERESTS_MATCHED_EVENT,
@@ -3019,6 +3106,287 @@ async def process_feedback_ingest(job: Job, _job_token: str) -> dict[str, Any]:
     }
 
 
+async def read_reindex_job_context(
+    cursor: psycopg.AsyncCursor[Any],
+    reindex_job_id: str,
+) -> tuple[str, dict[str, Any]]:
+    await cursor.execute(
+        """
+        select job_kind, options_json
+        from reindex_jobs
+        where reindex_job_id = %s
+        for update
+        """,
+        (reindex_job_id,),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        raise ValueError(f"Reindex job {reindex_job_id} was not found.")
+    return (str(row.get("job_kind") or "rebuild"), coerce_json_object(row.get("options_json")))
+
+
+async def update_reindex_job_options(
+    reindex_job_id: str,
+    patch: dict[str, Any],
+) -> None:
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    update reindex_jobs
+                    set
+                      options_json = options_json || %s::jsonb,
+                      updated_at = now()
+                    where reindex_job_id = %s
+                    """,
+                    (Json(make_json_safe(patch)), reindex_job_id),
+                )
+
+
+async def count_historical_backfill_articles(doc_ids: Sequence[str] | None = None) -> int:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            if doc_ids:
+                await cursor.execute(
+                    """
+                    select count(*)::int as total
+                    from articles
+                    where processing_state in ('clustered', 'matched', 'notified')
+                      and doc_id = any(%s::uuid[])
+                    """,
+                    (list(doc_ids),),
+                )
+            else:
+                await cursor.execute(
+                    """
+                    select count(*)::int as total
+                    from articles
+                    where processing_state in ('clustered', 'matched', 'notified')
+                    """
+                )
+            row = await cursor.fetchone()
+    return int(row["total"] or 0) if row else 0
+
+
+async def list_historical_backfill_doc_ids(
+    *,
+    batch_size: int,
+    offset: int,
+    doc_ids: Sequence[str] | None = None,
+) -> list[str]:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            if doc_ids:
+                await cursor.execute(
+                    """
+                    select doc_id::text as doc_id
+                    from articles
+                    where processing_state in ('clustered', 'matched', 'notified')
+                      and doc_id = any(%s::uuid[])
+                    order by created_at asc, doc_id asc
+                    limit %s
+                    offset %s
+                    """,
+                    (list(doc_ids), batch_size, offset),
+                )
+            else:
+                await cursor.execute(
+                    """
+                    select doc_id::text as doc_id
+                    from articles
+                    where processing_state in ('clustered', 'matched', 'notified')
+                    order by created_at asc, doc_id asc
+                    limit %s
+                    offset %s
+                    """,
+                    (batch_size, offset),
+                )
+            rows = list(await cursor.fetchall())
+    return [str(row["doc_id"]) for row in rows]
+
+
+async def find_current_prompt_template_id(scope: str) -> str | None:
+    prompt_scope = "criteria" if scope == "criterion" else "interests"
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            prompt_template = await find_prompt_template(cursor, prompt_scope)
+    if prompt_template is None:
+        return None
+    return str(prompt_template["prompt_template_id"])
+
+
+async def list_gray_zone_target_ids(
+    *,
+    doc_id: str,
+    scope: str,
+) -> list[str]:
+    table_name = "criterion_match_results" if scope == "criterion" else "interest_match_results"
+    column_name = "criterion_id" if scope == "criterion" else "interest_id"
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                f"""
+                select {column_name}::text as target_id
+                from {table_name}
+                where doc_id = %s
+                  and decision = 'gray_zone'
+                order by created_at desc
+                """,
+                (doc_id,),
+            )
+            rows = list(await cursor.fetchall())
+    return [str(row["target_id"]) for row in rows]
+
+
+async def replay_gray_zone_reviews_for_doc(
+    *,
+    doc_id: str,
+    scope: str,
+) -> int:
+    prompt_template_id = await find_current_prompt_template_id(scope)
+    if prompt_template_id is None:
+        return 0
+
+    target_ids = await list_gray_zone_target_ids(doc_id=doc_id, scope=scope)
+    replay_count = 0
+    for target_id in target_ids:
+        review_event_id = str(uuid.uuid4())
+        await ensure_published_outbox_event(
+            event_id=review_event_id,
+            event_type=LLM_REVIEW_REQUESTED_EVENT,
+            aggregate_type="criterion" if scope == "criterion" else "interest",
+            aggregate_id=target_id,
+            payload={
+                "docId": doc_id,
+                "scope": scope,
+                "targetId": target_id,
+                "promptTemplateId": prompt_template_id,
+                "historicalBackfill": True,
+                "version": 1,
+            },
+        )
+        await process_llm_review(
+            SimpleNamespace(
+                data={
+                    "eventId": review_event_id,
+                    "docId": doc_id,
+                    "scope": scope,
+                    "targetId": target_id,
+                    "promptTemplateId": prompt_template_id,
+                    "historicalBackfill": True,
+                }
+            ),
+            "",
+        )
+        replay_count += 1
+    return replay_count
+
+
+async def replay_historical_articles(
+    *,
+    reindex_job_id: str,
+    batch_size: int,
+    doc_ids: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    total_articles = await count_historical_backfill_articles(doc_ids)
+    processed_articles = 0
+    criteria_matches = 0
+    interest_matches = 0
+    criterion_llm_reviews = 0
+    interest_llm_reviews = 0
+    offset = 0
+
+    while True:
+        batch_doc_ids = await list_historical_backfill_doc_ids(
+            batch_size=batch_size,
+            offset=offset,
+            doc_ids=doc_ids,
+        )
+        if not batch_doc_ids:
+            break
+
+        for doc_id in batch_doc_ids:
+            criteria_event_id = str(uuid.uuid4())
+            await ensure_published_outbox_event(
+                event_id=criteria_event_id,
+                event_type=ARTICLE_CLUSTERED_EVENT,
+                aggregate_type="article",
+                aggregate_id=doc_id,
+                payload={
+                    "docId": doc_id,
+                    "historicalBackfill": True,
+                    "version": 1,
+                },
+            )
+            criteria_result = await process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": criteria_event_id,
+                        "docId": doc_id,
+                        "historicalBackfill": True,
+                    }
+                ),
+                "",
+            )
+            interests_event_id = str(uuid.uuid4())
+            await ensure_published_outbox_event(
+                event_id=interests_event_id,
+                event_type=ARTICLE_CLUSTERED_EVENT,
+                aggregate_type="article",
+                aggregate_id=doc_id,
+                payload={
+                    "docId": doc_id,
+                    "historicalBackfill": True,
+                    "version": 1,
+                },
+            )
+            interest_result = await process_match_interests(
+                SimpleNamespace(
+                    data={
+                        "eventId": interests_event_id,
+                        "docId": doc_id,
+                        "historicalBackfill": True,
+                    }
+                ),
+                "",
+            )
+            criteria_matches += int(criteria_result.get("criteriaCount") or 0)
+            interest_matches += int(interest_result.get("interestCount") or 0)
+            criterion_llm_reviews += await replay_gray_zone_reviews_for_doc(
+                doc_id=doc_id,
+                scope="criterion",
+            )
+            interest_llm_reviews += await replay_gray_zone_reviews_for_doc(
+                doc_id=doc_id,
+                scope="interest",
+            )
+            processed_articles += 1
+
+        offset += len(batch_doc_ids)
+        await update_reindex_job_options(
+            reindex_job_id,
+            {
+                "progress": {
+                    "processedArticles": processed_articles,
+                    "totalArticles": total_articles,
+                }
+            },
+        )
+
+    return {
+        "mode": "historical_backfill",
+        "processedArticles": processed_articles,
+        "totalArticles": total_articles,
+        "criteriaMatches": criteria_matches,
+        "interestMatches": interest_matches,
+        "criterionLlmReviews": criterion_llm_reviews,
+        "interestLlmReviews": interest_llm_reviews,
+        "retroNotifications": "skipped",
+        "batchSize": batch_size,
+    }
+
+
 async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     reindex_job_id = str(job.data.get("reindexJobId"))
@@ -3028,11 +3396,15 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
         raise ValueError("Reindex worker expected eventId and reindexJobId.")
 
     connection = await open_connection()
+    job_kind = "rebuild"
+    job_options: dict[str, Any] = {}
     async with connection:
         async with connection.transaction():
             async with connection.cursor() as cursor:
                 if await is_event_processed(cursor, REINDEX_CONSUMER, event_id):
                     return {"status": "duplicate-event", "reindexJobId": reindex_job_id}
+
+                job_kind, job_options = await read_reindex_job_context(cursor, reindex_job_id)
 
                 await cursor.execute(
                     """
@@ -3045,12 +3417,35 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
 
     result: dict[str, Any]
     try:
-        if index_name == INTEREST_CENTROIDS_INDEX_NAME:
-            result = await INTEREST_INDEXER.rebuild_interest_centroids()
-        elif index_name == EVENT_CLUSTER_CENTROIDS_INDEX_NAME:
-            result = await INTEREST_INDEXER.rebuild_event_cluster_centroids()
+        result = {"indexName": index_name, "jobKind": job_kind}
+        if job_kind in {"rebuild", "backfill"}:
+            if index_name == INTEREST_CENTROIDS_INDEX_NAME:
+                result["rebuild"] = await INTEREST_INDEXER.rebuild_interest_centroids()
+            elif index_name == EVENT_CLUSTER_CENTROIDS_INDEX_NAME:
+                result["rebuild"] = await INTEREST_INDEXER.rebuild_event_cluster_centroids()
+            else:
+                result["rebuild"] = {
+                    "indexName": index_name,
+                    "status": "skipped",
+                    "reason": "unsupported_index",
+                }
+        elif job_kind == "repair":
+            result["rebuild"] = {
+                "indexName": index_name,
+                "status": "skipped",
+                "reason": "repair_job_skips_rebuild",
+            }
         else:
-            result = {"indexName": index_name, "status": "skipped", "reason": "unsupported_index"}
+            raise ValueError(f"Unsupported reindex job kind: {job_kind}")
+
+        if job_kind in {"backfill", "repair"}:
+            batch_size = min(max(coerce_positive_int(job_options.get("batchSize"), 100), 1), 500)
+            target_doc_ids = coerce_text_list(job_options.get("docIds"))
+            result["backfill"] = await replay_historical_articles(
+                reindex_job_id=reindex_job_id,
+                batch_size=batch_size,
+                doc_ids=target_doc_ids or None,
+            )
     except Exception as error:
         async with await open_connection() as connection:
             async with connection.transaction():

@@ -1,0 +1,284 @@
+import * as React from "react";
+
+import { FormField, Input, Textarea } from "@newsportal/ui";
+
+export interface InterestTemplateEditorValue {
+  interestTemplateId?: string;
+  name: string;
+  description: string;
+  positiveTexts: string;
+  negativeTexts: string;
+  mustHaveTerms: string;
+  mustNotHaveTerms: string;
+  places: string;
+  languagesAllowed: string;
+  shortTokensRequired: string;
+  shortTokensForbidden: string;
+  priority: string;
+  isActive: boolean;
+}
+
+interface InterestTemplateEditorFormProps {
+  action: string;
+  mode: "create" | "edit";
+  redirectTo: string;
+  cancelHref: string;
+  value: InterestTemplateEditorValue;
+}
+
+function boolToString(value: boolean): string {
+  return value ? "true" : "false";
+}
+
+const inputClassName = "h-10 text-sm";
+
+export function InterestTemplateEditorForm({
+  action,
+  mode,
+  redirectTo,
+  cancelHref,
+  value,
+}: InterestTemplateEditorFormProps) {
+  return (
+    <form method="post" action={action} className="space-y-6">
+      <input type="hidden" name="kind" value="interest" />
+      <input type="hidden" name="intent" value="save" />
+      <input type="hidden" name="redirectTo" value={redirectTo} />
+      {value.interestTemplateId && (
+        <input type="hidden" name="interestTemplateId" value={value.interestTemplateId} />
+      )}
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-base font-semibold text-foreground">
+            {mode === "create" ? "Interest template basics" : "Edit interest template"}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Interest templates power the ready-made topics users can subscribe to without creating custom interests from scratch.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField
+            label="Template name"
+            name="interest-template-name"
+            required
+            helpText="Short label shown to operators and reused when users browse predefined topics."
+          >
+            <Input
+              id="interest-template-name"
+              name="name"
+              defaultValue={value.name}
+              placeholder="AI policy"
+              className={inputClassName}
+            />
+          </FormField>
+
+          <FormField
+            label="Lifecycle state"
+            name="interest-template-active"
+            helpText="Archived templates stay visible in admin and can be reactivated later."
+          >
+            <select
+              id="interest-template-active"
+              name="isActive"
+              defaultValue={boolToString(value.isActive)}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="true">Active</option>
+              <option value="false">Archived</option>
+            </select>
+          </FormField>
+        </div>
+
+        <div className="mt-4">
+          <FormField
+            label="Description"
+            name="interest-template-description"
+            helpText="Explain what kind of stories this topic should surface to end users."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-description"
+              name="description"
+              rows={3}
+              defaultValue={value.description}
+              placeholder="News about AI regulation, governance, and public-sector oversight."
+              className="text-sm"
+            />
+          </FormField>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <FormField
+            label="Positive prototypes"
+            name="interest-template-positive-texts"
+            required
+            helpText="One example headline per line that should match this template."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-positive-texts"
+              name="positive_texts"
+              rows={8}
+              defaultValue={value.positiveTexts}
+              className="min-h-[14rem] text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Negative prototypes"
+            name="interest-template-negative-texts"
+            helpText="Near-neighbor examples that should not match this template, to reduce false positives."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-negative-texts"
+              name="negative_texts"
+              rows={8}
+              defaultValue={value.negativeTexts}
+              className="min-h-[14rem] text-sm"
+            />
+          </FormField>
+        </div>
+      </section>
+
+      <details className="group rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div>
+            <p className="text-base font-semibold text-foreground">Advanced matching hints</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Optional lexical constraints and geographic hints for more precise topic matching.
+            </p>
+          </div>
+          <span className="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
+        </summary>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <FormField
+            label="Must-have terms"
+            name="interest-template-must-have"
+            helpText="One term per line. Articles must contain at least one of these terms."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-must-have"
+              name="must_have_terms"
+              rows={4}
+              defaultValue={value.mustHaveTerms}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Must-not-have terms"
+            name="interest-template-must-not-have"
+            helpText="One term per line. Articles containing these terms will be filtered out."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-must-not-have"
+              name="must_not_have_terms"
+              rows={4}
+              defaultValue={value.mustNotHaveTerms}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Places"
+            name="interest-template-places"
+            helpText="Optional place hints, one per line, for geographically-scoped topics."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-places"
+              name="places"
+              rows={4}
+              defaultValue={value.places}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Allowed languages"
+            name="interest-template-languages"
+            helpText="Optional ISO language codes, one per line."
+          >
+            <Textarea
+              id="interest-template-languages"
+              name="languages_allowed"
+              rows={4}
+              defaultValue={value.languagesAllowed}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Required short tokens"
+            name="interest-template-short-required"
+            helpText="Short keywords, acronyms, or stock tickers that must be present."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-short-required"
+              name="short_tokens_required"
+              rows={4}
+              defaultValue={value.shortTokensRequired}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Forbidden short tokens"
+            name="interest-template-short-forbidden"
+            helpText="Short keywords or acronyms that should suppress false-positive matches."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-short-forbidden"
+              name="short_tokens_forbidden"
+              rows={4}
+              defaultValue={value.shortTokensForbidden}
+              className="text-sm"
+            />
+          </FormField>
+        </div>
+
+        <div className="mt-4 max-w-xs">
+          <FormField
+            label="Priority"
+            name="interest-template-priority"
+            helpText="Relative weighting applied when multiple templates compete for the same story cluster."
+            helpWide
+          >
+            <Input
+              id="interest-template-priority"
+              name="priority"
+              type="number"
+              min={0.1}
+              step={0.1}
+              defaultValue={value.priority}
+              className={inputClassName}
+            />
+          </FormField>
+        </div>
+      </details>
+
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
+        <a
+          href={cancelHref}
+          className="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent"
+        >
+          Back to templates
+        </a>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          {mode === "create" ? "Create template" : "Save changes"}
+        </button>
+      </div>
+    </form>
+  );
+}

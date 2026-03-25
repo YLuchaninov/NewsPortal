@@ -1,5 +1,7 @@
 ---
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
+import { PaginationNav } from "@newsportal/ui";
 import Shell from "../layouts/Shell.astro";
 import { queryOne, queryRows } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
@@ -29,8 +31,12 @@ const bffPaths = {
 };
 
 type ViewRow = Record<string, unknown>;
-const [profile, configuredChannels] = await Promise.all([
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const channelsOffset = (page - 1) * DEFAULT_PAGE_SIZE;
+const [profile, connectedChannelsCount, configuredChannels] = await Promise.all([
   queryOne<ViewRow>(`select theme_preference, notification_preferences from user_profiles where user_id = $1`, [session.userId]),
+  queryOne<ViewRow>(`select count(*)::int as total from user_notification_channels where user_id = $1`, [session.userId]),
   queryRows<ViewRow>(`
     select unc.*, last_d.status as last_status, last_d.sent_at as last_sent_at
     from user_notification_channels unc
@@ -41,12 +47,18 @@ const [profile, configuredChannels] = await Promise.all([
     ) last_d on true
     where unc.user_id = $1
     order by unc.channel_type, unc.created_at desc
-  `, [session.userId]),
+    limit $2
+    offset $3
+  `, [session.userId, DEFAULT_PAGE_SIZE, channelsOffset]),
 ]);
 
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const notificationPreferences = (profile?.notification_preferences as Record<string, unknown>) ?? {};
+const connectedChannelsTotal = Number(connectedChannelsCount?.total ?? 0);
+const connectedChannelsTotalPages = connectedChannelsTotal > 0
+  ? Math.ceil(connectedChannelsTotal / DEFAULT_PAGE_SIZE)
+  : 0;
 const prefState = {
   webPush: notificationPreferences.web_push !== false,
   telegram: notificationPreferences.telegram !== false,
@@ -72,6 +84,16 @@ const processedChannels = (configuredChannels as ViewRow[]).map((ch) => {
 });
 
 const webPushKey = runtimeConfig.webPushVapidPublicKey;
+
+function resolveChannelsPageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <Shell
@@ -218,10 +240,14 @@ const webPushKey = runtimeConfig.webPushVapidPublicKey;
     </section>
 
     <!-- Connected Channels -->
-    {processedChannels.length > 0 && (
+    {connectedChannelsTotal > 0 && (
       <section class="rounded-xl border border-border bg-card overflow-hidden">
         <div class="px-6 py-4 border-b border-border">
           <h2 class="font-semibold">Connected Channels</h2>
+          <p class="text-sm text-muted-foreground mt-0.5">
+            {connectedChannelsTotal} channel{connectedChannelsTotal !== 1 ? "s" : ""} total
+            {connectedChannelsTotal > 0 && ` — page ${page} of ${Math.max(connectedChannelsTotalPages, 1)}`}
+          </p>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -233,7 +259,11 @@ const webPushKey = runtimeConfig.webPushVapidPublicKey;
               </tr>
             </thead>
             <tbody>
-              {processedChannels.map((c) => (
+              {processedChannels.length === 0 ? (
+                <tr>
+                  <td colspan="3" class="px-4 py-8 text-center text-sm text-muted-foreground">No connected channels on this page</td>
+                </tr>
+              ) : processedChannels.map((c) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td class="px-4 py-3">
                     <div class="font-medium">{c.type}</div>
@@ -253,6 +283,17 @@ const webPushKey = runtimeConfig.webPushVapidPublicKey;
             </tbody>
           </table>
         </div>
+        {connectedChannelsTotalPages > 1 && (
+          <PaginationNav
+            className="rounded-none border-x-0 border-b-0 px-6 py-4"
+            page={page}
+            totalPages={connectedChannelsTotalPages}
+            hasPrev={page > DEFAULT_PAGE}
+            hasNext={page < connectedChannelsTotalPages}
+            prevHref={resolveChannelsPageHref(page - 1)}
+            nextHref={resolveChannelsPageHref(page + 1)}
+          />
+        )}
       </section>
     )}
   </div>
@@ -300,4 +341,3 @@ const webPushKey = runtimeConfig.webPushVapidPublicKey;
     }
   });
 </script>
-

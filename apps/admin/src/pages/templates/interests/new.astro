@@ -1,0 +1,67 @@
+---
+import AdminShell from "../../../layouts/AdminShell.astro";
+import { InterestTemplateEditorForm } from "../../../components/InterestTemplateEditorForm";
+import { resolveAdminSession } from "../../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<AdminShell title="New Interest Template — Admin" session={session} flash={flash} activeNav="interest-templates">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/templates/interests")} class="hover:text-foreground">Interest Templates</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">New</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Create</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Create interest template</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        Define the baseline topic, prototypes, and optional lexical guidance on a dedicated screen built for long-form authoring.
+      </p>
+    </div>
+
+    <InterestTemplateEditorForm
+      action={appPath("/bff/admin/templates")}
+      mode="create"
+      redirectTo={currentPath}
+      cancelHref={appPath("/templates/interests")}
+      value={{
+        name: "",
+        description: "",
+        positiveTexts: "",
+        negativeTexts: "",
+        mustHaveTerms: "",
+        mustNotHaveTerms: "",
+        places: "",
+        languagesAllowed: "",
+        shortTokensRequired: "",
+        shortTokensForbidden: "",
+        priority: "1.0",
+        isActive: true,
+      }}
+    />
+  </div>
+</AdminShell>

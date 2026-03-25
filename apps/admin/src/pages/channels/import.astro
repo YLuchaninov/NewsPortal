@@ -1,0 +1,77 @@
+---
+import AdminShell from "../../layouts/AdminShell.astro";
+import { BulkChannelImport } from "../../components/BulkChannelImport";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const pagePath = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<AdminShell title="Bulk Import Channels — Admin" session={session} flash={flash} activeNav="channels">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/channels")} class="hover:text-foreground">Channels</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Bulk import</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Bulk onboarding</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Import RSS channels from JSON</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        Keep the list page focused on monitoring and use this screen when you need validation, examples, and batch creation in one place.
+      </p>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <BulkChannelImport
+        action={appPath("/bff/admin/channels/bulk")}
+        redirectTo={pagePath}
+        client:load
+      />
+
+      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 class="text-base font-semibold">Import checklist</h2>
+        <div class="mt-4 space-y-4 text-sm text-muted-foreground">
+          <div class="rounded-2xl border border-border bg-background p-4">
+            <p class="font-medium text-foreground">Validate before importing</p>
+            <p class="mt-2">Use the built-in validator to catch missing names, invalid URLs, and too-small poll intervals before the batch is submitted.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background p-4">
+            <p class="font-medium text-foreground">Keep naming consistent</p>
+            <p class="mt-2">Channel names show up in fetch-run logs and admin health tables, so use source names that operators can recognize quickly.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background p-4">
+            <p class="font-medium text-foreground">Return to monitoring</p>
+            <p class="mt-2">After a successful import, go back to the channels list to review health badges, schedule state, and first fetch outcomes.</p>
+          </div>
+        </div>
+        <div class="mt-5">
+          <a href={appPath("/channels")} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+            Back to channels
+          </a>
+        </div>
+      </section>
+    </div>
+  </div>
+</AdminShell>

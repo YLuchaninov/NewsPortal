@@ -6,7 +6,9 @@ import {
   createAdminSession
 } from "../../../lib/server/auth";
 import {
+  buildAdminSignInPath,
   buildFlashRedirect,
+  resolveAdminRedirectPath,
   requestPrefersHtmlNavigation
 } from "../../../lib/server/browser-flow";
 import { readRequestPayload } from "../../../lib/server/request";
@@ -26,13 +28,19 @@ export const POST: APIRoute = async ({ request }) => {
   const payload = await readRequestPayload(request);
   const email = String(payload.email ?? "").trim();
   const password = String(payload.password ?? "");
+  const nextPath = resolveAdminRedirectPath(
+    request,
+    String(payload.next ?? payload.redirectTo ?? ""),
+    "/"
+  );
   if (!email || !password) {
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "auth",
         status: "error",
         message: "Email and password are required.",
-        setCookie: buildExpiredAdminSessionCookie()
+        setCookie: buildExpiredAdminSessionCookie(),
+        redirectTo: buildAdminSignInPath(request, nextPath)
       });
     }
     return Response.json({ error: "Email and password are required." }, { status: 400 });
@@ -45,7 +53,8 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "success",
         message: "Signed in.",
-        setCookie: buildAdminSessionCookie(adminSession.idToken)
+        setCookie: buildAdminSessionCookie(adminSession.idToken),
+        redirectTo: nextPath
       });
     }
 
@@ -69,7 +78,8 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "error",
         message: toBrowserSignInErrorMessage(errorMessage),
-        setCookie: buildExpiredAdminSessionCookie()
+        setCookie: buildExpiredAdminSessionCookie(),
+        redirectTo: buildAdminSignInPath(request, nextPath)
       });
     }
 

@@ -1,6 +1,8 @@
 ---
+import { DEFAULT_PAGE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
 import Shell from "../layouts/Shell.astro";
 import { InterestManager } from "../components/InterestManager";
 import { queryOne } from "../lib/server/db";
@@ -31,15 +33,28 @@ const bffPaths = {
   interests: resolvePageAppPath("../bff/interests"),
   interest: (id: string) => resolvePageAppPath(`../bff/interests/${id}`),
 };
+const INTERESTS_PAGE_SIZE = 6;
 
 type ViewRow = Record<string, unknown>;
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const [interests, profile] = await Promise.all([
-  sdk.listInterests<ViewRow[]>(session.userId),
+  sdk.listInterestsPage<ViewRow>(session.userId, { page, pageSize: INTERESTS_PAGE_SIZE }),
   queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
 ]);
 
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <Shell
@@ -53,11 +68,29 @@ const themeClass = themePreference === "dark" ? "dark" : "";
   bffLogoutPath={bffPaths.authLogout}
   bffBootstrapPath={bffPaths.authBootstrap}
 >
-  <InterestManager
-    interests={interests as any[]}
-    interestsPath={bffPaths.interests}
-    interestPath={bffPaths.interest}
-    client:load
-  />
-</Shell>
+  <div class="space-y-6">
+    <p class="text-sm text-muted-foreground">
+      {interests.total} interest{interests.total !== 1 ? "s" : ""} total
+      {interests.total > 0 && ` — page ${interests.page} of ${Math.max(interests.totalPages, 1)}`}
+    </p>
 
+    <InterestManager
+      interests={interests.items as any[]}
+      interestsPath={bffPaths.interests}
+      interestPath={bffPaths.interest}
+      hasAnyInterests={interests.total > 0}
+      client:load
+    />
+
+    {(interests.hasPrev || interests.hasNext) && (
+      <PaginationNav
+        page={interests.page}
+        totalPages={interests.totalPages}
+        hasPrev={interests.hasPrev}
+        hasNext={interests.hasNext}
+        prevHref={resolvePageHref(interests.page - 1)}
+        nextHref={resolvePageHref(interests.page + 1)}
+      />
+    )}
+  </div>
+</Shell>

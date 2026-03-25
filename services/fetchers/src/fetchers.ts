@@ -858,8 +858,6 @@ class FetcherService {
         pass: imapConfig.password
       }
     });
-    let ingestedCount = 0;
-    let duplicateCount = 0;
     let maxUid = lastUid;
     const fetchedAt = new Date().toISOString();
 
@@ -934,10 +932,10 @@ class FetcherService {
           }
         }));
 
-      ({ ingestedCount, duplicateCount } = await this.persistInputsWithPreflight(
+      const { ingestedCount, duplicateCount } = await this.persistInputsWithPreflight(
         channel.channelId,
         inputs
-      ));
+      );
 
       await this.markChannelSuccess(channel, {
         startedAt,

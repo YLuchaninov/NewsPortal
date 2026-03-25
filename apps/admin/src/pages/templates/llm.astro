@@ -1,0 +1,234 @@
+---
+import { DEFAULT_PAGE } from "@newsportal/contracts";
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+import { AdminConfirmAction } from "../../components/AdminConfirmAction";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const TEMPLATE_PAGE_SIZE = 8;
+type R = Record<string, unknown>;
+
+function parsePage(paramName: string): number {
+  const requestedPage = Number.parseInt(Astro.url.searchParams.get(paramName) ?? String(DEFAULT_PAGE), 10);
+  return Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+}
+
+function fmt(v: unknown) {
+  if (!v) return "—";
+  const d = new Date(String(v));
+  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+const page = parsePage("page");
+const templates = await sdk.listLlmTemplatesPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
+const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
+const activeCount = templates.items.filter((item) => item.is_active === true).length;
+
+function resolveListHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+---
+
+<AdminShell title="LLM Templates — Admin" session={session} flash={flash} activeNav="llm-templates">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">LLM Templates</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <a href={appPath("/templates/interests")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+      Interest templates
+    </a>
+    <a href={appPath("/templates/llm/new")} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+      New LLM template
+    </a>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+      <div class="max-w-2xl">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">AI review prompts</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">LLM templates</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          Keep prompt authoring on dedicated create and edit screens. This list stays focused on activation state, scope coverage, and safe lifecycle actions.
+        </p>
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
+          <p class="mt-1 text-2xl font-semibold">{templates.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Active</p>
+          <p class="mt-1 text-2xl font-semibold text-emerald-500">{activeCount}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Page</p>
+          <p class="mt-1 text-2xl font-semibold">{templates.page}</p>
+        </div>
+      </div>
+    </div>
+
+    <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div class="border-b border-border px-5 py-4">
+        <h2 class="text-base font-semibold">Prompt library</h2>
+        <p class="mt-1 text-sm text-muted-foreground">
+          {templates.total} template{templates.total !== 1 ? "s" : ""} total
+          {templates.total > 0 && ` — page ${templates.page} of ${Math.max(templates.totalPages, 1)}`}
+        </p>
+      </div>
+
+      {templates.total === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No LLM templates yet</p>
+          <p class="mt-2 text-sm text-muted-foreground">Create the first prompt template to control gray-zone model review.</p>
+          <a href={appPath("/templates/llm/new")} class="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+            Create template
+          </a>
+        </div>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[900px] text-sm">
+            <thead>
+              <tr class="border-b border-border bg-muted/30">
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Template</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scope</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Status</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Preview</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {templates.items.length === 0 ? (
+                <tr>
+                  <td colspan="5" class="px-5 py-10 text-center text-sm text-muted-foreground">No templates on this page</td>
+                </tr>
+              ) : templates.items.map((template) => {
+                const promptTemplateId = String(template.prompt_template_id ?? "");
+                const isActive = template.is_active === true;
+                return (
+                  <tr class="border-b border-border last:border-b-0">
+                    <td class="px-5 py-4 align-top">
+                      <p class="text-sm font-semibold">{String(template.name ?? "Unnamed template")}</p>
+                      <p class="mt-1 text-xs text-muted-foreground">Language: {String(template.language ?? "Any")}</p>
+                      <p class="mt-1 text-xs text-muted-foreground">Updated {fmt(template.updated_at)}</p>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <span class:list={[
+                        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                        String(template.scope) === "global"
+                          ? "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300"
+                          : String(template.scope) === "criteria"
+                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+                      ]}>
+                        {String(template.scope ?? "—")}
+                      </span>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <span class:list={[
+                        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                        isActive
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                          : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                      ]}>
+                        {isActive ? "Active" : "Archived"}
+                      </span>
+                      <p class="mt-2 text-xs text-muted-foreground">Version {String(template.version ?? 1)}</p>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <p class="max-w-md line-clamp-3 text-sm text-muted-foreground font-mono">
+                        {String(template.template_text ?? "")}
+                      </p>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex flex-wrap gap-2">
+                        <a href={appPath(`/templates/llm/${promptTemplateId}/edit`)} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                          Edit
+                        </a>
+                        <AdminConfirmAction
+                          action={appPath("/bff/admin/templates")}
+                          title={isActive ? "Archive template" : "Reactivate template"}
+                          description={isActive
+                            ? "Archived templates stay visible to operators but are no longer used for live gray-zone review."
+                            : "Reactivating this template makes it eligible for future gray-zone review decisions again."}
+                          triggerLabel={isActive ? "Archive" : "Activate"}
+                          confirmLabel={isActive ? "Archive template" : "Activate template"}
+                          fields={[
+                            { name: "kind", value: "llm" },
+                            { name: "intent", value: isActive ? "archive" : "activate" },
+                            { name: "promptTemplateId", value: promptTemplateId },
+                            { name: "redirectTo", value: currentListPath },
+                          ]}
+                          triggerClassName={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
+                          confirmClassName={isActive ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-emerald-600 text-white hover:bg-emerald-600/90"}
+                          client:load
+                        />
+                        <AdminConfirmAction
+                          action={appPath("/bff/admin/templates")}
+                          title="Delete template"
+                          description="Delete permanently only when you no longer need this template in the admin library. Existing review logs will keep their history, but the template record itself will be removed."
+                          triggerLabel="Delete"
+                          confirmLabel="Delete template"
+                          fields={[
+                            { name: "kind", value: "llm" },
+                            { name: "intent", value: "delete" },
+                            { name: "promptTemplateId", value: promptTemplateId },
+                            { name: "redirectTo", value: currentListPath },
+                          ]}
+                          triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                          client:load
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+
+    {(templates.hasPrev || templates.hasNext) && (
+      <PaginationNav
+        page={templates.page}
+        totalPages={templates.totalPages}
+        hasPrev={templates.hasPrev}
+        hasNext={templates.hasNext}
+        prevHref={resolveListHref(templates.page - 1)}
+        nextHref={resolveListHref(templates.page + 1)}
+      />
+    )}
+  </div>
+</AdminShell>

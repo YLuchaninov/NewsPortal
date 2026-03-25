@@ -1,8 +1,10 @@
 import type { APIRoute } from "astro";
 
 import {
+  buildAdminSignInPath,
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
+  requestPrefersHtmlNavigation,
+  resolveAdminRedirectPath,
 } from "../../../../lib/server/browser-flow";
 import {
   buildExpiredAdminSessionCookie,
@@ -19,6 +21,11 @@ export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
+  const redirectTo = resolveAdminRedirectPath(
+    request,
+    request.headers.get("referer"),
+    "/channels"
+  );
   const session = await resolveAdminSession(request);
   if (!session || !session.roles.includes("admin")) {
     if (browserRequest) {
@@ -26,7 +33,8 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "error",
         message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie()
+        setCookie: buildExpiredAdminSessionCookie(),
+        redirectTo: buildAdminSignInPath(request, redirectTo)
       });
     }
     return Response.json({ error: "Forbidden." }, { status: 403 });
@@ -41,7 +49,8 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "channels",
         status: "success",
-        message: "Schedule applied"
+        message: "Schedule applied",
+        redirectTo
       });
     }
 
@@ -56,7 +65,8 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "channels",
         status: "error",
-        message: errorMessage
+        message: errorMessage,
+        redirectTo
       });
     }
     return Response.json(

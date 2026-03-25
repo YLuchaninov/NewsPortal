@@ -120,7 +120,40 @@ function readHeader(headers, name) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-function assertFlashRedirect(response, { origin, pathname = "/", section, status, message }) {
+function assertLocationSearchParams(location, searchParams = {}) {
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (location.searchParams.get(key) !== value) {
+      throw new Error(
+        `Expected redirect search param ${key}=${value}, got ${location.searchParams.get(key) || "<none>"}.`
+      );
+    }
+  }
+}
+
+function assertRedirect(response, { origin, pathname, status = 302, searchParams = {} }) {
+  if (response.status !== status) {
+    throw new Error(`Expected ${status} redirect, got ${response.status}.`);
+  }
+
+  const locationHeader = readHeader(response.headers, "location");
+  if (!locationHeader) {
+    throw new Error("Expected Location header for browser redirect.");
+  }
+
+  const location = new URL(locationHeader, origin);
+  if (location.origin !== origin) {
+    throw new Error(`Expected redirect origin ${origin}, got ${location.origin}.`);
+  }
+  if (location.pathname !== pathname) {
+    throw new Error(`Expected redirect to ${pathname}, got ${location.pathname}.`);
+  }
+  assertLocationSearchParams(location, searchParams);
+}
+
+function assertFlashRedirect(
+  response,
+  { origin, pathname = "/", section, status, message, searchParams = {} }
+) {
   if (response.status !== 303) {
     throw new Error(`Expected 303 redirect, got ${response.status}.`);
   }
@@ -130,7 +163,7 @@ function assertFlashRedirect(response, { origin, pathname = "/", section, status
     throw new Error("Expected Location header for browser redirect.");
   }
 
-  const location = new URL(locationHeader);
+  const location = new URL(locationHeader, origin);
   if (location.origin !== origin) {
     throw new Error(`Expected redirect origin ${origin}, got ${location.origin}.`);
   }
@@ -150,6 +183,7 @@ function assertFlashRedirect(response, { origin, pathname = "/", section, status
       `Expected flash_message=${message}, got ${location.searchParams.get("flash_message") || "<none>"}.`
     );
   }
+  assertLocationSearchParams(location, searchParams);
 }
 
 async function assertHtmlContains(url, snippets, { cookie } = {}) {
@@ -163,6 +197,21 @@ async function assertHtmlContains(url, snippets, { cookie } = {}) {
   for (const snippet of snippets) {
     if (!response.text.includes(snippet)) {
       throw new Error(`Expected HTML from ${url} to include ${snippet}.`);
+    }
+  }
+}
+
+async function assertHtmlDoesNotContain(url, snippets, { cookie } = {}) {
+  const response = await sendRequest(url, {
+    headers: cookie ? { Cookie: cookie } : {}
+  });
+  if (response.status !== 200) {
+    throw new Error(`Expected ${url} to respond with 200, got ${response.status}.`);
+  }
+
+  for (const snippet of snippets) {
+    if (response.text.includes(snippet)) {
+      throw new Error(`Did not expect HTML from ${url} to include ${snippet}.`);
     }
   }
 }
@@ -426,6 +475,7 @@ async function main() {
   const adminPassword = `NewsPortal!${runId}`;
   const notificationEmail = `internal-user-${runId}@example.test`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
+  const articleSourceUrl = `https://example.test/articles/${runId}`;
   let stackStarted = false;
 
   try {
@@ -639,9 +689,13 @@ async function main() {
     );
     assertFlashRedirect(adminBrowserFailure, {
       origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
       section: "auth",
       status: "error",
-      message: "Unable to sign in with those credentials."
+      message: "Unable to sign in with those credentials.",
+      searchParams: {
+        next: "/"
+      }
     });
     assertExpiredCookie(adminBrowserFailure, "np_admin_session");
 
@@ -665,6 +719,48 @@ async function main() {
     if (!browserAdminSession?.session?.roles?.includes?.("admin")) {
       throw new Error("Browser admin sign-in did not create an admin session.");
     }
+    const directAdminRoot = await sendRequest("http://127.0.0.1:4322/");
+    assertRedirect(directAdminRoot, {
+      origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
+      searchParams: {
+        next: "/"
+      }
+    });
+    await assertHtmlContains("http://127.0.0.1:4322/sign-in?next=%2F", [
+      'action="/bff/auth/sign-in"',
+      'name="next" value="/"',
+      "Admin sign in"
+    ]);
+    await assertHtmlDoesNotContain("http://127.0.0.1:4322/sign-in?next=%2F", [
+      'href="/reindex"',
+      'href="/channels"',
+      'action="/bff/auth/logout"'
+    ]);
+    const directSignedOutChannels = await sendRequest("http://127.0.0.1:4322/channels");
+    assertRedirect(directSignedOutChannels, {
+      origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
+      searchParams: {
+        next: "/channels"
+      }
+    });
+    const directSignedOutLlmTemplates = await sendRequest("http://127.0.0.1:4322/templates/llm");
+    assertRedirect(directSignedOutLlmTemplates, {
+      origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
+      searchParams: {
+        next: "/templates/llm"
+      }
+    });
+    const directSignedOutInterestTemplates = await sendRequest("http://127.0.0.1:4322/templates/interests");
+    assertRedirect(directSignedOutInterestTemplates, {
+      origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
+      searchParams: {
+        next: "/templates/interests"
+      }
+    });
     const adminBrowserLogout = await postBrowserForm(
       "http://127.0.0.1:4322/bff/auth/logout",
       {},
@@ -674,9 +770,13 @@ async function main() {
     );
     assertFlashRedirect(adminBrowserLogout, {
       origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
       section: "auth",
       status: "success",
-      message: "Signed out."
+      message: "Signed out.",
+      searchParams: {
+        next: "/"
+      }
     });
     assertExpiredCookie(adminBrowserLogout, "np_admin_session");
 
@@ -691,6 +791,7 @@ async function main() {
     );
     assertFlashRedirect(staleAdminReindex, {
       origin: "http://127.0.0.1:4322",
+      pathname: "/sign-in",
       section: "auth",
       status: "error",
       message: "Please sign in as an admin to continue."
@@ -739,11 +840,48 @@ async function main() {
       'id="bootstrap-form"',
       'href="/settings"'
     ]);
-    await assertHtmlContains("http://127.0.0.1:8080/admin/", [
+    const nginxAdminRoot = await sendRequest("http://127.0.0.1:8080/admin/");
+    assertRedirect(nginxAdminRoot, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/admin/sign-in",
+      searchParams: {
+        next: "/admin/"
+      }
+    });
+    await assertHtmlContains("http://127.0.0.1:8080/admin/sign-in?next=%2Fadmin%2F", [
       'action="/admin/bff/auth/sign-in"',
-      'href="/admin/reindex"',
-      'href="/admin/channels"'
+      'name="next" value="/admin/"',
+      "Admin sign in"
     ]);
+    await assertHtmlDoesNotContain("http://127.0.0.1:8080/admin/sign-in?next=%2Fadmin%2F", [
+      'href="/admin/reindex"',
+      'href="/admin/channels"',
+      'action="/admin/bff/auth/logout"'
+    ]);
+    const nginxSignedOutChannels = await sendRequest("http://127.0.0.1:8080/admin/channels");
+    assertRedirect(nginxSignedOutChannels, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/admin/sign-in",
+      searchParams: {
+        next: "/admin/channels"
+      }
+    });
+    const nginxSignedOutLlmTemplates = await sendRequest("http://127.0.0.1:8080/admin/templates/llm");
+    assertRedirect(nginxSignedOutLlmTemplates, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/admin/sign-in",
+      searchParams: {
+        next: "/admin/templates/llm"
+      }
+    });
+    const nginxSignedOutInterestTemplates = await sendRequest("http://127.0.0.1:8080/admin/templates/interests");
+    assertRedirect(nginxSignedOutInterestTemplates, {
+      origin: "http://127.0.0.1:8080",
+      pathname: "/admin/sign-in",
+      searchParams: {
+        next: "/admin/templates/interests"
+      }
+    });
 
     const nginxArticles = await fetchJson("http://127.0.0.1:8080/api/articles");
     if (!Array.isArray(nginxArticles)) {
@@ -800,10 +938,25 @@ async function main() {
     await assertHtmlContains(
       "http://127.0.0.1:8080/admin/channels",
       [
-        'action="/admin/bff/admin/channels"',
-        'action="/admin/bff/admin/channels/bulk"',
+        'href="/admin/channels/new"',
+        'href="/admin/channels/import"',
         'action="/admin/bff/admin/channels/schedule"'
       ],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/channels/new",
+      ['action="/admin/bff/admin/channels"', 'name="fetchUrl"'],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/templates/llm",
+      ['href="/admin/templates/llm/new"', "Prompt library", "LLM templates"],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/templates/interests",
+      ['href="/admin/templates/interests/new"', "Template catalog", "Interest templates"],
       { cookie: nginxAdminCookie }
     );
     const nginxAdminLogout = await postBrowserForm(
@@ -815,10 +968,13 @@ async function main() {
     );
     assertFlashRedirect(nginxAdminLogout, {
       origin: "http://127.0.0.1:8080",
-      pathname: "/admin/",
+      pathname: "/admin/sign-in",
       section: "auth",
       status: "success",
-      message: "Signed out."
+      message: "Signed out.",
+      searchParams: {
+        next: "/admin/"
+      }
     });
 
     log("Creating RSS channel through the admin surface.");
@@ -927,6 +1083,30 @@ async function main() {
         normalizeMailMessages(payload).some((message) =>
           JSON.stringify(message).includes(articleTitle)
         )
+    );
+
+    log("Verifying the public feed links articles to the original source.");
+    const publicFeed = await fetchJson("http://127.0.0.1:8000/feed?page=1&pageSize=20");
+    const publicFeedArticle = Array.isArray(publicFeed?.items)
+      ? publicFeed.items.find((item) => String(item?.doc_id ?? "") === docId)
+      : null;
+    if (!publicFeedArticle) {
+      throw new Error(`Expected /feed to include article ${docId} on the first page.`);
+    }
+    if (String(publicFeedArticle.url ?? "") !== articleSourceUrl) {
+      throw new Error(
+        `Expected /feed article ${docId} to expose source url ${articleSourceUrl}, got ${String(publicFeedArticle.url ?? "<none>")}.`
+      );
+    }
+    await assertHtmlContains(
+      "http://127.0.0.1:4321/",
+      [articleTitle, articleSourceUrl],
+      { cookie: webCookie }
+    );
+    await assertHtmlDoesNotContain(
+      "http://127.0.0.1:4321/",
+      [`/articles/${docId}/explain`],
+      { cookie: webCookie }
     );
 
     log("Exercising moderation block/unblock and verifying audit trail.");

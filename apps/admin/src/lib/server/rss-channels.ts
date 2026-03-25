@@ -32,6 +32,13 @@ export interface UpsertRssChannelsResult {
   updatedChannelIds: string[];
 }
 
+export type RssChannelDeleteMode = "delete" | "archive";
+
+export interface DeleteOrArchiveRssChannelResult {
+  mode: RssChannelDeleteMode;
+  articleCount: number;
+}
+
 function readOptionalString(value: unknown): string | null {
   if (value == null) {
     return null;
@@ -188,6 +195,16 @@ export function parseBulkRssAdminChannelInputs(payload: unknown): NormalizedRssA
       });
     }
   });
+}
+
+export function resolveRssChannelDeleteMode(articleCount: number): RssChannelDeleteMode {
+  return articleCount > 0 ? "archive" : "delete";
+}
+
+export function countRssChannelsRequiringOverwriteConfirmation(
+  channels: NormalizedRssAdminChannelInput[]
+): number {
+  return channels.filter((channel) => Boolean(channel.channelId)).length;
 }
 
 export async function upsertRssChannels(
@@ -356,4 +373,85 @@ export async function upsertRssChannels(
     createdChannelIds,
     updatedChannelIds
   };
+}
+
+export async function deleteOrArchiveRssChannel(
+  pool: Pool,
+  channelId: string
+): Promise<DeleteOrArchiveRssChannelResult> {
+  const client = await pool.connect();
+
+  try {
+    await client.query("begin");
+
+    const channelLookup = await client.query<{ article_count: number }>(
+      `
+        select (
+          select count(*)::int
+          from articles a
+          where a.channel_id = sc.channel_id
+        ) as article_count
+        from source_channels sc
+        where sc.channel_id = $1
+          and sc.provider_type = 'rss'
+        limit 1
+      `,
+      [channelId]
+    );
+
+    const articleCount = channelLookup.rows[0]?.article_count;
+    if (articleCount == null) {
+      throw new Error(`RSS channel ${channelId} was not found.`);
+    }
+
+    const mode = resolveRssChannelDeleteMode(articleCount);
+    if (mode === "archive") {
+      await client.query(
+        `
+          update source_channels
+          set
+            is_active = false,
+            updated_at = now()
+          where channel_id = $1
+        `,
+        [channelId]
+      );
+      await client.query(
+        `
+          update source_channel_runtime_state
+          set
+            next_due_at = null,
+            adaptive_reason = 'archived_from_admin',
+            updated_at = now()
+          where channel_id = $1
+        `,
+        [channelId]
+      );
+    } else {
+      const deleted = await client.query(
+        `
+          delete from source_channels
+          where channel_id = $1
+            and provider_type = 'rss'
+          returning channel_id
+        `,
+        [channelId]
+      );
+      if (deleted.rowCount !== 1) {
+        throw new Error(`RSS channel ${channelId} was not found.`);
+      }
+    }
+
+    await client.query("commit");
+
+    return {
+      mode,
+      articleCount
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

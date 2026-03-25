@@ -1,64 +1,95 @@
 ---
-import { CHANNEL_SCHEDULE_PRESETS } from "@newsportal/contracts";
+import { CHANNEL_SCHEDULE_PRESETS, DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+import { AdminConfirmAction } from "../components/AdminConfirmAction";
+import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
 
 export const prerender = false;
+
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-if (!session) return Astro.redirect(appPath("/"));
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 const bffPaths = {
   channels: appPath("/bff/admin/channels"),
-  channelsBulk: appPath("/bff/admin/channels/bulk"),
   channelsSchedule: appPath("/bff/admin/channels/schedule"),
 };
 
 const pagePaths = {
   dashboard: appPath("/"),
+  help: appPath("/help"),
+  newChannel: appPath("/channels/new"),
+  importChannels: appPath("/channels/import"),
 };
 
 type R = Record<string, unknown>;
 function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? (v as R) : {}; }
-function asInt(v: unknown, f: number) { const p = typeof v === "number" && Number.isInteger(v) ? v : parseInt(String(v ?? ""), 10); return Number.isInteger(p) && p > 0 ? p : f; }
-function asBool(v: boolean) { return v ? "true" : "false"; }
+function asInt(v: unknown, f: number) {
+  const p = typeof v === "number" && Number.isInteger(v) ? v : parseInt(String(v ?? ""), 10);
+  return Number.isInteger(p) && p >= 0 ? p : f;
+}
+function asBool(v: unknown, fallback = false) {
+  return typeof v === "boolean" ? v : String(v ?? "").trim().toLowerCase() === "true" || fallback;
+}
+function asBoolString(v: boolean) { return v ? "true" : "false"; }
 
-const channels = await sdk.listChannels<R[]>();
-
-const rssChannels = (channels as R[]).filter(c => String(c.provider_type) === "rss").map(c => {
-  const cfg = asRecord(c.config_json);
-  return {
-    channelId: String(c.channel_id ?? ""),
-    name: String(c.name ?? ""),
-    fetchUrl: String(c.fetch_url ?? ""),
-    language: String(c.language ?? "en"),
-    isActive: c.is_active === true,
-    pollIntervalSeconds: asInt(c.poll_interval_seconds, 300),
-    adaptiveEnabled: c.adaptive_enabled !== false,
-    effectivePollIntervalSeconds: asInt(c.effective_poll_interval_seconds, asInt(c.poll_interval_seconds, 300)),
-    maxPollIntervalSeconds: asInt(c.max_poll_interval_seconds, asInt(c.poll_interval_seconds, 300) * 16),
-    nextDueAt: String(c.next_due_at ?? ""),
-    lastResultKind: String(c.last_result_kind ?? "never"),
-    overdueSeconds: asInt(c.overdue_seconds, 0),
-    needsAttention: c.needs_attention === true,
-    recentFailureCount24h: asInt(c.recent_failure_count_24h, 0),
-    maxItemsPerPoll: asInt(cfg.maxItemsPerPoll, 20),
-    requestTimeoutMs: asInt(cfg.requestTimeoutMs, 10000),
-    userAgent: String(cfg.userAgent ?? "NewsPortalFetchers/0.1"),
-    preferContentEncoded: cfg.preferContentEncoded !== false,
-    lastFetchAt: String(c.last_fetch_at ?? ""),
-    lastSuccessAt: String(c.last_success_at ?? ""),
-    lastErrorAt: String(c.last_error_at ?? ""),
-    lastErrorMessage: String(c.last_error_message ?? ""),
-  };
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const channels = await sdk.listChannelsPage<R>({
+  page,
+  pageSize: DEFAULT_PAGE_SIZE,
+  providerType: "rss",
 });
+
+const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
+const rssChannels = channels.items
+  .filter((c) => String(c.provider_type) === "rss")
+  .map((c) => {
+    const cfg = asRecord(c.config_json);
+    const articleCount = asInt(c.article_count, 0);
+    return {
+      channelId: String(c.channel_id ?? ""),
+      name: String(c.name ?? ""),
+      fetchUrl: String(c.fetch_url ?? ""),
+      language: String(c.language ?? "en"),
+      isActive: c.is_active === true,
+      pollIntervalSeconds: asInt(c.poll_interval_seconds, 300),
+      adaptiveEnabled: c.adaptive_enabled !== false,
+      effectivePollIntervalSeconds: asInt(c.effective_poll_interval_seconds, asInt(c.poll_interval_seconds, 300)),
+      maxPollIntervalSeconds: asInt(c.max_poll_interval_seconds, asInt(c.poll_interval_seconds, 300) * 16),
+      nextDueAt: String(c.next_due_at ?? ""),
+      lastResultKind: String(c.last_result_kind ?? "never"),
+      overdueSeconds: asInt(c.overdue_seconds, 0),
+      needsAttention: c.needs_attention === true,
+      recentFailureCount24h: asInt(c.recent_failure_count_24h, 0),
+      maxItemsPerPoll: asInt(cfg.maxItemsPerPoll, 20),
+      requestTimeoutMs: asInt(cfg.requestTimeoutMs, 10000),
+      userAgent: String(cfg.userAgent ?? "NewsPortalFetchers/0.1"),
+      preferContentEncoded: asBool(cfg.preferContentEncoded, true),
+      lastFetchAt: String(c.last_fetch_at ?? ""),
+      lastSuccessAt: String(c.last_success_at ?? ""),
+      articleCount,
+      providerName: String(c.provider_name ?? "RSS"),
+    };
+  });
 
 function fmt(v: unknown) {
   if (!v) return "—";
@@ -66,11 +97,18 @@ function fmt(v: unknown) {
   return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-const bulkPlaceholder = JSON.stringify([{
-  name: "Reuters World RSS", fetchUrl: "https://example.com/world.xml", language: "en",
-  pollIntervalSeconds: 300, adaptiveEnabled: true, maxPollIntervalSeconds: 3600,
-  maxItemsPerPoll: 25, requestTimeoutMs: 4000, isActive: true
-}], null, 2);
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+const attentionCount = rssChannels.filter((channel) => channel.needsAttention).length;
+const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
 ---
 
 <AdminShell title="Channels — Admin" session={session} flash={flash} activeNav="channels">
@@ -82,187 +120,279 @@ const bulkPlaceholder = JSON.stringify([{
     </nav>
   </Fragment>
 
+  <Fragment slot="header-actions">
+    <a href={pagePaths.importChannels} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+      Bulk import
+    </a>
+    <a href={pagePaths.newChannel} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+      Add channel
+    </a>
+  </Fragment>
+
   <div class="space-y-6">
-    <!-- Page header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-xl font-bold">Source Channels</h1>
-        <p class="text-sm text-muted-foreground mt-0.5">{rssChannels.length} RSS channel{rssChannels.length !== 1 ? "s" : ""}</p>
+    <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+      <div class="max-w-2xl">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Source operations</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">RSS channels</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          Keep list management lightweight here, then move into dedicated create, import, and edit screens for full details.
+          This page stays focused on operational health, quick actions, and safe destructive controls.
+        </p>
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
+          <p class="mt-1 text-2xl font-semibold">{channels.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Attention</p>
+          <p class="mt-1 text-2xl font-semibold text-amber-500">{attentionCount}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Paused</p>
+          <p class="mt-1 text-2xl font-semibold text-slate-500">{pausedCount}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Page</p>
+          <p class="mt-1 text-2xl font-semibold">{channels.page}</p>
+        </div>
       </div>
     </div>
 
-    <!-- Create + Bulk + Schedule forms in a grid -->
-    <div class="grid gap-4 lg:grid-cols-3">
-      <!-- Create single -->
-      <div class="rounded-xl border border-border bg-card p-4">
-        <h2 class="font-semibold text-sm mb-3">Add RSS Channel</h2>
-        <form method="post" action={bffPaths.channels} class="grid gap-2">
+    <div class="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
+      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-base font-semibold">Operational overview</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Channels can be paused inline, while full edits happen on dedicated edit screens to reduce accidental changes.
+            </p>
+          </div>
+          <a href={pagePaths.help} class="text-sm font-medium text-primary hover:underline">Read setup guide</a>
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-3">
+          <div class="rounded-2xl border border-border bg-background p-4">
+            <p class="text-sm font-medium">Create individually</p>
+            <p class="mt-2 text-sm text-muted-foreground">Use the dedicated create screen when you need the full channel form and advanced fetch settings.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background p-4">
+            <p class="text-sm font-medium">Import in bulk</p>
+            <p class="mt-2 text-sm text-muted-foreground">Paste validated JSON on a separate import screen so the list stays focused on monitoring and quick actions.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background p-4">
+            <p class="text-sm font-medium">Delete safely</p>
+            <p class="mt-2 text-sm text-muted-foreground">Channels with historical articles are archived instead of hard-deleted, so the article history remains intact.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div>
+          <h2 class="text-base font-semibold">Bulk schedule</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Apply one polling preset across the current RSS fleet when you need fast operational tuning.
+          </p>
+        </div>
+        <form method="post" action={bffPaths.channelsSchedule} class="mt-4 grid gap-3">
+          <input type="hidden" name="redirectTo" value={currentListPath} />
           <input type="hidden" name="providerType" value="rss" />
-          {[
-            { name: "name", placeholder: "Reuters World RSS", label: "Name" },
-            { name: "fetchUrl", placeholder: "https://example.com/feed.xml", label: "Feed URL" },
-            { name: "language", defaultValue: "en", label: "Language" },
-          ].map(({ name, placeholder, label, defaultValue }) => (
-            <div class="grid gap-1">
-              <label class="text-xs font-medium">{label}</label>
-              <input name={name} placeholder={placeholder} value={defaultValue}
-                class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            </div>
-          ))}
-          <div class="grid grid-cols-2 gap-2">
-            <div class="grid gap-1">
-              <label class="text-xs font-medium">Poll interval (s)</label>
-              <input name="pollIntervalSeconds" value="300"
-                class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            </div>
-            <div class="grid gap-1">
-              <label class="text-xs font-medium">Adaptive</label>
-              <select name="adaptiveEnabled" class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </div>
-          </div>
-          <div class="grid gap-1">
-            <label class="text-xs font-medium">Active</label>
-            <select name="isActive" class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <option value="true">Active</option>
-              <option value="false">Paused</option>
+          <label class="grid gap-1.5">
+            <span class="text-xs font-medium">Base interval (seconds)</span>
+            <input name="pollIntervalSeconds" type="number" min="30" value="900" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+          </label>
+          <label class="grid gap-1.5">
+            <span class="text-xs font-medium">Adaptive scheduling</span>
+            <select name="adaptiveEnabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
             </select>
-          </div>
-          <button type="submit" class="mt-1 h-8 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
-            Create Channel
-          </button>
+          </label>
+          <label class="grid gap-1.5">
+            <span class="text-xs font-medium">Maximum interval (seconds)</span>
+            <input name="maxPollIntervalSeconds" type="number" min="30" value="86400" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+          </label>
+          <AdminConfirmSubmitButton
+            title="Apply bulk schedule"
+            description="This updates the polling schedule for all RSS channels. Use it when you intentionally want to retune the entire fleet, not for one-off feed changes."
+            triggerLabel="Apply schedule"
+            confirmLabel="Apply to RSS channels"
+            triggerClassName="mt-2 bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            confirmClassName="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            client:load
+          />
         </form>
-      </div>
-
-      <!-- Bulk import -->
-      <div class="rounded-xl border border-border bg-card p-4">
-        <h2 class="font-semibold text-sm mb-3">Bulk Import</h2>
-        <form method="post" action={bffPaths.channelsBulk} class="grid gap-2 h-[calc(100%-2rem)]">
-          <textarea name="channelsJson" rows={12} placeholder={bulkPlaceholder}
-            class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono flex-1" />
-          <button type="submit" class="h-8 rounded-md bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors">
-            Import JSON
-          </button>
-        </form>
-      </div>
-
-      <!-- Bulk schedule -->
-      <div class="rounded-xl border border-border bg-card p-4">
-        <h2 class="font-semibold text-sm mb-3">Bulk Schedule</h2>
-        <form method="post" action={bffPaths.channelsSchedule} class="grid gap-2">
-          <div class="grid gap-1">
-            <label class="text-xs font-medium">Provider</label>
-            <select name="providerType" class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <option value="rss">RSS</option>
-              <option value="website">Website</option>
-              <option value="api">API</option>
-              <option value="email_imap">Email IMAP</option>
-            </select>
-          </div>
-          <div class="grid gap-1">
-            <label class="text-xs font-medium">Base interval (s)</label>
-            <input name="pollIntervalSeconds" value="900"
-              class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-          </div>
-          <div class="grid gap-1">
-            <label class="text-xs font-medium">Adaptive</label>
-            <select name="adaptiveEnabled" class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </div>
-          <div class="grid gap-1">
-            <label class="text-xs font-medium">Max interval (s)</label>
-            <input name="maxPollIntervalSeconds" value="86400"
-              class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-          </div>
-          <button type="submit" class="mt-1 h-8 rounded-md bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors">
-            Apply Schedule
-          </button>
-        </form>
-        <div class="mt-3 flex flex-wrap gap-1">
+        <div class="mt-4 flex flex-wrap gap-1.5">
           {Object.entries(CHANNEL_SCHEDULE_PRESETS).map(([label, seconds]) => (
-            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+            <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
               {label}: {String(seconds)}s
             </span>
           ))}
         </div>
-      </div>
+      </section>
     </div>
 
-    <!-- Channels table -->
-    <div class="rounded-xl border border-border bg-card overflow-hidden">
-      <div class="px-4 py-3 border-b border-border">
-        <h2 class="font-semibold text-sm">RSS Channels</h2>
+    <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div class="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold">All RSS channels</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {channels.total} channel{channels.total !== 1 ? "s" : ""} total
+            {channels.total > 0 && ` — page ${channels.page} of ${Math.max(channels.totalPages, 1)}`}
+          </p>
+        </div>
       </div>
-      {rssChannels.length === 0 ? (
-        <p class="px-4 py-8 text-sm text-muted-foreground text-center">No RSS channels yet. Add one above.</p>
+
+      {channels.total === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No RSS channels yet</p>
+          <p class="mt-2 text-sm text-muted-foreground">Create a single channel or import a JSON batch to get the fetcher online.</p>
+          <div class="mt-5 flex flex-wrap justify-center gap-3">
+            <a href={pagePaths.newChannel} class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Add first channel
+            </a>
+            <a href={pagePaths.importChannels} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              Open bulk import
+            </a>
+          </div>
+        </div>
       ) : (
         <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="w-full min-w-[980px] text-sm">
             <thead>
-              <tr class="border-b border-border">
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Schedule</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden lg:table-cell">Last Success</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Actions</th>
+              <tr class="border-b border-border bg-muted/30">
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Channel</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Health</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Schedule</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">History</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rssChannels.map((ch) => (
-                <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                  <td class="px-4 py-3">
-                    <div class="font-medium text-xs">{ch.name}</div>
-                    <div class="text-[10px] text-muted-foreground truncate max-w-[200px]">{ch.fetchUrl}</div>
-                    <div class="text-[10px] text-muted-foreground">{ch.language}</div>
-                  </td>
-                  <td class="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
-                    <div>{ch.pollIntervalSeconds}s base / {ch.effectivePollIntervalSeconds}s eff.</div>
-                    <div>next: {fmt(ch.nextDueAt)}</div>
-                  </td>
-                  <td class="px-4 py-3">
-                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      ch.isActive ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-muted text-muted-foreground"
-                    }`}>
-                      {ch.isActive ? "active" : "paused"}
-                    </span>
-                    {ch.needsAttention && <span class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">attention</span>}
-                    {ch.recentFailureCount24h > 0 && (
-                      <div class="text-[10px] text-red-500 mt-0.5">{ch.recentFailureCount24h} failures 24h</div>
-                    )}
-                  </td>
-                  <td class="px-4 py-3 hidden lg:table-cell text-xs text-muted-foreground">{fmt(ch.lastSuccessAt)}</td>
-                  <td class="px-4 py-3">
-                    <div class="flex items-center gap-1">
-                      <form method="post" action={bffPaths.channels}>
-                        <input type="hidden" name="channelId" value={ch.channelId} />
-                        <input type="hidden" name="providerType" value="rss" />
-                        <input type="hidden" name="name" value={ch.name} />
-                        <input type="hidden" name="fetchUrl" value={ch.fetchUrl} />
-                        <input type="hidden" name="language" value={ch.language} />
-                        <input type="hidden" name="pollIntervalSeconds" value={String(ch.pollIntervalSeconds)} />
-                        <input type="hidden" name="adaptiveEnabled" value={asBool(ch.adaptiveEnabled)} />
-                        <input type="hidden" name="maxPollIntervalSeconds" value={String(ch.maxPollIntervalSeconds)} />
-                        <input type="hidden" name="maxItemsPerPoll" value={String(ch.maxItemsPerPoll)} />
-                        <input type="hidden" name="requestTimeoutMs" value={String(ch.requestTimeoutMs)} />
-                        <input type="hidden" name="userAgent" value={ch.userAgent} />
-                        <input type="hidden" name="preferContentEncoded" value={asBool(ch.preferContentEncoded)} />
-                        <input type="hidden" name="isActive" value={asBool(!ch.isActive)} />
-                        <button type="submit" class="h-7 px-2.5 rounded-md border border-input text-xs hover:bg-accent transition-colors">
-                          {ch.isActive ? "Pause" : "Resume"}
-                        </button>
-                      </form>
-                    </div>
-                  </td>
+              {rssChannels.length === 0 ? (
+                <tr>
+                  <td colspan="5" class="px-5 py-10 text-center text-sm text-muted-foreground">No channels on this page</td>
                 </tr>
-              ))}
+              ) : rssChannels.map((channel) => {
+                const editHref = appPath(`/channels/${channel.channelId}/edit`);
+                const destructiveLabel = channel.articleCount > 0 ? "Archive" : "Delete";
+                const destructiveDescription = channel.articleCount > 0
+                  ? `This channel already has ${channel.articleCount} linked article${channel.articleCount === 1 ? "" : "s"}. Confirming this action will archive the channel instead of hard-deleting it.`
+                  : "This channel has no linked historical articles, so the delete action will remove it permanently.";
+
+                return (
+                  <tr class="border-b border-border last:border-b-0">
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="text-sm font-semibold">{channel.name}</p>
+                          <p class="mt-1 text-xs text-muted-foreground">{channel.providerName}</p>
+                        </div>
+                        <span class:list={[
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                          channel.isActive
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                        ]}>
+                          {channel.isActive ? "Active" : "Paused"}
+                        </span>
+                      </div>
+                      <p class="mt-2 max-w-xl truncate text-sm text-muted-foreground">{channel.fetchUrl}</p>
+                      <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                        <span>{channel.language || "No language"}</span>
+                        <span>•</span>
+                        <span>{channel.articleCount} linked article{channel.articleCount === 1 ? "" : "s"}</span>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex flex-wrap gap-2">
+                        {channel.needsAttention && (
+                          <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                            Needs attention
+                          </span>
+                        )}
+                        {channel.recentFailureCount24h > 0 && (
+                          <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-medium text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
+                            {channel.recentFailureCount24h} failure{channel.recentFailureCount24h === 1 ? "" : "s"} / 24h
+                          </span>
+                        )}
+                        {!channel.needsAttention && channel.recentFailureCount24h === 0 && (
+                          <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            Healthy
+                          </span>
+                        )}
+                      </div>
+                      <p class="mt-3 text-sm text-muted-foreground">Last result: <span class="font-medium text-foreground">{channel.lastResultKind}</span></p>
+                      <p class="mt-1 text-sm text-muted-foreground">Next due: {fmt(channel.nextDueAt)}</p>
+                    </td>
+                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                      <p>{channel.pollIntervalSeconds}s base</p>
+                      <p class="mt-1">{channel.effectivePollIntervalSeconds}s effective</p>
+                      <p class="mt-1">{channel.maxPollIntervalSeconds}s max</p>
+                    </td>
+                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                      <p>Last fetch: {fmt(channel.lastFetchAt)}</p>
+                      <p class="mt-1">Last success: {fmt(channel.lastSuccessAt)}</p>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex flex-wrap gap-2">
+                        <a href={editHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                          Edit
+                        </a>
+                        <form method="post" action={bffPaths.channels}>
+                          <input type="hidden" name="intent" value="save" />
+                          <input type="hidden" name="redirectTo" value={currentListPath} />
+                          <input type="hidden" name="channelId" value={channel.channelId} />
+                          <input type="hidden" name="providerType" value="rss" />
+                          <input type="hidden" name="name" value={channel.name} />
+                          <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
+                          <input type="hidden" name="language" value={channel.language} />
+                          <input type="hidden" name="pollIntervalSeconds" value={String(channel.pollIntervalSeconds)} />
+                          <input type="hidden" name="adaptiveEnabled" value={asBoolString(channel.adaptiveEnabled)} />
+                          <input type="hidden" name="maxPollIntervalSeconds" value={String(channel.maxPollIntervalSeconds)} />
+                          <input type="hidden" name="maxItemsPerPoll" value={String(channel.maxItemsPerPoll)} />
+                          <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
+                          <input type="hidden" name="userAgent" value={channel.userAgent} />
+                          <input type="hidden" name="preferContentEncoded" value={asBoolString(channel.preferContentEncoded)} />
+                          <input type="hidden" name="isActive" value={asBoolString(!channel.isActive)} />
+                          <button type="submit" class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                            {channel.isActive ? "Pause" : "Resume"}
+                          </button>
+                        </form>
+                        <AdminConfirmAction
+                          action={bffPaths.channels}
+                          title={`${destructiveLabel} channel`}
+                          description={destructiveDescription}
+                          triggerLabel={destructiveLabel}
+                          confirmLabel={destructiveLabel}
+                          fields={[
+                            { name: "intent", value: "delete" },
+                            { name: "channelId", value: channel.channelId },
+                            { name: "redirectTo", value: currentListPath },
+                          ]}
+                          triggerClassName={channel.articleCount > 0 ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"}
+                          confirmClassName={channel.articleCount > 0 ? "bg-amber-600 text-white hover:bg-amber-600/90" : ""}
+                          client:load
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
-    </div>
+    </section>
+
+    {(channels.hasPrev || channels.hasNext) && (
+      <PaginationNav
+        page={channels.page}
+        totalPages={channels.totalPages}
+        hasPrev={channels.hasPrev}
+        hasNext={channels.hasNext}
+        prevHref={resolvePageHref(channels.page - 1)}
+        nextHref={resolvePageHref(channels.page + 1)}
+      />
+    )}
   </div>
 </AdminShell>

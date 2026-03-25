@@ -3,7 +3,12 @@ import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -11,19 +16,22 @@ const session = await resolveAdminSession(Astro.request);
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-
-const bffPaths = {
-  authLogout: appPath("/bff/auth/logout"),
-  authSignIn: appPath("/bff/auth/sign-in"),
-};
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
 
 const pagePaths = {
   channels: appPath("/channels"),
+  channelNew: appPath("/channels/new"),
   articles: appPath("/articles"),
   clusters: appPath("/clusters"),
-  templates: appPath("/templates"),
+  llmTemplates: appPath("/templates/llm"),
+  interestTemplates: appPath("/templates/interests"),
   observability: appPath("/observability"),
   reindex: appPath("/reindex"),
+  help: appPath("/help"),
 };
 
 type R = Record<string, unknown>;
@@ -31,9 +39,9 @@ type R = Record<string, unknown>;
 const [summary, fetchRuns] = session
   ? await Promise.all([
       sdk.getDashboardSummary<R>(),
-      sdk.listFetchRuns<R[]>(),
+      sdk.listFetchRunsPage<R>({ page: 1, pageSize: 8 }),
     ])
-  : [null, []];
+  : [null, null];
 
 function formatTimestamp(v: unknown): string {
   if (!v) return "never";
@@ -42,8 +50,8 @@ function formatTimestamp(v: unknown): string {
 }
 
 const kpiCards = !summary ? [] : [
-  { label: "Active News", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
-  { label: "Processed Today", value: String(summary.processed_today ?? 0), color: "text-blue-500" },
+  { label: "Feed Eligible News", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
+  { label: "Processed 24h", value: String(summary.processed_today ?? 0), color: "text-blue-500" },
   { label: "Total Users", value: String(summary.total_users ?? 0), color: "text-violet-500" },
   { label: "Overdue Channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
   { label: "Fetch Failures 24h", value: String(summary.fetch_failures_24h ?? 0), color: (summary.fetch_failures_24h as number) > 0 ? "text-red-500" : "text-muted-foreground" },
@@ -58,35 +66,7 @@ const kpiCards = !summary ? [] : [
     <h1 class="text-sm font-semibold text-foreground">Dashboard</h1>
   </Fragment>
 
-  {!session ? (
-    <div class="flex items-center justify-center min-h-[calc(100vh-56px)]">
-      <div class="w-full max-w-sm">
-        <div class="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div class="mb-6 text-center">
-            <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold mx-auto mb-3">N</span>
-            <h2 class="text-lg font-semibold">{DEFAULT_BRAND_CONFIG.productName} Admin</h2>
-            <p class="text-sm text-muted-foreground mt-1">Sign in to continue</p>
-          </div>
-          <form method="post" action={bffPaths.authSignIn} class="grid gap-3">
-            <div class="grid gap-1.5">
-              <label class="text-sm font-medium" for="email">Email</label>
-              <input id="email" name="email" type="email" placeholder="admin@example.com" required
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            </div>
-            <div class="grid gap-1.5">
-              <label class="text-sm font-medium" for="password">Password</label>
-              <input id="password" name="password" type="password" required
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            </div>
-            <button type="submit" class="mt-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-              Sign In
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <div class="space-y-6">
+  <div class="space-y-6">
       <!-- KPI grid -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {kpiCards.map(({ label, value, color }) => (
@@ -98,14 +78,17 @@ const kpiCards = !summary ? [] : [
       </div>
 
       <!-- Quick navigation -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
         {[
-          { href: pagePaths.channels, label: "Channels", desc: "Manage RSS feeds" },
+          { href: pagePaths.channels, label: "Channels", desc: "Monitor source health" },
+          { href: pagePaths.channelNew, label: "Add Channel", desc: "Create a new RSS feed" },
           { href: pagePaths.articles, label: "Articles", desc: "Moderate content" },
           { href: pagePaths.clusters, label: "Clusters", desc: "Event clusters" },
-          { href: pagePaths.templates, label: "Templates", desc: "LLM prompts" },
+          { href: pagePaths.llmTemplates, label: "LLM Templates", desc: "Gray-zone prompts" },
+          { href: pagePaths.interestTemplates, label: "Interest Templates", desc: "Predefined topics" },
           { href: pagePaths.observability, label: "Observability", desc: "Fetch & LLM logs" },
           { href: pagePaths.reindex, label: "Reindex", desc: "Rebuild indices" },
+          { href: pagePaths.help, label: "Help", desc: "Setup guide" },
         ].map(({ href, label, desc }) => (
           <a href={href} class="rounded-xl border border-border bg-card p-4 hover:bg-accent hover:border-primary/20 transition-all group">
             <p class="font-medium text-sm group-hover:text-primary transition-colors">{label}</p>
@@ -117,10 +100,15 @@ const kpiCards = !summary ? [] : [
       <!-- Recent Fetch Runs -->
       <div class="rounded-xl border border-border bg-card overflow-hidden">
         <div class="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h2 class="font-semibold text-sm">Recent Fetch Runs</h2>
+          <div>
+            <h2 class="font-semibold text-sm">Recent Fetch Runs</h2>
+            {fetchRuns && fetchRuns.total > 0 && (
+              <p class="text-[10px] text-muted-foreground mt-0.5">Showing latest {fetchRuns.items.length} of {fetchRuns.total}</p>
+            )}
+          </div>
           <a href={pagePaths.observability} class="text-xs text-primary hover:underline">View all →</a>
         </div>
-        {(fetchRuns as R[]).length === 0 ? (
+        {!fetchRuns || fetchRuns.total === 0 ? (
           <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
         ) : (
           <div class="overflow-x-auto">
@@ -134,7 +122,7 @@ const kpiCards = !summary ? [] : [
                 </tr>
               </thead>
               <tbody>
-                {(fetchRuns as R[]).slice(0, 8).map((run) => (
+                {fetchRuns.items.map((run) => (
                   <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td class="px-4 py-2.5">
                       <div class="font-medium text-xs truncate max-w-[120px]">{String(run.channel_name ?? run.channel_id ?? "—")}</div>
@@ -164,6 +152,5 @@ const kpiCards = !summary ? [] : [
           </div>
         )}
       </div>
-    </div>
-  )}
+  </div>
 </AdminShell>

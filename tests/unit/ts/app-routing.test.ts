@@ -3,8 +3,10 @@ import test from "node:test";
 
 import { resolveAppHref } from "../../../packages/config/src/index.ts";
 import {
+  buildAdminSignInPath,
   buildFlashRedirect as buildAdminFlashRedirect,
-  resolveAdminAppPath
+  resolveAdminAppPath,
+  resolveAdminRedirectPath,
 } from "../../../apps/admin/src/lib/server/browser-flow.ts";
 import { buildFlashRedirect as buildWebFlashRedirect } from "../../../apps/web/src/lib/server/browser-flow.ts";
 
@@ -68,6 +70,26 @@ test("admin flash redirects preserve nginx-style /admin base path from the curre
   });
 });
 
+test("admin flash redirects can return to the current entity screen instead of the dashboard", () => {
+  withAppBaseUrl("http://127.0.0.1:4322/", () => {
+    const response = buildAdminFlashRedirect(
+      new Request("http://127.0.0.1:8080/admin/bff/admin/channels"),
+      {
+        section: "channels",
+        status: "success",
+        message: "Channel updated",
+        redirectTo: "/admin/channels?page=2"
+      }
+    );
+
+    assert.equal(response.status, 303);
+    assert.equal(
+      response.headers.get("location"),
+      "http://127.0.0.1:8080/admin/channels?page=2&flash_status=success&flash_message=Channel+updated#channels"
+    );
+  });
+});
+
 test("resolveAdminAppPath keeps admin links and BFF actions rooted at the app base", () => {
   const directPortRequest = new Request("http://127.0.0.1:4322/channels");
   assert.equal(
@@ -95,5 +117,36 @@ test("resolveAdminAppPath keeps admin links and BFF actions rooted at the app ba
   assert.equal(
     resolveAdminAppPath(proxiedRequest, "/bff/admin/channels/bulk"),
     "/admin/bff/admin/channels/bulk"
+  );
+});
+
+test("resolveAdminRedirectPath normalizes proxied and direct-port return targets safely", () => {
+  const directPortRequest = new Request("http://127.0.0.1:4322/channels");
+  assert.equal(
+    resolveAdminRedirectPath(directPortRequest, "/admin/channels?page=3", "/"),
+    "/channels?page=3"
+  );
+
+  const proxiedRequest = new Request("http://admin:4322/channels", {
+    headers: {
+      "x-forwarded-prefix": "/admin"
+    }
+  });
+  assert.equal(
+    resolveAdminRedirectPath(proxiedRequest, "http://example.test/admin/templates/llm?page=2", "/"),
+    "/admin/templates/llm?page=2"
+  );
+});
+
+test("buildAdminSignInPath keeps the requested destination in next", () => {
+  const proxiedRequest = new Request("http://admin:4322/channels", {
+    headers: {
+      "x-forwarded-prefix": "/admin"
+    }
+  });
+
+  assert.equal(
+    buildAdminSignInPath(proxiedRequest, "/admin/channels?page=4"),
+    "/admin/sign-in?next=%2Fadmin%2Fchannels%3Fpage%3D4"
   );
 });

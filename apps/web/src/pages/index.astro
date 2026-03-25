@@ -1,6 +1,8 @@
 ---
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type PaginatedResponse } from "@newsportal/contracts";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
 import Shell from "../layouts/Shell.astro";
 import { ArticleCard } from "../components/ArticleCard";
 import { queryOne } from "../lib/server/db";
@@ -10,8 +12,10 @@ import { readFlash } from "../lib/server/browser-flow";
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
 const flash = readFlash(Astro.url);
-const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createNewsPortalSdk({
+  baseUrl: readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" }).apiBaseUrl,
+  fetchImpl: fetch,
+});
 
 const pageBaseUrl = new URL(Astro.url);
 if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
@@ -27,10 +31,23 @@ const bffPaths = {
 };
 
 type ViewRow = Record<string, unknown>;
-const articles = await sdk.listArticles<ViewRow[]>();
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const feed: PaginatedResponse<ViewRow> = await sdk.listFeedArticles<ViewRow>({ page, pageSize: DEFAULT_PAGE_SIZE });
+const articles = feed.items;
 const profile = session ? await queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]) : null;
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <Shell
@@ -48,10 +65,14 @@ const themeClass = themePreference === "dark" ? "dark" : "";
   <div class="mb-8">
     <h1 class="text-3xl font-bold tracking-tight">{DEFAULT_BRAND_CONFIG.productName}</h1>
     <p class="text-muted-foreground mt-1">{DEFAULT_BRAND_CONFIG.tagline}</p>
+    <p class="text-xs text-muted-foreground mt-3">
+      {feed.total} article{feed.total !== 1 ? "s" : ""} in feed
+      {articles.length > 0 && ` — page ${feed.page} of ${Math.max(feed.totalPages, 1)}`}
+    </p>
   </div>
 
   <!-- Articles grid -->
-  {(articles as ViewRow[]).length === 0 ? (
+  {articles.length === 0 ? (
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
@@ -62,16 +83,28 @@ const themeClass = themePreference === "dark" ? "dark" : "";
       <p class="text-muted-foreground text-sm mt-1">Articles will appear here once the fetchers run</p>
     </div>
   ) : (
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      {(articles as ViewRow[]).map((article) => (
-        <ArticleCard
-          article={article as any}
-          isLoggedIn={!!session}
-          reactionsPath={bffPaths.reactions}
-          publicApiBaseUrl={runtimeConfig.publicApiBaseUrl}
-          client:visible
+    <>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {articles.map((article) => (
+          <ArticleCard
+            article={article as any}
+            isLoggedIn={!!session}
+            reactionsPath={bffPaths.reactions}
+            client:visible
+          />
+        ))}
+      </div>
+      {(feed.hasPrev || feed.hasNext) && (
+        <PaginationNav
+          className="mt-8"
+          page={feed.page}
+          totalPages={feed.totalPages}
+          hasPrev={feed.hasPrev}
+          hasNext={feed.hasNext}
+          prevHref={resolvePageHref(feed.page - 1)}
+          nextHref={resolvePageHref(feed.page + 1)}
         />
-      ))}
-    </div>
+      )}
+    </>
   )}
 </Shell>

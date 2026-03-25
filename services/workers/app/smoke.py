@@ -18,6 +18,7 @@ from .main import (
     process_criterion_compile,
     process_embed,
     process_interest_compile,
+    process_reindex,
 )
 
 
@@ -342,6 +343,69 @@ async def ensure_outbox_event(
                         json.dumps(payload),
                     ),
                 )
+
+
+async def ensure_reindex_job_fixture(reindex_job_id: str, doc_id: str) -> None:
+    user_id = stable_uuid("interest-user")
+    options_json = json.dumps(
+        {
+            "batchSize": 25,
+            "retroNotifications": "skip",
+            "docIds": [doc_id],
+        }
+    )
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    insert into reindex_jobs (
+                      reindex_job_id,
+                      index_name,
+                      job_kind,
+                      options_json,
+                      requested_by_user_id,
+                      status,
+                      created_at,
+                      updated_at
+                    )
+                    values (
+                      %s,
+                      'interest_centroids',
+                      'backfill',
+                      %s::jsonb,
+                      %s,
+                      'queued',
+                      now(),
+                      now()
+                    )
+                    on conflict (reindex_job_id) do update
+                    set
+                      job_kind = 'backfill',
+                      options_json = %s::jsonb,
+                      status = 'queued',
+                      error_text = null,
+                      started_at = null,
+                      finished_at = null,
+                      updated_at = now()
+                    """,
+                    (reindex_job_id, options_json, user_id, options_json),
+                )
+
+
+async def fetch_notification_count(doc_id: str) -> int:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select count(*)::int as notification_count
+                from notification_log
+                where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            row = await cursor.fetchone()
+    return int(row["notification_count"] or 0) if row else 0
 
 
 async def ensure_normalize_dedup_fixture() -> tuple[str, str]:
@@ -776,6 +840,50 @@ async def verify_cluster_match_notify(doc_id: str) -> None:
         raise RuntimeError("Phase 4 smoke verification failed: notification log is missing.")
 
 
+async def verify_reindex_backfill(doc_id: str, *, expected_notification_count: int) -> None:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select count(*)::int as criterion_count
+                from criterion_match_results
+                where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            criterion_count = await cursor.fetchone()
+            await cursor.execute(
+                """
+                select count(*)::int as interest_count
+                from interest_match_results
+                where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            interest_count = await cursor.fetchone()
+            await cursor.execute(
+                """
+                select status
+                from reindex_jobs
+                where index_name = 'interest_centroids'
+                order by created_at desc
+                limit 1
+                """
+            )
+            reindex_job = await cursor.fetchone()
+
+    actual_notification_count = await fetch_notification_count(doc_id)
+
+    if int(criterion_count["criterion_count"]) != 1:
+        raise RuntimeError("Reindex backfill smoke verification failed: criterion matches were duplicated.")
+    if int(interest_count["interest_count"]) != 1:
+        raise RuntimeError("Reindex backfill smoke verification failed: interest matches were duplicated.")
+    if actual_notification_count != expected_notification_count:
+        raise RuntimeError("Reindex backfill smoke verification failed: retro notifications were sent.")
+    if not reindex_job or reindex_job["status"] != "completed":
+        raise RuntimeError("Reindex backfill smoke verification failed: reindex job did not complete.")
+
+
 async def run_embed_smoke() -> dict[str, Any]:
     doc_id = await ensure_embed_fixture()
     event_id = str(uuid.uuid4())
@@ -954,6 +1062,122 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
     }
 
 
+async def run_reindex_backfill_smoke() -> dict[str, Any]:
+    doc_id = await ensure_embed_fixture()
+    interest_id = await ensure_interest_fixture()
+    criterion_id = await ensure_criterion_fixture()
+    await ensure_notification_channel_fixture()
+
+    interest_event_id = str(uuid.uuid4())
+    criterion_event_id = str(uuid.uuid4())
+    normalized_event_id = str(uuid.uuid4())
+    embedded_event_id = str(uuid.uuid4())
+    clustered_event_id = str(uuid.uuid4())
+    matched_interest_event_id = str(uuid.uuid4())
+    reindex_event_id = str(uuid.uuid4())
+    reindex_job_id = str(stable_uuid("reindex-backfill-job"))
+
+    await ensure_outbox_event(
+        event_id=interest_event_id,
+        event_type="interest.compile.requested",
+        aggregate_type="interest",
+        aggregate_id=interest_id,
+        payload={"interestId": interest_id, "version": 2},
+    )
+    await ensure_outbox_event(
+        event_id=criterion_event_id,
+        event_type="criterion.compile.requested",
+        aggregate_type="criterion",
+        aggregate_id=criterion_id,
+        payload={"criterionId": criterion_id, "version": 3},
+    )
+    await process_interest_compile(
+        FakeJob({"eventId": interest_event_id, "interestId": interest_id, "version": 2}),
+        "",
+    )
+    await process_criterion_compile(
+        FakeJob({"eventId": criterion_event_id, "criterionId": criterion_id, "version": 3}),
+        "",
+    )
+    await ensure_outbox_event(
+        event_id=normalized_event_id,
+        event_type="article.normalized",
+        aggregate_type="article",
+        aggregate_id=doc_id,
+        payload={"docId": doc_id, "version": 1},
+    )
+    await process_embed(
+        FakeJob({"eventId": normalized_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    await ensure_outbox_event(
+        event_id=embedded_event_id,
+        event_type="article.embedded",
+        aggregate_type="article",
+        aggregate_id=doc_id,
+        payload={"docId": doc_id, "version": 1},
+    )
+    await process_cluster(
+        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    await ensure_outbox_event(
+        event_id=clustered_event_id,
+        event_type="article.clustered",
+        aggregate_type="article",
+        aggregate_id=doc_id,
+        payload={"docId": doc_id, "version": 1},
+    )
+    await process_match_criteria(
+        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    await process_match_interests(
+        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    await ensure_outbox_event(
+        event_id=matched_interest_event_id,
+        event_type="article.interests.matched",
+        aggregate_type="article",
+        aggregate_id=doc_id,
+        payload={"docId": doc_id, "version": 1},
+    )
+    await process_notify(
+        FakeJob({"eventId": matched_interest_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    await verify_cluster_match_notify(doc_id)
+    notification_count_before = await fetch_notification_count(doc_id)
+    await ensure_reindex_job_fixture(reindex_job_id, doc_id)
+    await ensure_outbox_event(
+        event_id=reindex_event_id,
+        event_type="reindex.requested",
+        aggregate_type="reindex_job",
+        aggregate_id=reindex_job_id,
+        payload={"reindexJobId": reindex_job_id, "indexName": "interest_centroids", "version": 1},
+    )
+    reindex_result = await process_reindex(
+        FakeJob(
+            {
+                "eventId": reindex_event_id,
+                "reindexJobId": reindex_job_id,
+                "indexName": "interest_centroids",
+            }
+        ),
+        "",
+    )
+    await verify_reindex_backfill(
+        doc_id,
+        expected_notification_count=notification_count_before,
+    )
+    return {
+        "status": "reindex-backfill-ok",
+        "docId": doc_id,
+        "reindex": reindex_result,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="NewsPortal worker smoke commands")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -962,6 +1186,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("interest-compile")
     subparsers.add_parser("criterion-compile")
     subparsers.add_parser("cluster-match-notify")
+    subparsers.add_parser("reindex-backfill")
     return parser
 
 
@@ -973,6 +1198,8 @@ async def run() -> int:
         result = await run_embed_smoke()
     elif args.command == "interest-compile":
         result = await run_interest_compile_smoke()
+    elif args.command == "reindex-backfill":
+        result = await run_reindex_backfill_smoke()
     elif args.command == "cluster-match-notify":
         result = await run_cluster_match_notify_smoke()
     else:

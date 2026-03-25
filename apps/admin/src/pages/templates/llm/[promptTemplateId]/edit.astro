@@ -1,0 +1,133 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../../../../layouts/AdminShell.astro";
+import { AdminConfirmAction } from "../../../../components/AdminConfirmAction";
+import { LlmTemplateEditorForm } from "../../../../components/LlmTemplateEditorForm";
+import { resolveAdminSession } from "../../../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+type R = Record<string, unknown>;
+const promptTemplateId = String(Astro.params.promptTemplateId ?? "");
+const template = await sdk.getLlmTemplate<R>(promptTemplateId);
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const isActive = template.is_active === true;
+---
+
+<AdminShell title="Edit LLM Template — Admin" session={session} flash={flash} activeNav="llm-templates">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/templates/llm")} class="hover:text-foreground">LLM Templates</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Edit</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(template.name ?? "LLM template")}</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Update prompt wording and lifecycle state without leaving the dedicated editor. Save keeps you on this screen so iterative prompt tuning feels predictable.
+        </p>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Scope</p>
+          <p class="mt-2 text-sm font-semibold">{String(template.scope ?? "—")}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Version</p>
+          <p class="mt-2 text-sm font-semibold">{String(template.version ?? 1)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+          <p class="mt-2 text-sm font-semibold">{isActive ? "Active" : "Archived"}</p>
+        </div>
+      </div>
+    </div>
+
+    <LlmTemplateEditorForm
+      action={appPath("/bff/admin/templates")}
+      mode="edit"
+      redirectTo={currentPath}
+      cancelHref={appPath("/templates/llm")}
+      value={{
+        promptTemplateId,
+        name: String(template.name ?? ""),
+        scope: String(template.scope ?? "interests") as "criteria" | "interests" | "global",
+        language: String(template.language ?? ""),
+        templateText: String(template.template_text ?? ""),
+        isActive,
+      }}
+    />
+
+    <section class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="max-w-2xl">
+          <h2 class="text-base font-semibold text-foreground">Danger zone</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Archive when you want to keep the record in admin without using it in live review. Delete only when the prompt should disappear from the library entirely.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <AdminConfirmAction
+            action={appPath("/bff/admin/templates")}
+            title={isActive ? "Archive template" : "Reactivate template"}
+            description={isActive
+              ? "Archived templates remain visible to operators but are removed from the active review set."
+              : "Reactivating the template makes it available for future live review decisions."}
+            triggerLabel={isActive ? "Archive" : "Activate"}
+            confirmLabel={isActive ? "Archive template" : "Activate template"}
+            fields={[
+              { name: "kind", value: "llm" },
+              { name: "intent", value: isActive ? "archive" : "activate" },
+              { name: "promptTemplateId", value: promptTemplateId },
+              { name: "redirectTo", value: currentPath },
+            ]}
+            triggerClassName={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
+            confirmClassName={isActive ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-emerald-600 text-white hover:bg-emerald-600/90"}
+            client:load
+          />
+          <AdminConfirmAction
+            action={appPath("/bff/admin/templates")}
+            title="Delete template"
+            description="Delete permanently only when this prompt should no longer exist in the admin library. Existing review history stays recorded, but the template record will be removed."
+            triggerLabel="Delete"
+            confirmLabel="Delete template"
+            fields={[
+              { name: "kind", value: "llm" },
+              { name: "intent", value: "delete" },
+              { name: "promptTemplateId", value: promptTemplateId },
+              { name: "redirectTo", value: appPath("/templates/llm") },
+            ]}
+            triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+            client:load
+          />
+        </div>
+      </div>
+    </section>
+  </div>
+</AdminShell>

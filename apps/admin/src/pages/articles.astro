@@ -1,31 +1,62 @@
 ---
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-if (!session) return Astro.redirect(appPath("/"));
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 const bffPaths = { moderation: appPath("/bff/admin/moderation") };
 const pagePaths = { dashboard: appPath("/") };
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 
 type R = Record<string, unknown>;
-const articles = await sdk.listArticles<R[]>();
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const articles = await sdk.listArticlesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE });
+const articleRows = articles.items;
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
 
 
 const stateColor: Record<string, string> = {
-  published: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  matched: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  notified: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
   blocked: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  raw: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
   normalized: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  deduped: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+  embedded: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+  clustered: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
 };
 ---
 
@@ -41,11 +72,55 @@ const stateColor: Record<string, string> = {
   <div class="space-y-5">
     <div>
       <h1 class="text-xl font-bold">Articles</h1>
-      <p class="text-sm text-muted-foreground mt-0.5">{(articles as R[]).length} article{(articles as R[]).length !== 1 ? "s" : ""} — block/unblock to moderate</p>
+      <p class="text-sm text-muted-foreground mt-0.5">
+        {articles.total} article{articles.total !== 1 ? "s" : ""} total
+        {articles.total > 0 && ` — page ${articles.page} of ${Math.max(articles.totalPages, 1)}`}
+      </p>
     </div>
 
+    <!-- State lifecycle explanation -->
+    <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
+      <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
+        <span class="text-sm font-medium">Understanding article states</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+      </summary>
+      <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
+        <p class="text-xs">Every row shows the exact runtime <code class="rounded bg-muted px-1 py-0.5">processing_state</code> from the pipeline. The most important states are:</p>
+        <div class="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
+          <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
+            <div class="flex shrink-0 gap-1">
+              <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300">raw</span>
+              <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">pending</span>
+            </div>
+            <p class="text-[11px]">Just ingested. The article is waiting for cleanup, feature extraction and downstream pipeline work.</p>
+          </div>
+          <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
+            <div class="flex shrink-0 gap-1">
+              <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">normalized</span>
+              <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300">clustered</span>
+            </div>
+            <p class="text-[11px]">Mid-pipeline. You may also see <em>deduped</em> or <em>embedded</em> before matching finishes.</p>
+          </div>
+          <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
+            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 shrink-0">matched</span>
+            <p class="text-[11px]">Fully processed and eligible for the public feed while <code class="rounded bg-muted px-1 py-0.5">visibility_state = visible</code>.</p>
+          </div>
+          <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
+            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 shrink-0">notified</span>
+            <p class="text-[11px]">A notification decision already ran. The article still remains feed-eligible while visibility stays visible.</p>
+          </div>
+          <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
+            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 shrink-0">blocked</span>
+            <p class="text-[11px]">Manually hidden by an admin. Won't appear in user feeds or notifications</p>
+          </div>
+        </div>
+        <p class="text-[11px]"><strong>Moderation:</strong> Use <em>Block</em> to hide inappropriate articles from users. <em>Unblock</em> reverses the action. Reactions (👍👎) are user feedback and stored for future analytics.</p>
+      </div>
+    </details>
+
     <div class="rounded-xl border border-border bg-card overflow-hidden">
-      {(articles as R[]).length === 0 ? (
+      {articles.total === 0 ? (
         <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles yet</p>
       ) : (
         <div class="overflow-x-auto">
@@ -59,7 +134,11 @@ const stateColor: Record<string, string> = {
               </tr>
             </thead>
             <tbody>
-              {(articles as R[]).map((a) => (
+              {articleRows.length === 0 ? (
+                <tr>
+                  <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No articles on this page</td>
+                </tr>
+              ) : articleRows.map((a) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td class="px-4 py-3 max-w-[300px]">
                     <div class="font-medium text-xs line-clamp-2">{String(a.title ?? "Untitled")}</div>
@@ -79,22 +158,40 @@ const stateColor: Record<string, string> = {
                     👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}
                   </td>
                   <td class="px-4 py-3">
-                    <div class="flex items-center gap-1.5">
-                      <form method="post" action={bffPaths.moderation}>
-                        <input type="hidden" name="docId" value={String(a.doc_id)} />
-                        <input type="hidden" name="actionType" value="block" />
-                        <button type="submit" class="h-7 px-2.5 rounded-md border border-red-200 text-red-600 text-xs hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors">
-                          Block
-                        </button>
-                      </form>
-                      <form method="post" action={bffPaths.moderation}>
-                        <input type="hidden" name="docId" value={String(a.doc_id)} />
-                        <input type="hidden" name="actionType" value="unblock" />
-                        <button type="submit" class="h-7 px-2.5 rounded-md border border-emerald-200 text-emerald-700 text-xs hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20 transition-colors">
-                          Unblock
-                        </button>
-                      </form>
-                    </div>
+                    {(() => {
+                      const articleTitle = String(a.title ?? "Untitled");
+                      const isBlocked = String(a.visibility_state ?? "") === "blocked";
+
+                      return (
+                        <AdminConfirmAction
+                          action={bffPaths.moderation}
+                          title={isBlocked ? "Restore article visibility" : "Block article"}
+                          description={
+                            isBlocked
+                              ? `Restore "${articleTitle}" to the visible feed and allow it to participate in normal delivery again.`
+                              : `Hide "${articleTitle}" from feeds and notifications until an admin restores it.`
+                          }
+                          triggerLabel={isBlocked ? "Unblock" : "Block"}
+                          confirmLabel={isBlocked ? "Unblock article" : "Block article"}
+                          fields={[
+                            { name: "docId", value: String(a.doc_id ?? "") },
+                            { name: "actionType", value: isBlocked ? "unblock" : "block" },
+                            { name: "redirectTo", value: currentPath },
+                          ]}
+                          triggerClassName={
+                            isBlocked
+                              ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                              : "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+                          }
+                          confirmClassName={
+                            isBlocked
+                              ? "bg-emerald-600 text-white hover:bg-emerald-600/90"
+                              : ""
+                          }
+                          client:load
+                        />
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}
@@ -103,5 +200,15 @@ const stateColor: Record<string, string> = {
         </div>
       )}
     </div>
+    {(articles.hasPrev || articles.hasNext) && (
+      <PaginationNav
+        page={articles.page}
+        totalPages={articles.totalPages}
+        hasPrev={articles.hasPrev}
+        hasNext={articles.hasNext}
+        prevHref={resolvePageHref(articles.page - 1)}
+        nextHref={resolvePageHref(articles.page + 1)}
+      />
+    )}
   </div>
 </AdminShell>

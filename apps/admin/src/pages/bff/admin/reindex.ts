@@ -4,8 +4,10 @@ import { randomUUID } from "node:crypto";
 import { REINDEX_REQUESTED_EVENT } from "@newsportal/contracts";
 
 import {
+  buildAdminSignInPath,
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
+  requestPrefersHtmlNavigation,
+  resolveAdminRedirectPath,
 } from "../../../lib/server/browser-flow";
 import {
   buildExpiredAdminSessionCookie,
@@ -18,6 +20,11 @@ import { readRequestPayload } from "../../../lib/server/request";
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
+  const redirectTo = resolveAdminRedirectPath(
+    request,
+    request.headers.get("referer"),
+    "/reindex"
+  );
   const session = await resolveAdminSession(request);
   if (!session || !session.roles.includes("admin")) {
     if (browserRequest) {
@@ -25,7 +32,8 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "error",
         message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie()
+        setCookie: buildExpiredAdminSessionCookie(),
+        redirectTo: buildAdminSignInPath(request, redirectTo)
       });
     }
     return Response.json({ error: "Forbidden." }, { status: 403 });
@@ -33,6 +41,16 @@ export const POST: APIRoute = async ({ request }) => {
 
   const payload = await readRequestPayload(request);
   const indexName = String(payload.indexName ?? "interest_centroids");
+  const requestedJobKind = String(payload.jobKind ?? "rebuild");
+  const jobKind = requestedJobKind === "backfill" ? "backfill" : "rebuild";
+  const optionsJson =
+    jobKind === "backfill"
+      ? {
+          batchSize: 100,
+          retroNotifications: "skip",
+          replayExistingArticles: true,
+        }
+      : {};
   const reindexJobId = randomUUID();
   const pool = getPool();
   const client = await pool.connect();
@@ -45,12 +63,13 @@ export const POST: APIRoute = async ({ request }) => {
           reindex_job_id,
           index_name,
           job_kind,
+          options_json,
           requested_by_user_id,
           status
         )
-        values ($1, $2, 'rebuild', $3, 'queued')
+        values ($1, $2, $3, $4::jsonb, $5, 'queued')
       `,
-      [reindexJobId, indexName, session.userId]
+      [reindexJobId, indexName, jobKind, JSON.stringify(optionsJson), session.userId]
     );
     await insertOutboxEvent(client, {
       eventType: REINDEX_REQUESTED_EVENT,
@@ -59,6 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
       payload: {
         reindexJobId,
         indexName,
+        jobKind,
         version: 1
       }
     });
@@ -73,7 +93,7 @@ export const POST: APIRoute = async ({ request }) => {
         )
         values ($1, 'reindex_requested', 'reindex_job', $2, $3::jsonb)
       `,
-      [session.userId, reindexJobId, JSON.stringify({ indexName })]
+      [session.userId, reindexJobId, JSON.stringify({ indexName, jobKind, options: optionsJson })]
     );
     await client.query("commit");
   } catch (error) {
@@ -82,7 +102,8 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "reindex",
         status: "error",
-        message: "Unable to queue reindex right now."
+        message: "Unable to queue reindex right now.",
+        redirectTo
       });
     }
     return Response.json(
@@ -101,7 +122,8 @@ export const POST: APIRoute = async ({ request }) => {
     return buildFlashRedirect(request, {
       section: "reindex",
       status: "success",
-      message: "Reindex queued"
+      message: jobKind === "backfill" ? "Reindex and historical backfill queued" : "Reindex queued",
+      redirectTo
     });
   }
 

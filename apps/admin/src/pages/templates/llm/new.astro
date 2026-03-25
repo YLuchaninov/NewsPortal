@@ -1,0 +1,60 @@
+---
+import AdminShell from "../../../layouts/AdminShell.astro";
+import { LlmTemplateEditorForm } from "../../../components/LlmTemplateEditorForm";
+import { resolveAdminSession } from "../../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<AdminShell title="New LLM Template — Admin" session={session} flash={flash} activeNav="llm-templates">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/templates/llm")} class="hover:text-foreground">LLM Templates</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">New</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Create</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Create LLM template</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        Draft the prompt on a dedicated screen so operators can focus on wording, scope, and lifecycle state without list-table distractions.
+      </p>
+    </div>
+
+    <LlmTemplateEditorForm
+      action={appPath("/bff/admin/templates")}
+      mode="create"
+      redirectTo={currentPath}
+      cancelHref={appPath("/templates/llm")}
+      value={{
+        name: "",
+        scope: "interests",
+        language: "",
+        templateText: "",
+        isActive: true,
+      }}
+    />
+  </div>
+</AdminShell>

@@ -9,6 +9,7 @@ interface FlashRedirectOptions {
   status: FlashStatus;
   message: string;
   setCookie?: string;
+  redirectTo?: string | null;
 }
 
 function normalizeSection(section: string): string {
@@ -23,12 +24,51 @@ function normalizeForwardedPrefix(value: string | null): string {
   return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
 }
 
-export function resolveAdminAppPath(request: Request, target = "/"): string {
+function resolveAdminBasePrefix(request: Request): string {
   const forwardedPrefix = normalizeForwardedPrefix(
     request.headers.get("x-forwarded-prefix")
   );
-  const appBaseUrl = `http://app${forwardedPrefix ? `${forwardedPrefix}/` : "/"}`;
-  return resolveAppHref(appBaseUrl, target);
+  if (forwardedPrefix) {
+    return forwardedPrefix;
+  }
+
+  try {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.pathname === "/admin" || requestUrl.pathname.startsWith("/admin/")) {
+      return "/admin";
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
+export function resolveAdminAppPath(request: Request, target = "/"): string {
+  const basePrefix = resolveAdminBasePrefix(request);
+  const normalizedTarget = target.startsWith("/") ? target : `/${target}`;
+  if (
+    basePrefix &&
+    (normalizedTarget === basePrefix || normalizedTarget.startsWith(`${basePrefix}/`))
+  ) {
+    return normalizedTarget;
+  }
+  const appBaseUrl = `http://app${basePrefix ? `${basePrefix}/` : "/"}`;
+  return resolveAppHref(appBaseUrl, normalizedTarget);
+}
+
+function stripAdminPrefix(pathname: string, forwardedPrefix = ""): string {
+  if (forwardedPrefix && (pathname === forwardedPrefix || pathname.startsWith(`${forwardedPrefix}/`))) {
+    const stripped = pathname.slice(forwardedPrefix.length);
+    return stripped || "/";
+  }
+
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const stripped = pathname.slice("/admin".length);
+    return stripped || "/";
+  }
+
+  return pathname || "/";
 }
 
 function inferAppHomePath(pathname: string, forwardedPrefix = ""): string {
@@ -68,15 +108,82 @@ export function requestPrefersHtmlNavigation(request: Request): boolean {
   return accept.includes("text/html") || secFetchMode === "navigate";
 }
 
+export function resolveAdminCurrentPath(request: Request): string {
+  const requestUrl = resolveRedirectBaseUrl(request);
+  const forwardedPrefix = normalizeForwardedPrefix(
+    request.headers.get("x-forwarded-prefix")
+  );
+  const normalizedPath = stripAdminPrefix(requestUrl.pathname, forwardedPrefix);
+  return resolveAdminAppPath(
+    request,
+    `${normalizedPath}${requestUrl.search}${requestUrl.hash}`
+  );
+}
+
+export function resolveAdminRedirectPath(
+  request: Request,
+  candidate: string | null | undefined,
+  fallback = "/"
+): string {
+  const fallbackPath = resolveAdminAppPath(request, fallback);
+  const rawCandidate = String(candidate ?? "").trim();
+  if (!rawCandidate) {
+    return fallbackPath;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawCandidate, "http://app");
+  } catch {
+    return fallbackPath;
+  }
+
+  if (!parsed.pathname.startsWith("/")) {
+    return fallbackPath;
+  }
+
+  const forwardedPrefix = normalizeForwardedPrefix(
+    request.headers.get("x-forwarded-prefix")
+  );
+  const normalizedPath = stripAdminPrefix(parsed.pathname, forwardedPrefix);
+
+  return resolveAdminAppPath(
+    request,
+    `${normalizedPath}${parsed.search}${parsed.hash}`
+  );
+}
+
+export function buildAdminSignInPath(
+  request: Request,
+  nextPath: string | null | undefined = null
+): string {
+  const signInLocation = new URL(
+    resolveAdminAppPath(request, "/sign-in"),
+    "http://app"
+  );
+  const resolvedNextPath = resolveAdminRedirectPath(request, nextPath, "/");
+  const resolvedSignInPath = resolveAdminAppPath(request, "/sign-in");
+
+  if (resolvedNextPath !== resolvedSignInPath) {
+    signInLocation.searchParams.set("next", resolvedNextPath);
+  }
+
+  return `${signInLocation.pathname}${signInLocation.search}${signInLocation.hash}`;
+}
+
 export function buildFlashRedirect(
   request: Request,
   options: FlashRedirectOptions
 ): Response {
   const requestUrl = resolveRedirectBaseUrl(request);
   const location = new URL(
-    inferAppHomePath(
-      requestUrl.pathname,
-      normalizeForwardedPrefix(request.headers.get("x-forwarded-prefix"))
+    resolveAdminRedirectPath(
+      request,
+      options.redirectTo,
+      inferAppHomePath(
+        requestUrl.pathname,
+        normalizeForwardedPrefix(request.headers.get("x-forwarded-prefix"))
+      )
     ),
     requestUrl
   );

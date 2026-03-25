@@ -22,6 +22,9 @@ interface InterestSheetProps {
   interests: Interest[];
   interestsPath: string;
   interestPath: (id: string) => string;
+  hasAnyInterests?: boolean;
+  emptyStateTitle?: string;
+  emptyStateDescription?: string;
 }
 
 function asCsv(val: unknown): string {
@@ -41,7 +44,14 @@ function statusBadgeClass(status: string): string {
   return map[status] ?? "bg-muted text-muted-foreground";
 }
 
-export function InterestManager({ interests, interestsPath, interestPath }: InterestSheetProps) {
+export function InterestManager({
+  interests,
+  interestsPath,
+  interestPath,
+  hasAnyInterests = interests.length > 0,
+  emptyStateTitle,
+  emptyStateDescription,
+}: InterestSheetProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -172,8 +182,16 @@ export function InterestManager({ interests, interestsPath, interestPath }: Inte
           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
             <Plus className="h-6 w-6 text-muted-foreground" />
           </div>
-          <p className="font-medium">No interests yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Add your first interest to start receiving personalized news</p>
+          <p className="font-medium">
+            {emptyStateTitle ?? (hasAnyInterests ? "No interests on this page" : "No interests yet")}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {emptyStateDescription ?? (
+              hasAnyInterests
+                ? "Use the pager below to return to another page of interests"
+                : "Add your first interest to start receiving personalized news"
+            )}
+          </p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -285,4 +303,3 @@ export function InterestManager({ interests, interestsPath, interestPath }: Inte
     </div>
   );
 }
-

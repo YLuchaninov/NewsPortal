@@ -1,24 +1,44 @@
 ---
+import { DEFAULT_PAGE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
-import { readFlash, resolveAdminAppPath } from "../lib/server/browser-flow";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-if (!session) return Astro.redirect(appPath("/"));
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
 
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const pagePaths = { dashboard: appPath("/") };
+const FETCH_RUNS_PAGE_SIZE = 25;
+const LLM_REVIEWS_PAGE_SIZE = 25;
 
 type R = Record<string, unknown>;
+function parsePage(paramName: string): number {
+  const requestedPage = Number.parseInt(Astro.url.searchParams.get(paramName) ?? String(DEFAULT_PAGE), 10);
+  return Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+}
+
+const fetchPage = parsePage("fetchPage");
+const reviewPage = parsePage("reviewPage");
 const [fetchRuns, llmReviews, llmUsageSummary] = await Promise.all([
-  sdk.listFetchRuns<R[]>(),
-  sdk.listLlmReviews<R[]>(),
+  sdk.listFetchRunsPage<R>({ page: fetchPage, pageSize: FETCH_RUNS_PAGE_SIZE }),
+  sdk.listLlmReviewsPage<R>({ page: reviewPage, pageSize: LLM_REVIEWS_PAGE_SIZE }),
   sdk.getLlmUsageSummary<R>(),
 ]);
 
@@ -35,6 +55,16 @@ function fmtD(v: unknown, decimals = 2): string {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
   return isFinite(n) ? n.toFixed(decimals) : "0";
 }
+
+function resolveTableHref(paramName: string, nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete(paramName);
+  } else {
+    target.searchParams.set(paramName, String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <AdminShell title="Observability — Admin" session={session} flash={flash} activeNav="observability">
@@ -48,6 +78,28 @@ function fmtD(v: unknown, decimals = 2): string {
 
   <div class="space-y-6">
     <h1 class="text-xl font-bold">Observability</h1>
+    <p class="text-sm text-muted-foreground mt-0.5">Monitor fetch performance and AI review costs</p>
+
+    <!-- Observability explanation -->
+    <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
+      <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
+        <span class="text-sm font-medium">Understanding these metrics</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+      </summary>
+      <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
+        <div class="grid gap-2 sm:grid-cols-2">
+          <div class="rounded-md border border-border bg-card p-2.5">
+            <p class="font-medium text-foreground text-[11px] mb-0.5">LLM Usage (top cards)</p>
+            <p class="text-[11px]"><strong>Reviews</strong> = number of gray-zone articles sent to the AI. <strong>Tokens</strong> = total LLM API tokens consumed. <strong>Cost</strong> = estimated USD spend based on token pricing. <strong>Avg latency</strong> = mean response time from the LLM provider.</p>
+          </div>
+          <div class="rounded-md border border-border bg-card p-2.5">
+            <p class="font-medium text-foreground text-[11px] mb-0.5">Fetch Runs (table)</p>
+            <p class="text-[11px]">Each row = one poll of a channel. <strong>new_content</strong> = found new articles. <strong>no_change</strong> = feed unchanged since last check. <strong>error</strong> = fetch failed (check the channel).</p>
+          </div>
+        </div>
+      </div>
+    </details>
 
     <!-- LLM Usage Summary -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -72,8 +124,12 @@ function fmtD(v: unknown, decimals = 2): string {
     <div class="rounded-xl border border-border bg-card overflow-hidden">
       <div class="px-4 py-3 border-b border-border">
         <h2 class="font-semibold text-sm">Fetch Runs</h2>
+        <p class="text-[10px] text-muted-foreground mt-0.5">
+          {fetchRuns.total} run{fetchRuns.total !== 1 ? "s" : ""} total
+          {fetchRuns.total > 0 && ` — page ${fetchRuns.page} of ${Math.max(fetchRuns.totalPages, 1)}`}
+        </p>
       </div>
-      {(fetchRuns as R[]).length === 0 ? (
+      {fetchRuns.total === 0 ? (
         <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
       ) : (
         <div class="overflow-x-auto">
@@ -88,7 +144,11 @@ function fmtD(v: unknown, decimals = 2): string {
               </tr>
             </thead>
             <tbody>
-              {(fetchRuns as R[]).slice(0, 25).map((run) => (
+              {fetchRuns.items.length === 0 ? (
+                <tr>
+                  <td colspan="5" class="px-4 py-8 text-center text-sm text-muted-foreground">No fetch runs on this page</td>
+                </tr>
+              ) : fetchRuns.items.map((run) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td class="px-4 py-2.5">
                     <div class="text-xs font-medium">{String(run.channel_name ?? run.channel_id ?? "—")}</div>
@@ -112,14 +172,29 @@ function fmtD(v: unknown, decimals = 2): string {
           </table>
         </div>
       )}
+      {(fetchRuns.hasPrev || fetchRuns.hasNext) && (
+        <PaginationNav
+          className="rounded-none border-x-0 border-b-0"
+          page={fetchRuns.page}
+          totalPages={fetchRuns.totalPages}
+          hasPrev={fetchRuns.hasPrev}
+          hasNext={fetchRuns.hasNext}
+          prevHref={resolveTableHref("fetchPage", fetchRuns.page - 1)}
+          nextHref={resolveTableHref("fetchPage", fetchRuns.page + 1)}
+        />
+      )}
     </div>
 
     <!-- LLM Reviews -->
     <div class="rounded-xl border border-border bg-card overflow-hidden">
       <div class="px-4 py-3 border-b border-border">
         <h2 class="font-semibold text-sm">LLM Reviews</h2>
+        <p class="text-[10px] text-muted-foreground mt-0.5">
+          {llmReviews.total} review{llmReviews.total !== 1 ? "s" : ""} total
+          {llmReviews.total > 0 && ` — page ${llmReviews.page} of ${Math.max(llmReviews.totalPages, 1)}`}
+        </p>
       </div>
-      {(llmReviews as R[]).length === 0 ? (
+      {llmReviews.total === 0 ? (
         <p class="px-4 py-6 text-sm text-muted-foreground text-center">No LLM reviews yet</p>
       ) : (
         <div class="overflow-x-auto">
@@ -133,7 +208,11 @@ function fmtD(v: unknown, decimals = 2): string {
               </tr>
             </thead>
             <tbody>
-              {(llmReviews as R[]).slice(0, 25).map((r) => (
+              {llmReviews.items.length === 0 ? (
+                <tr>
+                  <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No LLM reviews on this page</td>
+                </tr>
+              ) : llmReviews.items.map((r) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td class="px-4 py-2.5">
                     <div class="text-xs font-medium line-clamp-1">{String(r.article_title ?? r.doc_id ?? "—")}</div>
@@ -156,6 +235,17 @@ function fmtD(v: unknown, decimals = 2): string {
             </tbody>
           </table>
         </div>
+      )}
+      {(llmReviews.hasPrev || llmReviews.hasNext) && (
+        <PaginationNav
+          className="rounded-none border-x-0 border-b-0"
+          page={llmReviews.page}
+          totalPages={llmReviews.totalPages}
+          hasPrev={llmReviews.hasPrev}
+          hasNext={llmReviews.hasNext}
+          prevHref={resolveTableHref("reviewPage", llmReviews.page - 1)}
+          nextHref={resolveTableHref("reviewPage", llmReviews.page + 1)}
+        />
       )}
     </div>
   </div>
