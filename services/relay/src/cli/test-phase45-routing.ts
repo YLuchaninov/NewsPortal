@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Queue } from "bullmq";
 import {
+  ARTICLE_CRITERIA_MATCHED_EVENT,
   ARTICLE_CLUSTERED_EVENT,
   ARTICLE_EMBEDDED_EVENT,
   ARTICLE_INTERESTS_MATCHED_EVENT,
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
     const reindexJobId = randomUUID();
     const embeddedEventId = randomUUID();
     const clusteredEventId = randomUUID();
+    const criteriaMatchedEventId = randomUUID();
     const matchedEventId = randomUUID();
     const llmReviewEventId = randomUUID();
     const feedbackEventId = randomUUID();
@@ -100,6 +102,16 @@ async function main(): Promise<void> {
     await relay.enqueueOutboxRow({
       event_id: clusteredEventId,
       event_type: ARTICLE_CLUSTERED_EVENT,
+      aggregate_type: "article",
+      aggregate_id: docId,
+      payload_json: {
+        docId,
+        version: 1
+      }
+    });
+    await relay.enqueueOutboxRow({
+      event_id: criteriaMatchedEventId,
+      event_type: ARTICLE_CRITERIA_MATCHED_EVENT,
       aggregate_type: "article",
       aggregate_id: docId,
       payload_json: {
@@ -157,7 +169,7 @@ async function main(): Promise<void> {
 
     const clusterJob = await expectJob(clusterQueue, embeddedEventId);
     const criteriaMatchJob = await expectJob(criteriaMatchQueue, clusteredEventId);
-    const interestMatchJob = await expectJob(interestMatchQueue, clusteredEventId);
+    const interestMatchJob = await expectJob(interestMatchQueue, criteriaMatchedEventId);
     const notifyJob = await expectJob(notifyQueue, matchedEventId);
     const llmReviewJob = await expectJob(llmReviewQueue, llmReviewEventId);
     const feedbackJob = await expectJob(feedbackQueue, feedbackEventId);
@@ -168,9 +180,9 @@ async function main(): Promise<void> {
     }
     if (
       criteriaMatchJob.name !== ARTICLE_CLUSTERED_EVENT ||
-      interestMatchJob.name !== ARTICLE_CLUSTERED_EVENT
+      interestMatchJob.name !== ARTICLE_CRITERIA_MATCHED_EVENT
     ) {
-      throw new Error("article.clustered fanout routed to the wrong queue job names.");
+      throw new Error("criteria-first routing reached the wrong queue job names.");
     }
     if (notifyJob.name !== ARTICLE_INTERESTS_MATCHED_EVENT) {
       throw new Error("article.interests.matched routed to the wrong queue job name.");
@@ -194,7 +206,7 @@ async function main(): Promise<void> {
     expectThinKeys(
       interestMatchJob.data,
       ["docId", "eventId", "jobId", "version"],
-      "article.clustered -> interests"
+      "article.criteria.matched -> interests"
     );
     expectThinKeys(
       notifyJob.data,
@@ -218,7 +230,7 @@ async function main(): Promise<void> {
     );
 
     console.log(
-      `Phase 4/5 relay routing smoke passed: ${embeddedEventId} reached ${CLUSTER_QUEUE}, ${clusteredEventId} fanned out to ${CRITERIA_MATCH_QUEUE} + ${INTEREST_MATCH_QUEUE}, ${matchedEventId} reached ${NOTIFY_QUEUE}, ${llmReviewEventId} reached ${LLM_REVIEW_QUEUE}, ${feedbackEventId} reached ${FEEDBACK_INGEST_QUEUE}, and ${reindexEventId} reached ${REINDEX_QUEUE}.`
+      `Phase 4/5 relay routing smoke passed: ${embeddedEventId} reached ${CLUSTER_QUEUE}, ${clusteredEventId} reached ${CRITERIA_MATCH_QUEUE}, ${criteriaMatchedEventId} reached ${INTEREST_MATCH_QUEUE}, ${matchedEventId} reached ${NOTIFY_QUEUE}, ${llmReviewEventId} reached ${LLM_REVIEW_QUEUE}, ${feedbackEventId} reached ${FEEDBACK_INGEST_QUEUE}, and ${reindexEventId} reached ${REINDEX_QUEUE}.`
     );
   } finally {
     await relay.close();

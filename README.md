@@ -10,7 +10,7 @@
 - outbox relay, публикующего thin jobs из PostgreSQL в BullMQ;
 - RSS fetchers с cursor-aware raw article persistence;
 - Python workers для `normalize + dedup`, читающих BullMQ jobs с inbox idempotency;
-- Python workers для `embed + cluster + match + notify + Gemini-review`, также работающих через BullMQ и inbox idempotency;
+- Python workers для `embed + cluster + system criteria gating + optional user-interest match + notify + criteria-scope Gemini-review`, также работающих через BullMQ и inbox idempotency;
 - phase-2 article tables для raw, normalized и deduped state;
 - phase-3 feature extraction, embedding registries, compiled interest/criterion state и HNSW registry plumbing;
 - phase-4 matching, notification, moderation, reactions, prompt-template и audit tables;
@@ -174,6 +174,9 @@ infra/
 - `apps/web` и `apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
 - Browser/session routes `web` и `admin` больше не делят `/api/*` c Python API: public/read API остается на `/api/*`, а Astro BFF живет на `/bff/*`; через nginx admin surface доступен на `/admin/`, поэтому его browser/BFF paths снаружи имеют вид `/admin/bff/*`.
 - Для first-run admin bootstrap используется `ADMIN_ALLOWLIST_EMAILS`; allowlisted email получает локальную роль `admin` при первом успешном Firebase sign-in, а exact allowlisted address допускает repeatable `+alias` sign-in для internal tests. После bootstrap PostgreSQL остается источником истины для authorization.
+- Active admin `interest_templates` materialize-ятся в system `criteria`, поэтому операторский system layer уже участвует и во fresh ingest, и в historical backfill.
+- Fresh ingest и historical backfill теперь идут в system-first порядке: `criteria -> criteria-scope gray-zone LLM -> system-selected feed -> optional per-user user_interests`.
+- Пользователь без `user_interests` все равно видит system-selected feed; baseline notifications пока остаются personalization-lane contract, а не отдельным system-feed alert path.
 - Internal MVP acceptance фиксируется как RSS-first ingest path. Website/API/IMAP остаются в кодовой базе, но не считаются доказанными этим acceptance gate.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
 - `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
@@ -190,6 +193,7 @@ infra/
 - provider-wide scheduling patch позволяет массово назначать `fast=300`, `normal=900`, `slow=3600`, `daily=86400`, `three_day=259200`;
 - fetchers сохраняют `source_channel_runtime_state` и append-only `channel_fetch_runs`, поэтому overdue/adaptive/failed каналы видны отдельно от `source_channels.last_*`;
 - worker пишет first-class Gemini usage/cost поля в `llm_review_log`;
+- public `/feed` теперь показывает system-selected статьи по article-level gate из `system_feed_results`, даже если у текущего пользователя нет ни одного `user_interest`;
 - web показывает configured notification channels, working `notification_preferences`, browser-side `web_push` connect flow и расширенный lifecycle interests.
 
 Минимальный manual checklist:
@@ -197,8 +201,8 @@ infra/
 1. Поднимите stack через `pnpm dev:mvp:internal`.
 2. Импортируйте RSS channels через admin single/bulk form, используя шаблон [infra/scripts/manual-rss-bundle.template.json](infra/scripts/manual-rss-bundle.template.json).
 3. Назначьте часть каналов на `fast`, часть на `daily` и часть на `three_day`, затем проверьте `next due`, `overdue`, `recent failures` и fetch history в admin.
-4. В `web` создайте anonymous session, подключите `web_push`, включите нужные `notification_preferences`, создайте или отредактируйте interest и дождитесь compile/update path.
-5. Проверьте admin summary, recent fetch runs, recent LLM reviews и delivery state по user channels.
+4. В `web` создайте anonymous session, убедитесь, что system-selected feed заполняется и без персонализации, затем подключите `web_push`, включите нужные `notification_preferences`, создайте или отредактируйте interest и дождитесь compile/update path.
+5. Проверьте admin summary: `System Feed News`, recent fetch runs, recent LLM reviews и delivery state по user channels.
 
 Ограничение baseline:
 
@@ -250,6 +254,8 @@ infra/
    pnpm test:relay:phase45:compose
    ```
 
+   Этот smoke теперь подтверждает последовательный routing `article.clustered -> q.match.criteria -> article.criteria.matched -> q.match.interests`.
+
 8. Запустить worker smokes внутри контейнера `worker` после поднятия Postgres/Redis:
 
    ```sh
@@ -257,6 +263,8 @@ infra/
     pnpm test:criterion-compile:compose
     pnpm test:cluster-match-notify:compose
    ```
+
+   `pnpm test:cluster-match-notify:compose` теперь также доказывает, что `system_feed_results` заполняется до optional personalization lane и что baseline runtime не отправляет interest-side gray-zone review в LLM.
 
 ## Основные команды
 
@@ -315,9 +323,10 @@ infra/
 ## Текущий охват
 
 - Queue payloads остаются тонкими и содержат только ID плюс компактные metadata.
-- Article processing уже поддерживает путь `raw -> normalized -> deduped -> embedded -> clustered -> matched -> notified`.
-- Изменения interests и criteria запускают versioned compile jobs и обновляют Postgres-backed compiled/vector registries.
-- Gemini является baseline provider для gray-zone review в локальном MVP.
+- Article processing уже поддерживает путь `raw -> normalized -> deduped -> embedded -> clustered`, после которого system `criteria` записывают article-level gate в `system_feed_results`, а per-user personalization и notify продолжаются только для eligible статей.
+- Public/system feed eligibility теперь читается из `system_feed_results`, а не из `articles.processing_state`.
+- Изменения admin `interest_templates`, real `user_interests` и direct `criteria` запускают versioned compile jobs и обновляют Postgres-backed compiled/vector registries.
+- Gemini является baseline provider только для criteria-scope gray-zone review; interest-side gray-zone LLM review в baseline runtime отключен.
 - Firebase-backed anonymous web sessions и non-anonymous admin sessions подключены через Astro BFF routes.
 - `./data` bind-mounted в Python services, поэтому derived models, HNSW indices, snapshots и logs переживают container rebuild.
 - HNSW остается derived state; `interest_centroids` и `event_cluster_centroids` пересобираются из PostgreSQL.
@@ -342,9 +351,16 @@ Ingest smoke test создает временный RSS channel внутри run
 Полезные verification queries после smoke test:
 
 ```sql
-select doc_id, processing_state, normalized_at, deduped_at, canonical_doc_id, family_id
-from articles
-order by ingested_at desc
+select
+  a.doc_id,
+  a.processing_state,
+  sfr.decision as system_feed_decision,
+  sfr.eligible_for_feed,
+  a.normalized_at,
+  a.deduped_at
+from articles a
+left join system_feed_results sfr on sfr.doc_id = a.doc_id
+order by a.ingested_at desc
 limit 5;
 ```
 

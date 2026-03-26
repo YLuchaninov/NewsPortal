@@ -1,4 +1,7 @@
 import type { APIRoute } from "astro";
+import type { PoolClient } from "pg";
+
+import { CRITERION_COMPILE_REQUESTED_EVENT } from "@newsportal/contracts";
 
 import {
   deleteInterestTemplate,
@@ -9,6 +12,7 @@ import {
   saveLlmTemplate,
   setInterestTemplateActiveState,
   setLlmTemplateActiveState,
+  syncInterestTemplateCriterion,
 } from "../../../lib/server/admin-templates";
 import {
   buildAdminSignInPath,
@@ -22,6 +26,7 @@ import {
   resolveAdminSession,
 } from "../../../lib/server/auth";
 import { getPool } from "../../../lib/server/db";
+import { insertOutboxEvent } from "../../../lib/server/outbox";
 import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
@@ -62,13 +67,14 @@ function resolveTemplateEditPath(
 }
 
 async function writeAuditLog(
+  client: Pick<PoolClient, "query">,
   actorUserId: string,
   actionType: string,
   entityType: string,
   entityId: string,
   payloadJson: Record<string, unknown>
 ): Promise<void> {
-  await getPool().query(
+  await client.query(
     `
       insert into audit_log (
         actor_user_id,
@@ -108,20 +114,36 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 
+  let client: PoolClient | null = null;
   try {
     const pool = getPool();
+    client = await pool.connect();
     const intent = resolveTemplateIntent(payload);
+    await client.query("begin");
 
     if (kind === "interest") {
       if (intent === "save") {
         const template = parseInterestTemplateInput(payload);
-        const result = await saveInterestTemplate(pool, template);
+        const result = await saveInterestTemplate(client, template);
+        const syncResult = await syncInterestTemplateCriterion(client, result.interestTemplateId);
+        if (syncResult.compileRequested) {
+          await insertOutboxEvent(client, {
+            eventType: CRITERION_COMPILE_REQUESTED_EVENT,
+            aggregateType: "criterion",
+            aggregateId: syncResult.criterionId,
+            payload: {
+              criterionId: syncResult.criterionId,
+              version: syncResult.version,
+            },
+          });
+        }
         const entityPath = resolveTemplateEditPath(
           request,
           "interest",
           result.interestTemplateId
         );
         await writeAuditLog(
+          client,
           session.userId,
           result.created ? "interest_template_created" : "interest_template_updated",
           "interest_template",
@@ -130,8 +152,12 @@ export const POST: APIRoute = async ({ request }) => {
             name: template.name,
             isActive: template.isActive,
             created: result.created,
+            criterionId: syncResult.criterionId,
+            criterionVersion: syncResult.version,
+            criterionCompileRequested: syncResult.compileRequested,
           }
         );
+        await client.query("commit");
 
         if (browserRequest) {
           return buildFlashRedirect(request, {
@@ -157,14 +183,21 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       if (intent === "archive") {
-        await setInterestTemplateActiveState(pool, interestTemplateId, false);
+        await setInterestTemplateActiveState(client, interestTemplateId, false);
+        const syncResult = await syncInterestTemplateCriterion(client, interestTemplateId);
         await writeAuditLog(
+          client,
           session.userId,
           "interest_template_archived",
           "interest_template",
           interestTemplateId,
-          {}
+          {
+            criterionId: syncResult.criterionId,
+            criterionVersion: syncResult.version,
+            criterionCompileRequested: syncResult.compileRequested,
+          }
         );
+        await client.query("commit");
         if (browserRequest) {
           return buildFlashRedirect(request, {
             section: "templates",
@@ -177,14 +210,32 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       if (intent === "activate") {
-        await setInterestTemplateActiveState(pool, interestTemplateId, true);
+        await setInterestTemplateActiveState(client, interestTemplateId, true);
+        const syncResult = await syncInterestTemplateCriterion(client, interestTemplateId);
+        if (syncResult.compileRequested) {
+          await insertOutboxEvent(client, {
+            eventType: CRITERION_COMPILE_REQUESTED_EVENT,
+            aggregateType: "criterion",
+            aggregateId: syncResult.criterionId,
+            payload: {
+              criterionId: syncResult.criterionId,
+              version: syncResult.version,
+            },
+          });
+        }
         await writeAuditLog(
+          client,
           session.userId,
           "interest_template_activated",
           "interest_template",
           interestTemplateId,
-          {}
+          {
+            criterionId: syncResult.criterionId,
+            criterionVersion: syncResult.version,
+            criterionCompileRequested: syncResult.compileRequested,
+          }
         );
+        await client.query("commit");
         if (browserRequest) {
           return buildFlashRedirect(request, {
             section: "templates",
@@ -196,14 +247,16 @@ export const POST: APIRoute = async ({ request }) => {
         return Response.json({ ok: true });
       }
 
-      await deleteInterestTemplate(pool, interestTemplateId);
+      await deleteInterestTemplate(client, interestTemplateId);
       await writeAuditLog(
+        client,
         session.userId,
         "interest_template_deleted",
         "interest_template",
         interestTemplateId,
         {}
       );
+      await client.query("commit");
       if (browserRequest) {
         return buildFlashRedirect(request, {
           section: "templates",
@@ -217,9 +270,10 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (intent === "save") {
       const template = parseLlmTemplateInput(payload);
-      const result = await saveLlmTemplate(pool, template);
+      const result = await saveLlmTemplate(client, template);
       const entityPath = resolveTemplateEditPath(request, "llm", result.promptTemplateId);
       await writeAuditLog(
+        client,
         session.userId,
         result.created ? "llm_template_created" : "llm_template_updated",
         "llm_template",
@@ -231,6 +285,7 @@ export const POST: APIRoute = async ({ request }) => {
           created: result.created,
         }
       );
+      await client.query("commit");
 
       if (browserRequest) {
         return buildFlashRedirect(request, {
@@ -256,14 +311,16 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (intent === "archive") {
-      await setLlmTemplateActiveState(pool, promptTemplateId, false);
+      await setLlmTemplateActiveState(client, promptTemplateId, false);
       await writeAuditLog(
+        client,
         session.userId,
         "llm_template_archived",
         "llm_template",
         promptTemplateId,
         {}
       );
+      await client.query("commit");
       if (browserRequest) {
         return buildFlashRedirect(request, {
           section: "templates",
@@ -276,14 +333,16 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (intent === "activate") {
-      await setLlmTemplateActiveState(pool, promptTemplateId, true);
+      await setLlmTemplateActiveState(client, promptTemplateId, true);
       await writeAuditLog(
+        client,
         session.userId,
         "llm_template_activated",
         "llm_template",
         promptTemplateId,
         {}
       );
+      await client.query("commit");
       if (browserRequest) {
         return buildFlashRedirect(request, {
           section: "templates",
@@ -295,14 +354,16 @@ export const POST: APIRoute = async ({ request }) => {
       return Response.json({ ok: true });
     }
 
-    await deleteLlmTemplate(pool, promptTemplateId);
+    await deleteLlmTemplate(client, promptTemplateId);
     await writeAuditLog(
+      client,
       session.userId,
       "llm_template_deleted",
       "llm_template",
       promptTemplateId,
       {}
     );
+    await client.query("commit");
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "templates",
@@ -313,6 +374,9 @@ export const POST: APIRoute = async ({ request }) => {
     }
     return Response.json({ ok: true });
   } catch (error) {
+    if (client) {
+      await client.query("rollback").catch(() => undefined);
+    }
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "templates",
@@ -332,5 +396,7 @@ export const POST: APIRoute = async ({ request }) => {
         status: 500,
       }
     );
+  } finally {
+    client?.release();
   }
 };

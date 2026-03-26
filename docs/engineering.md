@@ -65,6 +65,7 @@
 - не перемещай durable logic через boundary без обновления `docs/blueprint.md`;
 - если touched subsystem имеет deep contract doc, следуй ему как required context;
 - не смешивай browser PRG contract, machine-readable API contract и internal smoke contract так, чтобы один silently ломал другой.
+- если `apps/web` или `apps/admin` используют shared primitives из `packages/ui`, app-local Tailwind entry CSS обязана явно объявлять `packages/ui/src` как source; не полагайся на случайное дублирование utility-классов в app-local markup как на build contract.
 
 ## Decomposition and Size Discipline
 

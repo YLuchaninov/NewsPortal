@@ -29,6 +29,7 @@ const pagePaths = {
   clusters: appPath("/clusters"),
   llmTemplates: appPath("/templates/llm"),
   interestTemplates: appPath("/templates/interests"),
+  userInterests: appPath("/user-interests"),
   observability: appPath("/observability"),
   reindex: appPath("/reindex"),
   help: appPath("/help"),
@@ -50,7 +51,7 @@ function formatTimestamp(v: unknown): string {
 }
 
 const kpiCards = !summary ? [] : [
-  { label: "Feed Eligible News", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
+  { label: "System Feed News", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
   { label: "Processed 24h", value: String(summary.processed_today ?? 0), color: "text-blue-500" },
   { label: "Total Users", value: String(summary.total_users ?? 0), color: "text-violet-500" },
   { label: "Overdue Channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
@@ -78,7 +79,7 @@ const kpiCards = !summary ? [] : [
       </div>
 
       <!-- Quick navigation -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
         {[
           { href: pagePaths.channels, label: "Channels", desc: "Monitor source health" },
           { href: pagePaths.channelNew, label: "Add Channel", desc: "Create a new RSS feed" },
@@ -86,6 +87,7 @@ const kpiCards = !summary ? [] : [
           { href: pagePaths.clusters, label: "Clusters", desc: "Event clusters" },
           { href: pagePaths.llmTemplates, label: "LLM Templates", desc: "Gray-zone prompts" },
           { href: pagePaths.interestTemplates, label: "Interest Templates", desc: "Predefined topics" },
+          { href: pagePaths.userInterests, label: "User Interests", desc: "Per-user matching" },
           { href: pagePaths.observability, label: "Observability", desc: "Fetch & LLM logs" },
           { href: pagePaths.reindex, label: "Reindex", desc: "Rebuild indices" },
           { href: pagePaths.help, label: "Help", desc: "Setup guide" },

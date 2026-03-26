@@ -45,8 +45,18 @@ def processed_article_clause(alias: str = "a") -> str:
     return f"{alias}.processing_state in ('matched', 'notified')"
 
 
-def feed_eligible_article_clause(alias: str = "a") -> str:
-    return f"{alias}.visibility_state = 'visible' and {processed_article_clause(alias)}"
+def system_feed_join_clause(article_alias: str = "a", system_alias: str = "sfr") -> str:
+    return f"left join system_feed_results {system_alias} on {system_alias}.doc_id = {article_alias}.doc_id"
+
+
+def feed_eligible_article_clause(
+    article_alias: str = "a",
+    system_alias: str = "sfr",
+) -> str:
+    return (
+        f"{article_alias}.visibility_state = 'visible' and "
+        f"coalesce({system_alias}.eligible_for_feed, false) = true"
+    )
 
 
 def build_paginated_response(
@@ -110,10 +120,13 @@ def list_articles(
           a.processing_state,
           a.visibility_state,
           a.event_cluster_id,
+          sfr.decision as system_feed_decision,
+          coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
           a.has_media,
           coalesce(ars.like_count, 0) as like_count,
           coalesce(ars.dislike_count, 0) as dislike_count
         from articles a
+        left join system_feed_results sfr on sfr.doc_id = a.doc_id
         left join article_reaction_stats ars on ars.doc_id = a.doc_id
         order by a.published_at desc nulls last, a.ingested_at desc
     """
@@ -146,7 +159,8 @@ def list_feed_articles(
         f"""
         select count(*)::int as total
         from articles a
-        where {feed_eligible_article_clause("a")}
+        {system_feed_join_clause("a", "sfr")}
+        where {feed_eligible_article_clause("a", "sfr")}
         """
     )
     items = query_all(
@@ -161,12 +175,15 @@ def list_feed_articles(
           a.processing_state,
           a.visibility_state,
           a.event_cluster_id,
+          sfr.decision as system_feed_decision,
+          coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
           a.has_media,
           coalesce(ars.like_count, 0) as like_count,
           coalesce(ars.dislike_count, 0) as dislike_count
         from articles a
+        left join system_feed_results sfr on sfr.doc_id = a.doc_id
         left join article_reaction_stats ars on ars.doc_id = a.doc_id
-        where {feed_eligible_article_clause("a")}
+        where {feed_eligible_article_clause("a", "sfr")}
         order by a.published_at desc nulls last, a.ingested_at desc
         limit %s
         offset %s
@@ -255,7 +272,12 @@ def get_dashboard_summary() -> dict[str, Any]:
     counts = query_one(
         f"""
         select
-          (select count(*)::int from articles a where {feed_eligible_article_clause("a")}) as active_news,
+          (
+            select count(*)::int
+            from articles a
+            {system_feed_join_clause("a", "sfr")}
+            where {feed_eligible_article_clause("a", "sfr")}
+          ) as active_news,
           (select count(*)::int from articles a where {processed_article_clause("a")}) as processed_total,
           (
             select count(*)::int

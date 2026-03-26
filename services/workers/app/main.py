@@ -44,6 +44,11 @@ from .notification_preferences import (
     is_channel_enabled_by_preferences,
     normalize_notification_preferences,
 )
+from .prompting import render_llm_prompt_template
+from .reindex_backfill import (
+    HistoricalBackfillDependencies,
+    replay_historical_articles as replay_historical_articles_with_snapshot,
+)
 from .scoring import (
     compute_cluster_same_event_score,
     compute_criterion_final_score,
@@ -62,6 +67,7 @@ from .scoring import (
     place_match_score,
     semantic_prototype_score,
 )
+from .system_feed import summarize_system_feed_result
 
 LOGGER = logging.getLogger("newsportal.workers")
 
@@ -94,6 +100,7 @@ CRITERION_COMPILE_CONSUMER = "worker.criterion.compile"
 ARTICLE_NORMALIZED_EVENT = "article.normalized"
 ARTICLE_EMBEDDED_EVENT = "article.embedded"
 ARTICLE_CLUSTERED_EVENT = "article.clustered"
+ARTICLE_CRITERIA_MATCHED_EVENT = "article.criteria.matched"
 ARTICLE_INTERESTS_MATCHED_EVENT = "article.interests.matched"
 LLM_REVIEW_REQUESTED_EVENT = "llm.review.requested"
 INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
@@ -1221,6 +1228,122 @@ def passes_hard_filters(
         reasons.append("short_tokens_forbidden")
 
     return (len(reasons) == 0, reasons, within_window)
+
+
+async def upsert_system_feed_result(
+    cursor: psycopg.AsyncCursor[Any],
+    doc_id: str | uuid.UUID,
+) -> dict[str, Any]:
+    previous_result = await fetch_system_feed_result_row(cursor, doc_id)
+    await cursor.execute(
+        """
+        select
+          count(*)::int as total_criteria_count,
+          count(*) filter (where decision = 'relevant')::int as relevant_criteria_count,
+          count(*) filter (where decision = 'irrelevant')::int as irrelevant_criteria_count,
+          count(*) filter (where decision = 'gray_zone')::int as pending_llm_criteria_count
+        from criterion_match_results
+        where doc_id = %s
+        """,
+        (doc_id,),
+    )
+    counts = await cursor.fetchone() or {}
+    summary = summarize_system_feed_result(
+        total_criteria_count=int(counts.get("total_criteria_count") or 0),
+        relevant_criteria_count=int(counts.get("relevant_criteria_count") or 0),
+        irrelevant_criteria_count=int(counts.get("irrelevant_criteria_count") or 0),
+        pending_llm_criteria_count=int(counts.get("pending_llm_criteria_count") or 0),
+    )
+
+    explain_json = coerce_json_object(summary.get("explain_json"))
+    criteria_counts = coerce_json_object(explain_json.get("criteriaCounts"))
+    await cursor.execute(
+        """
+        insert into system_feed_results (
+          doc_id,
+          decision,
+          eligible_for_feed,
+          total_criteria_count,
+          relevant_criteria_count,
+          irrelevant_criteria_count,
+          pending_llm_criteria_count,
+          explain_json
+        )
+        values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        on conflict (doc_id) do update
+        set
+          decision = excluded.decision,
+          eligible_for_feed = excluded.eligible_for_feed,
+          total_criteria_count = excluded.total_criteria_count,
+          relevant_criteria_count = excluded.relevant_criteria_count,
+          irrelevant_criteria_count = excluded.irrelevant_criteria_count,
+          pending_llm_criteria_count = excluded.pending_llm_criteria_count,
+          explain_json = excluded.explain_json,
+          updated_at = now()
+        """,
+        (
+            doc_id,
+            str(summary["decision"]),
+            bool(summary["eligible_for_feed"]),
+            int(criteria_counts.get("total") or 0),
+            int(criteria_counts.get("relevant") or 0),
+            int(criteria_counts.get("irrelevant") or 0),
+            int(criteria_counts.get("pendingLlm") or 0),
+            Json(make_json_safe(explain_json)),
+        ),
+    )
+    return {
+        "decision": str(summary["decision"]),
+        "eligible_for_feed": bool(summary["eligible_for_feed"]),
+        "previous_decision": (
+            str(previous_result.get("decision") or "")
+            if previous_result is not None
+            else None
+        ),
+        "previous_eligible_for_feed": (
+            bool(previous_result.get("eligible_for_feed"))
+            if previous_result is not None
+            else False
+        ),
+    }
+
+
+async def fetch_system_feed_result_row(
+    cursor: psycopg.AsyncCursor[Any],
+    doc_id: str | uuid.UUID,
+) -> dict[str, Any] | None:
+    await cursor.execute(
+        """
+        select
+          decision,
+          eligible_for_feed,
+          total_criteria_count,
+          relevant_criteria_count,
+          irrelevant_criteria_count,
+          pending_llm_criteria_count,
+          explain_json
+        from system_feed_results
+        where doc_id = %s
+        """,
+        (doc_id,),
+    )
+    return await cursor.fetchone()
+
+
+def should_dispatch_interest_matching(system_feed_result: Mapping[str, Any]) -> bool:
+    return bool(system_feed_result.get("eligible_for_feed")) and not bool(
+        system_feed_result.get("previous_eligible_for_feed")
+    )
+
+
+async def is_article_eligible_for_personalization(
+    *,
+    doc_id: str,
+) -> bool:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            result = await fetch_system_feed_result_row(cursor, doc_id)
+    return bool(result and result.get("eligible_for_feed"))
 
 
 async def list_compiled_criteria(
@@ -2420,6 +2543,15 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                         )
                     criteria_count += 1
 
+                system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
+                if should_dispatch_interest_matching(system_feed_result) and not historical_backfill:
+                    await insert_outbox_event(
+                        cursor,
+                        ARTICLE_CRITERIA_MATCHED_EVENT,
+                        "article",
+                        article["doc_id"],
+                        {"docId": str(article["doc_id"]), "version": 1},
+                    )
                 await record_processed_event(cursor, CRITERIA_MATCH_CONSUMER, event_id)
 
     return {
@@ -2445,6 +2577,14 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                     return {"status": "duplicate-event", "docId": doc_id}
 
                 article = await fetch_article_for_update(cursor, doc_id)
+                system_feed_result = await fetch_system_feed_result_row(cursor, article["doc_id"])
+                if system_feed_result is None or not bool(system_feed_result.get("eligible_for_feed")):
+                    await record_processed_event(cursor, INTEREST_MATCH_CONSUMER, event_id)
+                    return {
+                        "status": "skipped-system-feed",
+                        "docId": doc_id,
+                        "interestCount": 0,
+                    }
                 article_features = await fetch_article_features_row(cursor, article["doc_id"])
                 article_vectors = await fetch_article_vectors(cursor, article["doc_id"])
                 interest_rows = await list_compiled_interests(cursor)
@@ -2695,7 +2835,6 @@ async def process_notify(job: Job, _job_token: str) -> dict[str, Any]:
                     if user_key not in best_by_user:
                         best_by_user[user_key] = row
 
-                prompt_template = await find_prompt_template(cursor, "interests")
                 for match_row in best_by_user.values():
                     user_id = uuid.UUID(str(match_row["user_id"]))
                     interest_id = uuid.UUID(str(match_row["interest_id"]))
@@ -2738,33 +2877,17 @@ async def process_notify(job: Job, _job_token: str) -> dict[str, Any]:
                         continue
 
                     if match_row["decision"] == "gray_zone":
-                        if prompt_template is not None:
-                            await insert_outbox_event(
-                                cursor,
-                                LLM_REVIEW_REQUESTED_EVENT,
-                                "interest",
-                                interest_id,
-                                {
-                                    "docId": str(article["doc_id"]),
-                                    "scope": "interest",
-                                    "targetId": str(interest_id),
-                                    "promptTemplateId": str(prompt_template["prompt_template_id"]),
-                                    "version": 1,
-                                },
-                            )
-                            llm_review_count += 1
-                        else:
-                            await insert_notification_suppression(
-                                cursor,
-                                user_id=user_id,
-                                interest_id=interest_id,
-                                notification_id=None,
-                                doc_id=article["doc_id"],
-                                family_id=article.get("family_id"),
-                                cluster_id=cluster_id,
-                                reason="gray_zone_without_prompt_template",
-                            )
-                            suppressed_count += 1
+                        await insert_notification_suppression(
+                            cursor,
+                            user_id=user_id,
+                            interest_id=interest_id,
+                            notification_id=None,
+                            doc_id=article["doc_id"],
+                            family_id=article.get("family_id"),
+                            cluster_id=cluster_id,
+                            reason="interest_gray_zone_llm_disabled",
+                        )
+                        suppressed_count += 1
                         continue
 
                     if match_row["decision"] != "notify":
@@ -2895,17 +3018,22 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                     else (
                         "Review the news match below and respond with JSON "
                         '{"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}.\n'
-                        "Title: {{title}}\nLead: {{lead}}\nBody: {{body}}\nExplain: {{explain_json}}"
+                        "Title: {title}\nLead: {lead}\nBody: {body}\nContext: {context}"
                     )
                 )
                 review_context: dict[str, Any] = {}
                 if scope == "criterion":
                     await cursor.execute(
                         """
-                        select criterion_match_id, explain_json, decision
-                        from criterion_match_results
-                        where doc_id = %s and criterion_id = %s
-                        order by created_at desc
+                        select
+                          cmr.criterion_match_id,
+                          cmr.explain_json,
+                          cmr.decision,
+                          c.description as criterion_name
+                        from criterion_match_results cmr
+                        join criteria c on c.criterion_id = cmr.criterion_id
+                        where cmr.doc_id = %s and cmr.criterion_id = %s
+                        order by cmr.created_at desc
                         limit 1
                         """,
                         (article["doc_id"], target_id),
@@ -2914,24 +3042,27 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                 else:
                     await cursor.execute(
                         """
-                        select interest_match_id, user_id, explain_json, decision
-                        from interest_match_results
-                        where doc_id = %s and interest_id = %s
-                        order by created_at desc
+                        select
+                          imr.interest_match_id,
+                          imr.user_id,
+                          imr.explain_json,
+                          imr.decision,
+                          ui.description as interest_name
+                        from interest_match_results imr
+                        join user_interests ui on ui.interest_id = imr.interest_id
+                        where imr.doc_id = %s and imr.interest_id = %s
+                        order by imr.created_at desc
                         limit 1
                         """,
                         (article["doc_id"], target_id),
                     )
                     review_context = await cursor.fetchone() or {}
 
-                prompt = (
-                    template_text.replace("{{title}}", str(article.get("title") or ""))
-                    .replace("{{lead}}", str(article.get("lead") or ""))
-                    .replace("{{body}}", str(article.get("body") or "")[:4000])
-                    .replace(
-                        "{{explain_json}}",
-                        json.dumps(make_json_safe(review_context), ensure_ascii=True, sort_keys=True),
-                    )
+                prompt = render_llm_prompt_template(
+                    template_text,
+                    article=article,
+                    review_context=review_context,
+                    scope=scope,
                 )
                 review_result = review_with_gemini(prompt)
                 await cursor.execute(
@@ -3006,6 +3137,15 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                             target_id,
                         ),
                     )
+                    system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
+                    if should_dispatch_interest_matching(system_feed_result) and not historical_backfill:
+                        await insert_outbox_event(
+                            cursor,
+                            ARTICLE_CRITERIA_MATCHED_EVENT,
+                            "article",
+                            article["doc_id"],
+                            {"docId": str(article["doc_id"]), "version": 1},
+                        )
                 else:
                     final_decision = "suppress"
                     if review_result.decision == "approve":
@@ -3144,66 +3284,97 @@ async def update_reindex_job_options(
                 )
 
 
-async def count_historical_backfill_articles(doc_ids: Sequence[str] | None = None) -> int:
+async def count_historical_backfill_snapshot_targets(reindex_job_id: str) -> int:
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
-            if doc_ids:
-                await cursor.execute(
-                    """
-                    select count(*)::int as total
-                    from articles
-                    where processing_state in ('clustered', 'matched', 'notified')
-                      and doc_id = any(%s::uuid[])
-                    """,
-                    (list(doc_ids),),
-                )
-            else:
-                await cursor.execute(
-                    """
-                    select count(*)::int as total
-                    from articles
-                    where processing_state in ('clustered', 'matched', 'notified')
-                    """
-                )
+            await cursor.execute(
+                """
+                select count(*)::int as total
+                from reindex_job_targets
+                where reindex_job_id = %s
+                """,
+                (reindex_job_id,),
+            )
             row = await cursor.fetchone()
     return int(row["total"] or 0) if row else 0
 
 
-async def list_historical_backfill_doc_ids(
+async def prepare_historical_backfill_snapshot(
     *,
-    batch_size: int,
-    offset: int,
+    reindex_job_id: str,
     doc_ids: Sequence[str] | None = None,
-) -> list[str]:
+) -> int:
+    existing_total = await count_historical_backfill_snapshot_targets(reindex_job_id)
+    if existing_total > 0:
+        return existing_total
+
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                if doc_ids:
+                    await cursor.execute(
+                        """
+                        insert into reindex_job_targets (
+                          reindex_job_id,
+                          target_position,
+                          doc_id
+                        )
+                        select
+                          %s,
+                          row_number() over (order by articles.created_at asc, articles.doc_id asc),
+                          articles.doc_id
+                        from articles
+                        where processing_state in ('clustered', 'matched', 'notified')
+                          and doc_id = any(%s::uuid[])
+                        on conflict do nothing
+                        """,
+                        (reindex_job_id, list(doc_ids)),
+                    )
+                else:
+                    await cursor.execute(
+                        """
+                        insert into reindex_job_targets (
+                          reindex_job_id,
+                          target_position,
+                          doc_id
+                        )
+                        select
+                          %s,
+                          row_number() over (order by articles.created_at asc, articles.doc_id asc),
+                          articles.doc_id
+                        from articles
+                        where processing_state in ('clustered', 'matched', 'notified')
+                        on conflict do nothing
+                        """,
+                        (reindex_job_id,),
+                    )
+
+    return await count_historical_backfill_snapshot_targets(reindex_job_id)
+
+
+async def list_historical_backfill_snapshot_batch(
+    *,
+    reindex_job_id: str,
+    batch_size: int,
+    after_position: int,
+) -> list[dict[str, Any]]:
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
-            if doc_ids:
-                await cursor.execute(
-                    """
-                    select doc_id::text as doc_id
-                    from articles
-                    where processing_state in ('clustered', 'matched', 'notified')
-                      and doc_id = any(%s::uuid[])
-                    order by created_at asc, doc_id asc
-                    limit %s
-                    offset %s
-                    """,
-                    (list(doc_ids), batch_size, offset),
-                )
-            else:
-                await cursor.execute(
-                    """
-                    select doc_id::text as doc_id
-                    from articles
-                    where processing_state in ('clustered', 'matched', 'notified')
-                    order by created_at asc, doc_id asc
-                    limit %s
-                    offset %s
-                    """,
-                    (batch_size, offset),
-                )
+            await cursor.execute(
+                """
+                select
+                  target_position,
+                  doc_id::text as doc_id
+                from reindex_job_targets
+                where reindex_job_id = %s
+                  and target_position > %s
+                order by target_position asc
+                limit %s
+                """,
+                (reindex_job_id, after_position, batch_size),
+            )
             rows = list(await cursor.fetchall())
-    return [str(row["doc_id"]) for row in rows]
+    return rows
 
 
 async def find_current_prompt_template_id(scope: str) -> str | None:
@@ -3289,102 +3460,21 @@ async def replay_historical_articles(
     batch_size: int,
     doc_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    total_articles = await count_historical_backfill_articles(doc_ids)
-    processed_articles = 0
-    criteria_matches = 0
-    interest_matches = 0
-    criterion_llm_reviews = 0
-    interest_llm_reviews = 0
-    offset = 0
-
-    while True:
-        batch_doc_ids = await list_historical_backfill_doc_ids(
-            batch_size=batch_size,
-            offset=offset,
-            doc_ids=doc_ids,
-        )
-        if not batch_doc_ids:
-            break
-
-        for doc_id in batch_doc_ids:
-            criteria_event_id = str(uuid.uuid4())
-            await ensure_published_outbox_event(
-                event_id=criteria_event_id,
-                event_type=ARTICLE_CLUSTERED_EVENT,
-                aggregate_type="article",
-                aggregate_id=doc_id,
-                payload={
-                    "docId": doc_id,
-                    "historicalBackfill": True,
-                    "version": 1,
-                },
-            )
-            criteria_result = await process_match_criteria(
-                SimpleNamespace(
-                    data={
-                        "eventId": criteria_event_id,
-                        "docId": doc_id,
-                        "historicalBackfill": True,
-                    }
-                ),
-                "",
-            )
-            interests_event_id = str(uuid.uuid4())
-            await ensure_published_outbox_event(
-                event_id=interests_event_id,
-                event_type=ARTICLE_CLUSTERED_EVENT,
-                aggregate_type="article",
-                aggregate_id=doc_id,
-                payload={
-                    "docId": doc_id,
-                    "historicalBackfill": True,
-                    "version": 1,
-                },
-            )
-            interest_result = await process_match_interests(
-                SimpleNamespace(
-                    data={
-                        "eventId": interests_event_id,
-                        "docId": doc_id,
-                        "historicalBackfill": True,
-                    }
-                ),
-                "",
-            )
-            criteria_matches += int(criteria_result.get("criteriaCount") or 0)
-            interest_matches += int(interest_result.get("interestCount") or 0)
-            criterion_llm_reviews += await replay_gray_zone_reviews_for_doc(
-                doc_id=doc_id,
-                scope="criterion",
-            )
-            interest_llm_reviews += await replay_gray_zone_reviews_for_doc(
-                doc_id=doc_id,
-                scope="interest",
-            )
-            processed_articles += 1
-
-        offset += len(batch_doc_ids)
-        await update_reindex_job_options(
-            reindex_job_id,
-            {
-                "progress": {
-                    "processedArticles": processed_articles,
-                    "totalArticles": total_articles,
-                }
-            },
-        )
-
-    return {
-        "mode": "historical_backfill",
-        "processedArticles": processed_articles,
-        "totalArticles": total_articles,
-        "criteriaMatches": criteria_matches,
-        "interestMatches": interest_matches,
-        "criterionLlmReviews": criterion_llm_reviews,
-        "interestLlmReviews": interest_llm_reviews,
-        "retroNotifications": "skipped",
-        "batchSize": batch_size,
-    }
+    return await replay_historical_articles_with_snapshot(
+        reindex_job_id=reindex_job_id,
+        batch_size=batch_size,
+        doc_ids=list(doc_ids) if doc_ids is not None else None,
+        dependencies=HistoricalBackfillDependencies(
+            prepare_target_snapshot=prepare_historical_backfill_snapshot,
+            list_target_batch=list_historical_backfill_snapshot_batch,
+            update_job_options=update_reindex_job_options,
+            publish_outbox_event=ensure_published_outbox_event,
+            process_match_criteria=process_match_criteria,
+            process_match_interests=process_match_interests,
+            is_article_eligible_for_personalization=is_article_eligible_for_personalization,
+            replay_gray_zone_reviews_for_doc=replay_gray_zone_reviews_for_doc,
+        ),
+    )
 
 
 async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:

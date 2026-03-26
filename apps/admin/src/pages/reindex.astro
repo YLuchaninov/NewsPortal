@@ -85,13 +85,13 @@ function resolvePageHref(nextPage: number): string {
           <p class="text-sm font-medium">When should you reindex?</p>
           <p class="text-xs text-muted-foreground mt-1">
             The system maintains derived indices (like interest centroids) that are built from data stored in PostgreSQL.
-            If you notice matching quality degrading, or if interest templates have been significantly changed,
+            If you notice matching quality degrading, or if active interest templates or criteria have been significantly changed,
             reindexing rebuilds these derived structures from scratch. <strong>This is safe</strong> — it doesn't delete any data,
             it just recalculates the index used for fast similarity lookups.
           </p>
           <p class="text-xs text-muted-foreground mt-2">
             If you also want already persisted articles to be corrected in PostgreSQL, use <strong>Rebuild + repair existing articles</strong>.
-            That mode rematches historical rows and reruns gray-zone LLM review with the current templates, but it does <strong>not</strong>
+            That mode rematches historical rows against the current criteria set, including active interest-template-backed criteria, and reruns gray-zone LLM review with the current templates, but it does <strong>not</strong>
             resend retro notifications.
           </p>
         </div>
@@ -118,7 +118,7 @@ function resolvePageHref(nextPage: number): string {
           </select>
         </div>
         <p class="text-xs text-muted-foreground">
-          Reindexing runs asynchronously in the background. Historical repair rematches existing articles in the DB and reuses current templates,
+          Reindexing runs asynchronously in the background. Historical repair rematches existing articles in the DB against the current criteria set and reuses current LLM templates,
           but intentionally skips retro notification delivery.
         </p>
         <AdminConfirmSubmitButton

@@ -69,7 +69,7 @@ const pagePaths = {
       <p class="text-sm text-muted-foreground">
         {DEFAULT_BRAND_CONFIG.productName} is a zero-shot news filtering, personalization, and notification system.
         It ingests articles from RSS feeds, processes them through an NLP pipeline, matches them against
-        user interests and system criteria, and delivers notifications via web push, Telegram, or email digest.
+        system criteria first, then optional user interests, and delivers notifications via web push, Telegram, or email digest.
       </p>
       <div class="rounded-xl border border-border bg-card p-4">
         <p class="text-xs font-semibold mb-2">Data flow</p>
@@ -110,7 +110,7 @@ const pagePaths = {
         </div>
         <div class="rounded-md border border-border bg-card p-3">
           <p class="font-medium text-xs mb-1">Cost-efficient</p>
-          <p class="text-[11px] text-muted-foreground">LLM calls happen only for gray-zone articles. All other matching is local CPU using open-source models.</p>
+          <p class="text-[11px] text-muted-foreground">Baseline LLM calls happen only for criteria gray-zone articles. All other matching is local CPU using open-source models.</p>
         </div>
       </div>
     </section>
@@ -161,20 +161,20 @@ const pagePaths = {
       <h2 class="text-lg font-bold border-b border-border pb-2">LLM &amp; Interest Templates</h2>
       <p class="text-sm text-muted-foreground">
         <a href={pagePaths.llmTemplates} class="text-primary hover:underline">LLM Templates</a> configure AI review prompts,
-        while <a href={pagePaths.interestTemplates} class="text-primary hover:underline">Interest Templates</a> manage predefined user topic options.
+        while <a href={pagePaths.interestTemplates} class="text-primary hover:underline">Interest Templates</a> define reusable topic prototypes that sync into live system matching.
       </p>
 
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="rounded-xl border border-border bg-card p-4 space-y-2">
           <p class="text-xs font-semibold">🤖 LLM Templates</p>
           <p class="text-[11px] text-muted-foreground">
-            When an article's relevance score falls in the gray zone (0.45–0.72), the system sends it
+            When a system criterion falls in the gray zone (0.45–0.72), the baseline runtime sends it
             to an external LLM (like Google Gemini) for review. LLM templates define the exact prompt.
           </p>
           <p class="text-[11px] font-medium mt-2">Scopes:</p>
           <ul class="text-[11px] text-muted-foreground space-y-0.5 list-disc list-inside">
-            <li><code class="rounded bg-muted px-1 py-0.5">interests</code> — for user interest reviews</li>
-            <li><code class="rounded bg-muted px-1 py-0.5">criteria</code> — for system criterion reviews</li>
+            <li><code class="rounded bg-muted px-1 py-0.5">criteria</code> — active baseline scope for system criterion reviews</li>
+            <li><code class="rounded bg-muted px-1 py-0.5">interests</code> — reserved for future opt-in or premium user-interest reviews</li>
             <li><code class="rounded bg-muted px-1 py-0.5">global</code> — fallback when no specific template exists</li>
           </ul>
           <p class="text-[11px] font-medium mt-2">Expected JSON response:</p>
@@ -217,7 +217,7 @@ const pagePaths = {
       <h2 class="text-lg font-bold border-b border-border pb-2">Gray Zone &amp; AI Review</h2>
       <div class="rounded-xl border border-border bg-card p-4 space-y-3">
         <p class="text-sm text-muted-foreground">
-          The matching engine scores each article on a 0–1 scale against criteria and user interests:
+          The matching engine scores each article on a 0–1 scale against criteria and user interests, but the baseline LLM review lane currently applies only to system criteria:
         </p>
         <div class="grid gap-2 sm:grid-cols-3">
           <div class="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 p-3 text-center">
@@ -228,7 +228,7 @@ const pagePaths = {
           <div class="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3 text-center">
             <p class="text-lg font-bold text-amber-600 dark:text-amber-400">0.45 – 0.72</p>
             <p class="text-[11px] font-medium text-amber-800 dark:text-amber-300">Gray Zone</p>
-            <p class="text-[10px] text-muted-foreground mt-0.5">Uncertain — sent to LLM for review</p>
+            <p class="text-[10px] text-muted-foreground mt-0.5">Criteria gray zone — sent to LLM for review</p>
           </div>
           <div class="rounded-md bg-muted border border-border p-3 text-center">
             <p class="text-lg font-bold text-muted-foreground">≤ 0.45</p>
@@ -240,10 +240,10 @@ const pagePaths = {
           The LLM's response (<code class="rounded bg-muted px-1 py-0.5">approve</code>,
           <code class="rounded bg-muted px-1 py-0.5">reject</code>, or
           <code class="rounded bg-muted px-1 py-0.5">uncertain</code>) determines the final action.
-          <code class="rounded bg-muted px-1 py-0.5">uncertain</code> defaults to "don't notify" for safety.
+          <code class="rounded bg-muted px-1 py-0.5">uncertain</code> defaults to "don't notify" for safety. User-interest gray-zone reviews are disabled in the baseline tier and suppress instead.
         </p>
         <p class="text-xs text-muted-foreground">
-          <strong>LLM costs are controlled</strong> — only gray-zone articles trigger API calls. All other
+          <strong>LLM costs are controlled</strong> — only criteria gray-zone articles trigger API calls in the baseline runtime. All other
           matching uses local CPU with open-source embedding models. Monitor your spend on the
           <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page.
         </p>

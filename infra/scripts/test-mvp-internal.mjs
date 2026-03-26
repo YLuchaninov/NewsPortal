@@ -446,6 +446,78 @@ function queryPostgres(env, sql) {
   return result.stdout.trim();
 }
 
+function queryPostgresInt(env, sql) {
+  const value = queryPostgres(env, sql);
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Expected integer query result, got ${value || "<empty>"}.`);
+  }
+  return parsed;
+}
+
+function countInterestMatches(env, { docId, interestId }) {
+  return queryPostgresInt(
+    env,
+    `
+      select count(*)::int
+      from interest_match_results
+      where doc_id = ${sqlLiteral(docId)}
+        and interest_id = ${sqlLiteral(interestId)};
+    `
+  );
+}
+
+function countNotifications(env, { docId, interestId = null, status = null }) {
+  const filters = [`doc_id = ${sqlLiteral(docId)}`];
+  if (interestId) {
+    filters.push(`interest_id = ${sqlLiteral(interestId)}`);
+  }
+  if (status) {
+    filters.push(`status = ${sqlLiteral(status)}`);
+  }
+  return queryPostgresInt(
+    env,
+    `
+      select count(*)::int
+      from notification_log
+      where ${filters.join("\n        and ")};
+    `
+  );
+}
+
+function countSuppressions(env, { docId, interestId = null }) {
+  const filters = [`doc_id = ${sqlLiteral(docId)}`];
+  if (interestId) {
+    filters.push(`interest_id = ${sqlLiteral(interestId)}`);
+  }
+  return queryPostgresInt(
+    env,
+    `
+      select count(*)::int
+      from notification_suppression
+      where ${filters.join("\n        and ")};
+    `
+  );
+}
+
+function latestSuppressionReason(env, { docId, interestId = null }) {
+  const filters = [`doc_id = ${sqlLiteral(docId)}`];
+  if (interestId) {
+    filters.push(`interest_id = ${sqlLiteral(interestId)}`);
+  }
+  const value = queryPostgres(
+    env,
+    `
+      select reason
+      from notification_suppression
+      where ${filters.join("\n        and ")}
+      order by created_at desc
+      limit 1;
+    `
+  );
+  return value || null;
+}
+
 function normalizeMailMessages(payload) {
   if (Array.isArray(payload)) {
     return payload;
@@ -476,6 +548,8 @@ async function main() {
   const notificationEmail = `internal-user-${runId}@example.test`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
   const articleSourceUrl = `https://example.test/articles/${runId}`;
+  const adminFreshRunId = `${runId}-admin-fresh`;
+  const adminFreshArticleTitle = `EU AI policy update reaches Brussels and Warsaw ${adminFreshRunId}`;
   let stackStarted = false;
 
   try {
@@ -1162,8 +1236,266 @@ async function main() {
       );
     }
 
+    log("Creating an admin-managed user interest for the selected user.");
+    const adminManagedInterest = await postForm(
+      "http://127.0.0.1:4322/bff/admin/user-interests",
+      {
+        userId,
+        description: `Admin-managed EU AI policy updates in Brussels and Warsaw ${runId}`,
+        positive_texts: "EU AI policy update\nBrussels AI guidance\nWarsaw AI guidance",
+        negative_texts: "sports\ncelebrity gossip",
+        places: "Brussels, Warsaw",
+        languages_allowed: "en",
+        must_have_terms: "AI, policy",
+        priority: "1",
+        enabled: "true"
+      },
+      {
+        cookie: adminCookie
+      }
+    );
+    const adminManagedInterestId = String(adminManagedInterest.json?.interestId ?? "");
+    if (!adminManagedInterestId) {
+      throw new Error("Admin-managed interest creation did not return an interestId.");
+    }
+
+    await waitFor(
+      "compiled admin-managed interest",
+      async () =>
+        fetchJson(`http://127.0.0.1:4322/bff/admin/user-interests?userId=${encodeURIComponent(userId)}`, {
+          cookie: adminCookie
+        }),
+      (payload) =>
+        Array.isArray(payload?.interests) &&
+        payload.interests.some(
+          (interest) =>
+            String(interest.interest_id ?? "") === adminManagedInterestId &&
+            String(interest.compile_status ?? "") === "compiled"
+        )
+    );
+
+    const historicalAdminMatchCountBeforeBackfill = countInterestMatches(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+    if (historicalAdminMatchCountBeforeBackfill !== 0) {
+      throw new Error(
+        `Expected historical article ${docId} to have 0 matches for new admin-managed interest ${adminManagedInterestId} before backfill, got ${historicalAdminMatchCountBeforeBackfill}.`
+      );
+    }
+    const historicalNotificationCountBeforeBackfill = countNotifications(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+    const historicalSuppressionCountBeforeBackfill = countSuppressions(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+
+    log("Creating a second RSS channel to prove fresh-ingest matching for the admin-managed interest.");
+    const adminFreshChannel = await postForm(
+      "http://127.0.0.1:4322/bff/admin/channels",
+      {
+        providerType: "rss",
+        name: `Internal MVP RSS Fresh ${runId}`,
+        fetchUrl: `http://web:4321/internal-mvp-feed.xml?run=${encodeURIComponent(adminFreshRunId)}`,
+        language: "en"
+      },
+      {
+        cookie: adminCookie
+      }
+    );
+    const adminFreshChannelId = String(adminFreshChannel.json?.channelId ?? "");
+    if (!adminFreshChannelId) {
+      throw new Error("Fresh RSS channel creation did not return a channelId.");
+    }
+
+    runCompose(
+      "exec",
+      "-T",
+      "fetchers",
+      "pnpm",
+      "--filter",
+      "@newsportal/fetchers",
+      "run:once",
+      adminFreshChannelId
+    );
+
+    const freshArticleRow = await waitFor(
+      "fresh article row for admin-managed interest",
+      async () => {
+        const row = queryPostgres(
+          env,
+          `
+            select doc_id::text, processing_state, visibility_state
+            from articles
+            where title = ${sqlLiteral(adminFreshArticleTitle)}
+            order by ingested_at desc
+            limit 1;
+          `
+        );
+        return row ? row.split("|") : null;
+      },
+      (row) => Array.isArray(row) && row.length === 3
+    );
+    const freshDocId = freshArticleRow[0];
+
+    await waitFor(
+      "fresh-ingest admin-managed interest match",
+      async () =>
+        countInterestMatches(env, {
+          docId: freshDocId,
+          interestId: adminManagedInterestId
+        }),
+      (value) => value === 1
+    );
+
+    const freshDeliveryResolution = await waitFor(
+      "fresh article delivery resolution",
+      async () => {
+        const sentCount = countNotifications(env, {
+          docId: freshDocId,
+          interestId: adminManagedInterestId,
+          status: "sent"
+        });
+        const failedCount = countNotifications(env, {
+          docId: freshDocId,
+          interestId: adminManagedInterestId,
+          status: "failed"
+        });
+        const suppressionCount = countSuppressions(env, {
+          docId: freshDocId,
+          interestId: adminManagedInterestId
+        });
+        if (failedCount > 0) {
+          throw new Error(
+            `Notification delivery failed for ${freshDocId} and interest ${adminManagedInterestId}.`
+          );
+        }
+        return {
+          sentCount,
+          suppressionCount,
+          suppressionReason:
+            suppressionCount > 0
+              ? latestSuppressionReason(env, {
+                  docId: freshDocId,
+                  interestId: adminManagedInterestId
+                })
+              : null
+        };
+      },
+      (value) => value.sentCount > 0 || value.suppressionCount > 0
+    );
+
+    if (
+      freshDeliveryResolution.suppressionCount > 0 &&
+      freshDeliveryResolution.suppressionReason !== "recent_send_history"
+    ) {
+      throw new Error(
+        `Expected fresh article ${freshDocId} suppression to come from recent_send_history, got ${freshDeliveryResolution.suppressionReason || "<none>"}.`
+      );
+    }
+
+    const freshAdminMatchCountBeforeBackfill = countInterestMatches(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
+    const freshNotificationCountBeforeBackfill = freshDeliveryResolution.sentCount;
+    const freshSuppressionCountBeforeBackfill = freshDeliveryResolution.suppressionCount;
+
+    log("Queueing historical backfill after the admin-managed interest is live.");
+    const backfillJob = await postForm(
+      "http://127.0.0.1:4322/bff/admin/reindex",
+      {
+        indexName: "interest_centroids",
+        jobKind: "backfill"
+      },
+      {
+        cookie: adminCookie
+      }
+    );
+    const backfillJobId = String(backfillJob.json?.reindexJobId ?? "");
+    if (!backfillJobId) {
+      throw new Error("Backfill request did not return a reindexJobId.");
+    }
+
+    await waitFor(
+      "completed admin-triggered backfill job",
+      async () =>
+        queryPostgres(
+          env,
+          `
+            select status
+            from reindex_jobs
+            where reindex_job_id = ${sqlLiteral(backfillJobId)};
+          `
+        ),
+      (value) => value === "completed"
+    );
+
+    const historicalAdminMatchCountAfterBackfill = countInterestMatches(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+    if (historicalAdminMatchCountAfterBackfill !== 1) {
+      throw new Error(
+        `Expected historical article ${docId} to gain one match for admin-managed interest ${adminManagedInterestId} after backfill, got ${historicalAdminMatchCountAfterBackfill}.`
+      );
+    }
+
+    const historicalNotificationCountAfterBackfill = countNotifications(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+    if (historicalNotificationCountAfterBackfill !== historicalNotificationCountBeforeBackfill) {
+      throw new Error(
+        `Expected backfill to avoid retro notifications for historical article ${docId}; before=${historicalNotificationCountBeforeBackfill}, after=${historicalNotificationCountAfterBackfill}.`
+      );
+    }
+
+    const historicalSuppressionCountAfterBackfill = countSuppressions(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+    if (historicalSuppressionCountAfterBackfill !== historicalSuppressionCountBeforeBackfill) {
+      throw new Error(
+        `Expected backfill to avoid retro suppression rows for historical article ${docId}; before=${historicalSuppressionCountBeforeBackfill}, after=${historicalSuppressionCountAfterBackfill}.`
+      );
+    }
+
+    const freshAdminMatchCountAfterBackfill = countInterestMatches(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
+    if (freshAdminMatchCountAfterBackfill !== freshAdminMatchCountBeforeBackfill) {
+      throw new Error(
+        `Expected backfill to keep fresh article ${freshDocId} match cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshAdminMatchCountBeforeBackfill}, after=${freshAdminMatchCountAfterBackfill}.`
+      );
+    }
+
+    const freshNotificationCountAfterBackfill = countNotifications(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId,
+      status: "sent"
+    });
+    if (freshNotificationCountAfterBackfill !== freshNotificationCountBeforeBackfill) {
+      throw new Error(
+        `Expected backfill to avoid retro notifications for fresh article ${freshDocId}; before=${freshNotificationCountBeforeBackfill}, after=${freshNotificationCountAfterBackfill}.`
+      );
+    }
+
+    const freshSuppressionCountAfterBackfill = countSuppressions(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
+    if (freshSuppressionCountAfterBackfill !== freshSuppressionCountBeforeBackfill) {
+      throw new Error(
+        `Expected backfill to keep fresh article ${freshDocId} suppression cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshSuppressionCountBeforeBackfill}, after=${freshSuppressionCountAfterBackfill}.`
+      );
+    }
+
     log(
-      `Internal MVP acceptance passed for user ${userId}, admin ${adminEmail}, and article ${docId}.`
+      `Internal MVP acceptance passed for user ${userId}, admin ${adminEmail}, historical article ${docId}, fresh article ${freshDocId}, and admin-managed interest ${adminManagedInterestId}.`
     );
   } finally {
     if (stackStarted) {

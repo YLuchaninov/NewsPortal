@@ -14,6 +14,419 @@
 
 ## Completed items
 
+### 2026-03-26 — P-DOCS-SYSTEM-FIRST-SYNC-2 — Synced `HOW_TO_USE.md` and `EXAMPLES.md` with the live system-first contract
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: после первого docs pass пользователь уточнил, что отдельные operator-facing guides `HOW_TO_USE.md` и `EXAMPLES.md` тоже должны быть проверены на соответствие новому system-first порядку `criteria -> criteria-scope LLM -> system-selected feed -> optional user_interests`.
+- Что изменилось:
+  - `HOW_TO_USE.md` теперь описывает system-first data flow, актуальные dashboard labels, criteria-first baseline для gray-zone LLM review, distinction between admin `interest_templates` and real per-user `user_interests`, текущие article states, and the updated reindex mode guidance;
+  - `EXAMPLES.md` теперь объясняет, что baseline LLM config uses `criteria` + `global`, while `interests` is only future-ready, и что interest templates sync into live `criteria` instead of pretending to be the same thing as real user personalization;
+  - example prompts in `EXAMPLES.md` were updated to the current placeholder contract (`{title}`, `{lead}`, `{body}`, `{explain_json}`, `{interest_name}`, `{criterion_name}`) instead of older legacy tokens.
+- Что проверено:
+  - targeted `rg` consistency search across `HOW_TO_USE.md` and `EXAMPLES.md`
+  - manual content review against the already-shipped system-first runtime and admin/UI truth
+  - `git diff --check`
+- Риски или gaps:
+  - this patch intentionally stayed docs-only; it did not change runtime behavior, reindex semantics, or notification contracts.
+- Follow-up:
+  - future docs work should open a new bounded item only if the product later activates system-feed notifications or premium interest-side LLM review.
+
+### 2026-03-26 — P-DOCS-SYSTEM-FIRST-SYNC-1 — Synced README/how-to-use/examples with the live system-first contract
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: после закрытия system-first runtime/feed capability пользователь отдельно попросил проверить README, how-to-use surfaces и examples на соответствие новой последовательности `criteria -> criteria-scope LLM -> system-selected feed -> optional user_interests`.
+- Что изменилось:
+  - `README.md` теперь truthfully описывает system-first ingest/backfill order, explains that active admin `interest_templates` materialize into system `criteria`, clarifies that users without `user_interests` still see the system-selected feed, and updates the targeted-smoke notes to the sequential routing contract;
+  - README manual-usage guidance and SQL example now point at `system_feed_results` instead of suggesting that public feed eligibility comes from `articles.processing_state`;
+  - `docs/blueprint.md` had one remaining stale feed-definition block and was synced so public/system feed truth now depends on `system_feed_results.eligible_for_feed`, while `active news` matches the same set;
+  - `docs/contracts/README.md` and `.env.example` were reviewed during the pass and required no changes.
+- Что проверено:
+  - targeted `rg` consistency search across `README.md`, `docs/blueprint.md`, `docs/contracts/README.md` and `.env.example`
+  - manual content review against the already-shipped system-first runtime and feed semantics
+  - `git diff --check`
+- Риски или gaps:
+  - this patch intentionally stayed docs-only; it did not change runtime behavior, notification contracts, or env wiring.
+- Follow-up:
+  - future work should open a new bounded item only if the product adds system-feed notifications or premium interest-side LLM review.
+
+### 2026-03-26 — S-SYSTEM-FEED-CONTRACT-2 — Added the durable `system_feed_results` gate contract
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: planning spike зафиксировал, что requested hierarchy не может быть честно внедрена без article-level gate между system criteria и optional personalization; runtime нужен был durable read model, а не просто новое условие в памяти worker-а.
+- Что изменилось:
+  - migration `database/migrations/0009_system_feed_results.sql` и synced DDL в `database/ddl/phase4_matching_notification.sql` добавили durable table `system_feed_results`;
+  - helper `services/workers/app/system_feed.py` стал canonical summary contract для article-level system gate: `pass_through`, `pending_llm`, `eligible`, `filtered_out`;
+  - criteria worker и criterion-scope LLM review в `services/workers/app/main.py` теперь каждый раз recompute-ят и upsert-ят `system_feed_results`, так что article-level gate truth живет в PostgreSQL, а не только в текущем job execution;
+  - worker smoke получил explicit consistency checks для `system_feed_results`, а targeted unit coverage закрепила summary semantics на pure Python level.
+- Что проверено:
+  - `python -m py_compile services/workers/app/main.py services/workers/app/smoke.py services/workers/app/system_feed.py`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_system_feed_contract tests.unit.python.test_llm_prompt_rendering tests.unit.python.test_reindex_backfill_progress`
+  - compose worker smoke at this stage proved `system_feed_results` stays in sync both on fresh cluster/match flow and on historical backfill replay
+- Риски или gaps:
+  - stage intentionally stopped at contract truth; it did not yet make the gate upstream for personalization or public/system feed surfaces.
+- Follow-up:
+  - `S-SYSTEM-FIRST-RUNTIME-3` became the next truthful stage and rewired fresh ingest plus historical backfill around the new gate.
+
+### 2026-03-26 — S-SYSTEM-FIRST-RUNTIME-3 — Made criteria-first matching order live
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после появления durable gate contract runtime по-прежнему fanout-ил `article.clustered` параллельно в criteria и interests, так что system criteria plus criteria-LLM еще не были реальным upstream gate для personalization.
+- Что изменилось:
+  - `packages/contracts/src/queue.ts` и `services/relay/src/cli/test-phase45-routing.ts` теперь фиксируют последовательный routing: `article.clustered -> q.match.criteria`, затем `article.criteria.matched -> q.match.interests`;
+  - `services/workers/app/main.py` начал публиковать `article.criteria.matched` только после того, как `system_feed_results` стали `eligible`/`pass_through`, а `process_match_interests(...)` дополнительно hard-check-ит stored gate before matching;
+  - historical backfill в `services/workers/app/reindex_backfill.py` и `services/workers/app/main.py` теперь повторяет ту же иерархию: replay criteria, replay only criterion gray-zone reviews, rematch interests only for system-approved articles;
+  - baseline interest-scope gray-zone LLM review removed from default tier: gray-zone user-interest decisions suppress with `interest_gray_zone_llm_disabled`, and backfill now reports `interestLlmReviews = 0`.
+- Что проверено:
+  - `python -m py_compile services/workers/app/main.py services/workers/app/smoke.py services/workers/app/system_feed.py services/workers/app/reindex_backfill.py`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_system_feed_contract tests.unit.python.test_llm_prompt_rendering tests.unit.python.test_reindex_backfill_progress`
+  - `node --import tsx --test tests/unit/ts/queue.test.ts`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke cluster-match-notify`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke reindex-backfill`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T relay pnpm --filter @newsportal/relay test:phase45-routing`
+- Риски или gaps:
+  - stage intentionally left public/system feed surfaces on the older `processing_state`-based eligibility contract, so users without `user_interests` still could not yet see the requested system-selected default media flow.
+- Follow-up:
+  - `S-SYSTEM-FEED-UX-4` became the next truthful stage and switched feed/read surfaces plus operator copy onto `system_feed_results`.
+
+### 2026-03-26 — C-SYSTEM-FIRST-PERSONALIZATION — Sequential system-first matching and optional personalization are now live
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь потребовал двухуровневую обязательную иерархию: system customization first (`criteria` + criteria-scope LLM), then optional per-user personalization, with no baseline interest-side gray-zone LLM and with a default system-selected media flow for users without `user_interests`.
+- Что изменилось:
+  - `SP-SYSTEM-FIRST-PERSONALIZATION-1` defined the capability and split it into contract, runtime, UI/feed, and proof stages;
+  - `S-SYSTEM-FEED-CONTRACT-2` introduced durable `system_feed_results` as the article-level source of truth after system criteria and criteria-scope LLM review;
+  - `S-SYSTEM-FIRST-RUNTIME-3` made fresh ingest and historical backfill sequential around that gate, and removed baseline interest-scope gray-zone LLM review from the default runtime;
+  - `S-SYSTEM-FEED-UX-4` switched `services/api/app/main.py` feed eligibility and dashboard summary onto `system_feed_results`, added system-gate semantics to admin article/help/dashboard copy, and updated the web feed so user-facing cards show a system-selected badge instead of leaking raw pipeline states for eligible-but-non-personalized articles.
+- Что проверено:
+  - runtime proof for the sequential gate:
+    `python -m py_compile services/workers/app/main.py services/workers/app/smoke.py services/workers/app/system_feed.py services/workers/app/reindex_backfill.py`
+    `PYTHONPATH=. python -m unittest tests.unit.python.test_system_feed_contract tests.unit.python.test_llm_prompt_rendering tests.unit.python.test_reindex_backfill_progress`
+    `node --import tsx --test tests/unit/ts/queue.test.ts`
+    `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke cluster-match-notify`
+    `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke reindex-backfill`
+    `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T relay pnpm --filter @newsportal/relay test:phase45-routing`
+  - feed/UI proof for the default system-selected flow:
+    `python -m py_compile services/api/app/main.py`
+    `pnpm --filter @newsportal/web build`
+    `pnpm --filter @newsportal/admin build`
+    DB-backed fallback proof inside the compose worker image confirmed that an article with `processing_state = clustered` and `system_feed_results.eligible_for_feed = true` appears in `/feed` even with no personalization lane.
+- Риски или gaps:
+  - baseline notifications still remain a personalization-lane concern: users without `user_interests` now get the system-selected media flow, but they do not automatically receive a new notification fallback contract;
+  - future premium/opt-in return of interest-scope LLM review must stay a separate explicit capability, not a silent rollback of the baseline.
+- Follow-up:
+  - capability is fully closed; any future work on feed ranking polish, notification fallback, or premium interest-side LLM review must open a new bounded item instead of reopening this capability.
+
+### 2026-03-26 — SP-SYSTEM-FIRST-PERSONALIZATION-1 — Planned the two-layer system-first matching hierarchy
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь явно запросил новый обязательный порядок обработки, в котором каждая статья сначала проходит через system `criteria`, materialized from admin `interest_templates`, затем через criteria-scope gray-zone LLM review, и только потом попадает либо в default system feed, либо в optional per-user personalization; при этом baseline runtime больше не должен по умолчанию делать gray-zone LLM review для `user_interests`.
+- Что выяснилось:
+  - current live ingest still fans out one `article.clustered` event into parallel criteria and interest queues, so criteria review is not yet an upstream gate for personalization;
+  - admin `interest_templates` already sync into real system `criteria`, so the requested first layer can reuse the existing operator surface instead of inventing a new source of truth;
+  - current notify/runtime contract is driven by `interest_match_results`, so users without `user_interests` do not yet have a truthful system-selected fallback feed/alert path;
+  - historical backfill replays criteria and interests as separate steps and then replays gray-zone reviews per scope, so the new hierarchy needs both fresh-ingest and backfill orchestration changes rather than copy-only fixes;
+  - the requested removal of baseline interest-scope gray-zone LLM should be treated as part of the new capability, while any future subscription-gated return of that feature should stay a separate follow-up lane.
+- Рекомендованный stage plan:
+  - `S-SYSTEM-FEED-CONTRACT-2`: introduce the durable post-criteria/post-LLM system-feed eligibility contract and sync blueprint/verification truth when that contract becomes real;
+  - `S-SYSTEM-FIRST-RUNTIME-3`: rewire fresh ingest and historical backfill so per-user `user_interests` run only on system-approved articles and are skipped cleanly when a user has no interests configured;
+  - `S-SYSTEM-FEED-UX-4`: update web/admin/public feed semantics and copy so the default system feed and optional personalization are both explicit;
+  - `S-SYSTEM-FIRST-PROOF-5`: prove no-interest fallback, interest-enabled personalization, historical backfill behavior, and absence of baseline interest-scope gray-zone LLM in the default runtime.
+- Что проверено:
+  - read-only inspection of `docs/blueprint.md`, `docs/work.md`, `docs/history.md`, `services/relay/src/cli/test-phase45-routing.ts`, `services/workers/app/main.py`, `services/workers/app/reindex_backfill.py`, `apps/admin/src/lib/server/admin-templates.ts`, `apps/admin/src/pages/templates/interests.astro`, and `apps/admin/src/pages/user-interests.astro` confirmed the current parallel runtime and the existing template-to-criteria operator contract;
+  - runtime doc sync in `docs/work.md` now records the new capability, ready next stage, current-vs-target truth, and handoff warning not to rewrite blueprint prematurely.
+- Риски или gaps:
+  - capability is structural: it changes pipeline order, notification semantics, read-model expectations, and durable architecture truth together;
+  - until `S-SYSTEM-FEED-CONTRACT-2` lands, the real runtime and blueprint truth remain the current parallel model.
+- Follow-up:
+  - `S-SYSTEM-FEED-CONTRACT-2` is now the next ready implementation stage;
+  - if the product later wants premium/opt-in gray-zone LLM for `user_interests`, that should open a separate explicit capability after the baseline hierarchy is implemented.
+
+### 2026-03-25 — S-USER-INTEREST-MATCH-PROOF-4 — Internal MVP acceptance now proves admin-managed per-user interests end-to-end
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после shared-contract и admin-UX stages capability все еще оставался незавершенным, потому что не было честного runtime proof, что interest, созданный оператором через admin on-behalf flow, реально участвует и в fresh ingest, и в historical backfill.
+- Что изменилось:
+  - `infra/scripts/test-mvp-internal.mjs` теперь после базового RSS/admin/moderation acceptance создает real admin-managed `user_interest` через `/admin/bff/admin/user-interests`, ждет `compile_status = compiled`, и проверяет, что уже существующая историческая статья пока не имеет match rows для нового interest;
+  - тот же script создает второй RSS channel/article для того же пользователя и доказывает fresh-ingest participation: появляется targeted `interest_match`, а delivery считается resolved либо через реальную отправку, либо через truthfully accepted duplicate-cluster suppression (`recent_send_history`) вместо ложного ожидания обязательного `notification_log`;
+  - acceptance затем ставит admin-triggered `backfill` через `/admin/bff/admin/reindex`, ждет `completed` job, и подтверждает, что историческая статья получает ровно один missing match для нового interest без retro notification/suppression drift, while the fresh article keeps stable match/delivery cardinality through backfill.
+- Что проверено:
+  - `node --check infra/scripts/test-mvp-internal.mjs`
+  - `pnpm integration_tests`
+  - final green runtime proof recorded:
+    user `de5b8545-2572-42eb-a0dc-e312a509cb5e`,
+    admin alias `yluchaninov+internal-admin-682c854e@gmail.com`,
+    historical article `45003416-d52c-485a-87b4-9ebd3fadbeca`,
+    fresh article `5096b4f4-9909-4d3f-ab35-b079729937b7`,
+    interest `44f84101-6393-47aa-bf65-f0cb446273ed`
+- Риски или gaps:
+  - proof remains HTTP/browser-style rather than a human click-through in a graphical browser;
+  - RSS-first acceptance scope still does not prove `website`, `api`, or `email_imap` ingest;
+  - compose teardown removed local DB/Redis/Mailpit artifacts from this run, but the new Firebase admin alias remains as external dev residue until explicit cleanup.
+- Follow-up:
+  - the stage has no truthful live next step and should stay archived;
+  - any future cleanup of dev Firebase admin aliases should be its own bounded cleanup item.
+
+### 2026-03-25 — C-MATCHING-OPERATOR-TRUTH — Reindex progress truth and real user-interest operator flow are closed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь попросил сначала спроектировать и затем довести до конца два связанных outcomes: устранить progress drift в historical reindex и внедрить truthful operator flow для real per-user `user_interests`, чтобы это можно было реально тестировать и использовать из admin.
+- Что изменилось:
+  - `SP-REINDEX-PROGRESS-DRIFT-1` выбрал durable design с frozen per-job target set вместо mutable `count + offset` replay;
+  - `S-REINDEX-PROGRESS-DRIFT-2` реализовал этот design через PostgreSQL `reindex_job_targets`, extraction of `services/workers/app/reindex_backfill.py`, stable replay totals и compose smoke proof без retro notifications;
+  - `SP-USER-INTEREST-OPERATOR-FLOW-1` зафиксировал product truth: `user_interests` остаются per-user data, admin действует только on behalf of a selected user, and this must not be blurred into template-backed system criteria;
+  - `S-USER-INTEREST-SHARED-CONTRACT-2` вынес canonical per-user mutation/compile logic в shared server helper и дал admin audited on-behalf BFF endpoints for lookup plus CRUD;
+  - `S-USER-INTEREST-ADMIN-UX-3` добавил packaged `/user-interests` admin page with exact `email`/`user_id` lookup, truthful on-behalf copy, CRUD controls, and visible compile/error state;
+  - `S-USER-INTEREST-MATCH-PROOF-4` finally closed the capability with compose-backed end-to-end proof that admin-managed interests participate in fresh ingest and historical backfill under the real runtime boundaries.
+- Что проверено:
+  - targeted Python proof for reindex progress hardening:
+    `PYTHONPATH=. python -m unittest tests.unit.python.test_reindex_backfill_progress tests.unit.python.test_llm_prompt_rendering`
+    `python -m py_compile services/workers/app/main.py services/workers/app/reindex_backfill.py services/workers/app/smoke.py services/workers/app/prompting.py`
+    `pnpm db:migrate`
+    `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build worker`
+    `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke reindex-backfill`
+  - targeted/admin contract proof:
+    `node --import tsx --test tests/unit/ts/user-interests.test.ts tests/unit/ts/admin-user-interests.test.ts tests/unit/ts/admin-user-interest-page.test.ts`
+    `pnpm typecheck`
+    `pnpm --filter @newsportal/admin build`
+  - final capability closeout proof:
+    `pnpm integration_tests`
+- Риски или gaps:
+  - capability intentionally does not add a global admin CRUD surface for system `criteria`; template-backed criteria and per-user interests remain separate operator layers;
+  - retention/cleanup policy for completed `reindex_job_targets` rows remains an operational concern for a future bounded item;
+  - dev Firebase aliases created during proof (`yluchaninov+internal-admin-f77f2941@gmail.com`, `yluchaninov+internal-admin-682c854e@gmail.com`) remain tracked external residue.
+- Follow-up:
+  - the capability is fully closed and should not remain in live execution state;
+  - any future work on user-interest cleanup, extra operator polish, or reindex observability/reporting must open a new explicit item instead of reopening this capability.
+
+### 2026-03-25 — S-USER-INTEREST-ADMIN-UX-3 — Admin now ships a dedicated per-user interest manage page
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после shared-contract/admin-BFF stage пользователь попросил продолжить implementation, чтобы операторы могли реально пользоваться `user_interests` из admin shell, а не только через backend-only endpoints.
+- Что изменилось:
+  - `apps/admin/src/pages/user-interests.astro` added the dedicated manage surface: lookup by exact `email` or `user_id`, explicit “acting on behalf of” copy, create form, per-interest edit/clone/delete forms, and visible compile/error state for each real per-user interest;
+  - `apps/admin/src/lib/server/user-interest-admin-page.ts` now owns page-only normalization/formatting helpers for lookup state, hidden context fields, CSV/textarea rendering, and compile-state badges, which keeps the Astro page itself small enough to review;
+  - `apps/admin/src/layouts/AdminShell.astro`, `apps/admin/src/pages/index.astro`, and `apps/admin/src/pages/templates/interests.astro` now surface the page truthfully in admin navigation and explain that global `interest_templates` are different from user-owned `user_interests`;
+  - `apps/admin/src/lib/server/user-interests.ts` became self-contained for the packaged admin runtime: it no longer imports server logic from `apps/web`, so lookup/audit/CRUD/compile-request helpers stay inside the admin boundary and the compose-built admin image no longer needs a hidden cross-app Docker copy;
+  - the temporary `apps/web` copy was removed from `infra/docker/admin.Dockerfile`, restoring the intended packaging boundary for the admin app.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/admin-user-interest-page.test.ts tests/unit/ts/admin-user-interests.test.ts tests/unit/ts/user-interests.test.ts`
+  - `pnpm typecheck`
+  - `pnpm --filter @newsportal/admin build`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build admin nginx`
+  - nginx-shaped runtime smoke via `node --input-type=module ...`:
+    page load at `/admin/user-interests?userId=<userId>` preserved target-user context in HTML,
+    browser-style POST to `/admin/bff/admin/user-interests` succeeded,
+    the selected user's interest reached `compile_status = compiled`,
+    the page reloaded with compiled state visible,
+    and the created interest `c1660c73-1bd0-4a76-9b4f-c9e1d48f62b0` was deleted successfully after proof
+- Риски или gaps:
+  - stage intentionally stops at manage-surface proof; it does not yet prove that an admin-managed per-user interest creates fresh-ingest matches or participates in historical backfill;
+  - runtime proof used browser-style HTTP requests, not a manual human click-through in a graphical browser;
+  - local proof residue remains tracked: anonymous user `fa226230-b850-4dbd-9d65-b5f31858ea21` and Firebase allowlisted admin alias `yluchaninov+internal-admin-f77f2941@gmail.com` from smoke run `f77f2941`.
+- Follow-up:
+  - the next truthful stage is `S-USER-INTEREST-MATCH-PROOF-4`, which should prove fresh-ingest and historical-backfill matching for an admin-managed per-user interest on the local compose baseline;
+  - if a future item wants cleanup of the smoke user/admin identity residue, that should be explicit cleanup work rather than a silent reset of local state.
+
+### 2026-03-25 — S-USER-INTEREST-SHARED-CONTRACT-2 — Admin now has an audited on-behalf backend contract for real `user_interests`
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после design spike пользователь попросил начать реализацию truthful operator path для реальных `user_interests`, но без смешивания их с template-backed system `criteria`.
+- Что изменилось:
+  - `apps/web/src/lib/server/user-interests.ts` стал canonical mutation/read contract для per-user interests: create/update/clone/delete/list logic, payload normalization и queue-event builder теперь живут в одном server helper вместо дублированного SQL в web routes;
+  - `apps/web/src/pages/bff/interests.ts` и `apps/web/src/pages/bff/interests/[interestId].ts` теперь используют этот shared helper, так что user-owned web flow и будущие operator flows опираются на один persistence/compile contract;
+  - `apps/admin/src/lib/server/user-interests.ts` получил truthful admin-on-behalf orchestration: lookup target user by `email` or `user_id`, audited create/update/clone/delete helpers, and compile-request queue wiring that preserves per-user ownership instead of inventing a global interest catalog;
+  - новые admin BFF endpoints `apps/admin/src/pages/bff/admin/user-interests.ts` и `apps/admin/src/pages/bff/admin/user-interests/[interestId].ts` дают JSON/browser-safe backend surface для target lookup plus on-behalf CRUD, с явным admin auth check, flash redirects для будущей UX stage и audit trail на каждое mutation action.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/user-interests.test.ts tests/unit/ts/admin-user-interests.test.ts`
+  - `pnpm unit_tests:ts`
+  - `pnpm typecheck`
+  - `git diff --check`
+- Риски или gaps:
+  - stage intentionally не добавляет dedicated admin page; operator backend contract shipped, но удобная surfaced UX для поиска пользователя и управления его интересами остается следующим stage;
+  - end-to-end live proof того, что operator-created `user_interest` компилируется и матчится на свежих статьях и historical backfill, пока не выполнен;
+  - browser-click smoke для новых admin BFF actions в этом turn не гонялся.
+- Follow-up:
+  - следующий truthful stage — `S-USER-INTEREST-ADMIN-UX-3`, dedicated admin page и copy for target-user lookup/manage flow;
+  - capability затем должен закрыться `S-USER-INTEREST-MATCH-PROOF-4`, где operator-managed interest будет доказан на fresh ingest + backfill path.
+
+### 2026-03-25 — SP-USER-INTEREST-OPERATOR-FLOW-1 — Planned the truthful operator path for real `user_interests`
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: после закрытия reindex progress drift пользователь попросил именно план внедрения `user_interests`, чтобы они реально работали и были тестируемы, при необходимости с удобным/truthful admin flow.
+- Что выяснилось:
+  - real `user_interests` already have a truthful user-owned flow in `web`: `apps/web/src/pages/bff/interests.ts` handles create, `apps/web/src/pages/bff/interests/[interestId].ts` handles update/clone/delete, `apps/web/src/components/InterestManager.tsx` exposes the UI, and the Python API already ships `/users/{user_id}/interests` as a read model;
+  - this means the missing piece is not the core matching runtime itself, but the operator surface and shared contract: admin has no page, no BFF, and not even a truthful target-user lookup flow for choosing whose interests are being edited;
+  - a truthful admin/operator implementation must preserve ownership semantics: `user_interests` stay per-user data, while admin acts explicitly on behalf of a selected user; they must not be blurred into template-backed system `criteria` or into a fake global interest catalog;
+  - because admin has no user-directory product today, the bounded MVP operator surface should start with lookup by `email` or `user_id`, not a speculative broad user-management feature.
+- Рекомендованный stage plan:
+  - `S-USER-INTEREST-SHARED-CONTRACT-2`: extract canonical user-interest normalization/persistence/compile-queue logic from the existing web flow and add admin lookup + audited on-behalf BFF endpoints;
+  - `S-USER-INTEREST-ADMIN-UX-3`: add a dedicated admin page to find a target user and manage that user's interests with compile status, enabled state, and copy that clearly distinguishes per-user interests from admin templates/system criteria;
+  - `S-USER-INTEREST-MATCH-PROOF-4`: prove end-to-end that an operator-managed user interest compiles, matches fresh ingest, and also participates in historical backfill for the selected user; leave a manual test recipe that the operator can repeat.
+- Как это тестировать после внедрения:
+  - create or reuse a real user session in `web` so the target user exists in PostgreSQL;
+  - find that user in admin by `email` or `user_id`, create/update an interest there, and verify `compile_status` reaches `compiled`;
+  - ingest or seed a matching article and confirm the selected user receives an `interest_match`;
+  - run historical backfill and confirm the same selected user's interest participates there too, without requiring a template-backed system criterion workaround.
+- Риски или gaps:
+  - this spike intentionally did not ship code; admin still has no truthful operator surface for real `user_interests`;
+  - the plan intentionally avoids inventing a full user-directory product or collapsing `user_interests` into admin template management.
+- Follow-up:
+  - `S-USER-INTEREST-SHARED-CONTRACT-2` is now the next ready implementation stage;
+  - future stages should keep admin-on-behalf semantics explicit in copy, audit log, and proof, so operators and developers cannot confuse per-user interests with system-wide criteria/template data.
+
+### 2026-03-25 — S-REINDEX-PROGRESS-DRIFT-2 — Historical reindex progress now uses frozen target snapshots
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после audit и отдельного design spike пользователь попросил перейти к реализации progress-drift fix до любых работ по operator flow для реальных `user_interests`.
+- Что изменилось:
+  - migration `database/migrations/0008_reindex_backfill_target_snapshots.sql` добавила durable PostgreSQL table `reindex_job_targets`, а canonical DDL в `database/ddl/phase3_nlp_foundation.sql` теперь фиксирует тот же contract рядом с `reindex_jobs`;
+  - worker replay path в `services/workers/app/main.py` больше не считает live `articles` once-and-offset traversal: исторический backfill сначала materialize-ит frozen target set в `reindex_job_targets`, затем читает batch-ы по stable `target_position` и пишет `progress.processedArticles/totalArticles` от frozen snapshot;
+  - orchestration semantics вынесены в lightweight `services/workers/app/reindex_backfill.py`, чтобы snapshot/progress behavior можно было unit-test-ить без host-side imports тяжёлого worker runtime;
+  - `services/workers/app/smoke.py` теперь чистит snapshot residue для stable fixture job, проверяет persisted snapshot row count и требует stable `progress` values alongside the existing duplicate-safe/no-retro-notify invariants.
+- Что проверено:
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_reindex_backfill_progress tests.unit.python.test_llm_prompt_rendering`
+  - `python -m py_compile services/workers/app/main.py services/workers/app/reindex_backfill.py services/workers/app/smoke.py tests/unit/python/test_reindex_backfill_progress.py`
+  - `pnpm db:migrate`
+  - `docker compose -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build worker`
+  - `docker compose -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke reindex-backfill`
+  - `git diff --check`
+- Риски или gaps:
+  - stage intentionally не меняет operator-facing reindex UX/reporting; progress truth зафиксирован в worker/runtime layer, но не surfaced как новый admin report;
+  - snapshot rows для completed jobs сейчас остаются в PostgreSQL как durable residue; отдельная retention/cleanup policy пока не спроектирована;
+  - stage intentionally не трогает ownership/CRUD model для реальных `user_interests`.
+- Follow-up:
+  - следующий truthful stage в capability — `SP-USER-INTEREST-OPERATOR-FLOW-1`, design spike для operator ownership/write/read flow по реальным `user_interests`;
+  - если позже потребуется explicit snapshot retention policy или richer reindex observability, это должны быть новые bounded follow-up items, а не reopening этого stage.
+
+### 2026-03-25 — SP-REINDEX-PROGRESS-DRIFT-1 — Designed the snapshot-safe fix shape for historical reindex progress drift
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: после audit и template-matching fix пользователь explicitly запросил следующий порядок работы: сначала спроектировать fix для progress drift в historical reindex, а уже потом идти в operator flow для реальных `user_interests`.
+- Что выяснилось:
+  - current drift lives entirely in the worker replay path in `services/workers/app/main.py`: `count_historical_backfill_articles(...)` captures a one-time denominator from live `articles`, then `list_historical_backfill_doc_ids(... offset ...)` keeps querying the mutable `articles` table during replay, and `replay_historical_articles(...)` patches `processedArticles` against that stale denominator;
+  - this design is not snapshot-safe for either global backfill or doc-targeted replay: inserts, state transitions, or reordered eligibility during a live run can move the live window under `offset`, leading to totals that drift and potentially to skipped or repeated traversal intent;
+  - the recommended implementation shape is a durable per-job snapshot table in PostgreSQL, populated when the worker starts the job after locking `reindex_jobs`; the frozen target set should own `totalArticles`, batch ordering, and traversal progress instead of querying live `articles` on every batch;
+  - doc-targeted replay should use the same snapshot mechanism, just seeded from the requested doc-id subset, so the system does not split into two hidden traversal contracts.
+- Что проверено:
+  - targeted source inspection of `services/workers/app/main.py` around `count_historical_backfill_articles`, `list_historical_backfill_doc_ids`, `replay_historical_articles`, and `process_reindex`
+  - reconciliation against the earlier audited live job where `processedArticles = 3856` exceeded `totalArticles = 3844`
+- Риски или gaps:
+  - this spike intentionally shipped no code; historical backfill progress can still drift until the follow-up implementation stage lands;
+  - the spike chose the worker/schema direction but did not yet design operator-facing observability or the separate ownership model for real `user_interests`.
+- Follow-up:
+  - `S-REINDEX-PROGRESS-DRIFT-2` is now the next ready implementation stage and should add the persistent target snapshot, stable traversal, and proof;
+  - only after that stage should the capability move to `user_interests` operator-flow design/implementation.
+
+### 2026-03-25 — S-TEMPLATE-MATCHING-1 — Admin interest templates now participate in fresh ingest and historical reindex
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после read-only reindex audit пользователь уточнил целевое поведение: AI templates и admin-managed interests должны реально применяться к новым статьям и к historical backfill, а не оставаться catalog-only metadata.
+- Что изменилось:
+  - admin `interest_templates` теперь materialize в реальные system `criteria` через `criteria.source_interest_template_id`; mutation path в `apps/admin/src/pages/bff/admin/templates.ts` поддерживает linked criterion в sync, обновляет version только при содержательном изменении и ставит `criterion.compile.requested` только когда действительно нужна recompilation;
+  - `apps/admin/src/lib/server/admin-templates.ts` получил reusable sync helper для template-backed criteria, чтобы create/update/archive/activate flows работали атомарно в одной транзакции с audit/outbox side effects;
+  - migration `database/migrations/0007_interest_template_matching_sync.sql` и synced DDL в `database/ddl/phase4_matching_notification.sql` добавили durable link column + unique partial index, backfilled существующие templates в linked criteria и запросили compile для активированных записей;
+  - worker prompt rendering вынесен в `services/workers/app/prompting.py`: теперь он поддерживает documented single-brace placeholders (`{title}`, `{lead}`, `{body}`, `{context}`, `{criterion_name}`, `{interest_name}`, `{explain_json}`) и сохраняет backward compatibility с legacy `{{...}}` tokens;
+  - admin copy на `reindex`, `help` и `templates/interests` теперь truthfully объясняет, что активные interest templates feed the live criteria set used by fresh ingest and historical backfill; per-user `user_interests` intentionally остаются отдельным runtime layer.
+- Что проверено:
+  - `pnpm typecheck`
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_llm_prompt_rendering`
+  - `pnpm db:migrate`
+  - live PostgreSQL verification after migration: `8` linked template-backed criteria existed, all `8` were enabled and compiled, and compile-request backlog was empty
+  - doc-targeted backfill proof: a one-document `reindex_jobs` run completed with `criteriaMatches = 8`, `interestMatches = 0`, `criterionLlmReviews = 0`, `interestLlmReviews = 0`, and `processedArticles = 1`
+  - `pnpm --filter @newsportal/admin build`
+  - `git diff --check`
+- Риски или gaps:
+  - этот stage intentionally не redesign-ит per-user `user_interests`; notification/user-interest matching по-прежнему зависит от наличия реальных compiled `user_interests` в runtime;
+  - browser-click runtime smoke для admin flows не выполнялся в этом turn;
+  - snapshot-safe historical backfill traversal по-прежнему не исправлен: audited `count + offset` drift остается отдельным follow-up lane.
+- Follow-up:
+  - если пользователю нужна более ясная operator observability, следующий bounded item должен показывать target counts и post-run replay stats прямо в admin reindex UX;
+  - если нужно product-managed per-user filtering, это должен быть отдельный item для truthful `user_interests` operator flow, а не reopening этого stage.
+
+### 2026-03-25 — SP-REINDEX-AUDIT-1 — Historical backfill produced no visible matches because the runtime had no matchable targets
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: после ручного historical reindex пользователь сообщил, что не увидел ни одной статьи в gray zone и не заметил interest-based filtering, и попросил провести аудит причин до любых fixes.
+- Что выяснилось:
+  - live runtime data confirmed the latest job was a completed `backfill`, not a plain `rebuild`: `reindex_jobs.options_json` recorded `jobKind = backfill`, `criteriaMatches = 0`, `interestMatches = 0`, `criterionLlmReviews = 0`, `interestLlmReviews = 0`, and also exposed a progress mismatch where `processedArticles = 3856` exceeded the original `totalArticles = 3844`;
+  - the worker replay path only reads compiled `criteria` and compiled `user_interests` (`services/workers/app/main.py`), and the audited database had zero enabled compiled rows in both sets, so historical rematch had no actual targets to score and no gray-zone rows to replay;
+  - active LLM prompts did exist, but they were irrelevant without match rows: `llm_review_log`, `criterion_match_results`, and `interest_match_results` were all empty during the audit;
+  - admin-managed `interest_templates` are currently catalog-only data: they exist in the database and admin/API surfaces, but the worker matching/reindex path never reads them; meanwhile reindex/help copy still suggests that changing `interest templates` is a reason to rerun reindex;
+  - there is no operator-facing admin CRUD path for real system `criteria`, so criterion-based gray-zone review is effectively impossible in normal operator flow unless rows are created outside the product UI.
+- Что проверено:
+  - source inspection of `apps/admin/src/pages/bff/admin/reindex.ts`, `apps/admin/src/pages/reindex.astro`, `apps/admin/src/pages/help.astro`, `apps/web/src/pages/bff/interests.ts`, `apps/web/src/pages/bff/interests/[interestId].ts`, `services/workers/app/main.py`, and `services/workers/app/scoring.py`
+  - `docker ps --format '{{.Names}}\t{{.Status}}'`
+  - `docker compose -f infra/docker/compose.yml -f infra/docker/compose.dev.yml ps --services --status running`
+  - read-only PostgreSQL queries against `reindex_jobs`, `articles`, `user_interests`, `criteria`, `interest_templates`, `llm_prompt_templates`, `interest_match_results`, `criterion_match_results`, `llm_review_log`, and `outbox_events`
+- Риски или gaps:
+  - this spike did not apply fixes; it only separated data/setup causes from product/code defects;
+  - scoring thresholds (`services/workers/app/scoring.py`) remain unproven on the user dataset because the audited runtime had zero compiled targets, so there was nothing to classify into `gray_zone` or `notify`.
+- Follow-up:
+  - the strongest next bounded fix lane is to correct the operator contract: reindex/help UI should distinguish catalog `interest_templates` from real `user_interests` / `criteria`, warn when compiled target counts are zero, and surface post-run result counts more explicitly;
+  - if criterion-based matching is intended operator functionality, a separate item should add a truthful product path for managing `criteria`;
+  - a separate backfill hardening item should replace the mutable `count + offset` traversal with snapshot-safe target selection so progress and totals cannot drift during a live run.
+
+### 2026-03-25 — SW-UI-BUILD-HARDENING-1 — Shared UI build contract now scans `packages/ui` in both apps
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: после fix-а для reindex confirmation dialog пользователь попросил проверить остальной shared UI слой, чтобы не осталось похожих случаев, где JS рендерится, а нужные стили не попадают в app bundle.
+- Что изменилось:
+  - audit confirmed the durable root cause lived in the app build contract, not only in one modal: `apps/admin/src/styles/globals.css` и `apps/web/src/styles/globals.css` imported Tailwind without declaring `packages/ui/src` as a source, so shared utilities could disappear unless duplicated in app-local markup;
+  - both app styles now explicitly declare `@source "../../../../packages/ui/src"`, so shared primitives from `packages/ui` are scanned into admin and web bundles consistently;
+  - the previous inline-centering hardening in `packages/ui/src/components/ui/alert-dialog.tsx` and `packages/ui/src/components/ui/dialog.tsx` remains in place as a robust guard for dialog content;
+  - representative high-risk shared utility patterns are now present in both built bundles, including values used by `select`, `dropdown-menu`, `help-tooltip`, `scroll-area`, `table`, and nested selector variants;
+  - `docs/engineering.md` and `docs/verification.md` now record the durable rule: app-local Tailwind entry CSS must source `packages/ui`, and shared UI build-contract changes require build plus compiled-artifact proof.
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm --filter @newsportal/admin build`
+  - `pnpm --filter @newsportal/web build`
+  - `git diff --check`
+  - `node --input-type=module -e "import { readdirSync, readFileSync } from 'node:fs'; for (const app of ['admin','web']) { const dir = 'apps/' + app + '/dist/client/_astro'; const cssFile = readdirSync(dir).find((name) => name.endsWith('.css')); const css = cssFile ? readFileSync(dir + '/' + cssFile, 'utf8') : ''; const checks = { minWidth8rem: /min-width:8rem/.test(css), padding1px: /padding:1px/.test(css), maxWidth280: /max-width:280px/.test(css), maxWidth380: /max-width:380px/.test(css), radixSelectHeight: /var\\(--radix-select-trigger-height\\)/.test(css), radixSelectWidth: /var\\(--radix-select-trigger-width\\)/.test(css), checkboxTranslate2px: /--tw-translate-y:2px/.test(css), nestedSvgVariant: /\\[&_svg\\]:pointer-events-none|svg\\{pointer-events:none\\}/.test(css) }; console.log(app + ' ' + (cssFile ?? 'NO_CSS') + ' ' + JSON.stringify(checks)); }"`
+- Риски или gaps:
+  - sweep used representative compiled-artifact checks rather than a fully exhaustive per-class audit of every shared component;
+  - no browser-click walkthrough was run across every dialog/dropdown/select/tooltip consumer in this turn.
+- Follow-up:
+  - if the user wants, the next bounded item can be a manual browser sweep of the highest-risk admin interactions;
+  - future shared UI regressions should open a new explicit item rather than reopening this archived sweep.
+
+### 2026-03-25 — P-MVP-BUGFIX-2 — Admin confirmation dialogs render visibly again on the reindex flow
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь сообщил, что на admin reindex screen при нажатии на queue/reindex action страница блюрится и блокируется, но confirm dialog не виден.
+- Что изменилось:
+  - investigation showed a repo-specific build issue instead of a backend reindex problem: the admin bundle did not include the unique centering utilities used by shared `AlertDialogContent` / `DialogContent`, so the overlay rendered while the dialog content left the visible viewport;
+  - `packages/ui/src/components/ui/alert-dialog.tsx` и `packages/ui/src/components/ui/dialog.tsx` now center dialog content through inline layout styles (`inset: 0`, auto margins, bounded width, viewport-capped height, scroll fallback) instead of relying on Tailwind-scanned positioning utilities;
+  - the fix stays shared across admin confirmation flows, so reindex, bulk schedule, channel/template/article confirmations, and any other consumers of the same primitives keep one consistent centering path.
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm --filter @newsportal/admin build`
+  - `git diff --check`
+  - `rg -n "calc\\(100vw - 2rem\\)|fit-content|100vh - 2rem|overflowY" apps/admin/dist/client/_astro apps/admin/dist/server/chunks -S`
+- Риски или gaps:
+  - в этом turn не выполнялся browser-click runtime smoke; proof опирается на shared primitive change, green build/typecheck, и compiled artifact check;
+  - если позже всплывет похожий invisible popup вне этих shared primitives, нужен новый explicit item вместо тихого продолжения этого patch.
+- Follow-up:
+  - truthful next MVP bugfix work возвращается к следующему user-reported bounded item;
+  - если пользователь захочет, можно отдельно прогнать manual browser retest на `/admin/reindex` и соседних confirm flows.
+
 ### 2026-03-25 — C-MVP-MANUAL-READINESS — Manual MVP baseline is now closed on a green runtime/docs sync
 
 - Тип записи: capability archive

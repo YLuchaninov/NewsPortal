@@ -1,0 +1,541 @@
+---
+import { AdminConfirmAction } from "../components/AdminConfirmAction";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+import { getPool } from "../lib/server/db";
+import {
+  buildAdminUserInterestContextFields,
+  formatCsvListValue,
+  formatLineListValue,
+  resolveAdminUserInterestCompileState,
+  resolveAdminUserInterestSearchState,
+  type AdminUserInterestCompileState,
+  type AdminUserInterestContextField,
+} from "../lib/server/user-interest-admin-page";
+import {
+  findAdminUserInterestTarget,
+  listAdminUserInterests,
+  type AdminUserInterestTarget,
+} from "../lib/server/user-interests";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const pagePaths = {
+  dashboard: appPath("/"),
+  interestTemplates: appPath("/templates/interests"),
+  userInterests: appPath("/user-interests"),
+};
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const searchState = resolveAdminUserInterestSearchState(Astro.url.searchParams);
+
+let lookupError: string | null = null;
+let target: AdminUserInterestTarget | null = null;
+let interests: Record<string, unknown>[] = [];
+
+if (searchState.lookup) {
+  try {
+    target = await findAdminUserInterestTarget(getPool(), searchState.lookup);
+    if (!target) {
+      lookupError = "No user matched that search. Check the email or user ID and try again.";
+    } else {
+      interests = await listAdminUserInterests(getPool(), target.userId);
+    }
+  } catch (error) {
+    lookupError =
+      error instanceof Error
+        ? error.message
+        : "Unable to look up that user right now.";
+  }
+}
+
+const targetFields: AdminUserInterestContextField[] = target
+  ? buildAdminUserInterestContextFields(target, currentPath)
+  : [];
+const enabledCount = interests.filter((interest) => interest.enabled !== false).length;
+const compiledCount = interests.filter(
+  (interest) => String(interest.compile_status ?? "") === "compiled"
+).length;
+
+function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
+  if (tone === "success") {
+    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+  }
+  if (tone === "warning") {
+    return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+  }
+  if (tone === "error") {
+    return "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
+  }
+  return "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+}
+---
+
+<AdminShell title="User Interests — Admin" session={session} flash={flash} activeNav="user-interests">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">User Interests</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <a href={pagePaths.interestTemplates} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+      Interest templates
+    </a>
+    {target && (
+      <a href={pagePaths.userInterests} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+        Clear user
+      </a>
+    )}
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+      <div class="max-w-3xl">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Per-user matching</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">User interests</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          This page edits <strong>real per-user interests</strong> for one selected account at a time.
+          It does not change global interest templates or system criteria. Admin acts explicitly on behalf
+          of the chosen user, and every write stays auditable.
+        </p>
+      </div>
+
+      {target ? (
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
+            <p class="mt-1 text-2xl font-semibold">{interests.length}</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Enabled</p>
+            <p class="mt-1 text-2xl font-semibold text-emerald-500">{enabledCount}</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Compiled</p>
+            <p class="mt-1 text-2xl font-semibold text-primary">{compiledCount}</p>
+          </div>
+        </div>
+      ) : (
+        <div class="max-w-sm rounded-2xl border border-dashed border-border bg-background/80 px-5 py-4 text-sm text-muted-foreground">
+          Start by selecting a user with either an exact email address or a concrete `user_id`.
+        </div>
+      )}
+    </div>
+
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div class="max-w-2xl">
+          <h2 class="text-base font-semibold">Select a target user</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Search by exact email or `user_id`. If both are provided, the page uses `user_id` first.
+          </p>
+        </div>
+      </div>
+
+      <form method="get" action={pagePaths.userInterests} class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+        <label class="grid gap-1.5">
+          <span class="text-sm font-medium">Email</span>
+          <input
+            type="email"
+            name="email"
+            value={searchState.rawEmail}
+            placeholder="reader@example.com"
+            class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-sm font-medium">User ID</span>
+          <input
+            type="text"
+            name="userId"
+            value={searchState.rawUserId}
+            placeholder="f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </label>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Find user
+          </button>
+          <a
+            href={pagePaths.userInterests}
+            class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            Clear
+          </a>
+        </div>
+      </form>
+
+      {lookupError && (
+        <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300">
+          {lookupError}
+        </div>
+      )}
+    </section>
+
+    {target ? (
+      <Fragment>
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Acting on behalf of</p>
+              <h2 class="mt-2 text-xl font-semibold tracking-tight">
+                {target.email ?? "Anonymous / no email on file"}
+              </h2>
+              <p class="mt-1 text-sm text-muted-foreground">
+                `user_id`: <span class="font-mono text-xs">{target.userId}</span>
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <span class:list={[
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                target.status === "active"
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                  : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+              ]}>
+                {target.status}
+              </span>
+              <span class:list={[
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                target.isAnonymous
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+              ]}>
+                {target.isAnonymous ? "Anonymous" : "Signed-in identity"}
+              </span>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-200">
+            Interest templates remain global predefined topics. The forms below edit this specific user's
+            live `user_interests` records and queue recompilation for this user's matching layer only.
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-5">
+            <h2 class="text-base font-semibold">Create a new interest for this user</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Start with the core matching description and examples. Advanced lexical hints are optional.
+            </p>
+          </div>
+
+          <form method="post" action={appPath("/bff/admin/user-interests")} class="space-y-6">
+            {targetFields.map((field) => (
+              <input type="hidden" name={field.name} value={field.value} />
+            ))}
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <label class="grid gap-1.5 md:col-span-2">
+                <span class="text-sm font-medium">Description</span>
+                <textarea
+                  name="description"
+                  rows="3"
+                  placeholder="News about AI regulation, governance, and public-sector oversight."
+                  class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                ></textarea>
+              </label>
+
+              <label class="grid gap-1.5">
+                <span class="text-sm font-medium">Positive prototypes</span>
+                <textarea
+                  name="positive_texts"
+                  rows="7"
+                  placeholder="EU AI Act&#10;Brussels regulation"
+                  class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                ></textarea>
+              </label>
+
+              <label class="grid gap-1.5">
+                <span class="text-sm font-medium">Negative prototypes</span>
+                <textarea
+                  name="negative_texts"
+                  rows="7"
+                  placeholder="sports&#10;celebrity gossip"
+                  class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                ></textarea>
+              </label>
+            </div>
+
+            <details class="group rounded-2xl border border-border bg-background/80 p-4">
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold">Advanced matching hints</p>
+                  <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, and place hints.</p>
+                </div>
+                <span class="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
+              </summary>
+
+              <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Must-have terms</span>
+                  <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Must-not-have terms</span>
+                  <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Places</span>
+                  <input name="places" type="text" placeholder="Warsaw, Brussels" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Allowed languages</span>
+                  <input name="languages_allowed" type="text" value="en" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Required short tokens</span>
+                  <input name="short_tokens_required" type="text" placeholder="AI, FTC" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Forbidden short tokens</span>
+                  <input name="short_tokens_forbidden" type="text" placeholder="NBA, NFL" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+              </div>
+            </details>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-sm font-medium">Priority</span>
+                <input name="priority" type="number" min="0.1" max="1" step="0.1" value="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-sm font-medium">Enabled</span>
+                <select name="enabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <option value="true" selected>Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                Create user interest
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Existing interests</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              {interests.length} interest{interests.length !== 1 ? "s" : ""} for the selected user
+            </p>
+          </div>
+
+          {interests.length === 0 ? (
+            <div class="px-6 py-14 text-center">
+              <p class="text-base font-medium">No interests for this user yet</p>
+              <p class="mt-2 text-sm text-muted-foreground">
+                Use the form above to create the first real per-user interest. This does not affect interest templates.
+              </p>
+            </div>
+          ) : (
+            <div class="divide-y divide-border">
+              {interests.map((interest) => {
+                const interestId = String(interest.interest_id ?? "");
+                const compileState = resolveAdminUserInterestCompileState(interest);
+                const hasCompiledSnapshot = Boolean(interest.compiled_json);
+                const isEnabled = interest.enabled !== false;
+                const updatedAt = interest.updated_at
+                  ? new Date(String(interest.updated_at)).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : "unknown";
+                return (
+                  <details class="group px-5 py-4" open={false}>
+                    <summary class="flex cursor-pointer list-none flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <p class="text-sm font-semibold">{String(interest.description ?? "Untitled interest")}</p>
+                          <span class:list={[
+                            "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                            isEnabled
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                              : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                          ]}>
+                            {isEnabled ? "Enabled" : "Disabled"}
+                          </span>
+                          <span class:list={[
+                            "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                            badgeClass(compileState.tone),
+                          ]}>
+                            {compileState.label}
+                          </span>
+                        </div>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                          Version {String(interest.version ?? 1)} • Updated {updatedAt}
+                          {compileState.detail && ` • ${compileState.detail}`}
+                        </p>
+                      </div>
+
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {hasCompiledSnapshot && (
+                          <span class="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
+                            Compiled snapshot ready
+                          </span>
+                        )}
+                        <span class="text-primary transition group-open:rotate-180">⌄</span>
+                      </div>
+                    </summary>
+
+                    <div class="mt-5 grid gap-5">
+                      {String(interest.compile_status ?? "") === "failed" && interest.error_text && (
+                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300">
+                          {String(interest.error_text)}
+                        </div>
+                      )}
+
+                      <form method="post" action={appPath(`/bff/admin/user-interests/${interestId}`)} class="space-y-5">
+                        {targetFields.map((field) => (
+                          <input type="hidden" name={field.name} value={field.value} />
+                        ))}
+                        <div class="grid gap-4 md:grid-cols-2">
+                          <label class="grid gap-1.5 md:col-span-2">
+                            <span class="text-sm font-medium">Description</span>
+                            <textarea
+                              name="description"
+                              rows="3"
+                              class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >{String(interest.description ?? "")}</textarea>
+                          </label>
+
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Positive prototypes</span>
+                            <textarea
+                              name="positive_texts"
+                              rows="6"
+                              class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >{formatLineListValue(interest.positive_texts)}</textarea>
+                          </label>
+
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Negative prototypes</span>
+                            <textarea
+                              name="negative_texts"
+                              rows="6"
+                              class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >{formatLineListValue(interest.negative_texts)}</textarea>
+                          </label>
+                        </div>
+
+                        <details class="group rounded-2xl border border-border bg-background/80 p-4">
+                          <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+                            <div>
+                              <p class="text-sm font-semibold">Advanced matching hints</p>
+                              <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, and place hints.</p>
+                            </div>
+                            <span class="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
+                          </summary>
+
+                          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Must-have terms</span>
+                              <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(interest.must_have_terms)}</textarea>
+                            </label>
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Must-not-have terms</span>
+                              <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(interest.must_not_have_terms)}</textarea>
+                            </label>
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Places</span>
+                              <input name="places" type="text" value={formatCsvListValue(interest.places)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </label>
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Allowed languages</span>
+                              <input name="languages_allowed" type="text" value={formatCsvListValue(interest.languages_allowed)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </label>
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Required short tokens</span>
+                              <input name="short_tokens_required" type="text" value={formatCsvListValue(interest.short_tokens_required)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </label>
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Forbidden short tokens</span>
+                              <input name="short_tokens_forbidden" type="text" value={formatCsvListValue(interest.short_tokens_forbidden)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </label>
+                          </div>
+                        </details>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Priority</span>
+                            <input name="priority" type="number" min="0.1" max="1" step="0.1" value={String(interest.priority ?? 1)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Enabled</span>
+                            <select name="enabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                              <option value="true" selected={isEnabled}>Enabled</option>
+                              <option value="false" selected={!isEnabled}>Disabled</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                          <div class="flex flex-wrap gap-2">
+                            <button type="submit" name="_action" value="update" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                              Save changes
+                            </button>
+                            <button type="submit" name="_action" value="clone" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+                              Clone
+                            </button>
+                          </div>
+
+                          <AdminConfirmAction
+                            action={appPath(`/bff/admin/user-interests/${interestId}`)}
+                            title="Delete user interest"
+                            description="Delete this real per-user interest for the selected user. This does not touch global interest templates or criteria."
+                            triggerLabel="Delete"
+                            confirmLabel="Delete interest"
+                            fields={[
+                              ...targetFields,
+                              { name: "_action", value: "delete" },
+                            ]}
+                            triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                            client:load
+                          />
+                        </div>
+                      </form>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </Fragment>
+    ) : (
+      <section class="rounded-2xl border border-dashed border-border bg-card/60 px-6 py-14 text-center shadow-sm">
+        <p class="text-base font-medium">No user selected yet</p>
+        <p class="mt-2 max-w-2xl mx-auto text-sm text-muted-foreground">
+          Find a user first, then this page will show their real `user_interests`, compile status, errors,
+          and audited manage actions. Interest templates stay separate on the global template screens.
+        </p>
+      </section>
+    )}
+  </div>
+</AdminShell>

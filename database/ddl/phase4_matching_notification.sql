@@ -196,6 +196,32 @@ create index if not exists criterion_match_results_criterion_id_idx
 create unique index if not exists criterion_match_results_doc_criterion_unique
   on criterion_match_results (doc_id, criterion_id);
 
+create table if not exists system_feed_results (
+  doc_id uuid primary key references articles (doc_id) on delete cascade,
+  decision text not null,
+  eligible_for_feed boolean not null default false,
+  total_criteria_count integer not null default 0,
+  relevant_criteria_count integer not null default 0,
+  irrelevant_criteria_count integer not null default 0,
+  pending_llm_criteria_count integer not null default 0,
+  explain_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint system_feed_results_decision_check
+    check (decision in ('eligible', 'filtered_out', 'pending_llm', 'pass_through')),
+  constraint system_feed_results_total_criteria_count_check
+    check (total_criteria_count >= 0),
+  constraint system_feed_results_relevant_criteria_count_check
+    check (relevant_criteria_count >= 0),
+  constraint system_feed_results_irrelevant_criteria_count_check
+    check (irrelevant_criteria_count >= 0),
+  constraint system_feed_results_pending_llm_criteria_count_check
+    check (pending_llm_criteria_count >= 0)
+);
+
+create index if not exists system_feed_results_eligible_idx
+  on system_feed_results (eligible_for_feed, updated_at desc);
+
 create table if not exists interest_match_results (
   interest_match_id uuid primary key default gen_random_uuid(),
   doc_id uuid not null references articles (doc_id) on delete cascade,
@@ -307,6 +333,13 @@ create table if not exists interest_templates (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table criteria
+  add column if not exists source_interest_template_id uuid references interest_templates (interest_template_id) on delete cascade;
+
+create unique index if not exists criteria_source_interest_template_unique
+  on criteria (source_interest_template_id)
+  where source_interest_template_id is not null;
 
 create table if not exists audit_log (
   audit_log_id uuid primary key default gen_random_uuid(),

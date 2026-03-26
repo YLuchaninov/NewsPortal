@@ -7,6 +7,8 @@ interface Article {
   lead?: string;
   lang?: string;
   processing_state?: string;
+  system_feed_decision?: string;
+  system_feed_eligible?: boolean;
   visibility_state?: string;
   like_count?: number;
   dislike_count?: number;
@@ -99,6 +101,12 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath }: ArticleCardP
     className: "bg-muted text-muted-foreground",
     label: stateKey,
   };
+  const feedBadge = article.system_feed_eligible
+    ? {
+        className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+        label: "system-selected",
+      }
+    : state;
   const sourceHref = resolveSafeArticleHref(article.url);
   const previewContent = (
     <>
@@ -118,8 +126,8 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath }: ArticleCardP
               {String(article.lang).toUpperCase()}
             </span>
           )}
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${state.className}`}>
-            {state.label}
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${feedBadge.className}`}>
+            {feedBadge.label}
           </span>
           {article.visibility_state && article.visibility_state !== "visible" && (
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">

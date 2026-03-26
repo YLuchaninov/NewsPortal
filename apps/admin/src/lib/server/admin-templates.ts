@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export type LlmTemplateScope = "criteria" | "interests" | "global";
 
@@ -27,6 +27,37 @@ export interface InterestTemplateInput {
   shortTokensForbidden: string[];
   priority: number;
   isActive: boolean;
+}
+
+type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
+
+interface InterestTemplateRow extends InterestTemplateInput {
+  interestTemplateId: string;
+}
+
+interface CriterionSyncRow {
+  criterion_id: string;
+  version: number;
+  description: string;
+  positive_texts: unknown;
+  negative_texts: unknown;
+  must_have_terms: unknown;
+  must_not_have_terms: unknown;
+  places: unknown;
+  languages_allowed: unknown;
+  short_tokens_required: unknown;
+  short_tokens_forbidden: unknown;
+  priority: number;
+  enabled: boolean;
+  compiled: boolean;
+  compile_status: string;
+}
+
+export interface InterestTemplateCriterionSyncResult {
+  criterionId: string;
+  version: number;
+  created: boolean;
+  compileRequested: boolean;
 }
 
 function readOptionalString(value: unknown): string | null {
@@ -87,6 +118,281 @@ function readTextList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function normalizeTextList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry).trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    try {
+      const decoded = JSON.parse(value);
+      return normalizeTextList(decoded);
+    } catch {
+      return value
+        .split("\n")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function textListsEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(normalizeTextList(left)) === JSON.stringify(normalizeTextList(right));
+}
+
+function resolveCriterionDescription(input: InterestTemplateInput): string {
+  const name = input.name.trim();
+  if (name) {
+    return name;
+  }
+  const description = input.description.trim();
+  return description || "Interest template";
+}
+
+async function readInterestTemplateForSync(
+  queryable: Queryable,
+  interestTemplateId: string
+): Promise<InterestTemplateRow> {
+  const result = await queryable.query<{
+    interest_template_id: string;
+    name: string;
+    description: string;
+    positive_texts: unknown;
+    negative_texts: unknown;
+    must_have_terms: unknown;
+    must_not_have_terms: unknown;
+    places: unknown;
+    languages_allowed: unknown;
+    short_tokens_required: unknown;
+    short_tokens_forbidden: unknown;
+    priority: number;
+    is_active: boolean;
+  }>(
+    `
+      select
+        interest_template_id::text as interest_template_id,
+        name,
+        description,
+        positive_texts,
+        negative_texts,
+        must_have_terms,
+        must_not_have_terms,
+        places,
+        languages_allowed,
+        short_tokens_required,
+        short_tokens_forbidden,
+        priority,
+        is_active
+      from interest_templates
+      where interest_template_id = $1
+    `,
+    [interestTemplateId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error(`Interest template ${interestTemplateId} was not found.`);
+  }
+  return {
+    interestTemplateId: row.interest_template_id,
+    name: row.name,
+    description: row.description,
+    positiveTexts: normalizeTextList(row.positive_texts),
+    negativeTexts: normalizeTextList(row.negative_texts),
+    mustHaveTerms: normalizeTextList(row.must_have_terms),
+    mustNotHaveTerms: normalizeTextList(row.must_not_have_terms),
+    places: normalizeTextList(row.places),
+    languagesAllowed: normalizeTextList(row.languages_allowed),
+    shortTokensRequired: normalizeTextList(row.short_tokens_required),
+    shortTokensForbidden: normalizeTextList(row.short_tokens_forbidden),
+    priority: Number(row.priority ?? 1),
+    isActive: row.is_active === true,
+  };
+}
+
+export async function syncInterestTemplateCriterion(
+  queryable: Queryable,
+  interestTemplateId: string
+): Promise<InterestTemplateCriterionSyncResult> {
+  const template = await readInterestTemplateForSync(queryable, interestTemplateId);
+  const existingResult = await queryable.query<CriterionSyncRow>(
+    `
+      select
+        criterion_id::text as criterion_id,
+        version,
+        description,
+        positive_texts,
+        negative_texts,
+        must_have_terms,
+        must_not_have_terms,
+        places,
+        languages_allowed,
+        short_tokens_required,
+        short_tokens_forbidden,
+        priority,
+        enabled,
+        compiled,
+        compile_status
+      from criteria
+      where source_interest_template_id = $1
+      limit 1
+    `,
+    [interestTemplateId]
+  );
+  const existing = existingResult.rows[0];
+  const description = resolveCriterionDescription(template);
+
+  if (!existing) {
+    const insertResult = await queryable.query<{
+      criterion_id: string;
+      version: number;
+    }>(
+      `
+        insert into criteria (
+          criterion_id,
+          source_interest_template_id,
+          description,
+          positive_texts,
+          negative_texts,
+          must_have_terms,
+          must_not_have_terms,
+          places,
+          languages_allowed,
+          short_tokens_required,
+          short_tokens_forbidden,
+          priority,
+          enabled,
+          compiled,
+          compile_status,
+          version
+        )
+        values (
+          gen_random_uuid(),
+          $1,
+          $2,
+          $3::jsonb,
+          $4::jsonb,
+          $5::jsonb,
+          $6::jsonb,
+          $7::jsonb,
+          $8::jsonb,
+          $9::jsonb,
+          $10::jsonb,
+          $11,
+          $12,
+          false,
+          $13,
+          1
+        )
+        returning criterion_id::text as criterion_id, version
+      `,
+      [
+        interestTemplateId,
+        description,
+        JSON.stringify(template.positiveTexts),
+        JSON.stringify(template.negativeTexts),
+        JSON.stringify(template.mustHaveTerms),
+        JSON.stringify(template.mustNotHaveTerms),
+        JSON.stringify(template.places),
+        JSON.stringify(template.languagesAllowed),
+        JSON.stringify(template.shortTokensRequired),
+        JSON.stringify(template.shortTokensForbidden),
+        template.priority,
+        template.isActive,
+        template.isActive ? "queued" : "pending",
+      ]
+    );
+    const created = insertResult.rows[0];
+    return {
+      criterionId: created.criterion_id,
+      version: created.version,
+      created: true,
+      compileRequested: template.isActive,
+    };
+  }
+
+  const dataChanged =
+    existing.description !== description ||
+    !textListsEqual(existing.positive_texts, template.positiveTexts) ||
+    !textListsEqual(existing.negative_texts, template.negativeTexts) ||
+    !textListsEqual(existing.must_have_terms, template.mustHaveTerms) ||
+    !textListsEqual(existing.must_not_have_terms, template.mustNotHaveTerms) ||
+    !textListsEqual(existing.places, template.places) ||
+    !textListsEqual(existing.languages_allowed, template.languagesAllowed) ||
+    !textListsEqual(existing.short_tokens_required, template.shortTokensRequired) ||
+    !textListsEqual(existing.short_tokens_forbidden, template.shortTokensForbidden) ||
+    Number(existing.priority ?? 1) !== Number(template.priority ?? 1);
+
+  const nextVersion = dataChanged ? Number(existing.version ?? 1) + 1 : Number(existing.version ?? 1);
+  const compileRequested =
+    template.isActive &&
+    (
+      dataChanged ||
+      existing.compile_status === "failed" ||
+      (existing.compiled !== true &&
+        existing.compile_status !== "queued" &&
+        existing.compile_status !== "compiled")
+    );
+  const nextCompiled =
+    !template.isActive && dataChanged
+      ? false
+      : compileRequested
+        ? false
+        : existing.compiled === true;
+  const nextCompileStatus =
+    !template.isActive && dataChanged
+      ? "pending"
+      : compileRequested
+        ? "queued"
+        : existing.compile_status;
+
+  await queryable.query(
+    `
+      update criteria
+      set
+        description = $2,
+        positive_texts = $3::jsonb,
+        negative_texts = $4::jsonb,
+        must_have_terms = $5::jsonb,
+        must_not_have_terms = $6::jsonb,
+        places = $7::jsonb,
+        languages_allowed = $8::jsonb,
+        short_tokens_required = $9::jsonb,
+        short_tokens_forbidden = $10::jsonb,
+        priority = $11,
+        enabled = $12,
+        compiled = $13,
+        compile_status = $14,
+        version = $15,
+        updated_at = now()
+      where criterion_id = $1
+    `,
+    [
+      existing.criterion_id,
+      description,
+      JSON.stringify(template.positiveTexts),
+      JSON.stringify(template.negativeTexts),
+      JSON.stringify(template.mustHaveTerms),
+      JSON.stringify(template.mustNotHaveTerms),
+      JSON.stringify(template.places),
+      JSON.stringify(template.languagesAllowed),
+      JSON.stringify(template.shortTokensRequired),
+      JSON.stringify(template.shortTokensForbidden),
+      template.priority,
+      template.isActive,
+      nextCompiled,
+      nextCompileStatus,
+      nextVersion,
+    ]
+  );
+
+  return {
+    criterionId: existing.criterion_id,
+    version: nextVersion,
+    created: false,
+    compileRequested,
+  };
+}
+
 export function parseLlmTemplateInput(payload: Record<string, unknown>): LlmTemplateInput {
   const scope = readOptionalString(payload.scope) ?? "interests";
   if (!["criteria", "interests", "global"].includes(scope)) {
@@ -130,7 +436,7 @@ export function parseInterestTemplateInput(
 }
 
 export async function saveLlmTemplate(
-  pool: Pool,
+  pool: Queryable,
   input: LlmTemplateInput
 ): Promise<{ promptTemplateId: string; created: boolean }> {
   if (input.promptTemplateId) {
@@ -203,7 +509,7 @@ export async function saveLlmTemplate(
 }
 
 export async function setLlmTemplateActiveState(
-  pool: Pool,
+  pool: Queryable,
   promptTemplateId: string,
   isActive: boolean
 ): Promise<void> {
@@ -223,7 +529,7 @@ export async function setLlmTemplateActiveState(
 }
 
 export async function deleteLlmTemplate(
-  pool: Pool,
+  pool: Queryable,
   promptTemplateId: string
 ): Promise<void> {
   const deleted = await pool.query(
@@ -239,7 +545,7 @@ export async function deleteLlmTemplate(
 }
 
 export async function saveInterestTemplate(
-  pool: Pool,
+  pool: Queryable,
   input: InterestTemplateInput
 ): Promise<{ interestTemplateId: string; created: boolean }> {
   const params = [
@@ -333,7 +639,7 @@ export async function saveInterestTemplate(
 }
 
 export async function setInterestTemplateActiveState(
-  pool: Pool,
+  pool: Queryable,
   interestTemplateId: string,
   isActive: boolean
 ): Promise<void> {
@@ -353,7 +659,7 @@ export async function setInterestTemplateActiveState(
 }
 
 export async function deleteInterestTemplate(
-  pool: Pool,
+  pool: Queryable,
   interestTemplateId: string
 ): Promise<void> {
   const deleted = await pool.query(

@@ -45,11 +45,9 @@ test("embed fanout adds embed queue for normalized articles", () => {
   assert.deepEqual(queueMap[ARTICLE_NORMALIZED_EVENT], [DEDUP_QUEUE, EMBED_QUEUE]);
 });
 
-test("clustered articles fan out to both match queues", () => {
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT], [
-    CRITERIA_MATCH_QUEUE,
-    INTEREST_MATCH_QUEUE
-  ]);
+test("clustered articles route to criteria first and criteria-matched articles route to interests", () => {
+  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT], [CRITERIA_MATCH_QUEUE]);
+  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CRITERIA_MATCHED_EVENT], [INTEREST_MATCH_QUEUE]);
   assert.equal(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT].includes(CLUSTER_QUEUE), false);
 });
 
@@ -61,7 +59,6 @@ test("queue map preserves terminal routing contracts for downstream events", () 
     FEEDBACK_INGEST_QUEUE
   ]);
   assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[REINDEX_REQUESTED_EVENT], [REINDEX_QUEUE]);
-  assert.equal(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CRITERIA_MATCHED_EVENT], undefined);
 });
 
 test("event classifiers distinguish article, compile, review, feedback and reindex events", () => {

@@ -51,7 +51,7 @@ function resolvePageHref(nextPage: number): string {
 ---
 
 <Shell
-  title={`${DEFAULT_BRAND_CONFIG.productName} — Feed`}
+  title={`${DEFAULT_BRAND_CONFIG.productName} — System Feed`}
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}
@@ -66,7 +66,7 @@ function resolvePageHref(nextPage: number): string {
     <h1 class="text-3xl font-bold tracking-tight">{DEFAULT_BRAND_CONFIG.productName}</h1>
     <p class="text-muted-foreground mt-1">{DEFAULT_BRAND_CONFIG.tagline}</p>
     <p class="text-xs text-muted-foreground mt-3">
-      {feed.total} article{feed.total !== 1 ? "s" : ""} in feed
+      {feed.total} article{feed.total !== 1 ? "s" : ""} in the system-selected feed
       {articles.length > 0 && ` — page ${feed.page} of ${Math.max(feed.totalPages, 1)}`}
     </p>
   </div>
@@ -80,7 +80,7 @@ function resolvePageHref(nextPage: number): string {
         </svg>
       </div>
       <p class="font-semibold text-lg">No articles yet</p>
-      <p class="text-muted-foreground text-sm mt-1">Articles will appear here once the fetchers run</p>
+      <p class="text-muted-foreground text-sm mt-1">Articles will appear here once the system criteria approve them</p>
     </div>
   ) : (
     <>

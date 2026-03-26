@@ -58,6 +58,13 @@ const stateColor: Record<string, string> = {
   embedded: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
   clustered: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
 };
+
+const systemFeedColor: Record<string, string> = {
+  eligible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  pass_through: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  pending_llm: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  filtered_out: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+};
 ---
 
 <AdminShell title="Articles — Admin" session={session} flash={flash} activeNav="articles">
@@ -86,7 +93,7 @@ const stateColor: Record<string, string> = {
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
       </summary>
       <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
-        <p class="text-xs">Every row shows the exact runtime <code class="rounded bg-muted px-1 py-0.5">processing_state</code> from the pipeline. The most important states are:</p>
+        <p class="text-xs">Every row shows the exact runtime <code class="rounded bg-muted px-1 py-0.5">processing_state</code>, but public feed eligibility now comes from <code class="rounded bg-muted px-1 py-0.5">system_feed_results</code> after criteria and criteria-scope LLM review.</p>
         <div class="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <div class="flex shrink-0 gap-1">
@@ -104,11 +111,15 @@ const stateColor: Record<string, string> = {
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 shrink-0">matched</span>
-            <p class="text-[11px]">Fully processed and eligible for the public feed while <code class="rounded bg-muted px-1 py-0.5">visibility_state = visible</code>.</p>
+            <p class="text-[11px]">Personalization finished for at least one compiled <code class="rounded bg-muted px-1 py-0.5">user_interest</code>. This is no longer the public-feed gate by itself.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 shrink-0">notified</span>
-            <p class="text-[11px]">A notification decision already ran. The article still remains feed-eligible while visibility stays visible.</p>
+            <p class="text-[11px]">A notification decision already ran for the personalization lane. The article can still be in the system feed even when no notification was sent.</p>
+          </div>
+          <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
+            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 shrink-0">system gate</span>
+            <p class="text-[11px]">Use the extra system-feed badge on each row to see whether the article is <em>eligible</em>, <em>pending_llm</em>, <em>filtered_out</em>, or <em>pass_through</em>.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 shrink-0">blocked</span>
@@ -148,6 +159,11 @@ const stateColor: Record<string, string> = {
                     <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${stateColor[String(a.processing_state)] ?? "bg-muted text-muted-foreground"}`}>
                       {String(a.processing_state ?? "raw")}
                     </span>
+                    {a.system_feed_decision && (
+                      <span class={`ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${systemFeedColor[String(a.system_feed_decision)] ?? "bg-muted text-muted-foreground"}`}>
+                        {String(a.system_feed_decision)}
+                      </span>
+                    )}
                     {a.visibility_state && a.visibility_state !== "visible" && (
                       <span class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
                         {String(a.visibility_state)}

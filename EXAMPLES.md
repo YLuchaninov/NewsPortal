@@ -30,8 +30,8 @@
 Каждый пример содержит **полный набор настроек**, готовый к вводу в панель администратора:
 
 1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels
-2. **LLM-шаблоны** — три промпта (scope: `interests`, `criteria`, `global`), которые создаются на странице Templates в левой колонке
-3. **Шаблоны интересов** — набор тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке
+2. **LLM-шаблоны** — два active baseline промпта (scope: `criteria`, `global`) и один optional future-ready промпт (`interests`) для возможной opt-in / premium персонализации
+3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке и синхронизируются в live `criteria`
 
 **Порядок действий:**
 
@@ -43,7 +43,7 @@
 5. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
 ```
 
-> ⚠️ **Не забудьте переиндексацию!** После создания или изменения шаблонов интересов всегда запускайте переиндексацию `interest_centroids`. Без этого новые шаблоны не повлияют на подбор статей.
+> ⚠️ **Не забудьте переиндексацию!** После создания или изменения шаблонов интересов всегда запускайте переиндексацию `interest_centroids`. Это обновит derived index, а режим repair/backfill поможет пересчитать уже существующие статьи по текущему системному набору тем.
 
 ---
 
@@ -72,7 +72,7 @@
 
 ### Как снизить расходы на LLM
 
-Каждая статья в «серой зоне» (скор 0.45–0.72) отправляется на проверку ИИ, что стоит денег. Чтобы уменьшить количество статей в серой зоне:
+В текущем baseline runtime статьи из «серой зоны» отправляются на проверку ИИ прежде всего на уровне **системных критериев**. Чтобы уменьшить количество таких проверок и расходы:
 
 - **Добавьте больше прототипов** (5–7 положительных, 3–5 отрицательных) — система будет увереннее в решениях
 - **Сделайте прототипы максимально непохожими друг на друга** — это расширяет «понимание» темы
@@ -247,9 +247,9 @@
 
 ### A.2. LLM-шаблоны
 
-Перейдите в **Templates** и создайте три шаблона в левой колонке (**Create LLM Template**).
+Перейдите в **Templates** и создайте в левой колонке как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
 
-#### LLM-шаблон 1: interests (проверка интересов пользователей)
+#### LLM-шаблон 1: interests (optional future-ready, не используется в baseline по умолчанию)
 
 | Поле | Значение |
 |---|---|
@@ -260,14 +260,14 @@
 ```
 You are a job-listing relevance reviewer for a job aggregator platform.
 
-The user is tracking this job category: "{{title}}"
+The user is tracking this job category: "{interest_name}"
 
 An article or listing has landed in the gray zone — the system is not confident whether it matches.
 
-Article title: {{title}}
-Article lead: {{lead}}
-Article body (truncated): {{body}}
-Match context: {{explain_json}}
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Match context: {explain_json}
 
 Your task: decide whether this content represents a REAL job opportunity or career-relevant content for the specified category.
 
@@ -300,14 +300,14 @@ Be strict. If the content does not contain a specific job opening or hiring sign
 ```
 You are a content classification reviewer for a job aggregator platform.
 
-The system criterion is: "{{title}}"
+The system criterion is: "{criterion_name}"
 
 An article has landed in the gray zone — the automated scoring was inconclusive.
 
-Article title: {{title}}
-Article lead: {{lead}}
-Article body (truncated): {{body}}
-Scoring details: {{explain_json}}
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Scoring details: {explain_json}
 
 Your task: decide whether this content meets the system criterion.
 
@@ -334,10 +334,10 @@ You are a content relevance reviewer for a job aggregator platform that collects
 
 An article has landed in the gray zone — the system is not confident in its relevance decision.
 
-Article title: {{title}}
-Article lead: {{lead}}
-Article body (truncated): {{body}}
-Review context: {{explain_json}}
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Review context: {explain_json}
 
 Core question: Does this content contain or directly signal a specific job opportunity, hiring activity, or vacancy?
 
@@ -805,9 +805,9 @@ Accelerator program announces deadline for summer cohort applications
 
 ### B.2. LLM-шаблоны
 
-Перейдите в **Templates** и создайте три шаблона в левой колонке (**Create LLM Template**).
+Перейдите в **Templates** и создайте в левой колонке как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
 
-#### LLM-шаблон 1: interests (проверка интересов пользователей)
+#### LLM-шаблон 1: interests (optional future-ready, не используется в baseline по умолчанию)
 
 | Поле | Значение |
 |---|---|
@@ -818,14 +818,14 @@ Accelerator program announces deadline for summer cohort applications
 ```
 You are a tech news relevance reviewer for a developer-focused news portal.
 
-The developer is tracking this topic: "{{title}}"
+The developer is tracking this topic: "{interest_name}"
 
 An article has landed in the gray zone — the automated scoring was inconclusive.
 
-Article title: {{title}}
-Article lead: {{lead}}
-Article body (truncated): {{body}}
-Match context: {{explain_json}}
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Match context: {explain_json}
 
 Your task: decide whether this article is genuinely valuable for a developer interested in the stated topic.
 
@@ -859,14 +859,14 @@ Be selective. Developers value signal over noise.
 ```
 You are a content classification reviewer for a developer-focused news portal.
 
-The system criterion is: "{{title}}"
+The system criterion is: "{criterion_name}"
 
 An article has landed in the gray zone — the automated scoring was inconclusive.
 
-Article title: {{title}}
-Article lead: {{lead}}
-Article body (truncated): {{body}}
-Scoring details: {{explain_json}}
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Scoring details: {explain_json}
 
 Your task: decide whether this article meets the system criterion for inclusion in the developer news feed.
 
@@ -893,10 +893,10 @@ You are a relevance reviewer for a developer-focused news portal covering startu
 
 An article has landed in the gray zone — the system is not confident in its relevance decision.
 
-Article title: {{title}}
-Article lead: {{lead}}
-Article body (truncated): {{body}}
-Review context: {{explain_json}}
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Review context: {explain_json}
 
 Core question: Would a professional software developer find this article valuable in their daily work or career?
 
@@ -1197,7 +1197,7 @@ Elon Musk tweets about Mars colonization timeline and SpaceX plans
 ## 6. FAQ по примерам
 
 **В: Можно ли использовать оба набора одновременно в одной установке NewsPortal?**
-> Да. Шаблоны интересов — это отдельные темы, которые выбирают пользователи. Вы можете создать и вакансийные, и новостные шаблоны в одной системе. Но LLM-шаблоны работают по одному на scope (используется последний активный), поэтому вам понадобится написать универсальный промпт, покрывающий обе задачи.
+> Да. Эти шаблоны интересов формируют системный каталог тем и синхронизируются в live `criteria`, поэтому вы можете держать в одной установке и вакансийные, и developer-news темы одновременно. Если вам нужна персонализация для конкретного человека, она настраивается отдельно через реальные `user_interests`. LLM-шаблоны по-прежнему работают по одному на scope, но в baseline runtime активно используются прежде всего `criteria` и `global`, а `interests` остаётся future-ready scope.
 
 **В: Нужно ли копировать все 8 шаблонов интересов? Можно ли начать с меньшего числа?**
 > Конечно. Начните с 3–4 самых важных для вашей аудитории тем. Добавляйте новые по мере необходимости. Не забывайте запускать переиндексацию `interest_centroids` после каждого добавления.
@@ -1230,4 +1230,3 @@ Elon Musk tweets about Mars colonization timeline and SpaceX plans
 > 📖 **Связанные документы:**
 > - [HOW_TO_USE.md](./HOW_TO_USE.md) — полное руководство по администрированию NewsPortal
 > - Раздел **Help & Guide** в боковом меню админки — встроенный справочник на английском языке
-

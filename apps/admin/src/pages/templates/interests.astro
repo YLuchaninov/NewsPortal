@@ -60,6 +60,9 @@ function resolveListHref(nextPage: number): string {
   </Fragment>
 
   <Fragment slot="header-actions">
+    <a href={appPath("/user-interests")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+      User interests
+    </a>
     <a href={appPath("/templates/llm")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
       LLM templates
     </a>
@@ -74,7 +77,8 @@ function resolveListHref(nextPage: number): string {
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Predefined topics</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">Interest templates</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          These templates seed user-facing topic choices. Keep authoring and advanced lexical hints on dedicated screens, while this list focuses on lifecycle state and coverage.
+          These templates define reusable topic prototypes. Active templates are synced into the live criteria set used by fresh ingest and historical reindex, while this list focuses on lifecycle state and coverage.
+          Editing one specific user's real `user_interests` happens on the separate <a href={appPath("/user-interests")} class="text-primary hover:underline">User Interests</a> page.
         </p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">

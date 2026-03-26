@@ -20,6 +20,7 @@ from .main import (
     process_interest_compile,
     process_reindex,
 )
+from .system_feed import summarize_system_feed_result
 
 
 @dataclass
@@ -81,9 +82,9 @@ async def ensure_embed_fixture() -> str:
                       'phase3-embed-smoke',
                       'https://example.test/articles/phase3-embed-smoke',
                       now(),
-                      'EU AI policy update reaches Brussels and Warsaw',
-                      'European Union regulators publish a coordinated AI policy response.',
-                      'European Union regulators in Warsaw and Brussels published a coordinated AI policy response with 42 pages of guidance for cross-border EU AI compliance.',
+                      'European Union AI policy response reaches Brussels and Warsaw',
+                      'European Union AI policy response reaches Brussels and Warsaw.',
+                      'European Union AI policy response reaches Brussels and Warsaw. European Union AI policy response reaches Brussels and Warsaw as regulators in Warsaw and Brussels publish coordinated EU AI compliance guidance with 42 pages of response details.',
                       'en',
                       0.9,
                       'normalized',
@@ -98,12 +99,23 @@ async def ensure_embed_fixture() -> str:
                       body = excluded.body,
                       lang = excluded.lang,
                       lang_confidence = excluded.lang_confidence,
+                      canonical_doc_id = excluded.doc_id,
+                      family_id = excluded.doc_id,
+                      is_exact_duplicate = false,
+                      is_near_duplicate = false,
+                      event_cluster_id = null,
                       processing_state = 'normalized',
                       normalized_at = now(),
+                      embedded_at = null,
                       updated_at = now()
                     """,
                     (doc_id, channel_id),
                 )
+    await reset_phase4_runtime_state(
+        doc_id=str(doc_id),
+        user_id=str(stable_uuid("interest-user")),
+        interest_id=str(stable_uuid("interest-row")),
+    )
     return str(doc_id)
 
 
@@ -260,15 +272,15 @@ async def ensure_criterion_fixture() -> str:
                     )
                     values (
                       %s,
-                      'Track regulatory AI policy updates',
-                      '["AI policy", "regulation update", "compliance bulletin"]'::jsonb,
-                      '["celebrity gossip", "match results"]'::jsonb,
-                      '["AI"]'::jsonb,
-                      '["sports"]'::jsonb,
-                      '["Brussels"]'::jsonb,
+                      'European Union AI policy response',
+                      '[]'::jsonb,
+                      '["entertainmentcoverage fashionindustry marketcommentary"]'::jsonb,
+                      '["AI", "European Union"]'::jsonb,
+                      '[]'::jsonb,
+                      '["Brussels", "Warsaw"]'::jsonb,
                       '["en"]'::jsonb,
-                      '["AI"]'::jsonb,
-                      '["NBA"]'::jsonb,
+                      '["AI", "EU"]'::jsonb,
+                      '[]'::jsonb,
                       1.0,
                       true,
                       false,
@@ -297,6 +309,114 @@ async def ensure_criterion_fixture() -> str:
                     (criterion_id,),
                 )
     return str(criterion_id)
+
+
+async def reset_phase4_runtime_state(
+    *,
+    doc_id: str,
+    user_id: str,
+    interest_id: str,
+) -> None:
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    delete from notification_feedback
+                    where notification_id in (
+                      select notification_id
+                      from notification_log
+                      where doc_id = %s
+                         or (user_id = %s and interest_id = %s)
+                    )
+                    """,
+                    (doc_id, user_id, interest_id),
+                )
+                await cursor.execute(
+                    """
+                    delete from notification_suppression
+                    where doc_id = %s
+                       or family_id = %s
+                       or (user_id = %s and interest_id = %s)
+                    """,
+                    (doc_id, doc_id, user_id, interest_id),
+                )
+                await cursor.execute(
+                    """
+                    delete from notification_log
+                    where doc_id = %s
+                       or (user_id = %s and interest_id = %s)
+                    """,
+                    (doc_id, user_id, interest_id),
+                )
+                await cursor.execute(
+                    """
+                    delete from llm_review_log
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from interest_match_results
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from criterion_match_results
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from system_feed_results
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from event_cluster_members
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from outbox_events
+                    where aggregate_type = 'article'
+                      and aggregate_id = %s
+                    """,
+                    (doc_id,),
+                )
+
+
+async def fetch_latest_article_event_id(doc_id: str, event_type: str) -> str:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select event_id::text as event_id
+                from outbox_events
+                where aggregate_type = 'article'
+                  and aggregate_id = %s
+                  and event_type = %s
+                order by created_at desc
+                limit 1
+                """,
+                (doc_id, event_type),
+            )
+            event = await cursor.fetchone()
+
+    if not event:
+        raise RuntimeError(
+            f"Phase 4 smoke verification failed: missing emitted outbox event {event_type}."
+        )
+
+    return str(event["event_id"])
 
 
 async def ensure_outbox_event(
@@ -349,7 +469,7 @@ async def ensure_reindex_job_fixture(reindex_job_id: str, doc_id: str) -> None:
     user_id = stable_uuid("interest-user")
     options_json = json.dumps(
         {
-            "batchSize": 25,
+            "batchSize": 1,
             "retroNotifications": "skip",
             "docIds": [doc_id],
         }
@@ -357,6 +477,13 @@ async def ensure_reindex_job_fixture(reindex_job_id: str, doc_id: str) -> None:
     async with await open_connection() as connection:
         async with connection.transaction():
             async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    delete from reindex_job_targets
+                    where reindex_job_id = %s
+                    """,
+                    (reindex_job_id,),
+                )
                 await cursor.execute(
                     """
                     insert into reindex_jobs (
@@ -406,6 +533,85 @@ async def fetch_notification_count(doc_id: str) -> int:
             )
             row = await cursor.fetchone()
     return int(row["notification_count"] or 0) if row else 0
+
+
+async def fetch_match_counts(doc_id: str) -> tuple[int, int]:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select count(*)::int as criterion_count
+                from criterion_match_results
+                where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            criterion_count = await cursor.fetchone()
+            await cursor.execute(
+                """
+                select count(*)::int as interest_count
+                from interest_match_results
+                where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            interest_count = await cursor.fetchone()
+
+    return (
+        int(criterion_count["criterion_count"] or 0) if criterion_count else 0,
+        int(interest_count["interest_count"] or 0) if interest_count else 0,
+    )
+
+
+async def fetch_system_feed_result(doc_id: str) -> dict[str, Any] | None:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select
+                  decision,
+                  eligible_for_feed,
+                  total_criteria_count,
+                  relevant_criteria_count,
+                  irrelevant_criteria_count,
+                  pending_llm_criteria_count
+                from system_feed_results
+                where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+def verify_system_feed_result_consistency(
+    system_feed: dict[str, Any] | None,
+    *,
+    require_criteria_counts: bool,
+) -> None:
+    if not system_feed:
+        raise RuntimeError("System feed verification failed: result row is missing.")
+
+    total = int(system_feed.get("total_criteria_count") or 0)
+    relevant = int(system_feed.get("relevant_criteria_count") or 0)
+    irrelevant = int(system_feed.get("irrelevant_criteria_count") or 0)
+    pending = int(system_feed.get("pending_llm_criteria_count") or 0)
+    decision = str(system_feed.get("decision") or "")
+    eligible_for_feed = system_feed.get("eligible_for_feed") is True
+
+    if require_criteria_counts and total < 1:
+        raise RuntimeError("System feed verification failed: criteria totals are missing.")
+
+    expected = summarize_system_feed_result(
+        total_criteria_count=total,
+        relevant_criteria_count=relevant,
+        irrelevant_criteria_count=irrelevant,
+        pending_llm_criteria_count=pending,
+    )
+    if decision != str(expected["decision"]):
+        raise RuntimeError("System feed verification failed: stored decision drifted from criteria counts.")
+    if eligible_for_feed != bool(expected["eligible_for_feed"]):
+        raise RuntimeError("System feed verification failed: eligibility drifted from criteria counts.")
 
 
 async def ensure_normalize_dedup_fixture() -> tuple[str, str]:
@@ -828,6 +1034,7 @@ async def verify_cluster_match_notify(doc_id: str) -> None:
             )
             notification_count = await cursor.fetchone()
 
+    system_feed = await fetch_system_feed_result(doc_id)
     if not article or article["processing_state"] not in {"matched", "notified"}:
         raise RuntimeError("Phase 4 smoke verification failed: article did not advance to matched/notified.")
     if int(cluster_count["cluster_count"]) < 1:
@@ -838,9 +1045,22 @@ async def verify_cluster_match_notify(doc_id: str) -> None:
         raise RuntimeError("Phase 4 smoke verification failed: interest matches are missing.")
     if int(notification_count["notification_count"]) < 1:
         raise RuntimeError("Phase 4 smoke verification failed: notification log is missing.")
+    try:
+        verify_system_feed_result_consistency(system_feed, require_criteria_counts=True)
+    except RuntimeError as error:
+        raise RuntimeError(f"Phase 4 smoke verification failed: {error}") from error
+    if str((system_feed or {}).get("decision") or "") != "eligible":
+        raise RuntimeError("Phase 4 smoke verification failed: system feed did not become eligible.")
 
 
-async def verify_reindex_backfill(doc_id: str, *, expected_notification_count: int) -> None:
+async def verify_reindex_backfill(
+    doc_id: str,
+    *,
+    reindex_job_id: str,
+    expected_criterion_count: int,
+    expected_interest_count: int,
+    expected_notification_count: int,
+) -> None:
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
             await cursor.execute(
@@ -863,25 +1083,48 @@ async def verify_reindex_backfill(doc_id: str, *, expected_notification_count: i
             interest_count = await cursor.fetchone()
             await cursor.execute(
                 """
-                select status
+                select status, options_json
                 from reindex_jobs
-                where index_name = 'interest_centroids'
-                order by created_at desc
-                limit 1
-                """
+                where reindex_job_id = %s
+                """,
+                (reindex_job_id,),
             )
             reindex_job = await cursor.fetchone()
+            await cursor.execute(
+                """
+                select count(*)::int as target_count
+                from reindex_job_targets
+                where reindex_job_id = %s
+                """,
+                (reindex_job_id,),
+            )
+            target_count = await cursor.fetchone()
 
     actual_notification_count = await fetch_notification_count(doc_id)
+    system_feed = await fetch_system_feed_result(doc_id)
+    options_json = dict(reindex_job["options_json"] or {}) if reindex_job else {}
+    progress = dict(options_json.get("progress") or {})
 
-    if int(criterion_count["criterion_count"]) != 1:
-        raise RuntimeError("Reindex backfill smoke verification failed: criterion matches were duplicated.")
-    if int(interest_count["interest_count"]) != 1:
-        raise RuntimeError("Reindex backfill smoke verification failed: interest matches were duplicated.")
+    if int(criterion_count["criterion_count"]) != expected_criterion_count:
+        raise RuntimeError("Reindex backfill smoke verification failed: criterion match cardinality changed.")
+    if int(interest_count["interest_count"]) != expected_interest_count:
+        raise RuntimeError("Reindex backfill smoke verification failed: interest match cardinality changed.")
     if actual_notification_count != expected_notification_count:
         raise RuntimeError("Reindex backfill smoke verification failed: retro notifications were sent.")
     if not reindex_job or reindex_job["status"] != "completed":
         raise RuntimeError("Reindex backfill smoke verification failed: reindex job did not complete.")
+    if int(target_count["target_count"]) != 1:
+        raise RuntimeError("Reindex backfill smoke verification failed: target snapshot row count drifted.")
+    if int(progress.get("processedArticles") or -1) != 1 or int(progress.get("totalArticles") or -1) != 1:
+        raise RuntimeError("Reindex backfill smoke verification failed: stable progress totals were not recorded.")
+    try:
+        verify_system_feed_result_consistency(system_feed, require_criteria_counts=True)
+    except RuntimeError as error:
+        raise RuntimeError(f"Reindex backfill smoke verification failed: {error}") from error
+    if str((system_feed or {}).get("decision") or "") != "eligible":
+        raise RuntimeError(
+            "Reindex backfill smoke verification failed: system feed did not remain eligible."
+        )
 
 
 async def run_embed_smoke() -> dict[str, Any]:
@@ -977,8 +1220,6 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
     normalized_event_id = str(uuid.uuid4())
     embedded_event_id = str(uuid.uuid4())
     clustered_event_id = str(uuid.uuid4())
-    matched_interest_event_id = str(uuid.uuid4())
-
     await ensure_outbox_event(
         event_id=interest_event_id,
         event_type="interest.compile.requested",
@@ -1035,16 +1276,17 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
+    criteria_matched_event_id = await fetch_latest_article_event_id(
+        doc_id,
+        "article.criteria.matched",
+    )
     interest_result = await process_match_interests(
-        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
+        FakeJob({"eventId": criteria_matched_event_id, "docId": doc_id, "version": 1}),
         "",
     )
-    await ensure_outbox_event(
-        event_id=matched_interest_event_id,
-        event_type="article.interests.matched",
-        aggregate_type="article",
-        aggregate_id=doc_id,
-        payload={"docId": doc_id, "version": 1},
+    matched_interest_event_id = await fetch_latest_article_event_id(
+        doc_id,
+        "article.interests.matched",
     )
     notify_result = await process_notify(
         FakeJob({"eventId": matched_interest_event_id, "docId": doc_id, "version": 1}),
@@ -1073,7 +1315,6 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
     normalized_event_id = str(uuid.uuid4())
     embedded_event_id = str(uuid.uuid4())
     clustered_event_id = str(uuid.uuid4())
-    matched_interest_event_id = str(uuid.uuid4())
     reindex_event_id = str(uuid.uuid4())
     reindex_job_id = str(stable_uuid("reindex-backfill-job"))
 
@@ -1132,22 +1373,24 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
+    criteria_matched_event_id = await fetch_latest_article_event_id(
+        doc_id,
+        "article.criteria.matched",
+    )
     await process_match_interests(
-        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
+        FakeJob({"eventId": criteria_matched_event_id, "docId": doc_id, "version": 1}),
         "",
     )
-    await ensure_outbox_event(
-        event_id=matched_interest_event_id,
-        event_type="article.interests.matched",
-        aggregate_type="article",
-        aggregate_id=doc_id,
-        payload={"docId": doc_id, "version": 1},
+    matched_interest_event_id = await fetch_latest_article_event_id(
+        doc_id,
+        "article.interests.matched",
     )
     await process_notify(
         FakeJob({"eventId": matched_interest_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     await verify_cluster_match_notify(doc_id)
+    criterion_count_before, interest_count_before = await fetch_match_counts(doc_id)
     notification_count_before = await fetch_notification_count(doc_id)
     await ensure_reindex_job_fixture(reindex_job_id, doc_id)
     await ensure_outbox_event(
@@ -1167,8 +1410,16 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         ),
         "",
     )
+    backfill_result = dict(reindex_result.get("backfill") or {})
+    if int(backfill_result.get("interestLlmReviews") or 0) != 0:
+        raise RuntimeError(
+            "Reindex backfill smoke verification failed: interest-scope LLM review was unexpectedly replayed."
+        )
     await verify_reindex_backfill(
         doc_id,
+        reindex_job_id=reindex_job_id,
+        expected_criterion_count=criterion_count_before,
+        expected_interest_count=interest_count_before,
         expected_notification_count=notification_count_before,
     )
     return {
