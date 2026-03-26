@@ -29,6 +29,9 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             reindex_job_id="job-1",
             batch_size=1,
             doc_ids=None,
+            user_id=None,
+            interest_id=None,
+            system_feed_only=False,
             dependencies=dependencies,
         )
 
@@ -78,6 +81,9 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             reindex_job_id="job-empty",
             batch_size=50,
             doc_ids=["doc-1"],
+            user_id=None,
+            interest_id=None,
+            system_feed_only=False,
             dependencies=dependencies,
         )
 
@@ -98,6 +104,44 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["totalArticles"], 0)
         self.assertEqual(result["criteriaMatches"], 0)
         self.assertEqual(result["interestMatches"], 0)
+
+    async def test_replay_historical_articles_forwards_scoped_interest_filters(self) -> None:
+        process_match_interests = AsyncMock(return_value={"interestCount": 1})
+        dependencies = reindex_backfill.HistoricalBackfillDependencies(
+            prepare_target_snapshot=AsyncMock(return_value=1),
+            list_target_batch=AsyncMock(
+                side_effect=[
+                    [{"target_position": 1, "doc_id": "doc-7"}],
+                    [],
+                ]
+            ),
+            update_job_options=AsyncMock(),
+            publish_outbox_event=AsyncMock(),
+            process_match_criteria=AsyncMock(return_value={"criteriaCount": 1}),
+            process_match_interests=process_match_interests,
+            is_article_eligible_for_personalization=AsyncMock(return_value=True),
+            replay_gray_zone_reviews_for_doc=AsyncMock(return_value=0),
+        )
+
+        await reindex_backfill.replay_historical_articles(
+            reindex_job_id="job-scope",
+            batch_size=25,
+            doc_ids=None,
+            user_id="user-1",
+            interest_id="interest-1",
+            system_feed_only=True,
+            dependencies=dependencies,
+        )
+
+        dependencies.prepare_target_snapshot.assert_awaited_once_with(
+            reindex_job_id="job-scope",
+            doc_ids=None,
+            system_feed_only=True,
+        )
+        scoped_job = process_match_interests.await_args.args[0]
+        self.assertEqual(scoped_job.data["userId"], "user-1")
+        self.assertEqual(scoped_job.data["interestId"], "interest-1")
+        self.assertTrue(scoped_job.data["historicalBackfill"])
 
 
 if __name__ == "__main__":

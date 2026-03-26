@@ -10,7 +10,7 @@ export interface Props {
   themeClass?: string;
   currentTheme?: string;
   flash?: { status: "success" | "error"; message: string } | null;
-  activeNav?: "feed" | "interests" | "notifications" | "settings";
+  activeNav?: "feed" | "matches" | "interests" | "notifications" | "settings";
   bffPreferencesPath?: string;
   bffLogoutPath?: string;
   bffBootstrapPath?: string;
@@ -30,6 +30,7 @@ const {
 
 const navItems = [
   { href: "/", label: "Feed", key: "feed" },
+  { href: "/matches", label: "My Matches", key: "matches" },
   { href: "/interests", label: "Interests", key: "interests" },
   { href: "/notifications", label: "Notifications", key: "notifications" },
   { href: "/settings", label: "Settings", key: "settings" },
@@ -181,4 +182,3 @@ const navItems = [
     </script>
   </body>
 </html>
-

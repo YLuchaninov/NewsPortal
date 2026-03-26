@@ -36,11 +36,15 @@ async def replay_historical_articles(
     reindex_job_id: str,
     batch_size: int,
     doc_ids: list[str] | None,
+    user_id: str | None,
+    interest_id: str | None,
+    system_feed_only: bool,
     dependencies: HistoricalBackfillDependencies,
 ) -> dict[str, Any]:
     total_articles = await dependencies.prepare_target_snapshot(
         reindex_job_id=reindex_job_id,
         doc_ids=doc_ids,
+        system_feed_only=system_feed_only,
     )
     processed_articles = 0
     criteria_matches = 0
@@ -105,6 +109,8 @@ async def replay_historical_articles(
                     payload={
                         "docId": doc_id,
                         "historicalBackfill": True,
+                        "userId": user_id,
+                        "interestId": interest_id,
                         "version": 1,
                     },
                 )
@@ -114,6 +120,8 @@ async def replay_historical_articles(
                             "eventId": interests_event_id,
                             "docId": doc_id,
                             "historicalBackfill": True,
+                            "userId": user_id,
+                            "interestId": interest_id,
                         }
                     ),
                     "",

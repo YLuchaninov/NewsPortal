@@ -3,6 +3,7 @@ import type { AuthIdentity, AuthSession } from "@newsportal/contracts";
 import { queryOne, queryRows } from "./db";
 
 const WEB_SESSION_COOKIE = "np_web_session";
+const WEB_REFRESH_COOKIE = "np_web_refresh";
 
 interface FirebaseLookupUser {
   localId: string;
@@ -59,6 +60,31 @@ async function firebaseRequest(path: string, payload: Record<string, unknown>): 
   return data;
 }
 
+async function firebaseTokenRequest(payload: URLSearchParams): Promise<any> {
+  const apiKey = readFirebaseApiKey();
+  if (!apiKey) {
+    throw new Error("FIREBASE_WEB_API_KEY is not configured.");
+  }
+
+  const response = await fetch(
+    `https://securetoken.googleapis.com/v1/token?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: payload.toString()
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message ?? "Firebase token refresh failed.");
+  }
+
+  return data;
+}
+
 function normalizeIdentity(lookupUser: FirebaseLookupUser, fallbackAnonymous = false): AuthIdentity {
   const providerIds = lookupUser.providerUserInfo?.map((item) => item.providerId ?? "") ?? [];
   const providerId = providerIds[0] ?? "";
@@ -96,6 +122,80 @@ export async function bootstrapAnonymousFirebaseSession(): Promise<{
       email: response.email ? String(response.email) : null,
       isAnonymous: true
     }
+  };
+}
+
+async function restoreFirebaseSession(
+  refreshToken: string
+): Promise<{
+  idToken: string;
+  refreshToken: string;
+  identity: AuthIdentity;
+} | null> {
+  const normalizedRefreshToken = String(refreshToken).trim();
+  if (!normalizedRefreshToken) {
+    return null;
+  }
+
+  const response = await firebaseTokenRequest(
+    new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: normalizedRefreshToken
+    })
+  );
+  const idToken = String(response.id_token ?? "").trim();
+  if (!idToken) {
+    return null;
+  }
+
+  const identity = await verifyFirebaseIdToken(idToken);
+  if (!identity) {
+    return null;
+  }
+
+  return {
+    idToken,
+    refreshToken: String(response.refresh_token ?? normalizedRefreshToken).trim(),
+    identity
+  };
+}
+
+function readCookie(cookies: Record<string, string>, key: string): string | null {
+  const value = cookies[key];
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+export async function bootstrapWebFirebaseSession(request: Request): Promise<{
+  idToken: string;
+  refreshToken: string;
+  identity: AuthIdentity;
+  reusedExisting: boolean;
+}> {
+  const cookies = parseCookies(request.headers.get("cookie"));
+  const refreshToken = readCookie(cookies, WEB_REFRESH_COOKIE);
+  if (refreshToken) {
+    try {
+      const restored = await restoreFirebaseSession(refreshToken);
+      if (restored) {
+        return {
+          ...restored,
+          reusedExisting: true
+        };
+      }
+    } catch {
+      // Fall back to a new anonymous session when the stored refresh token is stale.
+    }
+  }
+
+  const session = await bootstrapAnonymousFirebaseSession();
+  return {
+    ...session,
+    reusedExisting: false
   };
 }
 
@@ -191,6 +291,17 @@ export async function resolveWebSession(request: Request): Promise<(AuthSession 
 
 export function buildSessionCookie(value: string): string {
   return `${WEB_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
+}
+
+export function buildRefreshCookie(value: string): string {
+  return `${WEB_REFRESH_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
+}
+
+export function buildWebAuthCookies(tokens: {
+  idToken: string;
+  refreshToken: string;
+}): string[] {
+  return [buildSessionCookie(tokens.idToken), buildRefreshCookie(tokens.refreshToken)];
 }
 
 export function buildExpiredSessionCookie(): string {

@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 
 import {
-  bootstrapAnonymousFirebaseSession,
-  buildSessionCookie,
+  bootstrapWebFirebaseSession,
+  buildWebAuthCookies,
   syncLocalUser
 } from "../../../lib/server/auth";
 import {
@@ -16,15 +16,25 @@ export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
 
   try {
-    const session = await bootstrapAnonymousFirebaseSession();
+    const session = await bootstrapWebFirebaseSession(request);
     const localUser = await syncLocalUser(session.identity);
+    const authCookies = buildWebAuthCookies(session);
     if (browserRequest) {
-      return buildFlashRedirect(request, {
+      const response = buildFlashRedirect(request, {
         section: "auth",
         status: "success",
         message: "Session started.",
-        setCookie: buildSessionCookie(session.idToken)
+        setCookie: authCookies[0]
       });
+      response.headers.append("Set-Cookie", authCookies[1]);
+      return response;
+    }
+
+    const headers = new Headers({
+      "Content-Type": "application/json"
+    });
+    for (const cookie of authCookies) {
+      headers.append("Set-Cookie", cookie);
     }
 
     return new Response(
@@ -37,10 +47,7 @@ export const POST: APIRoute = async ({ request }) => {
       }),
       {
         status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Set-Cookie": buildSessionCookie(session.idToken)
-        }
+        headers
       }
     );
   } catch (error) {

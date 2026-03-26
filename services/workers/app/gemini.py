@@ -24,6 +24,8 @@ class GeminiReviewResult:
 
 
 PRICE_CARD_VERSION = "gemini-2026-03"
+ENV_INPUT_COST_PER_MILLION_USD = "LLM_INPUT_COST_PER_MILLION_USD"
+ENV_OUTPUT_COST_PER_MILLION_USD = "LLM_OUTPUT_COST_PER_MILLION_USD"
 DEFAULT_PRICE_CARD = {
     "default": {
         "input_cost_per_million_tokens_usd": 0.10,
@@ -34,6 +36,25 @@ DEFAULT_PRICE_CARD = {
         "output_cost_per_million_tokens_usd": 0.40,
     },
 }
+
+
+def _read_non_negative_float_env(name: str) -> tuple[float | None, str | None]:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return None, None
+
+    candidate = raw_value.strip()
+    if not candidate:
+        return None, None
+
+    try:
+        parsed = float(candidate)
+    except ValueError:
+        return None, f"{name} must be a non-negative number."
+
+    if parsed < 0:
+        return None, f"{name} must be a non-negative number."
+    return parsed, None
 
 
 def _read_text_part(payload: dict[str, Any]) -> str:
@@ -108,24 +129,58 @@ def _read_usage_metadata(payload: dict[str, Any]) -> tuple[int | None, int | Non
     )
 
 
-def _resolve_price_card(model: str) -> dict[str, float]:
-    return DEFAULT_PRICE_CARD.get(model, DEFAULT_PRICE_CARD["default"])
+def _resolve_price_card(model: str) -> tuple[dict[str, float], dict[str, Any]]:
+    model_key = model if model in DEFAULT_PRICE_CARD else "default"
+    price_card = dict(DEFAULT_PRICE_CARD[model_key])
+    warnings: list[str] = []
+
+    input_override, input_warning = _read_non_negative_float_env(ENV_INPUT_COST_PER_MILLION_USD)
+    output_override, output_warning = _read_non_negative_float_env(ENV_OUTPUT_COST_PER_MILLION_USD)
+    if input_warning:
+        warnings.append(input_warning)
+    if output_warning:
+        warnings.append(output_warning)
+
+    if input_override is not None:
+        price_card["input_cost_per_million_tokens_usd"] = input_override
+    if output_override is not None:
+        price_card["output_cost_per_million_tokens_usd"] = output_override
+
+    if input_override is not None and output_override is not None:
+        source = "env_override"
+    elif input_override is not None or output_override is not None:
+        source = "env_partial_override"
+    else:
+        source = "default"
+
+    if warnings:
+        source = f"{source}_with_invalid_env"
+
+    return price_card, {
+        "priceCardVersion": PRICE_CARD_VERSION,
+        "priceCardSource": source,
+        "priceCardModelKey": model_key,
+        "priceCardWarnings": warnings,
+    }
 
 
 def _estimate_cost_usd(
     model: str,
     prompt_tokens: int | None,
     completion_tokens: int | None,
+    price_card: dict[str, float] | None = None,
 ) -> float | None:
     if prompt_tokens is None and completion_tokens is None:
         return None
 
-    price_card = _resolve_price_card(model)
+    resolved_price_card = price_card
+    if resolved_price_card is None:
+        resolved_price_card, _ = _resolve_price_card(model)
     input_cost = float(prompt_tokens or 0) / 1_000_000 * float(
-        price_card["input_cost_per_million_tokens_usd"]
+        resolved_price_card["input_cost_per_million_tokens_usd"]
     )
     output_cost = float(completion_tokens or 0) / 1_000_000 * float(
-        price_card["output_cost_per_million_tokens_usd"]
+        resolved_price_card["output_cost_per_million_tokens_usd"]
     )
     return round(input_cost + output_cost, 6)
 
@@ -196,7 +251,13 @@ def review_with_gemini(prompt: str) -> GeminiReviewResult:
     text_part = _read_text_part(payload)
     parsed = _parse_json_fragment(text_part) or {}
     prompt_tokens, completion_tokens, total_tokens, usage_metadata = _read_usage_metadata(payload)
-    cost_estimate_usd = _estimate_cost_usd(model, prompt_tokens, completion_tokens)
+    price_card, price_card_metadata = _resolve_price_card(model)
+    cost_estimate_usd = _estimate_cost_usd(
+        model,
+        prompt_tokens,
+        completion_tokens,
+        price_card=price_card,
+    )
     score = 0.0
     raw_score = parsed.get("score")
     if isinstance(raw_score, (int, float)):
@@ -221,8 +282,8 @@ def review_with_gemini(prompt: str) -> GeminiReviewResult:
         total_tokens=total_tokens,
         cost_estimate_usd=cost_estimate_usd,
         provider_usage_json={
-            "priceCardVersion": PRICE_CARD_VERSION,
-            "priceCard": _resolve_price_card(model),
+            **price_card_metadata,
+            "priceCard": price_card,
             "usageMetadata": usage_metadata,
         },
     )

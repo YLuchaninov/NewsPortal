@@ -21,6 +21,8 @@ interface ArticleCardProps {
   article: Article;
   isLoggedIn: boolean;
   reactionsPath: string;
+  contextBadgeLabel?: string;
+  contextNote?: string | null;
 }
 
 export function resolveSafeArticleHref(url?: string): string | null {
@@ -39,7 +41,13 @@ export function resolveSafeArticleHref(url?: string): string | null {
   }
 }
 
-export function ArticleCard({ article, isLoggedIn, reactionsPath }: ArticleCardProps) {
+export function ArticleCard({
+  article,
+  isLoggedIn,
+  reactionsPath,
+  contextBadgeLabel,
+  contextNote,
+}: ArticleCardProps) {
   const [likes, setLikes] = useState(Number(article.like_count ?? 0));
   const [dislikes, setDislikes] = useState(Number(article.dislike_count ?? 0));
   const [reacted, setReacted] = useState<"like" | "dislike" | null>(null);
@@ -129,6 +137,11 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath }: ArticleCardP
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${feedBadge.className}`}>
             {feedBadge.label}
           </span>
+          {contextBadgeLabel && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+              {contextBadgeLabel}
+            </span>
+          )}
           {article.visibility_state && article.visibility_state !== "visible" && (
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">
               {String(article.visibility_state)}
@@ -139,6 +152,12 @@ export function ArticleCard({ article, isLoggedIn, reactionsPath }: ArticleCardP
         <h3 className="font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
           {String(article.title ?? "Untitled article")}
         </h3>
+
+        {contextNote && (
+          <p className="text-xs font-medium text-blue-700 dark:text-blue-300 line-clamp-2">
+            {contextNote}
+          </p>
+        )}
 
         {article.lead && (
           <p className="text-sm text-muted-foreground line-clamp-3 flex-1">

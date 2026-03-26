@@ -14,6 +14,44 @@
 
 ## Completed items
 
+### 2026-03-26 — S-PERSONALIZED-MATCHES-1 — Shipped the separate `/matches` feed and scoped post-compile history sync
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь зафиксировал, что `/` должен остаться system-selected feed, а персональные `user_interests` должны жить на отдельной поверхности и автоматически догонять уже существующие system-feed-approved статьи после compile, чтобы счетчик `62` на главной не воспринимался как баг.
+- Что изменилось:
+  - `services/api/app/main.py` added `GET /users/{user_id}/matches` with paginated and non-paginated modes, article-level dedupe by `doc_id`, strongest-match selection by `score_interest desc, created_at desc`, and strict filtering to `interest_match_results.decision = 'notify'` plus `system_feed_results.eligible_for_feed = true`;
+  - `packages/sdk/src/index.ts`, `apps/web/src/pages/matches.astro`, `apps/web/src/layouts/Shell.astro`, and `apps/web/src/components/ArticleCard.tsx` now expose a separate `/matches` page that reuses the main feed card/pagination UX while showing matched-interest context instead of changing `/`;
+  - web/admin interest mutation handlers and the shared interest manager copy now tell operators/users that create/update/clone starts compile plus background history sync, so they no longer expect `/` totals to drop immediately;
+  - `services/workers/app/main.py` and `services/workers/app/reindex_backfill.py` now build and run a scoped `repair` reindex job after successful interest compile using `userId`, `interestId`, `systemFeedOnly = true`, and `retroNotifications = 'skip'`, while historical replay only rematches the targeted compiled interests;
+  - synthetic smoke compile flows now pass `skipAutoRepair` so compose smoke proof stays focused on compile behavior, and criterion gray-zone matching now always dispatches `llm.review.requested` even when no active `criteria` prompt template exists, allowing fresh-stack proof to progress through the default review fallback path.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `pnpm integration_tests`
+  - earlier stage-local verification also passed `pnpm typecheck` and `pnpm build`
+- Риски или gaps:
+  - no manual browser-click walkthrough of `/matches` was executed; runtime proof remained HTTP/browser-style plus compose acceptance.
+  - fresh-stack proof still depends on external dev Firebase admin aliases created during acceptance runs; compose teardown cleans local services but not those external identities.
+- Follow-up:
+  - if the product later wants `/matches`-specific UX polish or manual browser proof, open a new bounded follow-up instead of reopening this completed stage.
+
+### 2026-03-26 — C-PERSONALIZED-MATCHES — Separate personalized matches now sits cleanly beside the system feed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: после system-first rollout пользователю нужно было сохранить `/` как global system-selected media flow, но при этом честно показать, куда попадает персонализация и как новые интересы догоняют существующую system-feed history.
+- Что изменилось:
+  - capability stayed intentionally single-stage: `S-PERSONALIZED-MATCHES-1` introduced the new personalized read surface, worker auto-sync semantics, SDK/API exposure, UI copy updates, and durable docs sync in one bounded slice;
+  - durable truth in `README.md`, `HOW_TO_USE.md`, and `docs/blueprint.md` now explicitly says that `/` remains the system feed, `/matches` is the per-user personalized surface, and interest creation/update triggers compile plus scoped historical repair against system-feed-approved history;
+  - compose acceptance now treats automatic historical sync as the live contract for newly created admin-managed interests, while manual backfill remains a stable/no-retro-notification repair tool rather than the first time those historical matches appear.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - capability intentionally did not change the `/` total/count semantics or introduce a second notification policy; retro delivery stays skipped for auto-sync and manual backfill.
+- Follow-up:
+  - future work on personalized sorting, richer match explanations, or `/matches` operator analytics should open a new explicit item.
+
 ### 2026-03-26 — P-DOCS-SYSTEM-FIRST-SYNC-2 — Synced `HOW_TO_USE.md` and `EXAMPLES.md` with the live system-first contract
 
 - Тип записи: patch archive

@@ -184,6 +184,7 @@ NewsPortal строится как zero-shot система фильтрации
 - compiled criteria и compiled user interests;
 - admin `interest_templates`, которые materialize-ятся в system `criteria`-targets для fresh ingest и historical reindex, при этом персональные `user_interests` остаются отдельным per-user match layer и могут редактироваться из admin только через явный on-behalf flow для выбранного пользователя по `email` или `user_id`;
 - article-level `system_feed_results` read model, который фиксирует итоговую eligibility статьи после system `criteria` и criteria-scope gray-zone LLM review; этот gate уже является upstream truth для public/system feed surfaces и для optional per-user personalization;
+- user-facing web surfaces теперь разделены truthfully: `/` остается global `system-selected feed`, а отдельный `/matches` page показывает только per-user personalized matches поверх уже допущенного system gate;
 - notification decisioning;
 - suppression и anti-spam;
 - хранение пользовательского feedback по алертам;
@@ -758,7 +759,7 @@ Astro user app.
 
 - пользовательские страницы;
 - browser auth integration;
-- anonymous Firebase session bootstrap в MVP;
+- anonymous Firebase session bootstrap в MVP, включая same-browser resume через persisted Firebase refresh token после explicit sign-out;
 - interests;
 - feed-eligible news;
 - media-capable article feed и detail screens;
@@ -925,6 +926,7 @@ Notification delivery adapter.
 `auth_subject` должен хранить внешний идентификатор пользователя из auth provider.
 
 В MVP пользователь по умолчанию создается через Firebase Anonymous Auth при первом входе.
+Если тот же браузер уже хранит действующий Firebase refresh token, повторный web bootstrap должен возвращать пользователя в тот же anonymous identity вместо создания нового локального `user_id`, чтобы `user_profiles`, `user_interests` и notification-channel настройки не терялись только из-за logout/login цикла.
 Admin-пользователи должны использовать неанонимный Firebase sign-in и получать локальную роль `admin`.
 Для internal/dev bootstrap допускается env-driven allowlist (`ADMIN_ALLOWLIST_EMAILS`), которая может выдать локальную роль `admin` при первом успешном sign-in; для repeatable internal tests exact allowlisted email может использоваться и через `+alias` variant того же адреса. После bootstrap источником истины для authorization все равно остается PostgreSQL.
 
@@ -2360,6 +2362,7 @@ Worker должен:
 13. если criteria case попал в gray zone, job в `q.llm.review` обновляет criterion decision и пересчитывает `system_feed_results`;
 14. когда system gate стал `eligible` или `pass_through`, relay публикует `article.criteria.matched`, и только после этого interest worker запускает optional per-user personalization;
 15. если у статьи нет system-feed eligibility, personalization lane пропускается; если у конкретного пользователя нет compiled `user_interests`, персонализация для него просто не создает per-user match rows, но статья остается доступной в system-selected feed;
+15a. если у пользователя есть matched `user_interests`, такие статьи остаются в global system feed на `/`, но дополнительно попадают в отдельный personalized `/matches` read surface;
 16. baseline runtime не делает interest-side gray-zone LLM review: такие user-interest matches suppress-ятся без внешнего LLM call, а future opt-in/premium lane может вернуть этот scope отдельно;
 17. notify worker применил suppression и отправил уведомление только для personalization lane;
 18. dispatch слой отправил уведомление.
@@ -2381,7 +2384,8 @@ Worker должен:
 5. worker компилирует embeddings и centroid;
 6. обновляется compiled state;
 7. обновляется registry/HNSW;
-8. interest становится активным без retrain.
+8. после успешного compile worker автоматически ставит scoped `repair` job для historical system-feed-eligible статей этого `user_id`/`interest_id`, без retro notifications;
+9. interest становится активным без retrain, а `/matches` постепенно догоняет historical articles после фонового replay.
 
 ---
 

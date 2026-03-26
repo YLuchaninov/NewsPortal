@@ -119,6 +119,12 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         page: params?.page,
         pageSize: params?.pageSize,
       }),
+    listMatches: <T>(userId: string) => getJson<T>(`/users/${userId}/matches`),
+    listMatchesPage: <T>(userId: string, params?: PaginationQuery) =>
+      getPaginated<T>(`/users/${userId}/matches`, {
+        page: params?.page,
+        pageSize: params?.pageSize,
+      }),
     listInterests: <T>(userId: string) => getJson<T>(`/users/${userId}/interests`),
     listInterestsPage: <T>(userId: string, params?: PaginationQuery) =>
       getPaginated<T>(`/users/${userId}/interests`, {

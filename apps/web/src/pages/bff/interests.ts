@@ -75,7 +75,7 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "interests",
         status: "success",
-        message: "Interest created"
+        message: "Interest created. Compilation and background match sync started."
       });
     }
 

@@ -49,6 +49,20 @@ def system_feed_join_clause(article_alias: str = "a", system_alias: str = "sfr")
     return f"left join system_feed_results {system_alias} on {system_alias}.doc_id = {article_alias}.doc_id"
 
 
+def canonical_article_family_expr(article_alias: str = "a") -> str:
+    return f"coalesce({article_alias}.canonical_doc_id, {article_alias}.doc_id)"
+
+
+def canonical_article_family_order_clause(article_alias: str = "a") -> str:
+    family_expr = canonical_article_family_expr(article_alias)
+    return (
+        f"case when {article_alias}.doc_id = {family_expr} then 0 else 1 end, "
+        f"{article_alias}.published_at desc nulls last, "
+        f"{article_alias}.ingested_at desc, "
+        f"{article_alias}.doc_id"
+    )
+
+
 def feed_eligible_article_clause(
     article_alias: str = "a",
     system_alias: str = "sfr",
@@ -155,36 +169,64 @@ def list_feed_articles(
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
 ) -> dict[str, Any]:
     offset = (page - 1) * page_size
+    family_expr = canonical_article_family_expr("a")
+    family_order = canonical_article_family_order_clause("a")
     total_row = query_one(
         f"""
         select count(*)::int as total
-        from articles a
-        {system_feed_join_clause("a", "sfr")}
-        where {feed_eligible_article_clause("a", "sfr")}
+        from (
+          select distinct {family_expr} as family_doc_id
+          from articles a
+          {system_feed_join_clause("a", "sfr")}
+          where {feed_eligible_article_clause("a", "sfr")}
+        ) deduped
         """
     )
     items = query_all(
         f"""
         select
-          a.doc_id,
-          a.url,
-          a.title,
-          a.lead,
-          a.lang,
-          a.published_at,
-          a.processing_state,
-          a.visibility_state,
-          a.event_cluster_id,
-          sfr.decision as system_feed_decision,
-          coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
-          a.has_media,
-          coalesce(ars.like_count, 0) as like_count,
-          coalesce(ars.dislike_count, 0) as dislike_count
-        from articles a
-        left join system_feed_results sfr on sfr.doc_id = a.doc_id
-        left join article_reaction_stats ars on ars.doc_id = a.doc_id
-        where {feed_eligible_article_clause("a", "sfr")}
-        order by a.published_at desc nulls last, a.ingested_at desc
+          ranked.doc_id,
+          ranked.url,
+          ranked.title,
+          ranked.lead,
+          ranked.lang,
+          ranked.published_at,
+          ranked.processing_state,
+          ranked.visibility_state,
+          ranked.event_cluster_id,
+          ranked.system_feed_decision,
+          ranked.system_feed_eligible,
+          ranked.has_media,
+          ranked.like_count,
+          ranked.dislike_count
+        from (
+          select
+            a.doc_id,
+            a.url,
+            a.title,
+            a.lead,
+            a.lang,
+            a.published_at,
+            a.ingested_at,
+            a.processing_state,
+            a.visibility_state,
+            a.event_cluster_id,
+            sfr.decision as system_feed_decision,
+            coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
+            a.has_media,
+            coalesce(ars.like_count, 0) as like_count,
+            coalesce(ars.dislike_count, 0) as dislike_count,
+            row_number() over (
+              partition by {family_expr}
+              order by {family_order}
+            ) as family_rank
+          from articles a
+          left join system_feed_results sfr on sfr.doc_id = a.doc_id
+          left join article_reaction_stats ars on ars.doc_id = a.doc_id
+          where {feed_eligible_article_clause("a", "sfr")}
+        ) ranked
+        where ranked.family_rank = 1
+        order by ranked.published_at desc nulls last, ranked.ingested_at desc, ranked.doc_id
         limit %s
         offset %s
         """,
@@ -269,14 +311,18 @@ def get_article_explain(doc_id: str) -> dict[str, Any]:
 
 @app.get("/dashboard/summary")
 def get_dashboard_summary() -> dict[str, Any]:
+    family_expr = canonical_article_family_expr("a")
     counts = query_one(
         f"""
         select
           (
             select count(*)::int
-            from articles a
-            {system_feed_join_clause("a", "sfr")}
-            where {feed_eligible_article_clause("a", "sfr")}
+            from (
+              select distinct {family_expr} as family_doc_id
+              from articles a
+              {system_feed_join_clause("a", "sfr")}
+              where {feed_eligible_article_clause("a", "sfr")}
+            ) deduped
           ) as active_news,
           (select count(*)::int from articles a where {processed_article_clause("a")}) as processed_total,
           (
@@ -611,6 +657,109 @@ def list_user_interests(
     items = query_all(
         f"{interest_select}\nlimit %s\noffset %s",
         (user_id, resolved_page_size, offset),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+@app.get("/users/{user_id}/matches")
+def list_user_matches(
+    user_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
+) -> dict[str, Any] | list[dict[str, Any]]:
+    family_expr = canonical_article_family_expr("a")
+    ranked_match_select = f"""
+        select
+          a.doc_id,
+          a.url,
+          a.title,
+          a.lead,
+          a.lang,
+          a.published_at,
+          a.ingested_at,
+          a.processing_state,
+          a.visibility_state,
+          a.event_cluster_id,
+          sfr.decision as system_feed_decision,
+          coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
+          a.has_media,
+          coalesce(ars.like_count, 0) as like_count,
+          coalesce(ars.dislike_count, 0) as dislike_count,
+          imr.interest_id::text as matched_interest_id,
+          ui.description as matched_interest_description,
+          imr.score_interest as interest_match_score,
+          imr.decision as interest_match_decision,
+          row_number() over (
+            partition by {family_expr}
+            order by
+              imr.score_interest desc nulls last,
+              imr.created_at desc,
+              case when a.doc_id = {family_expr} then 0 else 1 end,
+              a.published_at desc nulls last,
+              a.ingested_at desc,
+              a.doc_id
+          ) as family_rank
+        from interest_match_results imr
+        join articles a on a.doc_id = imr.doc_id
+        join user_interests ui on ui.interest_id = imr.interest_id
+        {system_feed_join_clause("a", "sfr")}
+        left join article_reaction_stats ars on ars.doc_id = a.doc_id
+        where imr.user_id = %s
+          and imr.decision = 'notify'
+          and {feed_eligible_article_clause("a", "sfr")}
+    """
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, limit
+    )
+    ranked_params: tuple[Any, ...] = (user_id,)
+    deduped_select = f"""
+        select
+          matched.doc_id,
+          matched.url,
+          matched.title,
+          matched.lead,
+          matched.lang,
+          matched.published_at,
+          matched.processing_state,
+          matched.visibility_state,
+          matched.event_cluster_id,
+          matched.system_feed_decision,
+          matched.system_feed_eligible,
+          matched.has_media,
+          matched.like_count,
+          matched.dislike_count,
+          matched.matched_interest_id,
+          matched.matched_interest_description,
+          matched.interest_match_score,
+          matched.interest_match_decision
+        from ({ranked_match_select}) matched
+        where matched.family_rank = 1
+    """
+    if not paginate:
+        return query_all(
+            f"{deduped_select}\norder by matched.published_at desc nulls last, matched.ingested_at desc\nlimit %s",
+            tuple([*ranked_params, limit]),
+        )
+
+    total = query_count(
+        f"""
+        select count(*)::int as total
+        from (
+          select distinct {family_expr} as family_doc_id
+          from interest_match_results imr
+          join articles a on a.doc_id = imr.doc_id
+          {system_feed_join_clause("a", "sfr")}
+          where imr.user_id = %s
+            and imr.decision = 'notify'
+            and {feed_eligible_article_clause("a", "sfr")}
+        ) deduped
+        """,
+        ranked_params,
+    )
+    items = query_all(
+        f"{deduped_select}\norder by matched.published_at desc nulls last, matched.ingested_at desc\nlimit %s\noffset %s",
+        tuple([*ranked_params, resolved_page_size, offset]),
     )
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 

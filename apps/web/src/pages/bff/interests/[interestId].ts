@@ -84,7 +84,7 @@ export const POST: APIRoute = async ({ request, params }) => {
         return buildFlashRedirect(request, {
           section: "interests",
           status: "success",
-          message: "Interest cloned"
+          message: "Interest cloned. Compilation and background match sync started."
         });
       }
       return Response.json(
@@ -108,7 +108,7 @@ export const POST: APIRoute = async ({ request, params }) => {
       return buildFlashRedirect(request, {
         section: "interests",
         status: "success",
-        message: "Interest updated"
+        message: "Interest updated. Compilation and background match sync started."
       });
     }
     return Response.json({ updated: true, version: result.version });

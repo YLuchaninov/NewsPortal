@@ -1184,7 +1184,14 @@ async def run_interest_compile_smoke() -> dict[str, Any]:
         payload={"interestId": interest_id, "version": 2},
     )
     result = await process_interest_compile(
-        FakeJob({"eventId": event_id, "interestId": interest_id, "version": 2}),
+        FakeJob(
+            {
+                "eventId": event_id,
+                "interestId": interest_id,
+                "version": 2,
+                "skipAutoRepair": True,
+            }
+        ),
         "",
     )
     await verify_interest_compile(interest_id)
@@ -1235,7 +1242,14 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         payload={"criterionId": criterion_id, "version": 3},
     )
     await process_interest_compile(
-        FakeJob({"eventId": interest_event_id, "interestId": interest_id, "version": 2}),
+        FakeJob(
+            {
+                "eventId": interest_event_id,
+                "interestId": interest_id,
+                "version": 2,
+                "skipAutoRepair": True,
+            }
+        ),
         "",
     )
     await process_criterion_compile(
@@ -1333,7 +1347,14 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         payload={"criterionId": criterion_id, "version": 3},
     )
     await process_interest_compile(
-        FakeJob({"eventId": interest_event_id, "interestId": interest_id, "version": 2}),
+        FakeJob(
+            {
+                "eventId": interest_event_id,
+                "interestId": interest_id,
+                "version": 2,
+                "skipAutoRepair": True,
+            }
+        ),
         "",
     )
     await process_criterion_compile(

@@ -67,7 +67,7 @@ export function InterestManager({
     try {
       const res = await fetch(interestsPath, { method: "POST", body });
       if (res.ok || res.redirected) {
-        toast.success("Interest created");
+        toast.success("Interest created. Compilation and background match sync started.");
         setShowCreate(false);
         form.reset();
         // Reload to get fresh data
@@ -94,7 +94,12 @@ export function InterestManager({
 
     const res = await fetch(interestPath(id), { method: "POST", body });
     if (res.ok || res.redirected) {
-      const msg = action === "delete" ? "Interest deleted" : action === "clone" ? "Interest cloned" : "Interest updated";
+      const msg =
+        action === "delete"
+          ? "Interest deleted"
+          : action === "clone"
+            ? "Interest cloned. Compilation and background match sync started."
+            : "Interest updated. Compilation and background match sync started.";
       toast.success(msg);
       window.location.reload();
     } else {

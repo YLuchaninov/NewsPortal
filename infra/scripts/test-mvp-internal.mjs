@@ -1274,23 +1274,33 @@ async function main() {
         )
     );
 
-    const historicalAdminMatchCountBeforeBackfill = countInterestMatches(env, {
-      docId,
-      interestId: adminManagedInterestId
-    });
-    if (historicalAdminMatchCountBeforeBackfill !== 0) {
-      throw new Error(
-        `Expected historical article ${docId} to have 0 matches for new admin-managed interest ${adminManagedInterestId} before backfill, got ${historicalAdminMatchCountBeforeBackfill}.`
-      );
-    }
+    const historicalAdminMatchCountBeforeBackfill = await waitFor(
+      "auto-synced historical admin-managed interest match",
+      async () =>
+        countInterestMatches(env, {
+          docId,
+          interestId: adminManagedInterestId
+        }),
+      (value) => value === 1
+    );
     const historicalNotificationCountBeforeBackfill = countNotifications(env, {
       docId,
       interestId: adminManagedInterestId
     });
+    if (historicalNotificationCountBeforeBackfill !== 0) {
+      throw new Error(
+        `Expected historical auto-sync to skip retro notifications for article ${docId} and interest ${adminManagedInterestId}, got ${historicalNotificationCountBeforeBackfill}.`
+      );
+    }
     const historicalSuppressionCountBeforeBackfill = countSuppressions(env, {
       docId,
       interestId: adminManagedInterestId
     });
+    if (historicalSuppressionCountBeforeBackfill !== 0) {
+      throw new Error(
+        `Expected historical auto-sync to skip retro suppressions for article ${docId} and interest ${adminManagedInterestId}, got ${historicalSuppressionCountBeforeBackfill}.`
+      );
+    }
 
     log("Creating a second RSS channel to prove fresh-ingest matching for the admin-managed interest.");
     const adminFreshChannel = await postForm(
@@ -1437,9 +1447,9 @@ async function main() {
       docId,
       interestId: adminManagedInterestId
     });
-    if (historicalAdminMatchCountAfterBackfill !== 1) {
+    if (historicalAdminMatchCountAfterBackfill !== historicalAdminMatchCountBeforeBackfill) {
       throw new Error(
-        `Expected historical article ${docId} to gain one match for admin-managed interest ${adminManagedInterestId} after backfill, got ${historicalAdminMatchCountAfterBackfill}.`
+        `Expected backfill to keep historical article ${docId} match cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${historicalAdminMatchCountBeforeBackfill}, after=${historicalAdminMatchCountAfterBackfill}.`
       );
     }
 

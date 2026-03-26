@@ -40,6 +40,7 @@ from ml.app import (
 )
 from .delivery import dispatch_channel_message
 from .gemini import review_with_gemini
+from .lexical import build_lexical_tsquery
 from .notification_preferences import (
     is_channel_enabled_by_preferences,
     normalize_notification_preferences,
@@ -103,6 +104,7 @@ ARTICLE_CLUSTERED_EVENT = "article.clustered"
 ARTICLE_CRITERIA_MATCHED_EVENT = "article.criteria.matched"
 ARTICLE_INTERESTS_MATCHED_EVENT = "article.interests.matched"
 LLM_REVIEW_REQUESTED_EVENT = "llm.review.requested"
+REINDEX_REQUESTED_EVENT = "reindex.requested"
 INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
 EVENT_CLUSTER_CENTROIDS_INDEX_NAME = "event_cluster_centroids"
 
@@ -286,6 +288,15 @@ def coerce_bool(value: Any, fallback: bool = False) -> bool:
         if normalized in {"0", "false", "no", "off"}:
             return False
     return fallback
+
+
+def coerce_optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized or normalized == "None":
+        return None
+    return normalized
 
 
 def advance_processing_state(current_state: str | None, target_state: str) -> str:
@@ -1157,7 +1168,8 @@ async def compute_lexical_score(
     doc_id: uuid.UUID,
     lexical_query: str,
 ) -> float:
-    if not lexical_query.strip():
+    tsquery = build_lexical_tsquery(lexical_query)
+    if not tsquery:
         return 0.0
 
     await cursor.execute(
@@ -1165,12 +1177,12 @@ async def compute_lexical_score(
         select
           ts_rank_cd(
             search_vector,
-            plainto_tsquery('simple', %s)
+            to_tsquery('simple', %s)
           ) as score
         from articles
         where doc_id = %s
         """,
-        (lexical_query, doc_id),
+        (tsquery, doc_id),
     )
     row = await cursor.fetchone()
     raw_score = float(row["score"] or 0.0) if row else 0.0
@@ -1372,9 +1384,25 @@ async def list_compiled_criteria(
 
 async def list_compiled_interests(
     cursor: psycopg.AsyncCursor[Any],
+    *,
+    user_id: str | None = None,
+    interest_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    filters = [
+        "ui.enabled = true",
+        "ui.compiled = true",
+        "uic.compile_status = 'compiled'",
+    ]
+    params: list[Any] = []
+    if user_id:
+        filters.append("ui.user_id = %s")
+        params.append(user_id)
+    if interest_id:
+        filters.append("ui.interest_id = %s")
+        params.append(interest_id)
+
     await cursor.execute(
-        """
+        f"""
         select
           ui.interest_id::text as interest_id,
           ui.user_id::text as user_id,
@@ -1386,11 +1414,10 @@ async def list_compiled_interests(
           uic.source_snapshot_json
         from user_interests ui
         join user_interests_compiled uic on uic.interest_id = ui.interest_id
-        where ui.enabled = true
-          and ui.compiled = true
-          and uic.compile_status = 'compiled'
+        where {' and '.join(filters)}
         order by ui.updated_at desc
-        """
+        """,
+        tuple(params),
     )
     return list(await cursor.fetchall())
 
@@ -2527,7 +2554,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                             Json(make_json_safe(explain_json)),
                         ),
                     )
-                    if decision == "gray_zone" and prompt_template is not None and not historical_backfill:
+                    if decision == "gray_zone" and not historical_backfill:
                         await insert_outbox_event(
                             cursor,
                             LLM_REVIEW_REQUESTED_EVENT,
@@ -2537,7 +2564,11 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                                 "docId": str(article["doc_id"]),
                                 "scope": "criterion",
                                 "targetId": str(criterion["criterion_id"]),
-                                "promptTemplateId": str(prompt_template["prompt_template_id"]),
+                                "promptTemplateId": (
+                                    str(prompt_template["prompt_template_id"])
+                                    if prompt_template is not None
+                                    else None
+                                ),
                                 "version": int(criterion.get("source_version") or 1),
                             },
                         )
@@ -2565,6 +2596,8 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
     historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
+    scoped_user_id = coerce_optional_string(job.data.get("userId"))
+    scoped_interest_id = coerce_optional_string(job.data.get("interestId"))
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Interest match worker expected eventId and docId.")
@@ -2587,7 +2620,28 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                     }
                 article_features = await fetch_article_features_row(cursor, article["doc_id"])
                 article_vectors = await fetch_article_vectors(cursor, article["doc_id"])
-                interest_rows = await list_compiled_interests(cursor)
+                if scoped_user_id or scoped_interest_id:
+                    cleanup_filters = ["doc_id = %s"]
+                    cleanup_params: list[Any] = [article["doc_id"]]
+                    if scoped_user_id:
+                        cleanup_filters.append("user_id = %s")
+                        cleanup_params.append(scoped_user_id)
+                    if scoped_interest_id:
+                        cleanup_filters.append("interest_id = %s")
+                        cleanup_params.append(scoped_interest_id)
+                    await cursor.execute(
+                        f"""
+                        delete from interest_match_results
+                        where {' and '.join(cleanup_filters)}
+                        """,
+                        tuple(cleanup_params),
+                    )
+
+                interest_rows = await list_compiled_interests(
+                    cursor,
+                    user_id=scoped_user_id,
+                    interest_id=scoped_interest_id,
+                )
                 pending_rows: list[dict[str, Any]] = []
 
                 for interest in interest_rows:
@@ -3303,6 +3357,7 @@ async def prepare_historical_backfill_snapshot(
     *,
     reindex_job_id: str,
     doc_ids: Sequence[str] | None = None,
+    system_feed_only: bool = False,
 ) -> int:
     existing_total = await count_historical_backfill_snapshot_targets(reindex_job_id)
     if existing_total > 0:
@@ -3312,8 +3367,19 @@ async def prepare_historical_backfill_snapshot(
         async with connection.transaction():
             async with connection.cursor() as cursor:
                 if doc_ids:
-                    await cursor.execute(
+                    system_feed_clause = ""
+                    if system_feed_only:
+                        system_feed_clause = """
+                          and articles.visibility_state = 'visible'
+                          and exists (
+                            select 1
+                            from system_feed_results sfr
+                            where sfr.doc_id = articles.doc_id
+                              and coalesce(sfr.eligible_for_feed, false) = true
+                          )
                         """
+                    await cursor.execute(
+                        f"""
                         insert into reindex_job_targets (
                           reindex_job_id,
                           target_position,
@@ -3326,13 +3392,25 @@ async def prepare_historical_backfill_snapshot(
                         from articles
                         where processing_state in ('clustered', 'matched', 'notified')
                           and doc_id = any(%s::uuid[])
+                          {system_feed_clause}
                         on conflict do nothing
                         """,
                         (reindex_job_id, list(doc_ids)),
                     )
                 else:
-                    await cursor.execute(
+                    system_feed_clause = ""
+                    if system_feed_only:
+                        system_feed_clause = """
+                          and articles.visibility_state = 'visible'
+                          and exists (
+                            select 1
+                            from system_feed_results sfr
+                            where sfr.doc_id = articles.doc_id
+                              and coalesce(sfr.eligible_for_feed, false) = true
+                          )
                         """
+                    await cursor.execute(
+                        f"""
                         insert into reindex_job_targets (
                           reindex_job_id,
                           target_position,
@@ -3344,6 +3422,7 @@ async def prepare_historical_backfill_snapshot(
                           articles.doc_id
                         from articles
                         where processing_state in ('clustered', 'matched', 'notified')
+                          {system_feed_clause}
                         on conflict do nothing
                         """,
                         (reindex_job_id,),
@@ -3459,11 +3538,17 @@ async def replay_historical_articles(
     reindex_job_id: str,
     batch_size: int,
     doc_ids: Sequence[str] | None = None,
+    user_id: str | None = None,
+    interest_id: str | None = None,
+    system_feed_only: bool = False,
 ) -> dict[str, Any]:
     return await replay_historical_articles_with_snapshot(
         reindex_job_id=reindex_job_id,
         batch_size=batch_size,
         doc_ids=list(doc_ids) if doc_ids is not None else None,
+        user_id=user_id,
+        interest_id=interest_id,
+        system_feed_only=system_feed_only,
         dependencies=HistoricalBackfillDependencies(
             prepare_target_snapshot=prepare_historical_backfill_snapshot,
             list_target_batch=list_historical_backfill_snapshot_batch,
@@ -3475,6 +3560,80 @@ async def replay_historical_articles(
             replay_gray_zone_reviews_for_doc=replay_gray_zone_reviews_for_doc,
         ),
     )
+
+
+def build_interest_auto_repair_job_options(
+    *,
+    user_id: str,
+    interest_id: str,
+    source_version: int,
+) -> dict[str, Any]:
+    return {
+        "batchSize": 100,
+        "retroNotifications": "skip",
+        "replayExistingArticles": True,
+        "systemFeedOnly": True,
+        "userId": user_id,
+        "interestId": interest_id,
+        "sourceVersion": source_version,
+        "requestSource": "interest_compile",
+    }
+
+
+async def queue_interest_auto_repair_job(
+    *,
+    user_id: str,
+    interest_id: str,
+    source_version: int,
+) -> dict[str, Any]:
+    reindex_job_id = uuid.uuid4()
+    options_json = build_interest_auto_repair_job_options(
+        user_id=user_id,
+        interest_id=interest_id,
+        source_version=source_version,
+    )
+
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    insert into reindex_jobs (
+                      reindex_job_id,
+                      index_name,
+                      job_kind,
+                      options_json,
+                      requested_by_user_id,
+                      status
+                    )
+                    values (%s, %s, 'repair', %s::jsonb, %s, 'queued')
+                    """,
+                    (
+                        reindex_job_id,
+                        INTEREST_CENTROIDS_INDEX_NAME,
+                        Json(make_json_safe(options_json)),
+                        user_id,
+                    ),
+                )
+                await insert_outbox_event(
+                    cursor,
+                    REINDEX_REQUESTED_EVENT,
+                    "reindex_job",
+                    reindex_job_id,
+                    {
+                        "reindexJobId": str(reindex_job_id),
+                        "indexName": INTEREST_CENTROIDS_INDEX_NAME,
+                        "jobKind": "repair",
+                        "version": 1,
+                    },
+                )
+
+    return {
+        "status": "queued",
+        "reindexJobId": str(reindex_job_id),
+        "jobKind": "repair",
+        "options": options_json,
+    }
 
 
 async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
@@ -3531,10 +3690,16 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
         if job_kind in {"backfill", "repair"}:
             batch_size = min(max(coerce_positive_int(job_options.get("batchSize"), 100), 1), 500)
             target_doc_ids = coerce_text_list(job_options.get("docIds"))
+            target_user_id = coerce_optional_string(job_options.get("userId"))
+            target_interest_id = coerce_optional_string(job_options.get("interestId"))
+            system_feed_only = coerce_bool(job_options.get("systemFeedOnly"))
             result["backfill"] = await replay_historical_articles(
                 reindex_job_id=reindex_job_id,
                 batch_size=batch_size,
                 doc_ids=target_doc_ids or None,
+                user_id=target_user_id,
+                interest_id=target_interest_id,
+                system_feed_only=system_feed_only,
             )
     except Exception as error:
         async with await open_connection() as connection:
@@ -3588,6 +3753,8 @@ async def process_interest_compile(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     interest_id = str(job.data.get("interestId"))
     source_version = coerce_positive_int(job.data.get("version"), 1)
+    skip_auto_repair = coerce_bool(job.data.get("skipAutoRepair"))
+    interest_user_id: str | None = None
 
     if not event_id or event_id == "None" or not interest_id or interest_id == "None":
         raise ValueError("Interest compile worker expected eventId and interestId.")
@@ -3600,6 +3767,7 @@ async def process_interest_compile(job: Job, _job_token: str) -> dict[str, Any]:
                     return {"status": "duplicate-event", "interestId": interest_id}
 
                 interest = await fetch_interest_for_update(cursor, interest_id)
+                interest_user_id = str(interest.get("user_id"))
                 current_version = coerce_positive_int(interest.get("version"), 1)
                 if current_version != source_version:
                     await record_processed_event(cursor, INTEREST_COMPILE_CONSUMER, event_id)
@@ -3776,6 +3944,26 @@ async def process_interest_compile(job: Job, _job_token: str) -> dict[str, Any]:
 
                 await record_processed_event(cursor, INTEREST_COMPILE_CONSUMER, event_id)
 
+    auto_repair_result: dict[str, Any] | None = None
+    if skip_auto_repair:
+        auto_repair_result = {
+            "status": "skipped",
+            "reason": "skipAutoRepair",
+        }
+    elif interest_user_id:
+        try:
+            auto_repair_result = await queue_interest_auto_repair_job(
+                user_id=interest_user_id,
+                interest_id=interest_id,
+                source_version=source_version,
+            )
+        except Exception as error:  # pragma: no cover - DB/env dependent
+            LOGGER.error("Interest auto-repair queueing failed for %s: %s", interest_id, error)
+            auto_repair_result = {
+                "status": "failed",
+                "error": str(error),
+            }
+
     try:
         rebuild_result = await INTEREST_INDEXER.rebuild_interest_centroids()
         return {
@@ -3783,6 +3971,7 @@ async def process_interest_compile(job: Job, _job_token: str) -> dict[str, Any]:
             "interestId": interest_id,
             "version": source_version,
             "rebuild": rebuild_result,
+            "autoRepair": auto_repair_result,
         }
     except Exception as error:  # pragma: no cover - env and filesystem dependent
         LOGGER.error("Interest centroid rebuild failed after compile: %s", error)
@@ -3791,6 +3980,7 @@ async def process_interest_compile(job: Job, _job_token: str) -> dict[str, Any]:
             "interestId": interest_id,
             "version": source_version,
             "error": str(error),
+            "autoRepair": auto_repair_result,
         }
 
 

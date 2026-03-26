@@ -177,6 +177,8 @@ infra/
 - Active admin `interest_templates` materialize-ятся в system `criteria`, поэтому операторский system layer уже участвует и во fresh ingest, и в historical backfill.
 - Fresh ingest и historical backfill теперь идут в system-first порядке: `criteria -> criteria-scope gray-zone LLM -> system-selected feed -> optional per-user user_interests`.
 - Пользователь без `user_interests` все равно видит system-selected feed; baseline notifications пока остаются personalization-lane contract, а не отдельным system-feed alert path.
+- `web` keeps `/` as the global system-selected feed and now exposes a separate `/matches` surface for per-user personalized matches.
+- Successful user-interest create/update/clone flows now compile first and then queue a scoped `repair` replay for historical system-feed-eligible articles, without resending retro notifications.
 - Internal MVP acceptance фиксируется как RSS-first ingest path. Website/API/IMAP остаются в кодовой базе, но не считаются доказанными этим acceptance gate.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
 - `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
@@ -201,7 +203,7 @@ infra/
 1. Поднимите stack через `pnpm dev:mvp:internal`.
 2. Импортируйте RSS channels через admin single/bulk form, используя шаблон [infra/scripts/manual-rss-bundle.template.json](infra/scripts/manual-rss-bundle.template.json).
 3. Назначьте часть каналов на `fast`, часть на `daily` и часть на `three_day`, затем проверьте `next due`, `overdue`, `recent failures` и fetch history в admin.
-4. В `web` создайте anonymous session, убедитесь, что system-selected feed заполняется и без персонализации, затем подключите `web_push`, включите нужные `notification_preferences`, создайте или отредактируйте interest и дождитесь compile/update path.
+4. В `web` создайте anonymous session, убедитесь, что system-selected feed на `/` заполняется и без персонализации, затем откройте `/matches`, подключите `web_push`, включите нужные `notification_preferences`, создайте или отредактируйте interest и дождитесь compile/update path plus background historical sync.
 5. Проверьте admin summary: `System Feed News`, recent fetch runs, recent LLM reviews и delivery state по user channels.
 
 Ограничение baseline:
