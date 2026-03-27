@@ -3,13 +3,21 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
+from decimal import Decimal
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from .main import (
+    LLM_REVIEW_REQUESTED_EVENT,
+    LLM_REVIEW_CONSUMER,
     open_connection,
     process_cluster,
+    process_llm_review,
     process_match_criteria,
     process_match_interests,
     process_notify,
@@ -28,8 +36,61 @@ class FakeJob:
     data: dict[str, Any]
 
 
+class _FakeGeminiHandler(BaseHTTPRequestHandler):
+    response_payload: dict[str, Any] = {}
+    request_paths: list[str] = []
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler contract
+        content_length = int(self.headers.get("Content-Length", "0") or 0)
+        if content_length > 0:
+            self.rfile.read(content_length)
+        type(self).request_paths.append(self.path)
+        encoded = json.dumps(type(self).response_payload, ensure_ascii=True).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A003 - stdlib signature
+        return None
+
+
 def stable_uuid(name: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"newsportal-phase3-smoke:{name}")
+
+
+@contextmanager
+def temporary_environment(overrides: dict[str, str]):
+    original = {key: os.environ.get(key) for key in overrides}
+    try:
+        for key, value in overrides.items():
+            os.environ[key] = value
+        yield
+    finally:
+        for key, previous_value in original.items():
+            if previous_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous_value
+
+
+@contextmanager
+def fake_gemini_server(response_payload: dict[str, Any]):
+    class Handler(_FakeGeminiHandler):
+        pass
+
+    Handler.response_payload = response_payload
+    Handler.request_paths = []
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", Handler.request_paths
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
 
 async def ensure_embed_fixture() -> str:
@@ -311,6 +372,140 @@ async def ensure_criterion_fixture() -> str:
     return str(criterion_id)
 
 
+async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
+    channel_id = str(uuid.uuid4())
+    doc_id = str(uuid.uuid4())
+    criterion_id = str(uuid.uuid4())
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    insert into source_channels (
+                      channel_id,
+                      provider_type,
+                      name,
+                      fetch_url,
+                      language,
+                      is_active
+                    )
+                    values (%s, 'rss', 'LLM Cost Proof Smoke', 'https://example.test/llm-cost-proof.xml', 'en', true)
+                    """,
+                    (channel_id,),
+                )
+                await cursor.execute(
+                    """
+                    insert into articles (
+                      doc_id,
+                      channel_id,
+                      source_article_id,
+                      url,
+                      published_at,
+                      title,
+                      lead,
+                      body,
+                      lang,
+                      lang_confidence,
+                      processing_state,
+                      normalized_at,
+                      embedded_at,
+                      updated_at
+                    )
+                    values (
+                      %s,
+                      %s,
+                      %s,
+                      %s,
+                      now(),
+                      'European Union AI policy response reaches Brussels and Warsaw',
+                      'Synthetic LLM proof article for provider usage metadata.',
+                      'European Union AI policy response reaches Brussels and Warsaw while regulators publish a detailed compliance package for AI governance.',
+                      'en',
+                      0.9,
+                      'embedded',
+                      now(),
+                      now(),
+                      now()
+                    )
+                    """,
+                    (
+                        doc_id,
+                        channel_id,
+                        f"llm-cost-proof-{doc_id}",
+                        f"https://example.test/articles/llm-cost-proof/{doc_id}",
+                    ),
+                )
+                await cursor.execute(
+                    """
+                    insert into criteria (
+                      criterion_id,
+                      description,
+                      positive_texts,
+                      negative_texts,
+                      must_have_terms,
+                      must_not_have_terms,
+                      places,
+                      languages_allowed,
+                      short_tokens_required,
+                      short_tokens_forbidden,
+                      priority,
+                      enabled,
+                      compiled,
+                      compile_status,
+                      version,
+                      updated_at
+                    )
+                    values (
+                      %s,
+                      'Synthetic LLM cost proof criterion',
+                      '["EU AI policy", "AI governance"]'::jsonb,
+                      '[]'::jsonb,
+                      '["AI"]'::jsonb,
+                      '[]'::jsonb,
+                      '["Brussels"]'::jsonb,
+                      '["en"]'::jsonb,
+                      '["AI"]'::jsonb,
+                      '[]'::jsonb,
+                      1.0,
+                      true,
+                      true,
+                      'compiled',
+                      1,
+                      now()
+                    )
+                    """,
+                    (criterion_id,),
+                )
+                await cursor.execute(
+                    """
+                    insert into criterion_match_results (
+                      doc_id,
+                      criterion_id,
+                      score_pos,
+                      score_neg,
+                      score_lex,
+                      score_meta,
+                      score_final,
+                      decision,
+                      explain_json
+                    )
+                    values (
+                      %s,
+                      %s,
+                      0.48,
+                      0.05,
+                      0.12,
+                      0.01,
+                      0.56,
+                      'gray_zone',
+                      '{"smoke":"llm-cost-proof"}'::jsonb
+                    )
+                    """,
+                    (doc_id, criterion_id),
+                )
+    return channel_id, doc_id, criterion_id
+
+
 async def reset_phase4_runtime_state(
     *,
     doc_id: str,
@@ -391,6 +586,75 @@ async def reset_phase4_runtime_state(
                       and aggregate_id = %s
                     """,
                     (doc_id,),
+                )
+
+
+async def cleanup_llm_cost_review_fixture(
+    *,
+    channel_id: str,
+    doc_id: str,
+    criterion_id: str,
+    event_id: str,
+) -> None:
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    delete from inbox_processed_events
+                    where event_id = %s and consumer_name = %s
+                    """,
+                    (event_id, LLM_REVIEW_CONSUMER),
+                )
+                await cursor.execute(
+                    """
+                    delete from outbox_events
+                    where aggregate_id = %s
+                       or (aggregate_type = 'criterion' and aggregate_id = %s)
+                    """,
+                    (doc_id, criterion_id),
+                )
+                await cursor.execute(
+                    """
+                    delete from llm_review_log
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from system_feed_results
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from criterion_match_results
+                    where doc_id = %s and criterion_id = %s
+                    """,
+                    (doc_id, criterion_id),
+                )
+                await cursor.execute(
+                    """
+                    delete from criteria
+                    where criterion_id = %s
+                    """,
+                    (criterion_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from articles
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                await cursor.execute(
+                    """
+                    delete from source_channels
+                    where channel_id = %s
+                    """,
+                    (channel_id,),
                 )
 
 
@@ -577,6 +841,30 @@ async def fetch_system_feed_result(doc_id: str) -> dict[str, Any] | None:
                   pending_llm_criteria_count
                 from system_feed_results
                 where doc_id = %s
+                """,
+                (doc_id,),
+            )
+            row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def fetch_latest_llm_review(doc_id: str) -> dict[str, Any] | None:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select
+                  review_id::text as review_id,
+                  decision,
+                  prompt_tokens,
+                  completion_tokens,
+                  total_tokens,
+                  cost_estimate_usd::text as cost_estimate_usd,
+                  provider_usage_json
+                from llm_review_log
+                where doc_id = %s
+                order by created_at desc
+                limit 1
                 """,
                 (doc_id,),
             )
@@ -1226,7 +1514,6 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
     criterion_event_id = str(uuid.uuid4())
     normalized_event_id = str(uuid.uuid4())
     embedded_event_id = str(uuid.uuid4())
-    clustered_event_id = str(uuid.uuid4())
     await ensure_outbox_event(
         event_id=interest_event_id,
         event_type="interest.compile.requested",
@@ -1275,27 +1562,24 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
-    cluster_result = await process_cluster(
-        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
-        "",
-    )
-    await ensure_outbox_event(
-        event_id=clustered_event_id,
-        event_type="article.clustered",
-        aggregate_type="article",
-        aggregate_id=doc_id,
-        payload={"docId": doc_id, "version": 1},
-    )
     criterion_result = await process_match_criteria(
-        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
+        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     criteria_matched_event_id = await fetch_latest_article_event_id(
         doc_id,
         "article.criteria.matched",
     )
-    interest_result = await process_match_interests(
+    cluster_result = await process_cluster(
         FakeJob({"eventId": criteria_matched_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    clustered_event_id = await fetch_latest_article_event_id(
+        doc_id,
+        "article.clustered",
+    )
+    interest_result = await process_match_interests(
+        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     matched_interest_event_id = await fetch_latest_article_event_id(
@@ -1328,7 +1612,6 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
     criterion_event_id = str(uuid.uuid4())
     normalized_event_id = str(uuid.uuid4())
     embedded_event_id = str(uuid.uuid4())
-    clustered_event_id = str(uuid.uuid4())
     reindex_event_id = str(uuid.uuid4())
     reindex_job_id = str(stable_uuid("reindex-backfill-job"))
 
@@ -1379,27 +1662,24 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
-    await process_cluster(
-        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
-        "",
-    )
-    await ensure_outbox_event(
-        event_id=clustered_event_id,
-        event_type="article.clustered",
-        aggregate_type="article",
-        aggregate_id=doc_id,
-        payload={"docId": doc_id, "version": 1},
-    )
     await process_match_criteria(
-        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
+        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     criteria_matched_event_id = await fetch_latest_article_event_id(
         doc_id,
         "article.criteria.matched",
     )
-    await process_match_interests(
+    await process_cluster(
         FakeJob({"eventId": criteria_matched_event_id, "docId": doc_id, "version": 1}),
+        "",
+    )
+    clustered_event_id = await fetch_latest_article_event_id(
+        doc_id,
+        "article.clustered",
+    )
+    await process_match_interests(
+        FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     matched_interest_event_id = await fetch_latest_article_event_id(
@@ -1450,6 +1730,111 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
     }
 
 
+async def run_llm_cost_proof_smoke() -> dict[str, Any]:
+    channel_id, doc_id, criterion_id = await ensure_llm_cost_review_fixture()
+    event_id = str(uuid.uuid4())
+    fake_payload = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": '{"decision":"approve","score":0.91,"reason":"synthetic provider usage proof"}'
+                        }
+                    ]
+                }
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 200,
+            "candidatesTokenCount": 100,
+            "totalTokenCount": 300,
+        },
+    }
+
+    try:
+        await ensure_outbox_event(
+            event_id=event_id,
+            event_type=LLM_REVIEW_REQUESTED_EVENT,
+            aggregate_type="criterion",
+            aggregate_id=criterion_id,
+            payload={
+                "docId": doc_id,
+                "scope": "criterion",
+                "targetId": criterion_id,
+                "version": 1,
+            },
+        )
+        with fake_gemini_server(fake_payload) as (base_url, request_paths):
+            with temporary_environment(
+                {
+                    "GEMINI_API_KEY": "local-proof-key",
+                    "GEMINI_MODEL": "gemini-2.0-flash",
+                    "GEMINI_BASE_URL": base_url,
+                    "LLM_INPUT_COST_PER_MILLION_USD": "0.10",
+                    "LLM_OUTPUT_COST_PER_MILLION_USD": "0.40",
+                }
+            ):
+                result = await process_llm_review(
+                    FakeJob(
+                        {
+                            "eventId": event_id,
+                            "docId": doc_id,
+                            "scope": "criterion",
+                            "targetId": criterion_id,
+                        }
+                    ),
+                    "",
+                )
+
+        review_row = await fetch_latest_llm_review(doc_id)
+        if review_row is None:
+            raise RuntimeError("LLM cost proof smoke failed: llm_review_log row was not written.")
+        if int(review_row.get("prompt_tokens") or 0) != 200:
+            raise RuntimeError("LLM cost proof smoke failed: prompt_tokens did not match provider usage.")
+        if int(review_row.get("completion_tokens") or 0) != 100:
+            raise RuntimeError("LLM cost proof smoke failed: completion_tokens did not match provider usage.")
+        if int(review_row.get("total_tokens") or 0) != 300:
+            raise RuntimeError("LLM cost proof smoke failed: total_tokens did not match provider usage.")
+
+        cost_text = str(review_row.get("cost_estimate_usd") or "").strip()
+        if Decimal(cost_text or "0").quantize(Decimal("0.000001")) != Decimal("0.000060"):
+            raise RuntimeError("LLM cost proof smoke failed: cost_estimate_usd did not match the expected tariff.")
+
+        provider_usage = review_row.get("provider_usage_json")
+        if not isinstance(provider_usage, dict):
+            raise RuntimeError("LLM cost proof smoke failed: provider_usage_json is not a JSON object.")
+        usage_metadata = provider_usage.get("usageMetadata")
+        if not isinstance(usage_metadata, dict) or int(usage_metadata.get("totalTokenCount") or 0) != 300:
+            raise RuntimeError(
+                "LLM cost proof smoke failed: provider_usage_json.usageMetadata did not preserve provider totals."
+            )
+        if provider_usage.get("priceCardSource") != "env_override":
+            raise RuntimeError("LLM cost proof smoke failed: priceCardSource did not reflect the env override path.")
+        if len(request_paths) != 1:
+            raise RuntimeError("LLM cost proof smoke failed: fake Gemini endpoint was not called exactly once.")
+
+        system_feed = await fetch_system_feed_result(doc_id)
+        verify_system_feed_result_consistency(system_feed, require_criteria_counts=True)
+
+        return {
+            "status": "llm-cost-proof-ok",
+            "docId": doc_id,
+            "criterionId": criterion_id,
+            "reviewId": review_row["review_id"],
+            "costEstimateUsd": cost_text,
+            "providerPath": request_paths[0],
+            "result": result,
+        }
+    finally:
+        await cleanup_llm_cost_review_fixture(
+            channel_id=channel_id,
+            doc_id=doc_id,
+            criterion_id=criterion_id,
+            event_id=event_id,
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="NewsPortal worker smoke commands")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1458,6 +1843,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("interest-compile")
     subparsers.add_parser("criterion-compile")
     subparsers.add_parser("cluster-match-notify")
+    subparsers.add_parser("llm-cost-proof")
     subparsers.add_parser("reindex-backfill")
     return parser
 
@@ -1472,6 +1858,8 @@ async def run() -> int:
         result = await run_interest_compile_smoke()
     elif args.command == "reindex-backfill":
         result = await run_reindex_backfill_smoke()
+    elif args.command == "llm-cost-proof":
+        result = await run_llm_cost_proof_smoke()
     elif args.command == "cluster-match-notify":
         result = await run_cluster_match_notify_smoke()
     else:

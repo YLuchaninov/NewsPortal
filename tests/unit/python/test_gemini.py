@@ -1,4 +1,7 @@
+import json
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
 from services.workers.app.gemini import (
@@ -7,6 +10,26 @@ from services.workers.app.gemini import (
     _resolve_price_card,
     review_with_gemini,
 )
+
+
+class _FakeGeminiHandler(BaseHTTPRequestHandler):
+    response_payload: dict[str, object] = {}
+    request_paths: list[str] = []
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler contract
+        content_length = int(self.headers.get("Content-Length", "0") or 0)
+        if content_length > 0:
+            self.rfile.read(content_length)
+        type(self).request_paths.append(self.path)
+        encoded = json.dumps(type(self).response_payload, ensure_ascii=True).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A003 - stdlib signature
+        return None
 
 
 class GeminiTests(unittest.TestCase):
@@ -73,6 +96,63 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(result.total_tokens, None)
         self.assertEqual(result.cost_estimate_usd, None)
         self.assertEqual(result.provider_usage_json, {})
+
+    def test_review_with_gemini_parses_usage_metadata_from_provider_response(self) -> None:
+        class Handler(_FakeGeminiHandler):
+            pass
+
+        Handler.response_payload = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": '{"decision":"approve","score":0.75,"reason":"provider test"}'
+                            }
+                        ]
+                    }
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 200,
+                "candidatesTokenCount": 100,
+                "totalTokenCount": 300,
+            },
+        }
+        Handler.request_paths = []
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with patch.dict(
+                "os.environ",
+                {
+                    "GEMINI_API_KEY": "local-proof-key",
+                    "GEMINI_MODEL": "gemini-2.0-flash",
+                    "GEMINI_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+                    "LLM_INPUT_COST_PER_MILLION_USD": "0.10",
+                    "LLM_OUTPUT_COST_PER_MILLION_USD": "0.40",
+                },
+                clear=False,
+            ):
+                result = review_with_gemini("review this article")
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
+
+        self.assertEqual(result.decision, "approve")
+        self.assertEqual(result.prompt_tokens, 200)
+        self.assertEqual(result.completion_tokens, 100)
+        self.assertEqual(result.total_tokens, 300)
+        self.assertEqual(result.cost_estimate_usd, 0.00006)
+        self.assertEqual(result.provider_usage_json["priceCardSource"], "env_override")
+        self.assertEqual(
+            result.provider_usage_json["usageMetadata"]["totalTokenCount"],
+            300,
+        )
+        self.assertEqual(len(Handler.request_paths), 1)
+        self.assertIn("/models/gemini-2.0-flash:generateContent", Handler.request_paths[0])
 
 
 if __name__ == "__main__":

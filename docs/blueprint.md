@@ -1587,7 +1587,7 @@ Current MVP-определение public feed:
 Current MVP-определение KPI:
 
 - `active news` = число статей из того же множества, что и public feed `total`, то есть `visibility_state = visible` плюс `system_feed_results.eligible_for_feed = true`;
-- `processed total` = число статей, дошедших как минимум до `processing_state = matched`, независимо от moderation visibility;
+- `processed total` = число статей, для которых system gate уже финализирован (`pass_through`, `eligible`, `filtered_out`) или которые дошли до более поздних downstream states вроде `matched` / `notified`, независимо от moderation visibility;
 - `processed 24h` = то же множество, но только для статей с `ingested_at` в rolling окне последних 24 часов, пока product timezone/config для календарного дня не введены;
 - `total users` = число локальных пользователей в статусе, отличном от deleted, включая anonymous users;
 - dashboard card, которая описывает public feed backlog, должна считаться по тому же множеству, что и public feed `total`, а не по отдельной loosely-related эвристике.
@@ -2359,11 +2359,11 @@ Worker должен:
 8. dedup worker назначил duplicate/family state;
 9. embed worker посчитал embeddings;
 10. создан `article.embedded`;
-11. cluster worker назначил event cluster;
-12. criteria worker посчитал системные criteria matches и обновил article-level `system_feed_results`;
-13. если criteria case попал в gray zone, job в `q.llm.review` обновляет criterion decision и пересчитывает `system_feed_results`;
-14. когда system gate стал `eligible` или `pass_through`, relay публикует `article.criteria.matched`, и только после этого interest worker запускает optional per-user personalization;
-15. если у статьи нет system-feed eligibility, personalization lane пропускается; если у конкретного пользователя нет compiled `user_interests`, персонализация для него просто не создает per-user match rows, но статья остается доступной в system-selected feed;
+11. criteria worker посчитал системные criteria matches и обновил article-level `system_feed_results`;
+12. если criteria case попал в gray zone, job в `q.llm.review` обновляет criterion decision и пересчитывает `system_feed_results`;
+13. когда system gate стал `eligible` или `pass_through`, relay публикует `article.criteria.matched`, и только после этого cluster worker назначает event cluster;
+14. только после `article.clustered` interest worker запускает optional per-user personalization;
+15. если у статьи нет system-feed eligibility, clustering и personalization lanes пропускаются; если у конкретного пользователя нет compiled `user_interests`, персонализация для него просто не создает per-user match rows, но статья остается доступной в system-selected feed;
 15a. если у пользователя есть matched `user_interests`, такие статьи остаются в global system feed на `/`, но дополнительно попадают в отдельный personalized `/matches` read surface;
 16. baseline runtime не делает interest-side gray-zone LLM review: такие user-interest matches suppress-ятся без внешнего LLM call, а future opt-in/premium lane может вернуть этот scope отдельно;
 17. notify worker применил suppression и отправил уведомление только для personalization lane;

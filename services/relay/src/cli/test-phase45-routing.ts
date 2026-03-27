@@ -167,22 +167,20 @@ async function main(): Promise<void> {
       }
     });
 
-    const clusterJob = await expectJob(clusterQueue, embeddedEventId);
-    const criteriaMatchJob = await expectJob(criteriaMatchQueue, clusteredEventId);
-    const interestMatchJob = await expectJob(interestMatchQueue, criteriaMatchedEventId);
+    const criteriaMatchJob = await expectJob(criteriaMatchQueue, embeddedEventId);
+    const clusterJob = await expectJob(clusterQueue, criteriaMatchedEventId);
+    const interestMatchJob = await expectJob(interestMatchQueue, clusteredEventId);
     const notifyJob = await expectJob(notifyQueue, matchedEventId);
     const llmReviewJob = await expectJob(llmReviewQueue, llmReviewEventId);
     const feedbackJob = await expectJob(feedbackQueue, feedbackEventId);
     const reindexJob = await expectJob(reindexQueue, reindexEventId);
 
-    if (clusterJob.name !== ARTICLE_EMBEDDED_EVENT) {
-      throw new Error("article.embedded routed to the wrong queue job name.");
-    }
     if (
-      criteriaMatchJob.name !== ARTICLE_CLUSTERED_EVENT ||
-      interestMatchJob.name !== ARTICLE_CRITERIA_MATCHED_EVENT
+      criteriaMatchJob.name !== ARTICLE_EMBEDDED_EVENT ||
+      clusterJob.name !== ARTICLE_CRITERIA_MATCHED_EVENT ||
+      interestMatchJob.name !== ARTICLE_CLUSTERED_EVENT
     ) {
-      throw new Error("criteria-first routing reached the wrong queue job names.");
+      throw new Error("criteria-gated clustering routing reached the wrong queue job names.");
     }
     if (notifyJob.name !== ARTICLE_INTERESTS_MATCHED_EVENT) {
       throw new Error("article.interests.matched routed to the wrong queue job name.");
@@ -197,16 +195,20 @@ async function main(): Promise<void> {
       throw new Error("reindex.requested routed to the wrong queue job name.");
     }
 
-    expectThinKeys(clusterJob.data, ["docId", "eventId", "jobId", "version"], "article.embedded");
     expectThinKeys(
       criteriaMatchJob.data,
       ["docId", "eventId", "jobId", "version"],
-      "article.clustered -> criteria"
+      "article.embedded -> criteria"
+    );
+    expectThinKeys(
+      clusterJob.data,
+      ["docId", "eventId", "jobId", "version"],
+      "article.criteria.matched -> cluster"
     );
     expectThinKeys(
       interestMatchJob.data,
       ["docId", "eventId", "jobId", "version"],
-      "article.criteria.matched -> interests"
+      "article.clustered -> interests"
     );
     expectThinKeys(
       notifyJob.data,
@@ -230,7 +232,7 @@ async function main(): Promise<void> {
     );
 
     console.log(
-      `Phase 4/5 relay routing smoke passed: ${embeddedEventId} reached ${CLUSTER_QUEUE}, ${clusteredEventId} reached ${CRITERIA_MATCH_QUEUE}, ${criteriaMatchedEventId} reached ${INTEREST_MATCH_QUEUE}, ${matchedEventId} reached ${NOTIFY_QUEUE}, ${llmReviewEventId} reached ${LLM_REVIEW_QUEUE}, ${feedbackEventId} reached ${FEEDBACK_INGEST_QUEUE}, and ${reindexEventId} reached ${REINDEX_QUEUE}.`
+      `Phase 4/5 relay routing smoke passed: ${embeddedEventId} reached ${CRITERIA_MATCH_QUEUE}, ${criteriaMatchedEventId} reached ${CLUSTER_QUEUE}, ${clusteredEventId} reached ${INTEREST_MATCH_QUEUE}, ${matchedEventId} reached ${NOTIFY_QUEUE}, ${llmReviewEventId} reached ${LLM_REVIEW_QUEUE}, ${feedbackEventId} reached ${FEEDBACK_INGEST_QUEUE}, and ${reindexEventId} reached ${REINDEX_QUEUE}.`
     );
   } finally {
     await relay.close();

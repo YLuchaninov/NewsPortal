@@ -15,11 +15,14 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         )
         replay_reviews = AsyncMock(side_effect=[1, 0, 0, 2])
         update_job_options = AsyncMock()
+        publish_outbox_event = AsyncMock()
+        process_cluster = AsyncMock(return_value={"status": "clustered"})
         dependencies = reindex_backfill.HistoricalBackfillDependencies(
             prepare_target_snapshot=AsyncMock(return_value=2),
             list_target_batch=list_snapshot_batch,
             update_job_options=update_job_options,
-            publish_outbox_event=AsyncMock(),
+            publish_outbox_event=publish_outbox_event,
+            process_cluster=process_cluster,
             process_match_criteria=AsyncMock(return_value={"criteriaCount": 1}),
             process_match_interests=AsyncMock(return_value={"interestCount": 2}),
             is_article_eligible_for_personalization=AsyncMock(return_value=True),
@@ -57,10 +60,23 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["interestMatches"], 4)
         self.assertEqual(result["criterionLlmReviews"], 1)
         self.assertEqual(result["interestLlmReviews"], 0)
+        self.assertEqual(
+            [call.kwargs["event_type"] for call in publish_outbox_event.await_args_list],
+            [
+                "article.embedded",
+                "article.criteria.matched",
+                "article.clustered",
+                "article.embedded",
+                "article.criteria.matched",
+                "article.clustered",
+            ],
+        )
+        self.assertEqual(process_cluster.await_count, 2)
 
     async def test_replay_historical_articles_records_zero_progress_for_empty_snapshot(self) -> None:
         list_snapshot_batch = AsyncMock(return_value=[])
         ensure_event = AsyncMock()
+        process_cluster = AsyncMock()
         match_criteria = AsyncMock()
         match_interests = AsyncMock()
         replay_reviews = AsyncMock()
@@ -71,6 +87,7 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             list_target_batch=list_snapshot_batch,
             update_job_options=update_job_options,
             publish_outbox_event=ensure_event,
+            process_cluster=process_cluster,
             process_match_criteria=match_criteria,
             process_match_interests=match_interests,
             is_article_eligible_for_personalization=AsyncMock(return_value=False),
@@ -97,6 +114,7 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             {"progress": {"processedArticles": 0, "totalArticles": 0}},
         )
         ensure_event.assert_not_awaited()
+        process_cluster.assert_not_awaited()
         match_criteria.assert_not_awaited()
         match_interests.assert_not_awaited()
         replay_reviews.assert_not_awaited()
@@ -106,6 +124,7 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["interestMatches"], 0)
 
     async def test_replay_historical_articles_forwards_scoped_interest_filters(self) -> None:
+        process_cluster = AsyncMock(return_value={"status": "clustered"})
         process_match_interests = AsyncMock(return_value={"interestCount": 1})
         dependencies = reindex_backfill.HistoricalBackfillDependencies(
             prepare_target_snapshot=AsyncMock(return_value=1),
@@ -117,6 +136,7 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             ),
             update_job_options=AsyncMock(),
             publish_outbox_event=AsyncMock(),
+            process_cluster=process_cluster,
             process_match_criteria=AsyncMock(return_value={"criteriaCount": 1}),
             process_match_interests=process_match_interests,
             is_article_eligible_for_personalization=AsyncMock(return_value=True),
@@ -138,6 +158,8 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             doc_ids=None,
             system_feed_only=True,
         )
+        scoped_cluster_job = process_cluster.await_args.args[0]
+        self.assertTrue(scoped_cluster_job.data["historicalBackfill"])
         scoped_job = process_match_interests.await_args.args[0]
         self.assertEqual(scoped_job.data["userId"], "user-1")
         self.assertEqual(scoped_job.data["interestId"], "interest-1")

@@ -42,7 +42,16 @@ def check_database() -> None:
 
 
 def processed_article_clause(alias: str = "a") -> str:
-    return f"{alias}.processing_state in ('matched', 'notified')"
+    return (
+        "("
+        f"{alias}.processing_state in ('matched', 'notified')"
+        f" or exists ("
+        f"select 1 from system_feed_results sfr_processed "
+        f"where sfr_processed.doc_id = {alias}.doc_id "
+        "and sfr_processed.decision in ('pass_through', 'eligible', 'filtered_out')"
+        ")"
+        ")"
+    )
 
 
 def system_feed_join_clause(article_alias: str = "a", system_alias: str = "sfr") -> str:

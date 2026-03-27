@@ -12,6 +12,7 @@ class HistoricalBackfillDependencies:
     list_target_batch: Callable[..., Awaitable[list[dict[str, Any]]]]
     update_job_options: Callable[[str, dict[str, Any]], Awaitable[None]]
     publish_outbox_event: Callable[..., Awaitable[None]]
+    process_cluster: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_match_criteria: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_match_interests: Callable[[Any, str], Awaitable[dict[str, Any]]]
     is_article_eligible_for_personalization: Callable[..., Awaitable[bool]]
@@ -75,7 +76,7 @@ async def replay_historical_articles(
             criteria_event_id = str(uuid.uuid4())
             await dependencies.publish_outbox_event(
                 event_id=criteria_event_id,
-                event_type="article.clustered",
+                event_type="article.embedded",
                 aggregate_type="article",
                 aggregate_id=doc_id,
                 payload={
@@ -100,10 +101,33 @@ async def replay_historical_articles(
                 scope="criterion",
             )
             if await dependencies.is_article_eligible_for_personalization(doc_id=doc_id):
+                cluster_event_id = str(uuid.uuid4())
+                await dependencies.publish_outbox_event(
+                    event_id=cluster_event_id,
+                    event_type="article.criteria.matched",
+                    aggregate_type="article",
+                    aggregate_id=doc_id,
+                    payload={
+                        "docId": doc_id,
+                        "historicalBackfill": True,
+                        "version": 1,
+                    },
+                )
+                await dependencies.process_cluster(
+                    SimpleNamespace(
+                        data={
+                            "eventId": cluster_event_id,
+                            "docId": doc_id,
+                            "historicalBackfill": True,
+                            "version": 1,
+                        }
+                    ),
+                    "",
+                )
                 interests_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
                     event_id=interests_event_id,
-                    event_type="article.criteria.matched",
+                    event_type="article.clustered",
                     aggregate_type="article",
                     aggregate_id=doc_id,
                     payload={

@@ -23,6 +23,7 @@ COPY packages/ui/src packages/ui/src
 COPY apps/web/package.json apps/web/package.json
 COPY apps/web/astro.config.mjs apps/web/astro.config.mjs
 COPY apps/web/tsconfig.json apps/web/tsconfig.json
+COPY apps/web/public apps/web/public
 COPY apps/web/src apps/web/src
 
 RUN pnpm install --frozen-lockfile

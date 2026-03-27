@@ -32,6 +32,7 @@ const PROFILE_SEQUENCE = [
   "healthy",
   "timeout"
 ];
+const ALLOWED_PROFILES = new Set(PROFILE_SEQUENCE);
 
 function log(message) {
   console.log(`[rss-multi-flow] ${message}`);
@@ -354,7 +355,8 @@ function queryPostgresRows(env, sql) {
 function parseArgs(argv) {
   const options = {
     channelCount: 24,
-    keepStack: false
+    keepStack: false,
+    profiles: [...PROFILE_SEQUENCE]
   };
 
   for (const argument of argv) {
@@ -364,11 +366,30 @@ function parseArgs(argv) {
     }
     if (argument === "--keep-stack") {
       options.keepStack = true;
+      continue;
+    }
+    if (argument.startsWith("--profiles=")) {
+      options.profiles = argument
+        .split("=")[1]
+        .split(",")
+        .map((profile) => profile.trim())
+        .filter(Boolean);
     }
   }
 
   if (!Number.isInteger(options.channelCount) || options.channelCount <= 0) {
     throw new Error("--channel-count must be a positive integer.");
+  }
+
+  if (options.profiles.length === 0) {
+    throw new Error("--profiles must include at least one fixture profile.");
+  }
+
+  const unsupportedProfiles = options.profiles.filter((profile) => !ALLOWED_PROFILES.has(profile));
+  if (unsupportedProfiles.length > 0) {
+    throw new Error(
+      `--profiles includes unsupported values: ${unsupportedProfiles.join(", ")}.`
+    );
   }
 
   return options;
@@ -392,10 +413,10 @@ function buildFixtureXml({ title, guid, url, summary, body, publishedAt }) {
 </rss>`;
 }
 
-function buildFixtures(runId, channelCount) {
+function buildFixtures(runId, channelCount, profiles) {
   return Array.from({ length: channelCount }, (_, index) => {
     const fixtureIndex = index + 1;
-    const profile = PROFILE_SEQUENCE[index % PROFILE_SEQUENCE.length];
+    const profile = profiles[index % profiles.length];
     const channelKey = `${runId}-${String(fixtureIndex).padStart(3, "0")}`;
     const publishedAt = new Date(Date.UTC(2026, 2, 20, 8, fixtureIndex, 0)).toUTCString();
     const title = `RSS multi fixture ${profile} ${channelKey}`;
@@ -557,7 +578,7 @@ async function main() {
   const runId = randomUUID().slice(0, 8);
   const adminEmail = selectAdminEmail(allowlistEntries, runId);
   const adminPassword = `NewsPortal!${runId}`;
-  const fixtures = buildFixtures(runId, options.channelCount);
+  const fixtures = buildFixtures(runId, options.channelCount, options.profiles);
   const { successfulFixtures, failedFixtures, successfulCount, failedCount } =
     collectExpectedCounts(fixtures);
   const fixtureServer = await startFixtureServer(fixtures);
@@ -565,7 +586,9 @@ async function main() {
   let keepStack = options.keepStack;
 
   try {
-    log(`Starting compose.dev stack for ${options.channelCount} RSS channels.`);
+    log(
+      `Starting compose.dev stack for ${options.channelCount} RSS channels with profiles ${options.profiles.join(", ")}.`
+    );
     runCompose(
       "up",
       "--build",
@@ -780,19 +803,23 @@ async function main() {
       );
     }
 
-    const invalidRows = queryPostgresRows(
-      env,
-      `
-        select
-          name,
-          coalesce(last_error_message, '')
-        from source_channels
-        where name in (${failedFixtures.map((fixture) => sqlLiteral(fixture.name)).join(", ")})
-        order by name
-      `
-    );
-    if (invalidRows.some(([, errorMessage]) => !errorMessage)) {
-      throw new Error("Expected every failing RSS fixture to persist a non-empty last_error_message.");
+    if (failedFixtures.length > 0) {
+      const invalidRows = queryPostgresRows(
+        env,
+        `
+          select
+            name,
+            coalesce(last_error_message, '')
+          from source_channels
+          where name in (${failedFixtures.map((fixture) => sqlLiteral(fixture.name)).join(", ")})
+          order by name
+        `
+      );
+      if (invalidRows.some(([, errorMessage]) => !errorMessage)) {
+        throw new Error(
+          "Expected every failing RSS fixture to persist a non-empty last_error_message."
+        );
+      }
     }
 
     await waitFor(

@@ -1342,7 +1342,7 @@ async def fetch_system_feed_result_row(
     return await cursor.fetchone()
 
 
-def should_dispatch_interest_matching(system_feed_result: Mapping[str, Any]) -> bool:
+def should_dispatch_clustering(system_feed_result: Mapping[str, Any]) -> bool:
     return bool(system_feed_result.get("eligible_for_feed")) and not bool(
         system_feed_result.get("previous_eligible_for_feed")
     )
@@ -2334,6 +2334,13 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
                 current_state = str(article.get("processing_state") or "raw")
                 if PROCESSING_STATE_ORDER.get(current_state, 0) < PROCESSING_STATE_ORDER["embedded"]:
                     raise ValueError(f"Article {doc_id} must be embedded before clustering.")
+                system_feed_result = await fetch_system_feed_result_row(cursor, article["doc_id"])
+                if system_feed_result is None or not bool(system_feed_result.get("eligible_for_feed")):
+                    await record_processed_event(cursor, CLUSTER_CONSUMER, event_id)
+                    return {
+                        "status": "skipped-system-feed",
+                        "docId": doc_id,
+                    }
 
                 article_features = await fetch_article_features_row(cursor, article["doc_id"])
                 article_vectors = await fetch_article_vectors(cursor, article["doc_id"])
@@ -2575,7 +2582,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                     criteria_count += 1
 
                 system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
-                if should_dispatch_interest_matching(system_feed_result) and not historical_backfill:
+                if should_dispatch_clustering(system_feed_result) and not historical_backfill:
                     await insert_outbox_event(
                         cursor,
                         ARTICLE_CRITERIA_MATCHED_EVENT,
@@ -3192,7 +3199,7 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                         ),
                     )
                     system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
-                    if should_dispatch_interest_matching(system_feed_result) and not historical_backfill:
+                    if should_dispatch_clustering(system_feed_result) and not historical_backfill:
                         await insert_outbox_event(
                             cursor,
                             ARTICLE_CRITERIA_MATCHED_EVENT,
@@ -3390,7 +3397,7 @@ async def prepare_historical_backfill_snapshot(
                           row_number() over (order by articles.created_at asc, articles.doc_id asc),
                           articles.doc_id
                         from articles
-                        where processing_state in ('clustered', 'matched', 'notified')
+                        where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           and doc_id = any(%s::uuid[])
                           {system_feed_clause}
                         on conflict do nothing
@@ -3421,7 +3428,7 @@ async def prepare_historical_backfill_snapshot(
                           row_number() over (order by articles.created_at asc, articles.doc_id asc),
                           articles.doc_id
                         from articles
-                        where processing_state in ('clustered', 'matched', 'notified')
+                        where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           {system_feed_clause}
                         on conflict do nothing
                         """,
@@ -3554,6 +3561,7 @@ async def replay_historical_articles(
             list_target_batch=list_historical_backfill_snapshot_batch,
             update_job_options=update_reindex_job_options,
             publish_outbox_event=ensure_published_outbox_event,
+            process_cluster=process_cluster,
             process_match_criteria=process_match_criteria,
             process_match_interests=process_match_interests,
             is_article_eligible_for_personalization=is_article_eligible_for_personalization,

@@ -15,6 +15,10 @@ interface WaitOptions {
   pollIntervalMs: number;
 }
 
+interface SmokeOptions {
+  duplicatePreflightOnly: boolean;
+}
+
 const PROCESSING_STATE_ORDER: Record<string, number> = {
   raw: 0,
   normalized: 1,
@@ -176,7 +180,11 @@ async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<v
   );
 }
 
-async function assertSmokeRows(pool: Pool, channelId: string): Promise<void> {
+async function assertSmokeRows(
+  pool: Pool,
+  channelId: string,
+  options: SmokeOptions
+): Promise<void> {
   const articleResult = await pool.query<{
     processingState: string;
     canonicalDocId: string | null;
@@ -209,7 +217,7 @@ async function assertSmokeRows(pool: Pool, channelId: string): Promise<void> {
     );
   }
 
-  if (!article.canonicalDocId || !article.familyId) {
+  if (!options.duplicatePreflightOnly && (!article.canonicalDocId || !article.familyId)) {
     throw new Error("Expected canonical_doc_id and family_id to be populated.");
   }
 
@@ -345,7 +353,14 @@ async function assertIdempotentRefetch(
   }
 }
 
+function parseSmokeOptions(argv: readonly string[]): SmokeOptions {
+  return {
+    duplicatePreflightOnly: argv.includes("--duplicate-preflight-only")
+  };
+}
+
 async function main(): Promise<void> {
+  const options = parseSmokeOptions(process.argv.slice(2));
   const config = loadFetchersConfig();
   const pool = createPgPool(config);
   const service = new RssFetcherService(pool, config);
@@ -374,9 +389,10 @@ async function main(): Promise<void> {
     const channelId = await seedSmokeChannel(pool, fixtureServer.url);
     await service.pollChannel(channelId);
     await waitForProcessedArticle(pool, channelId);
-    await assertSmokeRows(pool, channelId);
+    await assertSmokeRows(pool, channelId, options);
     await assertIdempotentRefetch(service, pool, channelId);
-    console.log(`RSS smoke test passed for channel ${channelId}.`);
+    const modeLabel = options.duplicatePreflightOnly ? "duplicate-preflight" : "full";
+    console.log(`RSS smoke test (${modeLabel}) passed for channel ${channelId}.`);
   } finally {
     await fixtureServer.close();
     await pool.end();

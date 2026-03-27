@@ -17,6 +17,17 @@ from services.api.app import main as api_main
 
 
 class ApiFeedDedupTests(unittest.TestCase):
+    def test_processed_article_clause_includes_final_system_gate_rows(self) -> None:
+        clause = api_main.processed_article_clause("articles")
+
+        self.assertIn("articles.processing_state in ('matched', 'notified')", clause)
+        self.assertIn("from system_feed_results sfr_processed", clause)
+        self.assertIn("sfr_processed.doc_id = articles.doc_id", clause)
+        self.assertIn(
+            "sfr_processed.decision in ('pass_through', 'eligible', 'filtered_out')",
+            clause,
+        )
+
     def test_list_feed_articles_uses_canonical_family_dedup(self) -> None:
         items = [{"doc_id": "doc-1", "title": "One copy only"}]
         with (
@@ -71,6 +82,7 @@ class ApiFeedDedupTests(unittest.TestCase):
             sql,
         )
         self.assertIn("coalesce(sfr.eligible_for_feed, false) = true", sql)
+        self.assertIn("from system_feed_results sfr_processed", sql)
 
 
 if __name__ == "__main__":

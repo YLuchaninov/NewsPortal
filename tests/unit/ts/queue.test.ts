@@ -45,14 +45,14 @@ test("embed fanout adds embed queue for normalized articles", () => {
   assert.deepEqual(queueMap[ARTICLE_NORMALIZED_EVENT], [DEDUP_QUEUE, EMBED_QUEUE]);
 });
 
-test("clustered articles route to criteria first and criteria-matched articles route to interests", () => {
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT], [CRITERIA_MATCH_QUEUE]);
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CRITERIA_MATCHED_EVENT], [INTEREST_MATCH_QUEUE]);
+test("embedded articles route to criteria, criteria-matched articles route to cluster, and clustered articles route to interests", () => {
+  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_EMBEDDED_EVENT], [CRITERIA_MATCH_QUEUE]);
+  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CRITERIA_MATCHED_EVENT], [CLUSTER_QUEUE]);
+  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT], [INTEREST_MATCH_QUEUE]);
   assert.equal(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT].includes(CLUSTER_QUEUE), false);
 });
 
 test("queue map preserves terminal routing contracts for downstream events", () => {
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_EMBEDDED_EVENT], [CLUSTER_QUEUE]);
   assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_INTERESTS_MATCHED_EVENT], [NOTIFY_QUEUE]);
   assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[LLM_REVIEW_REQUESTED_EVENT], [LLM_REVIEW_QUEUE]);
   assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[NOTIFICATION_FEEDBACK_RECORDED_EVENT], [

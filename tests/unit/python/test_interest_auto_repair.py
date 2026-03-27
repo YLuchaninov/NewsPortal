@@ -383,7 +383,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         }
         article_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
-            "processing_state": "clustered",
+            "processing_state": "embedded",
             "title": "AI policy",
             "lead": "Lead",
             "body": "Body",
@@ -421,7 +421,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                     }
                 ),
             ),
-            patch.object(worker_main, "should_dispatch_interest_matching", return_value=False),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
             patch.object(worker_main, "record_processed_event", AsyncMock()),
         ):
             result = await worker_main.process_match_criteria(
@@ -444,6 +444,70 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(call_args[4]["promptTemplateId"])
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["criteriaCount"], 1)
+
+    async def test_process_cluster_skips_articles_outside_system_feed(self) -> None:
+        article_row = {
+            "doc_id": "33333333-3333-3333-3333-333333333333",
+            "processing_state": "embedded",
+        }
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(
+                worker_main,
+                "fetch_system_feed_result_row",
+                AsyncMock(return_value={"eligible_for_feed": False}),
+            ),
+            patch.object(worker_main, "record_processed_event", AsyncMock()) as record_processed_event,
+        ):
+            result = await worker_main.process_cluster(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-cluster-1",
+                        "docId": article_row["doc_id"],
+                        "version": 1,
+                    }
+                ),
+                "",
+            )
+
+        record_processed_event.assert_awaited_once()
+        self.assertEqual(result["status"], "skipped-system-feed")
+        self.assertEqual(result["docId"], article_row["doc_id"])
+
+    async def test_process_match_interests_skips_articles_outside_system_feed(self) -> None:
+        article_row = {
+            "doc_id": "44444444-4444-4444-4444-444444444444",
+            "processing_state": "embedded",
+        }
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(
+                worker_main,
+                "fetch_system_feed_result_row",
+                AsyncMock(return_value={"eligible_for_feed": False}),
+            ),
+            patch.object(worker_main, "record_processed_event", AsyncMock()) as record_processed_event,
+        ):
+            result = await worker_main.process_match_interests(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-interests-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        record_processed_event.assert_awaited_once()
+        self.assertEqual(result["status"], "skipped-system-feed")
+        self.assertEqual(result["docId"], article_row["doc_id"])
+        self.assertEqual(result["interestCount"], 0)
 
 
 if __name__ == "__main__":

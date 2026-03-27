@@ -60,6 +60,10 @@ Code, который "выглядит готовым", не считается 
   Compose-backed deterministic proof для 24 synthetic RSS feeds. Доказывает RSS-only путь `admin -> source_channels -> fetchers -> relay -> workers`, bounded-concurrency scheduler behavior, channel-level failure isolation, idempotent refetch, `next_due_at`-aware second fetch и 304 handling.
 - `pnpm test:ingest:soak:compose`
   Отдельный heavier compose-backed soak для 60 synthetic RSS feeds. Используется как non-PR proof для realistic dozens-of-feeds baseline поверх того же admin/bulk/channel-state contract и подтверждает stable second-cycle behavior на dozens-of-feeds batch.
+- `node --import tsx services/fetchers/src/cli/test-rss-smoke.ts --duplicate-preflight-only`
+  Focused RSS smoke для fetcher duplicate-preflight. Доказывает повторный poll одной RSS-ленты без новых `articles` / article outbox rows и не зависит от более широких worker-side `canonical_doc_id` / `family_id` assertions.
+- `node infra/scripts/test-rss-multi-flow.mjs --channel-count=24 --profiles=healthy,duplicate`
+  Focused compose proof для fetcher duplicate-preflight. Доказывает repeated-200 duplicate suppression на 24 RSS channels without coupling stage closeout to unrelated `not_modified` / `304` fixture expectations.
 
 ### Subsystem-specific Smoke Matrix
 
@@ -178,7 +182,9 @@ Smallest honest local proof для обычной итерации.
 - capability closeout для listing-consistency также должен доказать, что user-facing wording больше не называет feed-eligible записи `published` или `matched-only`, если runtime truth на этом read model включает `matched` и `notified`.
 - для historical reindex/backfill минимум включает duplicate-safe proof для `criterion_match_results` / `interest_match_results`, явную проверку, что repair mode не рассылает retro-notifications, и proof того, что `processedArticles <= totalArticles` держится на frozen target snapshot, а не на mutable live scan.
 - для staged system-first matching contract changes минимум включает targeted proof того, что `system_feed_results` truthfully follows criterion outcomes: `pass_through` when no criteria were evaluated, `pending_llm` while criterion gray-zone review is unresolved, `eligible` after at least one surviving criterion, and `filtered_out` when all evaluated criteria are irrelevant.
+- для criteria-gated clustering contract changes минимум включает routing proof для `article.embedded -> criteria`, release proof того, что только финальный `eligible`/`pass_through` system gate публикует `article.criteria.matched -> cluster`, и downstream proof того, что только `article.clustered` запускает `user_interests`, тогда как `filtered_out` статьи truthfully skip both cluster and personalization lanes.
 - для feed/UI rollout поверх system-first matching минимум включает proof того, что `/feed` и summary surfaces derive eligibility from `system_feed_results`, а не от `articles.processing_state`; в том числе статья с `processing_state = clustered`, `system_feed_results.eligible_for_feed = true` и без personalization lane должна появляться в system-selected feed.
+- если `processed total` / `processed 24h` semantics расширяются от `processing_state` к final system-gate truth, proof должен включать live reconciliation между `/dashboard/summary` и прямым DB count на том же dataset после reload затронутого API runtime, а не только unit-assert на SQL string.
 - если historical backfill теперь поддерживает derived article-level gate/read models вроде `system_feed_results`, proof должен подтверждать, что replay keeps those derived rows in sync alongside `criterion_match_results` / `interest_match_results`, still without retro-notifications.
 - если baseline runtime отключает interest-scope gray-zone LLM review, proof должен явно подтвердить, что fresh ingest больше не enqueue-ит этот scope по умолчанию, а historical backfill сохраняет `interestLlmReviews = 0`.
 - для admin auth/CRUD contract changes минимум включает redirect unit coverage плюс runtime proof для logged-out redirect на dedicated sign-in и signed-in HTML checks на затронутых list/create/edit screens под прямым app path и/или nginx-shaped `/admin` ingress.

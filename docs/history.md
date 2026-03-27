@@ -14,6 +14,354 @@
 
 ## Completed items
 
+### 2026-03-27 — S-RESIDUAL-PROOF-CLOSEOUT-1 — Proved fresh DB-written LLM cost from provider usage metadata
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the earlier env-driven tariff patch proved deterministic estimation logic, but the user explicitly asked to close the remaining residuals, so this stage had to prove a fresh `llm_review_log` write with provider `usageMetadata` and non-null `cost_estimate_usd`.
+- Что изменилось:
+  - `services/workers/app/smoke.py` gained `llm-cost-proof`, a deterministic local proof path with a fake Gemini provider server plus temporary article/criterion fixtures and explicit DB cleanup;
+  - `tests/unit/python/test_gemini.py` gained local provider-response coverage for `usageMetadata`, including token counts and cost estimation extraction;
+  - the smoke now proves the persisted row fields directly instead of inferring them from helper-level tests.
+- Что проверено:
+  - `python -m py_compile services/workers/app/smoke.py tests/unit/python/test_gemini.py`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_gemini`
+  - `docker compose -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke llm-cost-proof`
+  - follow-up PostgreSQL cleanup verification returned zero temporary `llm_review_log`, `articles`, `criteria`, `inbox_processed_events`, and `outbox_events` residue
+- Риски или gaps:
+  - the stage proves worker-side estimation persistence, not external provider billing truth.
+- Follow-up:
+  - the remaining manual/browser closeout layer stayed in `S-RESIDUAL-PROOF-CLOSEOUT-2` until that stage also passed.
+
+### 2026-03-27 — S-RESIDUAL-PROOF-CLOSEOUT-2 — Proved browser web-push receipt and cleaned stateful residue
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: web live-update/browser work was already archived, but the user explicitly asked to close the remaining residual browser receipt question for `web_push`, which required a real local browser session and explicit cleanup truth.
+- Что изменилось:
+  - `infra/docker/web.Dockerfile` now copies `apps/web/public`, fixing real `/sw.js` delivery in the local Docker web build;
+  - `apps/web/public/sw.js` now mirrors received push payloads to open clients via `postMessage`, making browser receipt observable in proof without changing the notification contract;
+  - the local runtime was recreated with `.env.dev` so `FIREBASE_WEB_API_KEY`, `WEB_PUSH_VAPID_PUBLIC_KEY`, and `WEB_PUSH_VAPID_PRIVATE_KEY` were actually wired during proof.
+- Что проверено:
+  - live `sw.js` checks returned `200` on both local direct and nginx-shaped paths after the Dockerfile fix;
+  - a real Chrome session granted notifications, registered the service worker, created a real `web_push` channel, and received a worker-sent push with matching `web-push-received` payload plus visible notification card;
+  - browser cleanup unsubscribed and closed the notification, and DB cleanup removed the temporary proof user/profile/channel rows with zero remaining residue
+- Риски или gaps:
+  - this stage proves the local browser delivery contract, not cross-browser or OS-level notification behavior outside the local dev baseline.
+- Follow-up:
+  - no truthful live next stage remained inside the residual-proof capability.
+
+### 2026-03-27 — C-RESIDUAL-PROOF-CLOSEOUT — Residual provider-usage and browser receipt proof debt is durably closed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after broader live-update and runtime work had already shipped, the user asked to finish every small leftover, and the remaining explicit proof debt was concentrated in two residual layers: provider-usage-backed LLM cost persistence and real browser `web_push` receipt.
+- Что изменилось:
+  - `S-RESIDUAL-PROOF-CLOSEOUT-1` added deterministic local worker smoke plus unit coverage for fresh provider-usage-backed `llm_review_log.cost_estimate_usd` writes;
+  - `S-RESIDUAL-PROOF-CLOSEOUT-2` fixed local service-worker delivery in Docker, recreated the local runtime with the right `.env.dev` wiring, and proved real browser `web_push` receipt plus cleanup;
+  - the capability now has no remaining manual/operator completion layer and no tracked residual artifacts.
+- Что проверено:
+  - targeted Python compile/unit proof and live worker smoke for `llm-cost-proof`
+  - real Chrome browser proof for `web_push` send, receipt, notification visibility, unsubscribe, and cleanup
+- Риски или gaps:
+  - this capability intentionally does not claim provider billing reconciliation or broader cross-platform push delivery readiness.
+- Follow-up:
+  - any future observability or notification-delivery expansion must open a new bounded item instead of reopening this archived closeout capability.
+
+### 2026-03-27 — S-FETCHER-DUPLICATE-PREFLIGHT-1 — Closed fetcher duplicate preflight with focused smoke and compose proof
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the fetcher-side duplicate precheck was already implemented and unit-covered, but the user explicitly resumed this blocked lane; the remaining work was to prove it against current repo reality without pretending that unrelated worker canonical-family or `304` expectations belonged to the same stage.
+- Что изменилось:
+  - `services/fetchers/src/cli/test-rss-smoke.ts` now accepts `--duplicate-preflight-only`, preserving the article/outbox/idempotent-refetch assertions while intentionally skipping unrelated `canonical_doc_id` / `family_id` checks;
+  - `infra/scripts/test-rss-multi-flow.mjs` now accepts `--profiles=...`, so focused runs can isolate `healthy` + `duplicate` repeated-200 RSS paths, and it now correctly handles all-success targeted fixture sets without building `where name in ()`;
+  - no fetcher ingest semantics were changed in this closeout; the stage only hardened truthful proof around the already-landed preflight logic.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/fetcher-duplicate-preflight.test.ts`
+  - `node --import tsx services/fetchers/src/cli/test-rss-smoke.ts --duplicate-preflight-only`
+  - `node infra/scripts/test-rss-multi-flow.mjs --channel-count=24 --profiles=healthy,duplicate`
+- Риски или gaps:
+  - the stage proves fetcher-side duplicate suppression on repeated RSS polls; it does not claim broader worker-side `canonical_doc_id` / `family_id` population or default `not_modified` / `304` fixture coverage.
+- Follow-up:
+  - no truthful live next stage remained once the focused unit + smoke + compose proof passed, so the capability could be archived instead of stretched into artificial extra stages.
+
+### 2026-03-27 — C-FETCHER-DUPLICATE-PREFLIGHT — Fetcher duplicate suppression is now durably proven and closed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: duplicate rows on user-facing read models had already forced downstream dedupe/read-model fixes, but the upstream fetcher lane remained explicitly blocked until the pre-insert/pre-outbox duplicate suppression path could be proven on the real current runtime.
+- Что изменилось:
+  - the capability was truthfully collapsed to a single closeout stage because implementation had already landed in `services/fetchers/src/fetchers.ts`; what remained was proof and archive sync, not a second implementation slice;
+  - focused harness modes now let the repo prove duplicate-preflight behavior directly instead of coupling the closeout to unrelated ingest invariants from broader smoke suites;
+  - the capability now closes with no truthful live next stage and no hidden dependence on the default full ingest smoke commands.
+- Что проверено:
+  - classifier unit coverage in `tests/unit/ts/fetcher-duplicate-preflight.test.ts`
+  - focused host RSS smoke with `--duplicate-preflight-only`
+  - focused 24-channel compose proof with `--profiles=healthy,duplicate`
+- Риски или gaps:
+  - this capability does not backfill or repair historical duplicate rows already stored in PostgreSQL; it only closes the fetcher-side preflight suppression lane for repeated RSS ingest.
+- Follow-up:
+  - any future historical repair or broader ingest-contract work must open a new bounded item instead of reopening this archived capability.
+
+### 2026-03-27 — S-ADMIN-LIVE-UPDATES-1 — Closed manual browser proof and cleanup for bounded admin live updates
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: automated proof for `apps/admin` was already green, but the stage still could not close until a real browser session confirmed that the hydrated dashboard, reindex, observability, and selected-user `/user-interests` surfaces react truthfully to background state changes without full-page reloads.
+- Что изменилось:
+  - a real Chrome session against `http://127.0.0.1:4322` proved the dashboard KPI card `System Feed News` updated inline from `132 -> 133` after inserting one temporary eligible article, while the same page showed the bounded table behavior by surfacing `New fetch runs are available` after a temporary `channel_fetch_runs` insert instead of live-diffing the whole table;
+  - `/reindex` proved the in-place job-status flow end-to-end with one temporary job `residual_admin-proof-2d790db1-dda0-43ed-b523-7f2b59b9305a`, moving `queued -> running -> completed` and updating the inline progress label `1/3 articles -> 3/3 articles` without a page reload;
+  - `/observability` proved live summary-card refresh by increasing `Reviews (24h)` from `798 -> 799` after one temporary `llm_review_log` row, and selected-user `/user-interests?userId=356428d4-8529-4e8e-bf02-082d946661aa` proved DOM-bound inline status refresh by switching the same interest `Compiled -> Queued -> Compiled` with compiled-count `1 -> 0 -> 1`;
+  - all local admin proof rows were cleaned up in the same sync cycle: temporary `articles`, `system_feed_results`, `channel_fetch_runs`, `reindex_jobs`, and `llm_review_log` fixtures were deleted, and the proof-only local admin alias row `yluchaninov+internal-admin-682c854e@gmail.com` was removed after external Firebase cleanup.
+- Что проверено:
+  - existing automated proof remained the stage baseline: `node --import tsx --test tests/unit/ts/admin-live-updates.test.ts`, `pnpm --filter @newsportal/admin typecheck`, `pnpm unit_tests`, `git diff --check -- apps/admin/src docs/work.md tests/unit/ts`
+  - real-browser proof via CDP-backed Chrome against the live local admin app, using temporary PostgreSQL fixtures and same-origin `window.__newsportalAdminLiveUpdates.forceRefresh()`
+  - local DB cleanup verification showed zero remaining rows for the temporary `reindex_jobs`, `channel_fetch_runs`, `articles`, and `llm_review_log` fixtures
+- Риски или gaps:
+  - the stage intentionally kept broader admin realtime out of scope: `/articles`, `/channels`, `/clusters`, and `/templates/*` still require explicit refresh/reload patterns unless a later bounded item expands that contract.
+- Follow-up:
+  - no truthful live next stage remains inside this capability; only a separate future richer-realtime/admin scope would justify reopening it.
+
+### 2026-03-27 — C-ADMIN-LIVE-UPDATES — Admin live counters and status surfaces are now durably closed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the capability was intentionally multi-layered: implementation landed earlier, but full completion required operator-facing browser proof and explicit cleanup of stateful proof residue before the admin live-update lane could leave `docs/work.md`.
+- Что изменилось:
+  - `SP-ADMIN-LIVE-UPDATES-1` bounded the rollout to dashboard KPIs, reindex status/progress, observability summary cards, and selected-user compile state, explicitly excluding full-table realtime;
+  - `S-ADMIN-LIVE-UPDATES-1` shipped the same-origin polling coordinator, `/bff/admin/live-updates`, dashboard/observability summary islands, inline reindex job updates, and DOM-bound selected-user compile-status refreshes;
+  - the final browser proof and cleanup closed the only remaining operator/manual completion layer, so the capability no longer needs live execution space.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/admin-live-updates.test.ts`
+  - `pnpm --filter @newsportal/admin typecheck`
+  - `pnpm unit_tests`
+  - real-browser Chrome proof across `/`, `/reindex`, `/observability`, and selected-user `/user-interests`
+- Риски или gaps:
+  - this capability does not claim broad admin realtime beyond the bounded surfaces above.
+- Follow-up:
+  - any future SSE/WebSocket work or full-table admin live diffing must open a new capability instead of reopening this archived one.
+
+### 2026-03-27 — S-WEB-LIVE-UPDATES-1 — Closed manual browser proof and cleanup for bounded web live updates
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: `apps/web` already had targeted tests and polling code, but the stage still needed a real browser walkthrough proving that user-facing state stays on-page during mutations and that refresh notices appear only when fresh data arrives.
+- Что изменилось:
+  - a real Chrome session against `http://127.0.0.1:4321` proved `/settings` saves without full reload: the theme switched `dark -> light`, the page stayed on `/settings`, a window probe survived the mutation, and the script restored the original theme to `dark`;
+  - `/interests` proved on-page mutation without reload by creating a real interest `Residual proof compiled interest 798157a2-74d0-4d54-8b85-23d3d000ee5f`, increasing the total `1 -> 2`, preserving a window probe on `/interests`, and observing the new interest move from `queued` to `compiled`;
+  - feed, matches, and notifications each proved the bounded refresh-notice path while the page stayed open: temporary fixtures moved totals `/ 129 -> 130`, `/matches 35 -> 36`, and `/notifications 0 -> 1`, with `New system-selected articles available`, `New personal matches available`, and `New notification history available` visible only after the background inserts plus live refresh.
+  - all local web proof artifacts were cleaned up in the same sync cycle: the temporary anonymous user `356428d4-8529-4e8e-bf02-082d946661aa`, both proof-only interests, the temporary article, and the derived `interest_match_results` / `notification_log` rows were deleted.
+- Что проверено:
+  - existing automated proof remained the stage baseline: `node --import tsx --test tests/unit/ts/live-updates.test.ts tests/unit/ts/live-interest-state.test.ts`, `pnpm --filter @newsportal/web typecheck`, `pnpm unit_tests`, `git diff --check -- apps/web/src docs/work.md tests/unit/ts`
+  - real-browser proof via CDP-backed Chrome against the live local web app, using temporary PostgreSQL fixtures and same-origin `window.__newsportalLiveUpdates.forceRefresh()`
+  - local DB cleanup verification showed zero remaining rows for the temporary user, interests, article, match, and notification fixtures
+- Риски или gaps:
+  - browser receipt for `web_push` remains outside this stage and still needs a separate manual-only follow-up if the product wants that proof.
+- Follow-up:
+  - no truthful live next stage remains inside this capability; richer transport or broader UX work belongs in a new bounded capability.
+
+### 2026-03-27 — C-WEB-LIVE-UPDATES — Web live user-state updates are now durably closed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: implementation and tests landed earlier, but the capability could only close once the browser-level mutation and refresh-notice contract was proven on the real local app and all temporary user-bound artifacts were cleaned up truthfully.
+- Что изменилось:
+  - `S-WEB-LIVE-UPDATES-1` shipped the same-origin polling coordinator, `/bff/live-updates`, live `/interests` and `/settings` islands, and refresh notices for `/`, `/matches`, and `/notifications`;
+  - the final browser walkthrough proved both mutation-style and background-refresh-style UX paths, then removed the temporary user-bound artifacts and stateful proof residue.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/live-updates.test.ts tests/unit/ts/live-interest-state.test.ts`
+  - `pnpm --filter @newsportal/web typecheck`
+  - `pnpm unit_tests`
+  - real-browser Chrome proof across `/settings`, `/interests`, `/`, `/matches`, and `/notifications`
+- Риски или gaps:
+  - this capability intentionally does not introduce realtime transport or change admin-scope behavior.
+- Follow-up:
+  - future SSE/WebSocket work or `web_push` browser receipt proof must open a new explicit item.
+
+### 2026-03-27 — P-MVP-BUGFIX-6 — Archived browser-scoped auth persistence after live browser confirmation
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the patch had already passed targeted tests, but it still occupied live space until the broader browser-based closeout pass proved that the preserved browser-scoped session model coexists cleanly with the new `/settings` and `/interests` on-page mutation flows.
+- Что изменилось:
+  - `apps/web/src/lib/server/auth.ts` and `/bff/auth/bootstrap` keep reusing the browser-scoped Firebase refresh token so the same browser returns to the same anonymous/local account after logout/login;
+  - the later live browser walkthrough for web live updates confirmed that the persisted browser-scoped session can safely carry real user-bound settings and interests through on-page mutations, after which the patch no longer needed to remain half-live in `docs/work.md`.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-auth-session.test.ts`
+  - `node --import tsx --test tests/unit/ts/app-routing.test.ts`
+  - `pnpm --filter @newsportal/web typecheck`
+  - `git diff --check -- apps/web/src/lib/server/auth.ts apps/web/src/pages/bff/auth/bootstrap.ts tests/unit/ts/web-auth-session.test.ts docs/blueprint.md docs/work.md`
+  - real-browser web mutation proof on the preserved browser-scoped session
+- Риски или gaps:
+  - shared-device tradeoffs remain a product decision, but the runtime behavior is now intentionally documented instead of accidental.
+- Follow-up:
+  - no live implementation residue remains; any future multi-device/account-linking work belongs in a new item.
+
+### 2026-03-27 — P-MVP-BUGFIX-5 — Archived the recovered local worker runtime after canonical env/model repair
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the runtime recovery patch had already repaired the real blocker, but it stayed awkwardly half-live in `docs/work.md` until the broader residual-closeout pass could confirm there was no remaining proof or cleanup debt keeping it open.
+- Что изменилось:
+  - the local worker/runtime now runs with canonical `.env.dev` semantics, a live `GEMINI_API_KEY`, and `gemini-2.0-flash` instead of the stale preview model, so historical backfill and current feed truth are no longer local-config artifacts;
+  - later live browser validation of user-facing/admin surfaces happened on the recovered runtime, so this patch no longer has a separate open manual-validation layer.
+- Что проверено:
+  - canonical worker restart with `--env-file .env.dev`
+  - approved backfill job `f11923b8-01d4-41b3-8d95-e0f108d7ad5b` completed `4024/4024`
+  - live reconciliation proved `/feed.total = 62`, `dashboard/summary.active_news = 62`, and `system_feed_results.eligible = 62` with no Gemini `HTTP 404`
+- Риски или gaps:
+  - provider `usageMetadata` is still absent on the smoke path, so this patch does not by itself prove a fresh DB-written non-null `cost_estimate_usd` row.
+- Follow-up:
+  - that observability/provider-usage question remains an explicit separate gap rather than hidden residue on this patch.
+
+### 2026-03-27 — P-FEED-DUPLICATE-1 — Archived canonical-family dedupe on public feed surfaces
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the API fix was shipped and proven earlier, but it still occupied live context until the residual-closeout sync moved its durable meaning into history.
+- Что изменилось:
+  - `/feed`, `/matches`, and `dashboard/summary.active_news` now dedupe by canonical article family via `coalesce(canonical_doc_id, doc_id)`, so users no longer see one card per duplicate article copy;
+  - the patch remains intentionally read-model-only: raw/admin/debug surfaces can still see the underlying duplicate `articles` rows until a separate ingest/data-repair item handles them.
+- Что проверено:
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_api_matches tests.unit.python.test_api_feed_dedup`
+  - `python -m py_compile services/api/app/main.py tests/unit/python/test_api_matches.py tests/unit/python/test_api_feed_dedup.py`
+  - live reconciliation on the compose dataset proved `39` raw eligible rows collapsing to `30` visible canonical feed cards
+- Риски или gaps:
+  - duplicate rows still exist in PostgreSQL by design; only the user-facing read surfaces are deduped.
+- Follow-up:
+  - broader ingest-side duplicate suppression remains separate blocked work under `C-FETCHER-DUPLICATE-PREFLIGHT`.
+
+### 2026-03-27 — P-LLM-COST-ENV-1 — Archived env-driven LLM tariff overrides
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the pricing patch was already proven, but the user asked to close every residual, so its durable runtime meaning and its honest remaining proof gap needed to move out of live execution state.
+- Что изменилось:
+  - worker-side Gemini cost estimation now prefers `LLM_INPUT_COST_PER_MILLION_USD` / `LLM_OUTPUT_COST_PER_MILLION_USD`, with `.env.example` and `.env.dev` seeded to the official paid-tier `gemini-2.0-flash` rates `0.10` / `0.40`;
+  - the reloaded runtime resolved `price_card_source = env_override` with the expected deterministic estimate, so alternate local model configs no longer silently inherit the built-in price card.
+- Что проверено:
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_gemini`
+  - `python -m py_compile services/workers/app/gemini.py tests/unit/python/test_gemini.py`
+  - deterministic in-container probe confirmed `_estimate_cost_usd('gemini-2.0-flash', 1000, 500) = 0.0003`
+- Риски или gaps:
+  - provider `usageMetadata` was still absent on the smoke path, so the patch honestly stops short of proving a fresh DB-written non-null `cost_estimate_usd` row through the full review pipeline.
+- Follow-up:
+  - any future provider-billing or end-to-end observability proof should open a separate bounded item instead of reopening this archived patch.
+
+### 2026-03-27 — C-MVP-BUGFIXES — The minimal working MVP blocker lane is now durably closed
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the blocker lane had accumulated several already-shipped fixes, but the capability stayed half-live in `docs/work.md` until the final archive sync could confirm there was no truthful next bugfix stage left in the current user request.
+- Что изменилось:
+  - archived work from this capability now covers the whole blocker arc: public feed source-link restoration, admin confirm-dialog visibility, shared UI build hardening, criterion lexical-score repair, local worker/runtime recovery, and browser-scoped auth/session persistence;
+  - the closeout sync confirmed that the recovered runtime, system-first feed, and browser-scoped session model all remained stable while the final web/admin browser proofs ran, so no additional blocker fix is still waiting inside this capability.
+- Что проверено:
+  - earlier stage/patch proofs already archived their targeted unit, build, runtime, and reconciliation evidence
+  - the residual-closeout sync added real browser validation plus explicit cleanup of local/external proof artifacts, removing the last reason to keep the capability live
+- Риски или gaps:
+  - `website`, `api`, and `email_imap` ingest remain outside the RSS-first acceptance gate, but that is baseline product scope rather than a blocker bug inside this archived capability.
+- Follow-up:
+  - any future MVP bug should open a fresh bounded item instead of reopening `C-MVP-BUGFIXES`.
+
+### 2026-03-27 — S-SYSTEM-GATED-CLUSTERING-3 — Closed doc sync and archived the criteria-gated clustering rollout
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: после landing fresh-ingest и historical-backfill stages capability все еще оставался half-live в `docs/work.md`; нужен был явный archive sync, чтобы новый контракт не дрейфовал обратно к старому `cluster -> criteria -> interests` mental model.
+- Что изменилось:
+  - `docs/blueprint.md` и `docs/verification.md` уже были synced to the shipped runtime truth: `article.embedded -> criteria -> article.criteria.matched -> cluster -> article.clustered -> interests`, filtered-out articles skip both cluster and personalization, and operator-facing processed KPIs count final system-gate rows instead of only `matched/notified`;
+  - `docs/work.md` compressed `C-SYSTEM-GATED-CLUSTERING` out of live capability space, switched the primary active item back to the remaining admin live-update proof lane, and kept mixed-worktree warnings explicit because archived clustering files are still dirty/uncommitted beside unrelated web/admin work;
+  - no broader operator-copy follow-up was required to close the capability; any future worker/API/KPI wording changes in this lane now need a new bounded item instead of silently reopening the closed rollout.
+- Что проверено:
+  - targeted `sed`/`rg` doc consistency reads across `docs/work.md`, `docs/blueprint.md`, `docs/verification.md`, and `docs/history.md`
+  - `git diff --check -- docs/work.md docs/history.md`
+- Риски или gaps:
+  - archive sync intentionally does not commit the dirty tree; completed clustering code changes remain in the worktree until the user decides how to stage/commit them.
+- Follow-up:
+  - manual browser proof for `S-ADMIN-LIVE-UPDATES-1` and `S-WEB-LIVE-UPDATES-1`, plus separate archive sync for older done patches, remain separate work.
+
+### 2026-03-27 — C-SYSTEM-GATED-CLUSTERING — Criteria-gated clustering now sits durably before personalization
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: пользователь зафиксировал target order `criteria gate -> cluster only eligible/pass_through articles -> user interests`, but the repo still ran clustering before the system gate and mixed processed/reporting truth with downstream personalization states.
+- Что изменилось:
+  - `SP-SYSTEM-GATED-CLUSTERING-1` proved that criteria scoring itself does not require `event_cluster_id`, while novelty/suppression, historical replay, relay routing, and reporting semantics do, so the rollout had to be staged instead of treated as a one-line reorder;
+  - `S-SYSTEM-GATED-CLUSTERING-1` rewired fresh ingest to `article.embedded -> criteria -> article.criteria.matched -> cluster -> article.clustered -> interests`, made cluster workers hard-skip non-eligible system-gated articles, and updated API processed KPIs so filtered-out articles still count as processed;
+  - `S-SYSTEM-GATED-CLUSTERING-2` brought historical replay to the same order from `embedded+` snapshot targets, keeping snapshot-safe progress, `interestLlmReviews = 0`, and no retro-notification drift;
+  - `S-SYSTEM-GATED-CLUSTERING-3` archived the rollout cleanly by syncing durable docs and removing the capability from live execution state.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/queue.test.ts`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_reindex_backfill_progress tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_feed_dedup tests.unit.python.test_system_feed_contract`
+  - `pnpm test:relay:phase45:compose`
+  - `pnpm test:cluster-match-notify:compose`
+  - `docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke reindex-backfill`
+  - live API/DB reconciliation after rebuilding `api` proved the new processed clause and `/dashboard/summary.processed_total` both return `4817`
+- Риски или gaps:
+  - capability intentionally did not introduce a new system-feed notification policy; baseline notifications still remain a personalization-lane concern;
+  - broader operator-facing copy or dashboard wording beyond the shipped API summary semantics remains a separate follow-up if the product wants it.
+- Follow-up:
+  - any further worker/relay/API or KPI/UI changes in this lane must open a new bounded item instead of reopening the archived capability.
+
+### 2026-03-27 — S-SYSTEM-GATED-CLUSTERING-2 — Historical backfill now replays criteria before cluster and interests
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after fresh ingest moved behind the system gate, snapshot-based replay would have drifted if historical jobs kept clustering or rematching interests before final system eligibility was known.
+- Что изменилось:
+  - `services/workers/app/reindex_backfill.py` now replays `article.embedded -> criteria -> article.criteria.matched -> cluster -> article.clustered -> interests` instead of treating clustering as the old upstream prerequisite;
+  - historical target selection in `services/workers/app/main.py` now includes `embedded` rows so system-filtered articles that never reached `clustered` still remain in the truthful replay snapshot;
+  - only articles that stay `eligible` or `pass_through` in `system_feed_results` are clustered and rematched, while `interestLlmReviews` stays disabled and retro notifications remain skipped.
+- Что проверено:
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_reindex_backfill_progress tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_feed_dedup tests.unit.python.test_system_feed_contract`
+  - `docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke reindex-backfill`
+  - `git diff --check -- services/workers/app/reindex_backfill.py services/workers/app/main.py tests/unit/python/test_reindex_backfill_progress.py docs/work.md`
+- Риски или gaps:
+  - completed `reindex_job_targets` retention/cleanup policy is still separate operational work.
+- Follow-up:
+  - future replay changes should keep snapshot truth explicit and must not re-enable interest-scope gray-zone LLM review by accident.
+
+### 2026-03-27 — S-SYSTEM-GATED-CLUSTERING-1 — Fresh ingest now gates clustering on final system eligibility
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the live relay/worker chain still let clustering happen before the final system gate, which wasted work and risked drifting from the system-first contract the user asked for.
+- Что изменилось:
+  - `packages/contracts/src/queue.ts` and relay proof now route fresh ingest as `article.embedded -> criteria -> article.criteria.matched -> cluster -> article.clustered -> interests`;
+  - `services/workers/app/main.py` now releases articles to clustering only after final `system_feed_results` truth says `eligible` or `pass_through`, and `process_cluster` returns a clean skip for non-eligible articles;
+  - `services/api/app/main.py` updated processed KPI semantics so operator totals count final system-gate rows plus later `matched/notified`, instead of dropping articles that finish at `filtered_out`.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/queue.test.ts`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_feed_dedup tests.unit.python.test_system_feed_contract`
+  - `pnpm test:relay:phase45:compose`
+  - `pnpm test:cluster-match-notify:compose`
+  - `curl -sS http://127.0.0.1:8000/health`
+  - `docker compose -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build api`
+  - `curl -sS http://127.0.0.1:8000/dashboard/summary`
+  - `docker compose -f infra/docker/compose.yml exec -T postgres psql -U newsportal -d newsportal -Atc "select count(*) from articles a where (a.processing_state in ('matched','notified') or exists (select 1 from system_feed_results sfr_processed where sfr_processed.doc_id = a.doc_id and sfr_processed.decision in ('pass_through','eligible','filtered_out')));"`
+- Риски или gaps:
+  - the shipped KPI fix covered the API summary truth; any remaining operator surface still equating `matched/notified` with “processed” must be handled as separate follow-up work.
+- Follow-up:
+  - historical replay had to be updated in a separate stage rather than piggybacked onto this fresh-ingest refactor.
+
+### 2026-03-27 — SP-SYSTEM-GATED-CLUSTERING-1 — Planned the staged refactor for criteria-gated clustering
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: before changing queue order, the repo needed a truthful read-only answer to whether clustering could move later without breaking novelty, suppression, historical replay, and reporting semantics.
+- Что выяснилось:
+  - criteria scoring itself can run before cluster because it does not depend on `event_cluster_id`;
+  - downstream novelty/major-update suppression, notify behavior, and explainability still depend on event clustering, so `user_interests` could not safely move ahead of cluster;
+  - historical backfill and processed/reporting semantics both needed explicit follow-up stages, not a one-shot routing edit.
+- Что проверено:
+  - read-only inspection of `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `services/workers/app/main.py`, `services/workers/app/reindex_backfill.py`, `services/workers/app/smoke.py`, `services/api/app/main.py`, `services/relay/src/cli/test-phase45-routing.ts`, and `apps/admin/src/pages/articles.astro`
+- Риски или gaps:
+  - the spike intentionally stopped before any blueprint rewrite or runtime change; durable truth only moved once the implementation stages were real.
+- Follow-up:
+  - the spike’s recommended rollout became `S-SYSTEM-GATED-CLUSTERING-1`, `S-SYSTEM-GATED-CLUSTERING-2`, and the final archive-sync closeout stage.
+
 ### 2026-03-26 — S-PERSONALIZED-MATCHES-1 — Shipped the separate `/matches` feed and scoped post-compile history sync
 
 - Тип записи: stage archive

@@ -19,10 +19,26 @@ self.addEventListener("push", (event) => {
     };
   }
 
+  async function notifyOpenClients() {
+    const clients = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true
+    });
+    for (const client of clients) {
+      client.postMessage({
+        type: "web-push-received",
+        payload
+      });
+    }
+  }
+
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body
-    })
+    Promise.all([
+      self.registration.showNotification(payload.title, {
+        body: payload.body
+      }),
+      notifyOpenClients()
+    ])
   );
 });
 
