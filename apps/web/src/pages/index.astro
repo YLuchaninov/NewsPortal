@@ -3,8 +3,10 @@ import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type PaginatedResponse } from "@newsportal/contracts";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
+import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
 import { ArticleCard } from "../components/ArticleCard";
+import { LiveSurfaceSummary } from "../components/LiveSurfaceSummary";
 import { queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
@@ -26,6 +28,7 @@ function resolvePageAppPath(t: string) {
 const bffPaths = {
   authBootstrap: resolvePageAppPath("bff/auth/bootstrap"),
   authLogout: resolvePageAppPath("bff/auth/logout"),
+  liveUpdates: resolvePageAppPath("bff/live-updates"),
   preferences: resolvePageAppPath("bff/preferences"),
   reactions: resolvePageAppPath("bff/reactions"),
 };
@@ -35,9 +38,15 @@ const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? Stri
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const feed: PaginatedResponse<ViewRow> = await sdk.listFeedArticles<ViewRow>({ page, pageSize: DEFAULT_PAGE_SIZE });
 const articles = feed.items;
+const feedRevision = buildLiveRevision([
+  feed.total,
+  articles[0]?.doc_id,
+  articles[0]?.published_at ?? articles[0]?.ingested_at,
+]);
 const profile = session ? await queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]) : null;
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 
 function resolvePageHref(nextPage: number): string {
   const target = new URL(Astro.url);
@@ -57,6 +66,7 @@ function resolvePageHref(nextPage: number): string {
   currentTheme={themePreference}
   flash={flash}
   activeNav="feed"
+  bffLiveUpdatesPath={bffPaths.liveUpdates}
   bffPreferencesPath={bffPaths.preferences}
   bffLogoutPath={bffPaths.authLogout}
   bffBootstrapPath={bffPaths.authBootstrap}
@@ -65,10 +75,25 @@ function resolvePageHref(nextPage: number): string {
   <div class="mb-8">
     <h1 class="text-3xl font-bold tracking-tight">{DEFAULT_BRAND_CONFIG.productName}</h1>
     <p class="text-muted-foreground mt-1">{DEFAULT_BRAND_CONFIG.tagline}</p>
-    <p class="text-xs text-muted-foreground mt-3">
-      {feed.total} article{feed.total !== 1 ? "s" : ""} in the system-selected feed
-      {articles.length > 0 && ` — page ${feed.page} of ${Math.max(feed.totalPages, 1)}`}
-    </p>
+    {session ? (
+      <LiveSurfaceSummary
+        surface="feed"
+        initialCount={feed.total}
+        initialRevision={feedRevision}
+        page={feed.page}
+        totalPages={feed.totalPages}
+        singularLabel="article"
+        pluralLabel="articles"
+        suffix=" in the system-selected feed"
+        refreshHref={currentPath}
+        client:load
+      />
+    ) : (
+      <p class="text-xs text-muted-foreground mt-3">
+        {feed.total} article{feed.total !== 1 ? "s" : ""} in the system-selected feed
+        {articles.length > 0 && ` — page ${feed.page} of ${Math.max(feed.totalPages, 1)}`}
+      </p>
+    )}
   </div>
 
   <!-- Articles grid -->

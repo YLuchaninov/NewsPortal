@@ -1,7 +1,10 @@
 ---
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
+import { AdminLiveCollectionNotice } from "../components/AdminLiveCollectionNotice";
+import { LiveDashboardKpiGrid } from "../components/LiveDashboardKpiGrid";
 import AdminShell from "../layouts/AdminShell.astro";
+import { buildAdminLiveRevision } from "../lib/live-updates";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
   buildAdminSignInPath,
@@ -36,6 +39,13 @@ const pagePaths = {
 };
 
 type R = Record<string, unknown>;
+function asInt(v: unknown, fallback = 0): number {
+  const parsed =
+    typeof v === "number" && Number.isFinite(v)
+      ? v
+      : Number.parseInt(String(v ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 const [summary, fetchRuns] = session
   ? await Promise.all([
@@ -60,23 +70,68 @@ const kpiCards = !summary ? [] : [
   { label: "New Content 24h", value: String(summary.fetch_new_content_24h ?? 0), color: "text-cyan-500" },
   { label: "Needs Attention", value: String(summary.attention_channels ?? 0), color: (summary.attention_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
 ];
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=dashboard`;
+const initialDashboardSummary = !summary
+  ? null
+  : {
+      activeNews: asInt(summary.active_news, 0),
+      processedToday: asInt(summary.processed_today, 0),
+      totalUsers: asInt(summary.total_users, 0),
+      overdueChannels: asInt(summary.overdue_channels, 0),
+      fetchFailures24h: asInt(summary.fetch_failures_24h, 0),
+      llmReviewCount24h: asInt(summary.llm_review_count_24h, 0),
+      newContent24h: asInt(summary.fetch_new_content_24h, 0),
+      attentionChannels: asInt(summary.attention_channels, 0),
+      queuedReindexJobs: asInt(summary.queued_reindex_jobs, 0),
+      runningReindexJobs: 0,
+      revision: buildAdminLiveRevision([
+        summary.active_news,
+        summary.processed_today,
+        summary.total_users,
+        summary.overdue_channels,
+        summary.fetch_failures_24h,
+        summary.llm_review_count_24h,
+        summary.fetch_new_content_24h,
+        summary.attention_channels,
+        summary.queued_reindex_jobs,
+      ]),
+    };
+const fetchRunsRevision = buildAdminLiveRevision([
+  fetchRuns?.total ?? 0,
+  fetchRuns?.items[0]?.channel_id ?? "",
+  fetchRuns?.items[0]?.started_at ?? "",
+  fetchRuns?.items[0]?.outcome_kind ?? "",
+  fetchRuns?.items[0]?.new_article_count ?? "",
+]);
 ---
 
-<AdminShell title={`Dashboard — ${DEFAULT_BRAND_CONFIG.productName} Admin`} session={session} flash={flash} activeNav="dashboard">
+<AdminShell
+  title={`Dashboard — ${DEFAULT_BRAND_CONFIG.productName} Admin`}
+  session={session}
+  flash={flash}
+  activeNav="dashboard"
+  liveUpdatesEndpoint={liveUpdatesEndpoint}
+  liveUpdatesSurface="dashboard"
+>
   <Fragment slot="header-title">
     <h1 class="text-sm font-semibold text-foreground">Dashboard</h1>
   </Fragment>
 
   <div class="space-y-6">
       <!-- KPI grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {kpiCards.map(({ label, value, color }) => (
-          <div class="rounded-xl border border-border bg-card p-4">
-            <p class="text-xs text-muted-foreground mb-1">{label}</p>
-            <p class={`text-2xl font-bold ${color}`}>{value}</p>
-          </div>
-        ))}
-      </div>
+      {initialDashboardSummary ? (
+        <LiveDashboardKpiGrid initialSummary={initialDashboardSummary} client:load />
+      ) : (
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {kpiCards.map(({ label, value, color }) => (
+            <div class="rounded-xl border border-border bg-card p-4">
+              <p class="text-xs text-muted-foreground mb-1">{label}</p>
+              <p class={`text-2xl font-bold ${color}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <!-- Quick navigation -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
@@ -105,7 +160,16 @@ const kpiCards = !summary ? [] : [
           <div>
             <h2 class="font-semibold text-sm">Recent Fetch Runs</h2>
             {fetchRuns && fetchRuns.total > 0 && (
-              <p class="text-[10px] text-muted-foreground mt-0.5">Showing latest {fetchRuns.items.length} of {fetchRuns.total}</p>
+              <AdminLiveCollectionNotice
+                surface="dashboard"
+                collection="fetchRuns"
+                initialTotal={fetchRuns.total}
+                initialRevision={fetchRunsRevision}
+                visibleCount={fetchRuns.items.length}
+                refreshHref={currentPath}
+                updateMessage="New fetch runs are available"
+                client:load
+              />
             )}
           </div>
           <a href={pagePaths.observability} class="text-xs text-primary hover:underline">View all →</a>

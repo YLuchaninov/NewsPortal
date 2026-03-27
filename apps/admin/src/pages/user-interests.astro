@@ -1,4 +1,5 @@
 ---
+import { AdminUserInterestsLiveBindings } from "../components/AdminUserInterestsLiveBindings";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
@@ -70,6 +71,10 @@ const enabledCount = interests.filter((interest) => interest.enabled !== false).
 const compiledCount = interests.filter(
   (interest) => String(interest.compile_status ?? "") === "compiled"
 ).length;
+const liveUpdatesEndpoint = target
+  ? `${appPath("/bff/admin/live-updates")}?surface=user-interests&userId=${encodeURIComponent(target.userId)}`
+  : null;
+const initialInterestIds = interests.map((interest) => String(interest.interest_id ?? ""));
 
 function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
   if (tone === "success") {
@@ -85,7 +90,14 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
 }
 ---
 
-<AdminShell title="User Interests — Admin" session={session} flash={flash} activeNav="user-interests">
+<AdminShell
+  title="User Interests — Admin"
+  session={session}
+  flash={flash}
+  activeNav="user-interests"
+  liveUpdatesEndpoint={liveUpdatesEndpoint}
+  liveUpdatesSurface={target ? "user-interests" : null}
+>
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
@@ -118,20 +130,20 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
       </div>
 
       {target ? (
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
-            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
-            <p class="mt-1 text-2xl font-semibold">{interests.length}</p>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div class="rounded-2xl border border-border bg-background px-4 py-3">
+              <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
+            <p class="mt-1 text-2xl font-semibold" data-admin-live-interest-count="total">{interests.length}</p>
+            </div>
+            <div class="rounded-2xl border border-border bg-background px-4 py-3">
+              <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Enabled</p>
+            <p class="mt-1 text-2xl font-semibold text-emerald-500" data-admin-live-interest-count="enabled">{enabledCount}</p>
+            </div>
+            <div class="rounded-2xl border border-border bg-background px-4 py-3">
+              <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Compiled</p>
+            <p class="mt-1 text-2xl font-semibold text-primary" data-admin-live-interest-count="compiled">{compiledCount}</p>
+            </div>
           </div>
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
-            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Enabled</p>
-            <p class="mt-1 text-2xl font-semibold text-emerald-500">{enabledCount}</p>
-          </div>
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
-            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Compiled</p>
-            <p class="mt-1 text-2xl font-semibold text-primary">{compiledCount}</p>
-          </div>
-        </div>
       ) : (
         <div class="max-w-sm rounded-2xl border border-dashed border-border bg-background/80 px-5 py-4 text-sm text-muted-foreground">
           Start by selecting a user with either an exact email address or a concrete `user_id`.
@@ -340,9 +352,26 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
         <section class="rounded-2xl border border-border bg-card shadow-sm">
           <div class="border-b border-border px-5 py-4">
             <h2 class="text-base font-semibold">Existing interests</h2>
-            <p class="mt-1 text-sm text-muted-foreground">
+            <p class="mt-1 text-sm text-muted-foreground" data-admin-live-interest-summary>
               {interests.length} interest{interests.length !== 1 ? "s" : ""} for the selected user
             </p>
+          </div>
+
+          <div
+            data-admin-live-interest-refresh
+            class="hidden border-b border-border bg-primary/5 px-5 py-4"
+          >
+            <div class="flex flex-col items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+              <p class="font-medium text-foreground">
+                The interest list changed while this page was open
+              </p>
+              <a
+                href={currentPath}
+                class="inline-flex h-8 items-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+              >
+                Refresh this page
+              </a>
+            </div>
           </div>
 
           {interests.length === 0 ? (
@@ -384,32 +413,42 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                           <span class:list={[
                             "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
                             badgeClass(compileState.tone),
-                          ]}>
+                          ]} data-admin-live-interest-status={interestId}>
                             {compileState.label}
                           </span>
                         </div>
                         <p class="mt-1 text-sm text-muted-foreground">
                           Version {String(interest.version ?? 1)} • Updated {updatedAt}
-                          {compileState.detail && ` • ${compileState.detail}`}
+                          <span data-admin-live-interest-compile-detail={interestId}>
+                            {compileState.detail ? ` • ${compileState.detail}` : ""}
+                          </span>
                         </p>
                       </div>
 
                       <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {hasCompiledSnapshot && (
-                          <span class="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
-                            Compiled snapshot ready
-                          </span>
-                        )}
+                        <span
+                          data-admin-live-interest-compiled-pill={interestId}
+                          class:list={[
+                            "rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary",
+                            !hasCompiledSnapshot && "hidden",
+                          ]}
+                        >
+                          Compiled snapshot ready
+                        </span>
                         <span class="text-primary transition group-open:rotate-180">⌄</span>
                       </div>
                     </summary>
 
                     <div class="mt-5 grid gap-5">
-                      {String(interest.compile_status ?? "") === "failed" && interest.error_text && (
-                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300">
-                          {String(interest.error_text)}
-                        </div>
-                      )}
+                      <div
+                        data-admin-live-interest-error={interestId}
+                        class:list={[
+                          "rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300",
+                          !(String(interest.compile_status ?? "") === "failed" && interest.error_text) && "hidden",
+                        ]}
+                      >
+                        {String(interest.error_text ?? "")}
+                      </div>
 
                       <form method="post" action={appPath(`/bff/admin/user-interests/${interestId}`)} class="space-y-5">
                         {targetFields.map((field) => (
@@ -527,6 +566,13 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
             </div>
           )}
         </section>
+
+        <AdminUserInterestsLiveBindings
+          targetUserId={target.userId}
+          initialInterestIds={initialInterestIds}
+          refreshHref={currentPath}
+          client:load
+        />
       </Fragment>
     ) : (
       <section class="rounded-2xl border border-dashed border-border bg-card/60 px-6 py-14 text-center shadow-sm">

@@ -1,8 +1,7 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
-import { PaginationNav } from "@newsportal/ui";
 import Shell from "../layouts/Shell.astro";
+import { LiveSettingsSection } from "../components/LiveSettingsSection";
 import { queryOne, queryRows } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
@@ -26,17 +25,16 @@ function resolvePageAppPath(t: string) {
 const bffPaths = {
   authBootstrap: resolvePageAppPath("../bff/auth/bootstrap"),
   authLogout: resolvePageAppPath("../bff/auth/logout"),
+  liveUpdates: resolvePageAppPath("../bff/live-updates"),
   preferences: resolvePageAppPath("../bff/preferences"),
   notificationChannels: resolvePageAppPath("../bff/notification-channels"),
 };
 
 type ViewRow = Record<string, unknown>;
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
-const channelsOffset = (page - 1) * DEFAULT_PAGE_SIZE;
-const [profile, connectedChannelsCount, configuredChannels] = await Promise.all([
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+const [profile, configuredChannels] = await Promise.all([
   queryOne<ViewRow>(`select theme_preference, notification_preferences from user_profiles where user_id = $1`, [session.userId]),
-  queryOne<ViewRow>(`select count(*)::int as total from user_notification_channels where user_id = $1`, [session.userId]),
   queryRows<ViewRow>(`
     select unc.*, last_d.status as last_status, last_d.sent_at as last_sent_at
     from user_notification_channels unc
@@ -47,53 +45,19 @@ const [profile, connectedChannelsCount, configuredChannels] = await Promise.all(
     ) last_d on true
     where unc.user_id = $1
     order by unc.channel_type, unc.created_at desc
-    limit $2
-    offset $3
-  `, [session.userId, DEFAULT_PAGE_SIZE, channelsOffset]),
+  `, [session.userId]),
 ]);
 
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const notificationPreferences = (profile?.notification_preferences as Record<string, unknown>) ?? {};
-const connectedChannelsTotal = Number(connectedChannelsCount?.total ?? 0);
-const connectedChannelsTotalPages = connectedChannelsTotal > 0
-  ? Math.ceil(connectedChannelsTotal / DEFAULT_PAGE_SIZE)
-  : 0;
 const prefState = {
   webPush: notificationPreferences.web_push !== false,
   telegram: notificationPreferences.telegram !== false,
   weeklyEmailDigest: notificationPreferences.weekly_email_digest !== false,
 };
-
-function formatTimestamp(value: unknown): string {
-  if (!value) return "Never";
-  const d = new Date(String(value));
-  return isNaN(d.getTime()) ? String(value) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-const processedChannels = (configuredChannels as ViewRow[]).map((ch) => {
-  const cfg = (ch.config_json as ViewRow) ?? {};
-  return {
-    type: String(ch.channel_type ?? "—"),
-    identifier: String(cfg.email ?? cfg.chat_id ?? "browser"),
-    verified: formatTimestamp(ch.verified_at),
-    status: String(ch.last_status ?? "never"),
-    lastSent: formatTimestamp(ch.last_sent_at),
-    isSent: ch.last_status === "sent",
-  };
-});
-
 const webPushKey = runtimeConfig.webPushVapidPublicKey;
-
-function resolveChannelsPageHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
-}
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 ---
 
 <Shell
@@ -103,6 +67,7 @@ function resolveChannelsPageHref(nextPage: number): string {
   currentTheme={themePreference}
   flash={flash}
   activeNav="settings"
+  bffLiveUpdatesPath={bffPaths.liveUpdates}
   bffPreferencesPath={bffPaths.preferences}
   bffLogoutPath={bffPaths.authLogout}
   bffBootstrapPath={bffPaths.authBootstrap}
@@ -112,232 +77,17 @@ function resolveChannelsPageHref(nextPage: number): string {
     <p class="text-muted-foreground mt-1">Manage your preferences and notification channels</p>
   </div>
 
-  <div class="grid gap-6 max-w-3xl">
-
-    <!-- Appearance -->
-    <section class="rounded-xl border border-border bg-card overflow-hidden">
-      <div class="px-6 py-4 border-b border-border">
-        <h2 class="font-semibold">Appearance</h2>
-        <p class="text-sm text-muted-foreground mt-0.5">Choose how NewsPortal looks to you</p>
-      </div>
-      <div class="p-6">
-        <form method="post" action={bffPaths.preferences} class="flex items-end gap-3">
-          <input type="hidden" name="webPushEnabled" value={String(prefState.webPush)} />
-          <input type="hidden" name="telegramEnabled" value={String(prefState.telegram)} />
-          <input type="hidden" name="weeklyEmailDigestEnabled" value={String(prefState.weeklyEmailDigest)} />
-          <div class="grid gap-1.5 flex-1 max-w-[200px]">
-            <label class="text-sm font-medium" for="themeSelect">Theme</label>
-            <select id="themeSelect" name="themePreference" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <option value="system" selected={themePreference === "system"}>System</option>
-              <option value="light" selected={themePreference === "light"}>Light</option>
-              <option value="dark" selected={themePreference === "dark"}>Dark</option>
-            </select>
-          </div>
-          <button type="submit" class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-            Save
-          </button>
-        </form>
-      </div>
-    </section>
-
-    <!-- Notification Preferences -->
-    <section class="rounded-xl border border-border bg-card overflow-hidden">
-      <div class="px-6 py-4 border-b border-border">
-        <h2 class="font-semibold">Notification Preferences</h2>
-        <p class="text-sm text-muted-foreground mt-0.5">Control which notification channels are active</p>
-      </div>
-      <div class="p-6 space-y-4">
-        <form method="post" action={bffPaths.preferences} class="space-y-4">
-          <input type="hidden" name="themePreference" value={themePreference} />
-          <div class="flex items-center justify-between py-3 border-b border-border">
-            <div>
-              <p class="text-sm font-medium">Web Push</p>
-              <p class="text-xs text-muted-foreground">Browser push notifications</p>
-            </div>
-            <label class="relative inline-flex cursor-pointer items-center">
-              <input type="checkbox" name="webPushEnabled" value="true" checked={prefState.webPush} class="sr-only peer" />
-              <div class="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-            </label>
-          </div>
-          <div class="flex items-center justify-between py-3 border-b border-border">
-            <div>
-              <p class="text-sm font-medium">Telegram</p>
-              <p class="text-xs text-muted-foreground">Telegram channel alerts</p>
-            </div>
-            <label class="relative inline-flex cursor-pointer items-center">
-              <input type="checkbox" name="telegramEnabled" value="true" checked={prefState.telegram} class="sr-only peer" />
-              <div class="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-            </label>
-          </div>
-          <div class="flex items-center justify-between py-3">
-            <div>
-              <p class="text-sm font-medium">Weekly Digest</p>
-              <p class="text-xs text-muted-foreground">Weekly email summary</p>
-            </div>
-            <label class="relative inline-flex cursor-pointer items-center">
-              <input type="checkbox" name="weeklyEmailDigestEnabled" value="true" checked={prefState.weeklyEmailDigest} class="sr-only peer" />
-              <div class="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-            </label>
-          </div>
-          <button type="submit" class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-            Save Preferences
-          </button>
-        </form>
-      </div>
-    </section>
-
-    <!-- Connect Channels -->
-    <section class="rounded-xl border border-border bg-card overflow-hidden">
-      <div class="px-6 py-4 border-b border-border">
-        <h2 class="font-semibold">Connect Channels</h2>
-        <p class="text-sm text-muted-foreground mt-0.5">Link notification delivery channels to your account</p>
-      </div>
-      <div class="p-6 grid gap-4 sm:grid-cols-2">
-        <!-- Web Push -->
-        <div class="rounded-lg border border-border p-4">
-          <p class="font-medium text-sm mb-1">Web Push</p>
-          <p class="text-xs text-muted-foreground mb-3">
-            {webPushKey ? "Register this browser for push notifications" : "VAPID key not configured"}
-          </p>
-          <button
-            id="connect-web-push"
-            type="button"
-            disabled={!webPushKey}
-            data-vapid-key={webPushKey}
-            data-path={bffPaths.notificationChannels}
-            class="h-8 px-3 rounded-md border border-input text-xs font-medium hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Connect Web Push
-          </button>
-          <p id="web-push-status" class="text-xs text-muted-foreground mt-2"></p>
-        </div>
-
-        <!-- Telegram -->
-        <div class="rounded-lg border border-border p-4">
-          <p class="font-medium text-sm mb-1">Telegram</p>
-          <form method="post" action={bffPaths.notificationChannels} class="flex gap-2">
-            <input type="hidden" name="channelType" value="telegram" />
-            <input name="chatId" placeholder="Chat ID" class="flex h-8 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            <button type="submit" class="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors shrink-0">
-              Connect
-            </button>
-          </form>
-        </div>
-
-        <!-- Email Digest -->
-        <div class="rounded-lg border border-border p-4 sm:col-span-2">
-          <p class="font-medium text-sm mb-1">Email Digest</p>
-          <form method="post" action={bffPaths.notificationChannels} class="flex gap-2 max-w-sm">
-            <input type="hidden" name="channelType" value="email_digest" />
-            <input name="email" type="email" value={session.identity.email ?? ""} placeholder="your@email.com"
-              class="flex h-8 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            <button type="submit" class="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors shrink-0">
-              Connect
-            </button>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    <!-- Connected Channels -->
-    {connectedChannelsTotal > 0 && (
-      <section class="rounded-xl border border-border bg-card overflow-hidden">
-        <div class="px-6 py-4 border-b border-border">
-          <h2 class="font-semibold">Connected Channels</h2>
-          <p class="text-sm text-muted-foreground mt-0.5">
-            {connectedChannelsTotal} channel{connectedChannelsTotal !== 1 ? "s" : ""} total
-            {connectedChannelsTotal > 0 && ` — page ${page} of ${Math.max(connectedChannelsTotalPages, 1)}`}
-          </p>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-border bg-muted/50">
-                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Channel</th>
-                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Verified</th>
-                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Last Delivery</th>
-              </tr>
-            </thead>
-            <tbody>
-              {processedChannels.length === 0 ? (
-                <tr>
-                  <td colspan="3" class="px-4 py-8 text-center text-sm text-muted-foreground">No connected channels on this page</td>
-                </tr>
-              ) : processedChannels.map((c) => (
-                <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                  <td class="px-4 py-3">
-                    <div class="font-medium">{c.type}</div>
-                    <div class="text-xs text-muted-foreground">{c.identifier}</div>
-                  </td>
-                  <td class="px-4 py-3 text-muted-foreground text-xs">{c.verified}</td>
-                  <td class="px-4 py-3">
-                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      c.isSent ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-muted text-muted-foreground"
-                    }`}>
-                      {c.status}
-                    </span>
-                    <div class="text-xs text-muted-foreground mt-0.5">{c.lastSent}</div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {connectedChannelsTotalPages > 1 && (
-          <PaginationNav
-            className="rounded-none border-x-0 border-b-0 px-6 py-4"
-            page={page}
-            totalPages={connectedChannelsTotalPages}
-            hasPrev={page > DEFAULT_PAGE}
-            hasNext={page < connectedChannelsTotalPages}
-            prevHref={resolveChannelsPageHref(page - 1)}
-            nextHref={resolveChannelsPageHref(page + 1)}
-          />
-        )}
-      </section>
-    )}
-  </div>
+  <LiveSettingsSection
+    initialThemePreference={themePreference}
+    initialNotificationPreferences={prefState}
+    initialChannels={configuredChannels as any[]}
+    initialPage={page}
+    pageSize={20}
+    currentPath={currentPath}
+    notificationChannelsPath={bffPaths.notificationChannels}
+    preferencesPath={bffPaths.preferences}
+    sessionEmail={session.identity.email ?? ""}
+    vapidKey={webPushKey}
+    client:load
+  />
 </Shell>
-
-<script>
-  function urlBase64ToUint8Array(value: string) {
-    const padding = "=".repeat((4 - (value.length % 4 || 4)) % 4);
-    const base64 = (value + padding).replaceAll("-", "+").replaceAll("_", "/");
-    const raw = atob(base64);
-    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-  }
-
-  const btn = document.getElementById("connect-web-push") as HTMLButtonElement;
-  const status = document.getElementById("web-push-status");
-  btn?.addEventListener("click", async () => {
-    const vapidKey = btn.dataset.vapidKey;
-    const path = btn.dataset.path;
-    if (!vapidKey || !path) return;
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      if (status) status.textContent = "Push not supported in this browser.";
-      return;
-    }
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        if (status) status.textContent = "Permission denied.";
-        return;
-      }
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) });
-      }
-      const body = new URLSearchParams({ channelType: "web_push", subscription: JSON.stringify(sub.toJSON()) });
-      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
-      if (res.ok || res.redirected) {
-        if (status) status.textContent = "✓ Web push connected";
-        setTimeout(() => window.location.reload(), 800);
-      } else {
-        if (status) status.textContent = "Failed to connect.";
-      }
-    } catch (e) {
-      if (status) status.textContent = e instanceof Error ? e.message : "Failed.";
-    }
-  });
-</script>

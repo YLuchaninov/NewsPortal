@@ -20,7 +20,7 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current mode
 
 - Operating mode: normal
-- Why now: the web auth/session persistence patch requested on 2026-03-26 is implemented and proven; live context now needs truthful handoff and archive-sync follow-up until the next user request.
+- Why now: the user requested the admin follow-up so operator-visible counters and async job/status surfaces in `apps/admin` also refresh without manual full-page reloads.
 
 ## Current memory
 
@@ -55,6 +55,8 @@ Durable completed detail переносится в `docs/history.md`.
 - Criterion gray-zone reviews no longer deadlock on fresh stacks without an active `criteria` prompt template: the worker always dispatches `llm.review.requested`, and the review worker falls back to the default prompt/template lookup path.
 - Web user settings, interests, notification channels, and other user-bound state all hang off PostgreSQL `user_id`; if web bootstrap creates a new anonymous Firebase subject, the app truthfully lands on a fresh local user with empty `user_profiles` and related rows.
 - Web bootstrap now persists a browser-scoped Firebase refresh token and reuses it during `/bff/auth/bootstrap`, so the same device returns to the same anonymous/local user after logout/login while explicit sign-out still clears the active session cookie until the user starts a session again.
+- Web live-update rollout is implemented in `apps/web` and now mainly awaits manual browser proof for its hydrated UX paths.
+- Admin live-update rollout is now implemented in `apps/admin`: `AdminShell` mounts a bounded same-origin polling coordinator, `dashboard`/`reindex`/`observability` counters refresh live, and selected-user `/user-interests` compile status binds update inline; automated proof is green, while manual browser proof remains open.
 
 ## Capability planning
 
@@ -63,6 +65,8 @@ Durable completed detail переносится в `docs/history.md`.
 | Capability ID | Title | Status | Full completion condition | Planned stages | Current next stage | Notes |
 |---|---|---|---|---|---|---|
 | C-MVP-BUGFIXES | Minimal working MVP bugfix lane | active | User-confirmed blocker bugs for the minimal working MVP are fixed without regressing the current RSS-first acceptance flow | `P-MVP-BUGFIX-1`, `P-MVP-BUGFIX-2`, `SW-UI-BUILD-HARDENING-1`, `SP-MVP-BUGFIX-3`, `P-MVP-BUGFIX-3`, `P-MVP-BUGFIX-4`, `P-MVP-BUGFIX-5`, `P-MVP-BUGFIX-6`, follow-up product/config item TBD | `follow-up product/config item TBD` | Feed recovery and same-browser auth persistence are proven; capability now waits on manual validation/archive-sync decisions for the latest done bugfixes |
+| C-WEB-LIVE-UPDATES | Web user-state live updates | active | Authenticated `apps/web` surfaces update truthfully after background user work and other user-relevant state changes via same-origin polling, with compile/repair progress surfaced inline where appropriate and refresh prompts/toasts everywhere else, without introducing realtime transport or admin-scope changes | `S-WEB-LIVE-UPDATES-1`, follow-up richer realtime/admin stage TBD | `S-WEB-LIVE-UPDATES-1` | First rollout stays inside `apps/web` and its BFF read paths; admin live updates remain explicit follow-up work |
+| C-ADMIN-LIVE-UPDATES | Admin counters and job-status live updates | active | Authenticated `apps/admin` surfaces refresh operator-visible counters and asynchronous job/status indicators truthfully via same-origin polling, without live-streaming full tables or introducing realtime transport or new public `/api/*` contracts | `SP-ADMIN-LIVE-UPDATES-1`, `S-ADMIN-LIVE-UPDATES-1`, optional follow-up table-notice stage TBD | `S-ADMIN-LIVE-UPDATES-1` | V1 should target dashboard KPI cards, reindex progress/status, observability summary cards, and selected-user compile/repair state only; broad admin list realtime stays out of scope |
 | C-FETCHER-DUPLICATE-PREFLIGHT | Fetcher duplicate preflight | blocked | Fetcher batch precheck реализован и доказан unit + RSS smoke + multi-RSS compose proof | `S-FETCHER-DUPLICATE-PREFLIGHT-1`, `S-FETCHER-DUPLICATE-PREFLIGHT-2` | `S-FETCHER-DUPLICATE-PREFLIGHT-1` | Background work; stays isolated until explicitly resumed |
 
 Rule: если capability active или ready и у нее нет truthful next stage, следующую stage нужно создать до implementation.
@@ -72,23 +76,23 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 ### Primary active item
 
-- ID: `none`
-- Parent capability: `none`
-- Why this is the primary active work: no new implementation lane is currently active after `P-MVP-BUGFIX-6` reached proof-complete status in this turn.
+- ID: `S-ADMIN-LIVE-UPDATES-1`
+- Parent capability: `C-ADMIN-LIVE-UPDATES`
+- Why this is the primary active work: the user explicitly asked to proceed with the bounded admin live-update rollout, so this stage now owns polling-based freshness for admin counters and async job/status surfaces.
 
 ### Secondary active item
 
-- ID: `none`
-- Why it exists: `.aidp/os.yaml` keeps multi-agent work disabled; no second implementation lane is being actively advanced in this turn.
-- Allowed overlap paths: `none`
-- Exit condition for returning to one primary item: already satisfied.
+- ID: `S-WEB-LIVE-UPDATES-1`
+- Why it exists: the earlier `apps/web` live-update rollout is already implemented but still has an open manual-browser proof layer, so it remains explicit while the new admin implementation stage advances in parallel only through shared runtime-doc truth.
+- Allowed overlap paths: `docs/work.md`, `docs/blueprint.md`
+- Exit condition for returning to one primary item: admin implementation reaches its next sync point and the web stage is either manually verified or intentionally left as explicit residual follow-up.
 
 ### Worktree coherence
 
-- Worktree status: the new auth/settings patch added bounded web auth/test/runtime-doc edits on top of the already-dirty admin/feed/worker tree.
-- Primary item alignment note: `P-MVP-BUGFIX-6` stayed limited to web auth bootstrap/session persistence, targeted TS proof, and required runtime-doc sync; it did not rewrite the unrelated personalized-matches, feed-dedupe, or worker/env changes already in the tree.
+- Worktree status: the tree is still mixed from earlier web/admin/api/worker/doc work; the new admin live-update stage will add bounded `apps/admin` plus TS/runtime-doc edits on top of that existing dirt while preserving the already-dirty web rollout files.
+- Primary item alignment note: `S-ADMIN-LIVE-UPDATES-1` must stay inside `apps/admin`, targeted TS coverage, and required runtime-doc sync; it must not implicitly reopen public `/api/*`, worker behavior, or full-table admin realtime beyond read-only integration with already persisted state.
 - Mixed-change warning, if any: yes — multiple unrelated files are already dirty, including `docs/work.md`, so every edit for this patch must remain additive and preserve pre-existing user or prior-agent changes.
-- Required action before more implementation, if any: if follow-up requests grow beyond browser-scoped anonymous session restoration into broader account-linking, cross-device continuity, or admin auth semantics, stop and reframe them as a separate stage instead of stretching this patch.
+- Required action before more implementation, if any: if the admin rollout needs new public `/api/*` contracts, WebSocket/SSE transport, or live table diffing for articles/channels/clusters/templates, stop and split that broader behavior into a follow-up stage instead of stretching this bounded counters/status slice.
 
 ### Active risks
 
@@ -102,6 +106,9 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 - Env-driven tariffs can silently understate or overstate observability spend if parsing or fallback behavior is ambiguous, so the patch must keep invalid env handling explicit and preserve a truthful default for `gemini-2.0-flash`.
 - Auth/session bridge changes can easily break the user command/read path, so the fix must preserve explicit sign-out semantics while still letting `/bff/auth/bootstrap` resume the same browser-scoped anonymous identity on the next sign-in.
 - Persisting a browser-scoped refresh token improves continuity for anonymous users, but it also means the shared-device behavior must remain an explicit product tradeoff rather than an accidental side effect.
+- Polling can drift from page-local SSR semantics if totals/revisions are computed differently from the existing admin page queries, so the new admin snapshot endpoint must reuse current read truth instead of inventing parallel counters.
+- Admin pages can easily become internally inconsistent if counters or status chips update while paginated tables silently reorder underneath, so v1 must update only card/status surfaces and otherwise use refresh notices instead of live-diffing full tables.
+- Aggressive polling across every authenticated page could create noisy BFF traffic, so the coordinator must pause on hidden tabs, switch to fast mode only while work is pending, and back off on failures.
 
 ### Known gaps
 
@@ -114,7 +121,7 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 ### Next recommended action
 
-- Archive `P-MVP-BUGFIX-6` unless the user asks for a broader follow-up on cross-device account continuity, “forget this browser” logout semantics, or a live browser walkthrough of the restored session flow.
+- Run manual browser proof for `S-ADMIN-LIVE-UPDATES-1`: verify dashboard KPI cards update while background work runs, reindex job status/progress changes inline without reload, observability summary cards refresh while tables only ask for page refresh, and selected-user `/user-interests` updates compile badges/counts in place.
 
 ### Archive sync status
 
@@ -142,6 +149,8 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 ## Handoff state
 
 - Current item status:
+  `S-ADMIN-LIVE-UPDATES-1` is `active`: `apps/admin` now has a shell-mounted same-origin live-update coordinator plus `/bff/admin/live-updates`, live KPI/summary islands for `/` and `/observability`, inline reindex status/progress updates on `/reindex`, and selected-user compile-status bindings on `/user-interests`; automated proof passed (`pnpm --filter @newsportal/admin typecheck`, targeted TS admin live-update tests, full `pnpm unit_tests`, and `git diff --check -- apps/admin/src docs/work.md tests/unit/ts`), but manual browser validation is still open before the stage can close.
+  `S-WEB-LIVE-UPDATES-1` is `active`: `apps/web` now has a shell-mounted same-origin live-update coordinator, compact `/bff/live-updates` snapshot endpoint, live `/interests` and `/settings` islands, and refresh-notice headers for `/`, `/matches`, and `/notifications`; automated proof passed (`pnpm --filter @newsportal/web typecheck`, targeted TS tests, full `pnpm unit_tests`), but manual browser validation is still open before the stage can close.
   `P-MVP-BUGFIX-6` is `done`; web bootstrap now reuses a browser-scoped Firebase refresh token, so logout/login on the same browser returns to the same anonymous/local user instead of minting a fresh `user_id` with empty `user_profiles`; targeted TS auth tests, redirect regression tests, and web typecheck all passed, while a live browser click-through remains an optional follow-up rather than open coding work.
   `P-FEED-DUPLICATE-1` is `done`; it proved the repeated article cards were not a frontend rendering bug but separate eligible article rows from the same canonical family, then updated the API read path so `/feed`, `/matches`, and `dashboard/summary.active_news` dedupe on canonical article families after the `api` runtime reload.
   `SP-MVP-BUGFIX-3` is `done`; it proved that the 2026-03-26 08:54 UTC reindex card reflects a frozen 247-article snapshot, while the live blocker is that all current `system_feed_results` rows are `filtered_out` and worker lexical scoring never contributes.
@@ -155,6 +164,8 @@ Rule: dependency truth и mixed worktree должны быть явно пред
   `C-SYSTEM-FIRST-PERSONALIZATION` and its stages remain `archived`.
   `S-FETCHER-DUPLICATE-PREFLIGHT-1` remains the only explicit blocked background stage.
 - What is already proven:
+  the bounded admin live-update substrate is now live inside `apps/admin`: `AdminShell.astro` mounts a same-origin polling coordinator for opted-in admin pages, `/bff/admin/live-updates` serves page-scoped freshness snapshots, dashboard and observability summary cards update without full reload, reindex status/progress now refreshes inline, and selected-user `/user-interests` updates compile badges/counts via DOM-bound live status patches; `pnpm --filter @newsportal/admin typecheck`, `node --import tsx --test tests/unit/ts/admin-live-updates.test.ts`, full `pnpm unit_tests`, and `git diff --check -- apps/admin/src docs/work.md tests/unit/ts` all passed.
+  the web live-update substrate is now live inside `apps/web`: `Shell.astro` mounts a same-origin polling coordinator for authenticated sessions, `/bff/live-updates` aggregates feed/match/notification totals plus interest/settings and repair-job freshness, `/interests` and `/settings` now update via client fetch + local state instead of hard reloads, and `/`, `/matches`, `/notifications` expose refresh notices keyed off the same snapshot channel; `pnpm --filter @newsportal/web typecheck`, targeted TS live-update tests, full TS unit tests, full Python unit tests, and `git diff --check -- apps/web/src docs/work.md tests/unit/ts` all passed.
   the new durable `system_feed_results` contract is live: migration `0009_system_feed_results.sql`, synced phase-4 DDL, criteria-worker maintenance, criterion-LLM recompute, targeted Python unit coverage, and compose worker smoke/backfill smoke all passed in this turn.
   the sequential runtime is now live and proven: queue routing changed to `article.clustered -> criteria` and `article.criteria.matched -> interests`, compose relay routing smoke passed, compose worker `cluster-match-notify` smoke passed, and compose worker `reindex-backfill` smoke passed with `criterionLlmReviews = 0` and `interestLlmReviews = 0`.
   public/system feed eligibility now comes from `system_feed_results`: `services/api/app/main.py` switched `/feed` and dashboard summary to the system gate, web/admin builds passed, and a DB-backed fallback proof confirmed that an article with `processing_state = clustered` and `system_feed_results.eligible_for_feed = true` appears in `/feed` without any personalization lane.
@@ -163,6 +174,8 @@ Rule: dependency truth и mixed worktree должны быть явно пред
   `HOW_TO_USE.md` and `EXAMPLES.md` now also match the live contract: they describe system-first filtering, distinguish `interest_templates` from real `user_interests`, treat `criteria`/`global` as the active baseline LLM scopes, and use current prompt placeholders.
   the personalized matches slice is now live and proven: `/users/{user_id}/matches` returns deduped system-feed-eligible personal matches, web `/matches` reuses feed cards/pagination, user/admin interest mutations announce background compile + sync, successful interest compilation auto-queues a scoped `repair`, and fresh compose acceptance now expects historical admin-managed interests to auto-sync before manual backfill.
 - What is still unproven or blocked:
+  `S-ADMIN-LIVE-UPDATES-1` still lacks manual browser proof for the new hydrated admin UX: no click-through has yet confirmed the live counter/status behavior on `/`, `/reindex`, `/observability`, and selected-user `/user-interests` under real background change.
+  `S-WEB-LIVE-UPDATES-1` still lacks manual browser proof for the new hydrated UX: no click-through has yet confirmed that `/interests` and `/settings` stay on-page during mutation or that feed/matches/notifications surface the intended refresh notices/toasts under live data change.
   the post-reload live Gemini smoke did not return provider `usageMetadata`, so the patch stops short of proving a fresh non-null DB-written `cost_estimate_usd` row through the full review pipeline.
   no manual browser-click walkthrough was executed in this turn; runtime proof used HTTP/browser-style requests instead of a human-driven browser session.
   `website`, `api` и `email_imap` ingest остаются вне current RSS-first acceptance gate.
@@ -172,15 +185,14 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 ### Recently changed
 
+- 2026-03-27 — `S-ADMIN-LIVE-UPDATES-1` reached automated-proof status: `apps/admin` now mounts a same-origin live-update coordinator plus `/bff/admin/live-updates`, dashboard and observability summary counters refresh live, `/reindex` updates status/progress inline, and selected-user `/user-interests` updates compile badges/counts in place; `pnpm --filter @newsportal/admin typecheck`, targeted TS admin live-update tests, full `pnpm unit_tests`, and `git diff --check -- apps/admin/src docs/work.md tests/unit/ts` all passed, while manual browser proof remains open.
+- 2026-03-26 — `S-WEB-LIVE-UPDATES-1` reached automated-proof status: `apps/web` now mounts a same-origin live-update coordinator plus `/bff/live-updates`, `/interests` and `/settings` switched from hard reloads to fetch-driven local state, and `/`, `/matches`, `/notifications` now show polling-backed refresh notices/toasts; `pnpm --filter @newsportal/web typecheck`, targeted TS live-update tests, and full `pnpm unit_tests` all passed, while manual browser proof remains open.
 - 2026-03-26 — `P-FEED-DUPLICATE-1` completed: user-facing API surfaces now rank and dedupe eligible articles by `coalesce(canonical_doc_id, doc_id)` instead of returning one card per duplicate copy; targeted Python tests passed, `api` was rebuilt/restarted, and live proof on the current dataset reconciled `39` raw eligible rows down to `30` visible canonical feed cards with matching dashboard summary.
 - 2026-03-26 — `P-MVP-BUGFIX-6` completed: web auth bootstrap now stores and reuses a browser-scoped Firebase refresh token, so logout/login on the same browser returns to the same anonymous/local user instead of creating a fresh profile with empty settings; targeted TS auth tests, existing redirect regression tests, and `pnpm --filter @newsportal/web typecheck` all passed.
-- 2026-03-26 — `P-FEED-DUPLICATE-1` completed: user-facing API surfaces now rank and dedupe eligible articles by `coalesce(canonical_doc_id, doc_id)` instead of returning one card per duplicate copy; targeted Python tests passed, `api` was rebuilt/restarted, and live proof on the current dataset reconciled `39` raw eligible rows down to `30` visible canonical feed cards with matching dashboard summary.
 - 2026-03-26 — `S-PERSONALIZED-MATCHES-1` completed: API/web/admin/SDK now expose a separate `/matches` personalized surface, successful interest compile auto-queues scoped history repair for system-feed-approved articles, compose smoke compile uses `skipAutoRepair`, and fresh-stack gray-zone criteria now always dispatch LLM review even without an active template; `pnpm unit_tests` and `pnpm integration_tests` both passed.
 - 2026-03-26 — `P-LLM-COST-ENV-1` completed: worker Gemini pricing now accepts `LLM_INPUT_COST_PER_MILLION_USD` / `LLM_OUTPUT_COST_PER_MILLION_USD`, `.env.example` and `.env.dev` were seeded with the official `gemini-2.0-flash` paid-tier values `0.10` / `0.40`, unit/syntax checks passed, and the reloaded worker reported `price_card_source = env_override` with the expected deterministic estimate `0.0003` for `1000` prompt + `500` completion tokens.
 - 2026-03-26 — `P-MVP-BUGFIX-5` reached live-proof completion: local `.env.dev` was corrected from `gemini-3.0-flash-preview` to `gemini-2.0-flash`, `relay` was restarted after the compose recreate path, backfill job `f11923b8-01d4-41b3-8d95-e0f108d7ad5b` completed `4024/4024`, and final reconciliation recovered `/feed.total = 62`, `dashboard/summary.active_news = 62`, `system_feed_results.eligible = 62`, and `llm_review_log` decisions `approve/reject/uncertain` with no `HTTP 404`.
 - 2026-03-26 — `P-DOCS-SYSTEM-FIRST-SYNC-2` archived after syncing `HOW_TO_USE.md` and `EXAMPLES.md` with the live system-first contract, including dashboard wording, template semantics, current LLM scopes, article-state explanations, and prompt placeholders.
-- 2026-03-26 — `P-DOCS-SYSTEM-FIRST-SYNC-1` archived after syncing README/how-to-use/examples plus blueprint feed wording with the shipped system-first order and `system_feed_results` gate; `docs/contracts/README.md` and `.env.example` were checked and required no changes.
-- 2026-03-26 — `C-SYSTEM-FIRST-PERSONALIZATION` archived after shipping `system_feed_results`, criteria-first runtime order, system-gated `/feed`, user-facing system-selected feed copy, and proof for both personalized and no-interest paths.
 
 ## Operating limits
 
@@ -224,6 +236,9 @@ When compressing context:
 
 | ID | Kind | Title | Parent capability | Status | Depends on | Allowed paths | Risk | Proof status | Owner | Summary |
 |---|---|---|---|---|---|---|---|---|---|---|
+| S-ADMIN-LIVE-UPDATES-1 | Stage | Ship polling-based live admin counters and job-status updates across `apps/admin` | C-ADMIN-LIVE-UPDATES | active | SP-ADMIN-LIVE-UPDATES-1 | `apps/admin/`, `tests/unit/ts/`, `docs/work.md`, `docs/blueprint.md` | high | partial | Codex | Same-origin polling live updates are implemented across bounded admin surfaces and automated proof is green; the remaining close gate is manual browser validation for dashboard/reindex/observability and selected-user `/user-interests`. |
+| S-WEB-LIVE-UPDATES-1 | Stage | Ship polling-based live user-state updates across `apps/web` | C-WEB-LIVE-UPDATES | active | - | `apps/web/`, `tests/unit/ts/`, `docs/work.md`, `docs/blueprint.md` | high | partial | Codex | Same-origin polling live updates are implemented and automated proof is green; the remaining close gate is manual browser validation for the new on-page interest/settings UX and refresh notices. |
+| SP-ADMIN-LIVE-UPDATES-1 | Spike | Design bounded admin live-update rollout for counters and job statuses | C-ADMIN-LIVE-UPDATES | done | - | `apps/admin/`, `packages/sdk/`, `services/api/`, `docs/work.md` | medium | passed | Codex | Read-only review mapped the bounded v1 targets to dashboard KPIs, reindex job progress/status, observability summary cards, and selected-user compile state, while explicitly excluding full-table realtime across articles/channels/clusters/templates. |
 | SP-MVP-BUGFIX-3 | Spike | Diagnose empty system feed and reindex count mismatch | C-MVP-BUGFIXES | done | - | `services/api/`, `services/workers/`, `apps/admin/`, `tests/unit/python/`, `docs/work.md` | high | passed | Codex | Read-only DB/API/job reconciliation proved the latest visible reindex card is a historical frozen snapshot and isolated the live blocker to zero lexical hits plus all-current `system_feed_results = filtered_out`. |
 | P-MVP-BUGFIX-3 | Patch | Fix criterion lexical scoring for the system-first feed | C-MVP-BUGFIXES | done | SP-MVP-BUGFIX-3 | `services/workers/`, `tests/unit/python/`, `docs/work.md` | high | passed | Codex | Worker lexical scoring now interprets stored whitespace lexical bags as OR-style tsquery terms, restoring usable lexical signal without requiring immediate criteria recompilation; live replay remains a separate operator-approved follow-up. |
 | P-MVP-BUGFIX-4 | Patch | Apply lexical-scoring fix to the current local runtime | C-MVP-BUGFIXES | done | P-MVP-BUGFIX-3 | `docs/work.md` | high | passed | Codex | Worker restart plus approved backfill proved the lexical fix is live, but final reconciliation showed the local worker has no `GEMINI_API_KEY`, so all new criteria reviews stayed `uncertain` and the feed remained empty. |
@@ -235,6 +250,44 @@ When compressing context:
 | S-FETCHER-DUPLICATE-PREFLIGHT-1 | Stage | Fetcher-side duplicate suppression before insert/outbox | C-FETCHER-DUPLICATE-PREFLIGHT | blocked | - | `services/fetchers/`, `tests/unit/ts/fetcher-duplicate-preflight.test.ts`, `docs/work.md`, `docs/blueprint.md` | medium | partial | unassigned | Background capability remains blocked and should stay isolated until it is explicitly resumed. |
 
 ## Item detail
+
+### S-ADMIN-LIVE-UPDATES-1
+
+- Kind: `Stage`
+- Status: `active`
+- Goal: реализовать bounded admin live-update rollout для `apps/admin`, чтобы KPI cards, async job statuses/progress и selected-user compile state обновлялись через same-origin polling без полного reload-а и без live-diffing всех admin tables
+- In scope:
+  app-local polling substrate and snapshot logic in `apps/admin`, new admin BFF live-update endpoint, shell-mounted coordinator, live counter/status updates for `/`, `/reindex`, `/observability`, and selected-user `/user-interests`, targeted TS unit coverage, and required runtime-doc sync
+- Out of scope:
+  WebSocket/SSE transport, new public `/api/*` contracts, full live table diffing for `/articles`, `/channels`, `/clusters`, `/templates/*`, worker business-logic changes, and broader admin UX redesign beyond bounded freshness/status behavior
+- Allowed paths:
+  `apps/admin/`, `tests/unit/ts/`, `docs/work.md`, `docs/blueprint.md`
+- Required proof:
+  targeted TS coverage for admin live-update snapshot diffing/polling helpers and selected-user status flows; `pnpm typecheck` or narrower truthful admin typecheck entry if available; `pnpm unit_tests`; manual browser-oriented verification that dashboard/reindex/observability counters update without full-page reload and that selected-user `/user-interests` compile statuses refresh inline while broader tables only show refresh notices when needed
+- Risk: `high`
+- Executed proof:
+  `node --import tsx --test tests/unit/ts/admin-live-updates.test.ts`; `pnpm --filter @newsportal/admin typecheck`; `pnpm unit_tests`; `git diff --check -- apps/admin/src docs/work.md tests/unit/ts`
+- Proof status:
+  partial
+
+### S-WEB-LIVE-UPDATES-1
+
+- Kind: `Stage`
+- Status: `active`
+- Goal: реализовать web-only live-update rollout для user-facing `apps/web`, чтобы compile/repair flow и другие user-relevant state changes доходили до UI через same-origin polling, inline status updates и refresh prompts/toasts вместо полного ручного reload-а
+- In scope:
+  app-local polling substrate and snapshot logic in `apps/web`, new web BFF live-update endpoint, live `/interests` and `/settings` behavior, refresh notices for `/`, `/matches`, and `/notifications`, targeted TS unit coverage, and required runtime-doc sync
+- Out of scope:
+  admin live updates, WebSocket/SSE transport, new public `/api/*` contracts, worker business-logic changes, auth/logout semantic changes, and broader product redesign beyond the approved web UX
+- Allowed paths:
+  `apps/web/`, `tests/unit/ts/`, `docs/work.md`, `docs/blueprint.md`
+- Required proof:
+  `pnpm --filter @newsportal/web typecheck`; `pnpm unit_tests`; targeted TS coverage for snapshot diffing/polling helpers and live interest/update flows; manual browser-oriented verification that `/interests` and `/settings` update without full-page reload and that feed/matches/notifications surface refresh prompts when fresh data appears
+- Risk: `high`
+- Executed proof:
+  `node --import tsx --test tests/unit/ts/live-updates.test.ts tests/unit/ts/live-interest-state.test.ts`; `pnpm --filter @newsportal/web typecheck`; `pnpm unit_tests`; `git diff --check -- apps/web/src docs/work.md tests/unit/ts`
+- Proof status:
+  partial
 
 ### SP-MVP-BUGFIX-3
 

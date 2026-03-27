@@ -1,14 +1,18 @@
 ---
 import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
+import { AdminLiveUpdateCoordinator } from "../components/AdminLiveUpdateCoordinator";
 import { AdminFlashToast } from "../components/AdminFlashToast";
 import { resolveAdminAppPath } from "../lib/server/browser-flow";
+import type { AdminLiveUpdateSurface } from "../lib/live-updates";
 
 export interface Props {
   title?: string;
   session?: { userId: string; roles: string[] } | null;
   flash?: { status: "success" | "error"; message: string } | null;
   activeNav?: string;
+  liveUpdatesEndpoint?: string | null;
+  liveUpdatesSurface?: AdminLiveUpdateSurface | null;
 }
 
 const {
@@ -16,6 +20,8 @@ const {
   session,
   flash,
   activeNav,
+  liveUpdatesEndpoint = null,
+  liveUpdatesSurface = null,
 } = Astro.props;
 
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
@@ -168,6 +174,13 @@ const icons: Record<string, string> = {
         <!-- Page content -->
         <main class="flex-1 overflow-y-auto">
           <AdminFlashToast flash={flash} client:load />
+          {session && liveUpdatesEndpoint && liveUpdatesSurface && (
+            <AdminLiveUpdateCoordinator
+              endpoint={liveUpdatesEndpoint}
+              activeSurface={liveUpdatesSurface}
+              client:load
+            />
+          )}
           <div class="p-4 md:p-6">
             <slot />
           </div>

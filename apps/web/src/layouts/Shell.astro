@@ -3,6 +3,7 @@ import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
 import { FlashToast } from "../components/FlashToast";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { UserLiveUpdateCoordinator } from "../components/UserLiveUpdateCoordinator";
 
 export interface Props {
   title?: string;
@@ -14,6 +15,7 @@ export interface Props {
   bffPreferencesPath?: string;
   bffLogoutPath?: string;
   bffBootstrapPath?: string;
+  bffLiveUpdatesPath?: string;
 }
 
 const {
@@ -26,6 +28,7 @@ const {
   bffPreferencesPath = "/bff/preferences",
   bffLogoutPath = "/bff/auth/logout",
   bffBootstrapPath = "/bff/auth/bootstrap",
+  bffLiveUpdatesPath = "/bff/live-updates",
 } = Astro.props;
 
 const navItems = [
@@ -151,6 +154,13 @@ const navItems = [
 
     <!-- Flash toast (client island) -->
     <FlashToast flash={flash} client:load />
+    {session && (
+      <UserLiveUpdateCoordinator
+        endpoint={bffLiveUpdatesPath}
+        activeSurface={activeNav ?? null}
+        client:load
+      />
+    )}
 
     <!-- Page content -->
     <main class="mx-auto max-w-7xl px-4 sm:px-6 py-8">

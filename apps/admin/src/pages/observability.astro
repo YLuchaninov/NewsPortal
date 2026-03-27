@@ -3,7 +3,10 @@ import { DEFAULT_PAGE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
+import { AdminLiveCollectionNotice } from "../components/AdminLiveCollectionNotice";
+import { LiveObservabilitySummary } from "../components/LiveObservabilitySummary";
 import AdminShell from "../layouts/AdminShell.astro";
+import { buildAdminLiveRevision } from "../lib/live-updates";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
   buildAdminSignInPath,
@@ -43,8 +46,62 @@ const [fetchRuns, llmReviews, llmUsageSummary] = await Promise.all([
 ]);
 
 function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
+function asInt(v: unknown, fallback = 0): number {
+  const parsed =
+    typeof v === "number" && Number.isFinite(v)
+      ? v
+      : Number.parseInt(String(v ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+function asFloat(v: unknown, fallback = 0): number {
+  const parsed =
+    typeof v === "number" && Number.isFinite(v)
+      ? v
+      : Number.parseFloat(String(v ?? ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 const llmUsage24h = asRecord((llmUsageSummary as R)["24h"]);
 const llmUsage7d = asRecord((llmUsageSummary as R)["7d"]);
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=observability`;
+const initialUsage24h = {
+  reviewCount: asInt(llmUsage24h.review_count, 0),
+  totalTokens: asInt(llmUsage24h.total_tokens, 0),
+  costEstimateUsd: asFloat(llmUsage24h.cost_estimate_usd, 0),
+  avgLatencyMs: asFloat(llmUsage24h.avg_latency_ms, 0),
+  revision: buildAdminLiveRevision([
+    llmUsage24h.review_count,
+    llmUsage24h.total_tokens,
+    llmUsage24h.cost_estimate_usd,
+    llmUsage24h.avg_latency_ms,
+  ]),
+};
+const initialUsage7d = {
+  reviewCount: asInt(llmUsage7d.review_count, 0),
+  totalTokens: asInt(llmUsage7d.total_tokens, 0),
+  costEstimateUsd: asFloat(llmUsage7d.cost_estimate_usd, 0),
+  avgLatencyMs: asFloat(llmUsage7d.avg_latency_ms, 0),
+  revision: buildAdminLiveRevision([
+    llmUsage7d.review_count,
+    llmUsage7d.total_tokens,
+    llmUsage7d.cost_estimate_usd,
+    llmUsage7d.avg_latency_ms,
+  ]),
+};
+const fetchRunsRevision = buildAdminLiveRevision([
+  fetchRuns.total,
+  fetchRuns.items[0]?.channel_id ?? "",
+  fetchRuns.items[0]?.started_at ?? "",
+  fetchRuns.items[0]?.outcome_kind ?? "",
+  fetchRuns.items[0]?.new_article_count ?? "",
+]);
+const llmReviewsRevision = buildAdminLiveRevision([
+  llmReviews.total,
+  llmReviews.items[0]?.doc_id ?? "",
+  llmReviews.items[0]?.created_at ?? "",
+  llmReviews.items[0]?.review_decision ?? "",
+  llmReviews.items[0]?.model_name ?? "",
+]);
 
 function fmt(v: unknown) {
   if (!v) return "—";
@@ -67,7 +124,14 @@ function resolveTableHref(paramName: string, nextPage: number): string {
 }
 ---
 
-<AdminShell title="Observability — Admin" session={session} flash={flash} activeNav="observability">
+<AdminShell
+  title="Observability — Admin"
+  session={session}
+  flash={flash}
+  activeNav="observability"
+  liveUpdatesEndpoint={liveUpdatesEndpoint}
+  liveUpdatesSurface="observability"
+>
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
@@ -102,32 +166,29 @@ function resolveTableHref(paramName: string, nextPage: number): string {
     </details>
 
     <!-- LLM Usage Summary -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {[
-        { label: "Reviews (24h)", value: String(llmUsage24h.review_count ?? 0) },
-        { label: "Tokens (24h)", value: String(llmUsage24h.total_tokens ?? 0) },
-        { label: "Cost USD (24h)", value: `$${fmtD(llmUsage24h.cost_estimate_usd, 4)}` },
-        { label: "Avg latency (24h)", value: `${fmtD(llmUsage24h.avg_latency_ms, 0)}ms` },
-        { label: "Reviews (7d)", value: String(llmUsage7d.review_count ?? 0) },
-        { label: "Tokens (7d)", value: String(llmUsage7d.total_tokens ?? 0) },
-        { label: "Cost USD (7d)", value: `$${fmtD(llmUsage7d.cost_estimate_usd, 4)}` },
-        { label: "Avg latency (7d)", value: `${fmtD(llmUsage7d.avg_latency_ms, 0)}ms` },
-      ].map(({ label, value }) => (
-        <div class="rounded-xl border border-border bg-card p-4">
-          <p class="text-xs text-muted-foreground mb-1">{label}</p>
-          <p class="text-lg font-bold">{value}</p>
-        </div>
-      ))}
-    </div>
+    <LiveObservabilitySummary
+      initial24h={initialUsage24h}
+      initial7d={initialUsage7d}
+      client:load
+    />
 
     <!-- Fetch Runs -->
     <div class="rounded-xl border border-border bg-card overflow-hidden">
       <div class="px-4 py-3 border-b border-border">
         <h2 class="font-semibold text-sm">Fetch Runs</h2>
-        <p class="text-[10px] text-muted-foreground mt-0.5">
-          {fetchRuns.total} run{fetchRuns.total !== 1 ? "s" : ""} total
-          {fetchRuns.total > 0 && ` — page ${fetchRuns.page} of ${Math.max(fetchRuns.totalPages, 1)}`}
-        </p>
+        <AdminLiveCollectionNotice
+          surface="observability"
+          collection="fetchRuns"
+          initialTotal={fetchRuns.total}
+          initialRevision={fetchRunsRevision}
+          refreshHref={currentPath}
+          updateMessage="New fetch runs are available"
+          nounSingular="run"
+          nounPlural="runs"
+          page={fetchRuns.page}
+          totalPages={fetchRuns.totalPages}
+          client:load
+        />
       </div>
       {fetchRuns.total === 0 ? (
         <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
@@ -189,10 +250,19 @@ function resolveTableHref(paramName: string, nextPage: number): string {
     <div class="rounded-xl border border-border bg-card overflow-hidden">
       <div class="px-4 py-3 border-b border-border">
         <h2 class="font-semibold text-sm">LLM Reviews</h2>
-        <p class="text-[10px] text-muted-foreground mt-0.5">
-          {llmReviews.total} review{llmReviews.total !== 1 ? "s" : ""} total
-          {llmReviews.total > 0 && ` — page ${llmReviews.page} of ${Math.max(llmReviews.totalPages, 1)}`}
-        </p>
+        <AdminLiveCollectionNotice
+          surface="observability"
+          collection="llmReviews"
+          initialTotal={llmReviews.total}
+          initialRevision={llmReviewsRevision}
+          refreshHref={currentPath}
+          updateMessage="New LLM reviews are available"
+          nounSingular="review"
+          nounPlural="reviews"
+          page={llmReviews.page}
+          totalPages={llmReviews.totalPages}
+          client:load
+        />
       </div>
       {llmReviews.total === 0 ? (
         <p class="px-4 py-6 text-sm text-muted-foreground text-center">No LLM reviews yet</p>

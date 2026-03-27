@@ -16,12 +16,23 @@ interface Interest {
   must_not_have_terms?: string[];
   short_tokens_required?: string[];
   short_tokens_forbidden?: string[];
+  updated_at?: string | null;
+  created_at?: string | null;
+  error_text?: string | null;
+}
+
+interface InterestRepairState {
+  tone: "warning" | "error";
+  label: string;
+  detail: string | null;
 }
 
 interface InterestSheetProps {
   interests: Interest[];
   interestsPath: string;
   interestPath: (id: string) => string;
+  onMutationSuccess?: () => Promise<void> | void;
+  readRepairState?: (interestId: string) => InterestRepairState | null;
   hasAnyInterests?: boolean;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
@@ -48,6 +59,8 @@ export function InterestManager({
   interests,
   interestsPath,
   interestPath,
+  onMutationSuccess,
+  readRepairState,
   hasAnyInterests = interests.length > 0,
   emptyStateTitle,
   emptyStateDescription,
@@ -70,8 +83,7 @@ export function InterestManager({
         toast.success("Interest created. Compilation and background match sync started.");
         setShowCreate(false);
         form.reset();
-        // Reload to get fresh data
-        window.location.reload();
+        await onMutationSuccess?.();
       } else {
         toast.error("Failed to create interest");
       }
@@ -101,7 +113,7 @@ export function InterestManager({
             ? "Interest cloned. Compilation and background match sync started."
             : "Interest updated. Compilation and background match sync started.";
       toast.success(msg);
-      window.location.reload();
+      await onMutationSuccess?.();
     } else {
       toast.error("Action failed");
     }
@@ -203,6 +215,7 @@ export function InterestManager({
           {interests.map((interest) => {
             const isExpanded = expandedId === interest.interest_id;
             const status = String(interest.compile_status ?? "pending");
+            const repairState = readRepairState?.(interest.interest_id) ?? null;
             return (
               <div key={interest.interest_id} className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="p-4">
@@ -224,6 +237,23 @@ export function InterestManager({
                     {interest.languages_allowed && Array.isArray(interest.languages_allowed) && interest.languages_allowed.length > 0
                       ? ` · ${(interest.languages_allowed as string[]).join(", ")}` : ""}
                   </p>
+                  {status === "failed" && interest.error_text && (
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50/80 px-3 py-2 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300">
+                      {String(interest.error_text)}
+                    </div>
+                  )}
+                  {repairState && (
+                    <div
+                      className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+                        repairState.tone === "error"
+                          ? "border border-red-200 bg-red-50/80 text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300"
+                          : "border border-amber-200 bg-amber-50/80 text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-200"
+                      }`}
+                    >
+                      <p className="font-medium">{repairState.label}</p>
+                      {repairState.detail && <p className="mt-1">{repairState.detail}</p>}
+                    </div>
+                  )}
                 </div>
                 <div className="border-t border-border px-4 pb-3">
                   <button

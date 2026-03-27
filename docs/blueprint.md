@@ -51,6 +51,7 @@ NewsPortal строится как zero-shot система фильтрации
 ### Boundary map
 
 - UI/BFF и пользовательские команды отделены от тяжелой асинхронной обработки.
+- Authenticated `apps/web` и `apps/admin` surfaces могут использовать app-local same-origin polling через `/bff/*` и `/admin/bff/*` для bounded freshness уже записанной PostgreSQL truth, но этот слой остается тонкой read UX-надстройкой, а не новым processing transport или live-streaming full tables.
 - PostgreSQL truth отделен от derived state в HNSW, snapshots, cache и queue state.
 - Node fetch/relay responsibilities отделены от Python NLP/indexer responsibilities.
 - Public/read API и explain surfaces отделены от внутреннего pipeline orchestration.
@@ -487,6 +488,7 @@ flowchart LR
 - Firebase Auth считается подтвержденным baseline;
 - anonymous users поддерживаются только для конечных пользователей, не для admin routes;
 - public Python API остается единственным владельцем `/api/*`, а Astro browser/session/BFF surfaces живут в app-local namespace `/bff/*`; production ingress мапит `web` на `/`, `admin` на `/admin/`, поэтому admin browser/BFF paths снаружи выглядят как `/admin/bff/*`;
+- authenticated `web` UX может читать компактные user-bound freshness snapshots через same-origin `/bff/live-updates`, чтобы hydrated islands обновляли compile/repair status, counts и refresh prompts без ручного full-page reload; этот polling path не заменяет public `/api/*` и не становится каналом для тяжелой обработки;
 - admin auth использует dedicated sign-in surface `/sign-in` (снаружи `/admin/sign-in` за nginx ingress); unauthenticated admin page requests обязаны редиректить туда с `next=<requested-path>` и не должны рендерить dashboard shell поверх auth form;
 - Astro BFF write routes в `web` и `admin` обязаны различать browser navigation и scripted/API clients: HTML form flow использует `303` Post-Redirect-Get redirect с flash status/message на наиболее релевантный browser-visible экран (dedicated sign-in, текущий list screen или entity edit screen), auth failures чистят stale session cookie, а non-navigation clients сохраняют machine-readable JSON semantics;
 - доменные сущности не должны зависеть от Firebase-специфичных таблиц сильнее, чем через `auth_subject`;

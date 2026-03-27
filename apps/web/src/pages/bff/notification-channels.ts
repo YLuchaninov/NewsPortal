@@ -25,10 +25,21 @@ export const GET: APIRoute = async ({ request }) => {
 
   const channels = await queryRows(
     `
-      select *
-      from user_notification_channels
-      where user_id = $1
-      order by created_at desc
+      select
+        unc.*,
+        last_delivery.status as last_status,
+        last_delivery.sent_at as last_sent_at
+      from user_notification_channels unc
+      left join lateral (
+        select status, sent_at
+        from notification_log nl
+        where nl.user_id = unc.user_id
+          and nl.channel_type = unc.channel_type
+        order by nl.created_at desc
+        limit 1
+      ) last_delivery on true
+      where unc.user_id = $1
+      order by unc.channel_type, unc.created_at desc
     `,
     [session.userId]
   );

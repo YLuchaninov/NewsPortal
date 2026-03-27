@@ -2,8 +2,8 @@
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
 import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
+import { LiveReindexJobsSection } from "../components/LiveReindexJobsSection";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -33,6 +33,7 @@ type ReindexRow = Record<string, unknown>;
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const reindexJobs = await sdk.listReindexJobsPage<ReindexRow>({ page, pageSize: DEFAULT_PAGE_SIZE });
+const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=reindex&page=${page}&pageSize=${DEFAULT_PAGE_SIZE}`;
 
 function readProgressLabel(job: ReindexRow): string | null {
   const optionsJson = job.options_json;
@@ -50,19 +51,58 @@ function readProgressLabel(job: ReindexRow): string | null {
   }
   return `${processed}/${total} articles`;
 }
-
-function resolvePageHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
-}
+const initialJobs = {
+  total: reindexJobs.total,
+  page: reindexJobs.page,
+  totalPages: reindexJobs.totalPages,
+  hasPrev: reindexJobs.hasPrev,
+  hasNext: reindexJobs.hasNext,
+  queuedCount: reindexJobs.items.filter((job) => String(job.status) === "queued").length,
+  runningCount: reindexJobs.items.filter((job) => String(job.status) === "running").length,
+  revision: JSON.stringify(
+    reindexJobs.items.map((job) => [
+      job.reindex_job_id,
+      job.status,
+      readProgressLabel(job),
+      job.created_at,
+    ])
+  ),
+  items: reindexJobs.items.map((job) => {
+    const optionsJson = job.options_json;
+    const progress = optionsJson && typeof optionsJson === "object"
+      ? ((optionsJson as Record<string, unknown>).progress as Record<string, unknown> | undefined)
+      : undefined;
+    const processedArticles = progress ? Number(progress.processedArticles ?? NaN) : NaN;
+    const totalArticles = progress ? Number(progress.totalArticles ?? NaN) : NaN;
+    return {
+      reindexJobId: String(job.reindex_job_id ?? ""),
+      indexName: String(job.index_name ?? "—"),
+      jobKind: String(job.job_kind ?? "rebuild"),
+      status: String(job.status ?? "pending"),
+      createdAt: job.created_at ? String(job.created_at) : null,
+      processedArticles:
+        Number.isFinite(processedArticles) ? processedArticles : null,
+      totalArticles: Number.isFinite(totalArticles) ? totalArticles : null,
+      progressLabel: readProgressLabel(job),
+      revision: JSON.stringify([
+        job.reindex_job_id,
+        job.status,
+        readProgressLabel(job),
+        job.created_at,
+      ]),
+    };
+  }),
+};
 ---
 
-<AdminShell title="Reindex — Admin" session={session} flash={flash} activeNav="reindex">
+<AdminShell
+  title="Reindex — Admin"
+  session={session}
+  flash={flash}
+  activeNav="reindex"
+  liveUpdatesEndpoint={liveUpdatesEndpoint}
+  liveUpdatesSurface="reindex"
+>
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
@@ -131,52 +171,11 @@ function resolvePageHref(nextPage: number): string {
       </form>
     </div>
 
-    <!-- Jobs list -->
-    {reindexJobs.total > 0 && (
-      <div class="rounded-xl border border-border bg-card overflow-hidden">
-        <div class="px-4 py-3 border-b border-border">
-          <p class="text-sm font-semibold">Recent Jobs</p>
-          <p class="text-[10px] text-muted-foreground mt-0.5">
-            {reindexJobs.total} job{reindexJobs.total !== 1 ? "s" : ""} total
-            {reindexJobs.total > 0 && ` — page ${reindexJobs.page} of ${Math.max(reindexJobs.totalPages, 1)}`}
-          </p>
-        </div>
-        <div class="divide-y divide-border">
-          {reindexJobs.items.length === 0 ? (
-            <div class="px-4 py-8 text-center text-sm text-muted-foreground">No jobs on this page</div>
-          ) : reindexJobs.items.map((job) => (
-            <div class="flex items-center justify-between px-4 py-3">
-              <div>
-                <p class="text-sm font-medium">{String(job.index_name ?? "—")}</p>
-                <p class="text-[11px] text-muted-foreground">
-                  {String(job.job_kind ?? "rebuild")}
-                  {readProgressLabel(job) && ` • ${readProgressLabel(job)}`}
-                </p>
-                {job.created_at && <p class="text-xs text-muted-foreground">{new Date(String(job.created_at)).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>}
-              </div>
-              <span class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                String(job.status) === "completed" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                : String(job.status) === "failed" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                : String(job.status) === "running" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                : "bg-muted text-muted-foreground"
-              }`}>
-                {String(job.status ?? "pending")}
-              </span>
-            </div>
-          ))}
-        </div>
-        {(reindexJobs.hasPrev || reindexJobs.hasNext) && (
-          <PaginationNav
-            className="rounded-none border-x-0 border-b-0"
-            page={reindexJobs.page}
-            totalPages={reindexJobs.totalPages}
-            hasPrev={reindexJobs.hasPrev}
-            hasNext={reindexJobs.hasNext}
-            prevHref={resolvePageHref(reindexJobs.page - 1)}
-            nextHref={resolvePageHref(reindexJobs.page + 1)}
-          />
-        )}
-      </div>
-    )}
+    <LiveReindexJobsSection
+      initialJobs={initialJobs}
+      currentPage={page}
+      currentPath={currentPath}
+      client:load
+    />
   </div>
 </AdminShell>
