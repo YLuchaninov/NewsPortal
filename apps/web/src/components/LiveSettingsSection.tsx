@@ -319,6 +319,8 @@ export function LiveSettingsSection({
         <div className="p-6">
           <form
             className="flex items-end gap-3"
+            method="post"
+            action={preferencesPath}
             onSubmit={async (event) => {
               event.preventDefault();
               setSavingAppearance(true);
@@ -339,6 +341,7 @@ export function LiveSettingsSection({
               </label>
               <select
                 id="theme-select"
+                name="themePreference"
                 value={themePreference}
                 onChange={(event) => setThemePreference(event.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -369,6 +372,8 @@ export function LiveSettingsSection({
         <div className="p-6 space-y-4">
           <form
             className="space-y-4"
+            method="post"
+            action={preferencesPath}
             onSubmit={async (event) => {
               event.preventDefault();
               setSavingPreferences(true);
@@ -391,8 +396,11 @@ export function LiveSettingsSection({
                 </p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
+                <input type="hidden" name="webPushEnabled" value="false" />
                 <input
                   type="checkbox"
+                  name="webPushEnabled"
+                  value="true"
                   checked={preferences.webPush}
                   onChange={(event) =>
                     setPreferences((current) => ({
@@ -413,8 +421,11 @@ export function LiveSettingsSection({
                 </p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
+                <input type="hidden" name="telegramEnabled" value="false" />
                 <input
                   type="checkbox"
+                  name="telegramEnabled"
+                  value="true"
                   checked={preferences.telegram}
                   onChange={(event) =>
                     setPreferences((current) => ({
@@ -435,8 +446,11 @@ export function LiveSettingsSection({
                 </p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
+                <input type="hidden" name="weeklyEmailDigestEnabled" value="false" />
                 <input
                   type="checkbox"
+                  name="weeklyEmailDigestEnabled"
+                  value="true"
                   checked={preferences.weeklyEmailDigest}
                   onChange={(event) =>
                     setPreferences((current) => ({
@@ -492,6 +506,8 @@ export function LiveSettingsSection({
             <p className="font-medium text-sm mb-1">Telegram</p>
             <form
               className="flex gap-2"
+              method="post"
+              action={notificationChannelsPath}
               onSubmit={async (event) => {
                 event.preventDefault();
                 setConnectingTelegram(true);
@@ -509,7 +525,9 @@ export function LiveSettingsSection({
                 }
               }}
             >
+              <input type="hidden" name="channelType" value="telegram" />
               <input
+                name="chatId"
                 value={telegramChatId}
                 onChange={(event) => setTelegramChatId(event.target.value)}
                 placeholder="Chat ID"
@@ -529,6 +547,8 @@ export function LiveSettingsSection({
             <p className="font-medium text-sm mb-1">Email Digest</p>
             <form
               className="flex gap-2 max-w-sm"
+              method="post"
+              action={notificationChannelsPath}
               onSubmit={async (event) => {
                 event.preventDefault();
                 setConnectingEmailDigest(true);
@@ -545,8 +565,10 @@ export function LiveSettingsSection({
                 }
               }}
             >
+              <input type="hidden" name="channelType" value="email_digest" />
               <input
                 type="email"
+                name="email"
                 value={digestEmail}
                 onChange={(event) => setDigestEmail(event.target.value)}
                 placeholder="your@email.com"

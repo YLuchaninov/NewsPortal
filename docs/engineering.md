@@ -58,6 +58,7 @@
 - Public Python API остается владельцем `/api/*`; browser/session mutation flows для Astro живут в app-local `/bff/*` и `/admin/bff/*`.
 - `packages/contracts`, `packages/sdk`, `packages/config` и `packages/ui` остаются shared layers; service-local implementation detail не должен silently протекать в shared packages без durable reason.
 - Source inputs должны оставаться отделенными от derived artifacts в `data/indices`, snapshots, model caches и прочих rebuildable слоях.
+- `services/workers/app/task_engine` при staged rollout остается orchestration layer внутри worker domain: relay не должен становиться executor-ом, а plugins не должны bypass-ить PostgreSQL + outbox discipline.
 
 Правила:
 
@@ -102,6 +103,7 @@
 - queue payloads остаются ID-based и компактными;
 - env contracts должны явно различать internal service URLs и public/browser URLs;
 - browser/BFF naming не должен вводить в заблуждение относительно ownership paths (`/bff/*` vs `/api/*`).
+- sequence-engine symbols должны явно различать sequence definition, run, task-run, plugin, executor и relay handoff; не вводи vague names вроде `task utils` для orchestration core.
 
 ## State, Data and Side-effect Discipline
 
@@ -170,6 +172,7 @@ Refactors разрешены только когда они остаются ч�
 
 - `docs/contracts/README.md`
 - `docs/contracts/test-access-and-fixtures.md`
+- `docs/contracts/universal-task-engine.md`
 
 Новые contract docs нужны, когда subsystem получает:
 

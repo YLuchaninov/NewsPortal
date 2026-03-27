@@ -45,6 +45,7 @@ project:
     - infra/nginx/default.conf
     - README.md
     - docs/contracts/test-access-and-fixtures.md
+    - docs/contracts/universal-task-engine.md
   entry_points:
     - apps/web/src/pages/api/health.ts
     - apps/admin/src/pages/api/health.ts
@@ -52,6 +53,7 @@ project:
     - services/relay/src/main.ts
     - services/api/app/main.py
     - services/workers/app/main.py
+    - services/workers/app/task_engine/executor.py
     - services/indexer/app/main.py
 capabilities:
   build: true

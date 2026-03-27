@@ -27,5 +27,7 @@
 
 - `docs/contracts/test-access-and-fixtures.md`
   Repo-specific contract для stateful backend test access, fixture creation, persistent artifact tracking и cleanup discipline.
+- `docs/contracts/universal-task-engine.md`
+  Durable contract для staged Universal Task Engine migration: sequence data model, `q.sequence`, executor/plugin boundaries, trigger routing shape, cutover discipline и minimum proof before the new engine becomes default runtime.
 - `docs/contracts/SUBSYSTEM-CONTRACT-TEMPLATE.md`
   Reusable template для новых deep contract docs, когда compact core уже недостаточен.

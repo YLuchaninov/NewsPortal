@@ -378,6 +378,66 @@ async function ensureFirebasePasswordUser(apiKey, email, password) {
   }
 }
 
+async function signInFirebasePasswordUser(apiKey, email, password) {
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        returnSecureToken: true
+      })
+    }
+  );
+
+  const payload = await response.json();
+  if (!response.ok) {
+    const errorMessage = String(payload?.error?.message ?? "unknown");
+    if (
+      errorMessage === "EMAIL_NOT_FOUND" ||
+      errorMessage === "INVALID_LOGIN_CREDENTIALS" ||
+      errorMessage === "INVALID_PASSWORD"
+    ) {
+      return null;
+    }
+    throw new Error(`Firebase admin sign-in failed: ${errorMessage}`);
+  }
+
+  return payload;
+}
+
+async function deleteFirebasePasswordUser(apiKey, email, password) {
+  const session = await signInFirebasePasswordUser(apiKey, email, password);
+  if (!session?.idToken) {
+    return false;
+  }
+
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        idToken: session.idToken
+      })
+    }
+  );
+
+  const payload = await response.json();
+  if (!response.ok) {
+    const errorMessage = String(payload?.error?.message ?? "unknown");
+    throw new Error(`Firebase admin cleanup failed: ${errorMessage}`);
+  }
+
+  return true;
+}
+
 function runCompose(...args) {
   runCommand("docker", [...composeArgs, ...args]);
 }
@@ -1508,6 +1568,21 @@ async function main() {
       `Internal MVP acceptance passed for user ${userId}, admin ${adminEmail}, historical article ${docId}, fresh article ${freshDocId}, and admin-managed interest ${adminManagedInterestId}.`
     );
   } finally {
+    log("Cleaning up allowlisted Firebase admin identity.");
+    try {
+      const removed = await deleteFirebasePasswordUser(
+        firebaseApiKey,
+        adminEmail,
+        adminPassword
+      );
+      if (!removed) {
+        log("No Firebase proof-admin identity needed cleanup.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[mvp-internal] Failed to clean up Firebase proof-admin identity: ${message}`);
+    }
+
     if (stackStarted) {
       log("Stopping compose.dev stack.");
       try {

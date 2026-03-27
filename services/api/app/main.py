@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+import json
 import os
-from typing import Any
+import uuid
+from typing import Any, Literal
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 from psycopg.rows import dict_row
+
+from services.workers.app.task_engine import (
+    enqueue_sequence_run_job as dispatch_sequence_run_job,
+    parse_cron_expression,
+    SequenceQueueDispatchError,
+    TASK_REGISTRY,
+)
+from services.workers.app.task_engine.context import RESERVED_CONTEXT_KEYS
+
+
+SEQUENCE_DEFINITION_STATUSES = {"draft", "active", "archived"}
+SEQUENCE_RUN_CANCELLABLE_STATUSES = {"pending"}
 
 
 def build_database_url() -> str:
@@ -110,6 +125,646 @@ def resolve_pagination(
 def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
     row = query_one(sql, params)
     return int(row["total"]) if row and row.get("total") is not None else 0
+
+
+class SequenceValidationError(ValueError):
+    def __init__(self, errors: list[str]):
+        super().__init__("; ".join(errors))
+        self.errors = errors
+
+
+class SequenceNotFoundError(LookupError):
+    pass
+
+
+class SequenceConflictError(ValueError):
+    pass
+
+
+class SequenceDispatchError(RuntimeError):
+    pass
+
+
+class SequenceCreatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    task_graph: list[dict[str, Any]] = Field(alias="taskGraph")
+    description: str | None = None
+    status: Literal["draft", "active", "archived"] = "draft"
+    trigger_event: str | None = Field(default=None, alias="triggerEvent")
+    cron: str | None = None
+    max_runs: int | None = Field(default=None, ge=1, alias="maxRuns")
+    tags: list[str] = Field(default_factory=list)
+    created_by: str | None = Field(default=None, alias="createdBy")
+
+
+class SequenceUpdatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    task_graph: list[dict[str, Any]] | None = Field(default=None, alias="taskGraph")
+    description: str | None = None
+    status: Literal["draft", "active", "archived"] | None = None
+    trigger_event: str | None = Field(default=None, alias="triggerEvent")
+    cron: str | None = None
+    max_runs: int | None = Field(default=None, ge=1, alias="maxRuns")
+    tags: list[str] | None = None
+    created_by: str | None = Field(default=None, alias="createdBy")
+
+
+class SequenceManualRunPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    context_json: dict[str, Any] = Field(default_factory=dict, alias="contextJson")
+    trigger_meta: dict[str, Any] = Field(default_factory=dict, alias="triggerMeta")
+    requested_by: str | None = Field(default=None, alias="requestedBy")
+
+
+class AgentSequenceCreatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    task_graph: list[dict[str, Any]] = Field(alias="taskGraph")
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    created_by: str | None = Field(default=None, alias="createdBy")
+    context_json: dict[str, Any] = Field(default_factory=dict, alias="contextJson")
+    trigger_meta: dict[str, Any] = Field(default_factory=dict, alias="triggerMeta")
+    run_now: bool = Field(default=True, alias="runNow")
+
+
+class SequenceCancelPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = None
+
+
+def validate_sequence_task_graph(task_graph: list[dict[str, Any]]) -> None:
+    if not isinstance(task_graph, list):
+        raise SequenceValidationError(["task_graph must be an array."])
+
+    errors = TASK_REGISTRY.validate_task_graph(task_graph)
+    if errors:
+        raise SequenceValidationError(errors)
+
+
+def validate_sequence_context_json(context_json: dict[str, Any]) -> None:
+    errors: list[str] = []
+    if not isinstance(context_json, dict):
+        errors.append("context_json must be an object.")
+    else:
+        reserved_keys = sorted(
+            key for key in context_json.keys() if key in RESERVED_CONTEXT_KEYS or key.startswith("_")
+        )
+        if reserved_keys:
+            errors.append(
+                "context_json must not include reserved keys: "
+                + ", ".join(reserved_keys)
+                + "."
+            )
+
+    if errors:
+        raise SequenceValidationError(errors)
+
+
+def validate_trigger_meta(trigger_meta: dict[str, Any]) -> None:
+    if not isinstance(trigger_meta, dict):
+        raise SequenceValidationError(["trigger_meta must be an object."])
+
+
+def normalize_sequence_cron(cron: str | None) -> str | None:
+    if cron is None:
+        return None
+
+    normalized = cron.strip()
+    if not normalized:
+        return None
+
+    try:
+        parse_cron_expression(normalized)
+    except ValueError as error:
+        raise SequenceValidationError([f"cron is invalid: {error}"]) from error
+
+    return normalized
+
+
+def dump_json_value(value: Any, field_name: str) -> str:
+    try:
+        return json.dumps(value)
+    except TypeError as error:
+        raise SequenceValidationError([f"{field_name} must be JSON-serializable."]) from error
+
+
+def sequence_select_sql() -> str:
+    return """
+        select
+          sequence_id::text as sequence_id,
+          title,
+          description,
+          task_graph,
+          status,
+          trigger_event,
+          cron,
+          max_runs,
+          run_count,
+          tags,
+          created_by,
+          created_at,
+          updated_at
+        from sequences
+    """
+
+
+def sequence_run_select_sql() -> str:
+    return """
+        select
+          sr.run_id::text as run_id,
+          sr.sequence_id::text as sequence_id,
+          s.title as sequence_title,
+          sr.status,
+          sr.context_json,
+          sr.trigger_type,
+          sr.trigger_meta,
+          sr.started_at,
+          sr.finished_at,
+          sr.error_text,
+          sr.created_at,
+          coalesce(task_stats.total_tasks, 0) as total_tasks,
+          coalesce(task_stats.completed_tasks, 0) as completed_tasks,
+          coalesce(task_stats.failed_tasks, 0) as failed_tasks,
+          coalesce(task_stats.skipped_tasks, 0) as skipped_tasks,
+          coalesce(task_stats.running_tasks, 0) as running_tasks
+        from sequence_runs sr
+        join sequences s on s.sequence_id = sr.sequence_id
+        left join lateral (
+          select
+            count(*)::int as total_tasks,
+            count(*) filter (where status = 'completed')::int as completed_tasks,
+            count(*) filter (where status = 'failed')::int as failed_tasks,
+            count(*) filter (where status = 'skipped')::int as skipped_tasks,
+            count(*) filter (where status = 'running')::int as running_tasks
+          from sequence_task_runs str
+          where str.run_id = sr.run_id
+        ) task_stats on true
+    """
+
+
+def list_sequence_plugins() -> list[dict[str, Any]]:
+    return TASK_REGISTRY.list_all()
+
+
+def list_sequences_page(
+    *,
+    limit: int,
+    page: int | None,
+    page_size: int | None,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    base_sql = f"{sequence_select_sql()}\norder by updated_at desc, created_at desc"
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, limit
+    )
+    if not paginate:
+        return query_all(f"{base_sql}\nlimit %s", (limit,))
+
+    total = query_count(
+        """
+        select count(*)::int as total
+        from sequences
+        """
+    )
+    items = query_all(
+        f"{base_sql}\nlimit %s\noffset %s",
+        (resolved_page_size, offset),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+def get_sequence_definition(sequence_id: str) -> dict[str, Any]:
+    sequence = query_one(
+        f"{sequence_select_sql()}\nwhere sequence_id = %s",
+        (sequence_id,),
+    )
+    if sequence is None:
+        raise SequenceNotFoundError(f"Sequence {sequence_id} was not found.")
+    return sequence
+
+
+def create_sequence_definition(payload: SequenceCreatePayload) -> dict[str, Any]:
+    validate_sequence_task_graph(payload.task_graph)
+    normalized_cron = normalize_sequence_cron(payload.cron)
+
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into sequences (
+                  title,
+                  description,
+                  task_graph,
+                  status,
+                  trigger_event,
+                  cron,
+                  max_runs,
+                  tags,
+                  created_by
+                )
+                values (%s, %s, %s::jsonb, %s, %s, %s, %s, %s::text[], %s)
+                returning
+                  sequence_id::text as sequence_id,
+                  title,
+                  description,
+                  task_graph,
+                  status,
+                  trigger_event,
+                  cron,
+                  max_runs,
+                  run_count,
+                  tags,
+                  created_by,
+                  created_at,
+                  updated_at
+                """,
+                (
+                    payload.title,
+                    payload.description,
+                    dump_json_value(payload.task_graph, "task_graph"),
+                    payload.status,
+                    payload.trigger_event,
+                    normalized_cron,
+                    payload.max_runs,
+                    payload.tags,
+                    payload.created_by,
+                ),
+            )
+            row = cursor.fetchone()
+
+    if row is None:
+        raise SequenceConflictError("Sequence creation did not return a row.")
+
+    return dict(row)
+
+
+def update_sequence_definition(
+    sequence_id: str,
+    payload: SequenceUpdatePayload,
+) -> dict[str, Any]:
+    values = payload.model_dump(exclude_unset=True)
+    if not values:
+        raise SequenceValidationError(["At least one field must be provided for update."])
+
+    errors: list[str] = []
+    for field_name in ("title", "status", "task_graph", "tags"):
+        if field_name in values and values[field_name] is None:
+            errors.append(f"{field_name} cannot be null.")
+    if errors:
+        raise SequenceValidationError(errors)
+
+    if "task_graph" in values and values["task_graph"] is not None:
+        validate_sequence_task_graph(values["task_graph"])
+    if "cron" in values:
+        values["cron"] = normalize_sequence_cron(values["cron"])
+
+    assignments: list[str] = []
+    params: list[Any] = []
+
+    for field_name, column_name in (
+        ("title", "title"),
+        ("description", "description"),
+        ("status", "status"),
+        ("trigger_event", "trigger_event"),
+        ("cron", "cron"),
+        ("max_runs", "max_runs"),
+        ("created_by", "created_by"),
+    ):
+        if field_name in values:
+            assignments.append(f"{column_name} = %s")
+            params.append(values[field_name])
+
+    if "task_graph" in values:
+        assignments.append("task_graph = %s::jsonb")
+        params.append(dump_json_value(values["task_graph"], "task_graph"))
+
+    if "tags" in values:
+        assignments.append("tags = %s::text[]")
+        params.append(values["tags"])
+
+    assignments.append("updated_at = now()")
+    params.append(sequence_id)
+
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                update sequences
+                set {', '.join(assignments)}
+                where sequence_id = %s
+                returning
+                  sequence_id::text as sequence_id,
+                  title,
+                  description,
+                  task_graph,
+                  status,
+                  trigger_event,
+                  cron,
+                  max_runs,
+                  run_count,
+                  tags,
+                  created_by,
+                  created_at,
+                  updated_at
+                """,
+                tuple(params),
+            )
+            row = cursor.fetchone()
+
+    if row is None:
+        raise SequenceNotFoundError(f"Sequence {sequence_id} was not found.")
+
+    return dict(row)
+
+
+def archive_sequence_definition(sequence_id: str) -> dict[str, Any]:
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update sequences
+                set
+                  status = 'archived',
+                  updated_at = now()
+                where sequence_id = %s
+                returning
+                  sequence_id::text as sequence_id,
+                  title,
+                  description,
+                  task_graph,
+                  status,
+                  trigger_event,
+                  cron,
+                  max_runs,
+                  run_count,
+                  tags,
+                  created_by,
+                  created_at,
+                  updated_at
+                """,
+                (sequence_id,),
+            )
+            row = cursor.fetchone()
+
+    if row is None:
+        raise SequenceNotFoundError(f"Sequence {sequence_id} was not found.")
+
+    return dict(row)
+
+
+def enqueue_sequence_run_job(run_id: str, sequence_id: str) -> None:
+    try:
+        dispatch_sequence_run_job(run_id, sequence_id)
+    except SequenceQueueDispatchError as error:
+        raise SequenceDispatchError(str(error)) from error
+    except SequenceDispatchError:
+        raise
+    except Exception as error:  # pragma: no cover - runtime dependent
+        raise SequenceDispatchError(
+            f"Failed to enqueue sequence run {run_id}: {error}"
+        ) from error
+
+
+def mark_sequence_run_failed_dispatch(run_id: str, error_text: str) -> None:
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update sequence_runs
+                set
+                  status = 'failed',
+                  finished_at = now(),
+                  error_text = %s
+                where run_id = %s
+                """,
+                (error_text, run_id),
+            )
+
+
+def create_sequence_run_request_for_trigger(
+    sequence_id: str,
+    *,
+    context_json: dict[str, Any],
+    trigger_meta: dict[str, Any],
+    trigger_type: Literal["manual", "cron", "agent", "api", "event"],
+) -> dict[str, Any]:
+    validate_sequence_context_json(context_json)
+    validate_trigger_meta(trigger_meta)
+    run_id = str(uuid.uuid4())
+
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.transaction():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select sequence_id::text as sequence_id, status
+                    from sequences
+                    where sequence_id = %s
+                    for update
+                    """,
+                    (sequence_id,),
+                )
+                sequence_row = cursor.fetchone()
+                if sequence_row is None:
+                    raise SequenceNotFoundError(f"Sequence {sequence_id} was not found.")
+                if sequence_row["status"] == "archived":
+                    raise SequenceConflictError(
+                        f"Sequence {sequence_id} is archived and cannot be run."
+                    )
+
+                cursor.execute(
+                    """
+                    insert into sequence_runs (
+                      run_id,
+                      sequence_id,
+                      status,
+                      context_json,
+                      trigger_type,
+                      trigger_meta
+                    )
+                    values (%s, %s, 'pending', %s::jsonb, %s, %s::jsonb)
+                    """,
+                    (
+                        run_id,
+                        sequence_id,
+                        dump_json_value(context_json, "context_json"),
+                        trigger_type,
+                        dump_json_value(trigger_meta, "trigger_meta"),
+                    ),
+                )
+
+    try:
+        enqueue_sequence_run_job(run_id, sequence_id)
+    except SequenceDispatchError:
+        mark_sequence_run_failed_dispatch(run_id, "BullMQ transport is not available in this API runtime.")
+        raise
+    except Exception as error:  # pragma: no cover - runtime dependent
+        mark_sequence_run_failed_dispatch(run_id, str(error))
+        raise SequenceDispatchError(str(error)) from error
+
+    return get_sequence_run(run_id)
+
+
+def create_sequence_run_request(
+    sequence_id: str,
+    payload: SequenceManualRunPayload,
+) -> dict[str, Any]:
+    trigger_meta = {
+        "source": "maintenance_api",
+        **payload.trigger_meta,
+    }
+    if payload.requested_by:
+        trigger_meta["requestedBy"] = payload.requested_by
+    return create_sequence_run_request_for_trigger(
+        sequence_id,
+        context_json=payload.context_json,
+        trigger_meta=trigger_meta,
+        trigger_type="manual",
+    )
+
+
+def list_agent_sequence_tools() -> dict[str, Any]:
+    return {
+        "availablePlugins": list_sequence_plugins(),
+        "sequenceDefaults": {
+            "status": "draft",
+            "triggerType": "agent",
+        },
+        "notes": [
+            "Agent-created sequences are stored first and stay draft by default.",
+            "Agent-triggered runs still persist in sequence_runs and dispatch through q.sequence.",
+        ],
+    }
+
+
+def create_agent_sequence_request(payload: AgentSequenceCreatePayload) -> dict[str, Any]:
+    create_payload = SequenceCreatePayload.model_validate(
+        {
+            "title": payload.title,
+            "taskGraph": payload.task_graph,
+            "description": payload.description,
+            "status": "draft",
+            "tags": payload.tags,
+            "createdBy": payload.created_by or "agent",
+        }
+    )
+    sequence = create_sequence_definition(create_payload)
+
+    run: dict[str, Any] | None = None
+    if payload.run_now:
+        trigger_meta = {
+            "source": "agent_api",
+            "createdSequenceId": sequence["sequence_id"],
+            **payload.trigger_meta,
+        }
+        if payload.created_by:
+            trigger_meta["requestedBy"] = payload.created_by
+        run = create_sequence_run_request_for_trigger(
+            sequence["sequence_id"],
+            context_json=payload.context_json,
+            trigger_meta=trigger_meta,
+            trigger_type="agent",
+        )
+
+    return {
+        "sequence": sequence,
+        "run": run,
+    }
+
+
+def get_sequence_run(run_id: str) -> dict[str, Any]:
+    run = query_one(
+        f"{sequence_run_select_sql()}\nwhere sr.run_id = %s",
+        (run_id,),
+    )
+    if run is None:
+        raise SequenceNotFoundError(f"Sequence run {run_id} was not found.")
+    return run
+
+
+def cancel_sequence_run_request(run_id: str, reason: str | None = None) -> dict[str, Any]:
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.transaction():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select run_id::text as run_id, status
+                    from sequence_runs
+                    where run_id = %s
+                    for update
+                    """,
+                    (run_id,),
+                )
+                run = cursor.fetchone()
+                if run is None:
+                    raise SequenceNotFoundError(f"Sequence run {run_id} was not found.")
+                if run["status"] not in SEQUENCE_RUN_CANCELLABLE_STATUSES:
+                    raise SequenceConflictError(
+                        f"Sequence run {run_id} cannot be cancelled from status {run['status']}."
+                    )
+
+                error_text = reason.strip() if isinstance(reason, str) and reason.strip() else "Cancelled via maintenance API."
+                cursor.execute(
+                    """
+                    update sequence_runs
+                    set
+                      status = 'cancelled',
+                      finished_at = now(),
+                      error_text = %s
+                    where run_id = %s
+                    returning run_id::text as run_id
+                    """,
+                    (error_text, run_id),
+                )
+                cursor.fetchone()
+
+    return get_sequence_run(run_id)
+
+
+def list_sequence_task_runs(run_id: str) -> list[dict[str, Any]]:
+    get_sequence_run(run_id)
+    return query_all(
+        """
+        select
+          task_run_id::text as task_run_id,
+          run_id::text as run_id,
+          task_index,
+          task_key,
+          module,
+          status,
+          options_json,
+          input_json,
+          output_json,
+          started_at,
+          finished_at,
+          error_text,
+          duration_ms,
+          created_at
+        from sequence_task_runs
+        where run_id = %s
+        order by task_index asc, created_at asc
+        """,
+        (run_id,),
+    )
+
+
+def raise_sequence_http_exception(error: Exception) -> None:
+    if isinstance(error, SequenceNotFoundError):
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    if isinstance(error, SequenceConflictError):
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if isinstance(error, SequenceValidationError):
+        raise HTTPException(status_code=422, detail=error.errors) from error
+    if isinstance(error, SequenceDispatchError):
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    raise error
 
 
 app = FastAPI(title="NewsPortal API MVP")
@@ -929,6 +1584,80 @@ def list_reindex_jobs(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
+@app.get("/maintenance/sequences")
+def list_sequences(
+    limit: int = Query(default=20, ge=1, le=100),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
+) -> dict[str, Any] | list[dict[str, Any]]:
+    return list_sequences_page(limit=limit, page=page, page_size=page_size)
+
+
+@app.get("/maintenance/sequences/{sequence_id}")
+def get_sequence(sequence_id: str) -> dict[str, Any]:
+    try:
+        return get_sequence_definition(sequence_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
+
+
+@app.post("/maintenance/sequences", status_code=201)
+def create_sequence(payload: SequenceCreatePayload) -> dict[str, Any]:
+    try:
+        return create_sequence_definition(payload)
+    except (
+        SequenceConflictError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
+
+
+@app.patch("/maintenance/sequences/{sequence_id}")
+def update_sequence(
+    sequence_id: str,
+    payload: SequenceUpdatePayload,
+) -> dict[str, Any]:
+    try:
+        return update_sequence_definition(sequence_id, payload)
+    except (
+        SequenceConflictError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
+
+
+@app.delete("/maintenance/sequences/{sequence_id}")
+def delete_sequence(sequence_id: str) -> dict[str, Any]:
+    try:
+        return archive_sequence_definition(sequence_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
+
+
+@app.get("/maintenance/sequence-plugins")
+def get_sequence_plugins() -> list[dict[str, Any]]:
+    return list_sequence_plugins()
+
+
+@app.get("/maintenance/agent/sequence-tools")
+def get_agent_sequence_tools() -> dict[str, Any]:
+    return list_agent_sequence_tools()
+
+
+@app.post("/maintenance/agent/sequences", status_code=201)
+def create_agent_sequence(payload: AgentSequenceCreatePayload) -> dict[str, Any]:
+    try:
+        return create_agent_sequence_request(payload)
+    except (
+        SequenceConflictError,
+        SequenceDispatchError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
+
+
 @app.get("/maintenance/fetch-runs")
 def list_fetch_runs(
     limit: int = Query(default=50, ge=1, le=200),
@@ -1059,3 +1788,52 @@ def list_outbox_events(limit: int = Query(default=50, ge=1, le=200)) -> list[dic
         """,
         (limit,),
     )
+
+
+@app.post("/maintenance/sequences/{sequence_id}/runs", status_code=202)
+def request_sequence_run(
+    sequence_id: str,
+    payload: SequenceManualRunPayload,
+) -> dict[str, Any]:
+    try:
+        return create_sequence_run_request(sequence_id, payload)
+    except (
+        SequenceConflictError,
+        SequenceDispatchError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
+
+
+@app.get("/maintenance/sequence-runs/{run_id}")
+def get_sequence_run_status(run_id: str) -> dict[str, Any]:
+    try:
+        return get_sequence_run(run_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
+
+
+@app.get("/maintenance/sequence-runs/{run_id}/task-runs")
+def get_sequence_run_task_runs(run_id: str) -> list[dict[str, Any]]:
+    try:
+        return list_sequence_task_runs(run_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
+
+
+@app.post("/maintenance/sequence-runs/{run_id}/cancel")
+def cancel_sequence_run(
+    run_id: str,
+    payload: SequenceCancelPayload | None = None,
+) -> dict[str, Any]:
+    try:
+        return cancel_sequence_run_request(
+            run_id,
+            reason=payload.reason if payload is not None else None,
+        )
+    except (
+        SequenceConflictError,
+        SequenceNotFoundError,
+    ) as error:
+        raise_sequence_http_exception(error)

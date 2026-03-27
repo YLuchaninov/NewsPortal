@@ -264,14 +264,52 @@ async function assertSmokeRows(
           from articles
           where channel_id = $1
         )
-        and event_type in ('article.ingest.requested', 'article.normalized')
+        and event_type = 'article.ingest.requested'
         and status = 'published'
     `,
     [channelId]
   );
 
-  if (outboxResult.rows[0]?.count !== "2") {
-    throw new Error("Expected published outbox rows for article.ingest.requested and article.normalized.");
+  if (outboxResult.rows[0]?.count !== "1") {
+    throw new Error("Expected one published outbox row for article.ingest.requested.");
+  }
+
+  const suppressedIntermediateResult = await pool.query<{ count: string }>(
+    `
+      select count(*)::text as count
+      from outbox_events
+      where
+        aggregate_type = 'article'
+        and aggregate_id in (
+          select doc_id
+          from articles
+          where channel_id = $1
+        )
+        and event_type = 'article.normalized'
+    `,
+    [channelId]
+  );
+
+  if (suppressedIntermediateResult.rows[0]?.count !== "0") {
+    throw new Error("Expected sequence-first runtime to suppress article.normalized outbox rows.");
+  }
+
+  const sequenceRunResult = await pool.query<{ count: string }>(
+    `
+      select count(*)::text as count
+      from sequence_runs
+      where trigger_meta ->> 'eventType' = 'article.ingest.requested'
+        and context_json ->> 'doc_id' in (
+          select doc_id::text
+          from articles
+          where channel_id = $1
+        )
+    `,
+    [channelId]
+  );
+
+  if (sequenceRunResult.rows[0]?.count !== "1") {
+    throw new Error("Expected one sequence_run for the RSS article ingest trigger.");
   }
 
   const inboxResult = await pool.query<{ count: string }>(
@@ -292,7 +330,11 @@ async function assertIdempotentRefetch(
   pool: Pool,
   channelId: string
 ): Promise<void> {
-  const beforeCounts = await pool.query<{ articleCount: string; outboxCount: string }>(
+  const beforeCounts = await pool.query<{
+    articleCount: string;
+    outboxCount: string;
+    sequenceRunCount: string;
+  }>(
     `
       select
         (
@@ -310,16 +352,30 @@ async function assertIdempotentRefetch(
               from articles
               where channel_id = $1
             )
-            and event_type in ('article.ingest.requested', 'article.normalized')
+            and event_type = 'article.ingest.requested'
             and status = 'published'
-        ) as "outboxCount"
+        ) as "outboxCount",
+        (
+          select count(*)::text
+          from sequence_runs
+          where trigger_meta ->> 'eventType' = 'article.ingest.requested'
+            and context_json ->> 'doc_id' in (
+              select doc_id::text
+              from articles
+              where channel_id = $1
+            )
+        ) as "sequenceRunCount"
     `,
     [channelId]
   );
 
   await service.pollChannel(channelId);
 
-  const afterCounts = await pool.query<{ articleCount: string; outboxCount: string }>(
+  const afterCounts = await pool.query<{
+    articleCount: string;
+    outboxCount: string;
+    sequenceRunCount: string;
+  }>(
     `
       select
         (
@@ -337,9 +393,19 @@ async function assertIdempotentRefetch(
               from articles
               where channel_id = $1
             )
-            and event_type in ('article.ingest.requested', 'article.normalized')
+            and event_type = 'article.ingest.requested'
             and status = 'published'
-        ) as "outboxCount"
+        ) as "outboxCount",
+        (
+          select count(*)::text
+          from sequence_runs
+          where trigger_meta ->> 'eventType' = 'article.ingest.requested'
+            and context_json ->> 'doc_id' in (
+              select doc_id::text
+              from articles
+              where channel_id = $1
+            )
+        ) as "sequenceRunCount"
     `,
     [channelId]
   );
@@ -350,6 +416,10 @@ async function assertIdempotentRefetch(
 
   if (afterCounts.rows[0]?.outboxCount !== beforeCounts.rows[0]?.outboxCount) {
     throw new Error("Expected RSS refetch to avoid creating duplicate article outbox rows.");
+  }
+
+  if (afterCounts.rows[0]?.sequenceRunCount !== beforeCounts.rows[0]?.sequenceRunCount) {
+    throw new Error("Expected RSS refetch to avoid creating duplicate sequence runs.");
   }
 }
 

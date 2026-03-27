@@ -69,6 +69,12 @@ from .scoring import (
     semantic_prototype_score,
 )
 from .system_feed import summarize_system_feed_result
+from .task_engine import (
+    enqueue_sequence_run_job_async,
+    PostgresSequenceRepository,
+    SequenceCronScheduler,
+    SequenceRunJobProcessor,
+)
 
 LOGGER = logging.getLogger("newsportal.workers")
 
@@ -84,6 +90,7 @@ FEEDBACK_INGEST_QUEUE = "q.feedback.ingest"
 REINDEX_QUEUE = "q.reindex"
 INTEREST_COMPILE_QUEUE = "q.interest.compile"
 CRITERION_COMPILE_QUEUE = "q.criterion.compile"
+SEQUENCE_QUEUE = "q.sequence"
 
 NORMALIZE_CONSUMER = "worker.normalize"
 DEDUP_CONSUMER = "worker.dedup"
@@ -173,6 +180,48 @@ def check_redis() -> None:
         client.ping()
     finally:
         client.close()
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def legacy_queue_consumers_enabled() -> bool:
+    return env_flag("WORKER_ENABLE_LEGACY_QUEUE_CONSUMERS", default=False)
+
+
+def sequence_runner_enabled() -> bool:
+    return env_flag("WORKER_ENABLE_SEQUENCE_RUNNER", default=True)
+
+
+def sequence_cron_scheduler_enabled() -> bool:
+    return env_flag("WORKER_ENABLE_SEQUENCE_CRON_SCHEDULER", default=True)
+
+
+def sequence_runner_concurrency() -> int:
+    raw_value = os.getenv("WORKER_SEQUENCE_RUNNER_CONCURRENCY", "1")
+    try:
+        return max(1, int(raw_value))
+    except ValueError:
+        return 1
+
+
+def sequence_cron_poll_interval_seconds() -> float:
+    raw_value = os.getenv("WORKER_SEQUENCE_CRON_POLL_INTERVAL_SECONDS", "30")
+    try:
+        return max(1.0, float(raw_value))
+    except ValueError:
+        return 30.0
+
+
+def suppress_downstream_outbox(job: Job) -> bool:
+    job_data = job.data if isinstance(job.data, Mapping) else {}
+    return coerce_bool(job_data.get("suppressDownstreamOutbox")) or coerce_bool(
+        job_data.get("sequenceRuntime")
+    )
 
 
 def strip_html(value: str) -> str:
@@ -2009,6 +2058,7 @@ def resolve_family_id(candidate: dict[str, Any]) -> uuid.UUID:
 async def process_normalize(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
+    suppress_pipeline_fanout = suppress_downstream_outbox(job)
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Normalize worker expected eventId and docId.")
@@ -2061,13 +2111,14 @@ async def process_normalize(job: Job, _job_token: str) -> dict[str, Any]:
                         doc_id,
                     ),
                 )
-                await insert_outbox_event(
-                    cursor,
-                    ARTICLE_NORMALIZED_EVENT,
-                    "article",
-                    article["doc_id"],
-                    {"docId": str(article["doc_id"]), "version": 1},
-                )
+                if not suppress_pipeline_fanout:
+                    await insert_outbox_event(
+                        cursor,
+                        ARTICLE_NORMALIZED_EVENT,
+                        "article",
+                        article["doc_id"],
+                        {"docId": str(article["doc_id"]), "version": 1},
+                    )
                 await record_processed_event(cursor, NORMALIZE_CONSUMER, event_id)
 
     return {"status": "normalized", "docId": doc_id}
@@ -2154,6 +2205,7 @@ async def process_embed(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
     vector_version = coerce_positive_int(job.data.get("version"), 1)
+    suppress_pipeline_fanout = suppress_downstream_outbox(job)
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Embed worker expected eventId and docId.")
@@ -2298,13 +2350,14 @@ async def process_embed(job: Job, _job_token: str) -> dict[str, Any]:
                         article["doc_id"],
                     ),
                 )
-                await insert_outbox_event(
-                    cursor,
-                    ARTICLE_EMBEDDED_EVENT,
-                    "article",
-                    article["doc_id"],
-                    {"docId": str(article["doc_id"]), "version": vector_version},
-                )
+                if not suppress_pipeline_fanout:
+                    await insert_outbox_event(
+                        cursor,
+                        ARTICLE_EMBEDDED_EVENT,
+                        "article",
+                        article["doc_id"],
+                        {"docId": str(article["doc_id"]), "version": vector_version},
+                    )
                 await record_processed_event(cursor, EMBED_CONSUMER, event_id)
 
     return {
@@ -2319,6 +2372,7 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
     vector_version = coerce_positive_int(job.data.get("version"), 1)
+    suppress_pipeline_fanout = suppress_downstream_outbox(job)
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Cluster worker expected eventId and docId.")
@@ -2414,13 +2468,14 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
                     """,
                     (cluster_id, next_state, article["doc_id"]),
                 )
-                await insert_outbox_event(
-                    cursor,
-                    ARTICLE_CLUSTERED_EVENT,
-                    "article",
-                    article["doc_id"],
-                    {"docId": str(article["doc_id"]), "version": vector_version},
-                )
+                if not suppress_pipeline_fanout:
+                    await insert_outbox_event(
+                        cursor,
+                        ARTICLE_CLUSTERED_EVENT,
+                        "article",
+                        article["doc_id"],
+                        {"docId": str(article["doc_id"]), "version": vector_version},
+                    )
                 await record_processed_event(cursor, CLUSTER_CONSUMER, event_id)
 
     return {
@@ -2435,6 +2490,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
     historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
+    suppress_pipeline_fanout = suppress_downstream_outbox(job)
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Criteria match worker expected eventId and docId.")
@@ -2582,7 +2638,11 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                     criteria_count += 1
 
                 system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
-                if should_dispatch_clustering(system_feed_result) and not historical_backfill:
+                if (
+                    should_dispatch_clustering(system_feed_result)
+                    and not historical_backfill
+                    and not suppress_pipeline_fanout
+                ):
                     await insert_outbox_event(
                         cursor,
                         ARTICLE_CRITERIA_MATCHED_EVENT,
@@ -2605,6 +2665,7 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
     historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
     scoped_user_id = coerce_optional_string(job.data.get("userId"))
     scoped_interest_id = coerce_optional_string(job.data.get("interestId"))
+    suppress_pipeline_fanout = suppress_downstream_outbox(job)
 
     if not event_id or event_id == "None" or not doc_id or doc_id == "None":
         raise ValueError("Interest match worker expected eventId and docId.")
@@ -2836,7 +2897,7 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                     """,
                     (next_state, article["doc_id"]),
                 )
-                if should_trigger_notify and not historical_backfill:
+                if should_trigger_notify and not historical_backfill and not suppress_pipeline_fanout:
                     await insert_outbox_event(
                         cursor,
                         ARTICLE_INTERESTS_MATCHED_EVENT,
@@ -3040,6 +3101,7 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
     scope = str(job.data.get("scope") or "interest")
     target_id = str(job.data.get("targetId"))
     historical_backfill = coerce_bool(job.data.get("historicalBackfill"))
+    suppress_pipeline_fanout = suppress_downstream_outbox(job)
     raw_prompt_template_id = job.data.get("promptTemplateId")
     prompt_template_id = str(raw_prompt_template_id).strip() if raw_prompt_template_id else None
 
@@ -3199,7 +3261,11 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                         ),
                     )
                     system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
-                    if should_dispatch_clustering(system_feed_result) and not historical_backfill:
+                    if (
+                        should_dispatch_clustering(system_feed_result)
+                        and not historical_backfill
+                        and not suppress_pipeline_fanout
+                    ):
                         await insert_outbox_event(
                             cursor,
                             ARTICLE_CRITERIA_MATCHED_EVENT,
@@ -3234,7 +3300,11 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                             target_id,
                         ),
                     )
-                    if review_result.decision == "approve" and not historical_backfill:
+                    if (
+                        review_result.decision == "approve"
+                        and not historical_backfill
+                        and not suppress_pipeline_fanout
+                    ):
                         await insert_outbox_event(
                             cursor,
                             ARTICLE_INTERESTS_MATCHED_EVENT,
@@ -4163,115 +4233,179 @@ def on_worker_error(label: str):
 
 
 async def run_workers() -> None:
-    normalize_worker = Worker(
-        NORMALIZE_QUEUE,
-        process_normalize,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 4,
-        },
-    )
-    dedup_worker = Worker(
-        DEDUP_QUEUE,
-        process_dedup,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 4,
-        },
-    )
-    embed_worker = Worker(
-        EMBED_QUEUE,
-        process_embed,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    cluster_worker = Worker(
-        CLUSTER_QUEUE,
-        process_cluster,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    criteria_match_worker = Worker(
-        CRITERIA_MATCH_QUEUE,
-        process_match_criteria,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    interest_match_worker = Worker(
-        INTEREST_MATCH_QUEUE,
-        process_match_interests,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    notify_worker = Worker(
-        NOTIFY_QUEUE,
-        process_notify,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    llm_review_worker = Worker(
-        LLM_REVIEW_QUEUE,
-        process_llm_review,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 1,
-        },
-    )
-    feedback_ingest_worker = Worker(
-        FEEDBACK_INGEST_QUEUE,
-        process_feedback_ingest,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    reindex_worker = Worker(
-        REINDEX_QUEUE,
-        process_reindex,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 1,
-        },
-    )
-    interest_compile_worker = Worker(
-        INTEREST_COMPILE_QUEUE,
-        process_interest_compile,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
-    criterion_compile_worker = Worker(
-        CRITERION_COMPILE_QUEUE,
-        process_criterion_compile,
-        {
-            "connection": build_redis_connection_options(),
-            "concurrency": 2,
-        },
-    )
+    enable_legacy_queue_consumers = legacy_queue_consumers_enabled()
+    enable_sequence_runner = sequence_runner_enabled()
+    enable_sequence_cron_scheduler = sequence_cron_scheduler_enabled()
+    legacy_workers: list[tuple[str, str, Worker]] = []
+    if enable_legacy_queue_consumers:
+        legacy_workers = [
+            (
+                "normalize",
+                NORMALIZE_QUEUE,
+                Worker(
+                    NORMALIZE_QUEUE,
+                    process_normalize,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 4,
+                    },
+                ),
+            ),
+            (
+                "dedup",
+                DEDUP_QUEUE,
+                Worker(
+                    DEDUP_QUEUE,
+                    process_dedup,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 4,
+                    },
+                ),
+            ),
+            (
+                "embed",
+                EMBED_QUEUE,
+                Worker(
+                    EMBED_QUEUE,
+                    process_embed,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "cluster",
+                CLUSTER_QUEUE,
+                Worker(
+                    CLUSTER_QUEUE,
+                    process_cluster,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "match.criteria",
+                CRITERIA_MATCH_QUEUE,
+                Worker(
+                    CRITERIA_MATCH_QUEUE,
+                    process_match_criteria,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "match.interests",
+                INTEREST_MATCH_QUEUE,
+                Worker(
+                    INTEREST_MATCH_QUEUE,
+                    process_match_interests,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "notify",
+                NOTIFY_QUEUE,
+                Worker(
+                    NOTIFY_QUEUE,
+                    process_notify,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "llm.review",
+                LLM_REVIEW_QUEUE,
+                Worker(
+                    LLM_REVIEW_QUEUE,
+                    process_llm_review,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 1,
+                    },
+                ),
+            ),
+            (
+                "feedback.ingest",
+                FEEDBACK_INGEST_QUEUE,
+                Worker(
+                    FEEDBACK_INGEST_QUEUE,
+                    process_feedback_ingest,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "reindex",
+                REINDEX_QUEUE,
+                Worker(
+                    REINDEX_QUEUE,
+                    process_reindex,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 1,
+                    },
+                ),
+            ),
+            (
+                "interest.compile",
+                INTEREST_COMPILE_QUEUE,
+                Worker(
+                    INTEREST_COMPILE_QUEUE,
+                    process_interest_compile,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+            (
+                "criterion.compile",
+                CRITERION_COMPILE_QUEUE,
+                Worker(
+                    CRITERION_COMPILE_QUEUE,
+                    process_criterion_compile,
+                    {
+                        "connection": build_redis_connection_options(),
+                        "concurrency": 2,
+                    },
+                ),
+            ),
+        ]
+    sequence_worker: Worker | None = None
+    if enable_sequence_runner:
+        sequence_repository = PostgresSequenceRepository()
+        sequence_job_processor = SequenceRunJobProcessor(repository=sequence_repository)
 
-    normalize_worker.on("failed", on_worker_error("normalize"))
-    dedup_worker.on("failed", on_worker_error("dedup"))
-    embed_worker.on("failed", on_worker_error("embed"))
-    cluster_worker.on("failed", on_worker_error("cluster"))
-    criteria_match_worker.on("failed", on_worker_error("match.criteria"))
-    interest_match_worker.on("failed", on_worker_error("match.interests"))
-    notify_worker.on("failed", on_worker_error("notify"))
-    llm_review_worker.on("failed", on_worker_error("llm.review"))
-    feedback_ingest_worker.on("failed", on_worker_error("feedback.ingest"))
-    reindex_worker.on("failed", on_worker_error("reindex"))
-    interest_compile_worker.on("failed", on_worker_error("interest.compile"))
-    criterion_compile_worker.on("failed", on_worker_error("criterion.compile"))
+        async def process_sequence_queue_job(job: Job, _job_token: str) -> dict[str, Any]:
+            payload = job.data if isinstance(job.data, Mapping) else {}
+            return await sequence_job_processor.handle_payload(payload)
+
+        sequence_worker = Worker(
+            SEQUENCE_QUEUE,
+            process_sequence_queue_job,
+            {
+                "connection": build_redis_connection_options(),
+                "concurrency": sequence_runner_concurrency(),
+            },
+        )
+
+    for label, _queue_name, worker in legacy_workers:
+        worker.on("failed", on_worker_error(label))
+    if sequence_worker is not None:
+        sequence_worker.on("failed", on_worker_error("sequence"))
 
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -4280,39 +4414,41 @@ async def run_workers() -> None:
         signum = getattr(signal, signame)
         loop.add_signal_handler(signum, stop_event.set)
 
+    sequence_scheduler_task: asyncio.Task[None] | None = None
+    if enable_sequence_cron_scheduler:
+        sequence_repository = PostgresSequenceRepository()
+        sequence_scheduler = SequenceCronScheduler(
+            repository=sequence_repository,
+            enqueue_run=enqueue_sequence_run_job_async,
+            poll_interval_seconds=sequence_cron_poll_interval_seconds(),
+        )
+        sequence_scheduler_task = asyncio.create_task(
+            sequence_scheduler.run_until_stopped(stop_event)
+        )
+
+    consumed_queues = [queue_name for _label, queue_name, _worker in legacy_workers]
+    if sequence_worker is not None:
+        consumed_queues.append(SEQUENCE_QUEUE)
+
     LOGGER.info(
         "Workers booted. Consuming %s.",
-        ", ".join(
-            [
-                NORMALIZE_QUEUE,
-                DEDUP_QUEUE,
-                EMBED_QUEUE,
-                CLUSTER_QUEUE,
-                CRITERIA_MATCH_QUEUE,
-                INTEREST_MATCH_QUEUE,
-                NOTIFY_QUEUE,
-                LLM_REVIEW_QUEUE,
-                FEEDBACK_INGEST_QUEUE,
-                REINDEX_QUEUE,
-                INTEREST_COMPILE_QUEUE,
-                CRITERION_COMPILE_QUEUE,
-            ]
-        ),
+        ", ".join(consumed_queues) if consumed_queues else "<none>",
     )
+    if enable_sequence_cron_scheduler:
+        LOGGER.info(
+            "Sequence cron scheduler enabled with poll interval %.1fs.",
+            sequence_cron_poll_interval_seconds(),
+        )
+    if enable_legacy_queue_consumers:
+        LOGGER.warning("Legacy queue consumers are enabled alongside sequence runtime.")
     await stop_event.wait()
     LOGGER.info("Worker shutdown requested. Closing BullMQ consumers.")
-    await normalize_worker.close()
-    await dedup_worker.close()
-    await embed_worker.close()
-    await cluster_worker.close()
-    await criteria_match_worker.close()
-    await interest_match_worker.close()
-    await notify_worker.close()
-    await llm_review_worker.close()
-    await feedback_ingest_worker.close()
-    await reindex_worker.close()
-    await interest_compile_worker.close()
-    await criterion_compile_worker.close()
+    if sequence_scheduler_task is not None:
+        await sequence_scheduler_task
+    for _label, _queue_name, worker in legacy_workers:
+        await worker.close()
+    if sequence_worker is not None:
+        await sequence_worker.close()
 
 
 def main() -> None:

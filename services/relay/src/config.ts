@@ -4,7 +4,7 @@ export interface RelayConfig {
   relayPort: number;
   outboxPollIntervalMs: number;
   outboxBatchSize: number;
-  enableEmbedFanout: boolean;
+  enableSequenceRouting: boolean;
 }
 
 function readNumber(name: string, fallback: number): number {
@@ -79,6 +79,6 @@ export function loadRelayConfig(): RelayConfig {
     relayPort: readNumber("RELAY_PORT", 4000),
     outboxPollIntervalMs: readNumber("OUTBOX_POLL_INTERVAL_MS", 1000),
     outboxBatchSize: readNumber("OUTBOX_BATCH_SIZE", 20),
-    enableEmbedFanout: readBoolean("RELAY_ENABLE_EMBED_FANOUT", false)
+    enableSequenceRouting: readBoolean("RELAY_ENABLE_SEQUENCE_ROUTING", true)
   };
 }

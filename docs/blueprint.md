@@ -24,9 +24,11 @@ NewsPortal строится как zero-shot система фильтрации
 
 Основной путь данных выглядит так:
 
-`source channel -> Node fetcher -> PostgreSQL -> outbox_events -> relay -> BullMQ -> Python workers -> PostgreSQL/HNSW derived state -> Astro web/admin, API и notification dispatch`
+`source channel -> Node fetcher -> PostgreSQL -> outbox_events -> relay -> (q.fetch/q.foundation.smoke fallback or sequence lookup -> sequence_runs -> q.sequence) -> Python workers/task engine -> PostgreSQL/HNSW derived state -> Astro web/admin, API и notification dispatch`
 
 Главный write principle: пользовательский и сервисный command path сначала фиксирует бизнес-изменение в PostgreSQL, затем публикует outbox event; тяжелая обработка выполняется асинхронно worker-ами, а UI читает результат из PostgreSQL.
+
+Sequence-engine rollout truth: `services/workers/app/task_engine` теперь является default runtime owner для sequence-managed triggers (`article.ingest.requested`, `interest.compile.requested`, `criterion.compile.requested`, `llm.review.requested`, `notification.feedback.recorded`, `reindex.requested`). Relay для них создает PostgreSQL-backed `sequence_runs` и enqueue-ит `q.sequence`, а fallback direct queue fanout остается только для non-sequence events вроде `foundation.smoke.requested` и `source.channel.sync.requested`; если sequence-managed event не имеет active sequence route, relay должен fail-ить outbox row вместо silent skip.
 
 ### Capability model
 
@@ -61,6 +63,7 @@ NewsPortal строится как zero-shot система фильтрации
 - `apps/*` содержат только Astro product surfaces.
 - `services/fetchers` и `services/relay` несут Node/TypeScript ingest and routing responsibilities.
 - `services/api`, `services/workers`, `services/ml`, `services/indexer` несут Python read, processing, ML и rebuild responsibilities.
+- `services/workers/app/task_engine` теперь несет default runtime ownership для sequence-managed triggers; legacy typed queue consumers остаются только opt-in compatibility path и не должны silently работать рядом с default sequence runtime.
 - `packages/*` хранят shared contracts, SDK, UI primitives и config.
 - `database/*` хранит DDL, migrations и seeds; `infra/docker/*` задает официальный Compose baseline.
 - Queue payload design остается тонким и ID-based.
@@ -86,6 +89,7 @@ NewsPortal строится как zero-shot система фильтрации
 - `docs/engineering.md` хранит durable engineering discipline: decomposition rules, boundary-handling, refactor honesty, stateful test access и cleanup expectations.
 - `docs/verification.md` хранит proof policy, gate taxonomy и close gate.
 - `docs/contracts/test-access-and-fixtures.md` является текущим deep contract doc для stateful backend testing, Firebase identities, Mailpit delivery, `web_push` subscriptions и persistent fixture cleanup.
+- `docs/contracts/universal-task-engine.md` хранит durable contract для staged Universal Task Engine migration, sequence data model, executor/plugin boundaries и cutover discipline.
 
 Остальная часть документа ниже остается детальным, долговременным архитектурным reference без радикального переписывания под runtime-core summary.
 
@@ -816,7 +820,9 @@ Outbox relay.
 Отвечает за:
 
 - чтение `outbox_events`;
-- публикацию задач в BullMQ;
+- создание `sequence_runs` и публикацию `q.sequence` jobs для sequence-managed triggers;
+- fallback публикацию прямых BullMQ jobs только для non-sequence events;
+- явный failure для sequence-managed event, если active sequence route отсутствует;
 - повторную отправку при ошибках;
 - маркировку `published_at`, `attempt_count`, `status`.
 
@@ -829,7 +835,9 @@ Outbox relay.
 - health;
 - debug;
 - internal explain;
-- internal read endpoints.
+- internal read endpoints;
+- internal/maintenance sequence management surface (`/maintenance/sequences*`, `/maintenance/sequence-runs*`, `/maintenance/sequence-plugins`);
+- agent-facing draft-sequence create/run surface под тем же maintenance boundary.
 
 ### 10.6. `workers`
 
@@ -837,6 +845,7 @@ Python worker runtime.
 
 Отвечает за:
 
+- sequence-run traversal и task-run persistence;
 - normalization;
 - language detection;
 - feature extraction;
@@ -845,7 +854,8 @@ Python worker runtime.
 - cluster assignment;
 - criteria matching;
 - interest fanout;
-- notification decisioning.
+- notification decisioning;
+- cron-driven sequence bootstrap for active cron sequences.
 
 ### 10.7. `indexer`
 
@@ -2300,7 +2310,8 @@ Worker должен:
 3. записать строку в `outbox_events`;
 4. commit;
 5. relay читает `outbox_events`;
-6. relay публикует job в BullMQ;
+6. для sequence-managed events relay создает `sequence_runs` и публикует thin job в `q.sequence`; для non-sequence events использует direct BullMQ fallback;
+6a. если sequence-managed event не имеет active sequence route, relay помечает outbox row как failed вместо silent publish/skip;
 7. relay помечает событие как `published`.
 
 ### 22.3. Inbox/idempotency
@@ -2320,70 +2331,65 @@ Worker должен:
 ### 22.4. Минимальный набор очередей
 
 - `q.fetch`
-- `q.normalize`
-- `q.dedup`
-- `q.embed`
-- `q.cluster`
-- `q.match.criteria`
-- `q.match.interests`
-- `q.notify`
-- `q.llm.review`
-- `q.feedback.ingest`
-- `q.reindex`
-- `q.interest.compile`
-- `q.criterion.compile`
+- `q.foundation.smoke`
+- `q.sequence`
+
+Legacy typed queues (`q.normalize`, `q.dedup`, `q.embed`, `q.cluster`, `q.match.criteria`, `q.match.interests`, `q.notify`, `q.llm.review`, `q.feedback.ingest`, `q.reindex`, `q.interest.compile`, `q.criterion.compile`) остаются только compatibility surface для explicit opt-in legacy runtime и больше не являются default relay ownership.
 
 ### 22.5. Queue payload design
 
 В очередь не надо класть полный текст статьи.
 
-Правильный payload:
+Правильный payload зависит от transport boundary:
 
-- `job_id`
-- `event_id`
-- `doc_id`
-- `criterion_id` или `interest_id` при необходимости
-- `version`
+- для relay fallback queues:
+  - `job_id`
+  - `event_id`
+  - `doc_id`
+  - `criterion_id` или `interest_id` при необходимости
+  - `version`
+- для `q.sequence`:
+  - `job_id`
+  - `run_id`
+  - `sequence_id`
 
-Текст, признаки и compiled state worker должен читать из PostgreSQL.
+Event-specific thin identifiers для sequence runtime relay пишет в `sequence_runs.context_json`; текст, признаки и compiled state worker по-прежнему читает из PostgreSQL.
 
 ### 22.6. Порядок прохождения статьи
 
 1. fetcher получил статью;
 2. статья записана в PostgreSQL как raw article;
 3. создан `article.ingest.requested`;
-4. relay отправил job в `q.normalize`;
-5. normalize worker очистил текст и извлек признаки;
-6. создан `article.normalized`;
-7. relay отправил задачи в `q.dedup` и `q.embed`;
-8. dedup worker назначил duplicate/family state;
-9. embed worker посчитал embeddings;
-10. создан `article.embedded`;
-11. criteria worker посчитал системные criteria matches и обновил article-level `system_feed_results`;
-12. если criteria case попал в gray zone, job в `q.llm.review` обновляет criterion decision и пересчитывает `system_feed_results`;
-13. когда system gate стал `eligible` или `pass_through`, relay публикует `article.criteria.matched`, и только после этого cluster worker назначает event cluster;
-14. только после `article.clustered` interest worker запускает optional per-user personalization;
-15. если у статьи нет system-feed eligibility, clustering и personalization lanes пропускаются; если у конкретного пользователя нет compiled `user_interests`, персонализация для него просто не создает per-user match rows, но статья остается доступной в system-selected feed;
-15a. если у пользователя есть matched `user_interests`, такие статьи остаются в global system feed на `/`, но дополнительно попадают в отдельный personalized `/matches` read surface;
-16. baseline runtime не делает interest-side gray-zone LLM review: такие user-interest matches suppress-ятся без внешнего LLM call, а future opt-in/premium lane может вернуть этот scope отдельно;
-17. notify worker применил suppression и отправил уведомление только для personalization lane;
-18. dispatch слой отправил уведомление.
+4. relay находит active article sequence, создает `sequence_run` и публикует thin job в `q.sequence`;
+5. sequence runtime выполняет `article.normalize`, который очищает текст и извлекает признаки;
+6. тот же run выполняет `article.dedup` и назначает duplicate/family state;
+7. тот же run выполняет `article.embed` и считает embeddings;
+8. тот же run выполняет `article.match_criteria` и обновляет article-level `system_feed_results`;
+9. если criteria case попал в gray zone и это не historical replay, handler пишет `llm.review.requested`; relay создает отдельный LLM-resume `sequence_run` в `q.sequence`;
+10. когда system gate стал `eligible` или `pass_through`, текущий sequence run продолжает `article.cluster`, затем `article.match_interests`, затем `article.notify`; non-eligible статьи truthfully skip downstream tasks;
+11. если у статьи нет system-feed eligibility, clustering и personalization lanes пропускаются; если у конкретного пользователя нет compiled `user_interests`, персонализация для него просто не создает per-user match rows, но статья остается доступной в system-selected feed;
+11a. если у пользователя есть matched `user_interests`, такие статьи остаются в global system feed на `/`, но дополнительно попадают в отдельный personalized `/matches` read surface;
+12. baseline runtime не делает interest-side gray-zone LLM review: такие user-interest matches suppress-ятся без внешнего LLM call, а future opt-in/premium lane может вернуть этот scope отдельно;
+13. notify worker применил suppression и отправил уведомление только для personalization lane;
+14. dispatch слой отправил уведомление.
+
+Legacy intermediate article events (`article.normalized`, `article.embedded`, `article.criteria.matched`, `article.clustered`, `article.interests.matched`) больше не являются default relay ownership и suppress-ятся внутри sequence runtime, чтобы не создавать dual execution.
 
 ### 22.7. Порядок записи feedback
 
 1. пользователь в `web` или через public API отмечает alert как `helpful` или `not_helpful`;
 2. событие сохраняется в PostgreSQL;
 3. создается `notification.feedback.recorded`;
-4. relay публикует job в `q.feedback.ingest`;
-5. worker обновляет агрегаты и future-use аналитические представления.
+4. relay создает `sequence_run` и публикует thin job в `q.sequence`;
+5. maintenance plugin обновляет агрегаты и future-use аналитические представления.
 
 ### 22.8. Порядок изменения interest
 
 1. пользователь меняет interest в `web`;
 2. `web` сохраняет новую версию interest;
 3. создается `interest.compile.requested`;
-4. relay публикует job;
-5. worker компилирует embeddings и centroid;
+4. relay создает `sequence_run` и публикует thin job в `q.sequence`;
+5. maintenance plugin компилирует embeddings и centroid;
 6. обновляется compiled state;
 7. обновляется registry/HNSW;
 8. после успешного compile worker автоматически ставит scoped `repair` job для historical system-feed-eligible статей этого `user_id`/`interest_id`, без retro notifications;
@@ -2436,6 +2442,8 @@ Worker должен:
 
 - compile interest;
 - compile criterion;
+- sequence CRUD, soft-archive, manual run, pending-only cancel, run status и task-run detail;
+- plugin catalog и agent draft-sequence create/run surface;
 - rebuild HNSW;
 - historical backfill/rematch для уже сохраненных статей, когда admin intentionally repair-ит DB truth после изменения interests или LLM prompt templates;
 - manual reindex/backfill jobs обязаны явно различать rebuild-only и DB-repair modes; DB-repair mode должен заново считать `criterion_match_results` / `interest_match_results`, поддерживать в sync derived `system_feed_results`, переигрывать только criteria-scope gray-zone LLM review в baseline runtime и не отправлять retro-notifications молча;

@@ -25,36 +25,76 @@ export const INTEREST_COMPILE_REQUESTED_EVENT = "interest.compile.requested";
 export const INTEREST_COMPILE_QUEUE = "q.interest.compile";
 export const CRITERION_COMPILE_REQUESTED_EVENT = "criterion.compile.requested";
 export const CRITERION_COMPILE_QUEUE = "q.criterion.compile";
+export const SEQUENCE_QUEUE = "q.sequence";
+
+export const SEQUENCE_STATUSES = ["draft", "active", "archived"] as const;
+export type SequenceStatus = (typeof SEQUENCE_STATUSES)[number];
+
+export const SEQUENCE_RUN_STATUSES = [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "cancelled"
+] as const;
+export type SequenceRunStatus = (typeof SEQUENCE_RUN_STATUSES)[number];
+
+export const SEQUENCE_TASK_RUN_STATUSES = [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "skipped"
+] as const;
+export type SequenceTaskRunStatus = (typeof SEQUENCE_TASK_RUN_STATUSES)[number];
+
+export const SEQUENCE_TRIGGER_TYPES = [
+  "manual",
+  "cron",
+  "agent",
+  "api",
+  "event"
+] as const;
+export type SequenceTriggerType = (typeof SEQUENCE_TRIGGER_TYPES)[number];
+
+export interface TaskGraphRetryPolicy {
+  attempts: number;
+  delay_ms: number;
+}
+
+export interface TaskGraphNode {
+  key: string;
+  module: string;
+  options: Record<string, unknown>;
+  enabled?: boolean;
+  retry?: TaskGraphRetryPolicy;
+  timeout_ms?: number;
+}
+
+export type TaskGraph = readonly TaskGraphNode[];
 
 export interface OutboxEventQueueMapOptions {
   enableEmbedFanout?: boolean;
 }
 
 export function buildOutboxEventQueueMap(
-  options: OutboxEventQueueMapOptions = {}
+  _options: OutboxEventQueueMapOptions = {}
 ): Record<string, readonly string[]> {
-  const articleNormalizedQueues = options.enableEmbedFanout
-    ? [DEDUP_QUEUE, EMBED_QUEUE]
-    : [DEDUP_QUEUE];
-
   return {
     [FOUNDATION_SMOKE_EVENT]: [FOUNDATION_SMOKE_QUEUE],
-    [SOURCE_CHANNEL_SYNC_REQUESTED_EVENT]: [FETCH_QUEUE],
-    [ARTICLE_INGEST_REQUESTED_EVENT]: [NORMALIZE_QUEUE],
-    [ARTICLE_NORMALIZED_EVENT]: articleNormalizedQueues,
-    [ARTICLE_EMBEDDED_EVENT]: [CRITERIA_MATCH_QUEUE],
-    [ARTICLE_CLUSTERED_EVENT]: [INTEREST_MATCH_QUEUE],
-    [ARTICLE_CRITERIA_MATCHED_EVENT]: [CLUSTER_QUEUE],
-    [ARTICLE_INTERESTS_MATCHED_EVENT]: [NOTIFY_QUEUE],
-    [LLM_REVIEW_REQUESTED_EVENT]: [LLM_REVIEW_QUEUE],
-    [NOTIFICATION_FEEDBACK_RECORDED_EVENT]: [FEEDBACK_INGEST_QUEUE],
-    [REINDEX_REQUESTED_EVENT]: [REINDEX_QUEUE],
-    [INTEREST_COMPILE_REQUESTED_EVENT]: [INTEREST_COMPILE_QUEUE],
-    [CRITERION_COMPILE_REQUESTED_EVENT]: [CRITERION_COMPILE_QUEUE]
+    [SOURCE_CHANNEL_SYNC_REQUESTED_EVENT]: [FETCH_QUEUE]
   };
 }
 
 export const OUTBOX_EVENT_QUEUE_MAP = buildOutboxEventQueueMap();
+export const SEQUENCE_MANAGED_OUTBOX_EVENTS = [
+  ARTICLE_INGEST_REQUESTED_EVENT,
+  INTEREST_COMPILE_REQUESTED_EVENT,
+  CRITERION_COMPILE_REQUESTED_EVENT,
+  LLM_REVIEW_REQUESTED_EVENT,
+  NOTIFICATION_FEEDBACK_RECORDED_EVENT,
+  REINDEX_REQUESTED_EVENT
+] as const;
 
 export interface ThinQueueJobPayload {
   jobId: string;
@@ -113,6 +153,12 @@ export interface ReindexQueueJobPayload {
   version: number;
 }
 
+export interface SequenceQueueJobPayload {
+  jobId: string;
+  runId: string;
+  sequenceId: string;
+}
+
 export function isArticleOutboxEvent(eventType: string): boolean {
   return (
     eventType === ARTICLE_INGEST_REQUESTED_EVENT ||
@@ -142,4 +188,8 @@ export function isNotificationFeedbackOutboxEvent(eventType: string): boolean {
 
 export function isReindexOutboxEvent(eventType: string): boolean {
   return eventType === REINDEX_REQUESTED_EVENT;
+}
+
+export function isSequenceManagedOutboxEvent(eventType: string): boolean {
+  return (SEQUENCE_MANAGED_OUTBOX_EVENTS as readonly string[]).includes(eventType);
 }

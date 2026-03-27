@@ -20,23 +20,29 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current mode
 
 - Operating mode: normal
-- Why now: the user asked to finish the remaining small follow-ups, and this sync closed the last two live lanes: residual proof closeout and fetcher duplicate-preflight.
+- Why now: this sync closes the bounded umbrella residual patch after `pnpm integration_tests` passed and the Firebase proof-admin cleanup path was fixed.
 
 ## Current memory
 
 - Runtime core инициализирован; ordinary implementation work разрешен.
 - `docs/blueprint.md` остается главным architectural source of truth для system boundaries и service ownership.
+- `NEW_ARCHITECTURE.md` остается proposal/reference input; cross-chat durable truth for this capability now belongs in `docs/contracts/universal-task-engine.md`.
 - `docs/contracts/test-access-and-fixtures.md` обязателен whenever work touches local PostgreSQL/Redis-backed proof, Firebase identities, Mailpit, or other persistent test artifacts.
-- Fresh ingest remains sequential and system-first: `article.embedded -> criteria -> article.criteria.matched -> cluster -> article.clustered -> interests`.
-- Historical backfill mirrors the same order, keeps snapshot-safe `reindex_job_targets`, and still skips retro notifications.
+- `C-UNIVERSAL-TASK-ENGINE` implementation is complete and archived in `docs/history.md`.
+- Default runtime for sequence-managed triggers is now sequence-first: relay creates PostgreSQL-backed `sequence_runs`, publishes thin `q.sequence` jobs, and worker startup consumes `q.sequence` plus DB-backed cron polling by default.
+- Non-sequence relay fallback remains only for `foundation.smoke.requested` and `source.channel.sync.requested`.
+- Legacy queue consumers remain code-present but are opt-in only through `WORKER_ENABLE_LEGACY_QUEUE_CONSUMERS`; default runtime must not run them alongside the sequence-first path.
+- Sequence runtime suppresses default outbox emission for legacy intermediate article events (`article.normalized`, `article.embedded`, `article.criteria.matched`, `article.clustered`, `article.interests.matched`) to avoid dual execution.
+- Internal sequence management and agent surfaces remain maintenance-only under `/maintenance/*`; public API contracts did not expand.
+- The 2026-03-27 audit re-ran the full `UTE-S8` cutover proof contour on the current tree and found no blocking sequence-runtime regressions; only documentation mismatches were corrected.
+- Sequence definitions now validate `cron`, and default live sequences are activated through the sequence-engine migrations rather than through ad hoc operator bootstrap.
+- Discovery/enrichment plugin catalog stays additive and adapter-backed; live provider-backed discovery rollout remains out of scope for this capability.
+- Historical backfill still mirrors the legacy order, keeps snapshot-safe `reindex_job_targets`, and still skips retro notifications.
 - Public/system feed eligibility comes from `system_feed_results`, not from `articles.processing_state`.
 - `/` remains the system-selected feed; `/matches` remains the separate per-user personalized surface on top of system-feed-approved articles.
-- API dashboard `processed_total` / `processed_today` now count final system-gate rows plus later `matched` / `notified` states.
-- `llm_review_log.cost_estimate_usd` is still a worker-side estimate, not provider billing truth, but fresh local proof now exists for provider-usage-backed non-null writes.
-- Browser `web_push` receipt is now manually proven on the local app path, with explicit cleanup of the temporary user/channel/browser artifacts.
-- Fetcher duplicate preflight is now durably proven with unit coverage, duplicate-focused RSS smoke, and duplicate-focused 24-channel compose proof; the broader default ingest proofs still cover wider ingest invariants and remain separate from this closeout.
-- No active test artifacts are currently tracked.
-- The worktree remains mixed and dirty from archived runtime/docs changes; there is no active implementation item, so new edits must start from a fresh explicit bind.
+- `pnpm integration_tests` is now green again: the `/settings` page renders nginx-safe progressive-enhancement form actions, and the internal MVP harness now cleans up its `internal-admin-<runId>` Firebase proof identity in `finally`.
+- One historical Firebase proof-admin residue may still exist from the pre-fix failed run because its alias was not surfaced at the time; future umbrella runs should no longer leak that identity.
+- The dirty tree should stay limited to landed Universal Task Engine docs/runtime/code, synced process docs, and the user-owned untracked `NEW_ARCHITECTURE.md` reference.
 
 ## Capability planning
 
@@ -57,7 +63,7 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 ### Primary active item
 
-- None.
+- None. `P-UMBRELLA-RESIDUALS-1` is done and archived in `docs/history.md`.
 
 ### Secondary active items
 
@@ -65,29 +71,27 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 
 ### Worktree coherence
 
-- Worktree status: the tree remains mixed and dirty from already-landed runtime/docs changes across worker/API/relay/web/admin plus the archive sync in this turn.
-- Primary item alignment note: there is no active implementation item now; the remaining dirty paths belong to already-closed archived work and must not be treated as permission for casual scope expansion.
-- Mixed-change warning, if any: yes — archived clustering, live-update, residual-proof, fetcher-proof, and related docs/runtime changes still coexist in the same uncommitted tree.
-- Explicit overlap note: none currently live; overlapping dirty paths are historical residue from already-closed items.
-- Required action before more implementation, if any: open a new bounded work item before making additional product or runtime changes.
+- Worktree status: active edits are limited to landed Universal Task Engine code/docs sync plus the user-owned untracked `NEW_ARCHITECTURE.md` proposal file.
+- Primary item alignment note: no live item is open; the current dirty tree corresponds to the landed Universal Task Engine closeout, the archived umbrella residual fix, and the user-owned untracked `NEW_ARCHITECTURE.md` reference file.
+- Mixed-change warning, if any: no live secondary item is declared.
+- Explicit overlap note: none currently live.
+- Required action before more implementation, if any: open a new bounded item before touching unrelated web/admin/integration work.
 
 ### Active risks
 
-- Operators can still confuse template-backed system matching with per-user `user_interests`; future work must keep that ownership boundary explicit.
-- Duplicate historical `articles` rows can still exist in PostgreSQL; fetcher preflight now suppresses duplicate re-insertions on repeat RSS polls, but it is not a historical repair capability.
-- Completed `reindex_job_targets` retention/cleanup policy remains implicit and could become operational drift if left unowned.
+- Sequence-managed triggers must continue to preserve PostgreSQL-first write path, outbox/inbox idempotency, `system_feed_results` gating, snapshot-safe backfill, and zero retro notifications under the default sequence runtime.
+- Legacy queue consumers remain code-present but must stay opt-in only; enabling them alongside sequence-first defaults risks dual execution.
+- Active `sequences` seed rows now directly own production routing for managed triggers, so operator drift in sequence status/trigger wiring can break runtime even when code remains green.
 
 ### Known gaps
 
 - Proof gap: Python services still have no repo-level typecheck gate comparable to `pnpm typecheck`.
-- Proof gap: `pnpm unit_tests` covers deterministic pure logic only; DB/Redis/queue/network boundaries still rely on integration/smoke proof.
-- Proof gap: there is still no operator-facing report explaining how many historical articles were replayed, how many produced gray-zone matches, or which compiled interests existed at run time.
-- Product gap: baseline notifications remain a personalization-lane concern rather than a separate system-feed alert contract.
-- Scope gap: `website`, `api`, and `email_imap` ingest remain outside the current RSS-first acceptance gate.
+- Residual gap: discovery/enrichment live provider and DB smoke remain intentionally unproven; `UTE-S6` closed on deterministic adapter-backed proof only.
+- Residual gap: one historical Firebase allowlisted proof-admin identity may still remain from the pre-fix failed umbrella run because the exact alias was not surfaced in captured output; the harness now cleans future `internal-admin-<runId>` users in `finally`.
 
 ### Next recommended action
 
-- If the user wants to continue immediately, bind a new explicit item or decide how to stage/commit the already-archived dirty tree.
+- If the user wants the last historical external Firebase residue closed too, open a new bounded cleanup item; otherwise no live implementation follow-up is required from this patch.
 
 ### Archive sync status
 
@@ -101,35 +105,37 @@ Rule: dependency truth и mixed worktree должны быть явно пред
 ### Test artifacts and cleanup state
 
 - Users created:
-  none currently tracked.
+  no new persistent proof users remain from `P-UMBRELLA-RESIDUALS-1`; the harness now deletes its current `internal-admin-<runId>` Firebase admin identity in `finally`.
 - Subscriptions or device registrations:
   none currently tracked.
 - Tokens / keys / credentials issued:
-  no persistent proof credentials remain tracked.
+  no repo-local persistent proof credentials remain tracked; only a possible historical external Firebase residue from the pre-fix failed run remains.
 - Seeded or imported data:
-  none currently tracked.
+  no new durable seeded data is tracked; `pnpm integration_tests` brought up and tore down the canonical compose baseline inside the script.
 - Cleanup status:
-  clean.
+  current patch left no new cleanup residue; only the historical unknown Firebase alias from the pre-fix failed run may still need external cleanup.
 
 ## Handoff state
 
 - Current item status:
-  no active item is bound.
+  no active item; `P-UMBRELLA-RESIDUALS-1` is done and archived, and the sequence-engine capability remains closed.
 - What is already proven:
-  real-browser proof exists for the shipped web/admin live-update UX on the live local apps.
-  fresh worker smoke proves non-null DB-written `llm_review_log.cost_estimate_usd` from provider `usageMetadata`.
-  real Chrome proof confirms browser `web_push` receipt end-to-end, including unsubscribe and DB/browser cleanup.
-  fetcher duplicate preflight is proven by unit coverage, host RSS duplicate-only smoke, and duplicate-focused 24-channel compose proof.
+  `UTE-S1` through `UTE-S7` landed foundation, plugins, relay/API prep, discovery adapters, and cron/agent support.
+  `UTE-S8` activated default sequences, switched relay/worker defaults to the sequence-first runtime, removed default legacy intermediate article fanout, and updated relay/fetcher compose smokes to assert `sequence_runs` plus thin `q.sequence` jobs.
+  the post-cutover audit re-ran `pnpm unit_tests`, `pnpm typecheck`, `pnpm test:migrations:smoke`, `pnpm test:relay:compose`, `pnpm test:relay:phase3:compose`, `pnpm test:relay:phase45:compose`, `pnpm test:ingest:compose`, `pnpm test:normalize-dedup:compose`, `pnpm test:interest-compile:compose`, `pnpm test:criterion-compile:compose`, and `pnpm test:cluster-match-notify:compose`, and `git diff --check` passed for the touched docs.
+  `P-UMBRELLA-RESIDUALS-1` restored progressive-enhancement `action` contracts on `/settings`, added failed-run Firebase proof-admin cleanup to `infra/scripts/test-mvp-internal.mjs`, passed `pnpm typecheck`, passed `pnpm integration_tests`, and passed `git diff --check` on the touched files.
 - What is still unproven or blocked:
-  no open proof debt is currently tracked for the just-closed residual and fetcher lanes.
+  discovery/enrichment live provider and DB smoke remain intentionally out of scope.
+  no repo-local blocking proof remains from this patch; only the historical unknown Firebase alias from the pre-fix failed run may still exist outside the current successful run.
 - Scope or coordination warning for the next agent:
-  do not reintroduce `processing_state` as the canonical public-feed gate now that runtime truth is article-level `system_feed_results`; keep any new ingest or feed work on a fresh bounded item.
+  do not reopen the archived sequence capability or this patch for unrelated web/admin work; create a fresh bounded item for any new integration or external-cleanup request.
 
 ### Recently changed
 
-- 2026-03-27 — archive-synced `C-RESIDUAL-PROOF-CLOSEOUT` after proving fresh provider-usage-backed `llm_review_log.cost_estimate_usd` writes and real-browser `web_push` receipt with full cleanup.
-- 2026-03-27 — closed `C-FETCHER-DUPLICATE-PREFLIGHT` by adding duplicate-focused proof modes to the RSS smoke harness and multi-RSS compose harness, then executing green unit + smoke + compose proof.
-- 2026-03-27 — compressed live execution state to no active item because the user-requested residual closeout lanes are now complete.
+- 2026-03-27 — completed and archived `UTE-S8 Cutover and cleanup` with sequence-first default relay/worker runtime, active default sequences, suppressed intermediate article fanout, updated relay/fetcher compose smokes, and green cutover-specific compose proof.
+- 2026-03-27 — archived `C-UNIVERSAL-TASK-ENGINE`; durable rollout truth now lives in `docs/contracts/universal-task-engine.md` and `docs/history.md`.
+- 2026-03-27 — archived `SWEEP-UTE-AUDIT-1` after re-running the full cutover proof contour, confirming the migration stayed green, and syncing practical migration lessons into `NEW_ARCHITECTURE.md` and runtime core docs.
+- 2026-03-27 — archived `P-UMBRELLA-RESIDUALS-1` after restoring `/settings` form actions, fixing harness cleanup for `internal-admin-<runId>`, and getting `pnpm integration_tests` green again.
 
 ## Operating limits
 
@@ -171,4 +177,4 @@ When compressing context:
 
 ## Active work index
 
-No active items.
+- none.

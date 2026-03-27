@@ -8,57 +8,58 @@ import {
   ARTICLE_INGEST_REQUESTED_EVENT,
   ARTICLE_INTERESTS_MATCHED_EVENT,
   ARTICLE_NORMALIZED_EVENT,
-  CLUSTER_QUEUE,
   CRITERION_COMPILE_REQUESTED_EVENT,
-  CRITERIA_MATCH_QUEUE,
-  DEDUP_QUEUE,
-  EMBED_QUEUE,
-  FEEDBACK_INGEST_QUEUE,
-  INTEREST_MATCH_QUEUE,
+  FETCH_QUEUE,
+  FOUNDATION_SMOKE_EVENT,
+  FOUNDATION_SMOKE_QUEUE,
   INTEREST_COMPILE_REQUESTED_EVENT,
-  LLM_REVIEW_QUEUE,
   LLM_REVIEW_REQUESTED_EVENT,
   NOTIFICATION_FEEDBACK_RECORDED_EVENT,
-  NOTIFY_QUEUE,
   OUTBOX_EVENT_QUEUE_MAP,
   REINDEX_QUEUE,
   REINDEX_REQUESTED_EVENT,
+  SEQUENCE_QUEUE,
+  SEQUENCE_MANAGED_OUTBOX_EVENTS,
+  SEQUENCE_RUN_STATUSES,
+  SEQUENCE_STATUSES,
+  SEQUENCE_TASK_RUN_STATUSES,
+  SEQUENCE_TRIGGER_TYPES,
   isArticleOutboxEvent,
   isCriterionCompileOutboxEvent,
   isInterestCompileOutboxEvent,
   isLlmReviewOutboxEvent,
   isNotificationFeedbackOutboxEvent,
+  isSequenceManagedOutboxEvent,
   isReindexOutboxEvent,
   buildOutboxEventQueueMap
 } from "../../../packages/contracts/src/queue.ts";
 
-test("default outbox queue map keeps normalized articles on dedup only", () => {
+test("default outbox queue map keeps only non-sequence relay fanout", () => {
   const queueMap = buildOutboxEventQueueMap();
 
-  assert.deepEqual(queueMap[ARTICLE_NORMALIZED_EVENT], [DEDUP_QUEUE]);
+  assert.deepEqual(queueMap[FOUNDATION_SMOKE_EVENT], [FOUNDATION_SMOKE_QUEUE]);
+  assert.deepEqual(queueMap["source.channel.sync.requested"], [FETCH_QUEUE]);
+  assert.equal(queueMap[ARTICLE_INGEST_REQUESTED_EVENT], undefined);
   assert.deepEqual(queueMap, OUTBOX_EVENT_QUEUE_MAP);
 });
 
-test("embed fanout adds embed queue for normalized articles", () => {
+test("legacy embed fanout option is a no-op after sequence-first cutover", () => {
   const queueMap = buildOutboxEventQueueMap({ enableEmbedFanout: true });
 
-  assert.deepEqual(queueMap[ARTICLE_NORMALIZED_EVENT], [DEDUP_QUEUE, EMBED_QUEUE]);
+  assert.deepEqual(queueMap, OUTBOX_EVENT_QUEUE_MAP);
 });
 
-test("embedded articles route to criteria, criteria-matched articles route to cluster, and clustered articles route to interests", () => {
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_EMBEDDED_EVENT], [CRITERIA_MATCH_QUEUE]);
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CRITERIA_MATCHED_EVENT], [CLUSTER_QUEUE]);
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT], [INTEREST_MATCH_QUEUE]);
-  assert.equal(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_CLUSTERED_EVENT].includes(CLUSTER_QUEUE), false);
-});
-
-test("queue map preserves terminal routing contracts for downstream events", () => {
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[ARTICLE_INTERESTS_MATCHED_EVENT], [NOTIFY_QUEUE]);
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[LLM_REVIEW_REQUESTED_EVENT], [LLM_REVIEW_QUEUE]);
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[NOTIFICATION_FEEDBACK_RECORDED_EVENT], [
-    FEEDBACK_INGEST_QUEUE
+test("sequence-managed events are explicit after relay cutover", () => {
+  assert.deepEqual(SEQUENCE_MANAGED_OUTBOX_EVENTS, [
+    ARTICLE_INGEST_REQUESTED_EVENT,
+    INTEREST_COMPILE_REQUESTED_EVENT,
+    CRITERION_COMPILE_REQUESTED_EVENT,
+    LLM_REVIEW_REQUESTED_EVENT,
+    NOTIFICATION_FEEDBACK_RECORDED_EVENT,
+    REINDEX_REQUESTED_EVENT
   ]);
-  assert.deepEqual(OUTBOX_EVENT_QUEUE_MAP[REINDEX_REQUESTED_EVENT], [REINDEX_QUEUE]);
+  assert.equal(isSequenceManagedOutboxEvent(ARTICLE_INGEST_REQUESTED_EVENT), true);
+  assert.equal(isSequenceManagedOutboxEvent("source.channel.sync.requested"), false);
 });
 
 test("event classifiers distinguish article, compile, review, feedback and reindex events", () => {
@@ -75,4 +76,28 @@ test("event classifiers distinguish article, compile, review, feedback and reind
   );
   assert.equal(isReindexOutboxEvent(REINDEX_REQUESTED_EVENT), true);
   assert.equal(isReindexOutboxEvent("unknown.event"), false);
+});
+
+test("sequence engine cutover contracts keep q.sequence outside fallback fanout", () => {
+  const mappedQueues = Object.values(OUTBOX_EVENT_QUEUE_MAP).flatMap((queueNames) => queueNames);
+
+  assert.equal(SEQUENCE_QUEUE, "q.sequence");
+  assert.equal(mappedQueues.includes(SEQUENCE_QUEUE), false);
+  assert.equal(mappedQueues.includes(REINDEX_QUEUE), false);
+  assert.deepEqual(SEQUENCE_STATUSES, ["draft", "active", "archived"]);
+  assert.deepEqual(SEQUENCE_RUN_STATUSES, [
+    "pending",
+    "running",
+    "completed",
+    "failed",
+    "cancelled"
+  ]);
+  assert.deepEqual(SEQUENCE_TASK_RUN_STATUSES, [
+    "pending",
+    "running",
+    "completed",
+    "failed",
+    "skipped"
+  ]);
+  assert.deepEqual(SEQUENCE_TRIGGER_TYPES, ["manual", "cron", "agent", "api", "event"]);
 });

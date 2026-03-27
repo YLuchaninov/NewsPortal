@@ -14,6 +14,108 @@
 
 ## Completed items
 
+### 2026-03-27 — P-UMBRELLA-RESIDUALS-1 — Closed the umbrella `/settings` proof failure and fixed Firebase proof-admin cleanup
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the sequence-engine migration had already been proven green on its own boundary, the broader umbrella `pnpm integration_tests` still failed later on the nginx-routed `/settings` HTML assertion and left an honest cleanup concern around `internal-admin-<runId>` Firebase proof identities on failed runs.
+- Что изменилось:
+  - `apps/web/src/components/LiveSettingsSection.tsx` now renders progressive-enhancement form contracts for settings and notification-channel mutations: the SSR HTML exposes `method="post"` and nginx-safe `action` paths for `/bff/preferences` and `/bff/notification-channels`, while the client island still intercepts submits for the live UX;
+  - the same settings forms now carry stable field names and boolean fallback inputs so the server-side BFF contract remains truthful even without JavaScript enhancement;
+  - `infra/scripts/test-mvp-internal.mjs` now signs in and deletes its `internal-admin-<runId>` Firebase proof-admin identity in `finally`, so future successful or failed umbrella runs do not silently leak that user.
+- Что проверено:
+  - targeted inspection of the `/settings` BFF contract and harness cleanup flow
+  - `pnpm typecheck`
+  - `pnpm integration_tests`
+  - `git diff --check -- apps/web/src/components/LiveSettingsSection.tsx infra/scripts/test-mvp-internal.mjs docs/work.md docs/history.md`
+- Риски или gaps:
+  - the patch closes the current repo-local umbrella failure and future cleanup drift, but one historical Firebase proof-admin alias from the pre-fix failed run may still exist because that earlier run never surfaced the exact alias;
+  - no new sequence-engine work or broader auth redesign was performed in this patch.
+- Follow-up:
+  - if the user wants the last historical external Firebase residue removed too, open a separate bounded cleanup item; otherwise no live implementation residue remains from this patch.
+
+### 2026-03-27 — SWEEP-UTE-AUDIT-1 — Audited the finished sequence-engine migration and synced the migration lessons
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after `C-UNIVERSAL-TASK-ENGINE` had already been archived, the user asked for a comprehensive audit proving that the new sequence engine migration had actually succeeded and for the practical lessons to be written back into `NEW_ARCHITECTURE.md` plus runtime-core docs where system truth was still underspecified.
+- Что изменилось:
+  - the audit revalidated the current runtime boundaries: relay default ownership for sequence-managed triggers, worker sequence-first startup defaults, non-sequence fallback limits, maintenance-only sequence API, DB-backed cron scheduling, and suppression of legacy intermediate article fanout;
+  - `NEW_ARCHITECTURE.md` was updated with the migration lessons learned from NewsPortal: stable dotted module IDs, internal `/maintenance/*` API boundary, fail-fast relay behavior when a managed event has no active sequence route, DB-backed minute cron instead of BullMQ repeatable-job ownership, and additive-plus-parity cutover strategy instead of live dual execution;
+  - `docs/blueprint.md` and `docs/contracts/universal-task-engine.md` were extended with missing durable truth around relay failure semantics and internal maintenance ownership for sequence management and agent surfaces.
+- Что проверено:
+  - targeted code/runtime consistency checks across `packages/contracts/src/queue.ts`, `services/relay/src/relay.ts`, `services/workers/app/main.py`, migrations, and the maintenance API surface
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:relay:compose`
+  - `pnpm test:relay:phase3:compose`
+  - `pnpm test:relay:phase45:compose`
+  - `pnpm test:ingest:compose`
+  - `pnpm test:normalize-dedup:compose`
+  - `pnpm test:interest-compile:compose`
+  - `pnpm test:criterion-compile:compose`
+  - `pnpm test:cluster-match-notify:compose`
+  - `git diff --check -- NEW_ARCHITECTURE.md docs/blueprint.md docs/contracts/universal-task-engine.md docs/work.md docs/history.md`
+- Риски или gaps:
+  - no blocking sequence-engine findings were discovered in the audit; the migration remains proven successful on its own cutover boundary;
+  - the broader umbrella `pnpm integration_tests` failure on nginx `/settings` HTML and the possible Firebase proof-admin residue remain unrelated residuals and must stay in a separate bounded item if the user wants them fixed;
+  - Python services still have no repo-level typecheck gate comparable to `pnpm typecheck`.
+- Follow-up:
+  - no truthful live next stage remains for this audit; any future work should either target the unrelated umbrella residuals or open a new sequence-engine follow-up capability only if runtime behavior changes again.
+
+### 2026-03-27 — UTE-S8 — Archived the Universal Task Engine cutover and cleanup stage
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: additive foundation was already landed through `UTE-S7`, but the user asked to finish the capability truthfully, which required switching default relay/worker ownership to the sequence runtime, activating default sequences, removing default intermediate article fanout, and proving the live cutover path.
+- Что изменилось:
+  - `database/migrations/0012_sequence_engine_cutover_defaults.sql` activates the default article pipeline, LLM-review-resume pipeline, and maintenance sequences while archiving the old intermediate step seeds;
+  - `packages/contracts/src/queue.ts`, `services/relay/src/config.ts`, `services/relay/src/main.ts`, and `services/relay/src/relay.ts` now make sequence routing the default for sequence-managed triggers, keep direct fallback only for non-sequence events, and fail managed events if no active sequence route exists;
+  - `services/workers/app/main.py` now defaults to sequence runner + cron bootstrap, keeps legacy consumers opt-in only, and suppresses legacy intermediate article outbox events during sequence execution;
+  - `services/relay/src/cli/test-phase3-routing.ts`, `services/relay/src/cli/test-phase45-routing.ts`, and `services/fetchers/src/cli/test-rss-smoke.ts` were rewritten to prove `sequence_runs` + thin `q.sequence` jobs and the absence of default `article.normalized` outbox fanout instead of asserting the old direct queue map.
+- Что проверено:
+  - `python -m py_compile services/workers/app/main.py services/workers/app/task_engine/*.py tests/unit/python/test_task_engine_pipeline_plugins.py`
+  - focused Python and TS proof for pipeline adapters, executor/scheduler/API contracts, queue contracts, and relay sequence routing
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:relay:compose`
+  - `pnpm test:relay:phase3:compose`
+  - `pnpm test:relay:phase45:compose`
+  - `pnpm test:ingest:compose`
+  - `pnpm test:normalize-dedup:compose`
+  - `pnpm test:interest-compile:compose`
+  - `pnpm test:criterion-compile:compose`
+  - `pnpm test:cluster-match-notify:compose`
+- Риски или gaps:
+  - broader umbrella `pnpm integration_tests` still fell later on an unrelated nginx `/settings` HTML assertion expecting `action="/bff/preferences"` after all sequence-specific cutover smokes had already passed;
+  - the failed umbrella run may have left one Firebase allowlisted proof admin identity because `infra/scripts/test-mvp-internal.mjs` creates `internal-admin-<runId>` users and does not clean them up on failure, and the exact alias was not surfaced in captured output;
+  - live provider-backed discovery/enrichment rollout remains intentionally out of scope for this capability.
+- Follow-up:
+  - if the user wants the broader umbrella gate green too, open a new bounded item for the nginx `/settings` assertion and Firebase proof-user cleanup instead of reopening the sequence-engine capability.
+
+### 2026-03-27 — C-UNIVERSAL-TASK-ENGINE — Archived the completed Universal Task Engine capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement `NEW_ARCHITECTURE.md` consistently inside the current system, so the repo needed a durable capability-level rollout from additive foundation to default sequence runtime, not just isolated code drops.
+- Что изменилось:
+  - `UTE-S1` introduced the sequence data model, shared queue/task-graph contracts, executor/repository skeleton, and durable contract doc;
+  - `UTE-S2` and `UTE-S3` migrated the core article lane and maintenance lane into task-engine plugins via thin legacy-handler adapters;
+  - `UTE-S4`, `UTE-S5`, `UTE-S6`, and `UTE-S7` added relay sequence lookup/run creation, internal maintenance API, discovery/enrichment adapter-backed plugins, and cron/agent surfaces;
+  - `UTE-S8` completed the cutover by activating default sequences, switching relay/worker defaults to sequence-first execution, removing default legacy intermediate queue ownership, and syncing blueprint/verification/runtime truth.
+- Что проверено:
+  - repo-level `pnpm unit_tests` and `pnpm typecheck`
+  - sequence-engine unit proof for executor, adapters, scheduler, maintenance API, agent API, queue contracts, and relay routing
+  - cutover-specific compose proof for migrations, relay routing, RSS ingest, normalize/dedup, compile, cluster/match/notify, all on the new default sequence runtime path
+- Риски или gaps:
+  - unrelated umbrella integration failure on nginx `/settings` HTML assertion remains outside this capability boundary and must be handled in a separate item if needed;
+  - one possible Firebase proof-user residue may remain from that unrelated umbrella failure;
+  - future discovery live-provider rollout, public sequence UX, or broader operator tooling need new bounded follow-up items.
+- Follow-up:
+  - cross-chat durable truth for this archived capability now lives in `docs/contracts/universal-task-engine.md`; any new work should reference it and open a fresh item instead of reopening this archive.
+
 ### 2026-03-27 — S-RESIDUAL-PROOF-CLOSEOUT-1 — Proved fresh DB-written LLM cost from provider usage metadata
 
 - Тип записи: stage archive

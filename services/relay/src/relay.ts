@@ -1,6 +1,8 @@
 import { Queue } from "bullmq";
 import {
   OUTBOX_EVENT_QUEUE_MAP,
+  SEQUENCE_QUEUE,
+  isSequenceManagedOutboxEvent,
   isCriterionCompileOutboxEvent,
   isInterestCompileOutboxEvent,
   isLlmReviewOutboxEvent,
@@ -13,10 +15,15 @@ import {
   type LlmReviewQueueJobPayload,
   type NotificationFeedbackQueueJobPayload,
   type ReindexQueueJobPayload,
+  type SequenceQueueJobPayload,
   type ThinQueueJobPayload
 } from "@newsportal/contracts";
 import type IORedis from "ioredis";
 import type { Pool } from "pg";
+import type {
+  RelaySqlClient,
+  SequenceRoutingRepository
+} from "./sequence-routing";
 
 interface RelayState {
   isPolling: boolean;
@@ -40,11 +47,35 @@ type RelayOutboxRow = PendingOutboxRow;
 
 interface OutboxRelayOptions {
   queueMap?: Record<string, readonly string[]>;
+  queueFactory?: (queueName: string, connection: IORedis) => QueueLike;
+  sequenceRouting?: SequenceRoutingOptions;
+}
+
+interface QueueLike {
+  add(
+    name: string,
+    data: unknown,
+    options: {
+      jobId: string;
+      removeOnComplete: number;
+      removeOnFail: number;
+    }
+  ): Promise<unknown>;
+  close(): Promise<void>;
+}
+
+interface SequenceRoutingOptions {
+  enabled: boolean;
+  repository: SequenceRoutingRepository;
+  queueName?: string;
+  jobName?: string;
 }
 
 export class OutboxRelay {
-  private readonly queues = new Map<string, Queue>();
+  private readonly queues = new Map<string, QueueLike>();
   private readonly queueMap: Record<string, readonly string[]>;
+  private readonly queueFactory: (queueName: string, connection: IORedis) => QueueLike;
+  private readonly sequenceRouting?: SequenceRoutingOptions;
   private readonly state: RelayState = {
     isPolling: false,
     lastPollStartedAt: null,
@@ -62,18 +93,23 @@ export class OutboxRelay {
     options: OutboxRelayOptions = {}
   ) {
     this.queueMap = options.queueMap ?? OUTBOX_EVENT_QUEUE_MAP;
+    this.queueFactory =
+      options.queueFactory ??
+      ((queueName, queueConnection) =>
+        new Queue(queueName, {
+          connection: queueConnection
+        }));
+    this.sequenceRouting = options.sequenceRouting;
 
     const queueNames = new Set(
       Object.values(this.queueMap).flatMap((queueNameList) => queueNameList)
     );
+    if (this.sequenceRouting?.enabled) {
+      queueNames.add(this.sequenceRouting.queueName ?? SEQUENCE_QUEUE);
+    }
 
     for (const queueName of queueNames) {
-      this.queues.set(
-        queueName,
-        new Queue(queueName, {
-          connection
-        })
-      );
+      this.queues.set(queueName, this.queueFactory(queueName, connection));
     }
   }
 
@@ -115,7 +151,7 @@ export class OutboxRelay {
 
       for (const row of pendingRows.rows) {
         try {
-          await this.publishRow(row);
+          await this.publishRow(client, row);
           await client.query(
             `
               update outbox_events
@@ -192,8 +228,79 @@ export class OutboxRelay {
     }
   }
 
-  private async publishRow(row: PendingOutboxRow): Promise<void> {
+  private async publishRow(
+    client: RelaySqlClient,
+    row: PendingOutboxRow
+  ): Promise<void> {
+    const routedToSequences = await this.routeToSequences(client, row);
+
+    if (routedToSequences) {
+      return;
+    }
+
+    if (
+      this.sequenceRouting?.enabled &&
+      isSequenceManagedOutboxEvent(row.event_type)
+    ) {
+      throw new Error(
+        `No active sequence routing found for sequence-managed event type ${row.event_type}.`
+      );
+    }
+
     await this.enqueueOutboxRow(row);
+  }
+
+  private async routeToSequences(
+    client: RelaySqlClient,
+    row: PendingOutboxRow
+  ): Promise<boolean> {
+    if (!this.sequenceRouting?.enabled) {
+      return false;
+    }
+
+    const sequenceRoutes =
+      await this.sequenceRouting.repository.listActiveSequencesByTrigger(
+        client,
+        row.event_type
+      );
+
+    if (sequenceRoutes.length === 0) {
+      return false;
+    }
+
+    const sequenceQueueName = this.sequenceRouting.queueName ?? SEQUENCE_QUEUE;
+    const sequenceQueue = this.queues.get(sequenceQueueName);
+
+    if (!sequenceQueue) {
+      throw new Error(`BullMQ queue ${sequenceQueueName} is not configured.`);
+    }
+
+    const baseContext = this.createSequenceContext(row);
+    const triggerMeta = this.createSequenceTriggerMeta(row);
+    const sequenceJobName = this.sequenceRouting.jobName ?? "sequence.run";
+
+    for (const sequenceRoute of sequenceRoutes) {
+      const createdRun = await this.sequenceRouting.repository.createSequenceRun(client, {
+        sequenceId: sequenceRoute.sequenceId,
+        contextJson: { ...baseContext },
+        triggerType: "event",
+        triggerMeta: { ...triggerMeta }
+      });
+
+      const payload: SequenceQueueJobPayload = {
+        jobId: createdRun.runId,
+        runId: createdRun.runId,
+        sequenceId: createdRun.sequenceId
+      };
+
+      await sequenceQueue.add(sequenceJobName, payload, {
+        jobId: createdRun.runId,
+        removeOnComplete: 100,
+        removeOnFail: 100
+      });
+    }
+
+    return true;
   }
 
   private createQueuePayload(
@@ -278,6 +385,28 @@ export class OutboxRelay {
     };
   }
 
+  private createSequenceContext(
+    row: PendingOutboxRow
+  ): Record<string, unknown> {
+    const queuePayload = this.createQueuePayload(row);
+    return Object.fromEntries(
+      Object.entries(queuePayload)
+        .filter(([key]) => key !== "jobId")
+        .map(([key, value]) => [this.toSnakeCase(key), value])
+    );
+  }
+
+  private createSequenceTriggerMeta(
+    row: PendingOutboxRow
+  ): Record<string, unknown> {
+    return {
+      eventId: row.event_id,
+      eventType: row.event_type,
+      aggregateType: row.aggregate_type,
+      aggregateId: row.aggregate_id
+    };
+  }
+
   private readStringValue(value: unknown, fallback: string): string {
     return typeof value === "string" && value.length > 0 ? value : fallback;
   }
@@ -298,5 +427,9 @@ export class OutboxRelay {
     }
 
     return 1;
+  }
+
+  private toSnakeCase(value: string): string {
+    return value.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
   }
 }

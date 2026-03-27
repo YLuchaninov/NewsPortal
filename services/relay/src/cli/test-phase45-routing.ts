@@ -2,57 +2,229 @@ import { randomUUID } from "node:crypto";
 
 import { Queue } from "bullmq";
 import {
-  ARTICLE_CRITERIA_MATCHED_EVENT,
-  ARTICLE_CLUSTERED_EVENT,
-  ARTICLE_EMBEDDED_EVENT,
-  ARTICLE_INTERESTS_MATCHED_EVENT,
-  CLUSTER_QUEUE,
-  CRITERIA_MATCH_QUEUE,
-  FEEDBACK_INGEST_QUEUE,
-  INTEREST_MATCH_QUEUE,
-  LLM_REVIEW_QUEUE,
   LLM_REVIEW_REQUESTED_EVENT,
   NOTIFICATION_FEEDBACK_RECORDED_EVENT,
-  NOTIFY_QUEUE,
-  REINDEX_QUEUE,
   REINDEX_REQUESTED_EVENT,
-  buildOutboxEventQueueMap
+  SEQUENCE_QUEUE
 } from "@newsportal/contracts";
+import type { Pool } from "pg";
 
 import { loadRelayConfig } from "../config";
 import { createPgPool, createRedisConnection } from "../db";
+import { waitForPublishedEvent } from "../outbox";
 import { OutboxRelay } from "../relay";
+import { PostgresSequenceRoutingRepository } from "../sequence-routing";
 
-async function expectJob(
-  queue: Queue,
-  eventId: string
-): Promise<{
-  name: string;
-  data: Record<string, unknown>;
-}> {
-  const job = await queue.getJob(eventId);
-
-  if (!job) {
-    throw new Error(`Expected BullMQ job ${eventId} in ${queue.name} but none was found.`);
-  }
-
-  return {
-    name: job.name,
-    data: job.data as Record<string, unknown>
-  };
+interface ActiveSequenceRow {
+  sequenceId: string;
 }
 
-function expectThinKeys(
-  payload: Record<string, unknown>,
-  expectedKeys: string[],
+interface SequenceRunRow {
+  runId: string;
+  sequenceId: string;
+  status: string;
+  contextJson: Record<string, unknown>;
+  triggerMeta: Record<string, unknown>;
+}
+
+interface SequenceManagedSmokeInput {
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, unknown>;
+  expectedContext: Record<string, unknown>;
+  label: string;
+}
+
+async function insertOutboxEvent(
+  pool: Pool,
+  input: {
+    eventType: string;
+    aggregateType: string;
+    aggregateId: string;
+    payload: Record<string, unknown>;
+  }
+): Promise<string> {
+  const eventId = randomUUID();
+
+  await pool.query(
+    `
+      insert into outbox_events (
+        event_id,
+        event_type,
+        aggregate_type,
+        aggregate_id,
+        payload_json
+      )
+      values ($1, $2, $3, $4, $5::jsonb)
+    `,
+    [
+      eventId,
+      input.eventType,
+      input.aggregateType,
+      input.aggregateId,
+      JSON.stringify(input.payload)
+    ]
+  );
+
+  return eventId;
+}
+
+async function listActiveSequencesByTrigger(
+  pool: Pool,
+  triggerEvent: string
+): Promise<readonly string[]> {
+  const result = await pool.query<ActiveSequenceRow>(
+    `
+      select sequence_id::text as "sequenceId"
+      from sequences
+      where status = 'active'
+        and trigger_event = $1
+      order by created_at asc, sequence_id asc
+    `,
+    [triggerEvent]
+  );
+
+  return result.rows.map((row) => row.sequenceId);
+}
+
+async function listSequenceRunsForEvent(
+  pool: Pool,
+  eventId: string
+): Promise<readonly SequenceRunRow[]> {
+  const result = await pool.query<SequenceRunRow>(
+    `
+      select
+        run_id::text as "runId",
+        sequence_id::text as "sequenceId",
+        status,
+        context_json as "contextJson",
+        trigger_meta as "triggerMeta"
+      from sequence_runs
+      where trigger_meta ->> 'eventId' = $1
+      order by created_at asc, run_id asc
+    `,
+    [eventId]
+  );
+
+  return result.rows;
+}
+
+function assertRecordContains(
+  actual: Record<string, unknown>,
+  expected: Record<string, unknown>,
   label: string
 ): void {
-  const actualKeys = Object.keys(payload).sort();
-  const normalizedExpected = [...expectedKeys].sort();
+  for (const [key, value] of Object.entries(expected)) {
+    if (actual[key] !== value) {
+      throw new Error(
+        `${label} expected ${key}=${JSON.stringify(value)}, got ${JSON.stringify(actual[key])}.`
+      );
+    }
+  }
+}
 
-  if (actualKeys.join(",") !== normalizedExpected.join(",")) {
+function expectThinSequencePayload(
+  payload: Record<string, unknown>,
+  expectedRunId: string,
+  expectedSequenceId: string
+): void {
+  const actualKeys = Object.keys(payload).sort();
+  const expectedKeys = ["jobId", "runId", "sequenceId"];
+
+  if (actualKeys.join(",") !== expectedKeys.join(",")) {
     throw new Error(
-      `${label} payload is not thin. Expected keys ${normalizedExpected.join(", ")}, got ${actualKeys.join(", ")}.`
+      `Sequence payload is not thin. Expected keys ${expectedKeys.join(", ")}, got ${actualKeys.join(", ")}.`
+    );
+  }
+
+  if (
+    payload.jobId !== expectedRunId ||
+    payload.runId !== expectedRunId ||
+    payload.sequenceId !== expectedSequenceId
+  ) {
+    throw new Error(
+      `Sequence payload lost run identity. Expected run=${expectedRunId} sequence=${expectedSequenceId}, got ${JSON.stringify(payload)}.`
+    );
+  }
+}
+
+async function assertSequenceManagedRouting(
+  pool: Pool,
+  relay: OutboxRelay,
+  queue: Queue,
+  input: SequenceManagedSmokeInput
+): Promise<void> {
+  const activeSequenceIds = await listActiveSequencesByTrigger(pool, input.eventType);
+
+  if (activeSequenceIds.length === 0) {
+    throw new Error(`Expected at least one active sequence for ${input.eventType}.`);
+  }
+
+  const eventId = await insertOutboxEvent(pool, {
+    eventType: input.eventType,
+    aggregateType: input.aggregateType,
+    aggregateId: input.aggregateId,
+    payload: input.payload
+  });
+
+  await relay.pollOnce();
+
+  const outboxEvent = await waitForPublishedEvent(pool, eventId, 15000);
+  if (outboxEvent.status !== "published") {
+    throw new Error(
+      `${input.label} outbox event ${eventId} finished with status ${outboxEvent.status}: ${outboxEvent.errorMessage ?? "no error message"}`
+    );
+  }
+
+  const runs = await listSequenceRunsForEvent(pool, eventId);
+  if (runs.length !== activeSequenceIds.length) {
+    throw new Error(
+      `${input.label} expected ${activeSequenceIds.length} sequence runs, got ${runs.length}.`
+    );
+  }
+
+  for (const run of runs) {
+    if (!activeSequenceIds.includes(run.sequenceId)) {
+      throw new Error(
+        `${input.label} created unexpected sequence ${run.sequenceId} for event ${eventId}.`
+      );
+    }
+    if (run.status !== "pending") {
+      throw new Error(`${input.label} run ${run.runId} expected pending status, got ${run.status}.`);
+    }
+
+    assertRecordContains(run.contextJson, input.expectedContext, `${input.label} context`);
+    assertRecordContains(
+      run.contextJson,
+      {
+        event_id: eventId
+      },
+      `${input.label} context`
+    );
+    assertRecordContains(
+      run.triggerMeta,
+      {
+        eventId,
+        eventType: input.eventType,
+        aggregateType: input.aggregateType,
+        aggregateId: input.aggregateId
+      },
+      `${input.label} triggerMeta`
+    );
+
+    const job = await queue.getJob(run.runId);
+    if (!job) {
+      throw new Error(`${input.label} expected q.sequence job ${run.runId} but none was found.`);
+    }
+    if (job.name !== "sequence.run") {
+      throw new Error(`${input.label} expected queue job name sequence.run, got ${job.name}.`);
+    }
+
+    expectThinSequencePayload(
+      job.data as Record<string, unknown>,
+      run.runId,
+      run.sequenceId
     );
   }
 }
@@ -62,187 +234,84 @@ async function main(): Promise<void> {
   const pool = createPgPool(config);
   const redis = createRedisConnection(config);
   const relay = new OutboxRelay(pool, redis, config.outboxBatchSize, {
-    queueMap: buildOutboxEventQueueMap({
-      enableEmbedFanout: true
-    })
+    sequenceRouting: {
+      enabled: config.enableSequenceRouting,
+      repository: new PostgresSequenceRoutingRepository()
+    }
   });
-  const clusterQueue = new Queue(CLUSTER_QUEUE, { connection: redis });
-  const criteriaMatchQueue = new Queue(CRITERIA_MATCH_QUEUE, { connection: redis });
-  const interestMatchQueue = new Queue(INTEREST_MATCH_QUEUE, { connection: redis });
-  const notifyQueue = new Queue(NOTIFY_QUEUE, { connection: redis });
-  const llmReviewQueue = new Queue(LLM_REVIEW_QUEUE, { connection: redis });
-  const feedbackQueue = new Queue(FEEDBACK_INGEST_QUEUE, { connection: redis });
-  const reindexQueue = new Queue(REINDEX_QUEUE, { connection: redis });
+  const sequenceQueue = new Queue(SEQUENCE_QUEUE, { connection: redis });
 
   try {
     const docId = randomUUID();
-    const interestId = randomUUID();
+    const criterionId = randomUUID();
     const notificationId = randomUUID();
     const userId = randomUUID();
     const promptTemplateId = randomUUID();
     const reindexJobId = randomUUID();
-    const embeddedEventId = randomUUID();
-    const clusteredEventId = randomUUID();
-    const criteriaMatchedEventId = randomUUID();
-    const matchedEventId = randomUUID();
-    const llmReviewEventId = randomUUID();
-    const feedbackEventId = randomUUID();
-    const reindexEventId = randomUUID();
 
-    await relay.enqueueOutboxRow({
-      event_id: embeddedEventId,
-      event_type: ARTICLE_EMBEDDED_EVENT,
-      aggregate_type: "article",
-      aggregate_id: docId,
-      payload_json: {
+    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
+      eventType: LLM_REVIEW_REQUESTED_EVENT,
+      aggregateType: "criterion",
+      aggregateId: criterionId,
+      payload: {
         docId,
-        version: 1
-      }
-    });
-    await relay.enqueueOutboxRow({
-      event_id: clusteredEventId,
-      event_type: ARTICLE_CLUSTERED_EVENT,
-      aggregate_type: "article",
-      aggregate_id: docId,
-      payload_json: {
-        docId,
-        version: 1
-      }
-    });
-    await relay.enqueueOutboxRow({
-      event_id: criteriaMatchedEventId,
-      event_type: ARTICLE_CRITERIA_MATCHED_EVENT,
-      aggregate_type: "article",
-      aggregate_id: docId,
-      payload_json: {
-        docId,
-        version: 1
-      }
-    });
-    await relay.enqueueOutboxRow({
-      event_id: matchedEventId,
-      event_type: ARTICLE_INTERESTS_MATCHED_EVENT,
-      aggregate_type: "article",
-      aggregate_id: docId,
-      payload_json: {
-        docId,
-        version: 1
-      }
-    });
-    await relay.enqueueOutboxRow({
-      event_id: llmReviewEventId,
-      event_type: LLM_REVIEW_REQUESTED_EVENT,
-      aggregate_type: "interest",
-      aggregate_id: interestId,
-      payload_json: {
-        docId,
-        scope: "interest",
-        targetId: interestId,
+        scope: "criterion",
+        targetId: criterionId,
         promptTemplateId,
         version: 1
-      }
+      },
+      expectedContext: {
+        doc_id: docId,
+        scope: "criterion",
+        target_id: criterionId,
+        prompt_template_id: promptTemplateId,
+        version: 1
+      },
+      label: "llm.review.requested"
     });
-    await relay.enqueueOutboxRow({
-      event_id: feedbackEventId,
-      event_type: NOTIFICATION_FEEDBACK_RECORDED_EVENT,
-      aggregate_type: "notification",
-      aggregate_id: notificationId,
-      payload_json: {
+
+    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
+      eventType: NOTIFICATION_FEEDBACK_RECORDED_EVENT,
+      aggregateType: "notification",
+      aggregateId: notificationId,
+      payload: {
         notificationId,
         docId,
         userId,
-        interestId,
         version: 1
-      }
+      },
+      expectedContext: {
+        notification_id: notificationId,
+        doc_id: docId,
+        user_id: userId,
+        version: 1
+      },
+      label: "notification.feedback.recorded"
     });
-    await relay.enqueueOutboxRow({
-      event_id: reindexEventId,
-      event_type: REINDEX_REQUESTED_EVENT,
-      aggregate_type: "reindex",
-      aggregate_id: reindexJobId,
-      payload_json: {
+
+    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
+      eventType: REINDEX_REQUESTED_EVENT,
+      aggregateType: "reindex",
+      aggregateId: reindexJobId,
+      payload: {
         reindexJobId,
         indexName: "event_cluster_centroids",
         version: 1
-      }
+      },
+      expectedContext: {
+        reindex_job_id: reindexJobId,
+        index_name: "event_cluster_centroids",
+        version: 1
+      },
+      label: "reindex.requested"
     });
 
-    const criteriaMatchJob = await expectJob(criteriaMatchQueue, embeddedEventId);
-    const clusterJob = await expectJob(clusterQueue, criteriaMatchedEventId);
-    const interestMatchJob = await expectJob(interestMatchQueue, clusteredEventId);
-    const notifyJob = await expectJob(notifyQueue, matchedEventId);
-    const llmReviewJob = await expectJob(llmReviewQueue, llmReviewEventId);
-    const feedbackJob = await expectJob(feedbackQueue, feedbackEventId);
-    const reindexJob = await expectJob(reindexQueue, reindexEventId);
-
-    if (
-      criteriaMatchJob.name !== ARTICLE_EMBEDDED_EVENT ||
-      clusterJob.name !== ARTICLE_CRITERIA_MATCHED_EVENT ||
-      interestMatchJob.name !== ARTICLE_CLUSTERED_EVENT
-    ) {
-      throw new Error("criteria-gated clustering routing reached the wrong queue job names.");
-    }
-    if (notifyJob.name !== ARTICLE_INTERESTS_MATCHED_EVENT) {
-      throw new Error("article.interests.matched routed to the wrong queue job name.");
-    }
-    if (llmReviewJob.name !== LLM_REVIEW_REQUESTED_EVENT) {
-      throw new Error("llm.review.requested routed to the wrong queue job name.");
-    }
-    if (feedbackJob.name !== NOTIFICATION_FEEDBACK_RECORDED_EVENT) {
-      throw new Error("notification.feedback.recorded routed to the wrong queue job name.");
-    }
-    if (reindexJob.name !== REINDEX_REQUESTED_EVENT) {
-      throw new Error("reindex.requested routed to the wrong queue job name.");
-    }
-
-    expectThinKeys(
-      criteriaMatchJob.data,
-      ["docId", "eventId", "jobId", "version"],
-      "article.embedded -> criteria"
-    );
-    expectThinKeys(
-      clusterJob.data,
-      ["docId", "eventId", "jobId", "version"],
-      "article.criteria.matched -> cluster"
-    );
-    expectThinKeys(
-      interestMatchJob.data,
-      ["docId", "eventId", "jobId", "version"],
-      "article.clustered -> interests"
-    );
-    expectThinKeys(
-      notifyJob.data,
-      ["docId", "eventId", "jobId", "version"],
-      "article.interests.matched"
-    );
-    expectThinKeys(
-      llmReviewJob.data,
-      ["docId", "eventId", "jobId", "promptTemplateId", "scope", "targetId", "version"],
-      "llm.review.requested"
-    );
-    expectThinKeys(
-      feedbackJob.data,
-      ["docId", "eventId", "interestId", "jobId", "notificationId", "userId", "version"],
-      "notification.feedback.recorded"
-    );
-    expectThinKeys(
-      reindexJob.data,
-      ["eventId", "indexName", "jobId", "reindexJobId", "version"],
-      "reindex.requested"
-    );
-
     console.log(
-      `Phase 4/5 relay routing smoke passed: ${embeddedEventId} reached ${CRITERIA_MATCH_QUEUE}, ${criteriaMatchedEventId} reached ${CLUSTER_QUEUE}, ${clusteredEventId} reached ${INTEREST_MATCH_QUEUE}, ${matchedEventId} reached ${NOTIFY_QUEUE}, ${llmReviewEventId} reached ${LLM_REVIEW_QUEUE}, ${feedbackEventId} reached ${FEEDBACK_INGEST_QUEUE}, and ${reindexEventId} reached ${REINDEX_QUEUE}.`
+      `Phase 4/5 relay routing smoke passed: LLM review, feedback ingest, and reindex triggers created PostgreSQL-backed sequence runs and thin ${SEQUENCE_QUEUE} jobs.`
     );
   } finally {
     await relay.close();
-    await clusterQueue.close();
-    await criteriaMatchQueue.close();
-    await interestMatchQueue.close();
-    await notifyQueue.close();
-    await llmReviewQueue.close();
-    await feedbackQueue.close();
-    await reindexQueue.close();
+    await sequenceQueue.close();
     await redis.quit();
     await pool.end();
   }

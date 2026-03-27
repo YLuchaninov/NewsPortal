@@ -9,14 +9,17 @@ import {
   createRedisConnection
 } from "./db";
 import { OutboxRelay } from "./relay";
+import { PostgresSequenceRoutingRepository } from "./sequence-routing";
 
 const config = loadRelayConfig();
 const pool = createPgPool(config);
 const redis = createRedisConnection(config);
 const relay = new OutboxRelay(pool, redis, config.outboxBatchSize, {
-  queueMap: buildOutboxEventQueueMap({
-    enableEmbedFanout: config.enableEmbedFanout
-  })
+  queueMap: buildOutboxEventQueueMap(),
+  sequenceRouting: {
+    enabled: config.enableSequenceRouting,
+    repository: new PostgresSequenceRoutingRepository()
+  }
 });
 const app = Fastify({
   logger: true
@@ -34,7 +37,7 @@ app.get("/health", async () => {
     database: "ok",
     redis: "ok",
     isPolling: String(relayState.isPolling),
-    embedFanoutEnabled: String(config.enableEmbedFanout),
+    sequenceRoutingEnabled: String(config.enableSequenceRouting),
     publishedCount: String(relayState.publishedCount),
     failedCount: String(relayState.failedCount),
     lastPollCompletedAt: relayState.lastPollCompletedAt ?? "never"
