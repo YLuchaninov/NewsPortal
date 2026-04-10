@@ -1,15 +1,21 @@
 ---
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type PaginatedResponse } from "@newsportal/contracts";
+import {
+  DEFAULT_PAGE,
+  DEFAULT_PAGE_SIZE,
+  type ContentItemPreview,
+  type PaginatedResponse
+} from "@newsportal/contracts";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
-import { ArticleCard } from "../components/ArticleCard";
+import { ContentItemCard } from "../components/ContentItemCard";
 import { LiveSurfaceSummary } from "../components/LiveSurfaceSummary";
-import { queryOne } from "../lib/server/db";
+import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
+import { getUserContentStateMap } from "../lib/server/user-content-state";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -31,19 +37,29 @@ const bffPaths = {
   liveUpdates: resolvePageAppPath("bff/live-updates"),
   preferences: resolvePageAppPath("bff/preferences"),
   reactions: resolvePageAppPath("bff/reactions"),
+  contentState: resolvePageAppPath("bff/content-state"),
 };
 
-type ViewRow = Record<string, unknown>;
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
-const feed: PaginatedResponse<ViewRow> = await sdk.listFeedArticles<ViewRow>({ page, pageSize: DEFAULT_PAGE_SIZE });
-const articles = feed.items;
+const collection: PaginatedResponse<ContentItemPreview> =
+  await sdk.listSystemSelectedContentItems<ContentItemPreview>({ page, pageSize: DEFAULT_PAGE_SIZE });
+const contentItems = collection.items;
 const feedRevision = buildLiveRevision([
-  feed.total,
-  articles[0]?.doc_id,
-  articles[0]?.published_at ?? articles[0]?.ingested_at,
+  collection.total,
+  contentItems[0]?.content_item_id,
+  contentItems[0]?.published_at ?? contentItems[0]?.ingested_at,
 ]);
-const profile = session ? await queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]) : null;
+const profile = session
+  ? await queryOne<Record<string, unknown>>(
+      `select theme_preference from user_profiles where user_id = $1`,
+      [session.userId]
+    )
+  : null;
+const userStateMap =
+  session != null
+    ? await getUserContentStateMap(getPool(), session.userId, contentItems)
+    : new Map();
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
@@ -60,7 +76,7 @@ function resolvePageHref(nextPage: number): string {
 ---
 
 <Shell
-  title={`${DEFAULT_BRAND_CONFIG.productName} — System Feed`}
+  title={`${DEFAULT_BRAND_CONFIG.productName} — System Collection`}
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}
@@ -78,56 +94,57 @@ function resolvePageHref(nextPage: number): string {
     {session ? (
       <LiveSurfaceSummary
         surface="feed"
-        initialCount={feed.total}
+        initialCount={collection.total}
         initialRevision={feedRevision}
-        page={feed.page}
-        totalPages={feed.totalPages}
-        singularLabel="article"
-        pluralLabel="articles"
-        suffix=" in the system-selected feed"
+        page={collection.page}
+        totalPages={collection.totalPages}
+        singularLabel="content item"
+        pluralLabel="content items"
+        suffix=" in the system-selected collection"
         refreshHref={currentPath}
         client:load
       />
     ) : (
       <p class="text-xs text-muted-foreground mt-3">
-        {feed.total} article{feed.total !== 1 ? "s" : ""} in the system-selected feed
-        {articles.length > 0 && ` — page ${feed.page} of ${Math.max(feed.totalPages, 1)}`}
+        {collection.total} content item{collection.total !== 1 ? "s" : ""} in the system-selected collection
+        {contentItems.length > 0 && ` — page ${collection.page} of ${Math.max(collection.totalPages, 1)}`}
       </p>
     )}
   </div>
 
-  <!-- Articles grid -->
-  {articles.length === 0 ? (
+  {contentItems.length === 0 ? (
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
           <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>
         </svg>
       </div>
-      <p class="font-semibold text-lg">No articles yet</p>
-      <p class="text-muted-foreground text-sm mt-1">Articles will appear here once the system criteria approve them</p>
+      <p class="font-semibold text-lg">No content yet</p>
+      <p class="text-muted-foreground text-sm mt-1">Content will appear here once active system interests allow it into the global collection.</p>
     </div>
   ) : (
     <>
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {articles.map((article) => (
-          <ArticleCard
-            article={article as any}
+        {contentItems.map((contentItem) => (
+          <ContentItemCard
+            contentItem={contentItem}
             isLoggedIn={!!session}
             reactionsPath={bffPaths.reactions}
+            contentStatePath={bffPaths.contentState}
+            initialUserState={userStateMap.get(String(contentItem.content_item_id))}
             client:visible
           />
         ))}
       </div>
-      {(feed.hasPrev || feed.hasNext) && (
+      {(collection.hasPrev || collection.hasNext) && (
         <PaginationNav
           className="mt-8"
-          page={feed.page}
-          totalPages={feed.totalPages}
-          hasPrev={feed.hasPrev}
-          hasNext={feed.hasNext}
-          prevHref={resolvePageHref(feed.page - 1)}
-          nextHref={resolvePageHref(feed.page + 1)}
+          page={collection.page}
+          totalPages={collection.totalPages}
+          hasPrev={collection.hasPrev}
+          hasNext={collection.hasNext}
+          prevHref={resolvePageHref(collection.page - 1)}
+          nextHref={resolvePageHref(collection.page + 1)}
         />
       )}
     </>

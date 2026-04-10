@@ -181,7 +181,7 @@ export async function applyChannelSchedulePatch(
             adaptive_reason,
             updated_at
           )
-          values ($1, $2, $3, $4, now() + make_interval(secs => $3), 0, null, 0, 0, 'manual_schedule_reset', now())
+          values ($1, $2, $3, $4, now() + make_interval(secs => $5), 0, null, 0, 0, 'manual_schedule_reset', now())
           on conflict (channel_id)
           do update
           set
@@ -200,7 +200,8 @@ export async function applyChannelSchedulePatch(
           row.channel_id,
           patch.adaptiveEnabled,
           patch.pollIntervalSeconds,
-          patch.maxPollIntervalSeconds
+          patch.maxPollIntervalSeconds,
+          patch.pollIntervalSeconds
         ]
       );
     }

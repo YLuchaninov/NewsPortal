@@ -9,6 +9,16 @@ export interface AdminCollectionSignal {
   revision: string;
 }
 
+export interface AdminLlmBudgetSnapshot {
+  enabled: boolean;
+  monthlyBudgetCents: number;
+  monthToDateCostCents: number;
+  remainingMonthlyBudgetCents: number | null;
+  monthlyQuotaReached: boolean;
+  acceptGrayZoneOnBudgetExhaustion: boolean;
+  revision: string;
+}
+
 export interface AdminDashboardSummarySnapshot {
   activeNews: number;
   processedToday: number;
@@ -20,6 +30,12 @@ export interface AdminDashboardSummarySnapshot {
   attentionChannels: number;
   queuedReindexJobs: number;
   runningReindexJobs: number;
+  llmBudgetEnabled: boolean;
+  llmMonthlyBudgetCents: number;
+  llmMonthToDateCostCents: number;
+  llmRemainingMonthlyBudgetCents: number | null;
+  llmMonthlyQuotaReached: boolean;
+  llmAcceptGrayZoneOnBudgetExhaustion: boolean;
   revision: string;
 }
 
@@ -79,6 +95,7 @@ export interface AdminObservabilityLiveSnapshot {
   hasPendingWork: boolean;
   usage24h: AdminObservabilityWindowSnapshot;
   usage7d: AdminObservabilityWindowSnapshot;
+  llmBudget: AdminLlmBudgetSnapshot;
   fetchRuns: AdminCollectionSignal;
   llmReviews: AdminCollectionSignal;
 }

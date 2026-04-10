@@ -13,6 +13,26 @@ if "psycopg.rows" not in sys.modules:
     psycopg_rows_stub.dict_row = object()
     sys.modules["psycopg.rows"] = psycopg_rows_stub
 
+if "psycopg.types" not in sys.modules:
+    sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
+
+if "psycopg.types.json" not in sys.modules:
+    psycopg_types_json_stub = types.ModuleType("psycopg.types.json")
+    psycopg_types_json_stub.Json = lambda value: value
+    sys.modules["psycopg.types.json"] = psycopg_types_json_stub
+
+if "services.workers.app.gemini" not in sys.modules:
+    gemini_stub = types.ModuleType("services.workers.app.gemini")
+    gemini_stub.review_with_gemini = lambda *args, **kwargs: None
+    gemini_stub.DEFAULT_PRICE_CARD = {
+        "default": {
+            "input_cost_per_million_tokens_usd": 0.10,
+            "output_cost_per_million_tokens_usd": 0.40,
+        }
+    }
+    gemini_stub.PRICE_CARD_VERSION = "test"
+    sys.modules["services.workers.app.gemini"] = gemini_stub
+
 from services.api.app import main as api_main
 
 
@@ -20,6 +40,17 @@ class ApiSequenceManagementTests(unittest.TestCase):
     def test_sequence_maintenance_routes_are_registered(self) -> None:
         paths = {route.path for route in api_main.app.routes}
 
+        self.assertIn("/maintenance/articles/{doc_id}/enrichment/retry", paths)
+        self.assertIn("/maintenance/articles", paths)
+        self.assertIn("/maintenance/articles/{doc_id}", paths)
+        self.assertIn("/maintenance/articles/{doc_id}/explain", paths)
+        self.assertIn("/maintenance/llm-budget-summary", paths)
+        self.assertIn("/collections/system-selected", paths)
+        self.assertIn("/content-items", paths)
+        self.assertIn("/content-items/{content_item_id}", paths)
+        self.assertIn("/content-items/{content_item_id}/explain", paths)
+        self.assertIn("/system-interests", paths)
+        self.assertIn("/system-interests/{interest_template_id}", paths)
         self.assertIn("/maintenance/sequences", paths)
         self.assertIn("/maintenance/sequences/{sequence_id}", paths)
         self.assertIn("/maintenance/sequences/{sequence_id}/runs", paths)
@@ -157,9 +188,89 @@ class ApiSequenceManagementTests(unittest.TestCase):
         result = api_main.get_sequence_plugins()
         modules = {item["module"] for item in result}
 
+        self.assertIn("enrichment.article_extract", modules)
         self.assertIn("article.normalize", modules)
         self.assertIn("article.notify", modules)
         self.assertIn("maintenance.reindex", modules)
+
+    def test_request_article_enrichment_retry_reuses_active_article_sequence(self) -> None:
+        with (
+            patch.object(
+                api_main,
+                "query_one",
+                side_effect=[
+                    {"doc_id": "doc-1"},
+                    {"sequence_id": "sequence-article", "status": "active"},
+                ],
+            ) as query_one,
+            patch.object(
+                api_main,
+                "create_sequence_run_request_for_trigger",
+                return_value={"run_id": "run-1", "status": "pending"},
+            ) as create_run,
+            patch.object(api_main, "ensure_published_article_retry_event") as ensure_event,
+        ):
+            result = api_main.request_article_enrichment_retry(
+                "doc-1",
+                api_main.ArticleEnrichmentRetryPayload.model_validate(
+                    {"requestedBy": "operator-1"}
+                ),
+            )
+
+        self.assertEqual(result, {"run_id": "run-1", "status": "pending"})
+        self.assertEqual(query_one.call_count, 2)
+        create_run.assert_called_once()
+        ensure_event.assert_called_once()
+        event_id = ensure_event.call_args.kwargs["event_id"]
+        self.assertEqual(ensure_event.call_args.kwargs["doc_id"], "doc-1")
+        args = create_run.call_args.kwargs
+        self.assertEqual(args["context_json"]["doc_id"], "doc-1")
+        self.assertEqual(args["context_json"]["event_id"], event_id)
+        self.assertTrue(args["context_json"]["force_enrichment"])
+        self.assertEqual(args["trigger_meta"]["requestedBy"], "operator-1")
+        self.assertEqual(args["trigger_meta"]["source"], "maintenance_article_enrichment_retry")
+        self.assertEqual(args["trigger_type"], "manual")
+
+    def test_llm_budget_summary_uses_precise_usd_comparison(self) -> None:
+        with (
+            patch.object(api_main, "query_one", return_value={"month_to_date_cost_usd": "0.995"}),
+            patch.dict(
+                api_main.os.environ,
+                {
+                    "LLM_REVIEW_ENABLED": "1",
+                    "LLM_REVIEW_MONTHLY_BUDGET_CENTS": "100",
+                    "LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE": "1",
+                },
+                clear=False,
+            ),
+        ):
+            summary = api_main.get_llm_budget_summary()
+
+        self.assertFalse(summary["monthlyQuotaReached"])
+        self.assertEqual(summary["monthToDateCostCents"], 100)
+        self.assertEqual(summary["remainingMonthlyBudgetCents"], 1)
+        self.assertTrue(summary["acceptGrayZoneOnBudgetExhaustion"])
+
+    def test_request_content_item_enrichment_retry_reuses_editorial_retry_flow(self) -> None:
+        with patch.object(
+            api_main,
+            "request_article_enrichment_retry_route",
+            return_value={"run_id": "run-2", "status": "pending"},
+        ) as request_retry:
+            result = api_main.request_content_item_enrichment_retry_route(
+                "editorial:doc-2",
+                api_main.ArticleEnrichmentRetryPayload.model_validate({"requestedBy": "operator-1"}),
+            )
+
+        self.assertEqual(result, {"run_id": "run-2", "status": "pending"})
+        request_retry.assert_called_once()
+        self.assertEqual(request_retry.call_args.args[0], "doc-2")
+
+    def test_request_content_item_enrichment_retry_rejects_non_editorial_items(self) -> None:
+        with self.assertRaises(api_main.HTTPException) as error:
+            api_main.request_content_item_enrichment_retry_route("resource:item-2")
+
+        self.assertEqual(error.exception.status_code, 409)
 
     def test_request_sequence_run_route_maps_dispatch_failure_to_503(self) -> None:
         payload = api_main.SequenceManualRunPayload.model_validate(

@@ -85,7 +85,7 @@ test("resolveInterestRepairState parses running progress and failed repair jobs"
     {
       tone: "warning",
       label: "Syncing matches",
-      detail: "12/30 historical articles",
+      detail: "12/30 historical content items",
     }
   );
 

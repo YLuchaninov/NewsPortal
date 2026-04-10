@@ -18,20 +18,18 @@ class NotificationPreferencesTests(unittest.TestCase):
             {
                 "web_push": False,
                 "telegram": True,
-                "weekly_email_digest": True,
             },
         )
 
-    def test_channel_filter_maps_email_digest_to_weekly_preference(self) -> None:
+    def test_channel_filter_uses_immediate_channel_preferences_only(self) -> None:
         preferences = {
             "web_push": True,
             "telegram": False,
-            "weekly_email_digest": False,
         }
 
         self.assertTrue(is_channel_enabled_by_preferences("web_push", preferences))
         self.assertFalse(is_channel_enabled_by_preferences("telegram", preferences))
-        self.assertFalse(is_channel_enabled_by_preferences("email_digest", preferences))
+        self.assertTrue(is_channel_enabled_by_preferences("email_digest", preferences))
 
 
 if __name__ == "__main__":

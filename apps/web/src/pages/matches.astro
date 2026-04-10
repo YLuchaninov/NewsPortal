@@ -1,15 +1,17 @@
 ---
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
+import type { ContentItemPreview } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
-import { ArticleCard } from "../components/ArticleCard";
+import { ContentItemCard } from "../components/ContentItemCard";
 import { LiveSurfaceSummary } from "../components/LiveSurfaceSummary";
-import { queryOne } from "../lib/server/db";
+import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
+import { getUserContentStateMap } from "../lib/server/user-content-state";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -36,18 +38,19 @@ const bffPaths = {
   liveUpdates: resolvePageAppPath("../bff/live-updates"),
   preferences: resolvePageAppPath("../bff/preferences"),
   reactions: resolvePageAppPath("../bff/reactions"),
+  contentState: resolvePageAppPath("../bff/content-state"),
 };
 
-type ViewRow = Record<string, unknown>;
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const [matches, profile] = await Promise.all([
-  sdk.listMatchesPage<ViewRow>(session.userId, { page, pageSize: DEFAULT_PAGE_SIZE }),
-  queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
+  sdk.listMatchesPage<ContentItemPreview>(session.userId, { page, pageSize: DEFAULT_PAGE_SIZE }),
+  queryOne<Record<string, unknown>>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
 ]);
+const userStateMap = await getUserContentStateMap(getPool(), session.userId, matches.items);
 const matchesRevision = buildLiveRevision([
   matches.total,
-  matches.items[0]?.doc_id,
+  matches.items[0]?.content_item_id,
   matches.items[0]?.published_at ?? matches.items[0]?.ingested_at,
 ]);
 
@@ -65,7 +68,7 @@ function resolvePageHref(nextPage: number): string {
   return `${target.pathname}${target.search}`;
 }
 
-function readMatchNote(match: ViewRow): string | null {
+function readMatchNote(match: ContentItemPreview): string | null {
   const interestDescription = String(match.matched_interest_description ?? "").trim();
   const rawScore = Number(match.interest_match_score ?? NaN);
   const scoreLabel = Number.isFinite(rawScore) ? `score ${rawScore.toFixed(2)}` : "";
@@ -101,7 +104,7 @@ function readMatchNote(match: ViewRow): string | null {
   <div class="mb-8">
     <h1 class="text-3xl font-bold tracking-tight">My Matches</h1>
     <p class="text-muted-foreground mt-1">
-      Articles from the system-selected feed that also matched your interests
+      Content from the system-selected collection that also matched your interests
     </p>
     <LiveSurfaceSummary
       surface="matches"
@@ -109,8 +112,8 @@ function readMatchNote(match: ViewRow): string | null {
       initialRevision={matchesRevision}
       page={matches.page}
       totalPages={matches.totalPages}
-      singularLabel="matched article"
-      pluralLabel="matched articles"
+      singularLabel="matched item"
+      pluralLabel="matched items"
       suffix=" total"
       refreshHref={currentPath}
       client:load
@@ -126,8 +129,8 @@ function readMatchNote(match: ViewRow): string | null {
       </div>
       <p class="font-semibold text-lg">No personal matches yet</p>
       <p class="text-muted-foreground text-sm mt-1 max-w-md">
-        This page only fills with articles that passed the global system feed and also matched your interests.
-        Create or update an interest, then give the background sync a moment to replay existing system-feed articles.
+        This page only fills with content that passed the global system-selected collection and also matched your interests.
+        Create or update an interest, then give the background sync a moment to replay existing selected content.
       </p>
       <a href="/interests" class="mt-4 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
         Manage Interests
@@ -136,13 +139,15 @@ function readMatchNote(match: ViewRow): string | null {
   ) : (
     <>
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {matches.items.map((article) => (
-          <ArticleCard
-            article={article as any}
+        {matches.items.map((contentItem) => (
+          <ContentItemCard
+            contentItem={contentItem}
             isLoggedIn={!!session}
             reactionsPath={bffPaths.reactions}
+            contentStatePath={bffPaths.contentState}
             contextBadgeLabel="my-match"
-            contextNote={readMatchNote(article as ViewRow)}
+            contextNote={readMatchNote(contentItem)}
+            initialUserState={userStateMap.get(String(contentItem.content_item_id))}
             client:visible
           />
         ))}

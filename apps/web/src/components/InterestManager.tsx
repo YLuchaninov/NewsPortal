@@ -12,6 +12,7 @@ interface Interest {
   negative_texts?: string[];
   places?: string[];
   languages_allowed?: string[];
+  time_window_hours?: number | null;
   must_have_terms?: string[];
   must_not_have_terms?: string[];
   short_tokens_required?: string[];
@@ -44,6 +45,14 @@ function asCsv(val: unknown): string {
 
 function asLines(val: unknown): string {
   return Array.isArray(val) ? (val as string[]).join("\n") : "";
+}
+
+function formatTimeWindowHours(value: unknown): string {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? `${parsed}h` : "any time";
 }
 
 function statusBadgeClass(status: string): string {
@@ -161,28 +170,70 @@ export function InterestManager({
                   className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Places</label>
-                <input name="places" placeholder="Brussels, Warsaw" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            <details className="group rounded-xl border border-border bg-background/70 p-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Advanced matching hints</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Optional lexical constraints, languages, place hints, time-window gating, and short-token rules.
+                  </p>
+                </div>
+                <span className="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
+              </summary>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <label className="text-sm font-medium">Must-have terms</label>
+                  <textarea
+                    name="must_have_terms"
+                    rows={4}
+                    placeholder={"policy\nregulation"}
+                    className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-sm font-medium">Must-not-have terms</label>
+                  <textarea
+                    name="must_not_have_terms"
+                    rows={4}
+                    placeholder={"sports\ncelebrity"}
+                    className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-sm font-medium">Places</label>
+                  <input name="places" placeholder="Brussels, Warsaw" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-sm font-medium">Languages</label>
+                  <input name="languages_allowed" defaultValue="en" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-sm font-medium">Time window (hours)</label>
+                  <input name="time_window_hours" type="number" min="1" step="1" placeholder="168" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-sm font-medium">Required short tokens</label>
+                  <input name="short_tokens_required" placeholder="AI, FTC" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </div>
+                <div className="grid gap-1.5 sm:col-span-2">
+                  <label className="text-sm font-medium">Forbidden short tokens</label>
+                  <input name="short_tokens_forbidden" placeholder="NBA, NFL" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </div>
               </div>
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Languages</label>
-                <input name="languages_allowed" defaultValue="en" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </div>
+            </details>
+            <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
                 <label className="text-sm font-medium">Priority (0.1–1)</label>
                 <input name="priority" type="number" defaultValue="1" min="0.1" max="1" step="0.1" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Must-have terms</label>
-                <input name="must_have_terms" placeholder="policy, regulation" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </div>
-              <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Must-not-have terms</label>
-                <input name="must_not_have_terms" placeholder="sports, celebrity" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                <label className="text-sm font-medium">Enabled</label>
+                <select name="enabled" defaultValue="true"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
               </div>
             </div>
             <button type="submit" disabled={submitting}
@@ -236,6 +287,7 @@ export function InterestManager({
                     Priority: {String(interest.priority ?? 1)}
                     {interest.languages_allowed && Array.isArray(interest.languages_allowed) && interest.languages_allowed.length > 0
                       ? ` · ${(interest.languages_allowed as string[]).join(", ")}` : ""}
+                    {` · ${formatTimeWindowHours(interest.time_window_hours)}`}
                   </p>
                   {status === "failed" && interest.error_text && (
                     <div className="mt-3 rounded-lg border border-red-200 bg-red-50/80 px-3 py-2 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300">
@@ -286,25 +338,69 @@ export function InterestManager({
                               className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                           </div>
                         </div>
+                        <details className="group rounded-xl border border-border bg-background/70 p-3">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Advanced matching hints</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Keep lexical constraints, places, languages, time-window gating, and short-token rules aligned with the backend contract.
+                              </p>
+                            </div>
+                            <span className="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
+                          </summary>
+
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-1">
+                              <label className="text-xs font-medium">Must-have terms</label>
+                              <textarea name="must_have_terms" rows={4} defaultValue={asLines(interest.must_have_terms)}
+                                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                            <div className="grid gap-1">
+                              <label className="text-xs font-medium">Must-not-have terms</label>
+                              <textarea name="must_not_have_terms" rows={4} defaultValue={asLines(interest.must_not_have_terms)}
+                                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                            <div className="grid gap-1">
+                              <label className="text-xs font-medium">Places</label>
+                              <input name="places" defaultValue={asCsv(interest.places)}
+                                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                            <div className="grid gap-1">
+                              <label className="text-xs font-medium">Languages</label>
+                              <input name="languages_allowed" defaultValue={asCsv(interest.languages_allowed)}
+                                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                            <div className="grid gap-1">
+                              <label className="text-xs font-medium">Time window (hours)</label>
+                              <input name="time_window_hours" type="number" min="1" step="1" defaultValue={interest.time_window_hours == null ? "" : String(interest.time_window_hours)}
+                                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                            <div className="grid gap-1">
+                              <label className="text-xs font-medium">Required short tokens</label>
+                              <input name="short_tokens_required" defaultValue={asCsv(interest.short_tokens_required)}
+                                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                            <div className="grid gap-1 sm:col-span-2">
+                              <label className="text-xs font-medium">Forbidden short tokens</label>
+                              <input name="short_tokens_forbidden" defaultValue={asCsv(interest.short_tokens_forbidden)}
+                                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </div>
+                          </div>
+                        </details>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="grid gap-1">
-                            <label className="text-xs font-medium">Places</label>
-                            <input name="places" defaultValue={asCsv(interest.places)}
+                            <label className="text-xs font-medium">Priority</label>
+                            <input name="priority" type="number" min="0.1" max="1" step="0.1" defaultValue={String(interest.priority ?? 1)}
                               className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                           </div>
                           <div className="grid gap-1">
-                            <label className="text-xs font-medium">Languages</label>
-                            <input name="languages_allowed" defaultValue={asCsv(interest.languages_allowed)}
-                              className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            <label className="text-xs font-medium">Enabled</label>
+                            <select name="enabled" defaultValue={String(interest.enabled !== false)}
+                              className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                              <option value="true">Yes</option>
+                              <option value="false">No</option>
+                            </select>
                           </div>
-                        </div>
-                        <div className="grid gap-1">
-                          <label className="text-xs font-medium">Enabled</label>
-                          <select name="enabled" defaultValue={String(interest.enabled !== false)}
-                            className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                          </select>
                         </div>
                         <div className="flex gap-2 mt-1">
                           <button type="submit" className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">

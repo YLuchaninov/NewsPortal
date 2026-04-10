@@ -48,12 +48,17 @@ def _build_lexical_query(description: str, positive_texts: list[str]) -> str:
 
 
 def _build_hard_constraints(source: Mapping[str, Any]) -> dict[str, Any]:
+    raw_time_window = source.get("time_window_hours")
+    time_window_hours = None
+    if raw_time_window not in (None, ""):
+        time_window_hours = int(raw_time_window)
+
     return {
         "must_have_terms": _coerce_text_list(source.get("must_have_terms")),
         "must_not_have_terms": _coerce_text_list(source.get("must_not_have_terms")),
         "places": _coerce_text_list(source.get("places")),
         "languages_allowed": _coerce_text_list(source.get("languages_allowed")),
-        "time_window_hours": int(source.get("time_window_hours") or 168),
+        "time_window_hours": time_window_hours,
         "short_tokens_required": _coerce_text_list(source.get("short_tokens_required")),
         "short_tokens_forbidden": _coerce_text_list(source.get("short_tokens_forbidden")),
         "priority": float(source.get("priority") or 1.0),

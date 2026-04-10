@@ -4,6 +4,8 @@ import re
 from typing import Any, Final, Iterable, Mapping
 from urllib.parse import urlparse
 
+from .adapters.llm_analyzer import unwrap_llm_analyzer_output
+from .adapters.web_search import unwrap_web_search_output
 from .context import RESERVED_CONTEXT_KEYS
 from .discovery_runtime import get_discovery_runtime, resolve_runtime_call
 from .plugins import TASK_REGISTRY, TaskPlugin, TaskPluginRegistry
@@ -15,6 +17,7 @@ _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _VALID_SEARCH_TYPES = {"web", "news"}
 _VALID_TIME_RANGES = {"day", "week", "month", "year"}
 _VALID_ENRICHMENT_MODES = {"merge", "replace"}
+_VALID_DISCOVERY_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
 
 
 def _lookup_from_mapping(source: Mapping[str, Any], *keys: str) -> Any:
@@ -440,7 +443,7 @@ class WebSearchPlugin(ContextTaskPlugin):
             )
 
         runtime = get_discovery_runtime()
-        raw_results = await resolve_runtime_call(
+        raw_output = await resolve_runtime_call(
             runtime.web_search.search(
                 query=query,
                 count=count,
@@ -448,6 +451,7 @@ class WebSearchPlugin(ContextTaskPlugin):
                 time_range=time_range,
             )
         )
+        raw_results, search_meta = unwrap_web_search_output(raw_output)
         results = _coerce_mapping_list(raw_results, field_name="search_results")
 
         normalized_results: list[dict[str, Any]] = []
@@ -477,6 +481,14 @@ class WebSearchPlugin(ContextTaskPlugin):
         return {
             "search_query": query,
             "search_results": normalized_results,
+            "search_meta": {
+                **search_meta,
+                "search_query": query,
+                "requested_count": count,
+                "returned_count": len(normalized_results),
+                "result_type": result_type,
+                "time_range": time_range,
+            },
         }
 
     def validate_options(self, options: dict[str, Any]) -> list[str]:
@@ -517,6 +529,7 @@ class WebSearchPlugin(ContextTaskPlugin):
         return {
             "search_query": "Resolved search query used for the adapter call.",
             "search_results": "Normalized search results with url, title and snippet.",
+            "search_meta": "Provider/backend metadata for the search request and normalized result count.",
         }
 
 
@@ -639,6 +652,18 @@ class UrlValidatorPlugin(ContextTaskPlugin):
                     ),
                     "is_rss_candidate": bool(item.get("is_rss_candidate"))
                     or _looks_like_rss_candidate(url, content_type),
+                    "is_website_candidate": bool(item.get("is_website_candidate"))
+                    or ("text/html" in (content_type or "").lower()),
+                    "source_type_hint": (
+                        str(item.get("source_type_hint")).strip()
+                        if isinstance(item.get("source_type_hint"), str)
+                        and str(item.get("source_type_hint")).strip()
+                        else "rss"
+                        if bool(item.get("is_rss_candidate")) or _looks_like_rss_candidate(url, content_type)
+                        else "website"
+                        if "text/html" in (content_type or "").lower()
+                        else "unknown"
+                    ),
                 }
             )
 
@@ -675,7 +700,7 @@ class UrlValidatorPlugin(ContextTaskPlugin):
 
     def describe_outputs(self) -> dict[str, str]:
         return {
-            "validated_urls": "Normalized validation results with status, content type and RSS candidacy.",
+            "validated_urls": "Normalized validation results with status, content type, RSS candidacy, website candidacy and source type hints.",
         }
 
 
@@ -791,6 +816,173 @@ class RssProbePlugin(ContextTaskPlugin):
     def describe_outputs(self) -> dict[str, str]:
         return {
             "probed_feeds": "RSS probe results with feed validity and sample entries.",
+        }
+
+
+class WebsiteProbePlugin(ContextTaskPlugin):
+    name = "discovery.website_probe"
+    description = "Probe candidate URLs as HTML websites and surface generic capability, feed, listing, detail, and document signals."
+    category = "discovery"
+
+    async def execute(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        urls_field = self._resolve_optional_string(
+            options=options,
+            context=context,
+            key="urls_field",
+            aliases=("urlsField",),
+        ) or "validated_urls"
+        sample_count = self._resolve_positive_int(
+            options=options,
+            context=context,
+            key="sample_count",
+            aliases=("sampleCount",),
+            default=5,
+        )
+        explicit_urls = self._resolve_string_list(
+            options=options,
+            context=context,
+            key="urls",
+            default=[],
+        )
+        candidate_value = explicit_urls or context.get(urls_field)
+        candidate_rows = (
+            _coerce_mapping_list(candidate_value, field_name=urls_field)
+            if isinstance(candidate_value, list)
+            and candidate_value
+            and isinstance(candidate_value[0], Mapping)
+            else []
+        )
+
+        urls = explicit_urls
+        if not urls:
+            if candidate_rows:
+                urls = [
+                    row["url"]
+                    for row in candidate_rows
+                    if isinstance(row.get("url"), str)
+                    and row["url"].strip()
+                    and (
+                        bool(row.get("is_website_candidate"))
+                        or str(row.get("source_type_hint") or "").strip() == "website"
+                    )
+                ]
+            else:
+                urls = _extract_url_candidates(candidate_value)
+
+        runtime = get_discovery_runtime()
+        raw_results = await resolve_runtime_call(
+            runtime.website_probe.probe_websites(
+                urls=_unique_preserving_order(urls),
+                sample_count=sample_count,
+            )
+        )
+        results = _coerce_mapping_list(raw_results, field_name="probed_websites")
+        normalized_results: list[dict[str, Any]] = []
+        for item in results:
+            normalized_results.append(
+                {
+                    "url": str(item.get("url") or item.get("final_url") or ""),
+                    "final_url": str(item.get("final_url") or item.get("url") or ""),
+                    "title": str(item.get("title") or ""),
+                    "classification": self._resolve_json_object(
+                        options={"classification": item.get("classification") or {}},
+                        context={},
+                        key="classification",
+                        default={},
+                    ),
+                    "capabilities": self._resolve_json_object(
+                        options={"capabilities": item.get("capabilities") or {}},
+                        context={},
+                        key="capabilities",
+                        default={},
+                    ),
+                    "discovered_feed_urls": self._resolve_string_list(
+                        options={"discovered_feed_urls": item.get("discovered_feed_urls") or item.get("hidden_rss_urls") or []},
+                        context={},
+                        key="discovered_feed_urls",
+                        default=[],
+                    ),
+                    "listing_urls": self._resolve_string_list(
+                        options={"listing_urls": item.get("listing_urls") or item.get("category_urls") or []},
+                        context={},
+                        key="listing_urls",
+                        default=[],
+                    ),
+                    "document_urls": self._resolve_string_list(
+                        options={"document_urls": item.get("document_urls") or []},
+                        context={},
+                        key="document_urls",
+                        default=[],
+                    ),
+                    "detail_count_estimate": int(item.get("detail_count_estimate") or item.get("article_count_estimate") or 0),
+                    "listing_count_estimate": int(item.get("listing_count_estimate") or 0),
+                    "document_count_estimate": int(item.get("document_count_estimate") or 0),
+                    "sample_resources": _coerce_mapping_list(
+                        item.get("sample_resources") or [],
+                        field_name="sample_resources",
+                    ),
+                    "is_news_site": bool(item.get("is_news_site")),
+                    "has_hidden_rss": bool(item.get("has_hidden_rss")),
+                    "hidden_rss_urls": self._resolve_string_list(
+                        options={"hidden_rss_urls": item.get("hidden_rss_urls") or []},
+                        context={},
+                        key="hidden_rss_urls",
+                        default=[],
+                    ),
+                    "article_count_estimate": int(item.get("article_count_estimate") or 0),
+                    "freshness": str(item.get("freshness") or "unknown"),
+                    "date_patterns_found": bool(item.get("date_patterns_found")),
+                    "category_urls": self._resolve_string_list(
+                        options={"category_urls": item.get("category_urls") or []},
+                        context={},
+                        key="category_urls",
+                        default=[],
+                    ),
+                    "sample_articles": _coerce_mapping_list(
+                        item.get("sample_articles") or [],
+                        field_name="sample_articles",
+                    ),
+                    "browser_assisted_recommended": bool(
+                        item.get("browser_assisted_recommended")
+                    ),
+                    "challenge_kind": (
+                        str(item.get("challenge_kind") or "").strip() or None
+                    ),
+                }
+            )
+        return {"probed_websites": normalized_results}
+
+    def validate_options(self, options: dict[str, Any]) -> list[str]:
+        errors: list[str] = []
+        self._validate_optional_non_empty_string(
+            options,
+            errors,
+            option_key="urls_field",
+            aliases=("urlsField",),
+        )
+        self._validate_optional_positive_int(
+            options,
+            errors,
+            option_key="sample_count",
+            aliases=("sampleCount",),
+        )
+        self._validate_optional_string_list(options, errors, option_key="urls")
+        return errors
+
+    def describe_inputs(self) -> dict[str, str]:
+        return {
+            "urls": "Explicit list of website URLs to probe.",
+            "urls_field": "Context field holding validated URL rows.",
+            "sample_count": "Maximum number of sample resource links to keep per site.",
+        }
+
+    def describe_outputs(self) -> dict[str, str]:
+        return {
+            "probed_websites": "Website probe results with generic classification, capability signals, discovered feeds, compatibility hints, and browser-assistance recommendation metadata.",
         }
 
 
@@ -1069,6 +1261,12 @@ class LlmAnalyzerPlugin(ContextTaskPlugin):
             key="output_field",
             aliases=("outputField",),
         ) or "llm_analysis"
+        meta_output_field = self._resolve_optional_string(
+            options=options,
+            context=context,
+            key="meta_output_field",
+            aliases=("metaOutputField",),
+        ) or f"{output_field}_meta"
         prompt = self._resolve_optional_string(
             options=options,
             context=context,
@@ -1124,7 +1322,7 @@ class LlmAnalyzerPlugin(ContextTaskPlugin):
         ) or None
 
         runtime = get_discovery_runtime()
-        result = await resolve_runtime_call(
+        raw_result = await resolve_runtime_call(
             runtime.llm_analyzer.analyze(
                 prompt=prompt,
                 task=task,
@@ -1134,7 +1332,11 @@ class LlmAnalyzerPlugin(ContextTaskPlugin):
                 output_schema=output_schema,
             )
         )
-        return {output_field: result}
+        result, result_meta = unwrap_llm_analyzer_output(raw_result)
+        return {
+            output_field: result,
+            meta_output_field: result_meta,
+        }
 
     def validate_options(self, options: dict[str, Any]) -> list[str]:
         errors: list[str] = []
@@ -1143,6 +1345,12 @@ class LlmAnalyzerPlugin(ContextTaskPlugin):
             errors,
             option_key="output_field",
             aliases=("outputField",),
+        )
+        self._validate_optional_non_empty_string(
+            options,
+            errors,
+            option_key="meta_output_field",
+            aliases=("metaOutputField",),
         )
         self._validate_optional_non_empty_string(options, errors, option_key="prompt")
         self._validate_optional_non_empty_string(
@@ -1179,11 +1387,13 @@ class LlmAnalyzerPlugin(ContextTaskPlugin):
             "task": "Short task label understood by the adapter.",
             "payload_field": "Context field containing the payload to analyze.",
             "output_field": "Context field name to receive the analysis output.",
+            "meta_output_field": "Context field name to receive provider/cost metadata.",
         }
 
     def describe_outputs(self) -> dict[str, str]:
         return {
             "llm_analysis": "LLM-produced analysis or structured output.",
+            "llm_analysis_meta": "Provider/model/usage/cost metadata for the analysis step.",
         }
 
 
@@ -1235,6 +1445,16 @@ class SourceRegistrarPlugin(ContextTaskPlugin):
             key="tags",
             default=[],
         )
+        provider_type = self._resolve_optional_string(
+            options=options,
+            context=context,
+            key="provider_type",
+            aliases=("providerType",),
+        ) or "website"
+        if provider_type not in _VALID_DISCOVERY_PROVIDER_TYPES:
+            raise ValueError(
+                f"{self.name} expected provider_type to be one of {sorted(_VALID_DISCOVERY_PROVIDER_TYPES)}."
+            )
 
         sources = _coerce_mapping_list(context.get(sources_field) or [], field_name=sources_field)
         selected_sources = [
@@ -1255,6 +1475,7 @@ class SourceRegistrarPlugin(ContextTaskPlugin):
                 dry_run=dry_run,
                 created_by=created_by,
                 tags=tags,
+                provider_type=provider_type,
             )
         )
         registered = _coerce_mapping_list(raw_results, field_name="registered_channels")
@@ -1287,6 +1508,15 @@ class SourceRegistrarPlugin(ContextTaskPlugin):
             option_key="created_by",
             aliases=("createdBy",),
         )
+        provider_type = _lookup_from_mapping(options, "provider_type", "providerType")
+        if (
+            provider_type is not _MISSING
+            and provider_type is not None
+            and provider_type not in _VALID_DISCOVERY_PROVIDER_TYPES
+        ):
+            errors.append(
+                f"provider_type must be one of {sorted(_VALID_DISCOVERY_PROVIDER_TYPES)} when provided."
+            )
         self._validate_optional_string_list(options, errors, option_key="tags")
         return errors
 
@@ -1296,6 +1526,7 @@ class SourceRegistrarPlugin(ContextTaskPlugin):
             "minimum_score": "Minimum relevance score required for registration.",
             "enabled": "Whether newly registered channels should start enabled.",
             "dry_run": "Whether the registrar should skip durable writes.",
+            "provider_type": "Provider type to register for the selected sources: rss, website, api, email_imap, or youtube.",
         }
 
     def describe_outputs(self) -> dict[str, str]:
@@ -1604,6 +1835,7 @@ DISCOVERY_PLUGIN_CLASSES = (
     WebSearchPlugin,
     UrlValidatorPlugin,
     RssProbePlugin,
+    WebsiteProbePlugin,
     ContentSamplerPlugin,
     RelevanceScorerPlugin,
     LlmAnalyzerPlugin,

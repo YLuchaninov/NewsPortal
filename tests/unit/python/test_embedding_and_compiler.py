@@ -127,9 +127,23 @@ class EmbeddingAndCompilerTests(unittest.TestCase):
         self.assertEqual(compiled.positive_prototypes, ["Crisis watch", "Crisis update"])
         self.assertEqual(compiled.negative_prototypes, ["ignore me"])
         self.assertEqual(compiled.hard_constraints["must_have_terms"], ["alert"])
-        self.assertEqual(compiled.hard_constraints["time_window_hours"], 168)
+        self.assertIsNone(compiled.hard_constraints["time_window_hours"])
         self.assertEqual(compiled.hard_constraints["priority"], 1.0)
         self.assertEqual(compiled.hard_constraints["enabled"], True)
+
+    def test_compiler_keeps_blank_time_window_as_no_limit(self) -> None:
+        compiler = InterestBaselineCompiler()
+        compiled = compiler.compile(
+            {
+                "description": "Crisis watch",
+                "positive_texts": "Crisis update",
+                "negative_texts": '["ignore me"]',
+                "time_window_hours": "",
+            },
+            FakeEmbeddingProvider(),
+        )
+
+        self.assertIsNone(compiled.hard_constraints["time_window_hours"])
 
 
 if __name__ == "__main__":

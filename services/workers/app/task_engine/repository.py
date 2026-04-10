@@ -29,6 +29,15 @@ class SequenceRepository(Protocol):
 
     async def get_run(self, run_id: str) -> SequenceRunRecord | None: ...
 
+    async def create_pending_run(
+        self,
+        *,
+        sequence_id: str,
+        context_json: dict[str, Any],
+        trigger_type: str,
+        trigger_meta: dict[str, Any],
+    ) -> str: ...
+
     async def mark_run_running(self, run_id: str) -> None: ...
 
     async def mark_run_completed(self, run_id: str, *, context_json: dict[str, Any]) -> None: ...
@@ -82,6 +91,8 @@ class SequenceRepository(Protocol):
         duration_ms: int,
     ) -> None: ...
 
+    async def list_task_runs(self, run_id: str) -> list[dict[str, Any]]: ...
+
 
 class SequenceScheduleRepository(Protocol):
     async def list_active_cron_sequences(self) -> list[SequenceDefinition]: ...
@@ -114,6 +125,22 @@ class PostgresSequenceRepository:
     async def get_run(self, run_id: str) -> SequenceRunRecord | None:
         row = await asyncio.to_thread(self._fetch_run, run_id)
         return SequenceRunRecord.from_record(row) if row else None
+
+    async def create_pending_run(
+        self,
+        *,
+        sequence_id: str,
+        context_json: dict[str, Any],
+        trigger_type: str,
+        trigger_meta: dict[str, Any],
+    ) -> str:
+        return await asyncio.to_thread(
+            self._create_pending_run,
+            sequence_id,
+            context_json,
+            trigger_type,
+            trigger_meta,
+        )
 
     async def mark_run_running(self, run_id: str) -> None:
         await asyncio.to_thread(self._mark_run_running, run_id)
@@ -221,6 +248,9 @@ class PostgresSequenceRepository:
             duration_ms,
         )
 
+    async def list_task_runs(self, run_id: str) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._list_task_runs, run_id)
+
     def _connect(self) -> Any:
         import psycopg
         from psycopg.rows import dict_row
@@ -272,6 +302,58 @@ class PostgresSequenceRepository:
                 )
                 row = cursor.fetchone()
         return dict(row) if row else None
+
+    def _create_pending_run(
+        self,
+        sequence_id: str,
+        context_json: dict[str, Any],
+        trigger_type: str,
+        trigger_meta: dict[str, Any],
+    ) -> str:
+        run_id = str(uuid.uuid4())
+        with self._connect() as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        select sequence_id::text as sequence_id, status
+                        from sequences
+                        where sequence_id = %s
+                        for update
+                        """,
+                        (sequence_id,),
+                    )
+                    sequence_row = cursor.fetchone()
+                    if sequence_row is None:
+                        raise ValueError(f"Sequence {sequence_id} was not found.")
+                    if str(sequence_row["status"]) == "archived":
+                        raise ValueError(f"Sequence {sequence_id} is archived and cannot be run.")
+
+                    cursor.execute(
+                        """
+                        insert into sequence_runs (
+                          run_id,
+                          sequence_id,
+                          status,
+                          context_json,
+                          trigger_type,
+                          trigger_meta
+                        )
+                        values (%s, %s, 'pending', %s::jsonb, %s, %s::jsonb)
+                        returning run_id::text as run_id
+                        """,
+                        (
+                            run_id,
+                            sequence_id,
+                            self._json(context_json),
+                            trigger_type,
+                            self._json(trigger_meta),
+                        ),
+                    )
+                    row = cursor.fetchone()
+        if not row:
+            raise RuntimeError(f"Failed to create sequence run for {sequence_id}.")
+        return str(row["run_id"])
 
     def _mark_run_running(self, run_id: str) -> None:
         with self._connect() as connection:
@@ -573,6 +655,34 @@ class PostgresSequenceRepository:
                     """,
                     (duration_ms, error_text, task_run_id),
                 )
+
+    def _list_task_runs(self, run_id: str) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      task_run_id::text as task_run_id,
+                      run_id::text as run_id,
+                      task_index,
+                      task_key,
+                      module,
+                      status,
+                      options_json,
+                      input_json,
+                      output_json,
+                      started_at,
+                      finished_at,
+                      error_text,
+                      duration_ms,
+                      created_at
+                    from sequence_task_runs
+                    where run_id = %s
+                    order by task_index asc, created_at asc
+                    """,
+                    (run_id,),
+                )
+                return [dict(row) for row in cursor.fetchall()]
 
     def _json(self, value: dict[str, Any]) -> Any:
         from psycopg.types.json import Json

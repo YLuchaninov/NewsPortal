@@ -10,6 +10,9 @@ from .models import SequenceDefinition, TaskDefinition
 from .plugins import TaskPlugin, TaskPluginRegistry
 from .repository import SequenceRepository
 
+RUN_LOOKUP_RETRY_ATTEMPTS = 20
+RUN_LOOKUP_RETRY_DELAY_SECONDS = 0.1
+
 
 class SequenceExecutor:
     """Runs sequence definitions and persists run/task lifecycle."""
@@ -26,9 +29,7 @@ class SequenceExecutor:
         self._sleep = sleep or asyncio.sleep
 
     async def execute_run(self, run_id: str) -> dict[str, Any]:
-        run = await self._repository.get_run(run_id)
-        if run is None:
-            raise ValueError(f"Sequence run {run_id} was not found.")
+        run = await self._load_run_with_retry(run_id)
 
         sequence = await self._repository.get_sequence(run.sequence_id)
         if sequence is None:
@@ -132,6 +133,15 @@ class SequenceExecutor:
             }
         except Exception:
             raise
+
+    async def _load_run_with_retry(self, run_id: str):
+        for attempt in range(RUN_LOOKUP_RETRY_ATTEMPTS):
+            run = await self._repository.get_run(run_id)
+            if run is not None:
+                return run
+            if attempt < RUN_LOOKUP_RETRY_ATTEMPTS - 1:
+                await self._sleep(RUN_LOOKUP_RETRY_DELAY_SECONDS)
+        raise ValueError(f"Sequence run {run_id} was not found.")
 
     def _build_initial_context(
         self,

@@ -1,0 +1,133 @@
+---
+import { type ContentItemDetail } from "@newsportal/contracts";
+
+import Shell from "../../layouts/Shell.astro";
+import { getPool, queryOne } from "../../lib/server/db";
+import { resolveWebSession } from "../../lib/server/auth";
+import { readFlash } from "../../lib/server/browser-flow";
+import {
+  loadSavedDigestItems,
+  parseSelectedDigestItemIds,
+} from "../../lib/server/saved-digest";
+
+export const prerender = false;
+const session = await resolveWebSession(Astro.request);
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+const flash = readFlash(Astro.url);
+const itemIds = parseSelectedDigestItemIds(Astro.url.searchParams);
+const selectedItems: ContentItemDetail[] = await loadSavedDigestItems(getPool(), session.userId, itemIds);
+if (selectedItems.length === 0) {
+  return Astro.redirect("/saved");
+}
+
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
+function resolvePageAppPath(target: string) {
+  return new URL(target.replace(/^\/+/, ""), pageBaseUrl).pathname;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("../../bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("../../bff/auth/logout"),
+  liveUpdates: resolvePageAppPath("../../bff/live-updates"),
+  preferences: resolvePageAppPath("../../bff/preferences"),
+  savedDigest: resolvePageAppPath("../../bff/saved-digest"),
+};
+
+const profile = await queryOne<Record<string, unknown>>(
+  `select theme_preference from user_profiles where user_id = $1`,
+  [session.userId]
+);
+const themePreference = String(profile?.theme_preference ?? "system");
+const themeClass = themePreference === "dark" ? "dark" : "";
+const exportUrl = new URL("/saved/digest/export", Astro.url);
+itemIds.forEach((itemId) => exportUrl.searchParams.append("item", itemId));
+---
+
+<Shell
+  title="Saved Digest Preview — NewsPortal"
+  session={session}
+  themeClass={themeClass}
+  currentTheme={themePreference}
+  flash={flash}
+  activeNav="saved"
+  bffLiveUpdatesPath={bffPaths.liveUpdates}
+  bffPreferencesPath={bffPaths.preferences}
+  bffLogoutPath={bffPaths.authLogout}
+  bffBootstrapPath={bffPaths.authBootstrap}
+>
+  <div class="mx-auto max-w-4xl space-y-8">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <a href="/saved" class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+          <span aria-hidden="true">←</span>
+          Back to saved
+        </a>
+        <h1 class="mt-3 text-3xl font-semibold tracking-tight">Saved Digest Preview</h1>
+        <p class="mt-1 text-muted-foreground">
+          {selectedItems.length} selected item{selectedItems.length === 1 ? "" : "s"} ready for export or email
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a
+          href={exportUrl.pathname + exportUrl.search}
+          class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent"
+        >
+          Download HTML
+        </a>
+        <form method="post" action={bffPaths.savedDigest}>
+          <input type="hidden" name="returnTo" value={`${Astro.url.pathname}${Astro.url.search}`} />
+          {itemIds.map((itemId) => (
+            <input type="hidden" name="item" value={itemId} />
+          ))}
+          <button
+            type="submit"
+            class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Send to email
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <div class="mb-6 border-b border-border pb-5">
+        <h2 class="text-2xl font-semibold tracking-tight">Saved digest</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Articles and resources you explicitly saved for later review.
+        </p>
+      </div>
+
+      <div class="space-y-5">
+        {selectedItems.map((item, index) => (
+          <article class="rounded-2xl border border-border bg-background/70 p-5">
+            <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Item {index + 1}
+            </p>
+            <h3 class="mt-2 text-xl font-semibold leading-snug">
+              {item.url ? (
+                <a href={String(item.url)} target="_blank" rel="noopener noreferrer" class="hover:text-primary transition-colors">
+                  {String(item.title ?? "Untitled item")}
+                </a>
+              ) : (
+                String(item.title ?? "Untitled item")
+              )}
+            </h3>
+            <p class="mt-2 text-sm text-muted-foreground">
+              {[String(item.source_name ?? "").trim(), String(item.published_at ?? "").trim()].filter(Boolean).join(" · ")}
+            </p>
+            {(item.summary ?? item.lead) && (
+              <p class="mt-4 text-sm leading-7 text-foreground/85">
+                {String(item.summary ?? item.lead)}
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  </div>
+</Shell>

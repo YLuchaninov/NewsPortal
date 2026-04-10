@@ -12,6 +12,26 @@ interface LiveDashboardKpiGridProps {
 }
 
 function buildCards(summary: AdminDashboardSummarySnapshot) {
+  const llmBudgetCard = {
+    label:
+      summary.llmBudgetEnabled && summary.llmMonthlyQuotaReached
+        ? `LLM Budget · ${
+            summary.llmAcceptGrayZoneOnBudgetExhaustion ? "Accept" : "Reject"
+          }`
+        : "LLM Budget",
+    value: !summary.llmBudgetEnabled
+      ? "Disabled"
+      : summary.llmMonthlyBudgetCents <= 0
+      ? "Cap off"
+      : summary.llmMonthlyQuotaReached
+      ? "Exhausted"
+      : `${summary.llmRemainingMonthlyBudgetCents ?? 0}¢ left`,
+    color: !summary.llmBudgetEnabled
+      ? "text-muted-foreground"
+      : summary.llmMonthlyQuotaReached
+      ? "text-amber-500"
+      : "text-emerald-500",
+  };
   return [
     {
       label: "System Feed News",
@@ -49,6 +69,7 @@ function buildCards(summary: AdminDashboardSummarySnapshot) {
       value: String(summary.llmReviewCount24h),
       color: "text-primary",
     },
+    llmBudgetCard,
     {
       label: "New Content 24h",
       value: String(summary.newContent24h),

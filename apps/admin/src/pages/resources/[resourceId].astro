@@ -1,0 +1,333 @@
+---
+import type { WebResourceDetail } from "@newsportal/contracts";
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/",
+});
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const resourceId = String(Astro.params.resourceId ?? "").trim();
+
+if (!resourceId) {
+  return new Response("Web resource not found.", { status: 404 });
+}
+
+let resource: WebResourceDetail;
+try {
+  resource = await sdk.getWebResource<WebResourceDetail>(resourceId);
+} catch {
+  return new Response("Web resource not found.", { status: 404 });
+}
+
+function resolveSafeHref(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    const normalized = new URL(rawValue);
+    if (!["http:", "https:"].includes(normalized.protocol)) {
+      return null;
+    }
+    return normalized.toString();
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeHtml(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  return rawValue
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
+    .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
+}
+
+function formatTimestamp(rawValue: unknown): string {
+  if (!rawValue) {
+    return "—";
+  }
+  const date = new Date(String(rawValue));
+  if (Number.isNaN(date.getTime())) {
+    return String(rawValue);
+  }
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function toArray<T>(rawValue: unknown): T[] {
+  return Array.isArray(rawValue) ? (rawValue as T[]) : [];
+}
+
+function toRecord(rawValue: unknown): Record<string, unknown> {
+  return rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)
+    ? (rawValue as Record<string, unknown>)
+    : {};
+}
+
+const sourceHref = resolveSafeHref(resource.final_url ?? resource.url);
+const projectedArticleHref = resource.projected_article_id
+  ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
+  : null;
+const resourceHtml = sanitizeHtml(resource.body_html ?? null);
+const documents = toArray<Record<string, unknown>>(resource.documents_json);
+const mediaAssets = toArray<Record<string, unknown>>(resource.media_json);
+const linksOut = toArray<Record<string, unknown>>(resource.links_out_json);
+const childResources = toArray<Record<string, unknown>>(resource.child_resources_json);
+const discoveryPayload = toRecord(toRecord(resource.raw_payload_json).discovery);
+const discoverySignals = toRecord(discoveryPayload.rawSignals);
+const browserAssisted = discoverySignals.browserAssisted === true;
+const browserCaptureSource = String(discoverySignals.browserCaptureSource ?? "").trim() || "—";
+const browserChallengeKind = String(discoverySignals.browserChallengeKind ?? "").trim() || "—";
+const browserSeedUrl = String(discoverySignals.browserSeedUrl ?? "").trim() || "—";
+const browserPageUrl = String(discoverySignals.browserPageUrl ?? "").trim() || "—";
+---
+
+<AdminShell title="Resource Detail — Admin" session={session} flash={flash} activeNav="resources">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/resources")} class="hover:text-foreground">Resources</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Detail</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    {projectedArticleHref && (
+      <a
+        href={projectedArticleHref}
+        class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+      >
+        Open projected article
+      </a>
+    )}
+    {sourceHref && (
+      <a
+        href={sourceHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        Open source
+      </a>
+    )}
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 font-medium text-secondary-foreground">
+          {String(resource.resource_kind ?? "unknown")}
+        </span>
+        <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
+          {String(resource.extraction_state ?? "pending")}
+        </span>
+        <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
+          {String(resource.discovery_source ?? "manual")}
+        </span>
+      </div>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight">{String(resource.title ?? "Untitled resource")}</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{String(resource.summary ?? "No summary captured.")}</p>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Channel</p>
+          <p class="mt-2 font-medium">{String(resource.channel_name ?? "Unknown website channel")}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Resource id: {String(resource.resource_id)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Projection</p>
+          <p class="mt-2 font-medium">
+            {resource.projected_article_id ? "Projected into article" : "Resource-only"}
+          </p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {resource.projected_article_title
+              ? String(resource.projected_article_title)
+              : resource.content_item_ready
+                ? "Eligible for non-editorial content surfaces"
+                : "No downstream article projection"}
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Timeline</p>
+          <p class="mt-2 font-medium">{formatTimestamp(resource.discovered_at)}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Published: {formatTimestamp(resource.published_at)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Counts</p>
+          <p class="mt-2 font-medium">Docs {String(resource.documents_count ?? 0)} · Media {String(resource.media_count ?? 0)}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Links {String(resource.links_out_count ?? 0)} · Children {String(resource.child_resources_count ?? 0)}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div class="mb-4">
+          <h2 class="text-base font-semibold">Content preview</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Persisted website resource body captured by the existing ingest and extraction path.
+          </p>
+        </div>
+        {resourceHtml ? (
+          <article
+            class="prose prose-neutral max-w-none prose-headings:text-foreground prose-a:text-primary dark:prose-invert"
+            set:html={resourceHtml}
+          />
+        ) : (
+          <pre class="whitespace-pre-wrap text-sm leading-6 text-foreground">{String(resource.body ?? "No body captured.")}</pre>
+        )}
+      </section>
+
+      <div class="space-y-6">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Resolved URLs</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Canonical source references kept on the resource row.
+            </p>
+          </div>
+          <dl class="grid gap-3 text-sm">
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Original URL</dt>
+              <dd class="mt-1 break-all text-foreground">{String(resource.url ?? "—")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Final URL</dt>
+              <dd class="mt-1 break-all text-foreground">{String(resource.final_url ?? "—")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Normalized URL</dt>
+              <dd class="mt-1 break-all text-foreground">{String(resource.normalized_url ?? "—")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Updated</dt>
+              <dd class="mt-1 text-foreground">{formatTimestamp(resource.updated_at)}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Discovery provenance</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Operator-facing trace of whether the resource came from cheap static discovery or the browser-assisted fallback.
+            </p>
+          </div>
+          <dl class="grid gap-3 text-sm">
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Browser-assisted</dt>
+              <dd class="mt-1 text-foreground">{browserAssisted ? "Yes" : "No"}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Capture source</dt>
+              <dd class="mt-1 text-foreground">{browserCaptureSource}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Challenge kind</dt>
+              <dd class="mt-1 text-foreground">{browserChallengeKind}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Seed URL</dt>
+              <dd class="mt-1 break-all text-foreground">{browserSeedUrl}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Rendered page URL</dt>
+              <dd class="mt-1 break-all text-foreground">{browserPageUrl}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Structured extraction</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Summary of typed resource outputs retained for operator inspection.
+            </p>
+          </div>
+          <dl class="grid gap-3 text-sm">
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Documents</dt>
+              <dd class="mt-1 text-foreground">{documents.length}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Media</dt>
+              <dd class="mt-1 text-foreground">{mediaAssets.length}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Links out</dt>
+              <dd class="mt-1 text-foreground">{linksOut.length}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Child resources</dt>
+              <dd class="mt-1 text-foreground">{childResources.length}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Extraction error</dt>
+              <dd class="mt-1 text-foreground">{String(resource.extraction_error ?? "—")}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+    </div>
+
+    <details class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <summary class="cursor-pointer list-none text-sm font-semibold text-foreground">
+        Raw resource payloads
+      </summary>
+      <div class="mt-4 grid gap-4 xl:grid-cols-2">
+        <div>
+          <p class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Classification / attributes</p>
+          <pre class="mt-2 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify({
+            classification_json: resource.classification_json ?? {},
+            attributes_json: resource.attributes_json ?? {},
+          }, null, 2)}</pre>
+        </div>
+        <div>
+          <p class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Documents / media / links</p>
+          <pre class="mt-2 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify({
+            documents_json: resource.documents_json ?? [],
+            media_json: resource.media_json ?? [],
+            links_out_json: resource.links_out_json ?? [],
+            child_resources_json: resource.child_resources_json ?? [],
+          }, null, 2)}</pre>
+        </div>
+      </div>
+      <div class="mt-4">
+        <p class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Raw payload</p>
+        <pre class="mt-2 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(resource.raw_payload_json ?? {}, null, 2)}</pre>
+      </div>
+    </details>
+  </div>
+</AdminShell>

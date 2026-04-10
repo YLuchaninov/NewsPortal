@@ -3,10 +3,10 @@ import test from "node:test";
 
 import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
 
-test("listFeedArticles sends pagination params and returns the paginated envelope", async () => {
+test("listSystemSelectedContentItems sends pagination params and returns the paginated envelope", async () => {
   let requestedUrl = "";
   const expected = {
-    items: [{ doc_id: "article-1" }],
+    items: [{ content_item_id: "editorial:article-1" }],
     page: 2,
     pageSize: 50,
     total: 125,
@@ -26,16 +26,16 @@ test("listFeedArticles sends pagination params and returns the paginated envelop
     }) as typeof fetch,
   });
 
-  const response = await sdk.listFeedArticles<Record<string, unknown>>({
+  const response = await sdk.listSystemSelectedContentItems<Record<string, unknown>>({
     page: 2,
     pageSize: 50,
   });
 
-  assert.equal(requestedUrl, "http://api.example.test/feed?page=2&pageSize=50");
+  assert.equal(requestedUrl, "http://api.example.test/collections/system-selected?page=2&pageSize=50");
   assert.deepEqual(response, expected);
 });
 
-test("listFeedArticles omits empty pagination params", async () => {
+test("listSystemSelectedContentItems omits empty pagination params", async () => {
   let requestedUrl = "";
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test/",
@@ -59,9 +59,9 @@ test("listFeedArticles omits empty pagination params", async () => {
     }) as typeof fetch,
   });
 
-  await sdk.listFeedArticles();
+  await sdk.listSystemSelectedContentItems();
 
-  assert.equal(requestedUrl, "http://api.example.test/feed");
+  assert.equal(requestedUrl, "http://api.example.test/collections/system-selected");
 });
 
 test("listArticlesPage sends pagination params to the admin article list", async () => {
@@ -92,7 +92,7 @@ test("listArticlesPage sends pagination params to the admin article list", async
     pageSize: 10,
   });
 
-  assert.equal(requestedUrl, "http://api.example.test/articles?page=3&pageSize=10");
+  assert.equal(requestedUrl, "http://api.example.test/maintenance/articles?page=3&pageSize=10");
   assert.deepEqual(response, expected);
 });
 
@@ -129,6 +129,45 @@ test("listFetchRunsPage preserves filters while sending pagination params", asyn
   assert.equal(
     requestedUrl,
     "http://api.example.test/maintenance/fetch-runs?page=2&pageSize=25&channel_id=channel-123"
+  );
+});
+
+test("listWebResourcesPage preserves website filters while sending pagination params", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          items: [],
+          page: 2,
+          pageSize: 15,
+          total: 31,
+          totalPages: 3,
+          hasNext: true,
+          hasPrev: true,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.listWebResourcesPage<Record<string, unknown>>({
+    channelId: "channel-9",
+    extractionState: "skipped",
+    projection: "resource_only",
+    resourceKind: "entity",
+    page: 2,
+    pageSize: 15,
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/web-resources?page=2&pageSize=15&channelId=channel-9&extractionState=skipped&projection=resource_only&resourceKind=entity"
   );
 });
 
@@ -190,7 +229,161 @@ test("listClustersPage sends pagination params", async () => {
   assert.equal(requestedUrl, "http://api.example.test/clusters?page=1&pageSize=12");
 });
 
-test("listLlmTemplatesPage and listInterestTemplatesPage send independent pagination params", async () => {
+test("retryArticleEnrichment posts to the dedicated maintenance route", async () => {
+  let requestedUrl = "";
+  let requestedMethod = "";
+  let requestedBody = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedMethod = String(init?.method ?? "GET");
+      requestedBody = String(init?.body ?? "");
+      return new Response(
+        JSON.stringify({
+          run_id: "run-1",
+          status: "pending",
+        }),
+        {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.retryArticleEnrichment<Record<string, unknown>>("doc-99", {
+    requestedBy: "admin-1",
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/articles/doc-99/enrichment/retry"
+  );
+  assert.equal(requestedMethod, "POST");
+  assert.match(requestedBody, /"requestedBy":"admin-1"/);
+});
+
+test("listSequencesPage sends pagination params to sequence maintenance", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          items: [],
+          page: 2,
+          pageSize: 5,
+          total: 9,
+          totalPages: 2,
+          hasNext: false,
+          hasPrev: true,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.listSequencesPage<Record<string, unknown>>({ page: 2, pageSize: 5 });
+
+  assert.equal(requestedUrl, "http://api.example.test/maintenance/sequences?page=2&pageSize=5");
+});
+
+test("requestSequenceRun posts to the sequence run route", async () => {
+  let requestedUrl = "";
+  let requestedMethod = "";
+  let requestedBody = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedMethod = String(init?.method ?? "GET");
+      requestedBody = String(init?.body ?? "");
+      return new Response(
+        JSON.stringify({
+          run_id: "run-sequence-1",
+          status: "pending",
+        }),
+        {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.requestSequenceRun<Record<string, unknown>>("sequence-7", {
+    requestedBy: "admin-1",
+    contextJson: { manual: true },
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/sequences/sequence-7/runs"
+  );
+  assert.equal(requestedMethod, "POST");
+  assert.match(requestedBody, /"requestedBy":"admin-1"/);
+  assert.match(requestedBody, /"manual":true/);
+});
+
+test("cancelSequenceRun posts cancel reason to the dedicated route", async () => {
+  let requestedUrl = "";
+  let requestedMethod = "";
+  let requestedBody = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedMethod = String(init?.method ?? "GET");
+      requestedBody = String(init?.body ?? "");
+      return new Response(
+        JSON.stringify({
+          run_id: "run-1",
+          status: "cancelled",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.cancelSequenceRun<Record<string, unknown>>("run-1", {
+    reason: "Operator requested stop.",
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/sequence-runs/run-1/cancel"
+  );
+  assert.equal(requestedMethod, "POST");
+  assert.match(requestedBody, /"reason":"Operator requested stop\."}/);
+});
+
+test("listOutboxEvents preserves explicit limit", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch,
+  });
+
+  await sdk.listOutboxEvents<Record<string, unknown>[]>(15);
+
+  assert.equal(requestedUrl, "http://api.example.test/maintenance/outbox?limit=15");
+});
+
+test("listLlmTemplatesPage and listSystemInterestsPage send independent pagination params", async () => {
   const requestedUrls: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -215,11 +408,11 @@ test("listLlmTemplatesPage and listInterestTemplatesPage send independent pagina
   });
 
   await sdk.listLlmTemplatesPage<Record<string, unknown>>({ page: 2, pageSize: 8 });
-  await sdk.listInterestTemplatesPage<Record<string, unknown>>({ page: 2, pageSize: 8 });
+  await sdk.listSystemInterestsPage<Record<string, unknown>>({ page: 2, pageSize: 8 });
 
   assert.deepEqual(requestedUrls, [
     "http://api.example.test/templates/llm?page=2&pageSize=8",
-    "http://api.example.test/templates/interests?page=2&pageSize=8",
+    "http://api.example.test/system-interests?page=2&pageSize=8",
   ]);
 });
 

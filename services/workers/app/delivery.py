@@ -47,7 +47,12 @@ def send_telegram_message(config_json: dict[str, Any], title: str, body: str) ->
         return DeliveryAttempt(status="failed", detail=str(error))
 
 
-def send_email_digest(config_json: dict[str, Any], title: str, body: str) -> DeliveryAttempt:
+def send_email_digest(
+    config_json: dict[str, Any],
+    title: str,
+    body: str,
+    body_html: str | None = None,
+) -> DeliveryAttempt:
     smtp_url = os.getenv("EMAIL_DIGEST_SMTP_URL", "").strip()
     recipient = str(config_json.get("email") or "").strip()
     if not smtp_url or not recipient:
@@ -71,6 +76,8 @@ def send_email_digest(config_json: dict[str, Any], title: str, body: str) -> Del
     message["From"] = os.getenv("EMAIL_DIGEST_FROM", username or "newsportal@example.test")
     message["To"] = recipient
     message.set_content(body)
+    if body_html:
+        message.add_alternative(body_html, subtype="html")
 
     try:
         if scheme == "smtps":
@@ -123,11 +130,12 @@ def dispatch_channel_message(
     config_json: dict[str, Any],
     title: str,
     body: str,
+    body_html: str | None = None,
 ) -> DeliveryAttempt:
     if channel_type == "telegram":
         return send_telegram_message(config_json, title, body)
     if channel_type == "email_digest":
-        return send_email_digest(config_json, title, body)
+        return send_email_digest(config_json, title, body, body_html=body_html)
     if channel_type == "web_push":
         return send_web_push(config_json, title, body)
     return DeliveryAttempt(status="failed", detail=f"Unsupported channel type: {channel_type}")

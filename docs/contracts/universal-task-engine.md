@@ -41,6 +41,8 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - criterion compile
   - feedback ingest
   - reindex
+- `0016_adaptive_discovery_cutover.sql` keeps discovery on the same engine by reseeding the maintenance-owned discovery orchestrator plus the reusable RSS and website child sequences; discovery domain truth itself now lives in `docs/contracts/discovery-agent.md`.
+- `0015_article_enrichment.sql` keeps the active article lane on the same trigger `article.ingest.requested`, but prepends fetchers-owned `enrichment.article_extract` before `article.normalize`; this is a task-graph change inside the existing default sequence, not a new default trigger or a fetchers-side queue runtime.
 - Default managed runtime path is now:
   `outbox_events -> relay sequence lookup -> sequence_runs -> q.sequence -> TaskGraph plugins/legacy handler adapters`.
 - Direct fallback queue fanout remains only for non-sequence events such as `foundation.smoke.requested` and `source.channel.sync.requested`.
@@ -100,6 +102,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 - Sequence Runner остается владельцем linear traversal, retries/timeouts, context merge и run/task-run persistence.
 - Task plugins остаются self-contained execution units и не должны брать на себя обязанности relay или global scheduler.
 - Sequence management API остается internal/maintenance surface, пока capability явно не расширит public client contract.
+- Astro admin operator UX for shipped sequence control lives on `/automation` with same-origin BFF writes under `/admin/bff/admin/automation`; it must reuse the same maintenance contracts instead of inventing a parallel runtime path.
 - Legacy handlers и новые plugins могут временно coexist only during staged migration; их boundaries должны быть explicit, а не hidden.
 
 ## Maintenance API contract
@@ -119,21 +122,44 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 - Manual run path обязан сначала создать `sequence_runs` row в PostgreSQL, а уже потом делать best-effort enqueue в `q.sequence`.
 - Если dispatch не удался, API обязано пометить созданный run как `failed` с recorded dispatch error, а не оставлять silent pending row.
 - До отдельной runtime stage cooperative cancellation truthfully поддерживается только для `pending` runs; `running` runs через API пока не прерываются.
+- First-class admin operator reads may aggregate FastAPI/SDK sequence state with recent run/outbox visibility, but write actions still must flow through the same maintenance API and explicit audit logging path.
 - Agent create/run path обязан reuse-ить те же `create sequence -> create sequence_run -> enqueue q.sequence -> read run` contracts, а не bypass-ить их отдельным in-memory orchestration path.
 - Agent-created sequences на текущем additive stage создаются как `draft` by default; последующий live activation остаётся вопросом более позднего cutover/operator stage.
+- Adjacent maintenance endpoints, которые перезапускают existing business pipelines через manual sequence runs, обязаны сохранять ту же truth discipline: если downstream legacy idempotency tables ожидают persisted `event_id`, maintenance path сначала materialize-ит compatible outbox truth, а потом создает `sequence_run`.
 
 ## Discovery and enrichment plugin contract
 
 - `UTE-S6` intentionally lands additive plugin contracts plus deterministic unit proof, а не live provider rollout.
-- Network-, LLM- и DB-heavy plugins (`discovery.web_search`, `discovery.url_validator`, `discovery.rss_probe`, `discovery.content_sampler`, `discovery.llm_analyzer`, `discovery.source_registrar`, `utility.db_store`, `enrichment.article_loader`, `enrichment.article_enricher`) обязаны идти через pluggable runtime adapters.
+- Network-, LLM- и DB-heavy plugins (`discovery.web_search`, `discovery.url_validator`, `discovery.rss_probe`, `discovery.website_probe`, `discovery.content_sampler`, `discovery.llm_analyzer`, `discovery.source_registrar`, `utility.db_store`, `enrichment.article_loader`, `enrichment.article_enricher`) обязаны идти через pluggable runtime adapters.
 - Default runtime adapters могут truthfully сообщать, что provider/runtime integration еще не configured; это не считается cutover bug до отдельной rollout stage.
-- `discovery.relevance_scorer` в текущем additive stage остается deterministic local scorer, чтобы `UTE-S6` можно было доказать без live embedding provider; later provider-backed evolution допустима только при сохранении module contract и более сильном proof contour.
-- Source registration по-прежнему не должно bypass-ить PostgreSQL + outbox discipline; adapter boundary нужен именно для сохранения этого ownership, а не для прямых side effects в plugin code.
+- `discovery.relevance_scorer` остается deterministic local scorer внутри discovery child pipelines; richer discovery scoring policy lives in `docs/contracts/discovery-agent.md` and must not bypass the existing plugin/task boundary.
+- Source registration по-прежнему не должно bypass-ить PostgreSQL + outbox discipline; adapter boundary нужен именно для сохранения этого ownership, а не для прямых side effects в plugin code. Discovery rollout widens this boundary with explicit `provider_type` ownership so website-origin candidates can either stay `website` or collapse to hidden-RSS `rss` registration without bypassing `source_channels`, `source_channel_runtime_state` and outbox sync semantics.
+- Post-cutover article enrichment contract now uses `enrichment.article_extract` as the first task of the active article ingest sequence. Этот plugin вызывает fetchers internal HTTP endpoint, сохраняет thin `doc_id`/`event_id` context discipline, не берет ownership над queue consumption, и оставляет `services/fetchers` единственным owner-ом full-article/media extraction plus enrichment-owned `article_media_assets` rewrites.
+
+## Discovery orchestration adjunct
+
+- Discovery orchestration stays maintenance-only and additive on top of the engine; it does not introduce a parallel in-memory scheduler or direct admin-to-worker side channel.
+- Discovery domain model, registry semantics, source profiling/scoring and portfolio/feedback truth live in `docs/contracts/discovery-agent.md`; this document only governs the UTE boundary that discovery reuses.
+- UTE-owned orchestrator plugin surface is:
+  - `discovery.plan_hypotheses`
+  - `discovery.execute_hypotheses`
+  - `discovery.evaluate_results`
+- `discovery.re_evaluate_sources`
+- Worker-side orchestration must reuse the task-engine repository/service layer to create child `sequence_runs`, read task outputs and update persisted run state; importing FastAPI helpers into worker runtime is forbidden.
+- Discovery admin/API surface lives under `/maintenance/discovery/*`; Astro admin keeps the repo-wide pattern of same-origin BFF writes with explicit audit logging, while direct read surfaces stay on FastAPI/SDK.
+- Adjunct runtime boundary remains part of the contract:
+  - `DISCOVERY_ENABLED=false` keeps live runtime disabled;
+  - `DISCOVERY_SEARCH_PROVIDER=ddgs` is the default live-provider contract while runtime stays disabled until explicitly enabled;
+  - discovery search must keep `stub` as a supported rollback/test provider;
+  - discovery planning/source-evaluation LLM usage must read dedicated `DISCOVERY_GEMINI_*` and `DISCOVERY_LLM_*` envs first, then fall back to legacy Gemini/LLM envs;
+  - discovery monthly quota is enforced as a UTC calendar-month hard cap on new external discovery calls, separate from per-mission budgets;
+  - approved sources must still register only through PostgreSQL + outbox `source.channel.sync.requested`.
 
 ## Data and state rules
 
 - PostgreSQL остается source of truth для sequence definitions, run state и business state.
 - Redis/BullMQ остается transport/retry layer; queue state не становится authoritative run history.
+- Executor должен терпимо переживать короткий post-commit visibility lag между `sequence_runs` insert и worker-side `get_run`, retry-ируя short lookup window перед тем как объявить run missing.
 - Pipeline plugins обязаны сохранять текущие business invariants:
   - PostgreSQL-first write path;
   - outbox/inbox idempotency;
@@ -141,6 +167,8 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - criteria-gated clustering;
   - historical backfill with frozen target snapshot;
   - no silent retro-notifications.
+- Manual article enrichment retry использует тот же active article sequence и тот же sequence-first runtime: FastAPI maintenance path materialize-ит published synthetic `article.ingest.requested` outbox row, создает manual `sequence_run` с `force_enrichment=true`, а затем dispatch-ит его через Redis-backed `q.sequence`.
+- Historical enrichment-enabled repair не вводит новый trigger или отдельный queue runtime: maintenance backfill reuse-ит frozen `reindex_job_targets` snapshot, вызывает fetchers-owned `enrichment.article_extract` через existing internal contract, затем replay-ит `normalize -> dedup -> embed -> criteria -> criterion review -> cluster -> interests` внутри maintenance lane без `notify` stage.
 - После `UTE-S8` default runtime не должен повторно публиковать legacy intermediate article events во время sequence execution; их возврат допустим только как explicit opt-in compatibility path, а не как silent default.
 
 ## Runtime and delivery considerations
@@ -157,6 +185,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - `WORKER_SEQUENCE_RUNNER_CONCURRENCY`
   - `WORKER_SEQUENCE_CRON_POLL_INTERVAL_SECONDS`
 - Relay default runtime after `UTE-S8` truthfully uses sequence routing unless `RELAY_ENABLE_SEQUENCE_ROUTING` is explicitly disabled.
+- Compose/runtime baselines, в которых API surface умеет создавать manual sequence runs, должны давать `services/api` доступ к Redis, потому что maintenance dispatch path enqueue-ит `q.sequence` jobs напрямую после DB write.
 - Cron polling/bootstrap остаётся DB-backed and minute-based: scheduler перечитывает active cron sequences из PostgreSQL, создаёт `sequence_runs` only for the currently due minute, записывает `trigger_meta.scheduledFor` и dispatch-ит в `q.sequence`; missed catch-up/backfill scheduling не считается реализованным до более поздней capability.
 - Additive SQL migrations `0010` and `0011` laid the foundation; `0012` is the cutover activation migration that turns seeded default sequences live.
 - На plugin-migration stages допустим adapter pattern: pipeline plugins могут временно вызывать legacy `process_*` handlers через thin job-shim, если это сохраняет существующие side effects и дает parity-friendly extraction без runtime switch.
@@ -194,6 +223,9 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - targeted Python coverage for discovery/enrichment plugin contracts, deterministic adapter boundaries and end-to-end fake-runtime sequence execution
   - `pnpm unit_tests`
   - runtime default keeps legacy relay/worker routing, and live external-provider smoke remains out of scope unless a later stage explicitly introduces it
+- Adaptive discovery adjunct on top of the cutover engine:
+  - follow `docs/contracts/discovery-agent.md` for discovery-domain proof contour;
+  - UTE-specific expectation is that discovery continues to prove sequence-managed child-run creation, plugin execution, and PostgreSQL-first source registration without bypassing `q.sequence` or outbox discipline.
 - `UTE-S7` cron and agent integration without cutover:
   - targeted Python coverage for cron parsing, minute-based due-sequence polling/bootstrap, dispatch-failure handling, sequence job payload processing, agent draft-sequence create/run contract and agent tool catalog surface
   - `pnpm unit_tests`
@@ -211,6 +243,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - `pnpm test:criterion-compile:compose`
   - `pnpm test:cluster-match-notify:compose`
   - explicit proof that default runtime suppresses legacy intermediate article fanout while preserving inbox/idempotency and `system_feed_results` gating
+- Post-cutover admin/operator surface changes on this boundary must additionally rerun `node infra/scripts/test-automation-admin-flow.mjs`, so shipped `/automation` sequence/outbox UX stays aligned with the maintenance contract.
 - Plugin migration stages:
   использовать parity-oriented proof against current handler behavior plus existing worker smoke paths where relevant.
 - Broader umbrella `pnpm integration_tests` remains desirable, but unrelated failures outside the sequence/runtime boundary may stay as explicitly recorded residuals once all cutover-specific proofs above pass.
@@ -218,6 +251,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 ## Related files
 
 - `NEW_ARCHITECTURE.md`
+- `docs/contracts/discovery-agent.md`
 - `docs/work.md`
 - `docs/blueprint.md`
 - `packages/contracts/src/queue.ts`

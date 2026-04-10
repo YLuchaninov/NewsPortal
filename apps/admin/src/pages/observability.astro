@@ -39,10 +39,11 @@ function parsePage(paramName: string): number {
 
 const fetchPage = parsePage("fetchPage");
 const reviewPage = parsePage("reviewPage");
-const [fetchRuns, llmReviews, llmUsageSummary] = await Promise.all([
+const [fetchRuns, llmReviews, llmUsageSummary, llmBudgetSummary] = await Promise.all([
   sdk.listFetchRunsPage<R>({ page: fetchPage, pageSize: FETCH_RUNS_PAGE_SIZE }),
   sdk.listLlmReviewsPage<R>({ page: reviewPage, pageSize: LLM_REVIEWS_PAGE_SIZE }),
   sdk.getLlmUsageSummary<R>(),
+  sdk.getLlmBudgetSummary<R>(),
 ]);
 
 function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
@@ -86,6 +87,26 @@ const initialUsage7d = {
     llmUsage7d.total_tokens,
     llmUsage7d.cost_estimate_usd,
     llmUsage7d.avg_latency_ms,
+  ]),
+};
+const initialBudget = {
+  enabled: llmBudgetSummary.enabled === true,
+  monthlyBudgetCents: asInt(llmBudgetSummary.monthlyBudgetCents, 0),
+  monthToDateCostCents: asInt(llmBudgetSummary.monthToDateCostCents, 0),
+  remainingMonthlyBudgetCents:
+    llmBudgetSummary.remainingMonthlyBudgetCents == null
+      ? null
+      : asInt(llmBudgetSummary.remainingMonthlyBudgetCents, 0),
+  monthlyQuotaReached: llmBudgetSummary.monthlyQuotaReached === true,
+  acceptGrayZoneOnBudgetExhaustion:
+    llmBudgetSummary.acceptGrayZoneOnBudgetExhaustion === true,
+  revision: buildAdminLiveRevision([
+    llmBudgetSummary.enabled,
+    llmBudgetSummary.monthlyBudgetCents,
+    llmBudgetSummary.monthToDateCostCents,
+    llmBudgetSummary.remainingMonthlyBudgetCents,
+    llmBudgetSummary.monthlyQuotaReached,
+    llmBudgetSummary.acceptGrayZoneOnBudgetExhaustion,
   ]),
 };
 const fetchRunsRevision = buildAdminLiveRevision([
@@ -142,7 +163,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
 
   <div class="space-y-6">
     <h1 class="text-xl font-bold">Observability</h1>
-    <p class="text-sm text-muted-foreground mt-0.5">Monitor fetch performance and AI review costs</p>
+    <p class="text-sm text-muted-foreground mt-0.5">Monitor fetch health, gray-zone AI review costs, and the operator telemetry that feeds canonical, verification, and final-selection decisions.</p>
 
     <!-- Observability explanation -->
     <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
@@ -162,6 +183,10 @@ function resolveTableHref(paramName: string, nextPage: number): string {
             <p class="text-[11px]">Each row = one poll of a channel. <strong>new_content</strong> = found new articles. <strong>no_change</strong> = feed unchanged since last check. <strong>error</strong> = fetch failed (check the channel).</p>
           </div>
         </div>
+        <div class="rounded-md border border-border bg-card p-2.5">
+          <p class="font-medium text-foreground text-[11px] mb-0.5">Zero-shot cutover context</p>
+          <p class="text-[11px]">This page focuses on upstream telemetry: fetch stability and gray-zone review budgets. Canonical document ownership, story-cluster verification, and final selection now live on the <a href={appPath("/articles")} class="text-primary hover:underline">Articles</a> surface, while mission fit and generic channel-quality signals live on <a href={appPath("/discovery")} class="text-primary hover:underline">Discovery</a>.</p>
+        </div>
       </div>
     </details>
 
@@ -169,6 +194,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
     <LiveObservabilitySummary
       initial24h={initialUsage24h}
       initial7d={initialUsage7d}
+      initialBudget={initialBudget}
       client:load
     />
 

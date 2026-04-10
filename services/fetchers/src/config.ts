@@ -6,6 +6,14 @@ export interface FetchersConfig {
   fetchersConcurrency: number;
   defaultRequestTimeoutMs: number;
   defaultUserAgent: string;
+  enrichmentEnabled: boolean;
+  enrichmentConcurrency: number;
+  enrichmentTimeoutMs: number;
+  enrichmentUserAgent: string;
+  enrichmentMaxOembedPerArticle: number;
+  enrichmentOembedTimeoutMs: number;
+  enrichmentPerDomainConcurrency: number;
+  enrichmentPerDomainMinIntervalMs: number;
 }
 
 function readNumber(name: string, fallback: number): number {
@@ -22,6 +30,15 @@ function readNumber(name: string, fallback: number): number {
   }
 
   return parsed;
+}
+
+function readBoolean(name: string, fallback: boolean): boolean {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  return ["1", "true", "yes", "on"].includes(rawValue.trim().toLowerCase());
 }
 
 function buildPostgresUrl(): string {
@@ -41,6 +58,10 @@ function buildPostgresUrl(): string {
 }
 
 export function loadFetchersConfig(): FetchersConfig {
+  const defaultUserAgent =
+    process.env.FETCHERS_USER_AGENT ??
+    "NewsPortalFetchers/0.1 (+https://newsportal.local)";
+
   return {
     databaseUrl: buildPostgresUrl(),
     fetchersPort: readNumber("FETCHERS_PORT", 4100),
@@ -48,8 +69,23 @@ export function loadFetchersConfig(): FetchersConfig {
     fetchersBatchSize: readNumber("FETCHERS_BATCH_SIZE", 100),
     fetchersConcurrency: Math.max(1, Math.floor(readNumber("FETCHERS_CONCURRENCY", 4))),
     defaultRequestTimeoutMs: readNumber("FETCHERS_REQUEST_TIMEOUT_MS", 10000),
-    defaultUserAgent:
-      process.env.FETCHERS_USER_AGENT ??
-      "NewsPortalFetchers/0.1 (+https://newsportal.local)"
+    defaultUserAgent,
+    enrichmentEnabled: readBoolean("ENRICHMENT_ENABLED", true),
+    enrichmentConcurrency: Math.max(1, Math.floor(readNumber("ENRICHMENT_CONCURRENCY", 5))),
+    enrichmentTimeoutMs: readNumber("ENRICHMENT_TIMEOUT_MS", 15000),
+    enrichmentUserAgent: process.env.ENRICHMENT_USER_AGENT ?? defaultUserAgent,
+    enrichmentMaxOembedPerArticle: Math.max(
+      1,
+      Math.floor(readNumber("ENRICHMENT_MAX_OEMBED_PER_ARTICLE", 3))
+    ),
+    enrichmentOembedTimeoutMs: readNumber("ENRICHMENT_OEMBED_TIMEOUT_MS", 10000),
+    enrichmentPerDomainConcurrency: Math.max(
+      1,
+      Math.floor(readNumber("ENRICHMENT_PER_DOMAIN_CONCURRENCY", 2))
+    ),
+    enrichmentPerDomainMinIntervalMs: Math.max(
+      0,
+      Math.floor(readNumber("ENRICHMENT_PER_DOMAIN_MIN_INTERVAL_MS", 1000))
+    )
   };
 }

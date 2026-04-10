@@ -1,5 +1,15 @@
 ---
-import { CHANNEL_SCHEDULE_PRESETS, DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
+import {
+  CHANNEL_SCHEDULE_PRESETS,
+  DEFAULT_PAGE,
+  DEFAULT_PAGE_SIZE,
+  parseApiChannelConfig,
+  parseEmailImapChannelConfig,
+  parseRssChannelConfig,
+  parseWebsiteChannelConfig,
+  resolveRssChannelAdapterStrategy,
+  resolveRssChannelMaxEntryAgeHours,
+} from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
@@ -13,6 +23,10 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import {
+  formatAdminChannelProviderLabel,
+  isAdminChannelProviderType,
+} from "../lib/channel-providers";
 
 export const prerender = false;
 
@@ -36,60 +50,180 @@ const bffPaths = {
 const pagePaths = {
   dashboard: appPath("/"),
   help: appPath("/help"),
-  newChannel: appPath("/channels/new"),
+  resources: appPath("/resources"),
+  newRssChannel: appPath("/channels/new"),
+  newWebsiteChannel: appPath("/channels/new?providerType=website"),
+  newApiChannel: appPath("/channels/new?providerType=api"),
+  newEmailImapChannel: appPath("/channels/new?providerType=email_imap"),
   importChannels: appPath("/channels/import"),
 };
 
 type R = Record<string, unknown>;
-function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? (v as R) : {}; }
+function asRecord(v: unknown): R {
+  return v != null && typeof v === "object" && !Array.isArray(v) ? (v as R) : {};
+}
 function asInt(v: unknown, f: number) {
   const p = typeof v === "number" && Number.isInteger(v) ? v : parseInt(String(v ?? ""), 10);
   return Number.isInteger(p) && p >= 0 ? p : f;
 }
-function asBool(v: unknown, fallback = false) {
-  return typeof v === "boolean" ? v : String(v ?? "").trim().toLowerCase() === "true" || fallback;
+function asBoolString(v: boolean) {
+  return v ? "true" : "false";
 }
-function asBoolString(v: boolean) { return v ? "true" : "false"; }
+function resolveListedProviderType(value: unknown): string {
+  const normalized = String(value ?? "").trim();
+  return normalized || "unknown";
+}
+function formatListedProviderLabel(providerType: string): string {
+  if (isAdminChannelProviderType(providerType)) {
+    return formatAdminChannelProviderLabel(providerType);
+  }
+  if (providerType === "youtube") {
+    return "YouTube";
+  }
+  return providerType || "Unknown";
+}
+function defaultPollIntervalSeconds(providerType: string): number {
+  return providerType === "website" ? 900 : 300;
+}
 
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const channels = await sdk.listChannelsPage<R>({
   page,
   pageSize: DEFAULT_PAGE_SIZE,
-  providerType: "rss",
 });
 
 const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
-const rssChannels = channels.items
-  .filter((c) => String(c.provider_type) === "rss")
-  .map((c) => {
-    const cfg = asRecord(c.config_json);
-    const articleCount = asInt(c.article_count, 0);
-    return {
-      channelId: String(c.channel_id ?? ""),
-      name: String(c.name ?? ""),
-      fetchUrl: String(c.fetch_url ?? ""),
-      language: String(c.language ?? "en"),
-      isActive: c.is_active === true,
-      pollIntervalSeconds: asInt(c.poll_interval_seconds, 300),
-      adaptiveEnabled: c.adaptive_enabled !== false,
-      effectivePollIntervalSeconds: asInt(c.effective_poll_interval_seconds, asInt(c.poll_interval_seconds, 300)),
-      maxPollIntervalSeconds: asInt(c.max_poll_interval_seconds, asInt(c.poll_interval_seconds, 300) * 16),
-      nextDueAt: String(c.next_due_at ?? ""),
-      lastResultKind: String(c.last_result_kind ?? "never"),
-      overdueSeconds: asInt(c.overdue_seconds, 0),
-      needsAttention: c.needs_attention === true,
-      recentFailureCount24h: asInt(c.recent_failure_count_24h, 0),
-      maxItemsPerPoll: asInt(cfg.maxItemsPerPoll, 20),
-      requestTimeoutMs: asInt(cfg.requestTimeoutMs, 10000),
-      userAgent: String(cfg.userAgent ?? "NewsPortalFetchers/0.1"),
-      preferContentEncoded: asBool(cfg.preferContentEncoded, true),
-      lastFetchAt: String(c.last_fetch_at ?? ""),
-      lastSuccessAt: String(c.last_success_at ?? ""),
-      articleCount,
-      providerName: String(c.provider_name ?? "RSS"),
-    };
-  });
+const sourceChannels = channels.items.map((c) => {
+  const cfg = asRecord(c.config_json);
+  const rawProviderType = resolveListedProviderType(c.provider_type);
+  const editableProviderType = isAdminChannelProviderType(rawProviderType)
+    ? rawProviderType
+    : null;
+  const storedItemCount = asInt(c.stored_item_count, 0);
+  const pollDefault = defaultPollIntervalSeconds(rawProviderType);
+  const rssConfig = rawProviderType === "rss" ? parseRssChannelConfig(cfg) : null;
+  const websiteConfig = rawProviderType === "website" ? parseWebsiteChannelConfig(cfg) : null;
+  const apiConfig = rawProviderType === "api" ? parseApiChannelConfig(cfg) : null;
+  const emailImapConfig = rawProviderType === "email_imap" ? parseEmailImapChannelConfig(cfg) : null;
+  const websiteModes = rawProviderType === "website"
+    ? [
+        websiteConfig?.sitemapDiscoveryEnabled ? "sitemap" : null,
+        websiteConfig?.feedDiscoveryEnabled ? "feed" : null,
+        websiteConfig?.collectionDiscoveryEnabled ? "collection" : null,
+        websiteConfig?.downloadDiscoveryEnabled ? "download" : null,
+        websiteConfig?.browserFallbackEnabled ? "browser" : null,
+      ].filter((value): value is string => Boolean(value))
+    : [];
+
+  return {
+    channelId: String(c.channel_id ?? ""),
+    rawProviderType,
+    editableProviderType,
+    providerLabel: formatListedProviderLabel(rawProviderType),
+    name: String(c.name ?? ""),
+    fetchUrl: String(c.fetch_url ?? ""),
+    language: String(c.language ?? "en"),
+    isActive: c.is_active === true,
+    pollIntervalSeconds: asInt(c.poll_interval_seconds, pollDefault),
+    adaptiveEnabled: c.adaptive_enabled !== false,
+    effectivePollIntervalSeconds: asInt(
+      c.effective_poll_interval_seconds,
+      asInt(c.poll_interval_seconds, pollDefault)
+    ),
+    maxPollIntervalSeconds: asInt(
+      c.max_poll_interval_seconds,
+      asInt(c.poll_interval_seconds, pollDefault) * 16
+    ),
+    nextDueAt: String(c.next_due_at ?? ""),
+    lastResultKind: String(c.last_result_kind ?? "never"),
+    overdueSeconds: asInt(c.overdue_seconds, 0),
+    needsAttention: c.needs_attention === true,
+    recentFailureCount24h: asInt(c.recent_failure_count_24h, 0),
+    requestTimeoutMs: rawProviderType === "website"
+      ? websiteConfig?.requestTimeoutMs ?? 10000
+      : rawProviderType === "api"
+        ? apiConfig?.requestTimeoutMs ?? 10000
+        : rssConfig?.requestTimeoutMs ?? 10000,
+    userAgent: rawProviderType === "website"
+      ? websiteConfig?.userAgent ?? "NewsPortalFetchers/0.1"
+      : rawProviderType === "api"
+        ? apiConfig?.userAgent ?? "NewsPortalFetchers/0.1"
+        : rssConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+    lastFetchAt: String(c.last_fetch_at ?? ""),
+    lastSuccessAt: String(c.last_success_at ?? ""),
+    storedItemCount,
+    rss:
+      rawProviderType === "rss"
+        ? {
+            maxItemsPerPoll: rssConfig?.maxItemsPerPoll ?? 20,
+            preferContentEncoded: rssConfig?.preferContentEncoded ?? true,
+            adapterStrategy: rssConfig?.adapterStrategy ?? null,
+            maxEntryAgeHours: rssConfig?.maxEntryAgeHours ?? null,
+            resolvedAdapterStrategy: resolveRssChannelAdapterStrategy(
+              String(c.fetch_url ?? ""),
+              rssConfig ?? parseRssChannelConfig({})
+            ),
+            resolvedMaxEntryAgeHours: resolveRssChannelMaxEntryAgeHours(
+              String(c.fetch_url ?? ""),
+              rssConfig ?? parseRssChannelConfig({})
+            ),
+            enrichmentEnabled: c.enrichment_enabled !== false,
+            enrichmentMinBodyLength: asInt(c.enrichment_min_body_length, 500),
+          }
+        : null,
+    website:
+      rawProviderType === "website"
+        ? {
+            maxResourcesPerPoll: websiteConfig?.maxResourcesPerPoll ?? 50,
+            totalPollTimeoutMs: websiteConfig?.totalPollTimeoutMs ?? 30000,
+            crawlDelayMs: websiteConfig?.crawlDelayMs ?? 1000,
+            sitemapDiscoveryEnabled: websiteConfig?.sitemapDiscoveryEnabled ?? true,
+            feedDiscoveryEnabled: websiteConfig?.feedDiscoveryEnabled ?? true,
+            collectionDiscoveryEnabled: websiteConfig?.collectionDiscoveryEnabled ?? true,
+            downloadDiscoveryEnabled: websiteConfig?.downloadDiscoveryEnabled ?? true,
+            browserFallbackEnabled: websiteConfig?.browserFallbackEnabled ?? false,
+            collectionSeedUrls: websiteConfig?.collectionSeedUrls ?? [],
+            allowedUrlPatterns: websiteConfig?.allowedUrlPatterns ?? [],
+            blockedUrlPatterns: websiteConfig?.blockedUrlPatterns ?? [],
+            modesSummary: websiteModes.length > 0 ? websiteModes.join(", ") : "manual",
+          }
+        : null,
+    api:
+      rawProviderType === "api"
+        ? {
+            maxItemsPerPoll: apiConfig?.maxItemsPerPoll ?? 20,
+            requestTimeoutMs: apiConfig?.requestTimeoutMs ?? 10000,
+            userAgent: apiConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+            itemsPath: apiConfig?.itemsPath ?? "items",
+            titleField: apiConfig?.titleField ?? "title",
+            leadField: apiConfig?.leadField ?? "lead",
+            bodyField: apiConfig?.bodyField ?? "body",
+            urlField: apiConfig?.urlField ?? "url",
+            publishedAtField: apiConfig?.publishedAtField ?? "publishedAt",
+            externalIdField: apiConfig?.externalIdField ?? "id",
+            languageField: apiConfig?.languageField ?? "language",
+            enrichmentEnabled: c.enrichment_enabled !== false,
+            enrichmentMinBodyLength: asInt(c.enrichment_min_body_length, 500),
+          }
+        : null,
+    emailImap:
+      rawProviderType === "email_imap"
+        ? {
+            host: emailImapConfig?.host ?? "",
+            port: emailImapConfig?.port ?? 993,
+            secure: emailImapConfig?.secure ?? true,
+            username: emailImapConfig?.username ?? "",
+            mailbox: emailImapConfig?.mailbox ?? "INBOX",
+            searchFrom: emailImapConfig?.searchFrom ?? "",
+            maxItemsPerPoll: emailImapConfig?.maxItemsPerPoll ?? 20,
+            enrichmentEnabled: c.enrichment_enabled !== false,
+            enrichmentMinBodyLength: asInt(c.enrichment_min_body_length, 500),
+            hasPassword: Boolean(String(emailImapConfig?.password ?? "").trim()),
+          }
+        : null,
+  };
+});
 
 function fmt(v: unknown) {
   if (!v) return "—";
@@ -107,8 +241,12 @@ function resolvePageHref(nextPage: number): string {
   return `${target.pathname}${target.search}`;
 }
 
-const attentionCount = rssChannels.filter((channel) => channel.needsAttention).length;
-const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
+const attentionCount = sourceChannels.filter((channel) => channel.needsAttention).length;
+const pausedCount = sourceChannels.filter((channel) => !channel.isActive).length;
+const rssCount = sourceChannels.filter((channel) => channel.rawProviderType === "rss").length;
+const websiteCount = sourceChannels.filter((channel) => channel.rawProviderType === "website").length;
+const apiCount = sourceChannels.filter((channel) => channel.rawProviderType === "api").length;
+const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderType === "email_imap").length;
 ---
 
 <AdminShell title="Channels — Admin" session={session} flash={flash} activeNav="channels">
@@ -121,40 +259,63 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
   </Fragment>
 
   <Fragment slot="header-actions">
-    <a href={pagePaths.importChannels} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-      Bulk import
-    </a>
-    <a href={pagePaths.newChannel} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-      Add channel
-    </a>
+    <div class="flex flex-wrap items-center justify-end gap-2">
+      <a href={pagePaths.importChannels} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+        Bulk import
+      </a>
+      <a href={pagePaths.newEmailImapChannel} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+        Add Email IMAP
+      </a>
+      <a href={pagePaths.newApiChannel} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+        Add API
+      </a>
+      <a href={pagePaths.newWebsiteChannel} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+        Add website
+      </a>
+      <a href={pagePaths.newRssChannel} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+        Add RSS
+      </a>
+    </div>
   </Fragment>
 
   <div class="space-y-6">
     <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-2xl">
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Source operations</p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight">RSS channels</h1>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">Source channels</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          Keep list management lightweight here, then move into dedicated create, import, and edit screens for full details.
-          This page stays focused on operational health, quick actions, and safe destructive controls.
+          Keep list management lightweight here, then move into dedicated create and edit screens for full provider-specific details.
+          This page stays focused on operational health, safe destructive controls, and clear provider-specific entry points.
         </p>
       </div>
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <div class="rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
           <p class="mt-1 text-2xl font-semibold">{channels.total}</p>
         </div>
         <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Attention</p>
-          <p class="mt-1 text-2xl font-semibold text-amber-500">{attentionCount}</p>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">RSS</p>
+          <p class="mt-1 text-2xl font-semibold">{rssCount}</p>
         </div>
         <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Paused</p>
-          <p class="mt-1 text-2xl font-semibold text-slate-500">{pausedCount}</p>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Website</p>
+          <p class="mt-1 text-2xl font-semibold">{websiteCount}</p>
         </div>
         <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Page</p>
-          <p class="mt-1 text-2xl font-semibold">{channels.page}</p>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">API</p>
+          <p class="mt-1 text-2xl font-semibold">{apiCount}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Email IMAP</p>
+          <p class="mt-1 text-2xl font-semibold">{emailImapCount}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Attention / Paused</p>
+          <p class="mt-1 text-2xl font-semibold">
+            <span class="text-amber-500">{attentionCount}</span>
+            <span class="mx-1 text-muted-foreground">/</span>
+            <span class="text-slate-500">{pausedCount}</span>
+          </p>
         </div>
       </div>
     </div>
@@ -165,32 +326,32 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
           <div>
             <h2 class="text-base font-semibold">Operational overview</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              Channels can be paused inline, while full edits happen on dedicated edit screens to reduce accidental changes.
+              Channels can be paused inline, while full edits happen on dedicated screens to reduce accidental changes and keep provider-specific controls contained.
             </p>
           </div>
           <a href={pagePaths.help} class="text-sm font-medium text-primary hover:underline">Read setup guide</a>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-3">
           <div class="rounded-2xl border border-border bg-background p-4">
-            <p class="text-sm font-medium">Create individually</p>
-            <p class="mt-2 text-sm text-muted-foreground">Use the dedicated create screen when you need the full channel form and advanced fetch settings.</p>
+            <p class="text-sm font-medium">Create deliberately</p>
+            <p class="mt-2 text-sm text-muted-foreground">Use the dedicated create screen when you need the full RSS, website, API, or mailbox form with safe defaults.</p>
           </div>
           <div class="rounded-2xl border border-border bg-background p-4">
-            <p class="text-sm font-medium">Import in bulk</p>
-            <p class="mt-2 text-sm text-muted-foreground">Paste validated JSON on a separate import screen so the list stays focused on monitoring and quick actions.</p>
+            <p class="text-sm font-medium">Keep provider truth explicit</p>
+            <p class="mt-2 text-sm text-muted-foreground">Website channels stay websites, APIs stay APIs, and mailbox ingest stays mailbox-based instead of being silently coerced into another provider shape.</p>
           </div>
           <div class="rounded-2xl border border-border bg-background p-4">
             <p class="text-sm font-medium">Delete safely</p>
-            <p class="mt-2 text-sm text-muted-foreground">Channels with historical articles are archived instead of hard-deleted, so the article history remains intact.</p>
+            <p class="mt-2 text-sm text-muted-foreground">Channels with stored history are archived instead of hard-deleted, so previously ingested items stay recoverable.</p>
           </div>
         </div>
       </section>
 
       <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div>
-          <h2 class="text-base font-semibold">Bulk schedule</h2>
+          <h2 class="text-base font-semibold">Bulk RSS schedule</h2>
           <p class="mt-1 text-sm text-muted-foreground">
-            Apply one polling preset across the current RSS fleet when you need fast operational tuning.
+            Apply one polling preset across the current RSS fleet when you need fast operational tuning. Website, API, and mailbox channels keep their own provider-specific budgets and settings.
           </p>
         </div>
         <form method="post" action={bffPaths.channelsSchedule} class="mt-4 grid gap-3">
@@ -213,7 +374,7 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
           </label>
           <AdminConfirmSubmitButton
             title="Apply bulk schedule"
-            description="This updates the polling schedule for all RSS channels. Use it when you intentionally want to retune the entire fleet, not for one-off feed changes."
+            description="This updates the polling schedule for all RSS channels. Use it when you intentionally want to retune the feed fleet, not for one-off channel changes."
             triggerLabel="Apply schedule"
             confirmLabel="Apply to RSS channels"
             triggerClassName="mt-2 bg-secondary text-secondary-foreground hover:bg-secondary/80"
@@ -234,7 +395,7 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
     <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div class="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 class="text-base font-semibold">All RSS channels</h2>
+          <h2 class="text-base font-semibold">All source channels</h2>
           <p class="mt-1 text-sm text-muted-foreground">
             {channels.total} channel{channels.total !== 1 ? "s" : ""} total
             {channels.total > 0 && ` — page ${channels.page} of ${Math.max(channels.totalPages, 1)}`}
@@ -244,20 +405,26 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
 
       {channels.total === 0 ? (
         <div class="px-6 py-14 text-center">
-          <p class="text-base font-medium">No RSS channels yet</p>
-          <p class="mt-2 text-sm text-muted-foreground">Create a single channel or import a JSON batch to get the fetcher online.</p>
+          <p class="text-base font-medium">No source channels yet</p>
+          <p class="mt-2 text-sm text-muted-foreground">Create an RSS feed, website ingestion channel, JSON API channel, or mailbox ingest channel to get the fetcher online.</p>
           <div class="mt-5 flex flex-wrap justify-center gap-3">
-            <a href={pagePaths.newChannel} class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-              Add first channel
+            <a href={pagePaths.newRssChannel} class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Add RSS channel
             </a>
-            <a href={pagePaths.importChannels} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
-              Open bulk import
+            <a href={pagePaths.newWebsiteChannel} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              Add website channel
+            </a>
+            <a href={pagePaths.newApiChannel} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              Add API channel
+            </a>
+            <a href={pagePaths.newEmailImapChannel} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              Add Email IMAP channel
             </a>
           </div>
         </div>
       ) : (
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[980px] text-sm">
+          <table class="w-full min-w-[1080px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Channel</th>
@@ -268,16 +435,17 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
               </tr>
             </thead>
             <tbody>
-              {rssChannels.length === 0 ? (
+              {sourceChannels.length === 0 ? (
                 <tr>
                   <td colspan="5" class="px-5 py-10 text-center text-sm text-muted-foreground">No channels on this page</td>
                 </tr>
-              ) : rssChannels.map((channel) => {
+              ) : sourceChannels.map((channel) => {
                 const editHref = appPath(`/channels/${channel.channelId}/edit`);
-                const destructiveLabel = channel.articleCount > 0 ? "Archive" : "Delete";
-                const destructiveDescription = channel.articleCount > 0
-                  ? `This channel already has ${channel.articleCount} linked article${channel.articleCount === 1 ? "" : "s"}. Confirming this action will archive the channel instead of hard-deleting it.`
-                  : "This channel has no linked historical articles, so the delete action will remove it permanently.";
+                const resourcesHref = appPath(`/resources?channelId=${encodeURIComponent(channel.channelId)}`);
+                const destructiveLabel = channel.storedItemCount > 0 ? "Archive" : "Delete";
+                const destructiveDescription = channel.storedItemCount > 0
+                  ? `This channel already has ${channel.storedItemCount} stored item${channel.storedItemCount === 1 ? "" : "s"}. Confirming this action will archive the channel instead of hard-deleting it.`
+                  : "This channel has no stored item history, so the delete action will remove it permanently.";
 
                 return (
                   <tr class="border-b border-border last:border-b-0">
@@ -285,7 +453,7 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
                       <div class="flex items-start justify-between gap-3">
                         <div>
                           <p class="text-sm font-semibold">{channel.name}</p>
-                          <p class="mt-1 text-xs text-muted-foreground">{channel.providerName}</p>
+                          <p class="mt-1 text-xs text-muted-foreground">{channel.providerLabel}</p>
                         </div>
                         <span class:list={[
                           "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
@@ -296,12 +464,65 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
                           {channel.isActive ? "Active" : "Paused"}
                         </span>
                       </div>
-                      <p class="mt-2 max-w-xl truncate text-sm text-muted-foreground">{channel.fetchUrl}</p>
+                      <p class="mt-2 max-w-xl truncate text-sm text-muted-foreground">{channel.fetchUrl || "Provider-managed connection"}</p>
                       <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                         <span>{channel.language || "No language"}</span>
                         <span>•</span>
-                        <span>{channel.articleCount} linked article{channel.articleCount === 1 ? "" : "s"}</span>
+                        <span>{channel.storedItemCount} stored item{channel.storedItemCount === 1 ? "" : "s"}</span>
+                        <span>•</span>
+                        {channel.rawProviderType === "rss" ? (
+                          <span>
+                            {channel.rss?.enrichmentEnabled
+                              ? `enrichment ≥ ${channel.rss.enrichmentMinBodyLength}`
+                              : "enrichment off"}
+                          </span>
+                        ) : channel.rawProviderType === "website" ? (
+                          <span>
+                            {channel.website?.maxResourcesPerPoll} resources/poll
+                            {channel.website?.modesSummary ? ` • ${channel.website.modesSummary}` : ""}
+                          </span>
+                        ) : channel.rawProviderType === "api" ? (
+                          <span>
+                            {channel.api?.maxItemsPerPoll} items/poll • path {channel.api?.itemsPath}
+                          </span>
+                        ) : channel.rawProviderType === "email_imap" ? (
+                          <span>
+                            {channel.emailImap?.mailbox}
+                            {channel.emailImap?.searchFrom ? ` • from ${channel.emailImap.searchFrom}` : ""}
+                          </span>
+                        ) : (
+                          <span>Provider-specific editing unavailable</span>
+                        )}
                       </div>
+                      {channel.rawProviderType === "rss" && channel.rss && (
+                        <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          <span>adapter: {channel.rss.resolvedAdapterStrategy}</span>
+                          <span>•</span>
+                          <span>
+                            age gate: {channel.rss.resolvedMaxEntryAgeHours != null ? `${channel.rss.resolvedMaxEntryAgeHours}h` : "none"}
+                          </span>
+                        </div>
+                      )}
+                      {channel.rawProviderType === "api" && channel.api && (
+                        <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          <span>title/url: {channel.api.titleField} / {channel.api.urlField}</span>
+                          <span>•</span>
+                          <span>
+                            {channel.api.enrichmentEnabled
+                              ? `enrichment ≥ ${channel.api.enrichmentMinBodyLength}`
+                              : "enrichment off"}
+                          </span>
+                        </div>
+                      )}
+                      {channel.rawProviderType === "email_imap" && channel.emailImap && (
+                        <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          <span>user: {channel.emailImap.username || "—"}</span>
+                          <span>•</span>
+                          <span>transport: {channel.emailImap.secure ? "imaps" : "imap"}</span>
+                          <span>•</span>
+                          <span>{channel.emailImap.hasPassword ? "password stored" : "password missing"}</span>
+                        </div>
+                      )}
                     </td>
                     <td class="px-5 py-4 align-top">
                       <div class="flex flex-wrap gap-2">
@@ -335,29 +556,92 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
                     </td>
                     <td class="px-5 py-4 align-top">
                       <div class="flex flex-wrap gap-2">
-                        <a href={editHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
-                          Edit
-                        </a>
-                        <form method="post" action={bffPaths.channels}>
-                          <input type="hidden" name="intent" value="save" />
-                          <input type="hidden" name="redirectTo" value={currentListPath} />
-                          <input type="hidden" name="channelId" value={channel.channelId} />
-                          <input type="hidden" name="providerType" value="rss" />
-                          <input type="hidden" name="name" value={channel.name} />
-                          <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
-                          <input type="hidden" name="language" value={channel.language} />
-                          <input type="hidden" name="pollIntervalSeconds" value={String(channel.pollIntervalSeconds)} />
-                          <input type="hidden" name="adaptiveEnabled" value={asBoolString(channel.adaptiveEnabled)} />
-                          <input type="hidden" name="maxPollIntervalSeconds" value={String(channel.maxPollIntervalSeconds)} />
-                          <input type="hidden" name="maxItemsPerPoll" value={String(channel.maxItemsPerPoll)} />
-                          <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
-                          <input type="hidden" name="userAgent" value={channel.userAgent} />
-                          <input type="hidden" name="preferContentEncoded" value={asBoolString(channel.preferContentEncoded)} />
-                          <input type="hidden" name="isActive" value={asBoolString(!channel.isActive)} />
-                          <button type="submit" class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
-                            {channel.isActive ? "Pause" : "Resume"}
-                          </button>
-                        </form>
+                        {channel.editableProviderType && (
+                          <a href={editHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                            Edit
+                          </a>
+                        )}
+                        {channel.rawProviderType === "website" && (
+                          <a href={resourcesHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                            Resources
+                          </a>
+                        )}
+                        {channel.editableProviderType && (
+                          <form method="post" action={bffPaths.channels}>
+                            <input type="hidden" name="intent" value="save" />
+                            <input type="hidden" name="redirectTo" value={currentListPath} />
+                            <input type="hidden" name="channelId" value={channel.channelId} />
+                            <input type="hidden" name="providerType" value={channel.editableProviderType} />
+                            <input type="hidden" name="name" value={channel.name} />
+                            <input type="hidden" name="language" value={channel.language} />
+                            <input type="hidden" name="pollIntervalSeconds" value={String(channel.pollIntervalSeconds)} />
+                            <input type="hidden" name="adaptiveEnabled" value={asBoolString(channel.adaptiveEnabled)} />
+                            <input type="hidden" name="maxPollIntervalSeconds" value={String(channel.maxPollIntervalSeconds)} />
+                            {channel.editableProviderType === "rss" ? (
+                              <>
+                                <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
+                                <input type="hidden" name="maxItemsPerPoll" value={String(channel.rss?.maxItemsPerPoll ?? 20)} />
+                                <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
+                                <input type="hidden" name="userAgent" value={channel.userAgent} />
+                                <input type="hidden" name="preferContentEncoded" value={asBoolString(channel.rss?.preferContentEncoded ?? true)} />
+                                <input type="hidden" name="adapterStrategy" value={channel.rss?.adapterStrategy ?? "auto"} />
+                                <input type="hidden" name="maxEntryAgeHours" value={channel.rss?.maxEntryAgeHours != null ? String(channel.rss.maxEntryAgeHours) : ""} />
+                                <input type="hidden" name="enrichmentEnabled" value={asBoolString(channel.rss?.enrichmentEnabled ?? true)} />
+                                <input type="hidden" name="enrichmentMinBodyLength" value={String(channel.rss?.enrichmentMinBodyLength ?? 500)} />
+                              </>
+                            ) : channel.editableProviderType === "website" ? (
+                              <>
+                                <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
+                                <input type="hidden" name="requestTimeoutMs" value={String(channel.requestTimeoutMs)} />
+                                <input type="hidden" name="userAgent" value={channel.userAgent} />
+                                <input type="hidden" name="maxResourcesPerPoll" value={String(channel.website?.maxResourcesPerPoll ?? 50)} />
+                                <input type="hidden" name="totalPollTimeoutMs" value={String(channel.website?.totalPollTimeoutMs ?? 30000)} />
+                                <input type="hidden" name="crawlDelayMs" value={String(channel.website?.crawlDelayMs ?? 1000)} />
+                                <input type="hidden" name="sitemapDiscoveryEnabled" value={asBoolString(channel.website?.sitemapDiscoveryEnabled ?? true)} />
+                                <input type="hidden" name="feedDiscoveryEnabled" value={asBoolString(channel.website?.feedDiscoveryEnabled ?? true)} />
+                                <input type="hidden" name="collectionDiscoveryEnabled" value={asBoolString(channel.website?.collectionDiscoveryEnabled ?? true)} />
+                                <input type="hidden" name="downloadDiscoveryEnabled" value={asBoolString(channel.website?.downloadDiscoveryEnabled ?? true)} />
+                                <input type="hidden" name="browserFallbackEnabled" value={asBoolString(channel.website?.browserFallbackEnabled ?? false)} />
+                                <input type="hidden" name="collectionSeedUrls" value={(channel.website?.collectionSeedUrls ?? []).join("\n")} />
+                                <input type="hidden" name="allowedUrlPatterns" value={(channel.website?.allowedUrlPatterns ?? []).join("\n")} />
+                                <input type="hidden" name="blockedUrlPatterns" value={(channel.website?.blockedUrlPatterns ?? []).join("\n")} />
+                              </>
+                            ) : channel.editableProviderType === "api" ? (
+                              <>
+                                <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
+                                <input type="hidden" name="maxItemsPerPoll" value={String(channel.api?.maxItemsPerPoll ?? 20)} />
+                                <input type="hidden" name="requestTimeoutMs" value={String(channel.api?.requestTimeoutMs ?? 10000)} />
+                                <input type="hidden" name="userAgent" value={channel.api?.userAgent ?? "NewsPortalFetchers/0.1"} />
+                                <input type="hidden" name="itemsPath" value={channel.api?.itemsPath ?? "items"} />
+                                <input type="hidden" name="titleField" value={channel.api?.titleField ?? "title"} />
+                                <input type="hidden" name="leadField" value={channel.api?.leadField ?? "lead"} />
+                                <input type="hidden" name="bodyField" value={channel.api?.bodyField ?? "body"} />
+                                <input type="hidden" name="urlField" value={channel.api?.urlField ?? "url"} />
+                                <input type="hidden" name="publishedAtField" value={channel.api?.publishedAtField ?? "publishedAt"} />
+                                <input type="hidden" name="externalIdField" value={channel.api?.externalIdField ?? "id"} />
+                                <input type="hidden" name="languageField" value={channel.api?.languageField ?? "language"} />
+                                <input type="hidden" name="enrichmentEnabled" value={asBoolString(channel.api?.enrichmentEnabled ?? true)} />
+                                <input type="hidden" name="enrichmentMinBodyLength" value={String(channel.api?.enrichmentMinBodyLength ?? 500)} />
+                              </>
+                            ) : (
+                              <>
+                                <input type="hidden" name="host" value={channel.emailImap?.host ?? ""} />
+                                <input type="hidden" name="port" value={String(channel.emailImap?.port ?? 993)} />
+                                <input type="hidden" name="secure" value={asBoolString(channel.emailImap?.secure ?? true)} />
+                                <input type="hidden" name="username" value={channel.emailImap?.username ?? ""} />
+                                <input type="hidden" name="mailbox" value={channel.emailImap?.mailbox ?? "INBOX"} />
+                                <input type="hidden" name="searchFrom" value={channel.emailImap?.searchFrom ?? ""} />
+                                <input type="hidden" name="maxItemsPerPoll" value={String(channel.emailImap?.maxItemsPerPoll ?? 20)} />
+                                <input type="hidden" name="enrichmentEnabled" value={asBoolString(channel.emailImap?.enrichmentEnabled ?? true)} />
+                                <input type="hidden" name="enrichmentMinBodyLength" value={String(channel.emailImap?.enrichmentMinBodyLength ?? 500)} />
+                              </>
+                            )}
+                            <input type="hidden" name="isActive" value={asBoolString(!channel.isActive)} />
+                            <button type="submit" class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                              {channel.isActive ? "Pause" : "Resume"}
+                            </button>
+                          </form>
+                        )}
                         <AdminConfirmAction
                           action={bffPaths.channels}
                           title={`${destructiveLabel} channel`}
@@ -369,8 +653,8 @@ const pausedCount = rssChannels.filter((channel) => !channel.isActive).length;
                             { name: "channelId", value: channel.channelId },
                             { name: "redirectTo", value: currentListPath },
                           ]}
-                          triggerClassName={channel.articleCount > 0 ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"}
-                          confirmClassName={channel.articleCount > 0 ? "bg-amber-600 text-white hover:bg-amber-600/90" : ""}
+                          triggerClassName={channel.storedItemCount > 0 ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"}
+                          confirmClassName={channel.storedItemCount > 0 ? "bg-amber-600 text-white hover:bg-amber-600/90" : ""}
                           client:load
                         />
                       </div>

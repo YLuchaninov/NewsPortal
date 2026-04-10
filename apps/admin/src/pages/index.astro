@@ -36,6 +36,8 @@ const pagePaths = {
   observability: appPath("/observability"),
   reindex: appPath("/reindex"),
   help: appPath("/help"),
+  discovery: appPath("/discovery"),
+  resources: appPath("/resources"),
 };
 
 type R = Record<string, unknown>;
@@ -61,12 +63,32 @@ function formatTimestamp(v: unknown): string {
 }
 
 const kpiCards = !summary ? [] : [
-  { label: "System Feed News", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
+  { label: "System-selected content", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
   { label: "Processed 24h", value: String(summary.processed_today ?? 0), color: "text-blue-500" },
   { label: "Total Users", value: String(summary.total_users ?? 0), color: "text-violet-500" },
   { label: "Overdue Channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
   { label: "Fetch Failures 24h", value: String(summary.fetch_failures_24h ?? 0), color: (summary.fetch_failures_24h as number) > 0 ? "text-red-500" : "text-muted-foreground" },
   { label: "LLM Reviews 24h", value: String(summary.llm_review_count_24h ?? 0), color: "text-primary" },
+  {
+    label:
+      summary.llm_review_enabled === true && summary.llm_monthly_quota_reached === true
+        ? `LLM Budget · ${summary.llm_accept_gray_zone_on_budget_exhaustion === true ? "Accept" : "Reject"}`
+        : "LLM Budget",
+    value:
+      summary.llm_review_enabled !== true
+        ? "Disabled"
+        : Number(summary.llm_monthly_budget_cents ?? 0) <= 0
+        ? "Cap off"
+        : summary.llm_monthly_quota_reached === true
+        ? "Exhausted"
+        : `${String(summary.llm_remaining_monthly_budget_cents ?? 0)}¢ left`,
+    color:
+      summary.llm_review_enabled !== true
+        ? "text-muted-foreground"
+        : summary.llm_monthly_quota_reached === true
+        ? "text-amber-500"
+        : "text-emerald-500",
+  },
   { label: "New Content 24h", value: String(summary.fetch_new_content_24h ?? 0), color: "text-cyan-500" },
   { label: "Needs Attention", value: String(summary.attention_channels ?? 0), color: (summary.attention_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
 ];
@@ -85,6 +107,16 @@ const initialDashboardSummary = !summary
       attentionChannels: asInt(summary.attention_channels, 0),
       queuedReindexJobs: asInt(summary.queued_reindex_jobs, 0),
       runningReindexJobs: 0,
+      llmBudgetEnabled: summary.llm_review_enabled === true,
+      llmMonthlyBudgetCents: asInt(summary.llm_monthly_budget_cents, 0),
+      llmMonthToDateCostCents: asInt(summary.llm_month_to_date_cost_cents, 0),
+      llmRemainingMonthlyBudgetCents:
+        summary.llm_remaining_monthly_budget_cents == null
+          ? null
+          : asInt(summary.llm_remaining_monthly_budget_cents, 0),
+      llmMonthlyQuotaReached: summary.llm_monthly_quota_reached === true,
+      llmAcceptGrayZoneOnBudgetExhaustion:
+        summary.llm_accept_gray_zone_on_budget_exhaustion === true,
       revision: buildAdminLiveRevision([
         summary.active_news,
         summary.processed_today,
@@ -95,6 +127,12 @@ const initialDashboardSummary = !summary
         summary.fetch_new_content_24h,
         summary.attention_channels,
         summary.queued_reindex_jobs,
+        summary.llm_review_enabled,
+        summary.llm_monthly_budget_cents,
+        summary.llm_month_to_date_cost_cents,
+        summary.llm_remaining_monthly_budget_cents,
+        summary.llm_monthly_quota_reached,
+        summary.llm_accept_gray_zone_on_budget_exhaustion,
       ]),
     };
 const fetchRunsRevision = buildAdminLiveRevision([
@@ -134,14 +172,16 @@ const fetchRunsRevision = buildAdminLiveRevision([
       )}
 
       <!-- Quick navigation -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10">
         {[
           { href: pagePaths.channels, label: "Channels", desc: "Monitor source health" },
-          { href: pagePaths.channelNew, label: "Add Channel", desc: "Create a new RSS feed" },
+          { href: pagePaths.resources, label: "Resources", desc: "Inspect website resource rows" },
+          { href: pagePaths.channelNew, label: "Add Channel", desc: "Create a new source channel" },
+          { href: pagePaths.discovery, label: "Discovery", desc: "Approve AI-found sources" },
           { href: pagePaths.articles, label: "Articles", desc: "Moderate content" },
           { href: pagePaths.clusters, label: "Clusters", desc: "Event clusters" },
           { href: pagePaths.llmTemplates, label: "LLM Templates", desc: "Gray-zone prompts" },
-          { href: pagePaths.interestTemplates, label: "Interest Templates", desc: "Predefined topics" },
+          { href: pagePaths.interestTemplates, label: "System Interests", desc: "Global selection rules" },
           { href: pagePaths.userInterests, label: "User Interests", desc: "Per-user matching" },
           { href: pagePaths.observability, label: "Observability", desc: "Fetch & LLM logs" },
           { href: pagePaths.reindex, label: "Reindex", desc: "Rebuild indices" },

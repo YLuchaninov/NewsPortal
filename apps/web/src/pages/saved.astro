@@ -1,0 +1,168 @@
+---
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type ContentItemDetail } from "@newsportal/contracts";
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+
+import Shell from "../layouts/Shell.astro";
+import { ContentItemCard } from "../components/ContentItemCard";
+import { getPool, queryOne } from "../lib/server/db";
+import { resolveWebSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+import { getUserContentStateMap, listSavedContentItemRefs } from "../lib/server/user-content-state";
+
+export const prerender = false;
+const session = await resolveWebSession(Astro.request);
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+const flash = readFlash(Astro.url);
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
+const sdk = createNewsPortalSdk({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  fetchImpl: fetch,
+});
+
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
+function resolvePageAppPath(target: string) {
+  return new URL(target.replace(/^\/+/, ""), pageBaseUrl).pathname;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("../bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("../bff/auth/logout"),
+  liveUpdates: resolvePageAppPath("../bff/live-updates"),
+  preferences: resolvePageAppPath("../bff/preferences"),
+  reactions: resolvePageAppPath("../bff/reactions"),
+  contentState: resolvePageAppPath("../bff/content-state"),
+};
+
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const [savedRefs, profile] = await Promise.all([
+  listSavedContentItemRefs(getPool(), session.userId, page, DEFAULT_PAGE_SIZE),
+  queryOne<Record<string, unknown>>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
+]);
+const savedItems = await Promise.all(
+  savedRefs.items.map((item) => sdk.getContentItem<ContentItemDetail>(item.contentItemId))
+);
+const userStateMap = await getUserContentStateMap(getPool(), session.userId, savedItems);
+
+const themePreference = String(profile?.theme_preference ?? "system");
+const themeClass = themePreference === "dark" ? "dark" : "";
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+---
+
+<Shell
+  title="Saved — NewsPortal"
+  session={session}
+  themeClass={themeClass}
+  currentTheme={themePreference}
+  flash={flash}
+  activeNav="saved"
+  bffLiveUpdatesPath={bffPaths.liveUpdates}
+  bffPreferencesPath={bffPaths.preferences}
+  bffLogoutPath={bffPaths.authLogout}
+  bffBootstrapPath={bffPaths.authBootstrap}
+>
+  <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">Saved</h1>
+      <p class="text-muted-foreground mt-1">Your read-later queue for building a manual digest</p>
+    </div>
+    {savedItems.length > 0 && (
+      <form method="get" action="/saved/digest" class="inline-flex items-center gap-2">
+        {savedItems.map((item) => (
+          <input type="hidden" name="item" value={String(item.content_item_id)} />
+        ))}
+        <button
+          type="submit"
+          class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Preview digest from this page
+        </button>
+      </form>
+    )}
+  </div>
+
+  {savedItems.length === 0 ? (
+    <div class="flex flex-col items-center justify-center py-24 text-center">
+      <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
+          <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <p class="font-semibold text-lg">Nothing saved yet</p>
+      <p class="text-muted-foreground text-sm mt-1 max-w-sm">
+        Save items from Collection or My Matches to build a manual digest later.
+      </p>
+      <a href="/" class="mt-4 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+        Browse collection
+      </a>
+    </div>
+  ) : (
+    <>
+      <form method="get" action="/saved/digest" class="space-y-5">
+        <div class="grid gap-4">
+          {savedItems.map((item) => (
+            <div class="grid gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[auto,1fr]">
+              <div class="pt-2">
+                <input
+                  type="checkbox"
+                  name="item"
+                  value={String(item.content_item_id)}
+                  class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  checked
+                />
+              </div>
+              <ContentItemCard
+                contentItem={item}
+                isLoggedIn={true}
+                reactionsPath={bffPaths.reactions}
+                contentStatePath={bffPaths.contentState}
+                contextBadgeLabel="saved"
+                initialUserState={userStateMap.get(String(item.content_item_id))}
+                client:visible
+              />
+            </div>
+          ))}
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Preview selected digest
+          </button>
+          <p class="text-sm text-muted-foreground">
+            Uncheck items you do not want to include in the digest preview.
+          </p>
+        </div>
+      </form>
+
+      {(savedRefs.hasPrev || savedRefs.hasNext) && (
+        <PaginationNav
+          className="mt-8"
+          page={savedRefs.page}
+          totalPages={savedRefs.totalPages}
+          hasPrev={savedRefs.hasPrev}
+          hasNext={savedRefs.hasNext}
+          prevHref={resolvePageHref(savedRefs.page - 1)}
+          nextHref={resolvePageHref(savedRefs.page + 1)}
+        />
+      )}
+    </>
+  )}
+</Shell>

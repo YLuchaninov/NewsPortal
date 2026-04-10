@@ -18,6 +18,15 @@ import { insertOutboxEvent } from "../../../lib/server/outbox";
 import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
+
+function readBooleanField(value: FormDataEntryValue | undefined): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "on" || normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
 export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
   const redirectTo = resolveAdminRedirectPath(
@@ -43,12 +52,16 @@ export const POST: APIRoute = async ({ request }) => {
   const indexName = String(payload.indexName ?? "interest_centroids");
   const requestedJobKind = String(payload.jobKind ?? "rebuild");
   const jobKind = requestedJobKind === "backfill" ? "backfill" : "rebuild";
+  const includeEnrichment = jobKind === "backfill" && readBooleanField(payload.includeEnrichment);
+  const forceEnrichment = includeEnrichment && readBooleanField(payload.forceEnrichment);
   const optionsJson =
     jobKind === "backfill"
       ? {
           batchSize: 100,
           retroNotifications: "skip",
           replayExistingArticles: true,
+          includeEnrichment,
+          forceEnrichment,
         }
       : {};
   const reindexJobId = randomUUID();
@@ -122,7 +135,12 @@ export const POST: APIRoute = async ({ request }) => {
     return buildFlashRedirect(request, {
       section: "reindex",
       status: "success",
-      message: jobKind === "backfill" ? "Reindex and historical backfill queued" : "Reindex queued",
+      message:
+        jobKind === "backfill"
+          ? includeEnrichment
+            ? "Reindex and historical enrichment repair queued"
+            : "Reindex and historical backfill queued"
+          : "Reindex queued",
       redirectTo
     });
   }

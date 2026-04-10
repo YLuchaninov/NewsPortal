@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+  FEED_INGRESS_ADAPTER_STRATEGIES,
   normalizeMaxPollIntervalSeconds,
   parseRssChannelConfig,
+  parseSourceChannelAuthConfig,
+  serializeSourceChannelAuthConfig,
+  type FeedIngressAdapterStrategy,
   type RssChannelConfig
 } from "@newsportal/contracts";
 import type { Pool } from "pg";
@@ -10,6 +15,13 @@ import type { Pool } from "pg";
 const DEFAULT_RSS_CONFIG = parseRssChannelConfig({});
 const DEFAULT_LANGUAGE = "en";
 const DEFAULT_POLL_INTERVAL_SECONDS = 300;
+
+type AuthorizationHeaderUpdateMode = "preserve" | "replace" | "clear" | "disabled";
+
+interface AuthorizationHeaderUpdate {
+  mode: AuthorizationHeaderUpdateMode;
+  authorizationHeader: string | null;
+}
 
 export interface NormalizedRssAdminChannelInput {
   channelId?: string;
@@ -25,11 +37,18 @@ export interface NormalizedRssAdminChannelInput {
   requestTimeoutMs: number;
   userAgent: string;
   preferContentEncoded: boolean;
+  adapterStrategy: FeedIngressAdapterStrategy | null;
+  maxEntryAgeHours: number | null;
+  enrichmentEnabled: boolean;
+  enrichmentMinBodyLength: number;
+  authorizationHeaderUpdate: AuthorizationHeaderUpdate;
 }
 
 export interface UpsertRssChannelsResult {
   createdChannelIds: string[];
   updatedChannelIds: string[];
+  authConfiguredChannelIds: string[];
+  authClearedChannelIds: string[];
 }
 
 export type RssChannelDeleteMode = "delete" | "archive";
@@ -121,6 +140,28 @@ function validateHttpUrl(rawUrl: string): string {
   return parsed.toString();
 }
 
+function readOptionalFeedIngressAdapterStrategy(
+  value: unknown,
+  fieldName: string
+): FeedIngressAdapterStrategy | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized || normalized === "auto") {
+    return null;
+  }
+
+  if ((FEED_INGRESS_ADAPTER_STRATEGIES as readonly string[]).includes(normalized)) {
+    return normalized as FeedIngressAdapterStrategy;
+  }
+
+  throw new Error(
+    `RSS channel field "${fieldName}" must be one of auto, ${FEED_INGRESS_ADAPTER_STRATEGIES.join(", ")}.`
+  );
+}
+
 function normalizeRssConfig(payload: Record<string, unknown>): RssChannelConfig {
   return parseRssChannelConfig({
     maxItemsPerPoll: readPositiveInteger(
@@ -138,8 +179,56 @@ function normalizeRssConfig(payload: Record<string, unknown>): RssChannelConfig 
       payload.preferContentEncoded,
       DEFAULT_RSS_CONFIG.preferContentEncoded,
       "preferContentEncoded"
-    )
+    ),
+    adapterStrategy: readOptionalFeedIngressAdapterStrategy(payload.adapterStrategy, "adapterStrategy"),
+    maxEntryAgeHours: readOptionalPositiveInteger(payload.maxEntryAgeHours, "maxEntryAgeHours")
   });
+}
+
+function resolveAuthorizationHeaderUpdate(
+  payload: Record<string, unknown>,
+  isUpdate: boolean
+): AuthorizationHeaderUpdate {
+  const authorizationHeader = readOptionalString(payload.authorizationHeader);
+  const clearAuthorizationHeader = readBoolean(
+    payload.clearAuthorizationHeader,
+    false,
+    "clearAuthorizationHeader"
+  );
+
+  if (clearAuthorizationHeader) {
+    return {
+      mode: "clear",
+      authorizationHeader: null
+    };
+  }
+
+  if (authorizationHeader) {
+    return {
+      mode: "replace",
+      authorizationHeader
+    };
+  }
+
+  return {
+    mode: isUpdate ? "preserve" : "disabled",
+    authorizationHeader: null
+  };
+}
+
+function resolveNextAuthorizationHeader(
+  existingAuthConfigJson: unknown,
+  update: AuthorizationHeaderUpdate
+): string | null {
+  if (update.mode === "replace") {
+    return update.authorizationHeader;
+  }
+
+  if (update.mode === "clear" || update.mode === "disabled") {
+    return null;
+  }
+
+  return parseSourceChannelAuthConfig(existingAuthConfigJson).authorizationHeader;
 }
 
 export function parseRssAdminChannelInput(payload: Record<string, unknown>): NormalizedRssAdminChannelInput {
@@ -172,7 +261,16 @@ export function parseRssAdminChannelInput(payload: Record<string, unknown>): Nor
     maxItemsPerPoll: config.maxItemsPerPoll,
     requestTimeoutMs: config.requestTimeoutMs,
     userAgent: config.userAgent,
-    preferContentEncoded: config.preferContentEncoded
+    preferContentEncoded: config.preferContentEncoded,
+    adapterStrategy: config.adapterStrategy,
+    maxEntryAgeHours: config.maxEntryAgeHours,
+    enrichmentEnabled: readBoolean(payload.enrichmentEnabled, true, "enrichmentEnabled"),
+    enrichmentMinBodyLength: readPositiveInteger(
+      payload.enrichmentMinBodyLength,
+      DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+      "enrichmentMinBodyLength"
+    ),
+    authorizationHeaderUpdate: resolveAuthorizationHeaderUpdate(payload, Boolean(readOptionalString(payload.channelId)))
   };
 }
 
@@ -223,6 +321,8 @@ export async function upsertRssChannels(
   const client = await pool.connect();
   const createdChannelIds: string[] = [];
   const updatedChannelIds: string[] = [];
+  const authConfiguredChannelIds: string[] = [];
+  const authClearedChannelIds: string[] = [];
 
   try {
     await client.query("begin");
@@ -232,10 +332,34 @@ export async function upsertRssChannels(
         maxItemsPerPoll: channel.maxItemsPerPoll,
         requestTimeoutMs: channel.requestTimeoutMs,
         userAgent: channel.userAgent,
-        preferContentEncoded: channel.preferContentEncoded
+        preferContentEncoded: channel.preferContentEncoded,
+        ...(channel.adapterStrategy ? { adapterStrategy: channel.adapterStrategy } : {}),
+        ...(channel.maxEntryAgeHours != null ? { maxEntryAgeHours: channel.maxEntryAgeHours } : {})
       });
 
       if (channel.channelId) {
+        const existingChannel = await client.query<{ auth_config_json: unknown }>(
+          `
+            select auth_config_json
+            from source_channels
+            where channel_id = $1
+              and provider_type = 'rss'
+            for update
+          `,
+          [channel.channelId]
+        );
+        if (existingChannel.rowCount !== 1) {
+          throw new Error(`RSS channel ${channel.channelId} was not found.`);
+        }
+        const nextAuthorizationHeader = resolveNextAuthorizationHeader(
+          existingChannel.rows[0]?.auth_config_json,
+          channel.authorizationHeaderUpdate
+        );
+        const authConfigJson = JSON.stringify(
+          serializeSourceChannelAuthConfig({
+            authorizationHeader: nextAuthorizationHeader
+          })
+        );
         const updateResult = await client.query(
           `
             update source_channels
@@ -248,6 +372,9 @@ export async function upsertRssChannels(
               is_active = $6,
               poll_interval_seconds = $7,
               config_json = $8::jsonb,
+              auth_config_json = $9::jsonb,
+              enrichment_enabled = $10,
+              enrichment_min_body_length = $11,
               updated_at = now()
             where channel_id = $1
           `,
@@ -259,11 +386,19 @@ export async function upsertRssChannels(
             channel.language,
             channel.isActive,
             channel.pollIntervalSeconds,
-            configJson
+            configJson,
+            authConfigJson,
+            channel.enrichmentEnabled,
+            channel.enrichmentMinBodyLength
           ]
         );
         if (updateResult.rowCount !== 1) {
           throw new Error(`RSS channel ${channel.channelId} was not found.`);
+        }
+        if (channel.authorizationHeaderUpdate.mode === "replace") {
+          authConfiguredChannelIds.push(channel.channelId);
+        } else if (channel.authorizationHeaderUpdate.mode === "clear") {
+          authClearedChannelIds.push(channel.channelId);
         }
         await client.query(
           `
@@ -280,7 +415,7 @@ export async function upsertRssChannels(
               adaptive_reason,
               updated_at
             )
-            values ($1, $2, $3, $4, now() + make_interval(secs => $3), 0, null, 0, 0, 'manual_schedule_reset', now())
+            values ($1, $2, $3, $4, now() + make_interval(secs => $5), 0, null, 0, 0, 'manual_schedule_reset', now())
             on conflict (channel_id)
             do update
             set
@@ -299,7 +434,8 @@ export async function upsertRssChannels(
             channel.channelId,
             channel.adaptiveEnabled,
             channel.pollIntervalSeconds,
-            channel.maxPollIntervalSeconds
+            channel.maxPollIntervalSeconds,
+            channel.pollIntervalSeconds
           ]
         );
         updatedChannelIds.push(channel.channelId);
@@ -307,6 +443,14 @@ export async function upsertRssChannels(
       }
 
       const channelId = randomUUID();
+      const authConfigJson = JSON.stringify(
+        serializeSourceChannelAuthConfig({
+          authorizationHeader:
+            channel.authorizationHeaderUpdate.mode === "replace"
+              ? channel.authorizationHeaderUpdate.authorizationHeader
+              : null
+        })
+      );
       await client.query(
         `
           insert into source_channels (
@@ -318,9 +462,12 @@ export async function upsertRssChannels(
             language,
             is_active,
             poll_interval_seconds,
-            config_json
+            config_json,
+            auth_config_json,
+            enrichment_enabled,
+            enrichment_min_body_length
           )
-          values ($1, $2, 'rss', $3, $4, $5, $6, $7, $8::jsonb)
+          values ($1, $2, 'rss', $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11)
         `,
         [
           channelId,
@@ -330,9 +477,15 @@ export async function upsertRssChannels(
           channel.language,
           channel.isActive,
           channel.pollIntervalSeconds,
-          configJson
+          configJson,
+          authConfigJson,
+          channel.enrichmentEnabled,
+          channel.enrichmentMinBodyLength
         ]
       );
+      if (channel.authorizationHeaderUpdate.mode === "replace") {
+        authConfiguredChannelIds.push(channelId);
+      }
       await client.query(
         `
           insert into source_channel_runtime_state (
@@ -371,7 +524,9 @@ export async function upsertRssChannels(
 
   return {
     createdChannelIds,
-    updatedChannelIds
+    updatedChannelIds,
+    authConfiguredChannelIds,
+    authClearedChannelIds
   };
 }
 

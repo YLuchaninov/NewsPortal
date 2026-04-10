@@ -1,8 +1,12 @@
-# EXAMPLES.md — Готовые конфигурации NewsPortal для типовых проектов
+# EXAMPLES.md — Готовые RSS и template-конфигурации NewsPortal для типовых проектов
 
-> **Для кого этот документ:** для администратора, который хочет быстро запустить NewsPortal под конкретный тип сайта. Здесь приведены **полные рабочие конфигурации** — RSS-каналы, LLM-шаблоны и шаблоны интересов — для двух реальных сценариев.
+> **Для кого этот документ:** для администратора, который уже поднял NewsPortal и хочет быстро наполнить систему готовыми RSS-каналами, LLM-шаблонами и шаблонами интересов под типовой сценарий.
 >
-> **Предварительное чтение:** [HOW_TO_USE.md](./HOW_TO_USE.md) — общее руководство по администрированию.
+> **Что этот документ покрывает:** content-configuration bundle для RSS + Templates и отдельный appendix по discovery mode, который помогает расширять эти же сценарии новыми источниками.
+>
+> **Что этот документ не покрывает полностью:** полный `.env.dev` bootstrap, весь manual MVP runbook, полный website/hard-site operator pass и live-internet edge cases вне bounded local setup.
+>
+> **Перед началом:** прочитайте [HOW_TO_USE.md](./HOW_TO_USE.md) для общего админ-потока, [README.md](./README.md) для discovery/runtime env и [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md) для полного MVP walkthrough.
 
 ---
 
@@ -20,18 +24,36 @@
    - [B.2. LLM-шаблоны](#b2-llm-шаблоны)
    - [B.3. Шаблоны интересов](#b3-шаблоны-интересов)
    - [B.4. Переиндексация после настройки](#b4-переиндексация-после-настройки)
-5. [Сравнительная таблица двух конфигураций](#5-сравнительная-таблица-двух-конфигураций)
-6. [FAQ по примерам](#6-faq-по-примерам)
+5. [Пример C — Поиск клиентов для аутсорс-компании по всему миру](#5-пример-c--поиск-клиентов-для-аутсорс-компании-по-всему-миру)
+   - [C.1. RSS-каналы](#c1-rss-каналы)
+   - [C.2. LLM-шаблоны](#c2-llm-шаблоны)
+   - [C.3. Шаблоны интересов](#c3-шаблоны-интересов)
+   - [C.4. Переиндексация после настройки](#c4-переиндексация-после-настройки)
+6. [Сравнительная таблица трёх конфигураций](#6-сравнительная-таблица-трёх-конфигураций)
+7. [Discovery Mode для этих примеров](#7-discovery-mode-для-этих-примеров)
+   - [7.1. Что discovery добавляет, а что не заменяет](#71-что-discovery-добавляет-а-что-не-заменяет)
+   - [7.2. Что должно быть готово заранее](#72-что-должно-быть-готово-заранее)
+   - [7.3. Какие discovery-настройки нужны и что они означают](#73-какие-discovery-настройки-нужны-и-что-они-означают)
+   - [7.4. Пошаговое включение и проверка](#74-пошаговое-включение-и-проверка)
+   - [7.5. Как связать discovery с примерами A, B и C](#75-как-связать-discovery-с-примерами-a-b-и-c)
+   - [7.6. Что все еще остается вне этого файла](#76-что-все-еще-остается-вне-этого-файла)
+8. [FAQ по примерам](#8-faq-по-примерам)
 
 ---
 
 ## 1. Как пользоваться этим документом
 
-Каждый пример содержит **полный набор настроек**, готовый к вводу в панель администратора:
+Каждый пример содержит **полный content-набор настроек** для одного тематического сценария, готовый к вводу в панель администратора после базового setup:
 
 1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels
 2. **LLM-шаблоны** — два active baseline промпта (scope: `criteria`, `global`) и один optional future-ready промпт (`interests`) для возможной opt-in / premium персонализации
 3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке и синхронизируются в live `criteria`
+
+Перед использованием примеров убедитесь, что у вас уже есть:
+
+1. Заполненный `.env.dev` и рабочий локальный stack
+2. Настроенный Firebase admin sign-in и allowlist
+3. Понимание, что базовый content bundle живет здесь, discovery setup теперь описан в разделе 7, а полный website/hard-site manual pass по-прежнему живет в `README.md` и `docs/manual-mvp-runbook.md`
 
 **Порядок действий:**
 
@@ -41,6 +63,7 @@
 3. Создать шаблоны интересов (Templates → правая колонка)
 4. Запустить переиндексацию (Reindex → interest_centroids)
 5. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
+6. Если нужен полный MVP/manual verification pass, вернуться к `docs/manual-mvp-runbook.md`, а не останавливаться на этом документе
 ```
 
 > ⚠️ **Не забудьте переиндексацию!** После создания или изменения шаблонов интересов всегда запускайте переиндексацию `interest_centroids`. Это обновит derived index, а режим repair/backfill поможет пересчитать уже существующие статьи по текущему системному набору тем.
@@ -77,6 +100,20 @@
 - **Добавьте больше прототипов** (5–7 положительных, 3–5 отрицательных) — система будет увереннее в решениях
 - **Сделайте прототипы максимально непохожими друг на друга** — это расширяет «понимание» темы
 - **Обновляйте прототипы** при появлении новых подтем — если начали появляться статьи о теме, которую система не знает, добавьте примеры
+
+### Как теперь понимать hard constraints
+
+Если вы используете поля вроде `must_have_terms`, `must_not_have_terms` и `short_tokens_required`, важно помнить их текущую семантику:
+
+- `must_have_terms` работают как `OR`: статья проходит этот фильтр, если в `title + lead + body` встретился хотя бы один из указанных термов.
+- `must_not_have_terms` работают как блокирующий список: достаточно одного совпадения, чтобы статья была отфильтрована.
+- `short_tokens_required` работают жёстче и ближе к `AND`: требуемые short tokens должны присутствовать в извлечённых признаках статьи.
+
+Практический вывод:
+
+- для альтернативных buyer-intent формулировок вроде `rfp`, `rfq`, `vendor selection`, `looking for an agency` теперь удобно использовать именно `must_have_terms`;
+- не перегружайте `must_have_terms` длинными списками общих слов вроде `partner`, `migration`, `transformation`, иначе они станут слишком широким OR-фильтром;
+- если нужен более точный контроль, держите broad тему в прототипах, а hard constraints используйте только для сильных маркеров намерения.
 
 ---
 
@@ -1179,22 +1216,766 @@ Elon Musk tweets about Mars colonization timeline and SpaceX plans
 
 ---
 
-## 5. Сравнительная таблица двух конфигураций
 
-| Параметр | A: Агрегатор вакансий | B: IT-новости для разработчиков |
-|---|---|---|
-| **Главная задача фильтрации** | Отличить реальные вакансии от новостей о рынке труда | Отличить глубокий технический контент от потребительских обзоров |
-| **Количество RSS-каналов** | 14 | 16 |
-| **Источники** | Джоб-борды, агрегаторы вакансий, стартап-блоги | Новостные агрегаторы разработчиков, техно-издания, блоги |
-| **Интервал опроса (типичный)** | 15–30 мин (вакансии обновляются реже) | 5–10 мин (новости появляются часто) |
-| **Количество шаблонов интересов** | 8 | 8 |
-| **Фокус LLM-промптов** | «Есть ли конкретная вакансия?» | «Полезно ли это разработчику?» |
-| **Главный тип ложных срабатываний** | Новости о компании ≠ вакансия | Обзор гаджета ≠ техническая новость |
-| **Стратегия негативных прототипов** | Карьерные советы, обзоры рынка, новости увольнений | Потребительские обзоры, маркетинговые статьи, учебные гайды |
+## 5. Пример C — Поиск клиентов для аутсорс-компании по всему миру
+
+**Сценарий:** Портал собирает публичные сигналы, по которым можно находить потенциальных клиентов для software outsourcing / outstaff / delivery-команды по всему миру. Целевая аудитория — founder, sales, bizdev и account-команда аутсорс-компании. Система должна отличать **реальные buying signals** (RFP, partner search, funded startup with delivery gap, digital transformation program, implementation tender) от общего шума: vendor marketing, абстрактных аналитических статей и обычных новостей про рынок.
+
+**Особенность этого типа сайта:** Главная задача фильтрации — ловить не просто «интересные IT-новости», а **сигналы внешнего спроса на услуги**: проект, тендер, интеграция, модернизация, необходимость быстро запустить продукт или найти delivery-партнёра.
 
 ---
 
-## 6. FAQ по примерам
+### C.1. RSS-каналы
+
+Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**:
+
+```json
+[
+  {
+    "name": "Google News — Software Development Outsourcing",
+    "fetchUrl": "https://news.google.com/rss/search?q=%22software+development+outsourcing%22+OR+%22outsourced+software+development%22&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 25,
+    "isActive": true
+  },
+  {
+    "name": "Google News — IT Outsourcing & Engineering Partner",
+    "fetchUrl": "https://news.google.com/rss/search?q=%22IT+outsourcing%22+OR+%22engineering+partner%22+OR+%22technology+partner%22&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 25,
+    "isActive": true
+  },
+  {
+    "name": "Google News — Software Development RFP / Tender",
+    "fetchUrl": "https://news.google.com/rss/search?q=%22request+for+proposal%22+%22software+development%22+OR+%22software+development+tender%22&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 25,
+    "isActive": true
+  },
+  {
+    "name": "Google News — Mobile App Development RFP",
+    "fetchUrl": "https://news.google.com/rss/search?q=%22mobile+app+development%22+(RFP+OR+tender+OR+vendor)&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 1200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 20,
+    "isActive": true
+  },
+  {
+    "name": "Google News — Digital Transformation Partner Search",
+    "fetchUrl": "https://news.google.com/rss/search?q=%22digital+transformation%22+(partner+OR+vendor+OR+implementation)&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 1200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 20,
+    "isActive": true
+  },
+  {
+    "name": "Google News — ERP / CRM Implementation Partner",
+    "fetchUrl": "https://news.google.com/rss/search?q=(ERP+OR+CRM)+implementation+partner+OR+system+integrator&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 1200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 20,
+    "isActive": true
+  },
+  {
+    "name": "Google News — Cloud Migration & Data Platform Vendors",
+    "fetchUrl": "https://news.google.com/rss/search?q=(%22cloud+migration%22+OR+%22data+platform%22)+(vendor+OR+partner+OR+RFP)&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 1200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 20,
+    "isActive": true
+  },
+  {
+    "name": "Google News — Startup Funding & Product Build Signals",
+    "fetchUrl": "https://news.google.com/rss/search?q=(startup+raises+OR+series+A+OR+seed+funding)+(product+development+OR+engineering+team)&hl=en-US&gl=US&ceid=US:en",
+    "language": "en",
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "maxItemsPerPoll": 20,
+    "isActive": true
+  },
+  {
+    "name": "TechCrunch — Startups",
+    "fetchUrl": "https://techcrunch.com/category/startups/feed/",
+    "language": "en",
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 20,
+    "isActive": true
+  },
+  {
+    "name": "VentureBeat",
+    "fetchUrl": "https://venturebeat.com/feed/",
+    "language": "en",
+    "pollIntervalSeconds": 1200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 15,
+    "isActive": true
+  },
+  {
+    "name": "Reuters — Technology",
+    "fetchUrl": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best&best-sectors=tech",
+    "language": "en",
+    "pollIntervalSeconds": 1200,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 7200,
+    "maxItemsPerPoll": 15,
+    "isActive": true
+  },
+  {
+    "name": "The New Stack",
+    "fetchUrl": "https://thenewstack.io/feed/",
+    "language": "en",
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "maxItemsPerPoll": 15,
+    "isActive": true
+  }
+]
+```
+
+> 💡 **Рекомендации по каналам для global outsourcing lead discovery:**
+> - Query-based Google News feeds — это основной инструмент для ловли buying signals: RFP, тендеров, поиска vendor/partner и новостей о проектах.
+> - Техно-медиа (TechCrunch, VentureBeat, Reuters, The New Stack) — это не «лиды напрямую», а фоновые сигналы: funding, launch pressure, enterprise transformation, AI adoption, которые можно превратить в sales hypotheses.
+> - Этот сценарий почти всегда шумнее, чем Job Board и Developer News. Поэтому для него особенно важны строгие negative prototypes и conservative LLM-review.
+> - Для реального enterprise outbound через госзакупки и procurement portals обычно имеет смысл позже включить **discovery mode** и добавить региональные источники отдельно.
+
+---
+
+### C.2. LLM-шаблоны
+
+Перейдите в **Templates** и создайте в левой колонке как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
+
+#### LLM-шаблон 1: interests (optional future-ready, не используется в baseline по умолчанию)
+
+| Поле | Значение |
+|---|---|
+| **Template name** | `Outsourcing Leads — Interest Review` |
+| **Scope** | `interests` |
+
+**Prompt template:**
+```
+You are a B2B lead reviewer for a global software outsourcing company.
+
+The user is tracking this lead category: "{interest_name}"
+
+An article has landed in the gray zone — the system is not confident whether it matches.
+
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Match context: {explain_json}
+
+Your task: decide whether this content represents a REAL external demand signal for the specified lead category.
+
+APPROVE if:
+- It contains a tender, RFP, procurement notice, vendor search, implementation search, or partner search
+- It describes a company that is actively launching, rebuilding, modernizing, integrating, or scaling a product and is likely to need external delivery capacity
+- It clearly mentions budget, timeline, project scope, vendor shortlist, or search for a development / integration / consulting partner
+- It is a funded startup or expanding company with a concrete build or delivery need, not just generic growth news
+
+REJECT if:
+- It is pure vendor self-promotion, thought leadership, or agency marketing
+- It is general market analysis about outsourcing with no specific buyer signal
+- It is ordinary hiring news for internal employees with no sign of external partner demand
+- It is M&A, earnings, layoffs, or macro commentary with no project-buying signal
+- It is a generic trend article that only mentions outsourcing, AI, cloud, or transformation abstractly
+
+Respond ONLY with a JSON object:
+{"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
+
+Be conservative. Approve only when there is a believable client-intent signal.
+```
+
+#### LLM-шаблон 2: criteria (проверка системных критериев)
+
+| Поле | Значение |
+|---|---|
+| **Template name** | `Outsourcing Leads — Criterion Review` |
+| **Scope** | `criteria` |
+
+**Prompt template:**
+```
+You are a content qualification reviewer for a global software outsourcing company.
+
+The system criterion is: "{criterion_name}"
+
+An article has landed in the gray zone — the automated scoring was inconclusive.
+
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Scoring details: {explain_json}
+
+Your task: decide whether this content meets the system criterion.
+
+Key classification rules for outsourcing lead discovery:
+- Direct buyer-side signals (RFPs, tenders, vendor search, implementation partner search) are the PRIMARY content type
+- Fundraising or expansion news is RELEVANT only if it implies a concrete product build, transformation, implementation, or delivery need
+- Enterprise modernization, migration, data platform, AI rollout, and integration projects are RELEVANT when there is evidence the company may use external help
+- General tech news, vendor marketing, opinion pieces, and hiring-only stories are NOT relevant unless they clearly imply external service demand
+
+Respond ONLY with a JSON object:
+{"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
+```
+
+#### LLM-шаблон 3: global (универсальный запасной)
+
+| Поле | Значение |
+|---|---|
+| **Template name** | `Outsourcing Leads — Global Fallback` |
+| **Scope** | `global` |
+
+**Prompt template:**
+```
+You are a content relevance reviewer for a company that sells outsourced software development, data, cloud, QA, and product delivery services worldwide.
+
+An article has landed in the gray zone — the system is not confident in its relevance decision.
+
+Article title: {title}
+Article lead: {lead}
+Article body (truncated): {body}
+Review context: {explain_json}
+
+Core question: Does this content contain or strongly signal a company, department, startup, or public buyer that may purchase external software / product / data / cloud delivery services?
+
+APPROVE if the content:
+- Mentions a tender, RFP, procurement notice, or active vendor/partner selection
+- Describes a concrete modernization, migration, build, launch, AI rollout, or implementation initiative with likely external delivery demand
+- Signals a funded or scaling company that needs execution capacity faster than normal in-house hiring alone would provide
+
+REJECT if the content:
+- Is agency marketing or self-promotional vendor content
+- Is a general trend or analyst report with no identifiable buyer or project
+- Is only about internal hiring, layoffs, funding, or business results without external service demand
+- Is general product or consumer-tech news unrelated to a services opportunity
+
+Respond ONLY with a JSON object:
+{"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
+
+When in doubt, reject. It is better to miss a vague signal than to flood the pipeline with non-buying noise.
+```
+
+---
+
+### C.3. Шаблоны интересов
+
+Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
+
+---
+
+#### 1. Startup Funding & MVP Build Signals
+
+| Поле | Значение |
+|---|---|
+| **Name** | `Startup Funding & MVP Build Signals` |
+| **Description** | `Funded startups and early-stage companies likely to outsource MVP, product delivery, or first engineering capacity` |
+
+**Positive prototypes:**
+```
+Seed-stage fintech startup raises $4M and looks for external product team to ship MVP in 12 weeks
+Series A health-tech company seeks development partner to accelerate patient portal launch
+VC-backed B2B SaaS startup needs outsourced engineering team before first enterprise pilot
+Founders announce product roadmap and search for software partner to build v1 quickly
+Startup expands to US market and hires agency to deliver new mobile application
+Newly funded logistics startup looking for dedicated development team to build admin platform
+Pre-seed AI startup needs external engineers to validate product before internal team is staffed
+```
+
+**Negative prototypes:**
+```
+Startup raises $25M and appoints new chief financial officer
+How founders should choose between in-house and outsourced development
+VC market report shows seed funding rebounds in 2026
+Startup valuation trends across Europe and Latin America
+Founder shares lessons from building first MVP with no code tools
+```
+
+---
+
+#### 2. Enterprise Digital Transformation Programs
+
+| Поле | Значение |
+|---|---|
+| **Name** | `Enterprise Digital Transformation Programs` |
+| **Description** | `Large organizations launching modernization, digital transformation, self-service, automation, and platform rebuild programs` |
+
+**Positive prototypes:**
+```
+Global insurer starts digital transformation program and invites vendors to modernize claims platform
+Retail chain launches multi-country customer experience rebuild and seeks external delivery partner
+Manufacturing group starts enterprise modernization initiative with RFP for implementation vendors
+Telecom operator searches for product engineering partner to rebuild customer self-service systems
+Bank announces core platform transformation and procurement process for integration partner
+Healthcare network seeks external team for patient app, portal redesign, and backend modernization
+Regional airline launches digital passenger experience project and looks for delivery partner
+```
+
+**Negative prototypes:**
+```
+CEO says digital transformation remains a strategic priority for the company
+Consulting firm publishes annual digital transformation trends report
+Vendor blog explains seven pillars of enterprise modernization
+Company wins innovation award for previous digital transformation work
+Analyst predicts CIO budgets will rise next year
+```
+
+---
+
+#### 3. RFPs, Tenders & Procurement Notices
+
+| Поле | Значение |
+|---|---|
+| **Name** | `RFPs, Tenders & Procurement Notices` |
+| **Description** | `Public and private procurement notices for software development, app delivery, platforms, portals, and managed engineering work` |
+
+**Positive prototypes:**
+```
+Government agency issues RFP for citizen services portal rebuild and ongoing support
+University publishes tender for student mobile app, backend integration, and maintenance
+Municipality seeks supplier for document workflow platform and CRM integration project
+Public hospital procurement notice requests vendor for telemedicine software implementation
+Airport authority opens tender for passenger information platform modernization
+NGO seeks software development partner for grant management system across three countries
+Utility company issues request for proposal for field operations mobile application
+```
+
+**Negative prototypes:**
+```
+Government department announces procurement reform policy update
+How to respond to public sector software tenders successfully
+Tender advisory firm promotes its bid writing services
+Ministry releases annual spending report with no live opportunities
+Opinion article debates whether public procurement moves too slowly
+```
+
+---
+
+#### 4. ERP / CRM / Internal Systems Implementation
+
+| Поле | Значение |
+|---|---|
+| **Name** | `ERP / CRM / Internal Systems Implementation` |
+| **Description** | `Buyer-side demand for ERP, CRM, workflow, integration, and back-office systems implementation` |
+
+**Positive prototypes:**
+```
+Distribution company seeks ERP implementation partner for finance, inventory, and warehouse operations
+Nonprofit issues RFP for Salesforce implementation and donor platform integration
+Real estate group starts CRM migration and looks for system integrator with portal expertise
+Hospitality brand needs vendor for Microsoft Dynamics rollout across global properties
+Industrial company searches for partner to replace legacy ERP with cloud platform
+Education provider needs external team to integrate CRM, billing, and student lifecycle workflows
+Regional bank launches vendor selection for internal workflow automation and CRM upgrade
+```
+
+**Negative prototypes:**
+```
+Salesforce releases new AI capabilities for enterprise users
+Consultancy shares top five ERP migration mistakes
+CRM software market expected to grow 12 percent annually
+Vendor case study describes successful implementation for unnamed client
+Comparison of Salesforce vs HubSpot for mid-market businesses
+```
+
+---
+
+#### 5. AI / LLM Implementation Projects
+
+| Поле | Значение |
+|---|---|
+| **Name** | `AI / LLM Implementation Projects` |
+| **Description** | `Organizations likely to buy external help for AI copilots, LLM integrations, search, automation, and applied AI delivery` |
+
+**Positive prototypes:**
+```
+Insurance company seeks partner to implement internal AI copilot for service agents
+Enterprise SaaS vendor launches RFP for LLM-powered search and support automation
+Retailer looks for AI implementation partner to deploy forecasting and recommendation models
+Legal firm starts vendor review for document intelligence platform based on generative AI
+Government body seeks supplier for AI-assisted knowledge search across internal systems
+Healthcare provider needs partner to integrate LLM triage assistant into existing patient workflow
+B2B platform company requests proposals for AI summarization and workflow automation rollout
+```
+
+**Negative prototypes:**
+```
+OpenAI releases new multimodal model with better reasoning
+Analyst says enterprise AI spending will double by 2028
+AI consultancy publishes guide to successful LLM adoption
+Vendor announces new AI platform for enterprises worldwide
+Opinion article argues most AI pilots fail without change management
+```
+
+---
+
+#### 6. Data Platform & BI Modernization
+
+| Поле | Значение |
+|---|---|
+| **Name** | `Data Platform & BI Modernization` |
+| **Description** | `Opportunities related to data warehouses, BI migration, analytics engineering, reporting platforms, and data integration` |
+
+**Positive prototypes:**
+```
+Retail group seeks partner to migrate reporting stack from legacy BI to cloud warehouse
+Healthcare organization starts tender for data lakehouse, dashboards, and ETL modernization
+Media company looks for external team to rebuild analytics platform on Snowflake and dbt
+Logistics business issues RFP for operational reporting, data pipelines, and executive dashboards
+Fintech company needs data engineering partner for warehouse rebuild and self-serve BI rollout
+Global NGO seeks vendor for donor analytics platform and cross-system data integration
+Consumer brand launches procurement for customer data platform implementation and reporting layer
+```
+
+**Negative prototypes:**
+```
+Snowflake reports record quarterly revenue growth
+How to design a modern BI stack for scaling companies
+Consultant explains the difference between ETL and ELT
+Database vendor releases benchmark showing faster query performance
+Thought leadership piece on the future of data mesh
+```
+
+---
+
+#### 7. Cloud / DevOps / Platform Modernization
+
+| Поле | Значение |
+|---|---|
+| **Name** | `Cloud / DevOps / Platform Modernization` |
+| **Description** | `Signals that a company may need external help with migration, DevOps, Kubernetes, observability, platform engineering, and reliability improvements` |
+
+**Positive prototypes:**
+```
+Bank seeks cloud migration partner for multi-region infrastructure modernization
+Media platform issues RFP for DevOps transformation, CI/CD rebuild, and observability rollout
+Scale-up needs external SRE team to stabilize platform before global launch
+Public sector body searches for managed Kubernetes and platform engineering vendor
+E-commerce company starts project to migrate monolith to cloud-native stack with outside partner
+Telecom group requests proposals for infrastructure automation and release engineering overhaul
+SaaS provider needs platform modernization partner to improve reliability and deployment speed
+```
+
+**Negative prototypes:**
+```
+AWS launches new managed Kubernetes feature at annual conference
+How to pass the Certified Kubernetes Administrator exam
+DevOps platform vendor announces partnership with cloud provider
+Engineering blog explains why every team should adopt GitOps
+Cloud market revenue expected to reach new record next year
+```
+
+---
+
+#### 8. Agency / White-Label / Delivery Partnership Opportunities
+
+| Поле | Значение |
+|---|---|
+| **Name** | `Agency / White-Label / Delivery Partnership Opportunities` |
+| **Description** | `Agencies, consultancies, and system integrators that may need subcontractors, delivery partners, or white-label engineering capacity` |
+
+**Positive prototypes:**
+```
+Digital agency seeks white-label development partner for enterprise portal rollout
+Consulting firm needs subcontracted engineering team to deliver client mobile application
+System integrator looks for offshore delivery partner for backlog-heavy modernization program
+Brand agency searches for technical partner to build ecommerce and loyalty platform for major client
+Regional consultancy needs nearshore QA and development capacity for public sector project
+Implementation partner expands pipeline and looks for external product squad to cover new accounts
+Creative agency wins transformation deal and immediately seeks backend and frontend delivery partner
+```
+
+**Negative prototypes:**
+```
+Agency launches new website and rebrands its service offering
+Consultancy publishes report on the future of digital delivery partnerships
+Marketing agency shares tips for choosing a white-label vendor
+System integrator announces annual revenue growth and new office opening
+Opinion piece about whether agencies should build in-house engineering teams
+```
+
+---
+
+### C.4. Переиндексация после настройки
+
+После создания всех шаблонов интересов **обязательно** запустите переиндексацию:
+
+1. Перейдите в **Reindex** (боковое меню → System → Reindex)
+2. Выберите `interest_centroids`
+3. Нажмите **Queue Reindex**
+4. Дождитесь статуса **completed** в списке Recent Jobs
+
+> ⚠️ Без переиндексации новые шаблоны интересов не повлияют на подбор статей! Система будет собирать и обрабатывать статьи, но не сможет сопоставлять их с новыми интересами.
+
+---
+
+## 6. Сравнительная таблица трёх конфигураций
+
+| Параметр | A: Агрегатор вакансий | B: IT-новости для разработчиков | C: Поиск клиентов для аутсорс-компании |
+|---|---|---|---|
+| **Главная задача фильтрации** | Отличить реальные вакансии от новостей о рынке труда | Отличить глубокий технический контент от потребительских обзоров | Отличить buying signals от общего рыночного и vendor-маркетингового шума |
+| **Количество RSS-каналов** | 14 | 16 | 12 |
+| **Источники** | Джоб-борды, агрегаторы вакансий, стартап-блоги | Новостные агрегаторы разработчиков, техно-издания, блоги | Query-based news feeds, funding/enterprise media, техно-издания, сигналы procurement |
+| **Интервал опроса (типичный)** | 15–30 мин (вакансии обновляются реже) | 5–10 мин (новости появляются часто) | 10–30 мин (сигналы появляются неравномерно, но важны быстро) |
+| **Количество шаблонов интересов** | 8 | 8 | 8 |
+| **Фокус LLM-промптов** | «Есть ли конкретная вакансия?» | «Полезно ли это разработчику?» | «Есть ли здесь правдоподобный внешний спрос на услуги?» |
+| **Главный тип ложных срабатываний** | Новости о компании ≠ вакансия | Обзор гаджета ≠ техническая новость | Funding/news ≠ клиентский спрос |
+| **Стратегия негативных прототипов** | Карьерные советы, обзоры рынка, новости увольнений | Потребительские обзоры, маркетинговые статьи, учебные гайды | Vendor self-promo, hiring-only новости, аналитика без buyer-side сигнала |
+
+---
+
+## 7. Discovery Mode для этих примеров
+
+Discovery в NewsPortal не заменяет готовые bundles из этого файла. Он нужен для того, чтобы после импорта стартовых RSS-каналов и шаблонов система могла искать дополнительные источники под те же темы.
+
+### 7.1. Что discovery добавляет, а что не заменяет
+
+Discovery добавляет:
+
+- поиск новых кандидатов в источники под уже выбранную тематику;
+- mission-based planning через `/admin/discovery`;
+- review/approve loop для найденных RSS и `website` кандидатов;
+- cost/quota visibility через `/admin/discovery` и `/maintenance/discovery/*`.
+
+Discovery не заменяет:
+
+- стартовый импорт RSS из примеров A, B и C;
+- LLM-шаблоны `criteria` и `global`;
+- шаблоны интересов и обязательную переиндексацию `interest_centroids` после их изменения;
+- Firebase/bootstrap и общий MVP setup.
+
+Практически это означает следующее:
+
+1. Сначала разверните базовый сценарий из этого файла.
+2. Потом включайте discovery, если хотите расширять набор источников без ручного поиска.
+3. Найденные discovery-каналы должны проверяться на ту же тематику, что и ваши шаблоны интересов, а не жить отдельно от них.
+
+### 7.2. Что должно быть готово заранее
+
+Перед включением discovery для примеров из этого файла подготовьте:
+
+1. Рабочий `.env.dev`, созданный на основе `.env.example`.
+2. Поднятый локальный stack через `pnpm dev:mvp:internal`.
+3. Настроенный Firebase admin sign-in:
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_WEB_API_KEY`
+   - `FIREBASE_CLIENT_CONFIG`
+   - `FIREBASE_ADMIN_CREDENTIALS`
+   - `ADMIN_ALLOWLIST_EMAILS`
+4. Настроенный базовый Gemini runtime для обычного system-interest review:
+   - `GEMINI_API_KEY`
+   - `GEMINI_MODEL`
+   - `GEMINI_BASE_URL`
+5. Уже импортированный bundle хотя бы одного из примеров A/B/C:
+   - RSS-каналы
+   - LLM-шаблоны
+   - шаблоны интересов
+   - хотя бы одна успешная переиндексация `interest_centroids`
+
+Почему это важно: discovery ищет новые источники под уже определенную тему. Если сначала не задать темы и базовые источники, то найденные кандидаты будет труднее оценивать и они хуже соотносятся с примерами из этого файла.
+
+### 7.3. Какие discovery-настройки нужны и что они означают
+
+Для локального безопасного старта используйте такой baseline:
+
+| Переменная | Рекомендуемое значение | Что делает |
+|---|---|---|
+| `DISCOVERY_ENABLED` | `1` только в локальной env, когда вы действительно тестируете discovery | Включает discovery runtime. В committed baseline должен оставаться выключенным. |
+| `DISCOVERY_CRON` | `0 */6 * * *` | Cron для авто-запуска discovery mission planning/runs. |
+| `DISCOVERY_BUDGET_CENTS_DEFAULT` | `500` | Бюджет по умолчанию для новых mission в центах. Это per-mission default, а не глобальный месячный лимит. |
+| `DISCOVERY_MAX_HYPOTHESES_PER_RUN` | `20` | Ограничивает, сколько гипотез discovery строит и исполняет за один run. |
+| `DISCOVERY_MAX_SOURCES_DEFAULT` | `20` | Дефолтный ceiling на количество источников, которое mission пытается собрать. |
+| `DISCOVERY_AUTO_APPROVE_THRESHOLD` | оставить пустым | Пустое значение сохраняет manual review. Если указать число от `0` до `1`, кандидаты с достаточным `contextual_score` будут auto-approve. Для этих примеров manual review безопаснее. |
+| `DISCOVERY_SEARCH_PROVIDER` | `ddgs` | Текущий safe baseline provider. Live search остается dormant, пока discovery выключен. |
+| `DISCOVERY_DDGS_BACKEND` | `auto` | Backend mode для DDGS. |
+| `DISCOVERY_DDGS_REGION` | `us-en` | Регион поиска. Для примеров A, B и C подходит англоязычный baseline. |
+| `DISCOVERY_DDGS_SAFESEARCH` | `moderate` | SafeSearch-профиль для DDGS. |
+| `DISCOVERY_GEMINI_API_KEY` | ваш discovery key или тот же ключ, что и `GEMINI_API_KEY` | Отдельный ключ для discovery LLM. Если оставить пустым, discovery fallback-ится к обычному Gemini key. |
+| `DISCOVERY_GEMINI_MODEL` | `gemini-2.0-flash` | Отдельная модель для discovery. Если пусто, используется `GEMINI_MODEL`. |
+| `DISCOVERY_GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta` | Отдельный base URL для discovery. Если пусто, используется `GEMINI_BASE_URL`. |
+| `DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD` | `0.10` | Тариф входных токенов для discovery cost accounting. |
+| `DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD` | `0.40` | Тариф выходных токенов для discovery cost accounting. |
+| `DISCOVERY_MONTHLY_BUDGET_CENTS` | `500` для bounded local tests | Глобальный hard cap на текущий UTC-месяц. Если поставить `0`, лимит отключается. |
+| `DISCOVERY_BRAVE_API_KEY` | оставить пустым | Dormant placeholder. Текущий baseline его не использует. |
+| `DISCOVERY_SERPER_API_KEY` | оставить пустым | Dormant placeholder. Текущий baseline его не использует. |
+
+Минимально обязательный discovery env set для этих примеров:
+
+```env
+DISCOVERY_ENABLED=1
+DISCOVERY_CRON=0 */6 * * *
+DISCOVERY_BUDGET_CENTS_DEFAULT=500
+DISCOVERY_MAX_HYPOTHESES_PER_RUN=20
+DISCOVERY_MAX_SOURCES_DEFAULT=20
+DISCOVERY_AUTO_APPROVE_THRESHOLD=
+DISCOVERY_SEARCH_PROVIDER=ddgs
+DISCOVERY_DDGS_BACKEND=auto
+DISCOVERY_DDGS_REGION=us-en
+DISCOVERY_DDGS_SAFESEARCH=moderate
+DISCOVERY_GEMINI_API_KEY=replace-me
+DISCOVERY_GEMINI_MODEL=gemini-2.0-flash
+DISCOVERY_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD=0.10
+DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD=0.40
+DISCOVERY_MONTHLY_BUDGET_CENTS=500
+```
+
+### 7.4. Пошаговое включение и проверка
+
+1. Скопируйте `.env.example` в `.env.dev`, если еще не сделали этого, и заполните базовые runtime secrets.
+2. В `.env.dev` включите discovery:
+
+```env
+DISCOVERY_ENABLED=1
+DISCOVERY_SEARCH_PROVIDER=ddgs
+DISCOVERY_AUTO_APPROVE_THRESHOLD=
+DISCOVERY_MONTHLY_BUDGET_CENTS=500
+```
+
+3. Перезапустите stack, чтобы worker/API/admin увидели новые env:
+
+```sh
+pnpm dev:mvp:internal:down
+pnpm dev:mvp:internal
+```
+
+4. Перед manual use прогоните bounded proof:
+
+```sh
+pnpm test:discovery-enabled:compose
+```
+
+5. Проверьте, что runtime действительно включился:
+   - `GET /maintenance/discovery/summary` показывает `enabled=true`;
+   - `/admin/discovery` показывает активный provider, model и месячный quota state;
+   - при исчерпании месячного лимита UI/API должны честно показать quota reached вместо тихой деградации.
+6. Только после этого начинайте реальные mission runs в `/admin/discovery`.
+
+### 7.5. Как связать discovery с примерами A, B и C
+
+Ниже приведен практический mapping, чтобы discovery искал источники под те же сценарии, что и bundles выше.
+
+#### Для примера A — Job Board
+
+Создайте mission примерно с такими seed inputs:
+
+```json
+{
+  "title": "Job Board source expansion",
+  "description": "Find RSS and website sources with real software-engineering vacancies, remote hiring, startup recruiting and concrete career opportunities.",
+  "seed_topics": [
+    "software engineering jobs",
+    "remote developer jobs",
+    "startup hiring",
+    "engineering career opportunities"
+  ],
+  "seed_languages": ["en"],
+  "seed_regions": ["us", "eu"],
+  "target_provider_types": ["rss", "website"]
+}
+```
+
+При review кандидатов проверяйте:
+
+- публикует ли источник реальные вакансии или hiring roundups, а не общие HR-статьи;
+- не дублирует ли он уже импортированные RSS из примера A;
+- не является ли он login/CAPTCHA-зависимым сайтом, который текущий baseline не поддерживает.
+
+#### Для примера B — Developer News
+
+Создайте mission примерно с такими seed inputs:
+
+```json
+{
+  "title": "Developer news source expansion",
+  "description": "Find RSS and website sources covering developer tooling, programming languages, cloud-native engineering, security and AI/LLM news for engineers.",
+  "seed_topics": [
+    "developer tools",
+    "programming languages",
+    "cloud native engineering",
+    "software security",
+    "ai for developers"
+  ],
+  "seed_languages": ["en"],
+  "seed_regions": ["us", "eu"],
+  "target_provider_types": ["rss", "website"]
+}
+```
+
+При review кандидатов проверяйте:
+
+- есть ли там инженерная глубина, а не consumer-tech или gadget news;
+- согласуются ли найденные темы с вашими шаблонами интересов B.1-B.4;
+- не нужен ли для `website`-источника отдельный browser-assisted pass через `/admin/resources`.
+
+#### Для примера C — Global Outsourcing Lead Discovery
+
+Создайте mission примерно с такими seed inputs:
+
+```json
+{
+  "title": "Outsourcing lead source expansion",
+  "description": "Find RSS and website sources with public buying signals for external software delivery: tenders, partner searches, funded startups, digital transformation programs and implementation projects.",
+  "seed_topics": [
+    "software development outsourcing",
+    "digital transformation tender",
+    "implementation partner search",
+    "startup product build",
+    "engineering staff augmentation"
+  ],
+  "seed_languages": ["en"],
+  "seed_regions": ["us", "eu", "apac"],
+  "target_provider_types": ["rss", "website"]
+}
+```
+
+При review кандидатов проверяйте:
+
+- публикует ли источник buyer-side сигналы, а не только self-promo агентств и консультантов;
+- содержит ли он конкретные проекты, тендеры, vendor searches, procurement notices или явные delivery gaps;
+- не дублирует ли он уже импортированные query feeds и не слишком ли узок регионально;
+- не нужен ли для `website`-источника отдельный browser-assisted pass через `/admin/resources`.
+
+После approval:
+
+1. Дайте новым источникам отработать ingest.
+2. Проверяйте `Articles`, `Clusters`, `Observability` и при необходимости `/admin/resources`.
+3. Не запускайте `interest_centroids` только из-за новых discovery-каналов.
+4. Запускайте `interest_centroids` только если вы изменили сами шаблоны интересов.
+
+### 7.6. Что все еще остается вне этого файла
+
+Даже после этого appendix здесь сознательно не дублируются:
+
+- полный `.env.dev` bootstrap и все runtime env details из `README.md`;
+- весь operator manual verification flow из `docs/manual-mvp-runbook.md`;
+- browser-assisted hard-site walkthrough beyond the short discovery tie-in above;
+- live-internet anti-bot escalation, login-required sources, CAPTCHA solving и manual challenge bypass;
+- полноценный operator-ready rollout для discovery provider types `api`, `email_imap` и `youtube`.
+
+---
+
+## 8. FAQ по примерам
 
 **В: Можно ли использовать оба набора одновременно в одной установке NewsPortal?**
 > Да. Эти шаблоны интересов формируют системный каталог тем и синхронизируются в live `criteria`, поэтому вы можете держать в одной установке и вакансийные, и developer-news темы одновременно. Если вам нужна персонализация для конкретного человека, она настраивается отдельно через реальные `user_interests`. LLM-шаблоны по-прежнему работают по одному на scope, но в baseline runtime активно используются прежде всего `criteria` и `global`, а `interests` остаётся future-ready scope.
@@ -1225,8 +2006,16 @@ Elon Musk tweets about Mars colonization timeline and SpaceX plans
 > 3. LLM-промпты можно оставить на английском (Gemini хорошо понимает и русский, и английский контент), но при желании можно перевести и их
 > 4. Не забудьте указать `"language": "ru"` при импорте каналов
 
+**В: Почему в примере для аутсорс-компании есть funding- и tech-ленты, если они не содержат прямые заявки?**
+> Потому что для sales/discovery они работают как **lead signals**, а не как готовые лиды. Новость про funding, запуск нового продукта, rollout AI-функции или enterprise-модернизацию сама по себе не означает сделку — но часто подсказывает, у кого в ближайшие месяцы появляется потребность в внешней delivery-команде. Именно поэтому в примере C такие источники сочетаются со строгими negative prototypes и conservative LLM review.
+
+**В: Покрывает ли этот документ discovery, website channels и hard-site/browser fallback настройку?**
+> Теперь частично. Раздел 7 покрывает discovery enable path, смысл `DISCOVERY_*` настроек и то, как discovery соотносится с примерами A/B/C. Но полный operator manual verification, website `/resources`, hard-site/browser fallback и cleanup/reset по-прежнему подробно живут в `README.md` и `docs/manual-mvp-runbook.md`.
+
 ---
 
 > 📖 **Связанные документы:**
 > - [HOW_TO_USE.md](./HOW_TO_USE.md) — полное руководство по администрированию NewsPortal
+> - [README.md](./README.md) — runtime env, discovery enable и smoke/proof команды
+> - [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md) — полный local MVP walkthrough, cleanup/reset, optional discovery и website verification
 > - Раздел **Help & Guide** в боковом меню админки — встроенный справочник на английском языке

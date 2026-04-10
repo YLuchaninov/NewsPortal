@@ -1,4 +1,13 @@
 ---
+import {
+  DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+  parseApiChannelConfig,
+  parseEmailImapChannelConfig,
+  parseRssChannelConfig,
+  parseWebsiteChannelConfig,
+  resolveRssChannelAdapterStrategy,
+  resolveRssChannelMaxEntryAgeHours,
+} from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../../../layouts/AdminShell.astro";
@@ -11,6 +20,10 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../../lib/server/browser-flow";
+import {
+  formatAdminChannelProviderLabel,
+  isAdminChannelProviderType,
+} from "../../../lib/channel-providers";
 
 export const prerender = false;
 
@@ -29,11 +42,15 @@ const channelId = String(Astro.params.channelId ?? "");
 type R = Record<string, unknown>;
 const channel = await sdk.getChannel<R>(channelId);
 
-function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
+function asRecord(v: unknown): R {
+  return v != null && typeof v === "object" && !Array.isArray(v) ? (v as R) : {};
+}
+
 function asInt(v: unknown, fallback: number) {
   const parsed = typeof v === "number" && Number.isFinite(v) ? v : Number.parseInt(String(v ?? ""), 10);
   return Number.isFinite(parsed) ? Number(parsed) : fallback;
 }
+
 function fmt(v: unknown) {
   if (!v) return "—";
   const d = new Date(String(v));
@@ -41,12 +58,26 @@ function fmt(v: unknown) {
 }
 
 const configJson = asRecord(channel.config_json);
-const articleCount = asInt(channel.article_count, 0);
+const rawProviderType = String(channel.provider_type ?? "").trim();
+const providerType = isAdminChannelProviderType(rawProviderType) ? rawProviderType : null;
+const providerLabel = providerType ? formatAdminChannelProviderLabel(providerType) : rawProviderType || "Unknown";
+const providerSubject = providerType === "website"
+  ? "site"
+  : providerType === "api"
+    ? "endpoint"
+    : providerType === "email_imap"
+      ? "mailbox"
+      : "feed";
+const websiteConfig = providerType === "website" ? parseWebsiteChannelConfig(configJson) : null;
+const rssConfig = providerType === "rss" ? parseRssChannelConfig(configJson) : null;
+const apiConfig = providerType === "api" ? parseApiChannelConfig(configJson) : null;
+const emailImapConfig = providerType === "email_imap" ? parseEmailImapChannelConfig(configJson) : null;
+const storedItemCount = asInt(channel.stored_item_count, 0);
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
-const deleteLabel = articleCount > 0 ? "Archive channel" : "Delete channel";
-const deleteDescription = articleCount > 0
-  ? `This channel is already linked to ${articleCount} historical article${articleCount === 1 ? "" : "s"}. Confirming this action will archive it instead of hard-deleting it.`
-  : "This channel has no linked historical articles, so deleting it will permanently remove it and its runtime state.";
+const deleteLabel = storedItemCount > 0 ? "Archive channel" : "Delete channel";
+const deleteDescription = storedItemCount > 0
+  ? `This channel is already linked to ${storedItemCount} stored item${storedItemCount === 1 ? "" : "s"}. Confirming this action will archive it instead of hard-deleting it.`
+  : `This ${providerSubject} channel has no stored history yet, so deleting it will permanently remove it and its runtime state.`;
 ---
 
 <AdminShell title="Edit Channel — Admin" session={session} flash={flash} activeNav="channels">
@@ -60,82 +91,202 @@ const deleteDescription = articleCount > 0
     </nav>
   </Fragment>
 
-  <div class="space-y-6">
-    <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-      <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
-        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit channel</p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(channel.name ?? "RSS channel")}</h1>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Use this screen for full feed edits. Quick pause and archive actions are still available, but the detailed schedule and fetch settings live here.
-        </p>
+  {providerType ? (
+    <div class="space-y-6">
+      <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit channel</p>
+          <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(channel.name ?? `${providerLabel} channel`)}</h1>
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {providerType === "website"
+              ? "Use this screen for full website ingestion edits. Quick pause and archive actions are still available, but the detailed discovery and crawl settings live here."
+              : providerType === "api"
+                ? "Use this screen for full API ingestion edits. Quick pause and archive actions are still available, but the detailed mapping and auth settings live here."
+                : providerType === "email_imap"
+                  ? "Use this screen for mailbox ingest edits. Quick pause and archive actions are still available, but the detailed mailbox and credential settings live here."
+                  : "Use this screen for full feed edits. Quick pause and archive actions are still available, but the detailed schedule and fetch settings live here."}
+          </p>
+        </div>
+
+        <section class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+          <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Stored items</p>
+            <p class="mt-2 text-2xl font-semibold">{storedItemCount}</p>
+            <p class="mt-2 text-sm text-muted-foreground">Stored channel history determines whether delete becomes a safe archive.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Last success</p>
+            <p class="mt-2 text-sm font-medium">{fmt(channel.last_success_at)}</p>
+            <p class="mt-2 text-sm text-muted-foreground">Most recent successful fetch for this {providerSubject}.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Next due</p>
+            <p class="mt-2 text-sm font-medium">{fmt(channel.next_due_at)}</p>
+            <p class="mt-2 text-sm text-muted-foreground">Live scheduler target after the last runtime update.</p>
+          </div>
+        </section>
       </div>
 
-      <section class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Linked articles</p>
-          <p class="mt-2 text-2xl font-semibold">{articleCount}</p>
-          <p class="mt-2 text-sm text-muted-foreground">Historical articles determine whether delete becomes a safe archive.</p>
-        </div>
-        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Last success</p>
-          <p class="mt-2 text-sm font-medium">{fmt(channel.last_success_at)}</p>
-          <p class="mt-2 text-sm text-muted-foreground">Most recent successful fetch for this feed.</p>
-        </div>
-        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Next due</p>
-          <p class="mt-2 text-sm font-medium">{fmt(channel.next_due_at)}</p>
-          <p class="mt-2 text-sm text-muted-foreground">Live scheduler target after the last runtime update.</p>
+      <ChannelEditorForm
+        action={appPath("/bff/admin/channels")}
+        mode="edit"
+        redirectTo={currentPath}
+        cancelHref={appPath("/channels")}
+        value={providerType === "website"
+          ? {
+              channelId,
+              providerType,
+              name: String(channel.name ?? ""),
+              fetchUrl: String(channel.fetch_url ?? ""),
+              language: String(channel.language ?? "en"),
+              isActive: channel.is_active === true,
+              pollIntervalSeconds: asInt(channel.poll_interval_seconds, 900),
+              adaptiveEnabled: channel.adaptive_enabled !== false,
+              maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 14400),
+              requestTimeoutMs: websiteConfig?.requestTimeoutMs ?? 10000,
+              userAgent: websiteConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+              maxResourcesPerPoll: websiteConfig?.maxResourcesPerPoll ?? 50,
+              totalPollTimeoutMs: websiteConfig?.totalPollTimeoutMs ?? 30000,
+              crawlDelayMs: websiteConfig?.crawlDelayMs ?? 1000,
+              sitemapDiscoveryEnabled: websiteConfig?.sitemapDiscoveryEnabled ?? true,
+              feedDiscoveryEnabled: websiteConfig?.feedDiscoveryEnabled ?? true,
+              collectionDiscoveryEnabled: websiteConfig?.collectionDiscoveryEnabled ?? true,
+              downloadDiscoveryEnabled: websiteConfig?.downloadDiscoveryEnabled ?? true,
+              browserFallbackEnabled: websiteConfig?.browserFallbackEnabled ?? false,
+              collectionSeedUrlsText: (websiteConfig?.collectionSeedUrls ?? []).join("\n"),
+              allowedUrlPatternsText: (websiteConfig?.allowedUrlPatterns ?? []).join("\n"),
+              blockedUrlPatternsText: (websiteConfig?.blockedUrlPatterns ?? []).join("\n"),
+              hasAuthorizationHeader: channel.has_authorization_header === true,
+            }
+          : providerType === "api"
+            ? {
+                channelId,
+                providerType,
+                name: String(channel.name ?? ""),
+                fetchUrl: String(channel.fetch_url ?? ""),
+                language: String(channel.language ?? "en"),
+                isActive: channel.is_active === true,
+                pollIntervalSeconds: asInt(channel.poll_interval_seconds, 300),
+                adaptiveEnabled: channel.adaptive_enabled !== false,
+                maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 4800),
+                requestTimeoutMs: apiConfig?.requestTimeoutMs ?? 10000,
+                userAgent: apiConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+                maxItemsPerPoll: apiConfig?.maxItemsPerPoll ?? 20,
+                itemsPath: apiConfig?.itemsPath ?? "items",
+                titleField: apiConfig?.titleField ?? "title",
+                leadField: apiConfig?.leadField ?? "lead",
+                bodyField: apiConfig?.bodyField ?? "body",
+                urlField: apiConfig?.urlField ?? "url",
+                publishedAtField: apiConfig?.publishedAtField ?? "publishedAt",
+                externalIdField: apiConfig?.externalIdField ?? "id",
+                languageField: apiConfig?.languageField ?? "language",
+                enrichmentEnabled: channel.enrichment_enabled !== false,
+                enrichmentMinBodyLength: asInt(
+                  channel.enrichment_min_body_length,
+                  DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH
+                ),
+                hasAuthorizationHeader: channel.has_authorization_header === true,
+              }
+            : providerType === "email_imap"
+              ? {
+                  channelId,
+                  providerType,
+                  name: String(channel.name ?? ""),
+                  fetchUrl: String(channel.fetch_url ?? ""),
+                  language: String(channel.language ?? "en"),
+                  isActive: channel.is_active === true,
+                  pollIntervalSeconds: asInt(channel.poll_interval_seconds, 300),
+                  adaptiveEnabled: channel.adaptive_enabled !== false,
+                  maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 4800),
+                  requestTimeoutMs: undefined,
+                  userAgent: undefined,
+                  maxItemsPerPoll: emailImapConfig?.maxItemsPerPoll ?? 20,
+                  enrichmentEnabled: channel.enrichment_enabled !== false,
+                  enrichmentMinBodyLength: asInt(
+                    channel.enrichment_min_body_length,
+                    DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH
+                  ),
+                  host: emailImapConfig?.host ?? "",
+                  port: emailImapConfig?.port ?? 993,
+                  secure: emailImapConfig?.secure ?? true,
+                  username: emailImapConfig?.username ?? "",
+                  mailbox: emailImapConfig?.mailbox ?? "INBOX",
+                  searchFrom: emailImapConfig?.searchFrom ?? "",
+                  hasPassword: Boolean(String(emailImapConfig?.password ?? "").trim()),
+                }
+              : {
+                  channelId,
+                  providerType,
+                  name: String(channel.name ?? ""),
+                  fetchUrl: String(channel.fetch_url ?? ""),
+                  language: String(channel.language ?? "en"),
+                  isActive: channel.is_active === true,
+                  pollIntervalSeconds: asInt(channel.poll_interval_seconds, 300),
+                  adaptiveEnabled: channel.adaptive_enabled !== false,
+                  maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 4800),
+                  requestTimeoutMs: rssConfig?.requestTimeoutMs ?? 10000,
+                  userAgent: rssConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+                  maxItemsPerPoll: rssConfig?.maxItemsPerPoll ?? 20,
+                  preferContentEncoded: rssConfig?.preferContentEncoded ?? true,
+                  adapterStrategy: rssConfig?.adapterStrategy ?? null,
+                  maxEntryAgeHours: rssConfig?.maxEntryAgeHours ?? null,
+                  resolvedAdapterStrategy: resolveRssChannelAdapterStrategy(
+                    String(channel.fetch_url ?? ""),
+                    rssConfig ?? parseRssChannelConfig({})
+                  ),
+                  resolvedMaxEntryAgeHours: resolveRssChannelMaxEntryAgeHours(
+                    String(channel.fetch_url ?? ""),
+                    rssConfig ?? parseRssChannelConfig({})
+                  ),
+                  enrichmentEnabled: channel.enrichment_enabled !== false,
+                  enrichmentMinBodyLength: asInt(
+                    channel.enrichment_min_body_length,
+                    DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH
+                  ),
+                  hasAuthorizationHeader: channel.has_authorization_header === true,
+                }}
+      />
+
+      <section class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="max-w-2xl">
+            <h2 class="text-base font-semibold text-foreground">Danger zone</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              {storedItemCount > 0
+                ? `Because this ${providerSubject} already has stored history, the destructive action archives it instead of deleting the record.`
+                : `This ${providerSubject} can be permanently deleted because it has no stored items yet.`}
+            </p>
+          </div>
+          <AdminConfirmAction
+            action={appPath("/bff/admin/channels")}
+            title={deleteLabel}
+            description={deleteDescription}
+            triggerLabel={storedItemCount > 0 ? "Archive" : "Delete"}
+            confirmLabel={storedItemCount > 0 ? "Archive channel" : "Delete channel"}
+            fields={[
+              { name: "intent", value: "delete" },
+              { name: "channelId", value: channelId },
+              { name: "redirectTo", value: appPath("/channels") },
+            ]}
+            triggerClassName={storedItemCount > 0 ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"}
+            confirmClassName={storedItemCount > 0 ? "bg-amber-600 text-white hover:bg-amber-600/90" : ""}
+            client:load
+          />
         </div>
       </section>
     </div>
-
-    <ChannelEditorForm
-      action={appPath("/bff/admin/channels")}
-      mode="edit"
-      redirectTo={currentPath}
-      cancelHref={appPath("/channels")}
-      value={{
-        channelId,
-        name: String(channel.name ?? ""),
-        fetchUrl: String(channel.fetch_url ?? ""),
-        language: String(channel.language ?? "en"),
-        isActive: channel.is_active === true,
-        pollIntervalSeconds: asInt(channel.poll_interval_seconds, 300),
-        adaptiveEnabled: channel.adaptive_enabled !== false,
-        maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 4800),
-        maxItemsPerPoll: asInt(configJson.maxItemsPerPoll, 20),
-        requestTimeoutMs: asInt(configJson.requestTimeoutMs, 10000),
-        userAgent: String(configJson.userAgent ?? "NewsPortalFetchers/0.1"),
-        preferContentEncoded: configJson.preferContentEncoded !== false,
-      }}
-    />
-
-    <section class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div class="max-w-2xl">
-          <h2 class="text-base font-semibold text-foreground">Danger zone</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            {articleCount > 0
-              ? "Because this feed already has historical articles, the destructive action archives it instead of deleting the record."
-              : "This feed can be permanently deleted because it has no historical article links yet."}
-          </p>
-        </div>
-        <AdminConfirmAction
-          action={appPath("/bff/admin/channels")}
-          title={deleteLabel}
-          description={deleteDescription}
-          triggerLabel={articleCount > 0 ? "Archive" : "Delete"}
-          confirmLabel={articleCount > 0 ? "Archive channel" : "Delete channel"}
-          fields={[
-            { name: "intent", value: "delete" },
-            { name: "channelId", value: channelId },
-            { name: "redirectTo", value: appPath("/channels") },
-          ]}
-          triggerClassName={articleCount > 0 ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"}
-          confirmClassName={articleCount > 0 ? "bg-amber-600 text-white hover:bg-amber-600/90" : ""}
-          client:load
-        />
+  ) : (
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Unsupported provider</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(channel.name ?? "Channel")}</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        This channel uses provider type <code>{rawProviderType || "unknown"}</code>, which does not have a first-class editor on this admin route yet.
+      </p>
+      <div class="mt-5">
+        <a href={appPath("/channels")} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+          Back to channels
+        </a>
       </div>
     </section>
-  </div>
+  )}
 </AdminShell>

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Awaitable, Callable, Final, Mapping
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from .plugins import TASK_REGISTRY, TaskPlugin, TaskPluginRegistry
 
@@ -36,6 +41,25 @@ def load_legacy_handler(handler_name: str) -> LegacyHandler:
 
 def _camel_to_snake(value: str) -> str:
     return _CAMEL_CASE_BOUNDARY.sub("_", value).lower()
+
+
+def build_fetchers_internal_base_url() -> str:
+    configured = os.getenv("FETCHERS_INTERNAL_BASE_URL")
+    if configured:
+        return configured.rstrip("/")
+
+    fetchers_port = os.getenv("FETCHERS_PORT", "4100")
+    postgres_host = os.getenv("POSTGRES_HOST", "127.0.0.1").strip().lower()
+    default_host = "127.0.0.1" if postgres_host in {"127.0.0.1", "localhost"} else "fetchers"
+    return f"http://{default_host}:{fetchers_port}"
+
+
+def fetchers_internal_timeout_seconds() -> float:
+    raw_value = os.getenv("FETCHERS_INTERNAL_TIMEOUT_SECONDS", "30")
+    try:
+        return max(1.0, float(raw_value))
+    except ValueError:
+        return 30.0
 
 
 class LegacyHandlerTaskPlugin(TaskPlugin):
@@ -309,6 +333,270 @@ class NormalizeArticlePlugin(LegacyHandlerTaskPlugin):
                 aliases=("docId",),
             ),
         }
+
+
+class ArticleExtractPlugin(LegacyHandlerTaskPlugin):
+    name = "enrichment.article_extract"
+    description = "Call the fetchers-owned article enrichment endpoint before normalization."
+    handler_name = "fetchers_internal_enrichment"
+    input_descriptions = {
+        "doc_id": "Article identifier passed via task options or sequence context.",
+        "event_id": "Sequence-owned event identifier retained for downstream idempotency.",
+        "force_enrichment": "Optional flag to force article extraction even when normal skip rules would apply.",
+    }
+    output_descriptions = {
+        "doc_id": "Article identifier retained in sequence context.",
+        "event_id": "Sequence-owned event identifier retained in sequence context.",
+        "status": "Fetchers enrichment outcome: skipped, enriched, or failed.",
+        "enrichment_state": "Persisted enrichment state written on the article row.",
+        "body_replaced": "Whether enrichment replaced the article body before normalize ran.",
+        "media_asset_count": "Number of media assets persisted by the fetchers enrichment owner.",
+        "error": "Non-fatal extraction error text when fetchers continued with the feed body.",
+    }
+
+    def validate_options(self, options: dict[str, Any]) -> list[str]:
+        errors = super().validate_options(options)
+        self._validate_optional_boolean_like(
+            options,
+            errors,
+            option_key="force_enrichment",
+            aliases=("forceEnrichment", "force"),
+        )
+        return errors
+
+    def build_job_data(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "eventId": self._resolve_required_string(
+                options=options,
+                context=context,
+                key="event_id",
+                aliases=("eventId",),
+            ),
+            "docId": self._resolve_required_string(
+                options=options,
+                context=context,
+                key="doc_id",
+                aliases=("docId",),
+            ),
+            "forceEnrichment": self._resolve_bool(
+                options=options,
+                context=context,
+                key="force_enrichment",
+                aliases=("forceEnrichment", "force"),
+                default=False,
+            ),
+        }
+
+    async def execute(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        job_data = self.build_job_data(options, context)
+        result = await asyncio.to_thread(self._request_enrichment, job_data)
+        if not isinstance(result, dict):
+            raise TypeError(
+                "Fetchers enrichment endpoint must return a JSON object result."
+            )
+        return self.build_context_update(job_data, result)
+
+    def build_context_update(
+        self,
+        job_data: Mapping[str, Any],
+        result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        normalized_result = {
+            _camel_to_snake(key): value for key, value in result.items()
+        }
+        normalized_result["doc_id"] = str(job_data["docId"])
+        normalized_result["event_id"] = str(job_data["eventId"])
+        normalized_result["force_enrichment"] = bool(job_data.get("forceEnrichment"))
+        return normalized_result
+
+    def _request_enrichment(self, job_data: Mapping[str, Any]) -> dict[str, Any]:
+        doc_id = str(job_data["docId"])
+        request_body = json.dumps(
+            {
+                "force": bool(job_data.get("forceEnrichment")),
+            }
+        ).encode("utf-8")
+        request = Request(
+            f"{build_fetchers_internal_base_url()}/internal/enrichment/articles/{doc_id}",
+            data=request_body,
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=fetchers_internal_timeout_seconds()) as response:
+                payload = response.read().decode("utf-8")
+        except HTTPError as error:
+            error_body = error.read().decode("utf-8", errors="replace")
+            detail = error_body or str(error.reason)
+            raise RuntimeError(
+                f"Fetchers enrichment request for article {doc_id} failed with HTTP {error.code}: {detail}"
+            ) from error
+        except URLError as error:
+            raise RuntimeError(
+                f"Fetchers enrichment request for article {doc_id} failed: {error.reason}"
+            ) from error
+
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(
+                f"Fetchers enrichment request for article {doc_id} returned invalid JSON."
+            ) from error
+
+        if not isinstance(parsed, dict):
+            raise TypeError(
+                f"Fetchers enrichment request for article {doc_id} must return a JSON object."
+            )
+
+        return parsed
+
+
+class ResourceExtractPlugin(LegacyHandlerTaskPlugin):
+    name = "enrichment.resource_extract"
+    description = "Call the fetchers-owned resource enrichment endpoint for website resources."
+    handler_name = "fetchers_internal_resource_enrichment"
+    input_descriptions = {
+        "resource_id": "Resource identifier passed via task options or sequence context.",
+        "event_id": "Sequence-owned event identifier retained for traceability.",
+        "force_enrichment": "Optional flag to force resource extraction.",
+    }
+    output_descriptions = {
+        "resource_id": "Resource identifier retained in sequence context.",
+        "event_id": "Sequence-owned event identifier retained in sequence context.",
+        "status": "Fetchers resource enrichment outcome: skipped, enriched, or failed.",
+        "resource_kind": "Final resource kind after typed extraction.",
+        "extraction_state": "Persisted extraction state written on the resource row.",
+        "projected_doc_id": "Projected article doc_id when the resource was editorial-compatible.",
+        "documents_count": "Number of documents stored on the resource row.",
+        "media_count": "Number of media assets stored on the resource row.",
+        "error": "Non-fatal extraction error text when enrichment failed.",
+    }
+
+    def validate_options(self, options: dict[str, Any]) -> list[str]:
+        errors = super().validate_options(options)
+        self._validate_optional_non_empty_string(
+            options,
+            errors,
+            option_key="resource_id",
+            aliases=("resourceId",),
+        )
+        self._validate_optional_boolean_like(
+            options,
+            errors,
+            option_key="force_enrichment",
+            aliases=("forceEnrichment", "force"),
+        )
+        return errors
+
+    def build_job_data(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "eventId": self._resolve_required_string(
+                options=options,
+                context=context,
+                key="event_id",
+                aliases=("eventId",),
+            ),
+            "resourceId": self._resolve_required_string(
+                options=options,
+                context=context,
+                key="resource_id",
+                aliases=("resourceId", "aggregate_id", "aggregateId"),
+            ),
+            "forceEnrichment": self._resolve_bool(
+                options=options,
+                context=context,
+                key="force_enrichment",
+                aliases=("forceEnrichment", "force"),
+                default=False,
+            ),
+        }
+
+    async def execute(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        job_data = self.build_job_data(options, context)
+        result = await asyncio.to_thread(self._request_enrichment, job_data)
+        if not isinstance(result, dict):
+            raise TypeError(
+                "Fetchers resource enrichment endpoint must return a JSON object result."
+            )
+        return self.build_context_update(job_data, result)
+
+    def build_context_update(
+        self,
+        job_data: Mapping[str, Any],
+        result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        normalized_result = {
+            _camel_to_snake(key): value for key, value in result.items()
+        }
+        normalized_result["resource_id"] = str(job_data["resourceId"])
+        normalized_result["event_id"] = str(job_data["eventId"])
+        normalized_result["force_enrichment"] = bool(job_data.get("forceEnrichment"))
+        return normalized_result
+
+    def _request_enrichment(self, job_data: Mapping[str, Any]) -> dict[str, Any]:
+        resource_id = str(job_data["resourceId"])
+        request_body = json.dumps(
+            {
+                "force": bool(job_data.get("forceEnrichment")),
+            }
+        ).encode("utf-8")
+        request = Request(
+            f"{build_fetchers_internal_base_url()}/internal/enrichment/resources/{resource_id}",
+            data=request_body,
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=fetchers_internal_timeout_seconds()) as response:
+                payload = response.read().decode("utf-8")
+        except HTTPError as error:
+            error_body = error.read().decode("utf-8", errors="replace")
+            detail = error_body or str(error.reason)
+            raise RuntimeError(
+                f"Fetchers resource enrichment request for resource {resource_id} failed with HTTP {error.code}: {detail}"
+            ) from error
+        except URLError as error:
+            raise RuntimeError(
+                f"Fetchers resource enrichment request for resource {resource_id} failed: {error.reason}"
+            ) from error
+
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(
+                f"Fetchers resource enrichment request for resource {resource_id} returned invalid JSON."
+            ) from error
+
+        if not isinstance(parsed, dict):
+            raise TypeError(
+                f"Fetchers resource enrichment request for resource {resource_id} must return a JSON object."
+            )
+
+        return parsed
 
 
 class DedupArticlePlugin(LegacyHandlerTaskPlugin):
@@ -962,6 +1250,8 @@ class ReindexPlugin(LegacyMaintenanceTaskPlugin):
 
 
 CORE_PIPELINE_PLUGIN_CLASSES = (
+    ArticleExtractPlugin,
+    ResourceExtractPlugin,
     NormalizeArticlePlugin,
     DedupArticlePlugin,
     EmbedArticlePlugin,

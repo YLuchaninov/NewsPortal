@@ -5,6 +5,7 @@ import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminShell from "../layouts/AdminShell.astro";
+import { resolveArticleOperatorState } from "../lib/server/operator-surfaces";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
   buildAdminSignInPath,
@@ -65,6 +66,24 @@ const systemFeedColor: Record<string, string> = {
   pending_llm: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   filtered_out: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
 };
+
+const finalSelectionColor: Record<string, string> = {
+  selected: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  gray_zone: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  rejected: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+};
+
+const verificationColor: Record<string, string> = {
+  strong: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  medium: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  weak: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  conflicting: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+};
+
+function shortId(value: unknown): string {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized.slice(0, 8) : "—";
+}
 ---
 
 <AdminShell title="Articles — Admin" session={session} flash={flash} activeNav="articles">
@@ -93,37 +112,37 @@ const systemFeedColor: Record<string, string> = {
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
       </summary>
       <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
-        <p class="text-xs">Every row shows the exact runtime <code class="rounded bg-muted px-1 py-0.5">processing_state</code>, but public feed eligibility now comes from <code class="rounded bg-muted px-1 py-0.5">system_feed_results</code> after criteria and criteria-scope LLM review.</p>
+        <p class="text-xs">Each row is still one editorial article observation, but the durable operator truth now lives across <code class="rounded bg-muted px-1 py-0.5">document_observations</code>, <code class="rounded bg-muted px-1 py-0.5">canonical_documents</code>, story-cluster verification, and <code class="rounded bg-muted px-1 py-0.5">final_selection_results</code>. The older <code class="rounded bg-muted px-1 py-0.5">system_feed_results</code> badge stays visible only as a compatibility read model.</p>
         <div class="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <div class="flex shrink-0 gap-1">
               <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300">raw</span>
               <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">pending</span>
             </div>
-            <p class="text-[11px]">Just ingested. The article is waiting for cleanup, feature extraction and downstream pipeline work.</p>
+            <p class="text-[11px]">Just ingested. The observation is waiting for enrichment, canonicalization, and later selection work.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <div class="flex shrink-0 gap-1">
               <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">normalized</span>
               <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300">clustered</span>
             </div>
-            <p class="text-[11px]">Mid-pipeline. You may also see <em>deduped</em> or <em>embedded</em> before matching finishes.</p>
+            <p class="text-[11px]">Mid-pipeline. You may also see <em>deduped</em>, <em>embedded</em>, or observation badges like <em>canonicalized</em> and <em>near_duplicate</em>.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 shrink-0">matched</span>
-            <p class="text-[11px]">Personalization finished for at least one compiled <code class="rounded bg-muted px-1 py-0.5">user_interest</code>. This is no longer the public-feed gate by itself.</p>
+            <p class="text-[11px]">Personalization finished for at least one compiled <code class="rounded bg-muted px-1 py-0.5">user_interest</code>. This is not the system-selected gate by itself anymore.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 shrink-0">notified</span>
-            <p class="text-[11px]">A notification decision already ran for the personalization lane. The article can still be in the system feed even when no notification was sent.</p>
+            <p class="text-[11px]">A notification decision already ran for the personalization lane. The article can still be in the system-selected collection even when no notification was sent.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 shrink-0">system gate</span>
-            <p class="text-[11px]">Use the extra system-feed badge on each row to see whether the article is <em>eligible</em>, <em>pending_llm</em>, <em>filtered_out</em>, or <em>pass_through</em>.</p>
+            <p class="text-[11px]">Use the extra selection badges on each row to compare the new final decision (<em>selected</em>, <em>gray_zone</em>, <em>rejected</em>) with the temporary compatibility projection (<em>eligible</em>, <em>pending_llm</em>, <em>filtered_out</em>, <em>pass_through</em>).</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 shrink-0">blocked</span>
-            <p class="text-[11px]">Manually hidden by an admin. Won't appear in user feeds or notifications</p>
+            <p class="text-[11px]">Manually hidden by an admin. Won't appear in user collections or notifications.</p>
           </div>
         </div>
         <p class="text-[11px]"><strong>Moderation:</strong> Use <em>Block</em> to hide inappropriate articles from users. <em>Unblock</em> reverses the action. Reactions (👍👎) are user feedback and stored for future analytics.</p>
@@ -152,23 +171,56 @@ const systemFeedColor: Record<string, string> = {
               ) : articleRows.map((a) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td class="px-4 py-3 max-w-[300px]">
-                    <div class="font-medium text-xs line-clamp-2">{String(a.title ?? "Untitled")}</div>
+                    <a
+                      href={appPath(`/articles/${encodeURIComponent(String(a.doc_id ?? ""))}`)}
+                      class="font-medium text-xs line-clamp-2 hover:text-primary"
+                    >
+                      {String(a.title ?? "Untitled")}
+                    </a>
                     <div class="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{String(a.lead ?? "")}</div>
                   </td>
                   <td class="px-4 py-3 hidden sm:table-cell">
-                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${stateColor[String(a.processing_state)] ?? "bg-muted text-muted-foreground"}`}>
-                      {String(a.processing_state ?? "raw")}
-                    </span>
-                    {a.system_feed_decision && (
-                      <span class={`ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${systemFeedColor[String(a.system_feed_decision)] ?? "bg-muted text-muted-foreground"}`}>
-                        {String(a.system_feed_decision)}
-                      </span>
-                    )}
-                    {a.visibility_state && a.visibility_state !== "visible" && (
-                      <span class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
-                        {String(a.visibility_state)}
-                      </span>
-                    )}
+                    {(() => {
+                      const operatorState = resolveArticleOperatorState(a);
+
+                      return (
+                        <div class="space-y-1">
+                          <div class="flex flex-wrap gap-1">
+                            {operatorState.selectionDecision && (
+                              <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${finalSelectionColor[String(operatorState.selectionDecision)] ?? systemFeedColor[String(operatorState.selectionDecision)] ?? "bg-muted text-muted-foreground"}`}>
+                                select:{String(operatorState.selectionDecision)}
+                              </span>
+                            )}
+                            {operatorState.verificationState && (
+                              <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${verificationColor[String(operatorState.verificationState)] ?? "bg-muted text-muted-foreground"}`}>
+                                verify:{String(operatorState.verificationState)}
+                              </span>
+                            )}
+                            {operatorState.observationState && (
+                              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
+                                obs:{String(operatorState.observationState)}
+                              </span>
+                            )}
+                            {operatorState.duplicateKind && (
+                              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300">
+                                dup:{String(operatorState.duplicateKind)}
+                              </span>
+                            )}
+                          </div>
+                          <div class="text-[10px] text-muted-foreground">
+                            canonical:{operatorState.canonicalDocumentId ? shortId(operatorState.canonicalDocumentId) : "pending"} · cluster:{operatorState.storyClusterId ? shortId(operatorState.storyClusterId) : "—"}
+                          </div>
+                          <div class="text-[10px] text-muted-foreground">
+                            raw:{String(operatorState.processingState ?? "raw")} · enrich:{String(operatorState.enrichmentState ?? "pending")} · compat:{String(operatorState.compatDecision ?? "—")}
+                          </div>
+                          {a.visibility_state && a.visibility_state !== "visible" && (
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                              {String(a.visibility_state)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td class="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
                     👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}
@@ -184,8 +236,8 @@ const systemFeedColor: Record<string, string> = {
                           title={isBlocked ? "Restore article visibility" : "Block article"}
                           description={
                             isBlocked
-                              ? `Restore "${articleTitle}" to the visible feed and allow it to participate in normal delivery again.`
-                              : `Hide "${articleTitle}" from feeds and notifications until an admin restores it.`
+                              ? `Restore "${articleTitle}" to the visible collection and allow it to participate in normal delivery again.`
+                              : `Hide "${articleTitle}" from collections and notifications until an admin restores it.`
                           }
                           triggerLabel={isBlocked ? "Unblock" : "Block"}
                           confirmLabel={isBlocked ? "Unblock article" : "Block article"}

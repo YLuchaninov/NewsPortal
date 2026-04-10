@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { RESOURCE_KINDS } from "@newsportal/contracts";
 import type { Pool, PoolClient } from "pg";
 
 export type LlmTemplateScope = "criteria" | "interests" | "global";
@@ -23,6 +24,8 @@ export interface InterestTemplateInput {
   mustNotHaveTerms: string[];
   places: string[];
   languagesAllowed: string[];
+  timeWindowHours: number | null;
+  allowedContentKinds: string[];
   shortTokensRequired: string[];
   shortTokensForbidden: string[];
   priority: number;
@@ -45,6 +48,7 @@ interface CriterionSyncRow {
   must_not_have_terms: unknown;
   places: unknown;
   languages_allowed: unknown;
+  time_window_hours: number | null;
   short_tokens_required: unknown;
   short_tokens_forbidden: unknown;
   priority: number;
@@ -59,6 +63,8 @@ export interface InterestTemplateCriterionSyncResult {
   created: boolean;
   compileRequested: boolean;
 }
+
+const DEFAULT_ALLOWED_CONTENT_KINDS = RESOURCE_KINDS.filter((kind) => kind !== "unknown");
 
 function readOptionalString(value: unknown): string | null {
   if (value == null) {
@@ -108,6 +114,35 @@ function readPositiveNumber(value: unknown, fallback: number, fieldName: string)
   }
 
   return parsed;
+}
+
+function readNullablePositiveInteger(
+  value: unknown,
+  fieldName: string
+): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+    throw new Error(`Template field "${fieldName}" must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function nullablePositiveIntegersEqual(left: unknown, right: unknown): boolean {
+  const normalize = (value: unknown): number | null => {
+    if (value == null || value === "") {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  return normalize(left) === normalize(right);
 }
 
 function readTextList(value: unknown): string[] {
@@ -163,6 +198,8 @@ async function readInterestTemplateForSync(
     must_not_have_terms: unknown;
     places: unknown;
     languages_allowed: unknown;
+    time_window_hours: number | null;
+    allowed_content_kinds: unknown;
     short_tokens_required: unknown;
     short_tokens_forbidden: unknown;
     priority: number;
@@ -179,6 +216,8 @@ async function readInterestTemplateForSync(
         must_not_have_terms,
         places,
         languages_allowed,
+        time_window_hours,
+        allowed_content_kinds,
         short_tokens_required,
         short_tokens_forbidden,
         priority,
@@ -202,6 +241,9 @@ async function readInterestTemplateForSync(
     mustNotHaveTerms: normalizeTextList(row.must_not_have_terms),
     places: normalizeTextList(row.places),
     languagesAllowed: normalizeTextList(row.languages_allowed),
+    timeWindowHours:
+      row.time_window_hours == null ? null : Number(row.time_window_hours),
+    allowedContentKinds: normalizeTextList(row.allowed_content_kinds),
     shortTokensRequired: normalizeTextList(row.short_tokens_required),
     shortTokensForbidden: normalizeTextList(row.short_tokens_forbidden),
     priority: Number(row.priority ?? 1),
@@ -226,6 +268,7 @@ export async function syncInterestTemplateCriterion(
         must_not_have_terms,
         places,
         languages_allowed,
+        time_window_hours,
         short_tokens_required,
         short_tokens_forbidden,
         priority,
@@ -257,6 +300,7 @@ export async function syncInterestTemplateCriterion(
           must_not_have_terms,
           places,
           languages_allowed,
+          time_window_hours,
           short_tokens_required,
           short_tokens_forbidden,
           priority,
@@ -275,12 +319,13 @@ export async function syncInterestTemplateCriterion(
           $6::jsonb,
           $7::jsonb,
           $8::jsonb,
-          $9::jsonb,
+          $9,
           $10::jsonb,
-          $11,
+          $11::jsonb,
           $12,
-          false,
           $13,
+          false,
+          $14,
           1
         )
         returning criterion_id::text as criterion_id, version
@@ -294,6 +339,7 @@ export async function syncInterestTemplateCriterion(
         JSON.stringify(template.mustNotHaveTerms),
         JSON.stringify(template.places),
         JSON.stringify(template.languagesAllowed),
+        template.timeWindowHours,
         JSON.stringify(template.shortTokensRequired),
         JSON.stringify(template.shortTokensForbidden),
         template.priority,
@@ -318,6 +364,7 @@ export async function syncInterestTemplateCriterion(
     !textListsEqual(existing.must_not_have_terms, template.mustNotHaveTerms) ||
     !textListsEqual(existing.places, template.places) ||
     !textListsEqual(existing.languages_allowed, template.languagesAllowed) ||
+    !nullablePositiveIntegersEqual(existing.time_window_hours, template.timeWindowHours) ||
     !textListsEqual(existing.short_tokens_required, template.shortTokensRequired) ||
     !textListsEqual(existing.short_tokens_forbidden, template.shortTokensForbidden) ||
     Number(existing.priority ?? 1) !== Number(template.priority ?? 1);
@@ -356,13 +403,14 @@ export async function syncInterestTemplateCriterion(
         must_not_have_terms = $6::jsonb,
         places = $7::jsonb,
         languages_allowed = $8::jsonb,
-        short_tokens_required = $9::jsonb,
-        short_tokens_forbidden = $10::jsonb,
-        priority = $11,
-        enabled = $12,
-        compiled = $13,
-        compile_status = $14,
-        version = $15,
+        time_window_hours = $9,
+        short_tokens_required = $10::jsonb,
+        short_tokens_forbidden = $11::jsonb,
+        priority = $12,
+        enabled = $13,
+        compiled = $14,
+        compile_status = $15,
+        version = $16,
         updated_at = now()
       where criterion_id = $1
     `,
@@ -375,6 +423,7 @@ export async function syncInterestTemplateCriterion(
       JSON.stringify(template.mustNotHaveTerms),
       JSON.stringify(template.places),
       JSON.stringify(template.languagesAllowed),
+      template.timeWindowHours,
       JSON.stringify(template.shortTokensRequired),
       JSON.stringify(template.shortTokensForbidden),
       template.priority,
@@ -428,6 +477,10 @@ export function parseInterestTemplateInput(
     mustNotHaveTerms: readTextList(payload.must_not_have_terms),
     places: readTextList(payload.places),
     languagesAllowed: readTextList(payload.languages_allowed),
+    timeWindowHours: readNullablePositiveInteger(payload.time_window_hours, "time_window_hours"),
+    allowedContentKinds: readTextList(payload.allowed_content_kinds).length
+      ? readTextList(payload.allowed_content_kinds)
+      : [...DEFAULT_ALLOWED_CONTENT_KINDS],
     shortTokensRequired: readTextList(payload.short_tokens_required),
     shortTokensForbidden: readTextList(payload.short_tokens_forbidden),
     priority: readPositiveNumber(payload.priority, 1.0, "priority"),
@@ -557,6 +610,8 @@ export async function saveInterestTemplate(
     JSON.stringify(input.mustNotHaveTerms),
     JSON.stringify(input.places),
     JSON.stringify(input.languagesAllowed),
+    input.timeWindowHours,
+    JSON.stringify(input.allowedContentKinds),
     JSON.stringify(input.shortTokensRequired),
     JSON.stringify(input.shortTokensForbidden),
     input.priority,
@@ -576,10 +631,12 @@ export async function saveInterestTemplate(
           must_not_have_terms = $7::jsonb,
           places = $8::jsonb,
           languages_allowed = $9::jsonb,
-          short_tokens_required = $10::jsonb,
-          short_tokens_forbidden = $11::jsonb,
-          priority = $12,
-          is_active = $13,
+          time_window_hours = $10,
+          allowed_content_kinds = $11::jsonb,
+          short_tokens_required = $12::jsonb,
+          short_tokens_forbidden = $13::jsonb,
+          priority = $14,
+          is_active = $15,
           updated_at = now()
         where interest_template_id = $1
       `,
@@ -608,6 +665,8 @@ export async function saveInterestTemplate(
         must_not_have_terms,
         places,
         languages_allowed,
+        time_window_hours,
+        allowed_content_kinds,
         short_tokens_required,
         short_tokens_forbidden,
         priority,
@@ -623,10 +682,12 @@ export async function saveInterestTemplate(
         $7::jsonb,
         $8::jsonb,
         $9::jsonb,
-        $10::jsonb,
+        $10,
         $11::jsonb,
-        $12,
-        $13
+        $12::jsonb,
+        $13::jsonb,
+        $14,
+        $15
       )
     `,
     [interestTemplateId, ...params]

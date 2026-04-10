@@ -55,6 +55,7 @@ function stableJson(value: Record<string, unknown> | null | undefined): string {
 
 function readMetricRevision(total: number, row: ApiListRow | undefined, timeKeys: string[]): string {
   const firstId =
+    row?.content_item_id ??
     row?.doc_id ??
     row?.notification_id ??
     row?.interest_id ??
@@ -106,7 +107,7 @@ export async function loadLiveUpdatesSnapshot(
 
   const [feedPage, matchesPage, notificationsPage, interestAggregate, profileRow, channelAggregate, repairRows] =
     await Promise.all([
-      sdk.listFeedArticles<ApiListRow>({ page: DEFAULT_PAGE, pageSize: 1 }),
+      sdk.listSystemSelectedContentItems<ApiListRow>({ page: DEFAULT_PAGE, pageSize: 1 }),
       sdk.listMatchesPage<ApiListRow>(userId, { page: DEFAULT_PAGE, pageSize: 1 }),
       sdk.listNotificationsPage<ApiListRow>(userId, {
         page: DEFAULT_PAGE,

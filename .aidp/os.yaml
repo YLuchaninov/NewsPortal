@@ -1,4 +1,4 @@
-version: 23
+version: 41
 mode: Minimal
 initialized: true
 core:
@@ -44,15 +44,26 @@ project:
     - infra/docker/compose.prod.yml
     - infra/nginx/default.conf
     - README.md
+    - docs/contracts/browser-assisted-websites.md
+    - docs/contracts/content-model.md
+    - docs/contracts/discovery-agent.md
+    - docs/contracts/independent-recall-discovery.md
+    - docs/contracts/zero-shot-interest-filtering.md
     - docs/contracts/test-access-and-fixtures.md
     - docs/contracts/universal-task-engine.md
   entry_points:
     - apps/web/src/pages/api/health.ts
     - apps/admin/src/pages/api/health.ts
+    - apps/admin/src/pages/automation.astro
+    - apps/admin/src/pages/bff/admin/automation.ts
+    - apps/admin/src/pages/discovery.astro
+    - apps/admin/src/pages/bff/admin/discovery.ts
     - services/fetchers/src/main.ts
+    - services/fetchers/src/enrichment.ts
     - services/relay/src/main.ts
     - services/api/app/main.py
     - services/workers/app/main.py
+    - services/workers/app/discovery_orchestrator.py
     - services/workers/app/task_engine/executor.py
     - services/indexer/app/main.py
 capabilities:
@@ -78,12 +89,28 @@ commands:
   lint: "pnpm lint"
   typecheck: "pnpm typecheck"
   unit_tests: "pnpm unit_tests"
+  article_yield_diagnostics: "pnpm article:yield:diagnostics"
+  article_yield_remediate: "pnpm article:yield:remediate -- --apply"
+  migrations_smoke: "pnpm test:migrations:smoke"
   integration_tests: "pnpm integration_tests"
   smoke: "pnpm integration_tests"
+  web_viewports_smoke: "pnpm test:web:viewports"
   ingest_smoke: "pnpm test:ingest:compose"
+  channel_auth_compose_smoke: "pnpm test:channel-auth:compose"
+  website_compose_smoke: "pnpm test:website:compose"
+  website_admin_compose_smoke: "pnpm test:website:admin:compose"
+  automation_admin_smoke: "node infra/scripts/test-automation-admin-flow.mjs"
+  discovery_admin_compose_smoke: "pnpm test:discovery:admin:compose"
+  hard_sites_compose_smoke: "pnpm test:hard-sites:compose"
+  feed_ingress_adapter_smoke: "pnpm test:feed-ingress-adapters:smoke"
+  enrichment_compose_smoke: "pnpm test:enrichment:compose"
+  discovery_enabled_compose_smoke: "pnpm test:discovery-enabled:compose"
+  llm_budget_stop_smoke: "pnpm test:llm-budget-stop:smoke"
+  llm_budget_stop_compose_smoke: "pnpm test:llm-budget-stop:compose"
   ingest_multi_compose: "pnpm test:ingest:multi:compose"
   ingest_soak_compose: "pnpm test:ingest:soak:compose"
   cluster_match_notify_compose: "pnpm test:cluster-match-notify:compose"
+  reindex_backfill_compose: "pnpm test:reindex-backfill:compose"
   package_release: ""
   deploy: ""
 risk_defaults:
@@ -195,6 +222,239 @@ proof_contours:
   release_gate: releasable build or promotion proof
   delivery_gate: packaging, deployment, migration, or environment delivery proof
   runtime_smoke_gate: minimal real runtime proof
+runtime_facts:
+  zero_shot_filtering:
+    deep_contract: docs/contracts/zero-shot-interest-filtering.md
+    stage1_tables:
+      - canonical_documents
+      - document_observations
+    stage1_identity_rule: canonical_document_id_reuses_canonical_article_doc_id
+    stage2_tables:
+      - story_clusters
+      - story_cluster_members
+      - verification_results
+    stage2_runtime_owner: services/workers/app/main.py::process_cluster
+    stage3_tables:
+      - interest_filter_results
+    stage3_runtime_owners:
+      - services/workers/app/main.py::process_match_criteria
+      - services/workers/app/main.py::process_match_interests
+      - services/workers/app/main.py::process_llm_review
+    stage4_tables:
+      - final_selection_results
+    stage4_runtime_owners:
+      - services/workers/app/main.py::upsert_final_selection_result
+      - services/workers/app/main.py::upsert_system_feed_result
+      - services/api/app/main.py::editorial_content_select_sql
+    stage6_operator_surfaces:
+      - services/api/app/main.py::get_article
+      - services/api/app/main.py::get_article_explain
+      - services/api/app/main.py::get_content_item_explain
+      - apps/admin/src/pages/articles.astro
+      - apps/admin/src/pages/articles/[docId].astro
+      - apps/admin/src/pages/discovery.astro
+      - apps/admin/src/pages/observability.astro
+      - apps/admin/src/pages/help.astro
+    stage6_shared_helper: apps/admin/src/lib/server/operator-surfaces.ts
+    stage7_runtime_owners:
+      - services/workers/app/main.py::fetch_selection_gate_result_row
+      - services/workers/app/main.py::is_article_eligible_for_personalization
+      - services/workers/app/smoke.py::run_reindex_backfill_smoke
+    stage7_backfill_proof_command: pnpm test:reindex-backfill:compose
+    stage3_filter_scopes:
+      - system_criterion
+      - user_interest
+    stage3_technical_filter_states:
+      - passed
+      - filtered_out
+    stage3_semantic_decisions:
+      - match
+      - no_match
+      - gray_zone
+      - not_evaluated
+    verification_states:
+      - weak
+      - medium
+      - strong
+      - conflicting
+    stage4_final_decisions:
+      - selected
+      - rejected
+      - gray_zone
+    current_compatibility_truth:
+      article_storage: articles
+      legacy_story_clusters: event_clusters
+      final_selection_gate: final_selection_results
+      legacy_system_feed_projection: system_feed_results
+  user_digests:
+    immediate_channels:
+      - web_push
+      - telegram
+    digest_recipient_channel_type: email_digest
+    digest_settings_table: user_digest_settings
+    digest_delivery_log_table: digest_delivery_log
+    scheduler_enabled_env: WORKER_ENABLE_USER_DIGEST_SCHEDULER
+    poll_interval_env: WORKER_USER_DIGEST_POLL_INTERVAL_SECONDS
+  article_llm_review:
+    scope: system_interest_gray_zone_criteria_only
+    enabled_env: LLM_REVIEW_ENABLED
+    monthly_budget_env: LLM_REVIEW_MONTHLY_BUDGET_CENTS
+    post_budget_policy_env: LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE
+    budget_source_of_truth: llm_review_log.cost_estimate_usd
+    budget_scope_filter: criterion
+    monthly_budget_window: utc_calendar_month
+    post_budget_policy:
+      "1": accept_gray_zone_as_relevant
+      "0": reject_gray_zone_as_irrelevant
+  discovery:
+    architecture: graph_first_registry_driven
+    namespace: /maintenance/discovery/*
+    deep_contract: docs/contracts/discovery-agent.md
+    enabled_default: false
+    schema_drift_prerepair_migration: 0026a_discovery_schema_drift_prerepair.sql
+    schema_drift_repair_migration: 0030_discovery_schema_drift_repair.sql
+    migrations_smoke_scope: discovery_core_tables_indexes_columns_constraints
+    source_quality_signal_source: generic_channel_quality
+    downstream_selection_dependency: removed
+    search_provider_default: ddgs
+    search_stub_supported: true
+    class_registry_table: discovery_hypothesis_classes
+    mission_planning_state: discovery_missions.interest_graph
+    operator_surfaces: dual_path_mission_fit_generic_quality_recall_backlog_promotion
+    candidate_review_default: manual
+    feedback_re_evaluation_loop: true
+    source_registration_path: postgresql_plus_outbox_source_channel_sync
+    admin_operator_smoke_command: pnpm test:discovery:admin:compose
+    ddgs_defaults:
+      backend: auto
+      region: us-en
+      safesearch: moderate
+    llm_provider: gemini
+    llm_model_env: DISCOVERY_GEMINI_MODEL
+    llm_key_env: DISCOVERY_GEMINI_API_KEY
+    llm_base_url_env: DISCOVERY_GEMINI_BASE_URL
+    tariff_envs:
+      input: DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD
+      output: DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD
+    monthly_budget_env: DISCOVERY_MONTHLY_BUDGET_CENTS
+    monthly_budget_window: utc_calendar_month
+  independent_recall_discovery:
+    deep_contract: docs/contracts/independent-recall-discovery.md
+    stage1_tables:
+      - discovery_source_quality_snapshots
+    stage2_tables:
+      - discovery_recall_missions
+      - discovery_recall_candidates
+    stage1_runtime_owners:
+      - services/workers/app/source_scoring.py::compute_source_recall_quality_snapshot
+      - services/workers/app/discovery_orchestrator.py::execute_hypotheses
+      - services/workers/app/discovery_orchestrator.py::re_evaluate_sources
+      - services/api/app/main.py::list_discovery_source_quality_snapshots
+    stage2_runtime_owners:
+      - services/api/app/main.py::list_discovery_recall_missions
+      - services/api/app/main.py::create_discovery_recall_mission
+      - services/api/app/main.py::list_discovery_recall_candidates
+      - services/api/app/main.py::create_discovery_recall_candidate
+    stage3_runtime_owners:
+      - services/workers/app/discovery_orchestrator.py::acquire_recall_missions
+      - services/api/app/main.py::request_discovery_recall_mission_acquisition
+    stage4_runtime_owners:
+      - services/api/app/main.py::promote_discovery_recall_candidate
+    stage5_runtime_owners:
+      - services/api/app/main.py::get_discovery_summary
+      - services/api/app/main.py::discovery_source_profile_select_sql
+      - apps/admin/src/lib/server/operator-surfaces.ts::resolveDiscoveryOperatorSummary
+      - apps/admin/src/lib/server/operator-surfaces.ts::resolveDiscoverySourceQuality
+      - apps/admin/src/pages/discovery.astro
+      - apps/admin/src/pages/help.astro
+    stage1_read_routes:
+      - /maintenance/discovery/source-quality-snapshots
+      - /maintenance/discovery/source-quality-snapshots/{snapshot_id}
+    stage2_read_write_routes:
+      - /maintenance/discovery/recall-missions
+      - /maintenance/discovery/recall-missions/{recall_mission_id}
+      - /maintenance/discovery/recall-candidates
+      - /maintenance/discovery/recall-candidates/{recall_candidate_id}
+    stage3_action_routes:
+      - /maintenance/discovery/recall-missions/{recall_mission_id}/acquire
+    stage4_action_routes:
+      - /maintenance/discovery/recall-candidates/{recall_candidate_id}/promote
+    current_scope: shipped_dual_path_discovery_with_bounded_recall_promotion
+    mission_planning_owner_unchanged: discovery_missions.interest_graph
+    promotion_owners:
+      - discovery_candidates_manual_review_into_source_channels
+      - discovery_recall_candidates_bounded_promotion_into_source_channels
+  enrichment:
+    enabled_default: true
+    feed_parser: extractus
+    supported_formats:
+      - rss2
+      - rss1
+      - atom
+      - jsonfeed
+    sequence_trigger: article.ingest.requested
+    sequence_first_task: enrichment.article_extract
+    fetchers_internal_endpoint: /internal/enrichment/articles/{doc_id}
+    maintenance_retry_endpoint: /maintenance/articles/{doc_id}/enrichment/retry
+    per_channel_default_enabled: true
+    per_channel_default_min_body_length: 500
+    api_manual_retry_requires_redis: true
+  rss_ingress:
+    provider_type_remains: rss
+    deep_contract: docs/contracts/feed-ingress-adapters.md
+    adapter_strategy_config_field: source_channels.config_json.adapterStrategy
+    max_entry_age_config_field: source_channels.config_json.maxEntryAgeHours
+    inferred_strategies:
+      reddit_search_rss: reddit.com search.rss
+      hn_comments_feed: hnrss.org
+      google_news_rss: news.google.com /rss/
+    aggregator_default_max_entry_age_hours: 168
+    article_provenance_field: articles.raw_payload_json.feedAdapter
+    local_adapter_smoke_command: pnpm test:feed-ingress-adapters:smoke
+  sequence_runtime:
+    worker_sequence_runner_concurrency_env: WORKER_SEQUENCE_RUNNER_CONCURRENCY
+    python_fallback_default: 1
+    local_compose_default: 4
+    admin_operator_surface:
+      page: apps/admin/src/pages/automation.astro
+      bff: apps/admin/src/pages/bff/admin/automation.ts
+    operator_smoke_command: node infra/scripts/test-automation-admin-flow.mjs
+  web_ingestion:
+    website_provider_enabled: true
+    deep_contract: docs/contracts/browser-assisted-websites.md
+    resource_table: web_resources
+    crawl_policy_cache_table: crawl_policy_cache
+    sequence_trigger: resource.ingest.requested
+    sequence_first_task: enrichment.resource_extract
+    fetchers_internal_endpoint: /internal/enrichment/resources/{resource_id}
+    website_probe_internal_endpoint: /internal/discovery/websites/probe
+    hidden_feed_auto_conversion: false
+    browser_runtime_owner: services/fetchers
+    browser_fallback_enabled_default: false
+    browser_header_injection: same_origin_route_interception_only
+    browser_assistance_scope: public_js_heavy_and_soft_anti_bot_only
+    unsupported_browser_challenges:
+      - login
+      - captcha
+      - cloudflare_js_challenge
+      - unsupported_block
+  source_channel_admin:
+    operator_ready_provider_types:
+      - rss
+      - website
+      - api
+      - email_imap
+    non_baseline_provider_types:
+      - youtube
+  source_channel_auth:
+    storage_table: source_channels.auth_config_json
+    supported_operator_surfaces:
+      - rss
+      - website
+    supported_mode: static_authorization_header_only
+    read_model_summary_field: has_authorization_header
+    secrets_in_config_json_allowed: false
+    website_application_scope: same_origin_only
 engineering_defaults:
   preserve_behavior_unless_intentionally_changed: true
   keep_boundaries_clean: true

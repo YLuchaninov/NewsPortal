@@ -11,7 +11,7 @@ export interface Props {
   themeClass?: string;
   currentTheme?: string;
   flash?: { status: "success" | "error"; message: string } | null;
-  activeNav?: "feed" | "matches" | "interests" | "notifications" | "settings";
+  activeNav?: "feed" | "matches" | "saved" | "following" | "interests" | "notifications" | "settings";
   bffPreferencesPath?: string;
   bffLogoutPath?: string;
   bffBootstrapPath?: string;
@@ -32,8 +32,10 @@ const {
 } = Astro.props;
 
 const navItems = [
-  { href: "/", label: "Feed", key: "feed" },
+  { href: "/", label: "Collection", key: "feed" },
   { href: "/matches", label: "My Matches", key: "matches" },
+  { href: "/saved", label: "Saved", key: "saved" },
+  { href: "/following", label: "Following", key: "following" },
   { href: "/interests", label: "Interests", key: "interests" },
   { href: "/notifications", label: "Notifications", key: "notifications" },
   { href: "/settings", label: "Settings", key: "settings" },
@@ -65,7 +67,7 @@ const navItems = [
         </a>
 
         <!-- Desktop Nav -->
-        <nav class="hidden md:flex items-center gap-1 flex-1">
+        <nav class="hidden lg:flex items-center gap-1 flex-1">
           {navItems.map(({ href, label, key }) => (
             <a
               href={href}
@@ -125,7 +127,7 @@ const navItems = [
           <button
             type="button"
             id="mobile-menu-btn"
-            class="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent transition-colors"
+            class="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent transition-colors"
             aria-label="Toggle menu"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -136,7 +138,7 @@ const navItems = [
       </div>
 
       <!-- Mobile nav -->
-      <div id="mobile-nav" class="hidden md:hidden border-t border-border bg-card px-4 pb-3 pt-2">
+      <div id="mobile-nav" class="hidden lg:hidden border-t border-border bg-card px-4 pb-3 pt-2">
         {navItems.map(({ href, label, key }) => (
           <a
             href={href}
@@ -157,7 +159,11 @@ const navItems = [
     {session && (
       <UserLiveUpdateCoordinator
         endpoint={bffLiveUpdatesPath}
-        activeSurface={activeNav ?? null}
+        activeSurface={
+          activeNav === "saved" || activeNav === "following"
+            ? null
+            : (activeNav ?? null)
+        }
         client:load
       />
     )}

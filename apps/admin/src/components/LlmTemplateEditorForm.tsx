@@ -47,7 +47,7 @@ export function LlmTemplateEditorForm({
             {mode === "create" ? "LLM prompt definition" : "Edit LLM template"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Prompts are used when scoring falls into the gray zone and an article needs a model-assisted review.
+            Prompts are used when scoring falls into the gray zone and a content item needs a model-assisted review.
           </p>
         </div>
 
@@ -87,7 +87,7 @@ export function LlmTemplateEditorForm({
             label="Scope"
             name="llm-template-scope"
             required
-            helpText="Choose whether this prompt is used for interest review, system criteria review, or as a global fallback."
+            helpText="Choose whether this prompt is used for user-interest review, system-interest review, or as a global fallback."
             helpWide
           >
             <select
@@ -97,7 +97,7 @@ export function LlmTemplateEditorForm({
               className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="interests">Interests</option>
-              <option value="criteria">Criteria</option>
+              <option value="criteria">System interests</option>
               <option value="global">Global fallback</option>
             </select>
           </FormField>
@@ -125,7 +125,7 @@ export function LlmTemplateEditorForm({
             label="Prompt template"
             name="llm-template-text"
             required
-            helpText="Use placeholders like {title}, {lead}, {interest_name}, {criterion_name}, and {context}. The review worker fills them automatically."
+            helpText="Use placeholders like {title}, {lead}, {interest_name}, {criterion_name}, and {context}. The review worker fills them automatically; {criterion_name} remains the runtime placeholder for system-interest scope."
             helpWide
           >
             <Textarea
@@ -134,7 +134,7 @@ export function LlmTemplateEditorForm({
               rows={14}
               defaultValue={value.templateText}
               className="min-h-[18rem] text-sm font-mono"
-              placeholder={`You are a news relevance reviewer.\n\nArticle title: {title}\nArticle lead: {lead}\nContext: {context}\n\nReturn JSON: {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}`}
+              placeholder={`You are a content relevance reviewer.\n\nContent title: {title}\nContent summary: {lead}\nContext: {context}\n\nReturn JSON: {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}`}
             />
           </FormField>
         </div>

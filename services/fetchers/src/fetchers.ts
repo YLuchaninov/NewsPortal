@@ -3,11 +3,13 @@ import { Buffer } from "node:buffer";
 
 import {
   ARTICLE_INGEST_REQUESTED_EVENT,
+  RESOURCE_INGEST_REQUESTED_EVENT,
   defaultMaxPollIntervalSeconds,
   createHealthResponse,
   parseApiChannelConfig,
   parseEmailImapChannelConfig,
   parseRssChannelConfig,
+  resolveSourceChannelAuthorizationHeader,
   parseWebsiteChannelConfig,
   type HealthResponse,
   type NormalizedFetchOutcome,
@@ -21,15 +23,21 @@ import {
   resolveRuntimeState
 } from "./adaptive-scheduling";
 import type { FetchersConfig } from "./config";
+import { upsertArticleObservation } from "./document-observations";
+import { type ParsedFeed } from "./feed-parser";
+import { adaptFeedIngress, type AdaptedFeedEntry } from "./feed-ingress-adapters";
 import {
   canonicalizeUrl,
   collapseWhitespace,
   decodeHtmlEntities,
-  parseRssFeed,
-  stripHtmlTags,
-  type ParsedRssItem
+  stripHtmlTags
 } from "./rss";
 import { runWithConcurrency } from "./scheduler";
+import {
+  CrawlPolicyCacheService,
+  discoverWebsiteResources,
+  type DiscoveredWebsiteResource
+} from "./web-ingestion";
 
 interface SourceChannelRow {
   channelId: string;
@@ -37,6 +45,7 @@ interface SourceChannelRow {
   name: string;
   fetchUrl: string | null;
   configJson: unknown;
+  authConfigJson: unknown;
   language: string | null;
   pollIntervalSeconds: number;
   lastFetchAt: string | null;
@@ -78,6 +87,22 @@ interface PersistArticleInput {
   body: string;
   lang: string | null;
   confidence: number | null;
+  rawPayload: Record<string, unknown>;
+}
+
+interface PersistResourceInput {
+  channel: SourceChannelRow;
+  externalArticleId: string;
+  url: string;
+  resourceKind: string;
+  title: string;
+  summary: string;
+  publishedAt: string | null;
+  modifiedAt: string | null;
+  freshnessMarkerType: string | null;
+  freshnessMarkerValue: string | null;
+  discoverySource: string;
+  classificationJson: Record<string, unknown>;
   rawPayload: Record<string, unknown>;
 }
 
@@ -188,18 +213,6 @@ function deriveTimestampCursorValue(
   fetchedAt: string
 ): string {
   return responseLastModified ?? latestPublishedAt ?? fetchedAt;
-}
-
-function extractHtmlTitle(html: string): string {
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return normalizeWhitespace(stripHtmlTags(titleMatch?.[1] ?? ""));
-}
-
-function extractHtmlDescription(html: string): string {
-  const metaMatch = html.match(
-    /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([\s\S]*?)["'][^>]*>/i
-  );
-  return normalizeWhitespace(stripHtmlTags(metaMatch?.[1] ?? ""));
 }
 
 function getByPath(value: unknown, path: string): unknown {
@@ -345,11 +358,14 @@ class FetcherService {
     ingestedArticleCount: 0,
     duplicateArticleCount: 0
   };
+  private readonly crawlPolicyCache: CrawlPolicyCacheService;
 
   constructor(
     private readonly pool: Pool,
     private readonly config: FetchersConfig
-  ) {}
+  ) {
+    this.crawlPolicyCache = new CrawlPolicyCacheService(pool);
+  }
 
   getState(): FetcherState {
     return {
@@ -495,7 +511,8 @@ class FetcherService {
     const cursors = await this.loadCursorMap(channel.channelId);
     const headers = new Headers({
       "user-agent": rssConfig.userAgent || this.config.defaultUserAgent,
-      accept: "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8"
+      accept:
+        "application/feed+json, application/json;q=0.95, application/atom+xml;q=0.92, application/rss+xml;q=0.9, application/xml;q=0.85, text/xml;q=0.8"
     });
 
     if (cursors.etag?.cursorValue) {
@@ -503,6 +520,14 @@ class FetcherService {
     }
     if (cursors.timestamp?.cursorValue) {
       headers.set("if-modified-since", cursors.timestamp.cursorValue);
+    }
+    const authorizationHeader = resolveSourceChannelAuthorizationHeader(
+      channel.fetchUrl,
+      channel.fetchUrl,
+      channel.authConfigJson
+    );
+    if (authorizationHeader) {
+      headers.set("authorization", authorizationHeader);
     }
 
     const response = await fetch(channel.fetchUrl, {
@@ -548,7 +573,10 @@ class FetcherService {
     }
 
     if (!response.ok) {
-      const message = `RSS fetch failed for ${channel.channelId}: ${response.status} ${response.statusText}`;
+      const message =
+        response.status === 401 || response.status === 403
+          ? `RSS fetch authentication failed for ${channel.channelId}: upstream returned ${response.status}. Check the channel Authorization header.`
+          : `RSS fetch failed for ${channel.channelId}: ${response.status} ${response.statusText}`;
       throw new ChannelFetchError(message, {
         outcome: classifyHttpFailure(response.status),
         httpStatus: response.status,
@@ -561,17 +589,24 @@ class FetcherService {
       });
     }
 
-    const xml = await response.text();
+    const responseBody = await response.text();
     try {
-      const parsedFeed = parseRssFeed(xml);
-      const items = parsedFeed.items.slice(0, rssConfig.maxItemsPerPoll);
+      const adaptedFeed = await adaptFeedIngress({
+        fetchUrl: channel.fetchUrl,
+        rssConfig,
+        fetchedAt,
+        contentType: response.headers.get("content-type"),
+        responseBody
+      });
+      const items = adaptedFeed.entries;
       let invalidItemCount = 0;
       const inputs: PersistArticleInput[] = [];
       for (const item of items) {
         const input = this.buildRssPersistInput(
           channel,
+          adaptedFeed.parsedFeed,
           item,
-          parsedFeed.language,
+          fetchedAt,
           rssConfig.preferContentEncoded
         );
         if (input) {
@@ -584,7 +619,7 @@ class FetcherService {
         channel.channelId,
         inputs
       );
-      const latestPublishedAt = items
+      const latestPublishedAt = adaptedFeed.parsedFeed.entries
         .map((item) => item.publishedAt)
         .filter((value): value is string => Boolean(value))
         .sort()
@@ -600,7 +635,7 @@ class FetcherService {
         outcome: ingestedCount > 0 ? "new_content" : "no_change",
         httpStatus: response.status,
         retryAfterSeconds: null,
-        fetchedItemCount: items.length,
+        fetchedItemCount: adaptedFeed.parsedFeed.entries.slice(0, rssConfig.maxItemsPerPoll).length,
         newArticleCount: ingestedCount,
         duplicateSuppressedCount: duplicateCount,
         cursorChanged:
@@ -624,7 +659,8 @@ class FetcherService {
           }
         ]
       });
-      this.state.duplicateArticleCount += invalidItemCount;
+      this.state.duplicateArticleCount +=
+        invalidItemCount + adaptedFeed.droppedAdapterCount + adaptedFeed.droppedStaleCount;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown RSS parsing failure";
       throw new ChannelFetchError(message, {
@@ -655,20 +691,22 @@ class FetcherService {
     }
 
     const websiteConfig = parseWebsiteChannelConfig(channel.configJson);
-    const response = await fetch(channel.fetchUrl, {
-      headers: {
-        "user-agent": websiteConfig.userAgent || this.config.defaultUserAgent,
-        accept: "text/html,application/xhtml+xml"
-      },
-      signal: AbortSignal.timeout(websiteConfig.requestTimeoutMs)
-    });
-    const fetchedAt = new Date().toISOString();
-    if (!response.ok) {
-      const message = `Website fetch failed for ${channel.channelId}: ${response.status} ${response.statusText}`;
+    const cursors = await this.loadCursorMap(channel.channelId);
+    const policy = await this.crawlPolicyCache.getPolicy(
+      channel.fetchUrl,
+      websiteConfig.userAgent || this.config.defaultUserAgent,
+      websiteConfig.requestTimeoutMs,
+      {
+        channelUrl: channel.fetchUrl,
+        authConfig: channel.authConfigJson
+      }
+    );
+    if (!policy.isAllowed(channel.fetchUrl, websiteConfig.userAgent || this.config.defaultUserAgent)) {
+      const message = `Website crawl blocked by robots.txt for ${channel.channelId}.`;
       throw new ChannelFetchError(message, {
-        outcome: classifyHttpFailure(response.status),
-        httpStatus: response.status,
-        retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after")),
+        outcome: "hard_failure",
+        httpStatus: 403,
+        retryAfterSeconds: null,
         fetchedItemCount: 0,
         newArticleCount: 0,
         duplicateSuppressedCount: 0,
@@ -677,56 +715,65 @@ class FetcherService {
       });
     }
 
-    const html = await response.text();
-    const title = extractHtmlTitle(html) || channel.name;
-    const lead = extractHtmlDescription(html);
-    const body = normalizeWhitespace(stripHtmlTags(html));
-    const { lang, confidence } = pickLanguageHint(channel.language, response.headers.get("content-language"));
-    const { ingestedCount, duplicateCount } = await this.persistInputsWithPreflight(
+    const { resources, cursorUpdates, modes, browserAttempt, homepageStatus } = await discoverWebsiteResources({
+      channelUrl: channel.fetchUrl,
+      policy,
+      config: websiteConfig,
+      cursors,
+      authConfig: channel.authConfigJson
+    });
+    if (resources.length === 0 && (homepageStatus === 401 || homepageStatus === 403)) {
+      const message = `Website fetch authentication failed for ${channel.channelId}: upstream returned ${homepageStatus}. Check the channel Authorization header.`;
+      throw new ChannelFetchError(message, {
+        outcome: "hard_failure",
+        httpStatus: homepageStatus,
+        retryAfterSeconds: null,
+        fetchedItemCount: 0,
+        newArticleCount: 0,
+        duplicateSuppressedCount: 0,
+        cursorChanged: false,
+        errorMessage: message
+      });
+    }
+    if (resources.length === 0 && browserAttempt.attempted && browserAttempt.challengeKind) {
+      const message = `Website browser-assisted discovery stopped for ${channel.channelId}: unsupported ${browserAttempt.challengeKind}.`;
+      throw new ChannelFetchError(message, {
+        outcome: "hard_failure",
+        httpStatus: 403,
+        retryAfterSeconds: null,
+        fetchedItemCount: 0,
+        newArticleCount: 0,
+        duplicateSuppressedCount: 0,
+        cursorChanged: false,
+        errorMessage: message
+      });
+    }
+    const fetchedAt = new Date().toISOString();
+    const inputs = resources.map((resource) => this.buildWebsitePersistInput(channel, resource, fetchedAt));
+    const { ingestedCount, duplicateCount } = await this.persistWebsiteResourcesWithPreflight(
       channel.channelId,
-      [
-        {
-          channel,
-          externalArticleId: normalizeExternalUrl(channel.fetchUrl),
-          url: normalizeExternalUrl(channel.fetchUrl),
-          publishedAt: response.headers.get("last-modified") ?? fetchedAt,
-          title,
-          lead,
-          body,
-          lang,
-          confidence,
-          rawPayload: {
-            fetcher: "website",
-            fetchedAt,
-            html: {
-              url: channel.fetchUrl,
-              title,
-              description: lead
-            }
-          }
-        }
-      ]
+      inputs
     );
     await this.markChannelSuccess(channel, {
       startedAt,
       finishedAt: fetchedAt,
       outcome: ingestedCount > 0 ? "new_content" : "no_change",
-      httpStatus: response.status,
+      httpStatus: 200,
       retryAfterSeconds: null,
-      fetchedItemCount: 1,
+      fetchedItemCount: resources.length,
       newArticleCount: ingestedCount,
       duplicateSuppressedCount: duplicateCount,
-      cursorChanged: true,
+      cursorChanged: cursorUpdates.length > 0,
       errorMessage: null,
-      cursorUpdates: [
-        {
-          cursorType: "timestamp",
-          cursorValue: fetchedAt,
-          cursorJson: {
-            provider: "website"
-          }
+      cursorUpdates: cursorUpdates.map((cursorUpdate) => ({
+        cursorType: cursorUpdate.cursorType,
+        cursorValue: cursorUpdate.cursorValue,
+        cursorJson: {
+          ...cursorUpdate.cursorJson,
+          provider: "website",
+          modes
         }
-      ]
+      }))
     });
   }
 
@@ -745,11 +792,21 @@ class FetcherService {
     }
 
     const apiConfig = parseApiChannelConfig(channel.configJson);
+    const headers = new Headers({
+      "user-agent": apiConfig.userAgent || this.config.defaultUserAgent,
+      accept: "application/json"
+    });
+    const authorizationHeader = resolveSourceChannelAuthorizationHeader(
+      channel.fetchUrl,
+      channel.fetchUrl,
+      channel.authConfigJson
+    );
+    if (authorizationHeader) {
+      headers.set("authorization", authorizationHeader);
+    }
+
     const response = await fetch(channel.fetchUrl, {
-      headers: {
-        "user-agent": apiConfig.userAgent || this.config.defaultUserAgent,
-        accept: "application/json"
-      },
+      headers,
       signal: AbortSignal.timeout(apiConfig.requestTimeoutMs)
     });
     const fetchedAt = new Date().toISOString();
@@ -984,6 +1041,7 @@ class FetcherService {
           source_channels.name,
           source_channels.fetch_url as "fetchUrl",
           source_channels.config_json as "configJson",
+          source_channels.auth_config_json as "authConfigJson",
           source_channels.language,
           source_channels.poll_interval_seconds as "pollIntervalSeconds",
           source_channels.last_fetch_at as "lastFetchAt",
@@ -1041,6 +1099,7 @@ class FetcherService {
           source_channels.name,
           source_channels.fetch_url as "fetchUrl",
           source_channels.config_json as "configJson",
+          source_channels.auth_config_json as "authConfigJson",
           source_channels.language,
           source_channels.poll_interval_seconds as "pollIntervalSeconds",
           source_channels.last_fetch_at as "lastFetchAt",
@@ -1083,8 +1142,9 @@ class FetcherService {
 
   private buildRssPersistInput(
     channel: SourceChannelRow,
-    item: ParsedRssItem,
-    feedLanguage: string | null,
+    parsedFeed: ParsedFeed,
+    item: AdaptedFeedEntry,
+    fetchedAt: string,
     preferContentEncoded: boolean
   ): PersistArticleInput | null {
     if (!item.url) {
@@ -1092,14 +1152,14 @@ class FetcherService {
     }
 
     const canonicalUrl = canonicalizeUrl(item.url);
-    const externalArticleId = item.guid?.trim() || canonicalUrl;
+    const externalArticleId = item.entry.guid?.trim() || canonicalUrl;
     const publishedAt = item.publishedAt ?? new Date().toISOString();
-    const { lang, confidence } = pickLanguageHint(channel.language, feedLanguage);
-    const title = normalizeWhitespace(item.title);
-    const lead = derivePlaintextLead(item.summaryHtml, item.contentHtml);
+    const { lang, confidence } = pickLanguageHint(channel.language, parsedFeed.language);
+    const title = normalizeWhitespace(item.entry.title);
+    const lead = derivePlaintextLead(item.entry.summaryHtml, item.entry.contentHtml);
     const body = preferContentEncoded
-      ? derivePlaintextBody(item.contentHtml, item.summaryHtml)
-      : derivePlaintextBody(item.summaryHtml, item.contentHtml);
+      ? derivePlaintextBody(item.entry.contentHtml, item.entry.summaryHtml)
+      : derivePlaintextBody(item.entry.summaryHtml, item.entry.contentHtml);
     return {
       channel,
       externalArticleId,
@@ -1111,16 +1171,86 @@ class FetcherService {
       lang,
       confidence,
       rawPayload: {
-        fetcher: "rss",
-        fetchedAt: new Date().toISOString(),
+        fetcher: parsedFeed.fetcher,
+        fetchedAt,
+        feedAdapter: item.feedAdapter,
+        feed: {
+          format: parsedFeed.format,
+          title: parsedFeed.title,
+          language: parsedFeed.language,
+          description: parsedFeed.description,
+          generator: parsedFeed.generator,
+          publishedAt: parsedFeed.publishedAt
+        },
+        entry: {
+          guid: item.entry.guid,
+          title: item.entry.title,
+          link: item.entry.url,
+          description: item.entry.summaryHtml,
+          contentEncoded: item.entry.contentHtml,
+          publishedAt: item.entry.publishedAt,
+          rawXmlHash: item.entry.rawXmlHash,
+          enclosure: item.entry.enclosure,
+          mediaContentUrl: item.entry.mediaContentUrl,
+          categories: item.entry.categories
+        },
         rss: {
-          guid: item.guid,
-          title: item.title,
-          link: item.url,
-          description: item.summaryHtml,
-          contentEncoded: item.contentHtml,
-          publishedAt: item.publishedAt,
-          rawXmlHash: item.rawXmlHash
+          guid: item.entry.guid,
+          title: item.entry.title,
+          link: item.entry.url,
+          description: item.entry.summaryHtml,
+          contentEncoded: item.entry.contentHtml,
+          publishedAt: item.entry.publishedAt,
+          rawXmlHash: item.entry.rawXmlHash,
+          enclosure: item.entry.enclosure,
+          mediaContentUrl: item.entry.mediaContentUrl,
+          categories: item.entry.categories,
+          feed: {
+            format: parsedFeed.format,
+            title: parsedFeed.title,
+            language: parsedFeed.language,
+            description: parsedFeed.description,
+            generator: parsedFeed.generator,
+            publishedAt: parsedFeed.publishedAt
+          }
+        }
+      }
+    };
+  }
+
+  private buildWebsitePersistInput(
+    channel: SourceChannelRow,
+    resource: DiscoveredWebsiteResource,
+    fetchedAt: string
+  ): PersistResourceInput {
+    return {
+      channel,
+      externalArticleId: resource.externalResourceId,
+      url: resource.normalizedUrl,
+      resourceKind: resource.classification.kind,
+      title: resource.title ?? "[Pending enrichment]",
+      summary: resource.summary ?? "",
+      publishedAt: resource.publishedAt,
+      modifiedAt: resource.modifiedAt,
+      freshnessMarkerType: resource.freshnessMarkerType,
+      freshnessMarkerValue: resource.freshnessMarkerValue,
+      discoverySource: resource.discoverySource,
+      classificationJson: {
+        kind: resource.classification.kind,
+        confidence: resource.classification.confidence,
+        reasons: resource.classification.reasons,
+        hintedKinds: resource.hintedKinds
+      },
+      rawPayload: {
+        fetcher: `website_${resource.discoverySource}`,
+        fetchedAt,
+        discovery: {
+          parentUrl: resource.parentUrl,
+          freshnessMarkerType: resource.freshnessMarkerType,
+          freshnessMarkerValue: resource.freshnessMarkerValue,
+          hintedKinds: resource.hintedKinds,
+          classification: resource.classification,
+          rawSignals: resource.rawSignals
         }
       }
     };
@@ -1137,6 +1267,30 @@ class FetcherService {
 
     for (const input of pendingInputs) {
       const persisted = await this.persistArticle(input);
+      if (persisted) {
+        ingestedCount += 1;
+      } else {
+        duplicateCount += 1;
+      }
+    }
+
+    return {
+      ingestedCount,
+      duplicateCount
+    };
+  }
+
+  private async persistWebsiteResourcesWithPreflight(
+    channelId: string,
+    inputs: readonly PersistResourceInput[]
+  ): Promise<{ ingestedCount: number; duplicateCount: number }> {
+    const { pendingInputs, duplicateCount: preflightDuplicateCount } =
+      await this.filterDuplicateWebsiteResourceInputs(channelId, inputs);
+    let ingestedCount = 0;
+    let duplicateCount = preflightDuplicateCount;
+
+    for (const input of pendingInputs) {
+      const persisted = await this.persistWebsiteResource(input);
       if (persisted) {
         ingestedCount += 1;
       } else {
@@ -1197,6 +1351,63 @@ class FetcherService {
       inputs,
       new Set(externalRefResult.rows.map((row) => row.externalArticleId)),
       new Set(articleUrlResult.rows.map((row) => row.url))
+    );
+
+    return {
+      pendingInputs: decisions
+        .filter((decision) => decision.shouldPersist)
+        .map((decision) => decision.input),
+      duplicateCount: decisions.filter((decision) => !decision.shouldPersist).length
+    };
+  }
+
+  private async filterDuplicateWebsiteResourceInputs<T extends PersistResourceInput>(
+    channelId: string,
+    inputs: readonly T[]
+  ): Promise<{ pendingInputs: T[]; duplicateCount: number }> {
+    if (inputs.length === 0) {
+      return {
+        pendingInputs: [],
+        duplicateCount: 0
+      };
+    }
+
+    const knownExternalResourceIds = uniqueNonEmpty(
+      inputs.map((input) => input.externalArticleId)
+    );
+    const knownUrls = uniqueNonEmpty(inputs.map((input) => input.url));
+
+    const [externalRefResult, resourceUrlResult] = await Promise.all([
+      knownExternalResourceIds.length > 0
+        ? this.pool.query<{ externalResourceId: string }>(
+            `
+              select external_resource_id as "externalResourceId"
+              from web_resources
+              where
+                channel_id = $1
+                and external_resource_id = any($2::text[])
+            `,
+            [channelId, knownExternalResourceIds]
+          )
+        : Promise.resolve({ rows: [] } as { rows: Array<{ externalResourceId: string }> }),
+      knownUrls.length > 0
+        ? this.pool.query<{ normalizedUrl: string }>(
+            `
+              select normalized_url as "normalizedUrl"
+              from web_resources
+              where
+                channel_id = $1
+                and normalized_url = any($2::text[])
+            `,
+            [channelId, knownUrls]
+          )
+        : Promise.resolve({ rows: [] } as { rows: Array<{ normalizedUrl: string }> })
+    ]);
+
+    const decisions = classifyDuplicatePreflightInputs(
+      inputs,
+      new Set(externalRefResult.rows.map((row) => row.externalResourceId)),
+      new Set(resourceUrlResult.rows.map((row) => row.normalizedUrl))
     );
 
     return {
@@ -1274,8 +1485,156 @@ class FetcherService {
         `,
         [randomUUID(), input.channel.channelId, input.externalArticleId, insertedArticle.docId]
       );
-      await this.insertOutboxEvent(client, ARTICLE_INGEST_REQUESTED_EVENT, insertedArticle.docId, {
+      await upsertArticleObservation(client, insertedArticle.docId);
+      await this.insertOutboxEvent(client, ARTICLE_INGEST_REQUESTED_EVENT, "article", insertedArticle.docId, {
         docId: insertedArticle.docId,
+        version: 1
+      });
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async persistWebsiteResource(input: PersistResourceInput): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+
+      const existing = await client.query<{
+        resourceId: string;
+        freshnessMarkerValue: string | null;
+        discoverySource: string;
+      }>(
+        `
+          select
+            resource_id::text as "resourceId",
+            freshness_marker_value as "freshnessMarkerValue",
+            discovery_source as "discoverySource"
+          from web_resources
+          where channel_id = $1 and normalized_url = $2
+          limit 1
+        `,
+        [input.channel.channelId, input.url]
+      );
+      const existingRow = existing.rows[0];
+      if (existingRow) {
+        const freshnessChanged =
+          (existingRow.freshnessMarkerValue ?? "") !== (input.freshnessMarkerValue ?? "") ||
+          existingRow.discoverySource !== input.discoverySource;
+        if (!freshnessChanged) {
+          await client.query("rollback");
+          return false;
+        }
+
+        await client.query(
+          `
+            update web_resources
+            set
+              title = $3,
+              summary = $4,
+              resource_kind = $5,
+              discovery_source = $6,
+              freshness_marker_type = $7,
+              freshness_marker_value = $8,
+              published_at = $9,
+              modified_at = $10,
+              classification_json = $11::jsonb,
+              raw_payload_json = $12::jsonb,
+              extraction_state = 'pending',
+              extraction_error = null,
+              updated_at = now()
+            where resource_id = $1 and channel_id = $2
+          `,
+          [
+            existingRow.resourceId,
+            input.channel.channelId,
+            input.title,
+            input.summary,
+            input.resourceKind,
+            input.discoverySource,
+            input.freshnessMarkerType,
+            input.freshnessMarkerValue,
+            input.publishedAt,
+            input.modifiedAt,
+            JSON.stringify(input.classificationJson),
+            JSON.stringify(input.rawPayload)
+          ]
+        );
+        await this.insertOutboxEvent(client, RESOURCE_INGEST_REQUESTED_EVENT, "resource", existingRow.resourceId, {
+          resourceId: existingRow.resourceId,
+          version: 1
+        });
+        await client.query("commit");
+        return true;
+      }
+
+      const insertResult = await client.query<{ resourceId: string }>(
+        `
+          insert into web_resources (
+            channel_id,
+            external_resource_id,
+            url,
+            normalized_url,
+            resource_kind,
+            discovery_source,
+            freshness_marker_type,
+            freshness_marker_value,
+            published_at,
+            modified_at,
+            title,
+            summary,
+            classification_json,
+            raw_payload_json
+          )
+          values (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12,
+            $13::jsonb,
+            $14::jsonb
+          )
+          on conflict do nothing
+          returning resource_id::text as "resourceId"
+        `,
+        [
+          input.channel.channelId,
+          input.externalArticleId,
+          input.url,
+          input.url,
+          input.resourceKind,
+          input.discoverySource,
+          input.freshnessMarkerType,
+          input.freshnessMarkerValue,
+          input.publishedAt,
+          input.modifiedAt,
+          input.title,
+          input.summary,
+          JSON.stringify(input.classificationJson),
+          JSON.stringify(input.rawPayload)
+        ]
+      );
+      const insertedResource = insertResult.rows[0];
+      if (!insertedResource) {
+        await client.query("rollback");
+        return false;
+      }
+
+      await this.insertOutboxEvent(client, RESOURCE_INGEST_REQUESTED_EVENT, "resource", insertedResource.resourceId, {
+        resourceId: insertedResource.resourceId,
         version: 1
       });
       await client.query("commit");
@@ -1291,7 +1650,8 @@ class FetcherService {
   private async insertOutboxEvent(
     client: PoolClient,
     eventType: string,
-    docId: string,
+    aggregateType: string,
+    aggregateId: string,
     payload: Record<string, unknown>
   ): Promise<void> {
     await client.query(
@@ -1303,9 +1663,9 @@ class FetcherService {
           aggregate_id,
           payload_json
         )
-        values ($1, $2, 'article', $3, $4::jsonb)
+        values ($1, $2, $3, $4, $5::jsonb)
       `,
-      [randomUUID(), eventType, docId, JSON.stringify(payload)]
+      [randomUUID(), eventType, aggregateType, aggregateId, JSON.stringify(payload)]
     );
   }
 

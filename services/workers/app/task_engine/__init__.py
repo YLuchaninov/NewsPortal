@@ -41,6 +41,7 @@ from .pipeline_plugins import (
     register_core_pipeline_plugins,
     register_maintenance_plugins,
 )
+from .orchestrator_plugins import ORCHESTRATOR_PLUGIN_CLASSES, register_orchestrator_plugins
 from .plugins import TASK_REGISTRY, TaskPlugin, TaskPluginRegistry
 from .repository import PostgresSequenceRepository, SequenceRepository
 from .runner import (
@@ -57,7 +58,7 @@ from .scheduler import (
 
 
 BUILTIN_PLUGIN_CLASSES = (
-    PIPELINE_BUILTIN_PLUGIN_CLASSES + DISCOVERY_ENRICHMENT_PLUGIN_CLASSES
+    PIPELINE_BUILTIN_PLUGIN_CLASSES + DISCOVERY_ENRICHMENT_PLUGIN_CLASSES + ORCHESTRATOR_PLUGIN_CLASSES
 )
 
 
@@ -70,6 +71,7 @@ def register_builtin_plugins(
     register_discovery_plugins(target_registry)
     register_utility_plugins(target_registry)
     register_enrichment_plugins(target_registry)
+    register_orchestrator_plugins(target_registry)
     return target_registry
 
 __all__ = [
@@ -89,6 +91,7 @@ __all__ = [
     "ENRICHMENT_PLUGIN_CLASSES",
     "get_discovery_runtime",
     "MAINTENANCE_PLUGIN_CLASSES",
+    "ORCHESTRATOR_PLUGIN_CLASSES",
     "PostgresSequenceRepository",
     "SequenceCronRepository",
     "SequenceCronScheduler",
@@ -98,6 +101,7 @@ __all__ = [
     "register_discovery_plugins",
     "register_enrichment_plugins",
     "register_maintenance_plugins",
+    "register_orchestrator_plugins",
     "register_pipeline_builtin_plugins",
     "register_utility_plugins",
     "reset_discovery_runtime",

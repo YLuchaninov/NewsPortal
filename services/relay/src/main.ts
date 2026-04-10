@@ -68,6 +68,13 @@ process.on("SIGTERM", () => {
 async function main(): Promise<void> {
   await checkPostgres(pool);
   await checkRedis(redis);
+  const priorityRepair = await relay.repairPendingSequenceQueuePriorities();
+  app.log.info(
+    {
+      ...priorityRepair
+    },
+    "Relay repaired pending q.sequence article-ingest priorities."
+  );
   await relay.pollOnce();
 
   relayInterval = setInterval(() => {

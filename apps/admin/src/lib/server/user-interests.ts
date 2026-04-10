@@ -14,6 +14,7 @@ interface StoredUserInterestRow {
   negative_texts: string[];
   places: string[];
   languages_allowed: string[];
+  time_window_hours: number | null;
   must_have_terms: string[];
   must_not_have_terms: string[];
   short_tokens_required: string[];
@@ -47,6 +48,7 @@ export interface UserInterestCreateInput {
   negativeTexts: string[];
   places: string[];
   languagesAllowed: string[];
+  timeWindowHours: number | null;
   mustHaveTerms: string[];
   mustNotHaveTerms: string[];
   shortTokensRequired: string[];
@@ -61,6 +63,7 @@ export interface UserInterestUpdatePatch {
   negativeTexts?: string[];
   places?: string[];
   languagesAllowed?: string[];
+  timeWindowHours?: number | null;
   mustHaveTerms?: string[];
   mustNotHaveTerms?: string[];
   shortTokensRequired?: string[];
@@ -114,6 +117,10 @@ function hasOwn(payload: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(payload, key);
 }
 
+function hasDefinedPatchKey<T extends object>(value: T, key: keyof T): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function normalizeString(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -131,7 +138,7 @@ function parseLineList(value: unknown): string[] {
 
 function parseCsvList(value: unknown): string[] {
   return normalizeString(value)
-    .split(",")
+    .split(/[\n,]+/)
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
@@ -142,6 +149,18 @@ function clampPriority(value: unknown, fallback = 1): number {
     return fallback;
   }
   return Math.max(0.1, Math.min(parsed, 1));
+}
+
+function parseNullablePositiveInteger(value: unknown): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
 }
 
 function normalizeEnabled(value: unknown, fallback = true): boolean {
@@ -175,6 +194,7 @@ async function readUserInterestForOwner(
         negative_texts,
         places,
         languages_allowed,
+        time_window_hours,
         must_have_terms,
         must_not_have_terms,
         short_tokens_required,
@@ -206,6 +226,7 @@ async function createUserInterest(
         negative_texts,
         places,
         languages_allowed,
+        time_window_hours,
         must_have_terms,
         must_not_have_terms,
         short_tokens_required,
@@ -224,12 +245,13 @@ async function createUserInterest(
         $5::jsonb,
         $6::jsonb,
         $7::jsonb,
-        $8::jsonb,
+        $8,
         $9::jsonb,
         $10::jsonb,
         $11::jsonb,
         $12,
         $13,
+        $14,
         false,
         'queued',
         1
@@ -243,6 +265,7 @@ async function createUserInterest(
       JSON.stringify(input.negativeTexts),
       JSON.stringify(input.places),
       JSON.stringify(input.languagesAllowed),
+      input.timeWindowHours,
       JSON.stringify(input.mustHaveTerms),
       JSON.stringify(input.mustNotHaveTerms),
       JSON.stringify(input.shortTokensRequired),
@@ -270,6 +293,9 @@ async function updateUserInterest(
   }
 
   const nextVersion = current.version + 1;
+  const nextTimeWindowHours = hasDefinedPatchKey(patch, "timeWindowHours")
+    ? patch.timeWindowHours ?? null
+    : current.time_window_hours ?? null;
 
   await queryable.query(
     `
@@ -280,15 +306,16 @@ async function updateUserInterest(
         negative_texts = $5::jsonb,
         places = $6::jsonb,
         languages_allowed = $7::jsonb,
-        must_have_terms = $8::jsonb,
-        must_not_have_terms = $9::jsonb,
-        short_tokens_required = $10::jsonb,
-        short_tokens_forbidden = $11::jsonb,
-        priority = $12,
-        enabled = $13,
+        time_window_hours = $8,
+        must_have_terms = $9::jsonb,
+        must_not_have_terms = $10::jsonb,
+        short_tokens_required = $11::jsonb,
+        short_tokens_forbidden = $12::jsonb,
+        priority = $13,
+        enabled = $14,
         compiled = false,
         compile_status = 'queued',
-        version = $14,
+        version = $15,
         updated_at = now()
       where interest_id = $1 and user_id = $2
     `,
@@ -300,6 +327,7 @@ async function updateUserInterest(
       JSON.stringify(patch.negativeTexts ?? current.negative_texts ?? []),
       JSON.stringify(patch.places ?? current.places ?? []),
       JSON.stringify(patch.languagesAllowed ?? current.languages_allowed ?? []),
+      nextTimeWindowHours,
       JSON.stringify(patch.mustHaveTerms ?? current.must_have_terms ?? []),
       JSON.stringify(patch.mustNotHaveTerms ?? current.must_not_have_terms ?? []),
       JSON.stringify(
@@ -338,6 +366,7 @@ async function cloneUserInterest(
     negativeTexts: current.negative_texts ?? [],
     places: current.places ?? [],
     languagesAllowed: current.languages_allowed ?? [],
+    timeWindowHours: current.time_window_hours ?? null,
     mustHaveTerms: current.must_have_terms ?? [],
     mustNotHaveTerms: current.must_not_have_terms ?? [],
     shortTokensRequired: current.short_tokens_required ?? [],
@@ -404,6 +433,7 @@ export function parseUserInterestCreateInput(
       const values = parseCsvList(payload.languages_allowed);
       return values.length > 0 ? values : ["en"];
     })(),
+    timeWindowHours: parseNullablePositiveInteger(payload.time_window_hours),
     mustHaveTerms: parseCsvList(payload.must_have_terms),
     mustNotHaveTerms: parseCsvList(payload.must_not_have_terms),
     shortTokensRequired: parseCsvList(payload.short_tokens_required),
@@ -435,6 +465,9 @@ export function buildUserInterestUpdatePatch(
   }
   if (hasOwn(payload, "languages_allowed")) {
     patch.languagesAllowed = parseCsvList(payload.languages_allowed);
+  }
+  if (hasOwn(payload, "time_window_hours")) {
+    patch.timeWindowHours = parseNullablePositiveInteger(payload.time_window_hours);
   }
   if (hasOwn(payload, "must_have_terms")) {
     patch.mustHaveTerms = parseCsvList(payload.must_have_terms);

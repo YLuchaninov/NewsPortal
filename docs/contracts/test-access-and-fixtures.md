@@ -40,7 +40,7 @@
 - `env vars`
   `.env.dev`, `.env.example`, compose env wiring и их documented counterparts.
 - `seed/bootstrap command`
-  `pnpm dev:mvp:internal`, `pnpm test:mvp:internal`, `pnpm test:ingest:multi:compose`, `pnpm db:seed:outbox-smoke`, worker smoke commands и fetcher RSS smoke.
+  `pnpm dev:mvp:internal`, `pnpm test:mvp:internal`, `pnpm test:ingest:multi:compose`, `pnpm test:discovery-enabled:compose`, `pnpm db:seed:outbox-smoke`, worker smoke commands и fetcher RSS smoke.
 - `secrets manager path or mechanism`
   Сейчас отдельный secrets manager path не объявлен как обязательная часть baseline.
 - `ephemeral credential mechanism`
@@ -49,9 +49,9 @@
 ## Approved Test Identities
 
 - `admin`
-  Allowlisted Firebase identity из `ADMIN_ALLOWLIST_EMAILS`, включая alias patterns `internal-admin-<runId>` и `rss-admin-<runId>`.
+  Allowlisted Firebase identity из `ADMIN_ALLOWLIST_EMAILS`, включая alias patterns `internal-admin-<runId>`, `rss-admin-<runId>`, `website-admin-<runId>`, `automation-admin-<runId>`, `discovery-admin-<runId>` и `viewport-admin-<runId>`.
 - `regular user`
-  Anonymous web session или local user row, созданный deterministic proof script.
+  Anonymous web session или local user row, созданный deterministic proof script, включая `internal-user-<runId>@example.test` и `viewport-user-<runId>@example.test`.
 - `disabled user`
   Сейчас не зафиксирован как reusable seeded identity.
 - `premium or paid user`
@@ -67,6 +67,10 @@
   Worker smoke helpers и relay/fetcher smoke data, которые создаются deterministic code path-ами внутри репозитория.
 - `deterministic creation scripts`
   - `infra/scripts/test-mvp-internal.mjs`
+  - `infra/scripts/test-web-viewports.mjs`
+  - `infra/scripts/test-website-admin-flow.mjs`
+  - `infra/scripts/test-automation-admin-flow.mjs`
+  - `infra/scripts/test-discovery-admin-flow.mjs`
   - `infra/scripts/test-rss-multi-flow.mjs`
   - `services/workers/app/smoke.py`
   - `services/fetchers/src/cli/test-rss-smoke.ts`
@@ -76,8 +80,18 @@
   - `email+internal-admin-<runId>@...`
   - `rss-admin-<runId>@...`
   - `email+rss-admin-<runId>@...`
+  - `website-admin-<runId>@...`
+  - `email+website-admin-<runId>@...`
+  - `automation-admin-<runId>@...`
+  - `email+automation-admin-<runId>@...`
+  - `discovery-admin-<runId>@...`
+  - `email+discovery-admin-<runId>@...`
+  - `viewport-admin-<runId>@...`
+  - `email+viewport-admin-<runId>@...`
   - `internal-user-<runId>@example.test`
+  - `viewport-user-<runId>@example.test`
   - `Internal MVP RSS <runId>`
+  - `Viewport RSS <runId>`
   - `RSS multi <runId> ...`
 
 ## Persistent Artifacts That Must Be Tracked

@@ -14,6 +14,1259 @@
 
 ## Completed items
 
+### 2026-04-09 — C-UI-INTERACTIVE-VERIFICATION-AND-REPAIR — Closed interactive web/admin verification and repair on the local compose baseline
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly wanted every current `apps/web` and `apps/admin` interactive surface checked and repaired so pages render truthfully, controls complete their intended flows, and the local compose baseline has bounded proof for both user and operator behavior.
+- Что изменилось:
+  - stage 1 reused the existing owners first, then classified the first reproduced failures as proof-owner drift plus discovery runtime/read-model regressions instead of silently widening product scope;
+  - stage 2 added [`infra/scripts/test-web-viewports.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-web-viewports.mjs) plus root command `pnpm test:web:viewports`, seeded truthful responsive fixtures (anonymous user, digest channel, immediate telegram channel, saved/followed content, deterministic article), and fixed [`apps/web/src/layouts/Shell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/layouts/Shell.astro) so tablet widths now use collapsed navigation without horizontal overflow;
+  - stage 2 also repaired existing web acceptance ownership in [`infra/scripts/test-mvp-internal.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-mvp-internal.mjs) so `/notifications` and feedback proof use the supported immediate-channel path while still asserting that `email_digest` does not write immediate `notification_log` rows;
+  - stage 3 promoted discovery control-plane proof into a first-class compose owner via [`infra/scripts/test-discovery-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-admin-flow.mjs) plus root command `pnpm test:discovery:admin:compose`, then fixed three underlying regressions: discovery audit writes now normalize non-UUID entity ids in [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts), mission graph compilation now reuses manual graphs and falls back deterministically when no LLM runtime is configured in [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py), and recall candidate reads now expose `scoring_breakdown` correctly in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py);
+  - stage 4 added targeted regression coverage in [`tests/unit/ts/discovery-admin.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-admin.test.ts), [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py), and [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py), while syntax-checking the new browser/discovery owner scripts;
+  - stage 5 synced machine/proof/fixture docs for the new proof commands and deterministic alias patterns, reran the declared closeout chain, and stopped the local compose stack non-destructively with `pnpm dev:mvp:internal:down`.
+- Что проверено:
+  - targeted regression proof: `node --check infra/scripts/test-web-viewports.mjs`
+  - targeted regression proof: `node --check infra/scripts/test-discovery-admin-flow.mjs`
+  - targeted regression proof: `node --import tsx --test tests/unit/ts/discovery-admin.test.ts`
+  - targeted regression proof: `python -m unittest tests.unit.python.test_api_discovery_management tests.unit.python.test_discovery_orchestrator`
+  - capability closeout chain: `pnpm unit_tests`
+  - capability closeout chain: `pnpm typecheck`
+  - capability closeout chain: `pnpm integration_tests`
+  - capability closeout chain: `pnpm test:web:viewports`
+  - capability closeout chain: `pnpm test:website:admin:compose`
+  - capability closeout chain: `node infra/scripts/test-automation-admin-flow.mjs`
+  - capability closeout chain: `pnpm test:discovery:admin:compose`
+  - capability closeout chain: `pnpm test:website:compose`
+  - capability closeout chain: `pnpm test:channel-auth:compose`
+  - capability closeout chain: `pnpm test:cluster-match-notify:compose`
+  - capability closeout chain: `pnpm test:discovery-enabled:compose`
+  - capability closeout chain: `pnpm test:reindex-backfill:compose`
+  - cleanup proof: `pnpm dev:mvp:internal:down`
+- Что capability доказал:
+  - the current web surfaces `/`, `/matches`, `/content/[id]`, `/saved`, `/saved/digest`, `/following`, `/interests`, `/settings`, and `/notifications` now have bounded browser proof across desktop/tablet/mobile with visible primary actions and no reproduced tablet header overflow;
+  - the current admin operator surfaces now have dedicated compose proof owners for `/automation`, `/channels*` plus `/resources*`, and `/discovery`, while `integration_tests` continues to own the broader web/admin happy path including notification feedback, digest flows, and enrichment retry;
+  - discovery admin now works truthfully on the local compose baseline even when class keys are non-UUID strings, mission graph compilation must succeed without a live LLM runtime, and recall candidate reads depend on latest source-quality snapshot breakdowns.
+- Риски или gaps:
+  - the worktree remains heavily mixed with unrelated edits, so future implementation must still declare overlap paths explicitly;
+  - admin responsive behavior beyond desktop remains intentionally out of scope for this capability;
+  - browser receipt for real `web_push` delivery remains a manual proof lane; automated notification coverage continues to use deterministic telegram/digest fixtures.
+- Follow-up:
+  - none required for this capability; open a new bounded item only if product scope expands into additional interactive surfaces or broader responsive admin work.
+
+### 2026-04-09 — C-ADMIN-AUDIT-FINDINGS-REMEDIATION-AND-AUDIT-RETIREMENT — Closed audit findings and retired the standalone admin/API coverage artifact
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the audit spike had truthfully identified five findings (`F-001` through `F-005`), but the user explicitly wanted all of them fixed and the temporary audit artifact removed only after the surviving operator-baseline truth had been redistributed into stable docs.
+- Что изменилось:
+  - stage 1 hardened the website-admin acceptance harness so `pnpm test:website:admin:compose` self-bootstraps the compose baseline after `pnpm integration_tests` tears it down, and fixture cleanup no longer depends on container-side `kill`;
+  - stage 2 shipped first-class admin create/edit flows for `api` and `email_imap` channels, fixed the PostgreSQL scheduling-update type-inference bug on provider edits, and re-proved API auth-header plus IMAP password-preservation behavior end to end;
+  - stage 3 shipped first-class admin automation tooling at `/automation` plus same-origin writes under `/admin/bff/admin/automation`, widened the SDK to cover sequence/run/plugin/outbox maintenance routes, and added a dedicated runtime smoke for sequence create/update/archive, manual run/cancel, and outbox visibility;
+  - stage 4 migrated the retained operator-baseline truth into [`docs/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/manual-mvp-runbook.md), [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md), [`docs/contracts/universal-task-engine.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/universal-task-engine.md), and [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml), then deleted the temporary `docs/admin-api-coverage-audit.md` artifact.
+- Что проверено:
+  - targeted consistency proof: `git diff --check -- docs/work.md docs/manual-mvp-runbook.md docs/verification.md docs/blueprint.md docs/contracts/universal-task-engine.md .aidp/os.yaml`
+  - final closeout chain: `pnpm integration_tests`
+  - final closeout chain: `pnpm test:website:admin:compose`
+  - final closeout chain: `pnpm test:website:compose`
+  - final closeout chain: `pnpm test:channel-auth:compose`
+  - final closeout chain: `pnpm test:cluster-match-notify:compose`
+  - final closeout chain: `pnpm test:reindex-backfill:compose`
+  - sequence/outbox operator closeout: `node infra/scripts/test-automation-admin-flow.mjs`
+  - non-destructive cleanup proof: `pnpm dev:mvp:internal:down`
+- Что capability доказал:
+  - the shipped operator-ready admin baseline now truthfully covers `rss`, `website`, `api`, and `email_imap` source CRUD, website resource observability, moderation and repair tooling, admin-managed interests, reindex/backfill, and first-class sequence/outbox operator work on `/automation`;
+  - the previously recorded harness residuals are gone: declared gate order remains truthful even when `integration_tests` tears the stack down first, and the website-admin smoke no longer ends with cleanup noise;
+  - the standalone audit artifact is no longer needed because stable docs and machine facts now carry the retained parity matrix meaning, proof commands, and honest residual scope.
+- Риски или gaps:
+  - umbrella automated acceptance remains RSS-first, while website/API/Email IMAP admin CRUD and sequence/outbox tooling continue to rely on their dedicated operator smokes instead of `pnpm integration_tests`;
+  - `youtube` remains code-present but outside the committed admin/operator baseline;
+  - browser receipt for `web_push` remains manual-only proof.
+- Follow-up:
+  - none required for this capability; open a new bounded item only if product scope expands again, for example into `youtube` admin CRUD or broader umbrella acceptance.
+
+### 2026-04-09 — SPIKE-ADMIN-API-COVERAGE-AND-RUNTIME-VERIFICATION — Audited operator-path admin/API coverage and current runtime health
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly wanted proof that the admin panel truthfully covers the agreed operator-facing API baseline and a truthful separation between real regressions, environment blockers, and intentional non-admin or non-baseline gaps because “there are errors right now”.
+- Что изменилось:
+  - added the temporary `docs/admin-api-coverage-audit.md` artifact with a single operator-path parity matrix, runtime gate log, and bounded findings backlog;
+  - ran the declared proof sequence for the current operator-ready baseline and turned the audit from assumptions into command-backed status: `integration_tests`, website admin/operator acceptance, website ingest smoke, channel-auth smoke, cluster-match-notify smoke, reindex-backfill smoke, and optional discovery-enabled smoke;
+  - classified explicit remaining gaps instead of silently treating them as regressions: `api` and `email_imap` provider CRUD remain code-present but non-operator-ready from the current admin baseline, and sequence/outbox maintenance tooling remains API-only/internal rather than admin-screen-owned;
+  - captured two non-blocking harness/environment residuals for follow-up: the declared gate order is not self-contained because `integration_tests` stops compose before `test:website:admin:compose`, and the website-admin smoke emits a cleanup error because `kill` is unavailable inside the target container path.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, and `docs/contracts/test-access-and-fixtures.md`
+  - worktree coherence check via `git status --short`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm integration_tests`
+  - `pnpm test:website:admin:compose` (first attempt failed with `service "fetchers" is not running` after `integration_tests`; rerun passed after `pnpm dev:mvp:internal:no-build`)
+  - `pnpm test:website:compose`
+  - `pnpm test:channel-auth:compose`
+  - `pnpm test:cluster-match-notify:compose`
+  - `pnpm test:reindex-backfill:compose`
+  - `pnpm test:discovery-enabled:compose`
+  - `pnpm dev:mvp:internal:down`
+  - `git diff --check -- docs/work.md docs/history.md docs/admin-api-coverage-audit.md`
+- Что item доказал:
+  - the current promised operator-ready admin baseline is green for auth/routing, dashboard, channel listing, RSS creation path, website creation/resources path, moderation, article detail, enrichment retry, user-interest lookup/create path, reindex/backfill, protected channel auth, and the declared optional discovery backend lane;
+  - the current admin/API mismatch is not “admin covers nothing” but a bounded set of explicit gaps and unproven lanes: `api` and `email_imap` source CRUD are still non-operator-ready by current baseline, sequence/outbox maintenance tooling is still API-only/internal, and several existing admin surfaces still need dedicated runtime proof for full edit/archive/schedule or advanced lifecycle actions;
+  - the most visible “current errors” encountered during the audit were primarily environment/harness issues rather than core operator regressions: compose prerequisites between gates and a cleanup error in the website-admin smoke.
+- Риски или gaps:
+  - non-blocking harness residual `F-004`: `pnpm test:website:admin:compose` currently assumes a running compose stack, so the declared gate order is not self-contained after `integration_tests` tears the stack down;
+  - non-blocking cleanup residual `F-005`: the website-admin smoke succeeds functionally but ends with `exec: "kill": executable file not found in $PATH`;
+  - local compose volumes now contain run-scoped proof data (channels, articles/resources, interests, reindex rows, discovery smoke rows) because the audit used `pnpm dev:mvp:internal:down` instead of a destructive volume reset.
+- Follow-up:
+  - open a bounded patch if you want to harden the website-admin smoke workflow (`F-004` / `F-005`);
+  - open a separate scope-expansion item if the product now wants first-class admin CRUD for `api`, `email_imap`, or sequence/outbox tooling instead of leaving them as explicit non-baseline gaps.
+
+### 2026-04-09 — PATCH-DISCOVERY-SCHEMA-REPAIR-DOC-SYNC — Synced the repaired discovery migration baseline into durable truth layers
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the schema-repair patch had already fixed the live compose baseline, but its repaired migration order and stronger discovery-core migration-smoke expectation were still described only in live state, verification, and archive detail. Durable discovery truth in the blueprint/contract layers still read as if 0016 discovery rollout stood on its own without the now-shipped repair baseline.
+- Что изменилось:
+  - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md) now states that the current compose/dev discovery baseline includes `0026a_discovery_schema_drift_prerepair.sql` before `0027_*`, `0030_discovery_schema_drift_repair.sql` after the additive recall migrations, and strengthened migration smoke that asserts the full discovery core;
+  - [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md) now treats the repaired discovery migration order and full-core migration smoke as durable engineering discipline instead of leaving it implicit;
+  - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md) now records the repaired discovery migration baseline and the dedicated follow-up proof expectation for drifted compose DBs.
+- Что проверено:
+  - targeted consistency check via `rg -n "0026a_discovery_schema_drift_prerepair|0030_discovery_schema_drift_repair|full discovery core|drifted databases before|schema_drift_prerepair_migration|schema_drift_repair_migration" docs/blueprint.md docs/engineering.md docs/contracts/discovery-agent.md docs/work.md docs/history.md docs/verification.md .aidp/os.yaml`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md docs/engineering.md docs/contracts/discovery-agent.md docs/verification.md .aidp/os.yaml`
+- Что item доказал:
+  - the repaired discovery migration baseline is now represented consistently across live state, machine facts, proof policy, blueprint truth, engineering discipline, and the deep discovery contract;
+  - future discovery work no longer needs chat history to understand why `0026a` and `0030` exist or why migration smoke must assert the full discovery core.
+- Риски или gaps:
+  - no new runtime or schema gap was introduced; this was a doc-only sync follow-up.
+- Follow-up:
+  - none; future discovery work should treat the repaired baseline as ordinary durable truth.
+
+### 2026-04-09 — PATCH-DISCOVERY-SCHEMA-REPAIR-0016 — Repaired the compose discovery schema drift around migration `0016`
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the independent-recall capability was already archived, the compose baseline still had a separate environment residual where `schema_migrations` recorded `0016_adaptive_discovery_cutover.sql` as applied while core discovery tables like `discovery_hypothesis_classes` and `discovery_source_profiles` were absent. That drift broke normal `pnpm db:migrate` at `0027_independent_recall_quality_foundation.sql` and made `pnpm test:discovery-enabled:compose` fail before discovery runtime proof could even start.
+- Что изменилось:
+  - migration [`database/migrations/0026a_discovery_schema_drift_prerepair.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0026a_discovery_schema_drift_prerepair.sql) now runs before `0027` and recreates the minimum missing 0016 discovery core needed by later migrations: `discovery_hypothesis_classes`, `discovery_source_profiles`, seeded canonical class rows, placeholder-class healing for any orphan `class_key`, and the critical FK bridges from existing `discovery_hypotheses` / `discovery_candidates`;
+  - migration [`database/migrations/0030_discovery_schema_drift_repair.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0030_discovery_schema_drift_repair.sql) now provides the post-cutover consistency repair for already drifted databases by recreating the rest of the missing 0016 discovery tables, seeding the canonical class registry again idempotently, null-healing nullable orphan references, and restoring the remaining core discovery FKs such as `discovery_missions_latest_portfolio_snapshot_fk`;
+  - [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts) now treats discovery core as part of migration-smoke truth, explicitly asserting the full table set, representative columns and indexes, plus critical constraints across `discovery_hypothesis_classes`, `discovery_source_profiles`, `discovery_source_interest_scores`, `discovery_portfolio_snapshots`, `discovery_feedback_events`, and `discovery_strategy_stats`.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/discovery-agent.md`, and `docs/contracts/independent-recall-discovery.md`
+  - worktree coherence check via `git status --short`
+  - live compose DB evidence that `schema_migrations` contained `0016_adaptive_discovery_cutover.sql` while key discovery core tables were absent before the repair
+  - `pnpm test:migrations:smoke`
+  - `pnpm db:migrate`
+  - live compose DB verification that the previously missing tables, class seed rows, and critical discovery FK constraints now exist
+  - `pnpm test:discovery-enabled:compose`
+  - `git diff --check -- docs/work.md docs/history.md docs/verification.md .aidp/os.yaml database/migrations/0026a_discovery_schema_drift_prerepair.sql database/migrations/0030_discovery_schema_drift_repair.sql services/relay/src/cli/test-migrations.ts`
+- Что item доказал:
+  - a drifted compose DB can now heal itself before `0027` instead of failing on missing `discovery_source_profiles`;
+  - the full pending discovery migration chain now applies cleanly on the repaired compose baseline through `0030`;
+  - the previously broken compose discovery runtime proof is green again, and migration smoke now fails loudly if discovery-core tables/constraints drift out of sync in the future.
+- Риски или gaps:
+  - the repair is intentionally additive/idempotent and does not attempt destructive cleanup of any hypothetical non-null orphan references beyond safe nullable healing;
+  - historical history entries that mention the separate discovery schema-drift residual remain true as historical snapshots, but the residual itself is now considered closed by this archived patch.
+- Follow-up:
+  - no direct follow-up is required for this residual; future discovery work should treat the repaired migrations and strengthened smoke as the new baseline.
+
+### 2026-04-09 — C-INDEPENDENT-RECALL-DISCOVERY-CUTOVER — Archived the bounded independent-recall discovery capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the repo had already shipped zero-shot downstream filtering, but upstream discovery still behaved and read as graph-first-only. The user explicitly wanted discovery to stop depending on `interest_graph` as the sole owner of finding new information, while preserving the already shipped canonical/filter/final-selection pipeline.
+- Что capability в итоге delivered:
+  - additive generic source-quality truth now lives in `discovery_source_quality_snapshots` and is persisted independently from mission-fit `discovery_source_interest_scores`;
+  - neutral recall backlog now lives in additive `discovery_recall_missions` / `discovery_recall_candidates`, can exist without `interest_graph`, and can actively acquire bounded `rss` / `website` candidates through `/maintenance/discovery/recall-missions/{recall_mission_id}/acquire`;
+  - bounded recall promotion now reaches `source_channels` through `POST /maintenance/discovery/recall-candidates/{recall_candidate_id}/promote`, reusing the same PostgreSQL + outbox source-registration contract as graph-first discovery and persisting `registered_channel_id` plus shared source-profile channel linkage;
+  - operator/read-model closeout now exposes discovery as a dual-path control plane: discovery summary counts graph-first vs recall state separately, source-profile reads surface the latest generic source-quality snapshot, and admin/help surfaces distinguish mission fit, generic source quality, neutral recall backlog, and recall-promotion state instead of collapsing everything into one score.
+- Что проверено для capability closeout:
+  - stage-level proof archived in the individual stage entries for stages 0 through 5;
+  - final closeout proof on 2026-04-09:
+    - `python -m py_compile services/api/app/main.py tests/unit/python/test_api_discovery_management.py`
+    - `python -m unittest tests.unit.python.test_api_discovery_management`
+    - `node --test tests/unit/ts/admin-operator-surfaces.test.ts`
+    - `pnpm typecheck`
+    - `pnpm unit_tests`
+    - `git diff --check -- docs/work.md docs/blueprint.md docs/engineering.md docs/verification.md docs/history.md docs/contracts/discovery-agent.md docs/contracts/independent-recall-discovery.md .aidp/os.yaml services/api/app/main.py apps/admin/src/pages/discovery.astro apps/admin/src/pages/help.astro apps/admin/src/lib/server/operator-surfaces.ts tests/unit/python/test_api_discovery_management.py tests/unit/ts/admin-operator-surfaces.test.ts`
+- Что capability closeout доказал:
+  - shipped discovery runtime is no longer truthfully described as graph-first-only source onboarding;
+  - bounded independent recall now exists end-to-end as persisted quality state, recall backlog, bounded acquisition, bounded promotion, and operator-visible control-plane truth;
+  - downstream zero-shot filtering remains untouched as a consumer of the new upstream recall path instead of being reopened or rewritten.
+- Риски или gaps:
+  - a separate compose/environment residual remains open: some PostgreSQL compose states still record migration `0016_adaptive_discovery_cutover.sql` as applied while `discovery_hypothesis_classes` is absent, so compose-backed discovery proof can still fail outside this archived capability’s write scope;
+  - graph-first mission planning remains the primary planning owner, so future work that wants to demote or replace `interest_graph` itself should open a new capability instead of reopening this archived one.
+- Follow-up:
+  - if compose-backed discovery proof is needed, open a separate `Spike` or `Patch` for discovery schema drift rather than reopening this archived capability.
+
+### 2026-04-09 — STAGE-5-INDEPENDENT-RECALL-OBSERVABILITY-AND-COMPATIBILITY-CLEANUP — Archived the operator/read-model closeout for independent recall discovery
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stages 1 through 4 had already shipped additive generic quality, neutral recall entities, bounded acquisition, and bounded promotion, the remaining truthful gap was operator drift. Discovery still rendered and read too much like a graph-first-only subsystem even though bounded recall acquisition/promotion was already live.
+- Что изменилось:
+  - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now extends discovery summary with promoted/duplicate recall-candidate counts, surfaces `source_quality_scoring_breakdown` on recall-candidate reads, and adds latest generic source-quality snapshot fields directly onto source-profile reads through a lateral snapshot join;
+  - [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts) now exposes dedicated helpers for dual-path discovery summary, generic source-quality state, and recall-candidate promotion state instead of forcing UI code to infer those meanings ad hoc;
+  - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro) now presents discovery as a dual-path control plane, adds a recall tab, and separates graph-first mission fit from generic source quality and recall-promotion state on the source-profile/read surfaces;
+  - [`apps/admin/src/pages/help.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/help.astro) now explains the dual-path discovery model and operator debugging order directly in the admin guide;
+  - [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py) and [`tests/unit/ts/admin-operator-surfaces.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-operator-surfaces.test.ts) now prove the new summary/read-model fields and operator-helper semantics.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/discovery-agent.md`, and `docs/contracts/independent-recall-discovery.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/api/app/main.py tests/unit/python/test_api_discovery_management.py`
+  - `python -m unittest tests.unit.python.test_api_discovery_management`
+  - `node --test tests/unit/ts/admin-operator-surfaces.test.ts`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/engineering.md docs/verification.md docs/history.md docs/contracts/discovery-agent.md docs/contracts/independent-recall-discovery.md .aidp/os.yaml services/api/app/main.py apps/admin/src/pages/discovery.astro apps/admin/src/pages/help.astro apps/admin/src/lib/server/operator-surfaces.ts tests/unit/python/test_api_discovery_management.py tests/unit/ts/admin-operator-surfaces.test.ts`
+- Что stage-5 доказал:
+  - discovery read surfaces now truthfully separate mission fit, generic source quality, neutral recall backlog, and recall-promotion state;
+  - additive recall quality/promotion is no longer hidden behind graph-first-only wording in admin/help/runtime docs;
+  - the parent capability can now archive honestly because the remaining gap is the separate compose schema-drift residual, not an unsurfaced discovery-runtime ambiguity.
+- Риски или gaps:
+  - stage-5 did not attempt to repair the separate compose discovery schema drift around migration `0016_adaptive_discovery_cutover.sql`;
+  - recall acquire/promote operator actions remain maintenance-API-first flows rather than fully mirrored through the Astro BFF, which is acceptable for this observability/compatibility slice because no new runtime ownership was introduced.
+- Follow-up:
+  - archive the parent capability and keep any compose discovery schema repair as a separate lane.
+
+### 2026-04-09 — STAGE-4-INDEPENDENT-RECALL-PROMOTION-CUTOVER — Archived bounded recall-candidate promotion into source onboarding
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-3 let neutral recall actively acquire candidates, the next truthful slice was to let those candidates enter the normal `source_channels` onboarding path without inventing a second registration contract. The system needed bounded promotion that kept PostgreSQL + outbox discipline, candidate-level auditability, and shared source-profile linkage explicit.
+- Что изменилось:
+  - migration [`database/migrations/0029_independent_recall_promotion_cutover.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0029_independent_recall_promotion_cutover.sql) added additive `registered_channel_id` storage on `discovery_recall_candidates` plus an index for promoted/duplicate-resolved recall candidates;
+  - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now exposes `promote_discovery_recall_candidate(...)` and `POST /maintenance/discovery/recall-candidates/{recall_candidate_id}/promote`, reuses `PostgresSourceRegistrarAdapter`, persists `registered_channel_id`, updates recall review state, and links shared `discovery_source_profiles` to the promoted channel when possible;
+  - [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts) and [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py) now prove the new schema/runtime slice through migration smoke plus promotion/duplicate API tests.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/discovery-agent.md`, and `docs/contracts/independent-recall-discovery.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/api/app/main.py tests/unit/python/test_api_discovery_management.py`
+  - `python -m unittest tests.unit.python.test_api_discovery_management`
+  - `pnpm test:migrations:smoke`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/engineering.md docs/verification.md docs/history.md docs/contracts/discovery-agent.md docs/contracts/independent-recall-discovery.md .aidp/os.yaml database/migrations/0029_independent_recall_promotion_cutover.sql services/api/app/main.py services/relay/src/cli/test-migrations.ts tests/unit/python/test_api_discovery_management.py`
+- Что stage-4 доказал:
+  - NewsPortal now has shipped bounded recall-candidate promotion into `source_channels` without inventing a second onboarding contract;
+  - promoted or duplicate-resolved recall candidates persist `registered_channel_id`, and shared source profiles can link themselves to the resulting channel;
+  - recall-first discovery is no longer limited to backlog accumulation and acquisition only; it can now reach the same source onboarding boundary as graph-first discovery.
+- Риски или gaps:
+  - stage-4 does not yet update operator/admin surfaces enough to clearly explain the now-shipped dual-path discovery model;
+  - the separate compose discovery schema-drift residual remains out of scope for this stage.
+- Follow-up:
+  - start `STAGE-5-INDEPENDENT-RECALL-OBSERVABILITY-AND-COMPATIBILITY-CLEANUP`.
+
+### 2026-04-09 — STAGE-3-INDEPENDENT-RECALL-ACQUISITION-LOOPS — Archived bounded recall-first acquisition without promotion
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-2 made neutral recall backlog real persisted state, the next truthful slice was to let that backlog actively acquire candidates without falling back to `interest_graph` planning. The system needed bounded recall-first acquisition for `rss` and `website`, while still keeping source promotion out of scope until the next stage.
+- Что изменилось:
+  - [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py) now exposes additive bounded recall-first acquisition helpers plus `acquire_recall_missions(...)`, repository support for runnable recall missions/candidate persistence/profile linkage, and neutral `rss` / `website` search-probe loops that materialize `discovery_recall_candidates` and `discovery_source_quality_snapshots` with `snapshot_reason = recall_acquisition` without requiring `interest_graph`;
+  - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now exposes `request_discovery_recall_mission_acquisition(...)` and `POST /maintenance/discovery/recall-missions/{recall_mission_id}/acquire` as the bounded operator entrypoint for recall-first acquisition runs;
+  - [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py) now proves both neutral recall happy-path acquisition and same-origin canonicalization collapse in noisy website search results, while [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py) proves API delegation into the new worker orchestration path.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/discovery-agent.md`, and `docs/contracts/independent-recall-discovery.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/workers/app/discovery_orchestrator.py services/api/app/main.py tests/unit/python/test_discovery_orchestrator.py tests/unit/python/test_api_discovery_management.py`
+  - `python -m unittest tests.unit.python.test_discovery_orchestrator tests.unit.python.test_api_discovery_management`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/engineering.md docs/verification.md docs/history.md docs/contracts/discovery-agent.md docs/contracts/independent-recall-discovery.md .aidp/os.yaml services/workers/app/discovery_orchestrator.py services/api/app/main.py tests/unit/python/test_discovery_orchestrator.py tests/unit/python/test_api_discovery_management.py`
+- Что stage-3 доказал:
+  - NewsPortal now has shipped bounded recall-first acquisition loops that can search and probe neutral recall missions without `interest_graph`;
+  - additive recall acquisition persists `discovery_recall_candidates`, reuses shared `discovery_source_profiles` by canonical domain, and materializes generic `recall_acquisition` quality snapshots without source-channel promotion;
+  - noisy same-origin website search hits are collapsed to a single canonical probe target instead of fanning out duplicate candidates.
+- Риски или gaps:
+  - stage-3 is still additive only; it does not yet promote recall candidates into `source_channels` or demote graph-first discovery ownership;
+  - the separate compose discovery schema-drift residual remains out of scope for this stage.
+- Follow-up:
+  - start `STAGE-4-INDEPENDENT-RECALL-PROMOTION-CUTOVER`.
+
+### 2026-04-09 — STAGE-2-INDEPENDENT-RECALL-MISSION-AND-CANDIDATE-LAYER — Archived the additive neutral recall entity layer
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-1 introduced generic source-quality truth, the next truthful slice was to let independent recall exist as real persisted state instead of only as an abstract plan. The system needed bounded neutral recall missions/candidates that do not require `interest_graph` or hypothesis classes, while still reusing the already shipped source-profile and source-quality layers.
+- Что изменилось:
+  - migration [`database/migrations/0028_independent_recall_missions_and_candidates.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0028_independent_recall_missions_and_candidates.sql) added additive tables `discovery_recall_missions` and `discovery_recall_candidates` with bounded status/kind checks, canonical-domain storage, source-profile linkage, and dedicated indexes;
+  - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now exposes `/maintenance/discovery/recall-missions*` and `/maintenance/discovery/recall-candidates*`, additive read-model SQL for neutral recall entities, summary counts for recall backlog, canonical-domain auto-linking from recall candidates into existing `discovery_source_profiles`, and latest `discovery_source_quality_snapshots` on recall-candidate reads;
+  - migration smoke and API proof were expanded in [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts) and [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py) to cover recall mission/candidate routes, pagination/filter SQL, validation, persistence, and non-promoting review updates.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/discovery-agent.md`, and `docs/contracts/independent-recall-discovery.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/api/app/main.py tests/unit/python/test_api_discovery_management.py`
+  - `python -m unittest tests.unit.python.test_api_discovery_management`
+  - `pnpm test:migrations:smoke`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/engineering.md docs/verification.md docs/history.md docs/contracts/discovery-agent.md docs/contracts/independent-recall-discovery.md .aidp/os.yaml database/migrations/0028_independent_recall_missions_and_candidates.sql services/api/app/main.py services/relay/src/cli/test-migrations.ts tests/unit/python/test_api_discovery_management.py`
+- Что stage-2 доказал:
+  - NewsPortal now has shipped additive neutral recall entities that can exist independently from graph-first mission planning;
+  - recall candidates can reuse shared discovery source-profile truth and surface the latest additive generic source-quality snapshot without requiring promotion into `source_channels`;
+  - graph-first discovery remains intact while operator/API surfaces can now distinguish neutral recall backlog from mission-fit discovery state.
+- Риски или gaps:
+  - stage-2 is still additive only; it does not yet implement bounded recall-first acquisition loops or promotion cutover into `source_channels`;
+  - the separate compose discovery schema-drift residual remains out of scope for this stage.
+- Follow-up:
+  - start `STAGE-3-INDEPENDENT-RECALL-ACQUISITION-LOOPS`.
+
+### 2026-04-09 — STAGE-1-INDEPENDENT-RECALL-QUALITY-FOUNDATION — Archived the additive generic source-quality foundation for independent recall discovery
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after binding the new independent-recall capability, the first truthful runtime slice had to add a real interest-independent discovery layer without rewriting graph-first mission planning. The safest additive foundation was to persist generic source-quality truth separately from mission-fit scoring and expose it through maintenance read surfaces.
+- Что изменилось:
+  - migration [`database/migrations/0027_independent_recall_quality_foundation.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0027_independent_recall_quality_foundation.sql) added additive table `discovery_source_quality_snapshots` with recall-score storage, per-source uniqueness, channel linkage, and scoring breakdown;
+  - [`services/workers/app/source_scoring.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/source_scoring.py) now exposes `compute_source_recall_quality_snapshot(...)`, which derives generic recall/source-quality state from shared source-profile trust signals plus generic channel-intake metrics without reading mission graph data;
+  - [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py) now materializes `discovery_source_quality_snapshots` during both discovery execution and re-evaluation while keeping existing `discovery_source_interest_scores` and portfolio assembly behavior unchanged;
+  - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now exposes `/maintenance/discovery/source-quality-snapshots` and `/maintenance/discovery/source-quality-snapshots/{snapshot_id}`, and discovery summary now counts the additive generic-quality rows separately from mission-fit scores;
+  - proof harnesses were extended in [`tests/unit/python/test_source_scoring.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_source_scoring.py), [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py), [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py), and [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts).
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/discovery-agent.md`, and `docs/contracts/independent-recall-discovery.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/workers/app/source_scoring.py services/workers/app/discovery_orchestrator.py services/api/app/main.py tests/unit/python/test_source_scoring.py tests/unit/python/test_discovery_orchestrator.py tests/unit/python/test_api_discovery_management.py`
+  - `python -m unittest tests.unit.python.test_source_scoring tests.unit.python.test_discovery_orchestrator tests.unit.python.test_api_discovery_management`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+- Что stage-1 доказал:
+  - NewsPortal now has shipped additive generic source-quality truth that is persisted independently from graph-first mission-fit scoring;
+  - current discovery execution and re-evaluation paths can populate the new generic-quality layer without changing mission planning, portfolio assembly, or source-channel promotion ownership;
+  - maintenance read surfaces can now inspect generic recall/source-quality state separately from mission-fit `discovery_source_interest_scores`.
+- Риски или gaps:
+  - stage-1 is additive only; it does not yet introduce neutral recall missions/candidates or recall-first acquisition loops;
+  - the separate compose discovery schema-drift residual remains out of scope for this stage.
+- Follow-up:
+  - start `STAGE-2-INDEPENDENT-RECALL-MISSION-AND-CANDIDATE-LAYER`.
+
+### 2026-04-09 — STAGE-0-INDEPENDENT-RECALL-DESIGN-CONTRACT — Archived the design-contract stage for independent recall discovery
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly asked to move discovery toward a fully independent recall layer, but the current blueprint/runtime still remained graph-first and mission-fit-centric. Before changing schema or runtime ownership again, the repo needed a durable contract that preserved the shipped graph-first truth while defining additive recall-first cutover rules.
+- Что изменилось:
+  - added deep contract [`docs/contracts/independent-recall-discovery.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/independent-recall-discovery.md) with current-vs-target discovery truth, additive migration rules, stage map, failure modes, and minimum proof expectations;
+  - synced contract index in [`docs/contracts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/README.md), live capability planning in [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md), proof policy in [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), and machine truth in [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml);
+  - kept the existing graph-first discovery contract explicit in [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md) instead of silently rewriting its meaning before additive recall runtime truth actually shipped.
+- Что проверено:
+  - required-read-order reload of runtime core plus `docs/contracts/discovery-agent.md`
+  - targeted repo inspection of current discovery schema/runtime boundaries
+  - targeted consistency proof for references and formatting
+- Что stage-0 доказал:
+  - the new independent-recall capability has a truthful additive migration contract instead of an implicit rewrite;
+  - current graph-first discovery truth remained explicit while the new recall-first path was being introduced.
+- Follow-up:
+  - ship the first additive backend slice as `STAGE-1-INDEPENDENT-RECALL-QUALITY-FOUNDATION`.
+
+### 2026-04-08 — C-ZERO-SHOT-INTEREST-FILTERING-CUTOVER — Archived the full zero-shot filtering cutover capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the repo started from an interest-centric discovery/runtime model where raw article copies, legacy article-side selection truth, and downstream-selected-content feedback loops were still the practical center of the system. The user explicitly wanted a full-system shift to a zero-shot filtering engine that evaluates all found information, keeps noisy intake as evidence, and treats interests as downstream selection rather than upstream discovery ownership.
+- Что capability в итоге delivered:
+  - `services/fetchers` plus worker dedup now persist additive `document_observations` and `canonical_documents`, so raw intake and canonical ownership are no longer conflated;
+  - worker clustering/verification now materializes `story_clusters`, `story_cluster_members`, and `verification_results`, letting duplicate-heavy evidence be handled at canonical/story scope instead of per-copy article scope;
+  - semantic interest filtering is now explicit in `interest_filter_results`, with technical filter state, semantic decision, compatibility decision, and verification snapshots separated from final selection;
+  - `final_selection_results` is now the primary downstream final-selection truth, while `system_feed_results` remains a bounded compatibility projection for legacy consumers;
+  - discovery/source-scoring no longer learns source usefulness from downstream selected-content outcomes like `system_feed_results.eligible_for_feed` or `final_selection_results`;
+  - admin/API/observability/help/operator surfaces now expose canonical document, story cluster, verification, semantic filtering, and final selection truth explicitly;
+  - historical repair proof now rebuilds additive stage-2/3/4 rows before re-validating bounded compatibility projection and retro-notification suppression, while worker-side gating prefers `final_selection_results` wherever that truth exists.
+- Что проверено для capability closeout:
+  - stage-level proof archived in the individual stage entries for stages 0 through 7;
+  - final closeout proof on 2026-04-08:
+    - `python -m py_compile services/workers/app/main.py services/workers/app/smoke.py tests/unit/python/test_interest_auto_repair.py`
+    - `python -m unittest tests.unit.python.test_interest_auto_repair`
+    - `pnpm typecheck`
+    - `pnpm unit_tests`
+    - `pnpm test:migrations:smoke`
+    - `pnpm test:cluster-match-notify:compose`
+    - `pnpm test:reindex-backfill:compose`
+    - `pnpm test:ingest:compose`
+- Что capability closeout доказал:
+  - the shipped runtime now follows the intended additive zero-shot path end-to-end: observation -> canonical document -> story cluster / verification -> semantic filter -> final selection;
+  - worker personalization and backfill behavior no longer depends on `system_feed_results` when `final_selection_results` exists;
+  - historical rebuild can reconstruct stage-2/3/4 derived truth without retro-notification drift while preserving bounded legacy compatibility outputs.
+- Риски или gaps:
+  - a separate discovery/environment residual remains: some compose PostgreSQL states record migration `0016_adaptive_discovery_cutover.sql` as applied while class-registry tables such as `discovery_hypothesis_classes` are missing, so later `pnpm test:discovery-enabled:compose` runs may fail on schema drift outside this capability’s write scope;
+  - the repository worktree remains mixed with other in-flight edits, so future follow-up work must declare its own overlap explicitly instead of assuming the archived zero-shot lane still owns those paths.
+- Follow-up:
+  - if discovery compose proof is needed again, open a separate `Spike` or `Patch` for discovery schema drift instead of reopening this archived capability.
+
+### 2026-04-08 — STAGE-7-BACKFILL-COMPATIBILITY-CLEANUP-AND-FINAL-SYNC — Archived the bounded closeout stage for zero-shot filtering
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stages 1 through 6 had already shipped additive canonical/verification/filter/final-selection truth, the remaining truthful slice was to prove historical repair on the new derived layers, finish worker-side final-selection-first gating, and remove the last live-doc illusion that the old article-centric selection path was still the active truth.
+- Что изменилось:
+  - [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py) now routes worker-side personalization, clustering dispatch, and match-interest skip decisions through `fetch_selection_gate_result_row(...)`, preferring `final_selection_results` and falling back to `system_feed_results` only while a stage-4 row is absent;
+  - [`tests/unit/python/test_interest_auto_repair.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_interest_auto_repair.py) now proves final-selection-first gating for interest matching, personalization eligibility, and cluster-dispatch transitions while still keeping explicit legacy fallback coverage;
+  - [`services/workers/app/smoke.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/smoke.py) now clears and rebuilds additive zero-shot derived state for reindex/backfill proof, asserting restoration of `story_clusters`, `verification_results`, `interest_filter_results`, `final_selection_results`, and bounded `system_feed_results` alignment without retro notifications;
+  - [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json) now exposes `pnpm test:reindex-backfill:compose` as the canonical compose proof for stage-7 historical repair;
+  - [`services/fetchers/src/cli/test-rss-smoke.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/test-rss-smoke.ts) now uses the actual current synthetic canonical URL pattern in the compose RSS smoke instead of a stale exact-path assertion, which was required to keep the stage-7 ingest proof honest rather than leaving a known false failure in the harness;
+  - live runtime/process truth was compressed and resynced in [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md), [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md), [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md), [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), [`docs/contracts/zero-shot-interest-filtering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/zero-shot-interest-filtering.md), and [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml).
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/zero-shot-interest-filtering.md`, and `docs/contracts/discovery-agent.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/workers/app/main.py services/workers/app/smoke.py tests/unit/python/test_interest_auto_repair.py`
+  - `python -m unittest tests.unit.python.test_interest_auto_repair`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:cluster-match-notify:compose`
+  - `pnpm test:reindex-backfill:compose`
+  - `pnpm test:ingest:compose`
+- Что stage-7 доказал:
+  - historical repair can now truthfully rebuild the additive stage-2/3/4 zero-shot layers instead of only reprojecting article-side compatibility rows;
+  - worker runtime behavior now uses final-selection-first gating where that truth exists, which aligns runtime behavior with the stage-4 read-model cutover;
+  - the bounded compatibility layer remains in sync after rebuild, and retro notification suppression remains intact.
+- Риски или gaps:
+  - stage-7 did not claim to repair the separate discovery compose schema-drift residual where `0016_adaptive_discovery_cutover.sql` is recorded but `discovery_hypothesis_classes` is absent on some compose PostgreSQL states;
+  - the repository worktree remained mixed throughout closeout, so unrelated dirty paths were intentionally left untouched.
+- Follow-up:
+  - archive the parent capability and treat any future discovery/schema-drift investigation as a separate lane.
+
+### 2026-04-08 — STAGE-6-ADMIN-API-OBSERVABILITY-AND-OPERATOR-TOOLS — Archived the operator-surface stage for zero-shot filtering
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stages 1 through 5 had already shifted runtime truth onto canonical documents, verification state, semantic filters, final selection, and generic discovery source-quality signals, operator/admin/API surfaces still exposed too much legacy article-centric wording. The next truthful slice had to make the shipped model visible and explorable without pretending `system_feed_results` was still the primary truth.
+- Что изменилось:
+  - new shared operator helper [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts) now normalizes canonical document, story cluster, verification, semantic-filter, final-selection, and legacy-projection context for admin/operator surfaces;
+  - admin screens [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro), [`apps/admin/src/pages/articles/[docId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles/[docId].astro), [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro), [`apps/admin/src/pages/observability.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/observability.astro), and [`apps/admin/src/pages/help.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/help.astro) now present article observations separately from canonical/story-cluster/final-selection truth and distinguish mission fit from generic channel-quality evidence;
+  - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) and [`packages/contracts/src/article.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/contracts/src/article.ts) now expose operator/API payloads that include explicit zero-shot explain context instead of hiding the final-selection cutover behind legacy-only response shapes;
+  - targeted proof coverage was added in [`tests/unit/ts/admin-operator-surfaces.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-operator-surfaces.test.ts) and [`tests/unit/python/test_api_zero_shot_operator_surfaces.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_zero_shot_operator_surfaces.py), and runtime truth/docs were synced in [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md), [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md), [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md), [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), [`docs/contracts/zero-shot-interest-filtering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/zero-shot-interest-filtering.md), [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md), and [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml).
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/zero-shot-interest-filtering.md`, and `docs/contracts/discovery-agent.md`
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/api/app/main.py tests/unit/python/test_api_zero_shot_operator_surfaces.py`
+  - `python -m unittest tests.unit.python.test_api_zero_shot_operator_surfaces`
+  - `node --test tests/unit/ts/admin-operator-surfaces.test.ts`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:discovery-enabled:compose`
+  - `pnpm test:cluster-match-notify:compose`
+- Что stage-6 доказал:
+  - admin/API/operator surfaces now speak the shipped canonical/verification/final-selection model truthfully instead of implying that raw article processing state alone determines selection;
+  - discovery/operator wording now differentiates mission-scoped fit from generic channel-quality evidence after the stage-5 source-scoring decoupling;
+  - compose-backed runtime proof remained green for both clustering/final-selection and discovery enablement on the canonical baseline used during stage-6 closeout.
+- Риски или gaps:
+  - later compose environments may still encounter separate discovery schema drift outside the stage-6 write scope; that residual must be handled in a separate discovery lane rather than by reopening this archived stage;
+  - the repository worktree remained mixed, so stage-6 intentionally avoided unrelated edits even when nearby files were dirty.
+- Follow-up:
+  - continue with `STAGE-7-BACKFILL-COMPATIBILITY-CLEANUP-AND-FINAL-SYNC`.
+
+### 2026-04-08 — STAGE-5-DISCOVERY-SOURCE-SCORING-DECOUPLING — Archived the bounded discovery/source-quality decoupling stage for the zero-shot filtering cutover
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-4 moved final editorial selection onto `final_selection_results`, discovery still learned source usefulness from downstream selected-content outcomes. The next truthful slice had to remove that coupling without pretending to redesign the whole graph-first discovery subsystem in one pass.
+- Что изменилось:
+  - [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py) no longer joins `system_feed_results` to compute channel metrics; discovery channel quality is now derived from generic intake evidence such as unique-article ratio, fetch health, freshness, lead-time, duplicate pressure, and runtime-state failure signals;
+  - [`services/workers/app/source_scoring.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/source_scoring.py) now exposes `summarize_channel_quality_metrics(...)` and persists a discovery scoring breakdown that explicitly records generic `channelMetrics` provenance instead of relying on hidden selected-content yield semantics;
+  - targeted regression coverage in [`tests/unit/python/test_source_scoring.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_source_scoring.py) and [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py) now proves the generic metric path, portfolio/scoring persistence, and absence of `usefulArticlesPeriod` / downstream selection semantics in the scoring breakdown.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, and `docs/contracts/discovery-agent.md`
+  - targeted repo inspection of current discovery/source-scoring paths and downstream selection dependencies
+  - `python -m py_compile services/workers/app/source_scoring.py services/workers/app/discovery_orchestrator.py tests/unit/python/test_discovery_orchestrator.py tests/unit/python/test_source_scoring.py`
+  - `python -m unittest tests.unit.python.test_source_scoring tests.unit.python.test_discovery_orchestrator`
+  - `rg -n "join system_feed_results|eligible_for_feed" services/workers/app/discovery_orchestrator.py services/workers/app/source_scoring.py`
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm dev:mvp:internal:no-build` (needed because the local compose baseline was down before the discovery compose smoke)
+  - `pnpm test:discovery-enabled:compose`
+- Что stage-5 доказал:
+  - discovery/source usefulness is no longer learned from downstream selected-content outcomes in the current runtime;
+  - persisted discovery scoring can still build contextual scores and portfolio snapshots, but its `yield_score` semantics now describe generic source-quality yield rather than selected-content yield;
+  - the compose-backed discovery walkthrough still works after the decoupling change.
+- Риски или gaps:
+  - discovery remains graph-first and mission-centric after this stage; stage-5 removes the selected-content dependency, but it does not yet turn discovery into a fully recall-first, interest-independent acquisition system;
+  - the repository worktree remains mixed, and broad integration proof still carries the existing unrelated fetchers RSS canonical-smoke residual.
+- Follow-up:
+  - start `STAGE-6-ADMIN-API-OBSERVABILITY-AND-OPERATOR-TOOLS` as the next bounded implementation slice.
+
+### 2026-04-08 — STAGE-4-FINAL-SELECTION-READ-MODEL-CUTOVER — Archived the additive final-selection read-model cutover stage for the zero-shot filtering architecture
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-3 separated technical filters, semantic decisions, and verification snapshots into `interest_filter_results`, the repo still treated legacy `system_feed_results` as the only authoritative selected-content gate. The next truthful slice had to move final editorial selection onto canonical/verification/filtering truth without silently rewriting the whole historical corpus or collapsing compatibility consumers.
+- Что изменилось:
+  - added migration [`database/migrations/0026_final_selection_results.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0026_final_selection_results.sql) plus synced DDL in [`database/ddl/phase4_matching_notification.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase4_matching_notification.sql), introducing additive PostgreSQL table `final_selection_results` with final decision, selected flag, verification context, filter-count summary, compatibility decision, and explain payloads;
+  - added worker-side final-selection summarization in [`services/workers/app/final_selection.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/final_selection.py) and wired it into [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py), so system-criterion `interest_filter_results` plus current canonical/story verification context now materialize `selected` / `rejected` / `gray_zone` rows in `final_selection_results`, while `system_feed_results` is recomputed only as a compatibility projection;
+  - updated selected-content read surfaces in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), [`apps/web/src/lib/server/user-content-state.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/lib/server/user-content-state.ts), [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro), and [`apps/admin/src/pages/articles/[docId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles/[docId].astro) so system-selected/API/admin reads are now final-selection-first with legacy fallback while a stage-4 row is absent;
+  - extended contracts and proof hooks in [`packages/contracts/src/article.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/contracts/src/article.ts), [`packages/contracts/src/content.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/contracts/src/content.ts), [`services/workers/app/smoke.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/smoke.py), [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts), [`tests/unit/python/test_final_selection.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_final_selection.py), [`tests/unit/python/test_api_feed_dedup.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_feed_dedup.py), [`tests/unit/python/test_api_matches.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_matches.py), and [`tests/unit/python/test_interest_auto_repair.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_interest_auto_repair.py).
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted repo inspection of stage-3 semantic filter outputs, current API/admin selected-content surfaces, and compatibility boundaries
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/workers/app/final_selection.py services/workers/app/main.py services/workers/app/smoke.py services/api/app/main.py`
+  - `python -m unittest tests.unit.python.test_final_selection tests.unit.python.test_api_feed_dedup tests.unit.python.test_api_matches tests.unit.python.test_interest_filters tests.unit.python.test_story_clusters`
+  - `python -m unittest tests.unit.python.test_interest_auto_repair`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:cluster-match-notify:compose`
+  - `git diff --check -- database/migrations/0026_final_selection_results.sql database/ddl/phase4_matching_notification.sql services/workers/app/final_selection.py services/workers/app/main.py services/workers/app/smoke.py services/api/app/main.py apps/web/src/lib/server/user-content-state.ts apps/admin/src/pages/articles.astro apps/admin/src/pages/articles/[docId].astro packages/contracts/src/article.ts packages/contracts/src/content.ts services/relay/src/cli/test-migrations.ts tests/unit/python/test_final_selection.py tests/unit/python/test_api_feed_dedup.py tests/unit/python/test_api_matches.py tests/unit/python/test_interest_auto_repair.py`
+- Что stage-4 доказал:
+  - NewsPortal now has shipped additive final-selection truth in PostgreSQL via `final_selection_results`, rather than inferring selected-content eligibility only from legacy article-side tables;
+  - `system_feed_results` remains present but is now explicitly a compatibility projection derived from the stage-4 summary instead of the primary selected-content truth;
+  - selected-content/API/admin read surfaces now consume final-selection truth first and only fall back to legacy `system_feed_results` when a stage-4 row is not yet present.
+- Риски или gaps:
+  - `pnpm integration_tests` still fails in the current mixed worktree on an unrelated RSS canonical-URL smoke assertion in [`services/fetchers/src/cli/test-rss-smoke.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/test-rss-smoke.ts); the concrete failing expectation is that `canonical_documents.canonical_url` should preserve the smoke article URL but instead resolves to an `example.com` article URL, which sits outside the stage-4 final-selection boundary;
+  - this stage intentionally did not perform broad historical replay or mutate already selected rows; compatibility fallback remains necessary while older rows without `final_selection_results` are still present.
+- Follow-up:
+  - start `STAGE-5-DISCOVERY-SOURCE-SCORING-DECOUPLING` as the next bounded implementation slice.
+
+### 2026-04-08 — STAGE-3-ZERO-SHOT-INTEREST-FILTER-SPLIT — Archived the additive semantic filter-split stage for the zero-shot filtering cutover
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-2 established canonical-first story clustering and verification, the repo still kept semantic filtering logic mixed inside legacy article-side `criterion_match_results` and `interest_match_results`. The next truthful slice had to separate technical hard-filter outcomes, verification snapshots, and semantic decisions into an explicit downstream layer without yet rewriting final selection truth.
+- Что изменилось:
+  - added migration [`database/migrations/0025_interest_filter_results.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0025_interest_filter_results.sql) plus synced DDL in [`database/ddl/phase4_matching_notification.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase4_matching_notification.sql), introducing additive PostgreSQL table `interest_filter_results` for explicit split filter outcomes over both system criteria and user interests;
+  - added worker-side semantic filter helper layer in [`services/workers/app/interest_filters.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/interest_filters.py) and wired it into [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py), so `article.match_criteria`, `article.match_interests`, and criterion/user gray-zone review updates now write explicit `technical_filter_state`, `semantic_decision`, compatibility decision, and verification snapshot rows while preserving legacy article-side outputs;
+  - extended compose/runtime proof hooks in [`services/workers/app/smoke.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/smoke.py), migration smoke in [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts), article explainability in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), and added targeted regression coverage in [`tests/unit/python/test_interest_filters.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_interest_filters.py) plus [`tests/unit/python/test_interest_auto_repair.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_interest_auto_repair.py).
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted repo inspection of current criteria/user-interest runtime, verification truth, and legacy compatibility surfaces
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/workers/app/interest_filters.py services/workers/app/main.py services/workers/app/smoke.py services/api/app/main.py`
+  - `python -m unittest tests.unit.python.test_interest_filters tests.unit.python.test_interest_auto_repair tests.unit.python.test_story_clusters`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:interest-compile:compose` (passed on immediate rerun after one transient compose-fixture verification failure; compose DB inspection confirmed the compiled interest row and the rerun closed the proof)
+  - `pnpm test:cluster-match-notify:compose`
+  - `git diff --check -- database/migrations/0025_interest_filter_results.sql database/ddl/phase4_matching_notification.sql services/workers/app/interest_filters.py services/workers/app/main.py services/workers/app/smoke.py services/api/app/main.py services/relay/src/cli/test-migrations.ts tests/unit/python/test_interest_filters.py tests/unit/python/test_interest_auto_repair.py`
+- Что stage-3 доказал:
+  - NewsPortal now has a shipped additive semantic filter-split layer on top of stage-1/2 canonical ownership and verification, rather than keeping all semantic decisions implicit inside legacy article-side result tables only;
+  - explicit technical hard-filter outcome, semantic decision, compatibility decision, and verification snapshot rows are now rebuildable PostgreSQL truth via `interest_filter_results`, while legacy `criterion_match_results`, `interest_match_results`, and `system_feed_results` remain compatibility outputs rather than being silently removed;
+  - the local compose cluster/match/notify smoke proves that the new split layer coexists with canonical verification, story clustering, criteria matching, interest matching, and notification flow on the current baseline.
+- Follow-up:
+  - start `STAGE-4-FINAL-SELECTION-READ-MODEL-CUTOVER` as the next bounded implementation slice.
+
+### 2026-04-08 — STAGE-2-DUPLICATE-STORY-CLUSTERING-AND-VERIFICATION — Archived the additive canonical-first clustering and verification stage for the zero-shot filtering cutover
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-1 established canonical-document and observation ownership, the repo still lacked a durable semantic layer for same-story grouping and verification that later semantic filtering could build on. The current runtime already had legacy `event_clusters`, but it did not yet expose canonical-first story-cluster ownership, source-family-aware corroboration, or reusable verification truth.
+- Что изменилось:
+  - added migration [`database/migrations/0024_story_clusters_and_verification.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0024_story_clusters_and_verification.sql) plus synced DDL in [`database/ddl/phase2_ingest_foundation.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase2_ingest_foundation.sql) and [`database/ddl/phase3_nlp_foundation.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase3_nlp_foundation.sql), introducing additive PostgreSQL tables `story_clusters`, `story_cluster_members`, and `verification_results`, plus `canonical_documents.canonical_domain` for source-family-aware verification;
+  - added worker-side canonical-first clustering and verification materialization in [`services/workers/app/story_clusters.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/story_clusters.py) and wired it into [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py), so `article.cluster` now writes additive story-cluster and verification truth before the current legacy `event_clusters` compatibility lane continues;
+  - updated canonical ownership support in [`services/workers/app/canonical_documents.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/canonical_documents.py), expanded the compose smoke fixture in [`services/workers/app/smoke.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/smoke.py), extended migration smoke in [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts), and added targeted regression coverage in [`tests/unit/python/test_story_clusters.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_story_clusters.py) plus [`tests/unit/python/test_interest_auto_repair.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_interest_auto_repair.py), including the compatibility fallback when canonical ownership is still missing.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted repo inspection of canonical-document ownership, worker clustering/verification code, and current compatibility boundaries
+  - worktree coherence check via `git status --short`
+  - `python -m py_compile services/workers/app/canonical_documents.py services/workers/app/story_clusters.py services/workers/app/main.py services/workers/app/smoke.py`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:cluster-match-notify:compose`
+  - `git diff --check -- services/workers/app/story_clusters.py tests/unit/python/test_interest_auto_repair.py`
+- Что stage-2 доказал:
+  - NewsPortal now has shipped additive canonical-first story clustering and verification truth on top of stage-1 canonical ownership, rather than keeping all same-story semantics implicit inside legacy `event_clusters` only;
+  - canonical-document verification and story-cluster verification are now rebuildable PostgreSQL truth via `verification_results`, while missing canonical ownership truthfully skips the additive stage-2 path instead of breaking the legacy cluster worker contract;
+  - the local compose cluster smoke proves that additive stage-2 verification can coexist with legacy event clustering, criteria matching, interest matching, and notification flow on the current baseline.
+- Follow-up:
+  - start `STAGE-3-ZERO-SHOT-INTEREST-FILTER-SPLIT` as the next bounded implementation slice.
+
+### 2026-04-08 — STAGE-1-CANONICAL-DOCUMENT-AND-OBSERVATION-LAYER — Archived the additive canonical-ownership stage for the zero-shot filtering cutover
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stage-0 defined the cutover contract, the repo needed a first shipped runtime slice that separated raw observation ownership from future canonical-document ownership without breaking the current editorial/article path. The current system already stored `canonical_doc_id` inside `articles`, but it still lacked a truthful ownership layer that later clustering/verification/filter stages could build on.
+- Что изменилось:
+  - added migration [`database/migrations/0023_canonical_documents_and_observations.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0023_canonical_documents_and_observations.sql) plus synced DDL in [`database/ddl/phase2_ingest_foundation.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase2_ingest_foundation.sql), introducing additive PostgreSQL tables `canonical_documents` and `document_observations` together with bounded backfill for existing article rows;
+  - added fetchers-side observation persistence in [`services/fetchers/src/document-observations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/document-observations.ts), wired it into RSS/article ingest in [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts) and editorial website projection in [`services/fetchers/src/resource-enrichment.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts), so raw article observations are now recorded immediately at ingest time;
+  - added worker-side canonical ownership materialization in [`services/workers/app/canonical_documents.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/canonical_documents.py) and hooked it into dedup in [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py), so canonical documents and observation mappings are maintained after normalize/dedup without changing the existing `system_feed_results` gate;
+  - extended proof surfaces in [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts), [`services/fetchers/src/cli/test-rss-smoke.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/test-rss-smoke.ts), [`tests/unit/ts/document-observations.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/document-observations.test.ts), and [`tests/unit/python/test_canonical_documents.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_canonical_documents.py), then synced runtime/core docs to the new shipped truth.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted repo inspection of current article/content ownership and dedup paths
+  - worktree coherence check via `git status --short`
+  - `git diff --check -- docs/work.md database/migrations/0023_canonical_documents_and_observations.sql database/ddl/phase2_ingest_foundation.sql services/fetchers/src/document-observations.ts services/fetchers/src/fetchers.ts services/fetchers/src/resource-enrichment.ts services/workers/app/canonical_documents.py services/workers/app/main.py services/relay/src/cli/test-migrations.ts tests/unit/ts/document-observations.test.ts tests/unit/python/test_canonical_documents.py services/fetchers/src/cli/test-rss-smoke.ts`
+  - `python -m py_compile services/workers/app/canonical_documents.py services/workers/app/main.py`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:ingest:compose`
+- Что stage-1 доказал:
+  - NewsPortal now has a shipped additive ownership layer for raw article observations and canonical documents, rather than keeping all future semantic ownership implicit inside `articles` only;
+  - the compatibility bridge is explicit: `canonical_documents.canonical_document_id` currently reuses the canonical editorial article `doc_id`, and current final editorial selection still remains on `articles` plus `system_feed_results`;
+  - the local compose RSS path now proves that the new layer is materially populated in runtime, not just present in schema.
+- Follow-up:
+  - start `STAGE-2-DUPLICATE-STORY-CLUSTERING-AND-VERIFICATION` as the next bounded implementation slice.
+
+### 2026-04-08 — STAGE-0-ZERO-SHOT-FILTERING-DESIGN-CONTRACT — Archived the design-contract stage for the zero-shot filtering cutover
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the user asked to move from an interest-centric discovery model toward a system that evaluates all found information and filters it zero-shot by interests, the repo needed a truthful design-contract stage before any schema/runtime rewrite. The cutover spans multiple services and truth layers, so stage-0 had to establish durable target architecture, data ownership, proof contour, and doc-sync discipline first.
+- Что изменилось:
+  - added [`docs/contracts/zero-shot-interest-filtering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/zero-shot-interest-filtering.md), a new deep contract doc defining the target processing model `acquire all -> normalize -> canonicalize -> dedup/cluster -> verify -> interest-match -> select`, the non-search/non-top-k product model, the target data entities, compatibility rules for current `articles` / `system_feed_results`, and the full stage map for the cutover;
+  - synced contract indices and durable engineering/machine-proof truth in [`docs/contracts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/README.md), [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md), [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), and [.aidp/os.yaml](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml), so the new lane is no longer chat-only knowledge;
+  - synced live execution state in [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md): stage-0 is complete, the parent capability remains active, and `STAGE-1-CANONICAL-DOCUMENT-AND-OBSERVATION-LAYER` is now the truthful next implementation slice.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted repo inspection of current discovery/scoring/selection code and current contract docs
+  - worktree coherence check via `git status --short`
+  - primary-source internet research for zero-shot/noisy retrieval and filtering architecture tradeoffs
+  - `git diff --check -- docs/contracts/zero-shot-interest-filtering.md docs/contracts/README.md docs/engineering.md docs/verification.md .aidp/os.yaml docs/work.md docs/history.md`
+- Что stage-0 доказал:
+  - the repo now has an explicit durable contract for the replacement architecture and no longer needs to guess the target model during schema/runtime work;
+  - the cutover discipline now explicitly forbids rewriting `docs/blueprint.md` ahead of shipped reality and forbids treating internal confidence scores as a user-facing ranking contract.
+- Follow-up:
+  - start `STAGE-1-CANONICAL-DOCUMENT-AND-OBSERVATION-LAYER` as the next bounded additive implementation slice.
+
+### 2026-04-08 — SPIKE-ZERO-SHOT-NOISY-RETRIEVAL-OPTIONS — Archived the cost-aware research spike for zero-shot retrieval in mega-noisy environments
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after confirming that the current repo architecture is structurally interest-centric, the user narrowed the requirement further: the target system should remain zero-shot while operating in very noisy environments and should be as fast and cheap as possible. This required another bounded research spike focused specifically on retrieval architecture tradeoffs rather than only on interest independence.
+- Что установлено:
+  - external primary-source guidance does not support dense-first or LLM-first discovery as the default for this constraint set; the recurring recommendation is cheap broad recall first, expensive intelligence later and only on bounded top-k;
+  - official Vespa ranking guidance emphasizes phased retrieval/reranking and cheap top-k retrieval operators such as WAND/weakAnd before more expensive second-phase ranking, which aligns well with a noisy-corpus cost budget;
+  - official Elasticsearch guidance on RRF shows why hybrid retrieval is attractive as an additive quality layer: independent retrievers can be fused without weight tuning, but the mechanism still assumes bounded top result sets rather than an expensive all-doc scoring pass;
+  - Google retrieval work and zero-shot benchmarks indicate that lexical retrieval remains robust out-of-domain, while hybrid methods improve recall/quality by combining lexical and semantic signals; this makes lexical-first or sparse-lexical-first the safer cheap baseline for NewsPortal than dense-only retrieval;
+  - older but still relevant IR guidance on MMR/diversity remains important for mega-noisy environments because a system can otherwise retrieve many relevant-but-redundant near-copies, which is exactly the failure mode already visible in the current corpus.
+- Что это означает для NewsPortal:
+  - the best cheap/fast architectural default is not “better interest templates” and not “stronger dense scoring everywhere”, but an upstream recall layer built around lexical or sparse-lexical retrieval, canonicalization, source-family deduplication, cluster-aware novelty/diversity, and only then downstream interest/editorial ranking;
+  - a stronger hybrid stack is still reasonable, but only as a bounded top-k improvement layer after cheap recall has already reduced the candidate set;
+  - late interaction or stronger rerankers such as ColBERTv2-style methods may improve quality, but they should be treated as optional bounded rerank stages, not as the primary recall mechanism under the user’s cheap/fast constraint.
+- Что проверено:
+  - primary-source internet research across official Vespa and Elastic docs plus Google/ACL/OpenReview/CMU IR references
+  - synthesis against the current repo truth already established in the previous discovery review spike
+- Рекомендуемый follow-up:
+  - if the user wants the next truthful step, open a capability that compares three concrete NewsPortal-ready options:
+    - lexical-first recall with strong dedup/diversity and heuristic source priors;
+    - lexical-first plus sparse/hybrid fusion on bounded candidates;
+    - bounded late rerank on top of one of the first two, only if offline measurement shows the extra cost is worth it.
+
+### 2026-04-08 — SPIKE-INTEREST-INDEPENDENT-DISCOVERY-REVIEW — Archived the analysis of interest dependence versus recall-first discovery
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the future-only article-yield remediation, the user clarified a stricter product requirement: the system should find valuable information even in a high-noise environment and should not fundamentally depend on `interest_templates` or mission-specific interests for recall. That required a bounded spike to compare the current repo truth with primary-source retrieval guidance before proposing more tuning or architecture changes.
+- Что установлено:
+  - the current durable blueprint is explicitly interest-centric: discovery planning is owned by `discovery_missions.interest_graph`, source evaluation remains `Source Profile × Interest`, and approved candidates still become `source_channels` through the discovery mission flow rather than an interest-independent upstream recall layer;
+  - implementation truth matches that blueprint: [`services/workers/app/discovery_orchestrator.py`] builds default hypotheses directly from graph/topic/entity/source-type seeds, [`services/workers/app/source_scoring.py`] computes `contextual_score` from mission-graph overlap plus channel-yield heuristics, and channel yield itself is derived from `system_feed_results.eligible_for_feed`, which makes source-quality learning depend on the current downstream editorial gate;
+  - the article gate is a separate downstream layer and is not the main architectural problem by itself: [`services/workers/app/main.py`] applies criteria hard filters and writes `system_feed_results`, while [`services/workers/app/system_feed.py`] summarizes the final editorial decision from criterion outcomes;
+  - the recent remediation therefore remains tactically valid but strategically insufficient: syncing canonical interest templates, quarantining high-noise Google RSS cohorts, and deprioritizing duplicate-heavy country-scoped HN cohorts was the correct bounded fix for the current system because it reduced backlog/noise without mutating the eligible set, but it does not create the independent recall layer the user now wants.
+- Что показало сравнение с внешними первичными источниками:
+  - primary retrieval guidance consistently recommends separating fast candidate generation from slower, more selective reranking rather than collapsing discovery into a single interest-dependent gate;
+  - hybrid retrieval is recommended because lexical retrieval remains robust out-of-domain while semantic retrievers recover complementary matches; official Elastic and OpenSearch docs describe combining independent retrievers, and Google retrieval papers report that hybrid retrieval improves over either lexical or neural retrieval alone in zero-shot/out-of-domain settings;
+  - phased ranking and explicit diversity are treated as first-class concerns in mature retrieval systems, meaning that deduplication/diversity and top-k reranking should happen after broad recall, not instead of broad recall.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - worktree coherence check via `git status --short`
+  - targeted repo inspection of discovery/scoring/selection code and contracts
+  - primary-source internet research via Elastic, OpenSearch, Vespa, Google Research, ACL Anthology, and IR Anthology references
+- Рекомендуемый follow-up:
+  - if the user wants to continue, open a new architecture capability that separates:
+    - interest-independent recall and corpus building,
+    - canonicalization / near-duplicate suppression / source-family diversity,
+    - generic quality and importance priors,
+    - downstream system-interest and user-interest ranking as optional consumers of that corpus,
+  - and do not hide that redesign inside another narrow template-tuning or source-quarantine patch.
+
+### 2026-04-08 — C-ARTICLE-YIELD-REMEDIATION — Archived the future-only article-yield remediation capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the local compose stack had drifted into a truthful low-yield state on April 8, 2026: article-ingest backlog, duplicate-heavy Google/HN source families, and live interest-template drift were suppressing useful intake while still surfacing obvious false positives. The user explicitly wanted analysis plus a remediation plan that would avoid mutating already selected articles, so the lane had to stay future-only and evidence-driven.
+- Что изменилось:
+  - `services/fetchers/src/cli/article-yield-shared.ts`, `services/fetchers/src/cli/article-yield-diagnostics.ts`, `services/fetchers/src/cli/article-yield-remediate.ts`, `services/fetchers/package.json`, and `package.json` now provide repeatable article-yield diagnostics/remediation commands that export `/tmp/newsportal-article-yield-*` packs with the declared views, ranked offender analysis, before/after comparison, and eligible-set stability check;
+  - `services/fetchers/src/enrichment.ts` plus `tests/unit/ts/article-enrichment-sanitizers.test.ts` now sanitize malformed extracted publication timestamps and reject non-positive media dimensions before persistence, preventing the specific `[object Object]` timestamptz failures and `article_media_assets_height_px_check` violations from remaining acceptable write-path inputs;
+  - live operator data on the compose PostgreSQL stack was remediated future-only through the new CLI: the five active system-interest templates were resynced to `docs/data_scripts/outsource_balanced_templates.json`, `418` Google RSS channels were quarantined, and `330` country-scoped HN channels were deprioritized without broad historical replay or deletion of the existing eligible corpus;
+  - runtime-doc machine truth was synced in `docs/work.md`, `docs/verification.md`, and `.aidp/os.yaml` so the new diagnostics/remediation commands and proof contour are no longer session-only knowledge.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - `pnpm article:yield:diagnostics`
+  - `pnpm article:yield:remediate -- --apply`
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:enrichment:compose`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d fetchers`
+  - `docker exec docker-fetchers-1 pnpm --filter @newsportal/fetchers run:once`
+  - post-deploy `pnpm article:yield:diagnostics`
+- Что подтвердил финальный re-check:
+  - the diagnostics pack is repeatable and now captures the declared loss buckets plus offender views; one representative export on April 8, 2026 at `13:02:41Z` showed `920` active RSS channels, `6600` article rows, `667` distinct URLs, `16` eligible rows, `765` pending `article.ingest.requested` runs, and `861` transient fetch failures;
+  - the future-only remediation apply itself did not mutate the pre-existing eligible set: the before/after comparison at `13:05:22Z` preserved all `16` previously eligible doc IDs while updating live templates and source cohorts;
+  - after the HN selector correction, Google quarantine, final fetchers rebuild, and post-deploy diagnostics, the live stack on April 8, 2026 at `13:09:04Z` / `13:09:26Z` showed `502` active RSS channels, `6605` article rows, `672` distinct URLs, `19` eligible rows, and `0` pending `article.ingest.requested` runs; the short fresh poll-window check did not grow the pending backlog.
+- Риски или gaps:
+  - the lane intentionally did not replay or rewrite historical non-selected articles that had already failed before the final fetchers rebuild; if the user wants to clean that residue, it should be a separate `docIds`-scoped repair slice that explicitly excludes the current eligible set;
+  - worker logs still show historical enrichment failures from the pre-rebuild window on April 8, 2026, but the closed capability does not claim retrospective mutation of that already-ingested corpus;
+  - the fresh post-rebuild `run:once` proved that pending ingest no longer grows on the current stack, but no brand-new due-source batch appeared in that short window, so live proof is a no-growth/backlog-clear signal rather than a new uncontrolled internet sample.
+- Follow-up:
+  - if the user wants more on this lane, open a separate future-safe stage for scoped historical repair of failed non-selected docs only, or a narrower fetchers hardening patch if a new post-rebuild enrichment failure signature appears.
+
+### 2026-04-07 — C-INTEREST-CONTRACT-PARITY — Archived the admin/web interest-contract parity closeout
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after nullable `time_window_hours` semantics landed, the user still reported a remaining admin-managed system-interest save failure and the web `user_interests` surface still lagged behind the advanced backend/admin contract; the truthful follow-up therefore had to harden the real admin save path, keep synced `criteria` aligned, and remove the remaining user-portal advanced-field drops.
+- Что изменилось:
+  - `apps/admin/src/lib/server/admin-templates.ts`, `apps/admin/src/components/InterestTemplateEditorForm.tsx`, `apps/admin/src/pages/templates/interests/new.astro`, `apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro`, and `tests/unit/ts/admin-template-sync.test.ts` now preserve nullable `time_window_hours` plus `allowed_content_kinds` across parse/save/sync, so system-interest edits keep the full template-owned contract while still syncing the matching subset into live `criteria`;
+  - `apps/admin/src/pages/bff/admin/templates.ts` plus new `tests/unit/ts/admin-interest-template-route.test.ts` now translate time-window schema drift (`missing column`, type mismatch, legacy `NOT NULL`, or time-window check constraint failure) into an explicit migration/write-path guidance message instead of an opaque browser flash;
+  - `apps/web/src/components/InterestManager.tsx`, `apps/web/src/components/LiveInterestsSection.tsx`, `apps/web/src/lib/server/user-interests.ts`, and `tests/unit/ts/user-interests.test.ts` now expose and persist the full advanced `user_interests` field set that the runtime already supports, including `time_window_hours`, newline-delimited lexical lists, and short-token hints, without silent drops on create/update/clone.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+- Риски или gaps:
+  - this closeout did not rerun a compose/browser save against an intentionally outdated DB schema; if an operator still sees the save failure on a local stack, that environment likely still needs the latest nullable-time-window migrations applied;
+  - downstream zero-eligible tuning, representative-corpus restoration, and broader runtime quality work remain separate follow-up lanes;
+  - the repository worktree remains mixed with unrelated in-flight edits, and this archive does not claim a clean tree.
+- Follow-up:
+  - if the user wants the next truthful step on this lane, verify the target stack has the latest nullable-time-window migrations applied and retry the real admin save flow there; otherwise resume the blocked zero-eligible remediation only after restoring a representative corpus.
+
+### 2026-04-07 — C-FEED-INGRESS-ADAPTERS — Archived the internal RSS feed-ingress adapter capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to support aggregator-backed RSS/Atom sources such as Reddit, Hacker News, Google News, and similar system feeds without creating new provider types; the truthful implementation slice therefore had to stay inside `provider_type = rss`, add internal adapter strategies for aggregator-aware normalization, and then prove that local compose ingest no longer failed on the adapter lane.
+- Что изменилось:
+  - `packages/contracts/src/source.ts`, admin/API channel surfaces, and fetcher runtime now support explicit-or-inferred internal adapter strategies (`generic`, `reddit_search_rss`, `hn_comments_feed`, `google_news_rss`) plus optional pre-ingest `maxEntryAgeHours`, while keeping the operator-facing provider identity as `rss`;
+  - `services/fetchers` gained a feed-ingress adapter layer that owns tolerant parse and normalization for Reddit search feeds, HN discussion/comment-feed handling with outbound `Article URL` canonicalization and discussion provenance, Google News wrapper URL resolution, and pre-ingest stale-entry drop before `articles` / `article.ingest.requested` persistence;
+  - persisted article payloads now keep adapter provenance in `raw_payload_json.feedAdapter`, local compose/dev baseline docs/env now set `WORKER_SEQUENCE_RUNNER_CONCURRENCY=4`, and the durable subsystem truth moved into `docs/contracts/feed-ingress-adapters.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted contract reload of `docs/contracts/feed-ingress-adapters.md` and `docs/contracts/test-access-and-fixtures.md`
+  - `pnpm test:feed-ingress-adapters:smoke`
+  - final local runtime re-check via `docker ps`, targeted `docker logs`, and `docker exec docker-postgres-1 psql ...` inspection of `source_channels`, `articles`, `channel_fetch_runs`, `sequence_runs`, and persisted `raw_payload_json.feedAdapter`
+  - `pnpm test:ingest:compose`
+- Что подтвердил финальный re-check:
+  - on the current local compose baseline, `pnpm test:feed-ingress-adapters:smoke` and `pnpm test:ingest:compose` both pass;
+  - the smoke-created channel produces `channel_fetch_runs` with `new_content` followed by `304 no_change`, a completed `article.ingest.requested` `sequence_run`, and a persisted article row with `raw_payload_json.feedAdapter.strategy = generic`;
+  - before the smoke run the current compose DB was effectively empty (`source_channels = 0`, `articles = 0`, `channel_fetch_runs = 0`, `sequence_runs = 0`), so no local ingress blocker currently reproduces, but the fresh stack also does not contain operator-imported Reddit/HN/Google channels for uncontrolled live-network proof.
+- Риски или gaps:
+  - the final re-check proves the local baseline and deterministic adapter path, but it does not claim fresh uncontrolled live-internet proof for operator-imported Reddit/HN/Google channels on the current machine state because that dataset is no longer present on the fresh stack;
+  - downstream `system-selected` quality, template/scoring strictness, corpus duplication, and recompile/reindex work remain separate follow-up lanes and are not hidden inside this archive.
+- Follow-up:
+  - reopen this capability only if a new failing ingest signal appears on actual operator-imported aggregator channels or if future adapter strategies need to expand the `rss` boundary again; otherwise continue with the downstream zero-eligible remediation on a representative populated corpus.
+
+### 2026-04-07 — PATCH-TIME-WINDOW-NULL-SEMANTICS — Archived nullable "any time" semantics for blank time windows
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the system-interest contract alignment, the user asked for a follow-up semantic change: when `time_window_hours` is left unset, the platform should not silently fall back to `168` hours but instead accept content from any time period; the audit showed that this fallback was still hard-coded in admin parsing, DB defaults, compiler snapshots, and worker hard filters.
+- Что изменилось:
+  - `database/ddl/phase3_nlp_foundation.sql`, `database/ddl/phase4_matching_notification.sql`, and `database/migrations/0022_nullable_time_windows.sql` now make `criteria.time_window_hours`, `user_interests.time_window_hours`, and `interest_templates.time_window_hours` nullable, drop the implicit `168` default, and keep only a positive-value check when a window is explicitly set;
+  - `apps/admin/src/lib/server/admin-templates.ts`, `apps/admin/src/lib/server/user-interests.ts`, `apps/admin/src/components/InterestTemplateEditorForm.tsx`, `apps/admin/src/pages/templates/interests/new.astro`, `apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro`, and `apps/admin/src/pages/user-interests.astro` now treat a blank admin field as `NULL`, show blank inputs for null windows, and explain in the operator copy that blank means "any time" rather than a hidden seven-day fallback;
+  - `services/ml/app/compiler.py` now preserves `time_window_hours = null` in compiled hard constraints, and `services/workers/app/main.py` now interprets that null state as "no age limit" instead of auto-coercing it back to `168` and filtering stale content;
+  - `docs/blueprint.md`, `apps/admin/src/pages/help.astro`, `tests/unit/ts/admin-template-sync.test.ts`, `tests/unit/ts/admin-user-interests.test.ts`, `tests/unit/python/test_embedding_and_compiler.py`, and `tests/unit/python/test_worker_hard_filters.py` now document and prove the null-as-no-limit contract through schema, admin parsing, compiler output, and worker matching behavior.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted contract review of nullable `time_window_hours` semantics across schema, admin UI, compiler, worker filtering, and operator docs
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `node --import tsx --test tests/unit/ts/admin-user-interests.test.ts`
+  - `python -m unittest tests.unit.python.test_embedding_and_compiler tests.unit.python.test_worker_hard_filters`
+  - `pnpm typecheck`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md database/ddl/phase3_nlp_foundation.sql database/ddl/phase4_matching_notification.sql database/migrations/0021_interest_template_time_window.sql database/migrations/0022_nullable_time_windows.sql apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/pages/templates/interests/new.astro apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro apps/admin/src/pages/help.astro apps/admin/src/pages/user-interests.astro apps/admin/src/lib/server/admin-templates.ts apps/admin/src/lib/server/user-interests.ts services/api/app/main.py services/ml/app/compiler.py services/workers/app/main.py packages/contracts/src/system-interest.ts tests/unit/ts/admin-template-sync.test.ts tests/unit/ts/admin-user-interests.test.ts tests/unit/python/test_embedding_and_compiler.py tests/unit/python/test_worker_hard_filters.py`
+- Риски или gaps:
+  - this patch changes the contract for new or newly edited rows, but it does not automatically rewrite existing rows that already store numeric windows like `168`; a separate live migration or operator edit/recompile pass is still needed if the user wants old data to inherit the new "any time when blank" behavior;
+  - broader template quality, corpus cleanup, and `system-selected` runtime tuning remain separate follow-up work.
+- Follow-up:
+  - if the user wants the next truthful step, open a fresh bounded patch or stage that identifies existing interest/template rows where the current stored numeric window should be cleared to `NULL`, applies that change deliberately, and then recompiles/reindexes the affected matching state.
+
+### 2026-04-07 — C-SYSTEM-INTEREST-CONTRACT-ALIGNMENT — Archived the interest-admin contract alignment slice
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: while configuring system interests, the user noticed that several expected hard-filter fields did not appear in the real admin UI; the resulting audit showed a truthful mixed problem: some fields already existed but were hidden inside the advanced block, `interest_templates.time_window_hours` was missing end-to-end from the real contract, and adjacent `user_interests` admin had drifted away from the DB/runtime truth that already supported the same time-window field.
+- Что изменилось:
+  - `database/ddl/phase4_matching_notification.sql` and `database/migrations/0021_interest_template_time_window.sql` now add durable `interest_templates.time_window_hours integer not null default 168` storage with a positive-value check, without changing the broader provider or matching schema shape;
+  - `apps/admin/src/lib/server/admin-templates.ts`, `services/api/app/main.py`, `packages/contracts/src/system-interest.ts`, `apps/admin/src/components/InterestTemplateEditorForm.tsx`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/interests/new.astro`, and `apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro` now expose `time_window_hours` truthfully across system-interest create/edit/read flows, and criterion sync now carries that field into live `criteria` while keeping `allowed_content_kinds` template-owned instead of pretending it is a worker-side criterion field;
+  - `apps/admin/src/lib/server/user-interests.ts` and `apps/admin/src/pages/user-interests.astro` now restore admin parity for the already-existing `user_interests.time_window_hours` runtime field and also fix the smaller lexical-list drift discovered during audit: the admin UI used multiline textareas for `must_have_terms` and `must_not_have_terms`, but the server previously parsed them as CSV-only; the write path now accepts both commas and line breaks, matching what operators naturally enter in the form;
+  - `tests/unit/ts/admin-template-sync.test.ts` and `tests/unit/ts/admin-user-interests.test.ts` now prove the new system-interest time-window contract plus the user-interest multiline lexical-list parsing behavior;
+  - `docs/blueprint.md`, `apps/admin/src/pages/help.astro`, and `docs/work.md`/`docs/history.md` were synced so the durable/operator truth now matches the real field ownership: matching constraints sync into live criteria, `allowed_content_kinds` remain template-owned collection gates, and the advanced admin forms no longer claim a smaller contract than the runtime actually supports.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - targeted contract review of `interest_templates`, `criteria`, `user_interests`, admin UI, API read models, and operator-help wording
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `node --import tsx --test tests/unit/ts/admin-user-interests.test.ts`
+  - `pnpm typecheck`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/pages/templates/interests.astro apps/admin/src/pages/templates/interests/new.astro apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro apps/admin/src/pages/help.astro apps/admin/src/pages/user-interests.astro apps/admin/src/lib/server/admin-templates.ts apps/admin/src/lib/server/user-interests.ts services/api/app/main.py packages/contracts/src/system-interest.ts database/ddl/phase4_matching_notification.sql database/migrations/0021_interest_template_time_window.sql tests/unit/ts/admin-template-sync.test.ts tests/unit/ts/admin-user-interests.test.ts`
+- Риски или gaps:
+  - this archived slice aligns contract surfaces only; it does not import or rewrite the live system-interest dataset for the user, and it does not run a recompile/reindex/runtime proof on existing rows after the contract change;
+  - broader `system-selected` quality, buyer-intent template tuning, corpus cleanup, and zero-eligible remediation remain separate follow-up work;
+  - the repository worktree remains mixed with unrelated in-flight edits, and this archive does not claim a clean tree.
+- Follow-up:
+  - if the user wants the next truthful step, open a fresh bounded stage that applies the updated template contract to the live system-interest dataset, recompiles/reindexes the affected rows, and then measures whether the current corpus starts producing materially better `system-selected` results.
+
+### 2026-04-07 — C-SYSTEM-FEED-QUALITY-TUNING — Archived the outsourcing buyer-intent template tuning slice
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after the queue-starvation blocker was removed from the runtime path, the user asked to improve the operator-controlled outsourcing-lead selection layer; during that bounded tuning pass it became clear that worker hard filters treated `must_have_terms` too strictly as AND, so the truthful slice included a small runtime semantic fix, a rewrite of the outsourcing template bundle, and doc sync explaining the new hard-filter behavior.
+- Что изменилось:
+  - `services/workers/app/main.py` now evaluates `must_have_terms` as OR / any-match across `title + lead + body`, and emits a single `must_have_any` failure reason only when none of the configured terms matches;
+  - `tests/unit/python/test_worker_hard_filters.py` now proves both sides of the new contract: a criterion passes when any `must_have_terms` value matches, and fails with `must_have_any` when no configured term is present;
+  - `docs/data_scripts/outsource_balanced_templates.json` was rewritten around explicit outsourcing buyer intent with five focused interest templates plus stronger negatives against vendor self-promo, internal hiring, advisory content, rankings, and low-intent community chatter;
+  - `docs/blueprint.md`, `EXAMPLES.md`, `docs/data_scripts/outsource_balanced_templates.md`, and `apps/admin/src/pages/help.astro` now document the runtime semantics of `must_have_terms`, `must_not_have_terms`, and `short_tokens_required`, so operators no longer author templates under the old AND assumption;
+  - `docs/work.md` and `docs/history.md` were synced so the completed tuning slice no longer remains as a live active item.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - `python -m unittest tests.unit.python.test_worker_hard_filters`
+  - `node -e "JSON.parse(require('node:fs').readFileSync('docs/data_scripts/outsource_balanced_templates.json','utf8')); console.log('json-ok')"`
+  - targeted operator-doc review of `docs/blueprint.md`, `EXAMPLES.md`, `docs/data_scripts/outsource_balanced_templates.md`, and `apps/admin/src/pages/help.astro`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md EXAMPLES.md docs/data_scripts/outsource_balanced_templates.md apps/admin/src/pages/help.astro services/workers/app/main.py tests/unit/python/test_worker_hard_filters.py docs/data_scripts/outsource_balanced_templates.json`
+- Риски или gaps:
+  - this archived slice does not yet import the rewritten bundle into live system interests or LLM templates;
+  - no recompile/reindex/runtime quality proof has been executed for the new bundle yet;
+  - score thresholds, corpus cleanup, and broader `system-selected` quality remain separate follow-up work and are not redefined by this tuning slice.
+- Follow-up:
+  - if the user wants the next truthful step, open a fresh bounded stage that imports the updated bundle into the live admin/runtime layer, recompiles or reindexes the current corpus, and then verifies whether the new buyer-intent boundaries materially improve `system-selected`.
+
+### 2026-04-07 — C-CHANNEL-AUTH-HEADER — Archived per-channel static Authorization header support for RSS and website ingest
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement the planned per-channel ingest auth slice so operator-ready `rss` and `website` channels can use a static `Authorization` header, protected website polling also works through browser fallback, `429` keeps retry semantics, and the admin/API surfaces do not leak secrets back through read models or edit forms.
+- Что изменилось:
+  - `database/ddl/phase4_matching_notification.sql`, `database/migrations/0020_channel_auth_headers.sql`, `packages/contracts/src/source.ts`, and `services/api/app/main.py` now add durable `source_channels.auth_config_json` storage for fetcher-side source auth, expose only safe read-model summary via `has_authorization_header`, and keep the raw secret out of `config_json` and public/admin read payloads;
+  - `apps/admin/src/components/ChannelEditorForm.tsx`, `apps/admin/src/lib/server/rss-channels.ts`, `apps/admin/src/lib/server/website-channels.ts`, `apps/admin/src/pages/channels/new.astro`, `apps/admin/src/pages/channels/[channelId]/edit.astro`, and `apps/admin/src/pages/bff/admin/channels.ts` now give the operator a bounded `Authorization header` field for `rss` and `website`, with explicit preserve/replace/clear semantics on edit and audit-log-safe configured/cleared mutations without echoing the stored secret back into HTML;
+  - `services/fetchers/src/fetchers.ts` and `services/fetchers/src/web-ingestion.ts` now read `auth_config_json`, apply the raw header only to same-origin source requests, keep `429` as scheduler-based `rate_limited`, raise auth-oriented `hard_failure` messages for `401/403`, and inject website browser auth through same-origin request interception rather than global browser context headers;
+  - `services/fetchers/src/cli/test-channel-auth-smoke.ts`, `services/fetchers/src/cli/test-website-smoke.ts`, `services/fetchers/src/cli/test-hard-sites-smoke.ts`, `tests/unit/ts/admin-rss-channels.test.ts`, `tests/unit/ts/admin-website-channels.test.ts`, `tests/unit/ts/web-ingestion-browser.test.ts`, `services/relay/src/cli/test-migrations.ts`, `package.json`, `services/fetchers/package.json`, and the runtime docs now prove the protected RSS/website path end-to-end, stabilize the website/hard-site smokes around isolated local fixtures plus smoke-owned enrichment/handoff cleanup, and keep migration smoke aligned with the new schema.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - required deep-contract reload of `docs/contracts/browser-assisted-websites.md` and `docs/contracts/test-access-and-fixtures.md`
+  - `git status --short`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:channel-auth:compose`
+  - `pnpm test:website:compose`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm integration_tests`
+  - `git diff --check -- services/relay/src/cli/test-migrations.ts docs/blueprint.md docs/contracts/browser-assisted-websites.md docs/verification.md .aidp/os.yaml docs/manual-mvp-runbook.md docs/work.md docs/history.md packages/contracts/src/source.ts database/migrations/0020_channel_auth_headers.sql database/ddl/phase4_matching_notification.sql services/api/app/main.py apps/admin/src/components/ChannelEditorForm.tsx apps/admin/src/lib/server/rss-channels.ts apps/admin/src/lib/server/website-channels.ts apps/admin/src/pages/channels/new.astro 'apps/admin/src/pages/channels/[channelId]/edit.astro' apps/admin/src/pages/bff/admin/channels.ts services/fetchers/src/fetchers.ts services/fetchers/src/web-ingestion.ts services/fetchers/src/cli/test-channel-auth-smoke.ts services/fetchers/src/cli/test-website-smoke.ts services/fetchers/src/cli/test-hard-sites-smoke.ts tests/unit/ts/admin-rss-channels.test.ts tests/unit/ts/admin-website-channels.test.ts tests/unit/ts/web-ingestion-browser.test.ts package.json services/fetchers/package.json`
+- Риски или gaps:
+  - current source auth remains intentionally bounded to raw static `Authorization` headers stored in PostgreSQL; secrets-manager rollout and encryption-at-rest are not part of this archived slice;
+  - interactive login, cookie/session replay, OAuth, CAPTCHA solving, and broader anti-bot bypass stay explicitly unsupported;
+  - operator-ready auth UI still covers only `rss` and `website`; `api`, `email_imap`, and `youtube` remain separate follow-up surfaces;
+  - the repository worktree remains heavily mixed with unrelated in-flight edits, and this archive does not claim a clean tree.
+- Follow-up:
+  - if the user wants the next auth-related slice, open a fresh bounded capability for provider defaults, bulk RSS import auth, manual per-channel retry/run-now UX, or broader provider/operator coverage instead of reopening this archived lane.
+
+### 2026-04-04 — C-USER-TRIAGE-DIGEST — Archived per-user triage state, manual saved digests, scheduled digest cadence, and followed-story updates
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement the planned analyst-friendly user capability so readers can distinguish new vs seen content, save items for later, assemble a manual saved-items digest, receive a real scheduled personalized digest at configurable cadences, and follow editorial story clusters for later updates without mutating the public Python content APIs.
+- Что изменилось:
+  - `database/migrations/0019_user_triage_digest_following.sql`, `database/ddl/phase4_matching_notification.sql`, and `packages/contracts/src/user-content.ts` now add durable persistence/contracts for `user_content_state`, `user_digest_settings`, `digest_delivery_log`, `digest_delivery_items`, and `user_followed_event_clusters`, including migration of the legacy weekly-email preference into structured scheduled-digest settings;
+  - `services/workers/app/main.py`, `services/workers/app/digests.py`, `services/workers/app/delivery.py`, `services/workers/app/notification_preferences.py`, and worker startup/runtime wiring now cut `email_digest` out of the immediate per-article delivery loop, keep `web_push`/`telegram` as the only immediate channels, send manual and scheduled digests through a separate digest-delivery log, and poll due scheduled digests through a dedicated scheduler loop;
+  - `apps/web` now overlays per-user `new/seen/saved/following` state on collection, matches, and content detail surfaces, adds app-local BFF mutations for content state/story follow/digest settings/manual digest flow, introduces `/saved`, `/saved/digest`, `/following`, digest export/send endpoints, and updates settings so cadence, timezone, skip-empty, next-send, and last-send truth come from the new digest state instead of the old weekly toggle;
+  - proof and local acceptance harnesses were updated so `pnpm unit_tests` covers triage/story-update and digest cadence helpers, `pnpm integration_tests` proves saved/manual digest preview-export-email plus scheduled runtime delivery to Mailpit, and worker compose smoke continues proving immediate non-email delivery without silently reusing legacy `email_digest` assumptions.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - `git status --short`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm integration_tests`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md docs/verification.md .aidp/os.yaml`
+- Риски или gaps:
+  - live external Telegram/web-push endpoints remain outside the bounded local proof contour; closeout proof is compose/Mailpit-backed and deterministic rather than uncontrolled third-party validation;
+  - public Python content APIs intentionally remain unchanged in v1, so triage/digest mutations are still owned by the app-local web BFF layer;
+  - the repository worktree remains mixed with unrelated in-flight changes, and this archive does not claim a clean tree.
+- Follow-up:
+  - if the user wants the next slice here, open a fresh capability for user-visible digest history/audit UX, notes-highlights-tags on saved items, AI multi-article synthesis, or broader public API exposure for saved/followed views instead of reopening this archived lane.
+
+### 2026-04-03 — PATCH-WEB-INGESTION-ROOT-CLEANUP — Removed the stale root website-ingestion planning memo
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the workspace still contained a root `web_ingestion.md` engineering reference even though the actual website-ingestion capability had already been archived and its surviving truth moved into runtime-core docs; after a read-only consistency review the user explicitly asked to delete the file instead of keeping a parallel planning document in the repo root.
+- Что изменилось:
+  - the stale root `web_ingestion.md` file was removed from the workspace so website-ingestion no longer keeps an extra root-level planning memo next to the runtime core;
+  - `docs/work.md` was resynced so live state now says the deleted root file is not part of current website/discovery truth and the next item should not resurrect old root planning docs as parallel authority;
+  - durable website-ingestion truth remains unchanged and continues to live in `docs/blueprint.md`, `docs/contracts/browser-assisted-websites.md`, and the existing archived capability records for universal web ingestion, website-source closeout, and browser-assisted hard sites.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, and `.aidp/os.yaml`
+  - `git status --short`
+  - targeted consistency review of `web_ingestion.md` against the live website runtime docs and code paths
+  - `test ! -e web_ingestion.md`
+  - `rg -n "web_ingestion\\.md" README.md docs apps services packages tests infra . -S`
+  - `git diff --check -- docs/work.md docs/history.md`
+- Риски или gaps:
+  - this cleanup removes stale documentation only; it does not change website runtime behavior or re-run compose/runtime proof;
+  - historical archive entries still mention `web_ingestion.md` as the source that originally drove the capability, which is intentional history rather than a live dependency.
+- Follow-up:
+  - if the user wants more cleanup here, open a new bounded item for any other surviving stale root planning docs or doc-authority drift instead of restoring this file.
+
+### 2026-04-03 — C-ARTICLE-LLM-MONTHLY-BUDGET — Archived the baseline article LLM monthly budget and hard-stop capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement an env-driven monthly budget for baseline article/system-interest LLM review, matching discovery-style monthly hard-stop semantics while keeping settings env-only, avoiding a new cost ledger, exposing operator-visible budget state in admin, and making `LLM_REVIEW_ENABLED` a real runtime kill switch instead of drifted config.
+- Что изменилось:
+  - `services/workers/app/main.py` now computes a UTC-month `llm_review_log.cost_estimate_usd` quota snapshot for `scope='criterion'`, enforces `LLM_REVIEW_ENABLED`, `LLM_REVIEW_MONTHLY_BUDGET_CENTS`, and `LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE` before new provider calls, auto-resolves gray-zone criterion rows locally instead of leaving `pending_llm`, writes structured `llmBudgetGate` explainability, and propagates the same budget-gate rationale into `system_feed_results`;
+  - late queued criterion reviews now re-check the same runtime policy inside `process_llm_review`, skip Gemini when disabled or out of budget, avoid writing fake new `llm_review_log` rows, and still recalculate `system_feed_results` plus downstream clustering eligibility truthfully;
+  - `services/api/app/main.py`, `packages/sdk/src/index.ts`, and `packages/config/src/index.ts` now expose a shared article LLM budget summary contract through `GET /maintenance/llm-budget-summary`, extend `/dashboard/summary` with compact budget fields, and parse the new env surface for SSR/admin runtime use;
+  - `apps/admin/src/lib/live-updates.ts`, `apps/admin/src/lib/server/live-updates.ts`, `apps/admin/src/pages/index.astro`, `apps/admin/src/components/LiveDashboardKpiGrid.tsx`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/components/LiveObservabilitySummary.tsx`, and `apps/admin/src/pages/help.astro` now surface budget enabled/disabled state, monthly cap, spend, remaining budget, hard-stop status, and accept/reject gray-zone policy on both dashboard and observability views without adding a new polling mechanism;
+  - `.env.example`, `README.md`, `docs/blueprint.md`, `docs/verification.md`, `.aidp/os.yaml`, `package.json`, and `services/workers/app/smoke.py` were synced so the new env contract, proof contour, and dedicated `pnpm test:llm-budget-stop:compose` runtime smoke are part of durable repo truth rather than ad hoc session knowledge.
+- Что проверено:
+  - `python -m unittest tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_feed_dedup`
+  - `python -m py_compile services/workers/app/smoke.py`
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:llm-budget-stop:compose`
+  - `git diff --check -- services/workers/app/main.py services/workers/app/smoke.py services/api/app/main.py packages/config/src/index.ts packages/sdk/src/index.ts apps/admin/src/lib/live-updates.ts apps/admin/src/lib/server/live-updates.ts apps/admin/src/pages/index.astro apps/admin/src/components/LiveDashboardKpiGrid.tsx apps/admin/src/components/LiveObservabilitySummary.tsx apps/admin/src/pages/observability.astro apps/admin/src/pages/help.astro tests/unit/python/test_interest_auto_repair.py tests/unit/python/test_api_sequence_management.py tests/unit/python/test_api_feed_dedup.py tests/unit/ts/discovery-admin.test.ts tests/unit/ts/admin-live-updates.test.ts .env.example README.md docs/blueprint.md docs/verification.md docs/work.md .aidp/os.yaml package.json`
+- Риски или gaps:
+  - the archived capability covers only baseline article/system-interest gray-zone review; discovery budget semantics and user-interest LLM review remain separate lanes;
+  - settings remain env-only and read-only in admin; operator-editable budget CRUD is still out of scope;
+  - the new compose smoke proves late queued runtime gating for both reject/accept post-cap policies, while fresh-ingest budget exhaustion and live-internet Gemini behavior continue to rely on deterministic local proof plus unit coverage rather than uncontrolled external validation.
+- Follow-up:
+  - if the user wants the next slice here, open a fresh bounded capability for admin-writeable policy/settings control, richer operator reporting/history around budget exhaustion, or additional compose/runtime proof for first-touch gray-zone fallback from `article.match_criteria`.
+
+### 2026-04-03 — PATCH-EXAMPLES-DISCOVERY-ENV-CLARITY — Archived the discovery-aligned examples/env documentation patch
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked for `EXAMPLES.md` to stop hand-waving discovery mode, correlate more honestly with the example bundles already in the file, and for `.env.example` to explain every existing setting because the current template was too opaque.
+- Что изменилось:
+  - `EXAMPLES.md` now keeps the original RSS + templates examples but adds a dedicated discovery appendix with prerequisites, the meaning of the active `DISCOVERY_*` knobs, enable/verify steps, mission seed guidance aligned to Example A (job board) and Example B (developer news), and an explicit statement of what still remains outside the file;
+  - the top framing and FAQ in `EXAMPLES.md` were updated so the document no longer says discovery is entirely elsewhere while still staying honest that full website/hard-site manual verification and broader bootstrap details live in `README.md` plus `docs/manual-mvp-runbook.md`;
+  - `.env.example` is now grouped and commented line-by-line, explaining database/runtime ports, SSR/public base URLs, Firebase JSON expectations, Gemini/discovery fallback behavior, monthly-vs-per-mission discovery budgets, dormant search-provider placeholders, delivery credentials, and the remaining future IMAP settings;
+  - `docs/work.md` and `docs/history.md` were synced so the patch does not linger as an implicit active item.
+- Что проверено:
+  - `git diff --check -- EXAMPLES.md .env.example docs/work.md docs/history.md`
+  - targeted `rg` review across `EXAMPLES.md` confirming the new discovery appendix mentions `DISCOVERY_ENABLED`, `DISCOVERY_AUTO_APPROVE_THRESHOLD`, `DISCOVERY_MONTHLY_BUDGET_CENTS`, `/admin/discovery`, `/maintenance/discovery/summary`, `/admin/resources`, `interest_centroids`, and the renumbered FAQ section;
+  - manual spot-check of the updated `EXAMPLES.md`, `.env.example`, and runtime-doc sync in `docs/work.md`.
+- Риски или gaps:
+  - this is a docs-only patch; it does not claim new runtime proof beyond the already archived discovery/website/browser-assisted capabilities;
+  - full `.env.dev` bootstrap, complete website/hard-site operator verification, and uncontrolled live-internet discovery behavior remain intentionally outside this file.
+- Follow-up:
+  - if the user wants more, the next truthful slice would be either a broader bootstrap/runbook rewrite around `.env.dev` and secrets setup or a separate advanced discovery playbook for operator heuristics and review policy.
+
+### 2026-03-30 — SWEEP-DOCS-VERIFICATION-READINESS — Archived the operator-doc consistency sweep for MVP verification
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after a docs review found that `HOW_TO_USE.md` still described the product as RSS-only, `EXAMPLES.md` overstated itself as a full setup guide, and the operator-facing docs did not explain the new browser-assisted website lane, the user asked to fix the documentation everywhere necessary so MVP verification could follow truthful instructions.
+- Что изменилось:
+  - `HOW_TO_USE.md` now describes both operator-ready source types (`rss` and `website`), adds a dedicated website/JS-heavy note, points manual verification toward `/resources`, and stops telling operators that non-RSS sources are future-only;
+  - `EXAMPLES.md` now scopes itself honestly as RSS + template examples, explicitly says it does not cover `.env.dev`, Firebase/bootstrap, discovery enable, or website/hard-site setup, and points readers to `README.md` plus `docs/manual-mvp-runbook.md` for the full MVP path;
+  - `README.md` now includes an explicit browser-assisted website / hard-site subsection next to the discovery runtime guidance, documenting `browserFallbackEnabled`, `maxBrowserFetchesPerPoll`, `/admin/resources`, `pnpm test:hard-sites:compose`, and the out-of-scope login/CAPTCHA boundary;
+  - `docs/manual-mvp-runbook.md` now treats website ingest as including opt-in browser fallback for public JS-heavy sites, documents a dedicated `Website channels and hard sites` manual verification section, and ties discovery-approved JS-heavy website candidates back to the same `website` + `/resources` verification lane;
+  - `docs/work.md` and `docs/history.md` were synced so the live work state no longer leaves this docs sweep implicit.
+- Что проверено:
+  - targeted `rg` consistency check for stale RSS-only wording across `HOW_TO_USE.md`, `EXAMPLES.md`, `README.md`, and `docs/manual-mvp-runbook.md` returned no matches;
+  - targeted `rg` consistency check confirmed the updated docs now mention `DISCOVERY_ENABLED`, `/admin/discovery`, `/resources`, `browserFallbackEnabled`, `maxBrowserFetchesPerPoll`, and `pnpm test:hard-sites:compose` where expected;
+  - manual line-numbered spot-checks of `HOW_TO_USE.md`, `EXAMPLES.md`, `README.md`, `docs/manual-mvp-runbook.md`, `docs/work.md`, and `docs/history.md`.
+- Риски или gaps:
+  - this sweep updates operator-facing guidance only; it does not claim new runtime proof beyond the already archived website/discovery/browser-assisted capabilities;
+  - real-internet discovery behavior and anti-bot behavior remain intentionally out of scope for local MVP docs and should stay separated from the canonical safe-by-default baseline.
+- Follow-up:
+  - if the user wants more doc work, the next bounded follow-up would be either a dedicated discovery-tuning reference for the advanced `DISCOVERY_*` knobs or broader operator docs for the remaining non-operator-ready providers (`api`, `email_imap`, `youtube`).
+
+### 2026-03-30 — C-BROWSER-ASSISTED-HARD-SITES — Archived fetchers-owned browser assistance for JS-heavy website sources
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly asked to implement the bounded hard-sites plan so JS-heavy / soft anti-bot websites could be handled as a separate capability without reopening the archived website-ingestion architecture or pretending hidden feeds should turn website sources into RSS.
+- Что изменилось:
+  - `services/fetchers/src/web-ingestion.ts`, `services/fetchers/src/fetchers.ts`, `services/fetchers/src/main.ts`, `services/fetchers/package.json`, `package.json`, and `infra/docker/fetchers.Dockerfile` now provide the fetchers-owned browser runtime: Playwright/Chromium-backed `browser_assisted` discovery, same-origin DOM/network capture, challenge detection (`login`, `captcha`, `cloudflare_js_challenge`, `unsupported_block`), additive browser provenance, the internal discovery probe endpoint `/internal/discovery/websites/probe`, explicit hard-failure handling for unsupported blocks, and a deterministic `pnpm test:hard-sites:compose` harness;
+  - `services/workers/app/task_engine/adapters/website_probe.py`, `services/workers/app/task_engine/adapters/__init__.py`, `services/workers/app/task_engine/adapters/source_registrar.py`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/task_engine/discovery_plugins.py`, and `services/workers/app/smoke.py` now route website probing through fetchers, preserve `browser_assisted_recommended` / `challenge_kind` / discovered-feed hints through discovery evaluation and registration, materialize `browserFallbackEnabled` only for website candidates that actually need it, and keep hidden feeds as hints instead of auto-converting website sources into RSS;
+  - `apps/admin/src/pages/resources.astro` and `apps/admin/src/pages/resources/[resourceId].astro` now surface browser-assisted provenance on the existing resource observability lane, so operators can distinguish cheap/static discovery from browser DOM/network/download discovery and see recorded challenge metadata;
+  - `tests/unit/ts/web-ingestion-browser.test.ts`, `tests/unit/python/test_discovery_fetchers_website_probe.py`, `tests/unit/python/test_discovery_orchestrator.py`, and `tests/unit/python/test_task_engine_discovery_plugins.py` now cover browser fallback gating, segment-safe URL classification, fetchers probe normalization, discovery registration hints, and the preservation of hidden feed hints for registered website channels;
+  - `docs/contracts/browser-assisted-websites.md`, `docs/contracts/README.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/work.md`, and `docs/history.md` were synced so the repo now documents browser assistance as a fetchers-owned website capability with explicit proof boundaries and failure rules instead of leaving it implied by code or admin config.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `pnpm unit_tests:ts`
+  - `PYTHONPATH=. python -m unittest tests.unit.python.test_discovery_fetchers_website_probe tests.unit.python.test_discovery_orchestrator tests.unit.python.test_task_engine_discovery_plugins`
+  - `pnpm typecheck`
+  - `pnpm dev:mvp:internal`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm test:website:compose`
+  - `pnpm test:website:admin:compose`
+  - `pnpm test:discovery-enabled:compose`
+- Риски или gaps:
+  - v1 remains intentionally local-proof-only; uncontrolled live-internet anti-bot behavior is still out of scope;
+  - login-required sources, CAPTCHA solving, manual challenge bypass, stealth scraping escalation, and non-website providers remain explicitly unsupported;
+  - umbrella `pnpm integration_tests` remains RSS-first, so browser-assisted website proof continues to live in dedicated compose commands rather than the generic acceptance umbrella.
+- Follow-up:
+  - if the user wants the next slice here, open a fresh bounded capability for live-network/browser rollout or for the remaining provider CRUD (`api`, `email_imap`, `youtube`) instead of reopening this archived browser-assisted lane.
+
+### 2026-03-30 — C-WEBSITE-SOURCE-CLOSEOUT — Archived the website-source operator closeout beyond onboarding
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after confirming that website ingest runtime already existed but website sources still lacked truthful post-ingest observability and browser/admin-style acceptance, the user asked to finish the missing website-source surfaces instead of reopening the archived ingest architecture.
+- Что изменилось:
+  - `services/api/app/main.py`, `packages/contracts/src/source.ts`, and `packages/sdk/src/index.ts` now expose dedicated `web_resources` list/detail contracts plus `/maintenance/web-resources*` read models with projection-aware filters, so operator tooling can inspect both projected editorial rows and resource-only entity/document rows without pretending everything must become an `article`;
+  - `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/resources/[resourceId].astro`, `apps/admin/src/layouts/AdminShell.astro`, `apps/admin/src/pages/index.astro`, and `apps/admin/src/pages/channels.astro` now provide a first-class admin `/resources` lane with list/detail drilldown, channel linkage, truthful projection labels, and direct access from website channels and the dashboard;
+  - `apps/admin/src/lib/server/website-channels.ts` now persists `homepage_url = fetch_url` for admin-created or updated website channels, keeping the operator write path aligned with the seeded/runtime website contract instead of leaving admin-created website channels slightly under-specified;
+  - `infra/scripts/test-website-admin-flow.mjs`, `package.json`, `tests/unit/python/test_api_web_resources.py`, and `tests/unit/ts/admin-website-channels.test.ts` now add deterministic website operator acceptance: the script signs in through the real admin app, creates a website channel, runs a bounded website poll, proves `/maintenance/web-resources*` plus `/admin/resources*`, and uses an in-`fetchers` fixture server plus crawl-policy-cache cleanup so the acceptance path matches the real Node-fetch runtime instead of relying on fragile host aliases;
+  - `README.md`, `docs/manual-mvp-runbook.md`, `docs/verification.md`, `docs/blueprint.md`, `.aidp/os.yaml`, `docs/work.md`, and `docs/history.md` were synced so the repo now documents website sources as operator-ready beyond onboarding, with dedicated website acceptance commands and truthful residual follow-up scope.
+- Что проверено:
+  - `node --check infra/scripts/test-website-admin-flow.mjs`
+  - `node --import tsx --test tests/unit/ts/admin-website-channels.test.ts`
+  - `python -m unittest tests.unit.python.test_api_web_resources`
+  - `pnpm dev:mvp:internal`
+  - `pnpm test:website:admin:compose`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:website:compose`
+- Риски или gaps:
+  - browser-assisted hard-site discovery/extraction remains explicitly out of scope and still needs a separate bounded capability if website sources must handle JS-heavy or anti-bot sites;
+  - operator CRUD for `api`, `email_imap`, and `youtube` remains a separate follow-up even though `rss` and `website` are now operator-ready lanes;
+  - umbrella `pnpm integration_tests` stays intentionally RSS-first, so website end-to-end proof now lives in dedicated website compose commands rather than the generic acceptance umbrella.
+- Follow-up:
+  - if the user wants the next source-related slice, open a fresh bounded capability for hard-site/browser support or the remaining provider CRUD instead of reopening this archived website closeout.
+
+### 2026-03-30 — C-HISTORICAL-ENRICHMENT-BACKFILL — Archived the enrichment-enabled historical repair path for editorial articles
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement the already-planned critical-risk follow-up for sequence/backfill integrity, so historical editorial articles could be repaired through the same fetchers-owned enrichment owner without widening runtime ownership or resending retro notifications.
+- Что изменилось:
+  - `services/workers/app/reindex_backfill.py` and `services/workers/app/main.py` now extend the existing `reindex_jobs` + `reindex_job_targets` maintenance path with additive `includeEnrichment` / `forceEnrichment` options, conservative target selection for editorial `articles`, published synthetic outbox rows for inbox/idempotency truth, and a fixed historical replay order `enrichment.article_extract -> normalize -> dedup -> embed -> match_criteria -> criterion replay -> cluster -> match_interests` with no `notify` stage;
+  - `apps/admin/src/pages/bff/admin/reindex.ts` and `apps/admin/src/pages/reindex.astro` now surface enrichment-enabled historical repair as an explicit operator choice on `/reindex`, default `forceEnrichment` to off, and keep the UI wording aligned with the no-retro-notification maintenance contract;
+  - `services/workers/app/smoke.py` and `tests/unit/python/test_reindex_backfill_progress.py` now prove the new path on a deterministic long-body editorial fixture: snapshot-stable totals, truthful `includeEnrichment` bookkeeping, `skipped` enrichment persistence for feed HTML/media, and unchanged no-retro-notify / duplicate-safe match guarantees;
+  - `docs/blueprint.md`, `docs/verification.md`, `docs/manual-mvp-runbook.md`, and `docs/contracts/universal-task-engine.md` were synced so the repo now documents enrichment-enabled repair as a maintenance replay contract rather than a new ingest trigger or queue runtime.
+- Что проверено:
+  - `python -m unittest tests.unit.python.test_reindex_backfill_progress`
+  - `python -m py_compile services/workers/app/main.py services/workers/app/reindex_backfill.py services/workers/app/smoke.py`
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `docker compose -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m app.smoke reindex-backfill`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - enrichment-enabled historical repair is bounded to editorial `articles`; non-editorial `web_resources` remain separate product/runtime work;
+  - the operator-facing `/reindex` surface now exposes force rerun, but user/interest-scoped enrichment repair remains intentionally out of scope beyond the existing generic doc-targeted capability in `reindex_jobs`;
+  - repo-wide Python still has no dedicated static typecheck gate beyond the proof contour above.
+- Follow-up:
+  - if the user wants the next slice, open a fresh bounded capability for non-editorial browse UX or remaining provider CRUD (`api`, `email_imap`, `youtube`) instead of reopening this archived repair lane.
+
+### 2026-03-29 — C-SYSTEM-INTEREST-UNIVERSALIZATION — Archived the no-backward-compatibility cutover to a system-interest-driven universal content platform
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user first asked for a full cutover plan that makes content type follow system interests instead of a news-only product model, then asked to implement that plan fully without preserving the old public `feed` / `article` surfaces.
+- Что изменилось:
+  - `packages/contracts/src/content.ts`, `packages/contracts/src/system-interest.ts`, `packages/contracts/src/index.ts`, `packages/sdk/src/index.ts`, `services/api/app/main.py`, and `database/migrations/0018_system_interest_content_kinds.sql` now make `content_item`, `system interest`, `/collections/system-selected`, `/content-items/*`, and `/system-interests/*` the canonical shared/public contract while letting internal storage names remain legacy-only implementation detail;
+  - `apps/web/src/components/ContentItemCard.tsx`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/matches.astro`, `apps/web/src/pages/content/[id].astro`, `apps/web/src/lib/live-interest-state.ts`, and the integration harness in `infra/scripts/test-mvp-internal.mjs` now route the main user reading flow through content items rather than public `/feed` or `/article/*` paths, including a real fix for encoded `content_item_id` detail routing;
+  - `apps/admin/src/components/TemplateFormsIsland.tsx`, `apps/admin/src/components/LlmTemplateEditorForm.tsx`, `apps/admin/src/components/ChannelEditorForm.tsx`, `apps/admin/src/pages/help.astro`, `apps/admin/src/pages/reindex.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/channels/[channelId]/edit.astro`, `apps/admin/src/pages/bff/admin/channels.ts`, `apps/admin/src/lib/server/source-channels.ts`, and `services/api/app/main.py` now describe the product in system-interest/content terms, keep editorial moderation on explicit maintenance surfaces, and treat channel history/delete safety in terms of stored items rather than only linked articles;
+  - `README.md`, `docs/contracts/content-model.md`, `docs/contracts/README.md`, `docs/manual-mvp-runbook.md`, `docs/verification.md`, `docs/blueprint.md`, `.aidp/os.yaml`, and `docs/work.md` were synced so the durable repo truth, operator runbook, and proof language match the universal content platform cutover.
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - internal runtime/storage names like `criteria`, `system_feed_results`, and `articles` still remain as legacy implementation detail and were not renamed physically in this capability;
+  - operator-ready create/edit flows are now truthful for `rss` and `website`, but `api`, `email_imap`, and `youtube` still remain backend/runtime-capable follow-up provider surfaces rather than full admin CRUD flows;
+  - broad browse UX for non-editorial `web_resources` is still separate product work after this public semantic cutover.
+- Follow-up:
+  - if the user wants the next slice here, open a fresh bounded capability for operator CRUD on the remaining provider types, for browse/observability UX around non-editorial resources, or for the already-ready historical enrichment backfill instead of reopening this archived capability.
+
+### 2026-03-29 — C-UNIVERSAL-WEB-INGESTION — Archived the generic website-ingestion resource lane with compose-backed closeout proof
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user first asked for a repo-specific implementation plan from `web_ingestion.md`, then asked to implement that capability fully rather than leave website ingest as the old one-page HTML-to-article shortcut or keep the compose/runtime residue implicit.
+- Что изменилось:
+  - `database/migrations/0017_web_ingestion_resource_layer.sql`, `packages/contracts/src/source.ts`, `packages/contracts/src/queue.ts`, `services/fetchers/src/web-ingestion.ts`, `services/fetchers/src/fetchers.ts`, `services/fetchers/src/resource-enrichment.ts`, `services/relay/src/relay.ts`, and `services/workers/app/task_engine/pipeline_plugins.py` now provide the additive `web_resources` + `crawl_policy_cache` persistence layer, provider-agnostic website config, cheap multi-mode discovery, `resource.ingest.requested` sequence routing, typed resource extraction, and editorial article projection without replacing the existing `articles` lane wholesale;
+  - `apps/admin/src/lib/server/website-channels.ts`, `apps/admin/src/pages/bff/admin/channels.ts`, `apps/admin/src/components/ChannelEditorForm.tsx`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/channels/new.astro`, `apps/admin/src/pages/channels/[channelId]/edit.astro`, and `apps/admin/src/pages/help.astro` now keep website onboarding provider-aware instead of pretending website sources are just RSS in disguise;
+  - discovery semantics were rebalanced in `services/workers/app/task_engine/adapters/website_probe.py`, `services/workers/app/task_engine/adapters/source_registrar.py`, `services/workers/app/task_engine/discovery_plugins.py`, and `services/workers/app/discovery_orchestrator.py` so hidden RSS/news-site heuristics stay signals rather than canonical provider truth;
+  - closeout work added `services/fetchers/src/cli/test-website-smoke.ts`, root/package scripts for `pnpm test:website:compose`, admin website-channel unit coverage in `tests/unit/ts/admin-website-channels.test.ts`, and a port-preserving crawl-policy origin fix in `services/fetchers/src/web-ingestion.ts` so deterministic website proof also works on non-default ports instead of silently dropping sitemap/feed discovery during local runtime tests;
+  - `docs/verification.md`, `.aidp/os.yaml`, `docs/work.md`, and `docs/history.md` were synced so the website capability now has an explicit closeout command and no longer remains half-live in the active work document.
+- Что проверено:
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `python -m py_compile services/workers/app/smoke.py`
+  - `pnpm test:website:compose`
+  - `pnpm test:relay:compose`
+  - `pnpm test:ingest:compose`
+- Риски или gaps:
+  - broad operator/public UX for browsing non-editorial `web_resources` is still follow-up product work rather than something this archive claims to have closed;
+  - browser-assisted hard-site discovery/extraction remains explicitly out of scope for the archived capability and must land as a separate bounded stage if needed;
+  - the reusable resource lane for `api` and `email_imap` is still architectural truth and code-shape guidance, but not yet implemented as a separate provider follow-up.
+- Follow-up:
+  - if the user wants the next slice here, open a fresh capability for `web_resources` observability/browse UX, browser-assisted hard sites, or provider reuse for `api` / `email_imap` instead of reopening this archived capability.
+
+### 2026-03-28 — SWEEP-ROOT-PLANNING-DOC-CONSOLIDATION — Moved surviving root-plan truth into blueprint and removed stale root planning docs
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: the repository still kept discovery/extractus/source-agent planning docs in the root even after their durable meaning had already been implemented and mostly migrated into runtime-core docs; the user explicitly asked to keep only the valid surviving truth in `docs/blueprint.md` and remove the stale root planning artifacts.
+- Что изменилось:
+  - `docs/blueprint.md` now states three surviving discovery rules that were still only implicit across the old root plans: `interest_graph` is discovery working memory rather than a UI-only projection, discovery scoring is explicitly `Source Profile × Interest`, and the current discovery execution baseline is bounded to RSS and website child sequences rather than broader API/IMAP/YouTube discovery channels;
+  - stale root planning docs `DISCOVERY.md`, `DISCOVERY_EVOLUTION_PLAN.md`, `EXTRACTUS_INTEGRATION_PLAN.md`, and `agent_source.md` were removed from the repository root after that truth transfer;
+  - `docs/work.md` and `docs/history.md` were synced so the removal is recorded as a deliberate sweep instead of silent filesystem cleanup.
+- Что проверено:
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/history.md DISCOVERY.md DISCOVERY_EVOLUTION_PLAN.md EXTRACTUS_INTEGRATION_PLAN.md agent_source.md`
+  - targeted `rg` review confirming that runtime-core docs no longer depend on the deleted root planning docs for live architecture truth
+- Риски или gaps:
+  - historical archive entries still reference the deleted files as past artifacts, which is intentional historical context rather than live dependency;
+  - this sweep removes stale planning docs, not the broader product gap that current operator-ready source onboarding remains RSS-only.
+- Follow-up:
+  - if the user later wants operator-ready non-RSS source onboarding, open a fresh bounded capability instead of restoring root planning docs as parallel truth.
+
+### 2026-03-28 — C-MVP-OPERATOR-RUNBOOK-PACK — Expanded manual MVP docs into a full operator-facing runbook pack
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after a read-only audit of manual MVP readiness, the user asked to turn the findings into committed operator docs instead of leaving the repo with only a minimal RSS-first checklist and hidden setup assumptions.
+- Что изменилось:
+  - `docs/manual-mvp-runbook.md` now provides a single operator-facing guide for the local MVP baseline, including a truthful coverage matrix, required envs, Firebase/Gemini/web-push/Telegram setup notes, public API checks, moderation/reindex/enrichment-retry flow, and explicit cleanup/reset guidance;
+  - the runbook also adds a repeatable deterministic local RSS fixture path via `http://web:4321/internal-mvp-feed.xml?...`, so operators can exercise the local MVP without needing a canonical external feed bundle;
+  - `README.md` now keeps the short quick-start checklist but links to the full runbook, points operators to the deterministic local fixture option, and explicitly states that current committed admin/operator source CRUD is RSS-only while `website`, `api`, and `email_imap` ingest remain code-present but not operator-ready from this baseline;
+  - `docs/work.md` and `docs/history.md` were synced so this docs-only follow-up does not stay as a pseudo-active item after the runbook landed.
+- Что проверено:
+  - `git diff --check -- README.md docs/manual-mvp-runbook.md docs/work.md docs/history.md`
+  - targeted `rg` review across `README.md`, `docs/manual-mvp-runbook.md`, `docs/work.md`, and `docs/history.md` for runbook links, deterministic fixture URLs, RSS-only operator wording, notification feedback coverage, and cleanup/reset references
+- Риски или gaps:
+  - umbrella automated acceptance remains RSS-first and still does not prove `website`, `api`, or `email_imap` ingest;
+  - `web_push` browser receipt and Telegram delivery remain optional manual-only checks;
+  - the repo still does not ship a canonical real external RSS feed bundle, only a local deterministic fixture path plus a placeholder template for real feeds.
+- Follow-up:
+  - if the user wants operator-ready non-RSS source onboarding or a broader manual pack beyond the current RSS-first admin surface, open a new bounded capability instead of reopening this archive.
+
+### 2026-03-28 — C-ADAPTIVE-SOURCE-DISCOVERY-CUTOVER — Hard-cut discovery over to the adaptive graph-first registry-driven contract
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly asked to stop evolving the old discovery foundation incrementally and instead replace it with the adaptive architecture end-to-end, including extensible hypothesis classes, destructive schema/API cutover, and the full declared discovery proof contour.
+- Что изменилось:
+  - `database/migrations/0016_adaptive_discovery_cutover.sql` now destructively replaces the legacy discovery schema with graph-first missions, registry-managed hypothesis classes, class-linked hypotheses, candidates, source profiles, contextual source-interest scores, portfolio snapshots, feedback events, strategy stats and the preserved discovery cost ledger, while reseeding the discovery orchestrator plus RSS/website child sequences on the existing UTE runtime;
+  - `services/workers/app/discovery_orchestrator.py`, `services/workers/app/source_scoring.py`, `services/workers/app/task_engine/orchestrator_plugins.py`, and the discovery LLM/runtime adapters now compile authoritative mission graphs, load active hypothesis classes from PostgreSQL, allow data-only custom classes for existing backends, persist profile/score/portfolio/feedback/re-evaluation state, and keep approved-source registration PostgreSQL-first plus outbox-driven;
+  - `services/api/app/main.py`, `packages/sdk/src/index.ts`, `apps/admin/src/pages/bff/admin/discovery.ts`, and `apps/admin/src/pages/discovery.astro` now expose graph/class-first `/maintenance/discovery/*` semantics including class management, mission graph compilation, source-profile and score views, portfolio snapshots, feedback submission and re-evaluation controls with same-origin BFF audit logging preserved;
+  - `services/workers/app/smoke.py` now extends `test:discovery-enabled:compose` into a compose-backed adaptive walkthrough that creates a mission, compiles the graph, adds a custom class through the registry, plans and executes the class, persists candidate/profile/score/portfolio state, writes feedback, re-evaluates the mission, verifies strategy stats, and proves final source registration through `source_channels` plus `source.channel.sync.requested`, all with cleanup;
+  - `docs/contracts/discovery-agent.md`, `docs/contracts/universal-task-engine.md`, `docs/blueprint.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/work.md`, and `docs/history.md` were synced so the new adaptive discovery contract is the only live discovery truth and the legacy discovery semantics remain historical only.
+- Что проверено:
+  - `python -m py_compile services/api/app/main.py services/workers/app/discovery_orchestrator.py services/workers/app/source_scoring.py`
+  - `python -m py_compile services/workers/app/smoke.py`
+  - `python -m unittest tests.unit.python.test_api_discovery_management tests.unit.python.test_discovery_orchestrator tests.unit.python.test_task_engine_pipeline_plugins`
+  - `python -m unittest tests.unit.python.test_task_engine_discovery_plugins tests.unit.python.test_discovery_llm_adapter`
+  - `node --import tsx --test tests/unit/ts/discovery-admin.test.ts tests/unit/ts/sdk-pagination.test.ts`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:relay:compose`
+  - `pnpm test:ingest:compose`
+  - `pnpm test:discovery-enabled:compose`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - discovery remains disabled by default at the committed baseline, and the enabled-runtime compose smoke is still bounded fake-provider/local-harness proof rather than uncontrolled real-internet validation;
+  - repo-wide Python still has no separate static typecheck gate beyond the executed unit/integration/proof stack.
+- Follow-up:
+  - if the user wants real-network discovery rollout, new `generation_backend` kinds, or broader operator automation around adaptive discovery, open a new bounded capability instead of reopening this archive.
+
+### 2026-03-28 — SWEEP-COMMIT-READY-CLOSEOUT — Added separate historical backfill capability planning and normalized the mixed tree into a commit-ready snapshot
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after `C-EXTRACTUS-INTEGRATION` was archived, the user explicitly asked for two follow-ups that were process-heavy rather than new implementation work: open historical enrichment backfill as a separate future capability instead of silently folding it into the shipped ingest rollout, and make the existing mixed dirty tree honest and commit-ready.
+- Что изменилось:
+  - `docs/work.md` now keeps `C-HISTORICAL-ENRICHMENT-BACKFILL` as a separate ready capability with its own completion condition, stage outline, and boundary notes, instead of leaving historical enrichment as an implied TODO under the archived ingest capability;
+  - the live worktree framing now treats the current snapshot as an intentional staged commit-ready state that contains the archived discovery/Extractus runtime truth plus repo-kept planning/reference docs, rather than as an unexplained dirty overlap;
+  - the cleanup decision was to preserve substantive root planning/reference docs (`DISCOVERY.md`, `DISCOVERY_EVOLUTION_PLAN.md`, `EXTRACTUS_INTEGRATION_PLAN.md`, `agent_source.md`) as repository artifacts instead of deleting or hiding them ad hoc.
+- Что проверено:
+  - `git status --short`
+  - `git diff --name-only`
+  - `git diff --stat`
+  - targeted `rg` consistency check across runtime/docs files after the closeout sync
+- Риски или gaps:
+  - this sweep makes the tree commit-ready, not git-clean; an actual commit or commit split still remains a human or later-agent action;
+  - `C-HISTORICAL-ENRICHMENT-BACKFILL` is planning-only and intentionally unproven until a future bounded implementation stage opens.
+- Follow-up:
+  - commit the staged snapshot as one or more intentional commits, then activate `C-HISTORICAL-ENRICHMENT-BACKFILL` with a fresh stage if historical article backfill is still wanted.
+
+### 2026-03-28 — C-EXTRACTUS-INTEGRATION — Landed extractus feed parsing, pre-normalize enrichment, media ownership, and article detail/admin retry surfaces
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement `EXTRACTUS_INTEGRATION_PLAN.md` fully rather than leave it as a planning artifact, which required replacing the old feed parser, inserting fetchers-owned enrichment into the live article sequence, surfacing real media/detail state in web/admin, and proving the end-to-end path without breaking the sequence-first runtime cutover.
+- Что изменилось:
+  - `services/fetchers` now parses RSS/ATOM/JSON Feed through extractus, persists richer normalized feed payloads in `raw_payload_json`, and exposes `POST /internal/enrichment/articles/{doc_id}` for full-article/media extraction with deterministic skip/failure handling;
+  - `database/migrations/0015_article_enrichment.sql` now adds article enrichment fields plus per-channel enrichment controls and updates the existing active article sequence so `enrichment.article_extract` runs before `article.normalize` while keeping `article.ingest.requested` as the same default trigger;
+  - `services/workers/app/task_engine/pipeline_plugins.py`, `services/workers/app/main.py`, and `services/workers/app/task_engine/executor.py` now call the fetchers-owned enrichment endpoint from the sequence runtime, tolerate a short `sequence_runs` visibility race after enqueue, and let downstream normalize prefer enriched body/metadata when available;
+  - `services/api/app/main.py`, `packages/contracts`, `packages/sdk`, `apps/web`, and `apps/admin` now expose enrichment/media preview fields, internal article detail routes, admin article detail visibility, per-channel enrichment settings, and a maintenance retry path that reuses the active article pipeline via a manual `sequence_run`;
+  - `infra/docker/compose.yml`, `services/relay/src/cli/test-migrations.ts`, `services/fetchers/src/cli/test-enrichment-smoke.ts`, `infra/scripts/test-mvp-internal.mjs`, and the unit suites were synced so the compose baseline now truthfully supports API-side manual sequence dispatch and the proof stack covers enrichment-specific happy/skip/failure paths.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:enrichment:compose`
+  - `pnpm integration_tests`
+- Риски или gaps:
+  - the capability intentionally does not backfill already ingested historical articles; only newly ingested or manually retried articles go through the new enrichment owner by default;
+  - the fetchers enrichment path remains bounded to server-side HTTP/article/media extraction and does not claim browser-heavy anti-bot extraction support;
+  - repo-wide Python still has no separate static typecheck gate beyond the unit/integration proof stack already executed here.
+- Follow-up:
+  - if the user wants historical enrichment backfill, broader website/API provider extraction, or richer article-reader UX, open a new bounded capability instead of reopening this archived one.
+
+### 2026-03-28 — C-DISCOVERY-ENABLE-RUNBOOK — Mirrored discovery envs, added operator runbook, and proved enabled-runtime compose smoke
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked for the next bounded discovery follow-up to stop being a design intention and become operator-ready repo truth: mirror the dedicated discovery Gemini env surface onto the real runtime values, set a `$5` monthly discovery cap, document live enable/monitor/rollback steps, and add plus execute a separate `DISCOVERY_ENABLED=true` smoke in the test environment.
+- Что изменилось:
+  - `.env.dev`, `.env.prod`, and `.env.example` now mirror the ordinary Gemini model, base URL, and tariff values onto the dedicated discovery env surface, keep `DISCOVERY_SEARCH_PROVIDER=ddgs`, set the DDGS defaults, and set `DISCOVERY_MONTHLY_BUDGET_CENTS=500` while preserving the committed safe baseline `DISCOVERY_ENABLED=0`;
+  - `package.json`, `.aidp/os.yaml`, and `services/workers/app/smoke.py` now define and implement the bounded discovery-enabled smoke path, including fake DDGS and fake Gemini provider harnesses that verify live adapter selection, metadata emission, and `$5` monthly quota resolution under `DISCOVERY_ENABLED=true`;
+  - `README.md`, `DISCOVERY.md`, `docs/verification.md`, and `docs/contracts/test-access-and-fixtures.md` now include the short operator live-enable runbook, monitoring surfaces, rollback path, and the compose smoke as the declared bounded proof.
+- Что проверено:
+  - `python -m py_compile services/workers/app/smoke.py`
+  - `pnpm test:discovery-enabled:compose`
+  - local compose stack lifecycle was exercised with `pnpm dev:mvp:internal` and cleaned in the same sync cycle with `pnpm dev:mvp:internal:down`
+- Риски или gaps:
+  - the committed repo baseline intentionally remains `DISCOVERY_ENABLED=0`; this archive does not claim a default-on rollout;
+  - the enabled-runtime proof is still a bounded local fake-provider harness, not uncontrolled live-network DDGS/Gemini validation.
+- Follow-up:
+  - if the user wants the next discovery slice, open a fresh bounded item for broader operator rollout or real-network/live-provider validation instead of reopening this archived follow-up.
+
+### 2026-03-28 — C-DISCOVERY-DDGS-QUOTA — Landed DDGS discovery search, dedicated discovery Gemini config, and monthly quota enforcement
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement the approved follow-up discovery plan rather than leave it as a design note, which required turning DDGS live-provider support, discovery-specific Gemini env/cost fallbacks, precise spend accounting, and a hard monthly quota into real worker/API/admin/runtime truth.
+- Что изменилось:
+  - `database/migrations/0014_discovery_cost_precision_and_quota.sql` now adds precise USD discovery spend columns (`discovery_cost_log.cost_usd`, `discovery_hypotheses.execution_cost_usd`) with backfill from operator-facing cents;
+  - `services/workers/app/task_engine/adapters/web_search.py` now includes `DdgsWebSearchAdapter`, keeps `StubWebSearchAdapter` as rollback/test coverage, normalizes `DDGS().text()` / `DDGS().news()` results, and emits structured zero-cost `search_meta`;
+  - `services/workers/app/task_engine/adapters/llm_analyzer.py` and `services/workers/app/task_engine/discovery_plugins.py` now split discovery Gemini env/cost config from legacy review, return/result-wrap provider metadata, and write `search_meta` plus default or overridden `*_meta` sidecars into discovery sequence context;
+  - `services/workers/app/discovery_orchestrator.py` now dispatches the live search adapter by provider, logs mission-level and hypothesis-level precise USD spend, enforces mission budget and UTC calendar-month quota from precise spend, and stores hypothesis execution totals in both USD and rounded cents;
+  - `services/api/app/main.py`, `apps/admin/src/pages/discovery.astro`, `packages/config/src/index.ts`, `.env.example`, `infra/docker/compose.yml`, `infra/docker/python.requirements.txt`, `README.md`, `DISCOVERY.md`, `docs/blueprint.md`, `docs/contracts/universal-task-engine.md`, `docs/verification.md`, and `.aidp/os.yaml` were synced so operator-visible runtime truth now shows DDGS as the default live provider, the discovery LLM model/quota state, and manual-run `409` behavior when the monthly quota is exhausted.
+- Что проверено:
+  - `python -m unittest tests.unit.python.test_discovery_orchestrator tests.unit.python.test_task_engine_discovery_plugins tests.unit.python.test_discovery_llm_adapter tests.unit.python.test_api_discovery_management`
+  - `node --import tsx --test tests/unit/ts/discovery-admin.test.ts`
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:migrations:smoke`
+- Риски или gaps:
+  - discovery remains disabled by default, so live DDGS network behavior and enabled-runtime compose proof are still separate future work rather than something this archive claims to have closed;
+  - `stub` remains supported intentionally as rollback/test coverage even though DDGS is now the default live-provider contract;
+  - no non-Gemini discovery LLM abstraction or broader discovery automation policy was added beyond the requested monthly hard cap.
+- Follow-up:
+  - if the user wants the next discovery slice, open a new bounded item for enabled-runtime discovery smoke, operator rollout/playbook work, or additional provider/policy changes instead of reopening this archived capability.
+
+### 2026-03-27 — C-DISCOVERY-AGENT — Implemented the safe-by-default AI Discovery Agent capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement `DISCOVERY.md` fully rather than leave it as a design note, which required turning the approved staged rollout into real schema, sequence-engine orchestration, maintenance/admin surfaces, proof and synced runtime truth.
+- Что изменилось:
+  - `database/migrations/0013_discovery_agent_foundation.sql` now creates `discovery_missions`, `discovery_hypotheses`, `discovery_candidates` and `discovery_cost_log`, and seeds three draft discovery sequences: a top-level orchestrator plus reusable RSS and website child pipelines;
+  - `services/workers/app/task_engine` discovery contracts now include `website_probe`, widened URL classification, `provider_type`-aware source registration, live adapter implementations, and new orchestrator plugins `discovery.plan_hypotheses`, `discovery.execute_hypotheses`, `discovery.evaluate_results`;
+  - worker-side discovery orchestration now lives in `services/workers/app/discovery_orchestrator.py`, reusing the task-engine repository layer to create child `sequence_runs`, track candidates/costs/effectiveness, and keep source registration PostgreSQL-first plus outbox-driven;
+  - FastAPI now exposes `/maintenance/discovery/*` summary/mission/candidate/hypothesis/cost endpoints, SDK methods cover the same surface, Astro admin adds `/discovery` plus same-origin BFF write routes with audit logging, and the admin navigation/dashboard now surface discovery explicitly;
+  - worker startup now wires live discovery runtime only when `DISCOVERY_ENABLED=true`, env defaults and docs were synced, and the rollout remains safe by default with stub search/manual review unless an operator intentionally changes those flags.
+- Что проверено:
+  - `python -m unittest tests.unit.python.test_task_engine_discovery_plugins tests.unit.python.test_discovery_orchestrator tests.unit.python.test_api_discovery_management tests.unit.python.test_api_sequence_management`
+  - `node --import tsx --test tests/unit/ts/sdk-pagination.test.ts tests/unit/ts/discovery-admin.test.ts`
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+- Риски или gaps:
+  - live provider-backed discovery search remained intentionally out of scope for this archived capability; it landed later in follow-up work, so this archive should still be read as the pre-DDGS foundation state;
+  - discovery runtime is wired but disabled by default, so enabled-runtime compose smoke and operator activation remain separate future work;
+  - manual approval remains the default review mode; broader automation or trust-policy changes need a new bounded item.
+- Follow-up:
+  - if the user wants the next discovery stage, open a fresh capability for real search-provider integration, enabled-runtime/compose proof, or richer operator automation instead of reopening this archived rollout.
+
 ### 2026-03-27 — P-UMBRELLA-RESIDUALS-1 — Closed the umbrella `/settings` proof failure and fixed Firebase proof-admin cleanup
 
 - Тип записи: patch archive

@@ -3,6 +3,7 @@ export const FOUNDATION_SMOKE_QUEUE = "q.foundation.smoke";
 export const SOURCE_CHANNEL_SYNC_REQUESTED_EVENT = "source.channel.sync.requested";
 export const FETCH_QUEUE = "q.fetch";
 export const ARTICLE_INGEST_REQUESTED_EVENT = "article.ingest.requested";
+export const RESOURCE_INGEST_REQUESTED_EVENT = "resource.ingest.requested";
 export const ARTICLE_NORMALIZED_EVENT = "article.normalized";
 export const ARTICLE_EMBEDDED_EVENT = "article.embedded";
 export const ARTICLE_CLUSTERED_EVENT = "article.clustered";
@@ -78,8 +79,9 @@ export interface OutboxEventQueueMapOptions {
 }
 
 export function buildOutboxEventQueueMap(
-  _options: OutboxEventQueueMapOptions = {}
+  _options?: OutboxEventQueueMapOptions
 ): Record<string, readonly string[]> {
+  void _options;
   return {
     [FOUNDATION_SMOKE_EVENT]: [FOUNDATION_SMOKE_QUEUE],
     [SOURCE_CHANNEL_SYNC_REQUESTED_EVENT]: [FETCH_QUEUE]
@@ -89,6 +91,7 @@ export function buildOutboxEventQueueMap(
 export const OUTBOX_EVENT_QUEUE_MAP = buildOutboxEventQueueMap();
 export const SEQUENCE_MANAGED_OUTBOX_EVENTS = [
   ARTICLE_INGEST_REQUESTED_EVENT,
+  RESOURCE_INGEST_REQUESTED_EVENT,
   INTEREST_COMPILE_REQUESTED_EVENT,
   CRITERION_COMPILE_REQUESTED_EVENT,
   LLM_REVIEW_REQUESTED_EVENT,
@@ -108,6 +111,13 @@ export interface ArticleQueueJobPayload {
   jobId: string;
   eventId: string;
   docId: string;
+  version: number;
+}
+
+export interface ResourceQueueJobPayload {
+  jobId: string;
+  eventId: string;
+  resourceId: string;
   version: number;
 }
 
@@ -168,6 +178,10 @@ export function isArticleOutboxEvent(eventType: string): boolean {
     eventType === ARTICLE_CRITERIA_MATCHED_EVENT ||
     eventType === ARTICLE_INTERESTS_MATCHED_EVENT
   );
+}
+
+export function isResourceOutboxEvent(eventType: string): boolean {
+  return eventType === RESOURCE_INGEST_REQUESTED_EVENT;
 }
 
 export function isInterestCompileOutboxEvent(eventType: string): boolean {

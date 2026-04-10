@@ -97,8 +97,7 @@ export const POST: APIRoute = async ({ request }) => {
   const currentNotificationPreferences =
     currentProfile.rows[0]?.notification_preferences ?? {
       web_push: true,
-      telegram: true,
-      weekly_email_digest: true
+      telegram: true
     };
   const notificationPreferences = {
     ...currentNotificationPreferences,
@@ -107,9 +106,6 @@ export const POST: APIRoute = async ({ request }) => {
       : {}),
     ...(readOptionalBoolean(payload.telegramEnabled) != null
       ? { telegram: readOptionalBoolean(payload.telegramEnabled) }
-      : {}),
-    ...(readOptionalBoolean(payload.weeklyEmailDigestEnabled) != null
-      ? { weekly_email_digest: readOptionalBoolean(payload.weeklyEmailDigestEnabled) }
       : {})
   };
   await pool.query(

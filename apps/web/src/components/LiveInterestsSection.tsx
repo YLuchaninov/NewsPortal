@@ -16,6 +16,7 @@ interface InterestRecord {
   negative_texts?: string[];
   places?: string[];
   languages_allowed?: string[];
+  time_window_hours?: number | null;
   must_have_terms?: string[];
   must_not_have_terms?: string[];
   short_tokens_required?: string[];

@@ -13,6 +13,14 @@ if "psycopg.rows" not in sys.modules:
     psycopg_rows_stub.dict_row = object()
     sys.modules["psycopg.rows"] = psycopg_rows_stub
 
+if "psycopg.types" not in sys.modules:
+    sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
+
+if "psycopg.types.json" not in sys.modules:
+    psycopg_types_json_stub = types.ModuleType("psycopg.types.json")
+    psycopg_types_json_stub.Json = lambda value: value
+    sys.modules["psycopg.types.json"] = psycopg_types_json_stub
+
 from services.api.app import main as api_main
 
 
@@ -42,11 +50,15 @@ class ApiMatchesTests(unittest.TestCase):
         count_sql, count_params = query_count.call_args.args
         self.assertIn("select distinct coalesce(a.canonical_doc_id, a.doc_id) as family_doc_id", count_sql)
         self.assertIn("imr.decision = 'notify'", count_sql)
-        self.assertIn("coalesce(sfr.eligible_for_feed, false) = true", count_sql)
+        self.assertIn(
+            "coalesce(fsr.is_selected, coalesce(sfr.eligible_for_feed, false)) = true",
+            count_sql,
+        )
         self.assertEqual(count_params, ("user-1",))
 
         items_sql, items_params = query_all.call_args.args
         self.assertIn("partition by coalesce(a.canonical_doc_id, a.doc_id)", items_sql)
+        self.assertIn("left join final_selection_results fsr on fsr.doc_id = a.doc_id", items_sql)
         self.assertIn("matched.family_rank = 1", items_sql)
         self.assertIn("order by matched.published_at desc nulls last, matched.ingested_at desc", items_sql)
         self.assertEqual(items_params, ("user-1", 10, 10))

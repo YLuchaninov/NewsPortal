@@ -2,9 +2,10 @@
 import { readRuntimeConfig } from "@newsportal/config";
 import Shell from "../layouts/Shell.astro";
 import { LiveSettingsSection } from "../components/LiveSettingsSection";
-import { queryOne, queryRows } from "../lib/server/db";
+import { getPool, queryOne, queryRows } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
+import { loadDigestSettings } from "../lib/server/digest-settings";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -28,24 +29,38 @@ const bffPaths = {
   liveUpdates: resolvePageAppPath("../bff/live-updates"),
   preferences: resolvePageAppPath("../bff/preferences"),
   notificationChannels: resolvePageAppPath("../bff/notification-channels"),
+  digestSettings: resolvePageAppPath("../bff/digest-settings"),
 };
 
 type ViewRow = Record<string, unknown>;
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-const [profile, configuredChannels] = await Promise.all([
+const [profile, configuredChannels, digestSettings] = await Promise.all([
   queryOne<ViewRow>(`select theme_preference, notification_preferences from user_profiles where user_id = $1`, [session.userId]),
   queryRows<ViewRow>(`
     select unc.*, last_d.status as last_status, last_d.sent_at as last_sent_at
     from user_notification_channels unc
     left join lateral (
-      select status, sent_at from notification_log nl
-      where nl.user_id = unc.user_id and nl.channel_type = unc.channel_type
-      order by nl.created_at desc limit 1
+      select delivery.status, delivery.sent_at
+      from (
+        select nl.status, nl.sent_at, nl.created_at
+        from notification_log nl
+        where unc.channel_type <> 'email_digest'
+          and nl.user_id = unc.user_id
+          and nl.channel_type = unc.channel_type
+        union all
+        select ddl.status, ddl.sent_at, ddl.requested_at as created_at
+        from digest_delivery_log ddl
+        where unc.channel_type = 'email_digest'
+          and ddl.user_id = unc.user_id
+      ) delivery
+      order by delivery.sent_at desc nulls last, delivery.created_at desc
+      limit 1
     ) last_d on true
     where unc.user_id = $1
     order by unc.channel_type, unc.created_at desc
   `, [session.userId]),
+  loadDigestSettings(getPool(), session.userId),
 ]);
 
 const themePreference = String(profile?.theme_preference ?? "system");
@@ -54,7 +69,6 @@ const notificationPreferences = (profile?.notification_preferences as Record<str
 const prefState = {
   webPush: notificationPreferences.web_push !== false,
   telegram: notificationPreferences.telegram !== false,
-  weeklyEmailDigest: notificationPreferences.weekly_email_digest !== false,
 };
 const webPushKey = runtimeConfig.webPushVapidPublicKey;
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
@@ -86,6 +100,8 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
     currentPath={currentPath}
     notificationChannelsPath={bffPaths.notificationChannels}
     preferencesPath={bffPaths.preferences}
+    digestSettingsPath={bffPaths.digestSettings}
+    initialDigestSettings={digestSettings}
     sessionEmail={session.identity.email ?? ""}
     vapidKey={webPushKey}
     client:load

@@ -31,11 +31,20 @@ export const GET: APIRoute = async ({ request }) => {
         last_delivery.sent_at as last_sent_at
       from user_notification_channels unc
       left join lateral (
-        select status, sent_at
-        from notification_log nl
-        where nl.user_id = unc.user_id
-          and nl.channel_type = unc.channel_type
-        order by nl.created_at desc
+        select delivery.status, delivery.sent_at
+        from (
+          select nl.status, nl.sent_at, nl.created_at
+          from notification_log nl
+          where unc.channel_type <> 'email_digest'
+            and nl.user_id = unc.user_id
+            and nl.channel_type = unc.channel_type
+          union all
+          select ddl.status, ddl.sent_at, ddl.requested_at as created_at
+          from digest_delivery_log ddl
+          where unc.channel_type = 'email_digest'
+            and ddl.user_id = unc.user_id
+        ) delivery
+        order by delivery.sent_at desc nulls last, delivery.created_at desc
         limit 1
       ) last_delivery on true
       where unc.user_id = $1

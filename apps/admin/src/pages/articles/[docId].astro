@@ -1,0 +1,366 @@
+---
+import type { ArticleDetail, ArticleMediaAsset } from "@newsportal/contracts";
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+
+import AdminShell from "../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../lib/server/auth";
+import { resolveArticleOperatorState } from "../../lib/server/operator-surfaces";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const docId = String(Astro.params.docId ?? "").trim();
+
+if (!docId) {
+  return new Response("Article not found.", { status: 404 });
+}
+
+let article: ArticleDetail;
+try {
+  article = await sdk.getArticle<ArticleDetail>(docId);
+} catch {
+  return new Response("Article not found.", { status: 404 });
+}
+
+function resolveSafeHref(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    const normalized = new URL(rawValue);
+    if (!["http:", "https:"].includes(normalized.protocol)) {
+      return null;
+    }
+    return normalized.toString();
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeArticleHtml(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  return rawValue
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
+    .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
+}
+
+function formatTimestamp(rawValue: unknown): string {
+  if (!rawValue) {
+    return "—";
+  }
+
+  const date = new Date(String(rawValue));
+  if (Number.isNaN(date.getTime())) {
+    return String(rawValue);
+  }
+
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatReadTime(rawValue: unknown): string {
+  const seconds = Number(rawValue ?? NaN);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "—";
+  }
+
+  return `${Math.max(1, Math.round(seconds / 60))} min`;
+}
+
+function toMediaAssets(rawValue: unknown): ArticleMediaAsset[] {
+  return Array.isArray(rawValue) ? (rawValue as ArticleMediaAsset[]) : [];
+}
+
+function shortId(rawValue: unknown): string {
+  const normalized = String(rawValue ?? "").trim();
+  return normalized ? normalized.slice(0, 8) : "—";
+}
+
+const articleHtml = sanitizeArticleHtml(article.full_content_html ?? null);
+const sourceHref = resolveSafeHref(article.url);
+const canonicalHref = resolveSafeHref(article.canonical_document_url);
+const mediaAssets = toMediaAssets(article.media_assets);
+const retryPath = appPath("/bff/admin/articles/enrichment-retry");
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const operatorState = resolveArticleOperatorState(article);
+
+const finalSelectionColor: Record<string, string> = {
+  selected: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  gray_zone: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  rejected: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+};
+
+const systemFeedColor: Record<string, string> = {
+  eligible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  pass_through: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  pending_llm: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  filtered_out: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+};
+
+const verificationColor: Record<string, string> = {
+  strong: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  medium: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  weak: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  conflicting: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+};
+---
+
+<AdminShell title="Article Detail — Admin" session={session} flash={flash} activeNav="articles">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/articles")} class="hover:text-foreground">Articles</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Detail</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <form method="post" action={retryPath}>
+      <input type="hidden" name="docId" value={docId} />
+      <input type="hidden" name="redirectTo" value={currentPath} />
+      <button
+        type="submit"
+        class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        Retry enrichment
+      </button>
+    </form>
+    {sourceHref && (
+      <a
+        href={sourceHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+      >
+        Open source
+      </a>
+    )}
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {operatorState.selectionDecision && (
+          <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${finalSelectionColor[String(operatorState.selectionDecision)] ?? systemFeedColor[String(operatorState.selectionDecision)] ?? "bg-muted text-muted-foreground"}`}>
+            select:{String(operatorState.selectionDecision)}
+          </span>
+        )}
+        {operatorState.verificationState && (
+          <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${verificationColor[String(operatorState.verificationState)] ?? "bg-muted text-muted-foreground"}`}>
+            verify:{String(operatorState.verificationState)}
+          </span>
+        )}
+        {operatorState.observationState && (
+          <span class="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
+            obs:{String(operatorState.observationState)}
+          </span>
+        )}
+        {operatorState.duplicateKind && (
+          <span class="inline-flex items-center rounded-full bg-cyan-100 px-2.5 py-1 font-medium text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300">
+            dup:{String(operatorState.duplicateKind)}
+          </span>
+        )}
+        <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 font-medium text-secondary-foreground">
+          raw:{String(article.processing_state ?? "raw")}
+        </span>
+        <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
+          enrich:{String(article.enrichment_state ?? "pending")}
+        </span>
+        {article.system_feed_decision && (
+          <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${systemFeedColor[String(article.system_feed_decision)] ?? "bg-muted text-muted-foreground"}`}>
+            compat:{String(article.system_feed_decision)}
+          </span>
+        )}
+      </div>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight">{String(article.title ?? "Untitled article")}</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{String(article.lead ?? "")}</p>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Source</p>
+          <p class="mt-2 font-medium">{String(article.source_name ?? article.channel_name ?? "Unknown")}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Author: {String(article.author_name ?? article.extracted_author ?? "Unknown")}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Published</p>
+          <p class="mt-2 font-medium">{formatTimestamp(article.extracted_published_at ?? article.published_at)}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Read time: {formatReadTime(article.read_time_seconds ?? article.extracted_ttr_seconds)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Canonical Doc</p>
+          <p class="mt-2 font-medium">{article.canonical_document_id ? shortId(article.canonical_document_id) : "Pending"}</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {article.canonical_domain ? `${String(article.canonical_domain)} · ` : ""}{String(article.canonical_observation_count ?? 0)} observation{Number(article.canonical_observation_count ?? 0) === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Story Cluster</p>
+          <p class="mt-2 font-medium">{article.story_cluster_id ? shortId(article.story_cluster_id) : "—"}</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {String(article.story_cluster_verification_state ?? "unverified")} · {String(article.story_cluster_source_family_count ?? 0)} source families
+          </p>
+        </div>
+      </div>
+      <div class="mt-4 rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+        This page is an operator view for one editorial article observation. Canonical document ownership, story-cluster verification, and final selection are the durable selection truth; <code class="rounded bg-muted px-1 py-0.5">processing_state</code> stays here as raw pipeline telemetry.
+      </div>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
+      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div class="mb-4">
+          <h2 class="text-base font-semibold">Content preview</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Editorial maintenance detail for the underlying article observation. Public readers now use the universal <code class="rounded bg-muted px-1 py-0.5">/content/&lt;contentItemId&gt;</code> surface, while operators should reason from canonical, verification, and final-selection fields below.
+          </p>
+        </div>
+        {articleHtml ? (
+          <article
+            class="prose prose-neutral max-w-none prose-headings:text-foreground prose-a:text-primary dark:prose-invert"
+            set:html={articleHtml}
+          />
+        ) : (
+          <pre class="whitespace-pre-wrap text-sm leading-6 text-foreground">{String(article.body ?? "")}</pre>
+        )}
+      </section>
+
+      <div class="space-y-6">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Pipeline truth</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Current operator-facing cutover view across observation, canonical document, story cluster, verification, and final selection.
+            </p>
+          </div>
+          <dl class="grid gap-3 text-sm">
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selection source</dt>
+              <dd class="mt-1 text-foreground">{String(operatorState.selectionSource)}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Canonical document</dt>
+              <dd class="mt-1 text-foreground">
+                {article.canonical_document_id ? String(article.canonical_document_id) : "Not materialized yet"}
+              </dd>
+              {canonicalHref && (
+                <a href={canonicalHref} target="_blank" rel="noopener noreferrer" class="mt-1 inline-block break-all text-xs text-primary hover:underline">
+                  {canonicalHref}
+                </a>
+              )}
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Verification</dt>
+              <dd class="mt-1 text-foreground">
+                Final: {String(article.final_selection_verification_state ?? "—")} · Canonical: {String(article.canonical_verification_state ?? "—")} · Cluster: {String(article.story_cluster_verification_state ?? "—")}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Story cluster</dt>
+              <dd class="mt-1 text-foreground">
+                {article.story_cluster_id ? String(article.story_cluster_id) : "Not clustered yet"}
+              </dd>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {String(article.story_cluster_title ?? "—")} · {String(article.story_cluster_document_count ?? 0)} canonical docs · {String(article.story_cluster_corroboration_count ?? 0)} corroborations
+              </p>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Observation state</dt>
+              <dd class="mt-1 text-foreground">
+                {String(article.observation_state ?? "—")} · duplicate: {String(article.duplicate_kind ?? "—")}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selection decision</dt>
+              <dd class="mt-1 text-foreground">
+                Final: {String(article.final_selection_decision ?? "—")} · Compatibility: {String(article.system_feed_decision ?? "—")}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Extraction metadata</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Persisted article enrichment fields exposed for operator debugging.
+            </p>
+          </div>
+          <dl class="grid gap-3 text-sm">
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Description</dt>
+              <dd class="mt-1 text-foreground">{String(article.extracted_description ?? "—")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Image URL</dt>
+              <dd class="mt-1 break-all text-foreground">{String(article.extracted_image_url ?? "—")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Favicon URL</dt>
+              <dd class="mt-1 break-all text-foreground">{String(article.extracted_favicon_url ?? "—")}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Media assets</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              `article_media_assets` owned by the enrichment path for this observation row.
+            </p>
+          </div>
+          {mediaAssets.length === 0 ? (
+            <p class="text-sm text-muted-foreground">No persisted media assets.</p>
+          ) : (
+            <div class="space-y-3">
+              {mediaAssets.map((asset) => (
+                <div class="rounded-2xl border border-border bg-background p-4">
+                  <p class="text-sm font-medium text-foreground">
+                    {String(asset.media_kind ?? "asset")} · {String(asset.storage_kind ?? "external_url")}
+                  </p>
+                  <p class="mt-1 break-all text-xs text-muted-foreground">{String(asset.source_url ?? "—")}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+
+    <details class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <summary class="cursor-pointer list-none text-sm font-semibold text-foreground">
+        Raw enrichment debug
+      </summary>
+      <pre class="mt-4 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(article.enrichment_debug ?? {}, null, 2)}</pre>
+    </details>
+  </div>
+</AdminShell>

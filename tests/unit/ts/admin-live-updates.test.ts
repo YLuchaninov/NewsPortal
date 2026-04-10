@@ -29,6 +29,12 @@ function createDashboardSnapshot(): AdminDashboardLiveSnapshot {
       attentionChannels: 1,
       queuedReindexJobs: 0,
       runningReindexJobs: 0,
+      llmBudgetEnabled: true,
+      llmMonthlyBudgetCents: 500,
+      llmMonthToDateCostCents: 120,
+      llmRemainingMonthlyBudgetCents: 380,
+      llmMonthlyQuotaReached: false,
+      llmAcceptGrayZoneOnBudgetExhaustion: false,
       revision: "summary-v1",
     },
     fetchRuns: {

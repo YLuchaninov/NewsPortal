@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildUserInterestUpdatePatch,
   createAdminUserInterest,
   findAdminUserInterestTarget,
+  parseUserInterestCreateInput,
   resolveAdminUserInterestLookupInput,
   updateAdminUserInterest,
 } from "../../../apps/admin/src/lib/server/user-interests.ts";
@@ -99,6 +101,7 @@ test("createAdminUserInterest queues compile work for the selected target user a
       negativeTexts: ["sports"],
       places: ["EU"],
       languagesAllowed: ["en"],
+      timeWindowHours: 336,
       mustHaveTerms: ["policy"],
       mustNotHaveTerms: [],
       shortTokensRequired: [],
@@ -116,6 +119,7 @@ test("createAdminUserInterest queues compile work for the selected target user a
     version: 1,
   });
   assert.equal(queryable.calls[0]?.params?.[1], "user-1");
+  assert.equal(queryable.calls[0]?.params?.[7], 336);
   assert.deepEqual(queued[0], {
     eventType: "interest.compile.requested",
     aggregateType: "interest",
@@ -150,6 +154,7 @@ test("updateAdminUserInterest preserves ownership and requeues compilation on be
           negative_texts: [],
           places: ["EU"],
           languages_allowed: ["en"],
+          time_window_hours: 168,
           must_have_terms: [],
           must_not_have_terms: [],
           short_tokens_required: [],
@@ -182,7 +187,8 @@ test("updateAdminUserInterest preserves ownership and requeues compilation on be
     version: 4,
   });
   assert.equal(queryable.calls[1]?.params?.[1], "user-1");
-  assert.equal(queryable.calls[1]?.params?.[12], false);
+  assert.equal(queryable.calls[1]?.params?.[7], 168);
+  assert.equal(queryable.calls[1]?.params?.[13], false);
   assert.deepEqual(queued[0], {
     eventType: "interest.compile.requested",
     aggregateType: "interest",
@@ -203,4 +209,38 @@ test("updateAdminUserInterest preserves ownership and requeues compilation on be
     version: 4,
     compileRequested: true,
   });
+});
+
+test("parseUserInterestCreateInput accepts time_window_hours and keeps defaults", () => {
+  const blankParsed = parseUserInterestCreateInput({
+    description: "Evergreen demand",
+    positive_texts: "",
+    time_window_hours: "",
+  });
+
+  assert.equal(blankParsed.timeWindowHours, null);
+
+  const parsed = parseUserInterestCreateInput({
+    description: "AI policy",
+    positive_texts: "",
+    time_window_hours: "240",
+    must_have_terms: "policy\nprocurement",
+  });
+
+  assert.equal(parsed.timeWindowHours, 240);
+  assert.deepEqual(parsed.mustHaveTerms, ["policy", "procurement"]);
+  assert.deepEqual(parsed.languagesAllowed, ["en"]);
+  assert.deepEqual(parsed.positiveTexts, ["AI policy"]);
+});
+
+test("buildUserInterestUpdatePatch accepts newline-delimited lexical lists from the admin form", () => {
+  const patch = buildUserInterestUpdatePatch({
+    must_have_terms: "procurement\nvendor",
+    must_not_have_terms: "hiring,career",
+    time_window_hours: "",
+  });
+
+  assert.deepEqual(patch.mustHaveTerms, ["procurement", "vendor"]);
+  assert.deepEqual(patch.mustNotHaveTerms, ["hiring", "career"]);
+  assert.equal(patch.timeWindowHours, null);
 });

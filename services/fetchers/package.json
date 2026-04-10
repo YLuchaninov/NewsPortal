@@ -3,16 +3,28 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "article-yield:diagnostics": "node --import tsx src/cli/article-yield-diagnostics.ts",
+    "article-yield:remediate": "node --import tsx src/cli/article-yield-remediate.ts",
     "build": "tsc -p tsconfig.json --noEmit",
+    "test:channel-auth-smoke": "node --import tsx src/cli/test-channel-auth-smoke.ts",
+    "test:feed-ingress-adapters-smoke": "node --import tsx src/cli/test-feed-ingress-adapters-smoke.ts",
+    "test:hard-sites-smoke": "node --import tsx src/cli/test-hard-sites-smoke.ts",
     "run:once": "node --import tsx src/cli/run-once.ts",
     "start": "node --import tsx src/main.ts",
+    "test:enrichment-smoke": "node --import tsx src/cli/test-enrichment-smoke.ts",
     "test:rss-smoke": "node --import tsx src/cli/test-rss-smoke.ts",
+    "test:website-smoke": "node --import tsx src/cli/test-website-smoke.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@extractus/article-extractor": "^8.0.20",
+    "@extractus/feed-extractor": "^7.1.7",
+    "@extractus/oembed-extractor": "^4.0.9",
     "@newsportal/contracts": "workspace:*",
+    "fast-xml-parser": "^5.5.9",
     "fastify": "^5.6.0",
     "imapflow": "^1.2.13",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "playwright": "^1.54.2"
   }
 }

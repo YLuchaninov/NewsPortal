@@ -1,8 +1,28 @@
+import sys
+import types
 import unittest
 from dataclasses import replace
 from itertools import count
 from typing import Any
 from unittest.mock import patch
+
+if "psycopg" not in sys.modules:
+    psycopg_stub = types.ModuleType("psycopg")
+    psycopg_stub.connect = lambda *args, **kwargs: None
+    sys.modules["psycopg"] = psycopg_stub
+
+if "psycopg.rows" not in sys.modules:
+    psycopg_rows_stub = types.ModuleType("psycopg.rows")
+    psycopg_rows_stub.dict_row = object()
+    sys.modules["psycopg.rows"] = psycopg_rows_stub
+
+if "psycopg.types" not in sys.modules:
+    sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
+
+if "psycopg.types.json" not in sys.modules:
+    psycopg_types_json_stub = types.ModuleType("psycopg.types.json")
+    psycopg_types_json_stub.Json = lambda value: value
+    sys.modules["psycopg.types.json"] = psycopg_types_json_stub
 
 from services.workers.app.task_engine import (
     SequenceDefinition,
@@ -11,9 +31,13 @@ from services.workers.app.task_engine import (
     TaskPluginRegistry,
     register_builtin_plugins,
 )
+from services.workers.app.task_engine.adapters.web_search import DdgsWebSearchAdapter
 from services.workers.app.task_engine.discovery_plugins import (
+    LlmAnalyzerPlugin,
     RelevanceScorerPlugin,
     UrlValidatorPlugin,
+    WebSearchPlugin,
+    WebsiteProbePlugin,
 )
 
 
@@ -187,6 +211,9 @@ class FakeUrlValidatorAdapter:
                     "url": url,
                     "status": 200,
                     "content_type": "application/rss+xml" if url.endswith(".xml") else "text/html",
+                    "is_rss_candidate": url.endswith(".xml"),
+                    "is_website_candidate": not url.endswith(".xml"),
+                    "source_type_hint": "rss" if url.endswith(".xml") else "website",
                 }
             )
         return rows
@@ -234,6 +261,53 @@ class FakeContentSamplerAdapter:
         ]
 
 
+class FakeWebsiteProbeAdapter:
+    def probe_websites(self, *, urls: list[str], sample_count: int) -> list[dict[str, Any]]:
+        return [
+            {
+                "url": url,
+                "final_url": url,
+                "title": "Example Newsroom",
+                "classification": {
+                    "kind": "editorial",
+                    "confidence": 0.84,
+                    "reasons": ["detail:editorial", "hint:feed"],
+                },
+                "capabilities": {
+                    "supports_feed_discovery": True,
+                    "supports_collection_discovery": True,
+                    "supports_download_discovery": False,
+                    "inline_data_hint": False,
+                    "js_heavy_hint": False,
+                },
+                "discovered_feed_urls": [f"{url.rstrip('/')}/feed.xml"],
+                "listing_urls": [f"{url.rstrip('/')}/world"],
+                "document_urls": [],
+                "detail_count_estimate": 12,
+                "listing_count_estimate": 1,
+                "document_count_estimate": 0,
+                "sample_resources": [
+                    {"title": "Lead story", "url": f"{url.rstrip('/')}/lead", "kind": "editorial"},
+                    {"title": "Policy story", "url": f"{url.rstrip('/')}/policy", "kind": "editorial"},
+                ][:sample_count],
+                "is_news_site": True,
+                "has_hidden_rss": True,
+                "hidden_rss_urls": [f"{url.rstrip('/')}/feed.xml"],
+                "article_count_estimate": 12,
+                "freshness": "recent",
+                "date_patterns_found": True,
+                "category_urls": [f"{url.rstrip('/')}/world"],
+                "browser_assisted_recommended": True,
+                "challenge_kind": None,
+                "sample_articles": [
+                    {"title": "Lead story", "url": f"{url.rstrip('/')}/lead"},
+                    {"title": "Policy story", "url": f"{url.rstrip('/')}/policy"},
+                ][:sample_count],
+            }
+            for url in urls
+        ]
+
+
 class FakeLlmAnalyzerAdapter:
     def analyze(
         self,
@@ -270,6 +344,7 @@ class FakeSourceRegistrarAdapter:
         dry_run: bool,
         created_by: str | None,
         tags: list[str],
+        provider_type: str,
     ) -> list[dict[str, Any]]:
         return [
             {
@@ -279,6 +354,7 @@ class FakeSourceRegistrarAdapter:
                 "dry_run": dry_run,
                 "created_by": created_by,
                 "tags": tags,
+                "provider_type": provider_type,
             }
             for index, source in enumerate(sources)
         ]
@@ -339,11 +415,199 @@ class FakeDiscoveryRuntime:
         self.url_validator = FakeUrlValidatorAdapter()
         self.rss_probe = FakeRssProbeAdapter()
         self.content_sampler = FakeContentSamplerAdapter()
+        self.website_probe = FakeWebsiteProbeAdapter()
         self.llm_analyzer = FakeLlmAnalyzerAdapter()
         self.source_registrar = FakeSourceRegistrarAdapter()
         self.db_store = FakeDbStoreAdapter()
         self.article_loader = FakeArticleLoaderAdapter()
         self.article_enricher = FakeArticleEnricherAdapter()
+
+
+class _FakeDdgsClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def text(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("text", dict(kwargs)))
+        return [
+            {
+                "href": "https://feeds.example.com/eu-ai.xml",
+                "title": "EU AI feeds",
+                "body": "Coverage of EU AI and policy updates.",
+            }
+        ]
+
+    def news(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("news", dict(kwargs)))
+        return [
+            {
+                "url": "https://news.example.com/eu-ai",
+                "title": "EU AI daily",
+                "body": "Daily news coverage.",
+                "source": "Example News",
+                "date": "2026-03-28",
+            }
+        ]
+
+
+class _FakeDdgsFactory:
+    def __init__(self) -> None:
+        self.instance = _FakeDdgsClient()
+
+    def __call__(self) -> _FakeDdgsClient:
+        return self.instance
+
+
+class _EnvelopeWebSearchAdapter:
+    def search(
+        self,
+        *,
+        query: str,
+        count: int,
+        result_type: str,
+        time_range: str | None,
+    ) -> dict[str, Any]:
+        del count
+        return {
+            "results": [
+                {
+                    "url": "https://feeds.example.com/eu-ai.xml",
+                    "title": f"{query} result",
+                    "snippet": "Snippet",
+                }
+            ],
+            "meta": {
+                "provider": "ddgs",
+                "backend": "auto",
+                "result_type": result_type,
+                "time_range": time_range,
+                "request_count": 1,
+                "cost_usd": 0.0,
+            },
+        }
+
+
+class _EnvelopeLlmAnalyzerAdapter:
+    def analyze(
+        self,
+        *,
+        prompt: str | None,
+        task: str | None,
+        payload: Any,
+        model: str | None,
+        temperature: float,
+        output_schema: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        del prompt, task, model, temperature, output_schema
+        size = len(payload) if isinstance(payload, list) else 1
+        return {
+            "result": {"summary": f"{size} analyzed"},
+            "meta": {
+                "provider": "gemini",
+                "model": "gemini-2.5-pro",
+                "request_count": 1,
+                "prompt_tokens": 111,
+                "completion_tokens": 22,
+                "cost_usd": 0.0033,
+            },
+        }
+
+
+class DiscoveryAdapterBehaviorTests(unittest.TestCase):
+    def test_ddgs_web_search_adapter_normalizes_text_results_and_meta(self) -> None:
+        factory = _FakeDdgsFactory()
+        adapter = DdgsWebSearchAdapter(
+            ddgs_cls=factory,
+            backend="auto",
+            region="us-en",
+            safesearch="moderate",
+        )
+
+        result = adapter.search(
+            query="eu ai",
+            count=3,
+            result_type="web",
+            time_range="week",
+        )
+
+        self.assertEqual(factory.instance.calls[0][0], "text")
+        self.assertEqual(factory.instance.calls[0][1]["timelimit"], "w")
+        self.assertEqual(factory.instance.calls[0][1]["max_results"], 3)
+        self.assertEqual(result["results"][0]["url"], "https://feeds.example.com/eu-ai.xml")
+        self.assertEqual(result["results"][0]["snippet"], "Coverage of EU AI and policy updates.")
+        self.assertEqual(result["meta"]["provider"], "ddgs")
+        self.assertEqual(result["meta"]["backend"], "auto")
+        self.assertEqual(result["meta"]["timelimit"], "w")
+        self.assertEqual(result["meta"]["cost_usd"], 0.0)
+        self.assertEqual(result["meta"]["request_count"], 1)
+
+    def test_ddgs_web_search_adapter_normalizes_news_results_and_meta(self) -> None:
+        factory = _FakeDdgsFactory()
+        adapter = DdgsWebSearchAdapter(
+            ddgs_cls=factory,
+            backend="auto",
+            region="us-en",
+            safesearch="moderate",
+        )
+
+        result = adapter.search(
+            query="eu ai",
+            count=2,
+            result_type="news",
+            time_range="day",
+        )
+
+        self.assertEqual(factory.instance.calls[0][0], "news")
+        self.assertEqual(factory.instance.calls[0][1]["timelimit"], "d")
+        self.assertEqual(result["results"][0]["url"], "https://news.example.com/eu-ai")
+        self.assertEqual(result["results"][0]["source"], "Example News")
+        self.assertEqual(result["results"][0]["published_at"], "2026-03-28")
+        self.assertEqual(result["meta"]["result_type"], "news")
+        self.assertEqual(result["meta"]["returned_count"], 1)
+
+
+class DiscoveryMetaPluginTests(unittest.IsolatedAsyncioTestCase):
+    async def test_web_search_plugin_adds_search_meta_sidecar(self) -> None:
+        plugin = WebSearchPlugin()
+        runtime = FakeDiscoveryRuntime()
+        runtime.web_search = _EnvelopeWebSearchAdapter()
+
+        with patch(
+            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            return_value=runtime,
+        ):
+            result = await plugin.execute(
+                options={"query": "eu ai", "count": 1, "type": "news", "time_range": "day"},
+                context={},
+            )
+
+        self.assertEqual(result["search_results"][0]["url"], "https://feeds.example.com/eu-ai.xml")
+        self.assertEqual(result["search_meta"]["provider"], "ddgs")
+        self.assertEqual(result["search_meta"]["result_type"], "news")
+        self.assertEqual(result["search_meta"]["returned_count"], 1)
+
+    async def test_llm_analyzer_plugin_writes_default_meta_sidecar(self) -> None:
+        plugin = LlmAnalyzerPlugin()
+        runtime = FakeDiscoveryRuntime()
+        runtime.llm_analyzer = _EnvelopeLlmAnalyzerAdapter()
+
+        with patch(
+            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            return_value=runtime,
+        ):
+            result = await plugin.execute(
+                options={
+                    "task": "summarize_sources",
+                    "payload_field": "sources",
+                    "output_field": "source_hypothesis",
+                },
+                context={"sources": [{"source_url": "https://feeds.example.com/eu-ai.xml"}]},
+            )
+
+        self.assertEqual(result["source_hypothesis"]["summary"], "1 analyzed")
+        self.assertEqual(result["source_hypothesis_meta"]["provider"], "gemini")
+        self.assertEqual(result["source_hypothesis_meta"]["model"], "gemini-2.5-pro")
+        self.assertEqual(result["source_hypothesis_meta"]["request_count"], 1)
 
 
 class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
@@ -376,6 +640,45 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
             "https://feeds.example.com/ukraine-tech.xml",
         )
         self.assertTrue(result["validated_urls"][0]["is_rss_candidate"])
+        self.assertEqual(result["validated_urls"][0]["source_type_hint"], "rss")
+
+    async def test_website_probe_uses_validated_website_candidates(self) -> None:
+        plugin = WebsiteProbePlugin()
+        runtime = FakeDiscoveryRuntime()
+
+        with patch(
+            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            return_value=runtime,
+        ):
+            result = await plugin.execute(
+                options={"sample_count": 1},
+                context={
+                    "validated_urls": [
+                        {
+                            "url": "https://feeds.example.com/ukraine-tech.xml",
+                            "is_website_candidate": False,
+                            "source_type_hint": "rss",
+                        },
+                        {
+                            "url": "https://news.example.com",
+                            "is_website_candidate": True,
+                            "source_type_hint": "website",
+                        },
+                    ]
+                },
+            )
+
+        self.assertEqual(len(result["probed_websites"]), 1)
+        self.assertEqual(result["probed_websites"][0]["url"], "https://news.example.com")
+        self.assertEqual(result["probed_websites"][0]["classification"]["kind"], "editorial")
+        self.assertTrue(result["probed_websites"][0]["browser_assisted_recommended"])
+        self.assertIsNone(result["probed_websites"][0]["challenge_kind"])
+        self.assertEqual(
+            result["probed_websites"][0]["discovered_feed_urls"],
+            ["https://news.example.com/feed.xml"],
+        )
+        self.assertTrue(result["probed_websites"][0]["has_hidden_rss"])
+        self.assertEqual(result["probed_websites"][0]["hidden_rss_urls"], ["https://news.example.com/feed.xml"])
 
     async def test_relevance_scorer_scores_sampled_content_deterministically(self) -> None:
         plugin = RelevanceScorerPlugin()

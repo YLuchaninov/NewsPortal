@@ -23,12 +23,12 @@ const flash = readFlash(Astro.url);
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 ---
 
-<AdminShell title="New Interest Template — Admin" session={session} flash={flash} activeNav="interest-templates">
+<AdminShell title="New System Interest — Admin" session={session} flash={flash} activeNav="interest-templates">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <a href={appPath("/templates/interests")} class="hover:text-foreground">Interest Templates</a>
+      <a href={appPath("/templates/interests")} class="hover:text-foreground">System Interests</a>
       <span>/</span>
       <span class="text-foreground font-medium">New</span>
     </nav>
@@ -37,9 +37,9 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
   <div class="space-y-6">
     <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Create</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Create interest template</h1>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Create system interest</h1>
       <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Define the baseline topic, prototypes, and optional lexical guidance on a dedicated screen built for long-form authoring.
+        Define the baseline theme, content-kind gates, prototypes, and optional lexical guidance that power global system selection.
       </p>
     </div>
 
@@ -57,6 +57,8 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
         mustNotHaveTerms: "",
         places: "",
         languagesAllowed: "",
+        timeWindowHours: "",
+        allowedContentKinds: "editorial\nlisting\nentity\ndocument\ndata_file\napi_payload",
         shortTokensRequired: "",
         shortTokensForbidden: "",
         priority: "1.0",

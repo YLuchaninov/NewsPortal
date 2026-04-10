@@ -1,0 +1,1302 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  resolveDiscoveryChannelMetrics,
+  resolveDiscoveryOperatorSummary,
+  resolveDiscoveryRecallCandidateState,
+  resolveDiscoverySourceQuality,
+} from "../lib/server/operator-surfaces";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const bffPath = appPath("/bff/admin/discovery");
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const tab = Astro.url.searchParams.get("tab") ?? "dashboard";
+
+type R = Record<string, unknown>;
+type PagedR = {
+  items: R[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+function asRecord(value: unknown): R {
+  return value != null && typeof value === "object" && !Array.isArray(value) ? (value as R) : {};
+}
+
+function asArray(value: unknown): R[] {
+  return Array.isArray(value) ? value.map((entry) => asRecord(entry)) : [];
+}
+
+function asPaged(value: unknown): PagedR {
+  const row = asRecord(value);
+  return {
+    items: asArray(row.items),
+    page: asInt(row.page, 1),
+    pageSize: asInt(row.pageSize, 20),
+    total: asInt(row.total, 0),
+    totalPages: asInt(row.totalPages, 1),
+    hasNext: row.hasNext === true,
+    hasPrev: row.hasPrev === true,
+  };
+}
+
+function asInt(value: unknown, fallback = 0): number {
+  const parsed =
+    typeof value === "number" && Number.isFinite(value)
+      ? value
+      : Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function asFloat(value: unknown, fallback = 0): number {
+  const parsed =
+    typeof value === "number" && Number.isFinite(value)
+      ? value
+      : Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((entry) => String(entry ?? "").trim()).filter(Boolean) : [];
+}
+
+async function getDiscoveryApiJson(
+  path: string,
+  query: Record<string, string | number | null | undefined> = {}
+): Promise<unknown> {
+  const target = new URL(path, runtimeConfig.apiBaseUrl);
+  for (const [key, value] of Object.entries(query)) {
+    if (value == null) continue;
+    const normalized = String(value).trim();
+    if (!normalized) continue;
+    target.searchParams.set(key, normalized);
+  }
+  const response = await fetch(target, {
+    headers: {
+      accept: "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Discovery API request failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+function fmtDate(value: unknown): string {
+  if (!value) return "—";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function fmtMoney(cents: unknown): string {
+  return `$${(asInt(cents, 0) / 100).toFixed(2)}`;
+}
+
+function fmtUsd(value: unknown): string {
+  const amount = asFloat(value, 0);
+  return `$${amount >= 1 ? amount.toFixed(2) : amount.toFixed(4)}`;
+}
+
+function fmtBudget(cents: unknown): string {
+  const amount = asInt(cents, 0);
+  return amount > 0 ? fmtMoney(amount) : "Unlimited";
+}
+
+function fmtPercent(value: unknown): string {
+  return `${Math.round(asFloat(value, 0) * 100)}%`;
+}
+
+function metricSourceLabel(value: unknown): string {
+  const normalized = String(value ?? "").trim();
+  return normalized === "generic_channel_quality" ? "generic intake quality" : normalized || "generic intake quality";
+}
+
+function resolveTabHref(nextTab: string): string {
+  const target = new URL(Astro.url);
+  if (nextTab === "dashboard") {
+    target.searchParams.delete("tab");
+  } else {
+    target.searchParams.set("tab", nextTab);
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function resolvePageHref(paramName: string, nextPage: number): string {
+  const target = new URL(Astro.url);
+  target.searchParams.set("tab", tab || "dashboard");
+  if (nextPage <= 1) {
+    target.searchParams.delete(paramName);
+  } else {
+    target.searchParams.set(paramName, String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function resolveMissionScopedHref(missionId: string): string {
+  const target = new URL(Astro.url);
+  if (missionId) {
+    target.searchParams.set("portfolioMissionId", missionId);
+  } else {
+    target.searchParams.delete("portfolioMissionId");
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+const requestedMissionPage = Number.parseInt(Astro.url.searchParams.get("missionPage") ?? "1", 10);
+const requestedClassPage = Number.parseInt(Astro.url.searchParams.get("classPage") ?? "1", 10);
+const requestedCandidatePage = Number.parseInt(Astro.url.searchParams.get("candidatePage") ?? "1", 10);
+const requestedHypothesisPage = Number.parseInt(Astro.url.searchParams.get("hypothesisPage") ?? "1", 10);
+const requestedSourcePage = Number.parseInt(Astro.url.searchParams.get("sourcePage") ?? "1", 10);
+const requestedFeedbackPage = Number.parseInt(Astro.url.searchParams.get("feedbackPage") ?? "1", 10);
+const requestedRecallMissionPage = Number.parseInt(Astro.url.searchParams.get("recallMissionPage") ?? "1", 10);
+const requestedRecallCandidatePage = Number.parseInt(Astro.url.searchParams.get("recallCandidatePage") ?? "1", 10);
+const missionPage = Number.isFinite(requestedMissionPage) && requestedMissionPage > 0 ? requestedMissionPage : 1;
+const classPage = Number.isFinite(requestedClassPage) && requestedClassPage > 0 ? requestedClassPage : 1;
+const candidatePage = Number.isFinite(requestedCandidatePage) && requestedCandidatePage > 0 ? requestedCandidatePage : 1;
+const hypothesisPage = Number.isFinite(requestedHypothesisPage) && requestedHypothesisPage > 0 ? requestedHypothesisPage : 1;
+const sourcePage = Number.isFinite(requestedSourcePage) && requestedSourcePage > 0 ? requestedSourcePage : 1;
+const feedbackPage = Number.isFinite(requestedFeedbackPage) && requestedFeedbackPage > 0 ? requestedFeedbackPage : 1;
+const recallMissionPage =
+  Number.isFinite(requestedRecallMissionPage) && requestedRecallMissionPage > 0
+    ? requestedRecallMissionPage
+    : 1;
+const recallCandidatePage =
+  Number.isFinite(requestedRecallCandidatePage) && requestedRecallCandidatePage > 0
+    ? requestedRecallCandidatePage
+    : 1;
+
+const summary = asRecord(await sdk.getDiscoverySummary<R>());
+const costs = asRecord(await sdk.getDiscoveryCostSummary<R>());
+const missions = asPaged(await sdk.listDiscoveryMissions<R>({ page: missionPage, pageSize: 10 }));
+const classes = asPaged(await sdk.listDiscoveryClasses<R>({ page: classPage, pageSize: 10 }));
+const candidates = asPaged(await sdk.listDiscoveryCandidates<R>({ page: candidatePage, pageSize: 12 }));
+const hypotheses = asPaged(await sdk.listDiscoveryHypotheses<R>({ page: hypothesisPage, pageSize: 12 }));
+const sourceProfiles = asPaged(await sdk.listDiscoverySourceProfiles<R>({ page: sourcePage, pageSize: 12 }));
+const feedback = asPaged(await sdk.listDiscoveryFeedback<R>({ page: feedbackPage, pageSize: 12 }));
+const recallMissions = asPaged(
+  await getDiscoveryApiJson("/maintenance/discovery/recall-missions", {
+    page: recallMissionPage,
+    pageSize: 8,
+  }).catch(() => ({}))
+);
+const recallCandidates = asPaged(
+  await getDiscoveryApiJson("/maintenance/discovery/recall-candidates", {
+    page: recallCandidatePage,
+    pageSize: 10,
+  }).catch(() => ({}))
+);
+
+const missionItems = missions.items.map((item) => asRecord(item));
+const classItems = classes.items.map((item) => asRecord(item));
+const candidateItems = candidates.items.map((item) => asRecord(item));
+const hypothesisItems = hypotheses.items.map((item) => asRecord(item));
+const sourceProfileItems = sourceProfiles.items.map((item) => asRecord(item));
+const feedbackItems = feedback.items.map((item) => asRecord(item));
+const recallMissionItems = recallMissions.items.map((item) => asRecord(item));
+const recallCandidateItems = recallCandidates.items.map((item) => asRecord(item));
+const operatorSummary = resolveDiscoveryOperatorSummary(summary);
+const selectedMissionIdRaw = String(Astro.url.searchParams.get("portfolioMissionId") ?? "").trim();
+const selectedMissionId =
+  missionItems.find((item) => String(item.mission_id ?? "") === selectedMissionIdRaw) != null
+    ? selectedMissionIdRaw
+    : String(missionItems[0]?.mission_id ?? "");
+const portfolioResult = selectedMissionId
+  ? asRecord(await sdk.getDiscoveryMissionPortfolio<R>(selectedMissionId).catch(() => ({})))
+  : {};
+const portfolioSnapshot = asRecord(portfolioResult.snapshot);
+const sourceScores = selectedMissionId
+  ? asPaged(
+      await sdk.listDiscoverySourceInterestScores<R>({
+        missionId: selectedMissionId,
+        page: 1,
+        pageSize: 20,
+      })
+    )
+  : asPaged({});
+const sourceScoreItems = sourceScores.items.map((item) => asRecord(item));
+const sourceScoreByProfileId = new Map<string, R>(
+  sourceScoreItems
+    .map((item) => [String(item.source_profile_id ?? ""), item] as const)
+    .filter(([key]) => key.length > 0)
+);
+const rankedSources = asArray(portfolioSnapshot.ranked_sources);
+const portfolioGaps = asArray(portfolioSnapshot.gaps_json);
+const portfolioSummary = asRecord(portfolioSnapshot.summary_json);
+const costItems = asArray(costs.items);
+
+const tabs = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "missions", label: "Missions" },
+  { key: "recall", label: "Recall" },
+  { key: "classes", label: "Classes" },
+  { key: "candidates", label: "Candidates" },
+  { key: "hypotheses", label: "Hypotheses" },
+  { key: "sources", label: "Sources" },
+  { key: "portfolio", label: "Portfolio" },
+  { key: "feedback", label: "Feedback" },
+];
+
+const pagePaths = {
+  dashboard: appPath("/"),
+};
+const monthlyBudgetCents = asInt(
+  summary.monthlyBudgetCents ?? costs.monthlyBudgetCents ?? runtimeConfig.discoveryMonthlyBudgetCents,
+  0
+);
+const remainingMonthlyBudgetCents = asInt(
+  summary.remainingMonthlyBudgetCents ?? costs.remainingMonthlyBudgetCents,
+  0
+);
+const monthToDateCostUsd = asFloat(summary.monthToDateCostUsd ?? costs.monthToDateCostUsd, 0);
+const totalCostUsd = asFloat(costs.totalCostUsd ?? summary.total_cost_usd, 0);
+const monthlyQuotaReached = summary.monthlyQuotaReached === true || costs.monthlyQuotaReached === true;
+const activeSearchProvider = String(summary.searchProvider ?? runtimeConfig.discoverySearchProvider);
+const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmModel);
+---
+
+<AdminShell title="Discovery — Admin" session={session} flash={flash} activeNav="discovery">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Discovery</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <a href={appPath("/channels")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+      View channels
+    </a>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div class="max-w-3xl">
+          <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Adaptive Discovery Agent</p>
+          <h1 class="mt-2 text-2xl font-semibold tracking-tight">Dual-path discovery control plane</h1>
+          <p class="mt-2 text-sm leading-6 text-muted-foreground">
+            Discovery now ships two bounded upstream lanes. Graph-first missions still own mission planning, hypothesis classes, and portfolio fit, while independent recall owns neutral acquisition backlog, generic source quality, and bounded promotion into normal channels. Downstream zero-shot filtering stays a separate consumer of the discovered corpus.
+          </p>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Enabled</p>
+            <p class={`mt-1 text-2xl font-semibold ${summary.enabled ? "text-emerald-500" : "text-slate-500"}`}>
+              {summary.enabled ? "Yes" : "No"}
+            </p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Graph missions</p>
+            <p class="mt-1 text-2xl font-semibold">{String(operatorSummary.graphMissionCount)}</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Recall missions</p>
+            <p class="mt-1 text-2xl font-semibold">{String(operatorSummary.recallMissionCount)}</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+            <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">This month</p>
+            <p class="mt-1 text-2xl font-semibold">{fmtUsd(monthToDateCostUsd)}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-2">
+        {tabs.map((item) => (
+          <a
+            href={resolveTabHref(item.key)}
+            class:list={[
+              "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              tab === item.key || (tab === "dashboard" && item.key === "dashboard")
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+            ]}
+          >
+            {item.label}
+          </a>
+        ))}
+      </div>
+
+      {monthlyQuotaReached && (
+        <div class="mt-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950">
+          Monthly discovery quota is exhausted for the current UTC month. Planning and mission runs will remain blocked until the quota resets or `DISCOVERY_MONTHLY_BUDGET_CENTS` is increased.
+        </div>
+      )}
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-4">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Search provider</p>
+          <p class="mt-1 text-sm text-muted-foreground">{activeSearchProvider}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Discovery LLM</p>
+          <p class="mt-1 text-sm text-muted-foreground break-all">{activeLlmModel}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Monthly quota</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {fmtBudget(monthlyBudgetCents)}
+            {monthlyBudgetCents > 0 ? ` · ${fmtMoney(remainingMonthlyBudgetCents)} left` : ""}
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Default cron</p>
+          <p class="mt-1 text-sm text-muted-foreground font-mono">{String(summary.defaultCron ?? runtimeConfig.discoveryCron)}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-100">
+        <strong>Operator note:</strong> keep these meanings separate. <em>Mission fit</em> stays graph-scoped and portfolio-specific, <em>generic source quality</em> comes from additive recall/source snapshots, <em>neutral recall backlog</em> tracks acquisition without `interest_graph`, and <em>promotion state</em> shows which recall candidates have already become normal `source_channels`. None of these signals should be interpreted as downstream selected-content yield.
+      </div>
+    </div>
+
+    {(tab === "dashboard" || !tab) && (
+      <div class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+        <div class="space-y-4">
+          <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 class="text-base font-semibold">Discovery operator model</h2>
+                <p class="mt-1 text-sm text-muted-foreground">
+                  The shipped runtime is now dual-path: graph-first compatibility planning plus independent recall acquisition and promotion.
+                </p>
+              </div>
+              <span class="inline-flex w-fit items-center rounded-full border border-border bg-background px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {operatorSummary.operatingModel === "dual_path" ? "dual path" : "graph first only"}
+              </span>
+            </div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Graph missions</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.graphMissionCount)}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {String(operatorSummary.activeGraphMissionCount)} active · {String(operatorSummary.compiledGraphCount)} compiled
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Mission backlog</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.pendingHypothesisCount)}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  pending hypotheses · {String(operatorSummary.graphCandidateCount)} graph candidates
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Mission fit state</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.sourceInterestScoreCount)}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  mission source scores · {String(operatorSummary.portfolioSnapshotCount)} portfolio snapshots
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Recall missions</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.recallMissionCount)}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {String(operatorSummary.activeRecallMissionCount)} active neutral missions
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Recall backlog</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.recallCandidateCount)}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {String(operatorSummary.pendingRecallCandidateCount)} pending · {String(operatorSummary.duplicateRecallCandidateCount)} linked duplicates
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Generic quality</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.sourceQualitySnapshotCount)}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  snapshots across {String(operatorSummary.sourceProfileCount)} source profiles
+                </p>
+              </div>
+            </div>
+            <div class="mt-4 grid gap-3 lg:grid-cols-2">
+              <div class="rounded-2xl border border-emerald-300/60 bg-emerald-50/60 p-4 text-sm text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
+                <p class="font-medium">Independent recall lane</p>
+                <p class="mt-1 leading-6">
+                  Recall runs can search and probe `rss` / `website` candidates without `interest_graph`, persist generic source-quality snapshots, and now promote shortlisted candidates into `source_channels`.
+                </p>
+              </div>
+              <div class="rounded-2xl border border-amber-300/60 bg-amber-50/60 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100">
+                <p class="font-medium">Graph-first compatibility lane</p>
+                <p class="mt-1 leading-6">
+                  Mission graphs, class registry planning, hypothesis execution, feedback, and portfolio assembly remain live compatibility flows. They are no longer the only owner of source onboarding.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h2 class="text-base font-semibold">Recall promotion snapshot</h2>
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Promoted recall candidates</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.promotedRecallCandidateCount)}</p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Linked duplicates</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.duplicateRecallCandidateCount)}</p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Review queue</p>
+                <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.pendingRecallCandidateCount)}</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Cost ledger</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {fmtUsd(totalCostUsd)} total, {fmtUsd(costs.last24hCostUsd)} in the last 24h, {fmtUsd(costs.monthToDateCostUsd)} this UTC month.
+          </p>
+          <div class="mt-4 space-y-2">
+            {costItems.length === 0 ? (
+              <p class="rounded-2xl border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+                No discovery cost rows yet.
+              </p>
+            ) : costItems.map((item) => (
+              <div class="rounded-2xl border border-border bg-background px-4 py-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-medium">{String(item.provider ?? "unknown")} / {String(item.operation ?? "operation")}</p>
+                    <p class="text-xs text-muted-foreground">
+                      {String(item.row_count ?? 0)} entries · {fmtUsd(item.month_to_date_cost_usd)} this month
+                    </p>
+                  </div>
+                  <p class="text-sm font-semibold">{fmtUsd(item.total_cost_usd)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    )}
+
+    {tab === "missions" && (
+      <div class="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Create mission</h2>
+          <form method="post" action={bffPath} class="mt-4 grid gap-3">
+            <input type="hidden" name="intent" value="create_mission" />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Title</span>
+              <input name="title" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Description</span>
+              <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Seed topics (one per line)</span>
+              <textarea name="seedTopics" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Seed languages</span>
+                <textarea name="seedLanguages" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Seed regions</span>
+                <textarea name="seedRegions" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+              </label>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Target provider types</span>
+                <input name="targetProviderTypes" value="rss,website,api,email_imap,youtube" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Priority</span>
+                <input name="priority" type="number" value="0" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Max hypotheses</span>
+                <input name="maxHypotheses" type="number" min="1" value="10" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Max sources</span>
+                <input name="maxSources" type="number" min="1" value="20" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Budget (cents)</span>
+                <input name="budgetCents" type="number" min="0" value={String(summary.defaultBudgetCents ?? 500)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Optional interest graph JSON</span>
+              <textarea name="interestGraph" rows="10" placeholder='{"core_topic":"EU AI","subtopics":["regulation"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Create mission
+            </button>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Missions</h2>
+            <p class="mt-1 text-sm text-muted-foreground">{missions.total} mission{missions.total === 1 ? "" : "s"} total</p>
+          </div>
+          <div class="divide-y divide-border">
+            {missionItems.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No adaptive discovery missions yet.</p>
+            ) : missionItems.map((mission) => (
+              <div class="px-5 py-4">
+                <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-sm font-semibold">{String(mission.title ?? "Untitled mission")}</h3>
+                      <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {String(mission.status ?? "planned")}
+                      </span>
+                      <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        graph: {String(mission.interest_graph_status ?? "pending")}
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted-foreground">{String(mission.description ?? "No description")}</p>
+                    <p class="text-xs text-muted-foreground">
+                      Seeds: {asStringList(mission.seed_topics).join(", ") || "—"} · Providers: {asStringList(mission.target_provider_types).join(", ") || "rss, website, api, email_imap, youtube"} · Run count: {String(mission.run_count ?? 0)}
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                      Budget: {fmtBudget(mission.budget_cents)} · Spend: {fmtMoney(mission.spent_cents ?? 0)} · Latest portfolio: {String(mission.latest_portfolio_snapshot_id ?? "—")}
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <form method="post" action={bffPath}>
+                      <input type="hidden" name="intent" value="compile_graph" />
+                      <input type="hidden" name="missionId" value={String(mission.mission_id ?? "")} />
+                      <input type="hidden" name="redirectTo" value={currentPath} />
+                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                        Compile graph
+                      </button>
+                    </form>
+                    <form method="post" action={bffPath}>
+                      <input type="hidden" name="intent" value="run_mission" />
+                      <input type="hidden" name="missionId" value={String(mission.mission_id ?? "")} />
+                      <input type="hidden" name="redirectTo" value={currentPath} />
+                      <button
+                        type="submit"
+                        disabled={monthlyQuotaReached}
+                        class:list={[
+                          "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors",
+                          monthlyQuotaReached
+                            ? "cursor-not-allowed bg-muted text-muted-foreground"
+                            : "bg-primary text-primary-foreground hover:bg-primary/90",
+                        ]}
+                      >
+                        {monthlyQuotaReached ? "Quota blocked" : "Run mission"}
+                      </button>
+                    </form>
+                    <a href={resolveMissionScopedHref(String(mission.mission_id ?? ""))} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                      Open portfolio
+                    </a>
+                  </div>
+                </div>
+                <form method="post" action={bffPath} class="mt-4 grid gap-3 md:grid-cols-4">
+                  <input type="hidden" name="intent" value="update_mission" />
+                  <input type="hidden" name="missionId" value={String(mission.mission_id ?? "")} />
+                  <input type="hidden" name="redirectTo" value={currentPath} />
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+                    <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      {["planned", "active", "paused", "completed", "failed"].map((option) => (
+                        <option value={option} selected={String(mission.status ?? "planned") === option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Priority</span>
+                    <input name="priority" type="number" value={String(mission.priority ?? 0)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Budget</span>
+                    <input name="budgetCents" type="number" min="0" value={String(mission.budget_cents ?? 0)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <div class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Interest graph</span>
+                    <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                      Save mission
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ))}
+          </div>
+          {(missions.hasPrev || missions.hasNext) && (
+            <PaginationNav
+              className="rounded-none border-x-0 border-b-0"
+              page={missions.page}
+              totalPages={missions.totalPages}
+              hasPrev={missions.hasPrev}
+              hasNext={missions.hasNext}
+              prevHref={resolvePageHref("missionPage", missions.page - 1)}
+              nextHref={resolvePageHref("missionPage", missions.page + 1)}
+            />
+          )}
+        </section>
+      </div>
+    )}
+
+    {tab === "recall" && (
+      <div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Independent recall missions</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            These missions seed neutral acquisition without requiring `interest_graph`. Acquire and promote remain bounded maintenance API flows; this screen is the operator read surface for that backlog.
+          </p>
+          <div class="mt-4 space-y-3">
+            {recallMissionItems.length === 0 ? (
+              <p class="rounded-2xl border border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
+                No recall missions yet.
+              </p>
+            ) : recallMissionItems.map((mission) => (
+              <div class="rounded-2xl border border-border bg-background px-4 py-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="text-sm font-semibold">{String(mission.title ?? "Recall mission")}</h3>
+                  <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {String(mission.status ?? "planned")}
+                  </span>
+                  <span class="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {String(mission.mission_kind ?? "domain_seed")}
+                  </span>
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">{String(mission.description ?? "No description")}</p>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  Seed domains: {asStringList(mission.seed_domains).join(", ") || "—"}
+                </p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Seed queries: {asStringList(mission.seed_queries).join(", ") || "—"}
+                </p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Providers: {asStringList(mission.target_provider_types).join(", ") || "rss, website"} · Max candidates: {String(mission.max_candidates ?? "—")}
+                </p>
+                <p class="mt-1 text-xs text-muted-foreground">Updated {fmtDate(mission.updated_at)}</p>
+              </div>
+            ))}
+          </div>
+          {(recallMissions.hasPrev || recallMissions.hasNext) && (
+            <PaginationNav
+              className="mt-4"
+              page={recallMissions.page}
+              totalPages={recallMissions.totalPages}
+              hasPrev={recallMissions.hasPrev}
+              hasNext={recallMissions.hasNext}
+              prevHref={resolvePageHref("recallMissionPage", recallMissions.page - 1)}
+              nextHref={resolvePageHref("recallMissionPage", recallMissions.page + 1)}
+            />
+          )}
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Recall candidates</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              {recallCandidates.total} candidate{recallCandidates.total === 1 ? "" : "s"} total · {String(operatorSummary.promotedRecallCandidateCount)} promoted into normal channels
+            </p>
+          </div>
+          <div class="divide-y divide-border">
+            {recallCandidateItems.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No recall candidates yet.</p>
+            ) : recallCandidateItems.map((candidate) => {
+              const quality = resolveDiscoverySourceQuality(candidate);
+              const recallState = resolveDiscoveryRecallCandidateState(candidate);
+              return (
+                <div class="px-5 py-4">
+                  <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div class="space-y-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-sm font-semibold">{String(candidate.title ?? candidate.canonical_domain ?? candidate.url ?? "Recall candidate")}</h3>
+                        <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {String(candidate.status ?? "pending")}
+                        </span>
+                        <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {String(candidate.provider_type ?? "rss")}
+                        </span>
+                        <span class="inline-flex items-center rounded-full border border-emerald-300/50 bg-emerald-50/70 px-2 py-0.5 text-[11px] font-medium text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
+                          {recallState.promotionState}
+                        </span>
+                      </div>
+                      <a href={String(candidate.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
+                        {String(candidate.url ?? "—")}
+                      </a>
+                      <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No evaluation summary")}</p>
+                      <p class="text-xs text-muted-foreground">
+                        Recall mission: {String(candidate.recall_mission_title ?? "—")} · Domain: {String(candidate.canonical_domain ?? "—")} · Quality signal: {String(candidate.quality_signal_source ?? "—")}
+                      </p>
+                      <p class="text-xs text-muted-foreground">
+                        Snapshot: {quality.snapshotReason ?? "—"} · Scored {fmtDate(quality.scoredAt)}
+                      </p>
+                    </div>
+                    <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                      <div>Generic recall {quality.recallScore == null ? "—" : fmtPercent(quality.recallScore)}</div>
+                      <div class="mt-1">Yield {fmtPercent(quality.yieldScore ?? 0)} · Lead {fmtPercent(quality.leadTimeScore ?? 0)} · Dupes {fmtPercent(quality.duplicationScore ?? 0)}</div>
+                      <div class="mt-1">Metric source {metricSourceLabel(quality.metricSource)}</div>
+                      <div class="mt-1">Channel link {recallState.channelId ?? "not linked yet"}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {(recallCandidates.hasPrev || recallCandidates.hasNext) && (
+            <PaginationNav
+              className="rounded-none border-x-0 border-b-0"
+              page={recallCandidates.page}
+              totalPages={recallCandidates.totalPages}
+              hasPrev={recallCandidates.hasPrev}
+              hasNext={recallCandidates.hasNext}
+              prevHref={resolvePageHref("recallCandidatePage", recallCandidates.page - 1)}
+              nextHref={resolvePageHref("recallCandidatePage", recallCandidates.page + 1)}
+            />
+          )}
+        </section>
+      </div>
+    )}
+
+    {tab === "classes" && (
+      <div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Create class</h2>
+          <form method="post" action={bffPath} class="mt-4 grid gap-3">
+            <input type="hidden" name="intent" value="create_class" />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Class key</span>
+                <input name="classKey" required placeholder="regional_watch" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Display name</span>
+                <input name="displayName" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Description</span>
+              <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Status</span>
+                <select name="status" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  {["draft", "active", "archived"].map((option) => (
+                    <option value={option} selected={option === "draft"}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Generation backend</span>
+                <select name="generationBackend" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  {["graph_seed_llm", "graph_seed_only"].map((option) => (
+                    <option value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Provider types</span>
+                <input name="defaultProviderTypes" value="rss,website,api,email_imap,youtube" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Max per mission</span>
+                <input name="maxPerMission" type="number" min="1" value="3" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Sort order</span>
+                <input name="sortOrder" type="number" value="0" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Prompt instructions</span>
+              <textarea name="promptInstructions" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Seed rules JSON</span>
+              <textarea name="seedRulesJson" rows="8" placeholder='{"tactics":["regional","official"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Config JSON</span>
+              <textarea name="configJson" rows="6" placeholder='{"notes":"optional"}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Create class
+            </button>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Registry</h2>
+            <p class="mt-1 text-sm text-muted-foreground">{classes.total} class{classes.total === 1 ? "" : "es"} total</p>
+          </div>
+          <div class="divide-y divide-border">
+            {classItems.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No hypothesis classes yet.</p>
+            ) : classItems.map((item) => (
+              <div class="px-5 py-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="text-sm font-semibold">{String(item.display_name ?? item.class_key ?? "Class")}</h3>
+                  <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {String(item.class_key ?? "—")}
+                  </span>
+                  <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {String(item.status ?? "draft")}
+                  </span>
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">{String(item.description ?? "No description")}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Backend: {String(item.generation_backend ?? "graph_seed_llm")} · Providers: {asStringList(item.default_provider_types).join(", ") || "rss, website, api, email_imap, youtube"} · Max/mission: {String(item.max_per_mission ?? 0)}
+                </p>
+                <form method="post" action={bffPath} class="mt-4 grid gap-3 md:grid-cols-4">
+                  <input type="hidden" name="intent" value="update_class" />
+                  <input type="hidden" name="classKey" value={String(item.class_key ?? "")} />
+                  <input type="hidden" name="redirectTo" value={currentPath} />
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+                    <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      {["draft", "active", "archived"].map((option) => (
+                        <option value={option} selected={String(item.status ?? "draft") === option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Sort order</span>
+                    <input name="sortOrder" type="number" value={String(item.sort_order ?? 0)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Max per mission</span>
+                    <input name="maxPerMission" type="number" min="1" value={String(item.max_per_mission ?? 3)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <div class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Update</span>
+                    <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                      Save class
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ))}
+          </div>
+          {(classes.hasPrev || classes.hasNext) && (
+            <PaginationNav
+              className="rounded-none border-x-0 border-b-0"
+              page={classes.page}
+              totalPages={classes.totalPages}
+              hasPrev={classes.hasPrev}
+              hasNext={classes.hasNext}
+              prevHref={resolvePageHref("classPage", classes.page - 1)}
+              nextHref={resolvePageHref("classPage", classes.page + 1)}
+            />
+          )}
+        </section>
+      </div>
+    )}
+
+    {tab === "candidates" && (
+      <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div class="border-b border-border px-5 py-4">
+          <h2 class="text-base font-semibold">Candidates</h2>
+          <p class="mt-1 text-sm text-muted-foreground">{candidates.total} candidate{candidates.total === 1 ? "" : "s"} total</p>
+        </div>
+        <div class="divide-y divide-border">
+          {candidateItems.length === 0 ? (
+            <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet.</p>
+          ) : candidateItems.map((candidate) => (
+            <div class="px-5 py-4">
+              <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+                <div class="space-y-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="text-sm font-semibold">{String(candidate.title ?? candidate.url ?? "Candidate")}</h3>
+                    <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {String(candidate.status ?? "pending")}
+                    </span>
+                    <span class="inline-flex items-center rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground border border-border">
+                      {String(candidate.provider_type ?? "rss")}
+                    </span>
+                  </div>
+                  <a href={String(candidate.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
+                    {String(candidate.url ?? "—")}
+                  </a>
+                  <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
+                  <p class="text-xs text-muted-foreground">
+                    Mission: {String(candidate.mission_title ?? "—")} · Class: {String(candidate.class_key ?? "—")} · Tactic: {String(candidate.tactic_key ?? "—")} · Score: {asFloat(candidate.relevance_score, 0).toFixed(2)}
+                  </p>
+                </div>
+                {String(candidate.status ?? "pending") === "pending" ? (
+                  <div class="grid gap-2 sm:grid-cols-2">
+                    <form method="post" action={bffPath} class="flex gap-2">
+                      <input type="hidden" name="intent" value="review_candidate" />
+                      <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                      <input type="hidden" name="status" value="approved" />
+                      <input type="hidden" name="redirectTo" value={currentPath} />
+                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                        Approve
+                      </button>
+                    </form>
+                    <form method="post" action={bffPath} class="grid gap-2">
+                      <input type="hidden" name="intent" value="review_candidate" />
+                      <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                      <input type="hidden" name="status" value="rejected" />
+                      <input type="hidden" name="redirectTo" value={currentPath} />
+                      <input name="rejectionReason" placeholder="reason" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                        Reject
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div class="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                    Reviewed {fmtDate(candidate.reviewed_at)} by {String(candidate.reviewed_by ?? "system")}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {(candidates.hasPrev || candidates.hasNext) && (
+          <PaginationNav
+            className="rounded-none border-x-0 border-b-0"
+            page={candidates.page}
+            totalPages={candidates.totalPages}
+            hasPrev={candidates.hasPrev}
+            hasNext={candidates.hasNext}
+            prevHref={resolvePageHref("candidatePage", candidates.page - 1)}
+            nextHref={resolvePageHref("candidatePage", candidates.page + 1)}
+          />
+        )}
+      </section>
+    )}
+
+    {tab === "hypotheses" && (
+      <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div class="border-b border-border px-5 py-4">
+          <h2 class="text-base font-semibold">Hypotheses</h2>
+          <p class="mt-1 text-sm text-muted-foreground">{hypotheses.total} hypothesis{hypotheses.total === 1 ? "" : "es"} total</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[1120px] text-sm">
+            <thead>
+              <tr class="border-b border-border bg-muted/30">
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mission</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Class</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Query</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Expected value</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Results</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hypothesisItems.length === 0 ? (
+                <tr>
+                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No discovery hypotheses yet.</td>
+                </tr>
+              ) : hypothesisItems.map((hypothesis) => (
+                <tr class="border-b border-border last:border-b-0">
+                  <td class="px-5 py-4 align-top">
+                    <div class="font-medium">{String(hypothesis.mission_title ?? "—")}</div>
+                    <div class="mt-1 text-xs text-muted-foreground">{String(hypothesis.status ?? "pending")}</div>
+                  </td>
+                  <td class="px-5 py-4 align-top">
+                    <div>{String(hypothesis.class_key ?? "—")}</div>
+                    <div class="mt-1 text-xs text-muted-foreground">{String(hypothesis.tactic_key ?? "default")}</div>
+                  </td>
+                  <td class="px-5 py-4 align-top text-muted-foreground">{String(hypothesis.search_query ?? "—")}</td>
+                  <td class="px-5 py-4 align-top text-muted-foreground">{String(hypothesis.expected_value ?? "—")}</td>
+                  <td class="px-5 py-4 align-top">
+                    <div>{String(hypothesis.sources_found ?? 0)} found</div>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                      {String(hypothesis.sources_approved ?? 0)} approved · {asFloat(hypothesis.effectiveness, 0).toFixed(2)} effectiveness
+                    </div>
+                  </td>
+                  <td class="px-5 py-4 align-top">
+                    <div>{fmtUsd(hypothesis.execution_cost_usd)}</div>
+                    <div class="mt-1 text-xs text-muted-foreground">{fmtMoney(hypothesis.execution_cost_cents ?? 0)}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {(hypotheses.hasPrev || hypotheses.hasNext) && (
+          <PaginationNav
+            className="rounded-none border-x-0 border-b-0"
+            page={hypotheses.page}
+            totalPages={hypotheses.totalPages}
+            hasPrev={hypotheses.hasPrev}
+            hasNext={hypotheses.hasNext}
+            prevHref={resolvePageHref("hypothesisPage", hypotheses.page - 1)}
+            nextHref={resolvePageHref("hypothesisPage", hypotheses.page + 1)}
+          />
+        )}
+      </section>
+    )}
+
+    {tab === "sources" && (
+      <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div class="border-b border-border px-5 py-4">
+          <h2 class="text-base font-semibold">Source profiles</h2>
+          <p class="mt-1 text-sm text-muted-foreground">{sourceProfiles.total} profile{sourceProfiles.total === 1 ? "" : "s"} total</p>
+        </div>
+        <div class="divide-y divide-border">
+          {sourceProfileItems.length === 0 ? (
+            <p class="px-5 py-8 text-sm text-muted-foreground">No source profiles yet.</p>
+          ) : sourceProfileItems.map((profile) => {
+            const score = sourceScoreByProfileId.get(String(profile.source_profile_id ?? ""));
+            const channelMetrics = resolveDiscoveryChannelMetrics(score);
+            const sourceQuality = resolveDiscoverySourceQuality(profile);
+            return (
+              <div class="px-5 py-4">
+                <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+                  <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-sm font-semibold">{String(profile.canonical_domain ?? "Unknown domain")}</h3>
+                      <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {String(profile.source_type ?? "unknown")}
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted-foreground">
+                      Org: {String(profile.org_name ?? "—")} · Country: {String(profile.country ?? "—")} · Languages: {asStringList(profile.languages).join(", ") || "—"}
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                      Trust {fmtPercent(profile.trust_score)} · Accountability {fmtPercent(profile.author_accountability)} · Technical quality {fmtPercent(profile.technical_quality)}
+                    </p>
+                  </div>
+                  <div class="grid gap-3 md:grid-cols-2">
+                    <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                      <div class="font-medium text-foreground">Generic source quality</div>
+                      <div class="mt-1">Recall score {sourceQuality.recallScore == null ? "—" : fmtPercent(sourceQuality.recallScore)}</div>
+                      <div class="mt-1">Metric source {metricSourceLabel(sourceQuality.metricSource)}</div>
+                      <div class="mt-1">Yield {fmtPercent(sourceQuality.yieldScore ?? 0)} · Lead {fmtPercent(sourceQuality.leadTimeScore ?? 0)} · Dupes {fmtPercent(sourceQuality.duplicationScore ?? 0)}</div>
+                      <div class="mt-1">Snapshot {sourceQuality.snapshotReason ?? "—"} · {fmtDate(sourceQuality.scoredAt)}</div>
+                    </div>
+                    <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                      <div class="font-medium text-foreground">Mission fit</div>
+                      {score ? (
+                        <>
+                          <div class="mt-1">Contextual fit {fmtPercent(score.contextual_score)}</div>
+                          <div class="mt-1">Channel quality {metricSourceLabel(channelMetrics.metricSource)}</div>
+                          <div class="mt-1">Yield {fmtPercent(channelMetrics.yieldScore ?? 0)} · Lead {fmtPercent(channelMetrics.leadTimeScore ?? 0)} · Dupes {fmtPercent(channelMetrics.duplicationScore ?? 0)}</div>
+                          <div class="mt-1">Unique articles {String(channelMetrics.uniqueArticlesPeriod ?? 0)} / {String(channelMetrics.totalArticlesPeriod ?? 0)}</div>
+                          <div class="mt-1">Roles: {asStringList(score.role_labels).join(", ") || "—"}</div>
+                        </>
+                      ) : (
+                        <div class="mt-1">No mission-scoped source score for the current portfolio mission.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {(sourceProfiles.hasPrev || sourceProfiles.hasNext) && (
+          <PaginationNav
+            className="rounded-none border-x-0 border-b-0"
+            page={sourceProfiles.page}
+            totalPages={sourceProfiles.totalPages}
+            hasPrev={sourceProfiles.hasPrev}
+            hasNext={sourceProfiles.hasNext}
+            prevHref={resolvePageHref("sourcePage", sourceProfiles.page - 1)}
+            nextHref={resolvePageHref("sourcePage", sourceProfiles.page + 1)}
+          />
+        )}
+      </section>
+    )}
+
+    {tab === "portfolio" && (
+      <div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Portfolio controls</h2>
+          <div class="mt-4 space-y-3">
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Selected mission</span>
+              <div class="rounded-md border border-input bg-background px-3 py-2 text-sm">
+                {selectedMissionId || "No mission selected"}
+              </div>
+            </label>
+            <form method="post" action={bffPath} class="grid gap-3">
+              <input type="hidden" name="intent" value="re_evaluate" />
+              <input type="hidden" name="missionId" value={selectedMissionId} />
+              <input type="hidden" name="redirectTo" value={currentPath} />
+              <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                Re-evaluate mission
+              </button>
+            </form>
+            <div class="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+              <p>Snapshot reason: {String(portfolioSnapshot.snapshot_reason ?? "—")}</p>
+              <p class="mt-1">Created: {fmtDate(portfolioSnapshot.created_at)}</p>
+              <p class="mt-1">Selected sources: {String(portfolioSummary.selected_count ?? 0)}</p>
+              <p class="mt-1">Gap count: {String(portfolioSummary.gap_count ?? 0)}</p>
+            </div>
+            <div class="space-y-2">
+              {missionItems.map((mission) => (
+                <a href={resolveMissionScopedHref(String(mission.mission_id ?? ""))} class="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent">
+                  <span>{String(mission.title ?? mission.mission_id ?? "Mission")}</span>
+                  <span class="text-xs text-muted-foreground">{String(mission.interest_graph_status ?? "pending")}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Ranked sources</h2>
+            <p class="mt-1 text-sm text-muted-foreground">{rankedSources.length} ranked source{rankedSources.length === 1 ? "" : "s"} in latest snapshot</p>
+          </div>
+          <div class="divide-y divide-border">
+            {rankedSources.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No portfolio snapshot yet for the selected mission.</p>
+            ) : rankedSources.map((item) => {
+              const channelMetrics = resolveDiscoveryChannelMetrics(item);
+
+              return (
+                <div class="px-5 py-4">
+                  <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+                    <div class="space-y-1">
+                      <h3 class="text-sm font-semibold">{String(item.canonical_domain ?? item.url ?? "Source")}</h3>
+                      <a href={String(item.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
+                        {String(item.url ?? "—")}
+                      </a>
+                      <p class="text-xs text-muted-foreground">Roles: {asStringList(item.role_labels).join(", ") || "—"}</p>
+                    </div>
+                    <div class="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                      <div>Mission fit {fmtPercent(item.contextual_score)}</div>
+                      <div class="mt-1">Trust {fmtPercent(item.trust_score)}</div>
+                      <div class="mt-1">Yield {fmtPercent(channelMetrics.yieldScore ?? 0)} · Lead {fmtPercent(channelMetrics.leadTimeScore ?? 0)} · Dupes {fmtPercent(channelMetrics.duplicationScore ?? 0)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div class="border-t border-border px-5 py-4">
+            <h3 class="text-sm font-semibold">Coverage gaps</h3>
+            <div class="mt-3 space-y-2">
+              {portfolioGaps.length === 0 ? (
+                <p class="text-sm text-muted-foreground">No open portfolio gaps.</p>
+              ) : portfolioGaps.map((gap) => (
+                <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm">
+                  <p class="font-medium">{String(gap.kind ?? "gap")}</p>
+                  <p class="mt-1 text-muted-foreground">{String(gap.message ?? gap.query_hint ?? "No details")}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    )}
+
+    {tab === "feedback" && (
+      <div class="grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Submit feedback</h2>
+          <form method="post" action={bffPath} class="mt-4 grid gap-3">
+            <input type="hidden" name="intent" value="submit_feedback" />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Mission ID</span>
+              <input name="missionId" value={selectedMissionId} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Candidate ID</span>
+              <input name="candidateId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Source profile ID</span>
+              <input name="sourceProfileId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Feedback type</span>
+                <select name="feedbackType" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  {["valuable_source", "early_signal", "keep", "too_noisy", "duplicate_source", "reject"].map((option) => (
+                    <option value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Feedback value</span>
+                <input name="feedbackValue" placeholder="optional value" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Notes</span>
+              <textarea name="notes" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Record feedback
+            </button>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Feedback events</h2>
+            <p class="mt-1 text-sm text-muted-foreground">{feedback.total} event{feedback.total === 1 ? "" : "s"} total</p>
+          </div>
+          <div class="divide-y divide-border">
+            {feedbackItems.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No feedback events yet.</p>
+            ) : feedbackItems.map((item) => (
+              <div class="px-5 py-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="text-sm font-semibold">{String(item.feedback_type ?? "feedback")}</h3>
+                  <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {String(item.feedback_value ?? "no value")}
+                  </span>
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">{String(item.notes ?? "No notes")}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Mission {String(item.mission_id ?? "—")} · Candidate {String(item.candidate_id ?? "—")} · Profile {String(item.source_profile_id ?? "—")} · {fmtDate(item.created_at)}
+                </p>
+              </div>
+            ))}
+          </div>
+          {(feedback.hasPrev || feedback.hasNext) && (
+            <PaginationNav
+              className="rounded-none border-x-0 border-b-0"
+              page={feedback.page}
+              totalPages={feedback.totalPages}
+              hasPrev={feedback.hasPrev}
+              hasNext={feedback.hasNext}
+              prevHref={resolvePageHref("feedbackPage", feedback.page - 1)}
+              nextHref={resolvePageHref("feedbackPage", feedback.page + 1)}
+            />
+          )}
+        </section>
+      </div>
+    )}
+  </div>
+</AdminShell>

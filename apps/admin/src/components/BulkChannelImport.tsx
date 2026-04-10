@@ -29,6 +29,8 @@ const FIELD_SCHEMA: Record<string, { type: string; description: string }> = {
   maxPollIntervalSeconds: { type: "number", description: "Max interval when adaptive (default: pollInterval * 16)" },
   maxItemsPerPoll: { type: "number", description: "Max items per fetch (default: 20)" },
   requestTimeoutMs: { type: "number", description: "Request timeout in ms (default: 10000)" },
+  enrichmentEnabled: { type: "boolean", description: "Enable pre-normalize article enrichment (default: true)" },
+  enrichmentMinBodyLength: { type: "number", description: "Skip enrichment when body length already exceeds this threshold (default: 500)" },
   isActive: { type: "boolean", description: "Start fetching immediately (default: true)" },
 };
 const EXAMPLE_JSON = JSON.stringify([
@@ -40,6 +42,8 @@ const EXAMPLE_JSON = JSON.stringify([
     adaptiveEnabled: true,
     maxPollIntervalSeconds: 3600,
     maxItemsPerPoll: 25,
+    enrichmentEnabled: true,
+    enrichmentMinBodyLength: 500,
     isActive: true,
   },
   {

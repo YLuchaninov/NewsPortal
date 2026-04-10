@@ -1,0 +1,142 @@
+---
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type ContentItemDetail } from "@newsportal/contracts";
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+
+import Shell from "../layouts/Shell.astro";
+import { ContentItemCard } from "../components/ContentItemCard";
+import { getPool, queryOne } from "../lib/server/db";
+import { resolveWebSession } from "../lib/server/auth";
+import { readFlash } from "../lib/server/browser-flow";
+import { getUserContentStateMap, listFollowedStoryRefs } from "../lib/server/user-content-state";
+
+export const prerender = false;
+const session = await resolveWebSession(Astro.request);
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+const flash = readFlash(Astro.url);
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
+const sdk = createNewsPortalSdk({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  fetchImpl: fetch,
+});
+
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
+function resolvePageAppPath(target: string) {
+  return new URL(target.replace(/^\/+/, ""), pageBaseUrl).pathname;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("../bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("../bff/auth/logout"),
+  liveUpdates: resolvePageAppPath("../bff/live-updates"),
+  preferences: resolvePageAppPath("../bff/preferences"),
+  reactions: resolvePageAppPath("../bff/reactions"),
+  contentState: resolvePageAppPath("../bff/content-state"),
+};
+
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const [followingRefs, profile] = await Promise.all([
+  listFollowedStoryRefs(getPool(), session.userId, page, DEFAULT_PAGE_SIZE),
+  queryOne<Record<string, unknown>>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
+]);
+const followingItems = await Promise.all(
+  followingRefs.items.map((item) => sdk.getContentItem<ContentItemDetail>(item.contentItemId))
+);
+const userStateMap = await getUserContentStateMap(getPool(), session.userId, followingItems);
+
+const themePreference = String(profile?.theme_preference ?? "system");
+const themeClass = themePreference === "dark" ? "dark" : "";
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function readStoryNote(contentItemId: string): string | null {
+  const state = userStateMap.get(contentItemId);
+  if (!state?.is_following_story) {
+    return null;
+  }
+  return state.story_updated_since_seen
+    ? "New update since you last checked this story"
+    : "You are following this story";
+}
+---
+
+<Shell
+  title="Following — NewsPortal"
+  session={session}
+  themeClass={themeClass}
+  currentTheme={themePreference}
+  flash={flash}
+  activeNav="following"
+  bffLiveUpdatesPath={bffPaths.liveUpdates}
+  bffPreferencesPath={bffPaths.preferences}
+  bffLogoutPath={bffPaths.authLogout}
+  bffBootstrapPath={bffPaths.authBootstrap}
+>
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold tracking-tight">Following</h1>
+    <p class="text-muted-foreground mt-1">
+      Latest selected article for each story cluster you decided to follow
+    </p>
+  </div>
+
+  {followingItems.length === 0 ? (
+    <div class="flex flex-col items-center justify-center py-24 text-center">
+      <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
+          <path d="M20 21V7"/><path d="M4 21V3"/><path d="M9 21V9"/><path d="M15 21v-4"/>
+        </svg>
+      </div>
+      <p class="font-semibold text-lg">No followed stories yet</p>
+      <p class="text-muted-foreground text-sm mt-1 max-w-sm">
+        Open an editorial content item and use “Follow story” to keep an eye on future updates.
+      </p>
+      <a href="/" class="mt-4 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+        Browse collection
+      </a>
+    </div>
+  ) : (
+    <>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {followingItems.map((item) => (
+          <ContentItemCard
+            contentItem={item}
+            isLoggedIn={true}
+            reactionsPath={bffPaths.reactions}
+            contentStatePath={bffPaths.contentState}
+            contextBadgeLabel="following"
+            contextNote={readStoryNote(String(item.content_item_id))}
+            initialUserState={userStateMap.get(String(item.content_item_id))}
+            client:visible
+          />
+        ))}
+      </div>
+
+      {(followingRefs.hasPrev || followingRefs.hasNext) && (
+        <PaginationNav
+          className="mt-8"
+          page={followingRefs.page}
+          totalPages={followingRefs.totalPages}
+          hasPrev={followingRefs.hasPrev}
+          hasNext={followingRefs.hasNext}
+          prevHref={resolvePageHref(followingRefs.page - 1)}
+          nextHref={resolvePageHref(followingRefs.page + 1)}
+        />
+      )}
+    </>
+  )}
+</Shell>

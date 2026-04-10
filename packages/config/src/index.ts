@@ -26,6 +26,14 @@ export interface RuntimeConfig {
   firebaseProjectId: string;
   firebaseWebApiKey: string;
   webPushVapidPublicKey: string;
+  discoveryEnabled: boolean;
+  discoveryCron: string;
+  discoverySearchProvider: string;
+  discoveryLlmModel: string;
+  discoveryMonthlyBudgetCents: number;
+  llmReviewEnabled: boolean;
+  llmReviewMonthlyBudgetCents: number;
+  llmReviewBudgetExhaustAcceptGrayZone: boolean;
 }
 
 export interface RuntimeConfigOptions {
@@ -72,6 +80,26 @@ export function readRuntimeConfig(
     publicApiBaseUrl: env.NEWSPORTAL_PUBLIC_API_BASE_URL ?? apiBaseUrl,
     firebaseProjectId: env.FIREBASE_PROJECT_ID ?? "",
     firebaseWebApiKey: env.FIREBASE_WEB_API_KEY ?? "",
-    webPushVapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? ""
+    webPushVapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "",
+    discoveryEnabled:
+      String(env.DISCOVERY_ENABLED ?? "0").trim().toLowerCase() === "1" ||
+      String(env.DISCOVERY_ENABLED ?? "").trim().toLowerCase() === "true",
+    discoveryCron: env.DISCOVERY_CRON ?? "0 */6 * * *",
+    discoverySearchProvider: env.DISCOVERY_SEARCH_PROVIDER ?? "ddgs",
+    discoveryLlmModel: env.DISCOVERY_GEMINI_MODEL ?? env.GEMINI_MODEL ?? "gemini-2.0-flash",
+    discoveryMonthlyBudgetCents: Number.parseInt(
+      env.DISCOVERY_MONTHLY_BUDGET_CENTS ?? "0",
+      10
+    ) || 0,
+    llmReviewEnabled:
+      String(env.LLM_REVIEW_ENABLED ?? "1").trim().toLowerCase() === "1" ||
+      String(env.LLM_REVIEW_ENABLED ?? "").trim().toLowerCase() === "true",
+    llmReviewMonthlyBudgetCents: Number.parseInt(
+      env.LLM_REVIEW_MONTHLY_BUDGET_CENTS ?? "0",
+      10
+    ) || 0,
+    llmReviewBudgetExhaustAcceptGrayZone:
+      String(env.LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE ?? "0").trim().toLowerCase() === "1" ||
+      String(env.LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE ?? "").trim().toLowerCase() === "true",
   };
 }

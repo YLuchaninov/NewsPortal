@@ -225,6 +225,86 @@ async function assertSmokeRows(
     throw new Error("Expected the first smoke article to remain non-duplicate.");
   }
 
+  if (!options.duplicatePreflightOnly) {
+    const observationResult = await pool.query<{
+      canonicalDocumentId: string | null;
+      duplicateKind: string;
+      observationState: string;
+    }>(
+      `
+        select
+          canonical_document_id::text as "canonicalDocumentId",
+          duplicate_kind as "duplicateKind",
+          observation_state as "observationState"
+        from document_observations
+        where
+          origin_type = 'article'
+          and origin_id in (
+            select doc_id
+            from articles
+            where channel_id = $1
+          )
+      `,
+      [channelId]
+    );
+
+    if (observationResult.rowCount !== 1) {
+      throw new Error(
+        `Expected exactly one document_observations row, found ${observationResult.rowCount}.`
+      );
+    }
+
+    const observation = observationResult.rows[0];
+    if (observation.canonicalDocumentId !== article.canonicalDocId) {
+      throw new Error("Expected document_observations to point at the article canonical document.");
+    }
+    if (observation.duplicateKind !== "canonical") {
+      throw new Error(
+        `Expected the first observation duplicate_kind to be canonical, got ${observation.duplicateKind}.`
+      );
+    }
+    if (observation.observationState !== "canonicalized") {
+      throw new Error(
+        `Expected the first observation_state to be canonicalized, got ${observation.observationState}.`
+      );
+    }
+
+    const canonicalDocumentResult = await pool.query<{
+      canonicalUrl: string;
+      observationCount: string;
+    }>(
+      `
+        select
+          canonical_url as "canonicalUrl",
+          observation_count::text as "observationCount"
+        from canonical_documents
+        where canonical_document_id = $1::uuid
+      `,
+      [article.canonicalDocId]
+    );
+
+    if (canonicalDocumentResult.rowCount !== 1) {
+      throw new Error(
+        `Expected exactly one canonical_documents row, found ${canonicalDocumentResult.rowCount}.`
+      );
+    }
+
+    const canonicalDocument = canonicalDocumentResult.rows[0];
+    if (
+      !canonicalDocument.canonicalUrl.startsWith("https://example.com/articles/smoke-article-") ||
+      canonicalDocument.canonicalUrl.includes("?")
+    ) {
+      throw new Error(
+        `Expected canonical_documents.canonical_url to preserve the smoke article URL, got ${canonicalDocument.canonicalUrl}.`
+      );
+    }
+    if (canonicalDocument.observationCount !== "1") {
+      throw new Error(
+        `Expected canonical_documents.observation_count to equal 1, got ${canonicalDocument.observationCount}.`
+      );
+    }
+  }
+
   const externalRefResult = await pool.query<{ count: string }>(
     `
       select count(*)::text as count

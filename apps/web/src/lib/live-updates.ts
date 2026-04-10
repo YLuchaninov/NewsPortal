@@ -174,7 +174,7 @@ export function resolveLiveUpdateDelay(input: LiveUpdateDelayInput): number | nu
 
 export function resolveSurfaceUpdateMessage(surface: LiveUpdateSurface): string {
   if (surface === "feed") {
-    return "New system-selected articles available";
+    return "New system-selected content available";
   }
   if (surface === "matches") {
     return "New personal matches available";

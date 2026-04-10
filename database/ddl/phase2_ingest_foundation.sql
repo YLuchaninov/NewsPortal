@@ -219,6 +219,77 @@ create index if not exists articles_canonical_doc_id_idx
 create index if not exists articles_processing_state_idx
   on articles (processing_state);
 
+create table if not exists canonical_documents (
+  canonical_document_id uuid primary key references articles (doc_id) on delete cascade,
+  content_kind text not null default 'editorial',
+  content_format text not null default 'article',
+  canonical_url text not null,
+  canonical_domain text,
+  title text not null default '',
+  lead text not null default '',
+  body text not null default '',
+  lang text,
+  lang_confidence double precision,
+  exact_hash text,
+  simhash64 bigint,
+  source_name text,
+  author_name text,
+  published_at timestamptz,
+  first_observed_at timestamptz not null default now(),
+  last_observed_at timestamptz not null default now(),
+  observation_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint canonical_documents_content_kind_check
+    check (content_kind in ('editorial')),
+  constraint canonical_documents_content_format_check
+    check (content_format in ('article', 'video_news', 'gallery', 'mixed')),
+  constraint canonical_documents_observation_count_check
+    check (observation_count >= 0)
+);
+
+create index if not exists canonical_documents_published_at_idx
+  on canonical_documents (published_at);
+
+create index if not exists canonical_documents_canonical_domain_idx
+  on canonical_documents (canonical_domain);
+
+create index if not exists canonical_documents_last_observed_at_idx
+  on canonical_documents (last_observed_at);
+
+create table if not exists document_observations (
+  observation_id uuid primary key default gen_random_uuid(),
+  origin_type text not null default 'article',
+  origin_id uuid not null references articles (doc_id) on delete cascade,
+  channel_id uuid not null references source_channels (channel_id) on delete cascade,
+  source_record_id text,
+  observed_url text not null,
+  published_at timestamptz,
+  ingested_at timestamptz not null default now(),
+  canonical_document_id uuid references canonical_documents (canonical_document_id) on delete set null,
+  duplicate_kind text not null default 'pending',
+  observation_state text not null default 'pending_canonicalization',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint document_observations_origin_type_check
+    check (origin_type in ('article')),
+  constraint document_observations_duplicate_kind_check
+    check (duplicate_kind in ('pending', 'canonical', 'exact_duplicate', 'near_duplicate')),
+  constraint document_observations_state_check
+    check (observation_state in ('pending_canonicalization', 'canonicalized')),
+  constraint document_observations_origin_unique
+    unique (origin_type, origin_id)
+);
+
+create index if not exists document_observations_channel_id_idx
+  on document_observations (channel_id);
+
+create index if not exists document_observations_canonical_document_id_idx
+  on document_observations (canonical_document_id);
+
+create index if not exists document_observations_observation_state_idx
+  on document_observations (observation_state);
+
 create table if not exists article_external_refs (
   external_ref_id uuid primary key default gen_random_uuid(),
   channel_id uuid not null references source_channels (channel_id) on delete cascade,

@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import {
+  ARTICLE_INGEST_REQUESTED_EVENT,
   OUTBOX_EVENT_QUEUE_MAP,
   SEQUENCE_QUEUE,
   isSequenceManagedOutboxEvent,
@@ -8,6 +9,7 @@ import {
   isLlmReviewOutboxEvent,
   isNotificationFeedbackOutboxEvent,
   isReindexOutboxEvent,
+  isResourceOutboxEvent,
   isArticleOutboxEvent,
   type ArticleQueueJobPayload,
   type CriterionCompileQueueJobPayload,
@@ -15,6 +17,7 @@ import {
   type LlmReviewQueueJobPayload,
   type NotificationFeedbackQueueJobPayload,
   type ReindexQueueJobPayload,
+  type ResourceQueueJobPayload,
   type SequenceQueueJobPayload,
   type ThinQueueJobPayload
 } from "@newsportal/contracts";
@@ -59,9 +62,19 @@ interface QueueLike {
       jobId: string;
       removeOnComplete: number;
       removeOnFail: number;
+      priority?: number;
     }
   ): Promise<unknown>;
+  getJob(jobId: string): Promise<QueueJobLike | undefined>;
   close(): Promise<void>;
+}
+
+interface QueueJobLike {
+  priority: number;
+  changePriority(options: {
+    priority: number;
+    lifo?: boolean;
+  }): Promise<void>;
 }
 
 interface SequenceRoutingOptions {
@@ -70,6 +83,16 @@ interface SequenceRoutingOptions {
   queueName?: string;
   jobName?: string;
 }
+
+export interface SequenceQueuePriorityRepairSummary {
+  inspectedRuns: number;
+  reprioritizedRuns: number;
+  alreadyPrioritizedRuns: number;
+  missingJobs: number;
+}
+
+const ARTICLE_INGEST_SEQUENCE_JOB_PRIORITY = 100;
+const SEQUENCE_PRIORITY_REPAIR_BATCH_SIZE = 500;
 
 export class OutboxRelay {
   private readonly queues = new Map<string, QueueLike>();
@@ -228,6 +251,102 @@ export class OutboxRelay {
     }
   }
 
+  async repairPendingSequenceQueuePriorities(): Promise<SequenceQueuePriorityRepairSummary> {
+    const summary: SequenceQueuePriorityRepairSummary = {
+      inspectedRuns: 0,
+      reprioritizedRuns: 0,
+      alreadyPrioritizedRuns: 0,
+      missingJobs: 0
+    };
+
+    if (!this.sequenceRouting?.enabled) {
+      return summary;
+    }
+
+    const sequenceQueueName = this.sequenceRouting.queueName ?? SEQUENCE_QUEUE;
+    const sequenceQueue = this.queues.get(sequenceQueueName);
+
+    if (!sequenceQueue) {
+      throw new Error(`BullMQ queue ${sequenceQueueName} is not configured.`);
+    }
+
+    const client = await this.pool.connect();
+
+    try {
+      for (
+        let offset = 0;
+        ;
+        offset += SEQUENCE_PRIORITY_REPAIR_BATCH_SIZE
+      ) {
+        const result = await client.query(
+          `
+            select
+              run_id::text as "runId"
+            from sequence_runs
+            where status = 'pending'
+              and trigger_type = 'event'
+              and trigger_meta ->> 'eventType' = $1
+            order by created_at asc, run_id asc
+            limit $2
+            offset $3
+          `,
+          [
+            ARTICLE_INGEST_REQUESTED_EVENT,
+            SEQUENCE_PRIORITY_REPAIR_BATCH_SIZE,
+            offset
+          ]
+        );
+
+        const pendingRunRows = result.rows as Array<Record<string, unknown>>;
+
+        if (pendingRunRows.length === 0) {
+          break;
+        }
+
+        for (const pendingRunRow of pendingRunRows) {
+          const runId = pendingRunRow.runId;
+
+          if (typeof runId !== "string" || runId.length === 0) {
+            throw new Error(
+              "Pending sequence priority repair encountered an invalid run id."
+            );
+          }
+
+          summary.inspectedRuns += 1;
+
+          const job = await sequenceQueue.getJob(runId);
+
+          if (!job) {
+            summary.missingJobs += 1;
+            continue;
+          }
+
+          if (job.priority > 0) {
+            summary.alreadyPrioritizedRuns += 1;
+            continue;
+          }
+
+          // BullMQ drains wait-list jobs before the prioritized set. Moving
+          // pre-fix article-ingest runs out of the default wait lane allows
+          // existing llm.review.requested jobs to surface without rewriting
+          // queue ownership or re-enqueueing jobs.
+          await job.changePriority({
+            priority: ARTICLE_INGEST_SEQUENCE_JOB_PRIORITY
+          });
+          summary.reprioritizedRuns += 1;
+        }
+
+        if (pendingRunRows.length < SEQUENCE_PRIORITY_REPAIR_BATCH_SIZE) {
+          break;
+        }
+      }
+
+      return summary;
+    } finally {
+      client.release();
+    }
+  }
+
   private async publishRow(
     client: RelaySqlClient,
     row: PendingOutboxRow
@@ -296,11 +415,25 @@ export class OutboxRelay {
       await sequenceQueue.add(sequenceJobName, payload, {
         jobId: createdRun.runId,
         removeOnComplete: 100,
-        removeOnFail: 100
+        removeOnFail: 100,
+        ...this.getSequenceJobQueueOptions(row.event_type)
       });
     }
 
     return true;
+  }
+
+  private getSequenceJobQueueOptions(
+    eventType: string
+  ): { priority?: number } {
+    if (eventType === ARTICLE_INGEST_REQUESTED_EVENT) {
+      // BullMQ consumes wait-list jobs before prioritized jobs, so we
+      // deliberately place bulk article-ingest runs behind default-priority
+      // sequence jobs such as llm.review.requested.
+      return { priority: ARTICLE_INGEST_SEQUENCE_JOB_PRIORITY };
+    }
+
+    return {};
   }
 
   private createQueuePayload(
@@ -308,6 +441,7 @@ export class OutboxRelay {
   ):
     | ThinQueueJobPayload
     | ArticleQueueJobPayload
+    | ResourceQueueJobPayload
     | InterestCompileQueueJobPayload
     | CriterionCompileQueueJobPayload
     | LlmReviewQueueJobPayload
@@ -320,6 +454,15 @@ export class OutboxRelay {
         jobId: row.event_id,
         eventId: row.event_id,
         docId: this.readStringValue(row.payload_json.docId, row.aggregate_id),
+        version: payloadVersion
+      };
+    }
+
+    if (isResourceOutboxEvent(row.event_type)) {
+      return {
+        jobId: row.event_id,
+        eventId: row.event_id,
+        resourceId: this.readStringValue(row.payload_json.resourceId, row.aggregate_id),
         version: payloadVersion
       };
     }

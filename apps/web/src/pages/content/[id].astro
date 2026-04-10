@@ -1,0 +1,321 @@
+---
+import type { ContentItemDetail } from "@newsportal/contracts";
+import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+
+import Shell from "../../layouts/Shell.astro";
+import { UserContentStateControls } from "../../components/UserContentStateControls";
+import { getPool, queryOne } from "../../lib/server/db";
+import { resolveWebSession } from "../../lib/server/auth";
+import { readFlash } from "../../lib/server/browser-flow";
+import { markContentItemSeen } from "../../lib/server/user-content-state";
+
+export const prerender = false;
+
+const session = await resolveWebSession(Astro.request);
+const flash = readFlash(Astro.url);
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
+const sdk = createNewsPortalSdk({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  fetchImpl: fetch,
+});
+const rawContentItemId = String(Astro.params.id ?? "").trim();
+const contentItemId = rawContentItemId ? decodeURIComponent(rawContentItemId) : "";
+
+if (!contentItemId) {
+  return new Response("Content item not found.", { status: 404 });
+}
+
+let contentItem: ContentItemDetail;
+try {
+  contentItem = await sdk.getContentItem<ContentItemDetail>(contentItemId);
+} catch {
+  return new Response("Content item not found.", { status: 404 });
+}
+
+const pageBaseUrl = new URL(Astro.url);
+if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
+function resolvePageAppPath(target: string) {
+  return new URL(target.replace(/^\/+/, ""), pageBaseUrl).pathname;
+}
+
+const bffPaths = {
+  authBootstrap: resolvePageAppPath("../../bff/auth/bootstrap"),
+  authLogout: resolvePageAppPath("../../bff/auth/logout"),
+  liveUpdates: resolvePageAppPath("../../bff/live-updates"),
+  preferences: resolvePageAppPath("../../bff/preferences"),
+  contentState: resolvePageAppPath("../../bff/content-state"),
+  storyFollow: resolvePageAppPath("../../bff/story-follow"),
+};
+
+const profile = session
+  ? await queryOne<Record<string, unknown>>(
+      `select theme_preference from user_profiles where user_id = $1`,
+      [session.userId]
+    )
+  : null;
+const userState =
+  session != null
+    ? await markContentItemSeen(getPool(), session.userId, contentItem.content_item_id)
+    : null;
+const themePreference = String(profile?.theme_preference ?? "system");
+const themeClass = themePreference === "dark" ? "dark" : "";
+
+function resolveSafeHref(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    const normalized = new URL(rawValue);
+    if (!["http:", "https:"].includes(normalized.protocol)) {
+      return null;
+    }
+    return normalized.toString();
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeHtml(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  return rawValue
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
+    .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
+}
+
+function formatTimestamp(rawValue: unknown): string | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  const date = new Date(String(rawValue));
+  if (Number.isNaN(date.getTime())) {
+    return String(rawValue);
+  }
+
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatReadTime(rawValue: unknown): string | null {
+  const seconds = Number(rawValue ?? NaN);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+
+  return `${Math.max(1, Math.round(seconds / 60))} min read`;
+}
+
+function toObjectList(rawValue: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(rawValue)
+    ? rawValue.filter((item) => item && typeof item === "object").map((item) => item as Record<string, unknown>)
+    : [];
+}
+
+const sourceHref = resolveSafeHref(contentItem.url);
+const readTimeLabel = formatReadTime(contentItem.read_time_seconds ?? null);
+const publishedAtLabel = formatTimestamp(contentItem.published_at ?? null);
+const updatedAtLabel = formatTimestamp(contentItem.updated_at ?? null);
+const mediaItems = [
+  ...toObjectList(contentItem.media_assets),
+  ...toObjectList(contentItem.media_json),
+];
+const heroAsset = mediaItems[0] ?? null;
+const heroMediaUrl = resolveSafeHref(heroAsset?.thumbnail_url ?? heroAsset?.source_url ?? contentItem.primary_media_url ?? null);
+const renderedHtml = sanitizeHtml(contentItem.body_html ?? null);
+const summary = String(contentItem.summary ?? contentItem.lead ?? "").trim() || null;
+const sourceLabel = String(contentItem.source_name ?? contentItem.channel_name ?? "Source").trim();
+const authorLabel = String(contentItem.author_name ?? "").trim();
+const documents = toObjectList(contentItem.documents_json);
+const linksOut = toObjectList(contentItem.links_out_json);
+---
+
+<Shell
+  title={`${String(contentItem.title ?? "Content item")} — ${DEFAULT_BRAND_CONFIG.productName}`}
+  session={session}
+  themeClass={themeClass}
+  currentTheme={themePreference}
+  flash={flash}
+  activeNav="feed"
+  bffLiveUpdatesPath={bffPaths.liveUpdates}
+  bffPreferencesPath={bffPaths.preferences}
+  bffLogoutPath={bffPaths.authLogout}
+  bffBootstrapPath={bffPaths.authBootstrap}
+>
+  <div class="mx-auto max-w-4xl space-y-8">
+    <div class="space-y-4">
+      <a href="/" class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+        <span aria-hidden="true">←</span>
+        Back to collection
+      </a>
+
+      <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 font-medium text-secondary-foreground">
+          {String(contentItem.content_kind ?? "content")}
+        </span>
+        <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
+          {String(contentItem.system_selection_decision ?? "selected")}
+        </span>
+        {publishedAtLabel && <span>{publishedAtLabel}</span>}
+        {readTimeLabel && <span>{readTimeLabel}</span>}
+      </div>
+
+      <div class="space-y-3">
+        <h1 class="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          {String(contentItem.title ?? "Untitled content item")}
+        </h1>
+        {(sourceLabel || authorLabel) && (
+          <p class="text-sm text-muted-foreground">
+            {[sourceLabel, authorLabel].filter(Boolean).join(" · ")}
+          </p>
+        )}
+        {summary && (
+          <p class="max-w-3xl text-base leading-7 text-muted-foreground">
+            {summary}
+          </p>
+        )}
+      </div>
+
+      <div class="flex flex-wrap gap-3">
+        {sourceHref && (
+          <a
+            href={sourceHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Open original source
+          </a>
+        )}
+        <a
+          href="/matches"
+          class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent"
+        >
+          View personal matches
+        </a>
+      </div>
+
+      {session && userState && (
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <UserContentStateControls
+            contentItemId={String(contentItem.content_item_id)}
+            contentStatePath={bffPaths.contentState}
+            storyFollowPath={bffPaths.storyFollow}
+            initialUserState={userState}
+            showFollowButton={true}
+            showArchiveButton={true}
+            client:load
+          />
+        </div>
+      )}
+    </div>
+
+    {heroMediaUrl && (
+      <figure class="overflow-hidden rounded-[1.5rem] border border-border bg-card shadow-sm">
+        <img
+          src={heroMediaUrl}
+          alt={String(heroAsset?.alt_text ?? contentItem.title ?? "Content media")}
+          class="h-auto w-full object-cover"
+          loading="eager"
+        />
+      </figure>
+    )}
+
+    <section class="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm">
+      {renderedHtml ? (
+        <article
+          class="prose prose-neutral max-w-none leading-7 prose-headings:text-foreground prose-a:text-primary prose-img:rounded-xl dark:prose-invert"
+          set:html={renderedHtml}
+        />
+      ) : (
+        <article class="space-y-4 text-base leading-7 text-foreground">
+          {contentItem.body ? (
+            <p>{String(contentItem.body)}</p>
+          ) : summary ? (
+            <p>{summary}</p>
+          ) : (
+            <p class="text-muted-foreground">Detailed extracted content is not available for this item yet.</p>
+          )}
+        </article>
+      )}
+    </section>
+
+    {(mediaItems.length > 0 || documents.length > 0 || linksOut.length > 0) && (
+      <section class="grid gap-6 lg:grid-cols-3">
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Media</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {mediaItems.length} persisted media item{mediaItems.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Documents</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {documents.length} linked document{documents.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Links Out</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {linksOut.length} related link{linksOut.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      </section>
+    )}
+
+    <details class="rounded-[1.5rem] border border-border bg-card p-5 shadow-sm">
+      <summary class="cursor-pointer list-none text-sm font-semibold text-foreground">
+        Content details
+      </summary>
+      <div class="mt-4 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Identity</p>
+          <p class="mt-2 font-medium text-foreground">{String(contentItem.content_item_id ?? "Unknown")}</p>
+          <p class="mt-2">Origin: {String(contentItem.origin_type ?? "unknown")}</p>
+          <p class="mt-1">Kind: {String(contentItem.content_kind ?? "unknown")}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selection</p>
+          <p class="mt-2 font-medium text-foreground">{String(contentItem.system_selection_decision ?? "unknown")}</p>
+          <p class="mt-2">Published: {publishedAtLabel || "Unknown"}</p>
+          <p class="mt-1">Updated: {updatedAtLabel || "Unknown"}</p>
+        </div>
+      </div>
+
+      {(contentItem.attributes_json || contentItem.classification_json || contentItem.raw_payload_json) && (
+        <div class="mt-4 space-y-4">
+          {contentItem.attributes_json && (
+            <div>
+              <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Attributes</p>
+              <pre class="mt-2 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(contentItem.attributes_json, null, 2)}</pre>
+            </div>
+          )}
+          {contentItem.classification_json && (
+            <div>
+              <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Classification</p>
+              <pre class="mt-2 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(contentItem.classification_json, null, 2)}</pre>
+            </div>
+          )}
+          {contentItem.raw_payload_json && (
+            <div>
+              <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Raw payload</p>
+              <pre class="mt-2 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(contentItem.raw_payload_json, null, 2)}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </details>
+  </div>
+</Shell>

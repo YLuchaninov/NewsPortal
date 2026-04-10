@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { DEFAULT_PAGE } from "@newsportal/contracts";
+import {
+  DEFAULT_PAGE,
+  type DigestCadence,
+  type UserDigestSettingsView,
+} from "@newsportal/contracts";
 import { PaginationNav } from "@newsportal/ui";
 
 import { LIVE_UPDATES_EVENT, type LiveUpdatesEventDetail } from "../lib/live-updates";
@@ -9,7 +13,6 @@ import { LIVE_UPDATES_EVENT, type LiveUpdatesEventDetail } from "../lib/live-upd
 interface NotificationPreferencesState {
   webPush: boolean;
   telegram: boolean;
-  weeklyEmailDigest: boolean;
 }
 
 interface ChannelRow {
@@ -24,12 +27,14 @@ interface ChannelRow {
 interface LiveSettingsSectionProps {
   initialThemePreference: string;
   initialNotificationPreferences: NotificationPreferencesState;
+  initialDigestSettings: UserDigestSettingsView;
   initialChannels: ChannelRow[];
   initialPage: number;
   pageSize: number;
   currentPath: string;
   notificationChannelsPath: string;
   preferencesPath: string;
+  digestSettingsPath: string;
   sessionEmail: string;
   vapidKey: string;
 }
@@ -85,9 +90,37 @@ function normalizePreferences(
   return {
     webPush: value?.web_push !== false && fallback.webPush !== false,
     telegram: value?.telegram !== false && fallback.telegram !== false,
-    weeklyEmailDigest:
-      value?.weekly_email_digest !== false && fallback.weeklyEmailDigest !== false,
   };
+}
+
+function normalizeDigestSettings(
+  value: UserDigestSettingsView | null | undefined,
+  fallback: UserDigestSettingsView
+): UserDigestSettingsView {
+  return {
+    is_enabled: value?.is_enabled ?? fallback.is_enabled,
+    cadence: (value?.cadence ?? fallback.cadence ?? "weekly") as DigestCadence,
+    send_hour: Number.isFinite(Number(value?.send_hour))
+      ? Number(value?.send_hour)
+      : fallback.send_hour,
+    send_minute: Number.isFinite(Number(value?.send_minute))
+      ? Number(value?.send_minute)
+      : fallback.send_minute,
+    timezone: String(value?.timezone ?? fallback.timezone ?? "").trim() || null,
+    skip_if_empty: value?.skip_if_empty ?? fallback.skip_if_empty,
+    next_run_at: value?.next_run_at ?? fallback.next_run_at ?? null,
+    last_sent_at: value?.last_sent_at ?? fallback.last_sent_at ?? null,
+    last_delivery_status:
+      value?.last_delivery_status ?? fallback.last_delivery_status ?? null,
+    last_delivery_error:
+      value?.last_delivery_error ?? fallback.last_delivery_error ?? null,
+    recipient_email:
+      String(value?.recipient_email ?? fallback.recipient_email ?? "").trim() || null,
+  };
+}
+
+function formatTimeValue(hour: number, minute: number): string {
+  return `${String(hour ?? 9).padStart(2, "0")}:${String(minute ?? 0).padStart(2, "0")}`;
 }
 
 function paginateChannels(channels: ChannelRow[], requestedPage: number, pageSize: number) {
@@ -125,17 +158,20 @@ async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 export function LiveSettingsSection({
   initialThemePreference,
   initialNotificationPreferences,
+  initialDigestSettings,
   initialChannels,
   initialPage,
   pageSize,
   currentPath,
   notificationChannelsPath,
   preferencesPath,
+  digestSettingsPath,
   sessionEmail,
   vapidKey,
 }: LiveSettingsSectionProps) {
   const [themePreference, setThemePreference] = useState(initialThemePreference);
   const [preferences, setPreferences] = useState(initialNotificationPreferences);
+  const [digestSettings, setDigestSettings] = useState(initialDigestSettings);
   const [channels, setChannels] = useState(initialChannels);
   const [page, setPage] = useState(initialPage);
   const [webPushStatus, setWebPushStatus] = useState("");
@@ -143,6 +179,7 @@ export function LiveSettingsSection({
   const [digestEmail, setDigestEmail] = useState(sessionEmail);
   const [savingAppearance, setSavingAppearance] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [savingDigestSettings, setSavingDigestSettings] = useState(false);
   const [connectingWebPush, setConnectingWebPush] = useState(false);
   const [connectingTelegram, setConnectingTelegram] = useState(false);
   const [connectingEmailDigest, setConnectingEmailDigest] = useState(false);
@@ -150,7 +187,7 @@ export function LiveSettingsSection({
   const paginatedChannels = paginateChannels(channels, page, pageSize);
 
   async function refreshSettings(): Promise<void> {
-    const [preferencesPayload, channelsPayload] = await Promise.all([
+    const [preferencesPayload, channelsPayload, digestSettingsPayload] = await Promise.all([
       readJson<{ preferences: { theme_preference?: string; notification_preferences?: Record<string, unknown> } | null }>(
         preferencesPath,
         {
@@ -160,6 +197,11 @@ export function LiveSettingsSection({
         }
       ),
       readJson<{ channels: ChannelRow[] }>(notificationChannelsPath, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+      }),
+      readJson<{ digestSettings: UserDigestSettingsView | null }>(digestSettingsPath, {
         method: "GET",
         cache: "no-store",
         credentials: "same-origin",
@@ -179,6 +221,9 @@ export function LiveSettingsSection({
     }
 
     setChannels(Array.isArray(channelsPayload.channels) ? channelsPayload.channels : []);
+    setDigestSettings((current) =>
+      normalizeDigestSettings(digestSettingsPayload.digestSettings, current)
+    );
   }
 
   function requestLiveRefresh(): void {
@@ -190,7 +235,6 @@ export function LiveSettingsSection({
       themePreference,
       webPushEnabled: String(preferences.webPush),
       telegramEnabled: String(preferences.telegram),
-      weeklyEmailDigestEnabled: String(preferences.weeklyEmailDigest),
     });
 
     await readJson<{ updated: boolean }>(preferencesPath, {
@@ -203,6 +247,33 @@ export function LiveSettingsSection({
     });
 
     toast.success(successMessage);
+    await refreshSettings();
+    requestLiveRefresh();
+  }
+
+  async function submitDigestSettings(): Promise<void> {
+    const body = new URLSearchParams({
+      digestEnabled: String(digestSettings.is_enabled),
+      digestCadence: digestSettings.cadence,
+      digestTime: formatTimeValue(digestSettings.send_hour, digestSettings.send_minute),
+      digestTimezone: String(digestSettings.timezone ?? ""),
+      digestSkipIfEmpty: String(digestSettings.skip_if_empty),
+    });
+
+    const response = await readJson<{ digestSettings: UserDigestSettingsView }>(
+      digestSettingsPath,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body,
+        credentials: "same-origin",
+      }
+    );
+
+    setDigestSettings(normalizeDigestSettings(response.digestSettings, digestSettings));
+    toast.success("Digest settings saved");
     await refreshSettings();
     requestLiveRefresh();
   }
@@ -305,7 +376,7 @@ export function LiveSettingsSection({
     return () => {
       window.removeEventListener(LIVE_UPDATES_EVENT, handleLiveUpdate);
     };
-  }, [notificationChannelsPath, preferencesPath]);
+  }, [digestSettingsPath, notificationChannelsPath, preferencesPath]);
 
   return (
     <div className="grid gap-6 max-w-3xl">
@@ -438,24 +509,58 @@ export function LiveSettingsSection({
                 <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
               </label>
             </div>
-            <div className="flex items-center justify-between py-3">
+            <button
+              type="submit"
+              disabled={savingPreferences}
+              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {savingPreferences ? "Saving..." : "Save Preferences"}
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="font-semibold">Scheduled Digest</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Configure when your match digest email should be sent
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <form
+            className="space-y-4"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setSavingDigestSettings(true);
+              try {
+                await submitDigestSettings();
+              } catch (error) {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to save digest settings."
+                );
+              } finally {
+                setSavingDigestSettings(false);
+              }
+            }}
+          >
+            <div className="flex items-center justify-between py-3 border-b border-border">
               <div>
-                <p className="text-sm font-medium">Weekly Digest</p>
+                <p className="text-sm font-medium">Enable scheduled digest</p>
                 <p className="text-xs text-muted-foreground">
-                  Weekly email summary
+                  Uses your connected email digest channel
                 </p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
-                <input type="hidden" name="weeklyEmailDigestEnabled" value="false" />
                 <input
                   type="checkbox"
-                  name="weeklyEmailDigestEnabled"
-                  value="true"
-                  checked={preferences.weeklyEmailDigest}
+                  checked={digestSettings.is_enabled}
                   onChange={(event) =>
-                    setPreferences((current) => ({
+                    setDigestSettings((current) => ({
                       ...current,
-                      weeklyEmailDigest: event.target.checked,
+                      is_enabled: event.target.checked,
                     }))
                   }
                   className="sr-only peer"
@@ -463,12 +568,121 @@ export function LiveSettingsSection({
                 <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
               </label>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium" htmlFor="digest-cadence">
+                  Cadence
+                </label>
+                <select
+                  id="digest-cadence"
+                  value={digestSettings.cadence}
+                  onChange={(event) =>
+                    setDigestSettings((current) => ({
+                      ...current,
+                      cadence: event.target.value as DigestCadence,
+                    }))
+                  }
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="every_3_days">Every 3 days</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <label className="text-sm font-medium" htmlFor="digest-time">
+                  Send time
+                </label>
+                <input
+                  id="digest-time"
+                  type="time"
+                  value={formatTimeValue(digestSettings.send_hour, digestSettings.send_minute)}
+                  onChange={(event) => {
+                    const [hour, minute] = event.target.value.split(":");
+                    setDigestSettings((current) => ({
+                      ...current,
+                      send_hour: Number.parseInt(hour ?? "9", 10),
+                      send_minute: Number.parseInt(minute ?? "0", 10),
+                    }));
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <label className="text-sm font-medium" htmlFor="digest-timezone">
+                Timezone
+              </label>
+              <input
+                id="digest-timezone"
+                value={String(digestSettings.timezone ?? "")}
+                onChange={(event) =>
+                  setDigestSettings((current) => ({
+                    ...current,
+                    timezone: event.target.value,
+                  }))
+                }
+                placeholder="Europe/Warsaw"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">
+                Current recipient: {digestSettings.recipient_email ?? "connect an email digest channel first"}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-y border-border">
+              <div>
+                <p className="text-sm font-medium">Skip empty digest runs</p>
+                <p className="text-xs text-muted-foreground">
+                  Do not send a digest when there are no new personal matches
+                </p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={digestSettings.skip_if_empty}
+                  onChange={(event) =>
+                    setDigestSettings((current) => ({
+                      ...current,
+                      skip_if_empty: event.target.checked,
+                    }))
+                  }
+                  className="sr-only peer"
+                />
+                <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
+              </label>
+            </div>
+
+            <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-4 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Next run</span>
+                <span className="font-medium">{formatTimestamp(digestSettings.next_run_at)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Last sent</span>
+                <span className="font-medium">{formatTimestamp(digestSettings.last_sent_at)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Last status</span>
+                <span className="font-medium">{String(digestSettings.last_delivery_status ?? "never")}</span>
+              </div>
+              {digestSettings.last_delivery_error && (
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {digestSettings.last_delivery_error}
+                </p>
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={savingPreferences}
+              disabled={savingDigestSettings}
               className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {savingPreferences ? "Saving..." : "Save Preferences"}
+              {savingDigestSettings ? "Saving..." : "Save Digest Settings"}
             </button>
           </form>
         </div>

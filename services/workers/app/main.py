@@ -13,7 +13,8 @@ import unicodedata
 import uuid
 from collections.abc import Mapping, Sequence
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -39,6 +40,26 @@ from ml.app import (
     truncate_text_for_embedding,
 )
 from .delivery import dispatch_channel_message
+from .canonical_documents import sync_article_canonical_document
+from .digests import (
+    DigestItem,
+    build_digest_subject,
+    coerce_digest_cadence,
+    coerce_digest_send_hour,
+    coerce_digest_send_minute,
+    compute_next_digest_run_at,
+    render_digest_html,
+    render_digest_text,
+    validate_timezone_name,
+)
+from .final_selection import summarize_final_selection_result
+from .interest_filters import (
+    build_interest_filter_explain,
+    resolve_criterion_filter_outcome,
+    resolve_interest_filter_context,
+    resolve_user_interest_filter_outcome,
+    upsert_interest_filter_result,
+)
 from .gemini import review_with_gemini
 from .lexical import build_lexical_tsquery
 from .notification_preferences import (
@@ -68,13 +89,16 @@ from .scoring import (
     place_match_score,
     semantic_prototype_score,
 )
+from .story_clusters import sync_story_cluster_and_verification
 from .system_feed import summarize_system_feed_result
 from .task_engine import (
+    configure_discovery_runtime,
     enqueue_sequence_run_job_async,
     PostgresSequenceRepository,
     SequenceCronScheduler,
     SequenceRunJobProcessor,
 )
+from .task_engine.adapters import build_live_discovery_runtime, discovery_enabled
 
 LOGGER = logging.getLogger("newsportal.workers")
 
@@ -114,6 +138,8 @@ LLM_REVIEW_REQUESTED_EVENT = "llm.review.requested"
 REINDEX_REQUESTED_EVENT = "reindex.requested"
 INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
 EVENT_CLUSTER_CENTROIDS_INDEX_NAME = "event_cluster_centroids"
+_ZERO_USD = Decimal("0")
+_USD_TO_CENTS = Decimal("100")
 
 PROCESSING_STATE_ORDER = {
     "raw": 0,
@@ -215,6 +241,137 @@ def sequence_cron_poll_interval_seconds() -> float:
         return max(1.0, float(raw_value))
     except ValueError:
         return 30.0
+
+
+def user_digest_scheduler_enabled() -> bool:
+    return env_flag("WORKER_ENABLE_USER_DIGEST_SCHEDULER", default=True)
+
+
+def user_digest_poll_interval_seconds() -> float:
+    raw_value = os.getenv("WORKER_USER_DIGEST_POLL_INTERVAL_SECONDS", "60")
+    try:
+        return max(5.0, float(raw_value))
+    except ValueError:
+        return 60.0
+
+
+def coerce_llm_cost_usd(value: Any) -> Decimal:
+    if value is None:
+        return _ZERO_USD
+    if isinstance(value, Decimal):
+        return value if value >= _ZERO_USD else _ZERO_USD
+    try:
+        parsed = Decimal(str(value).strip())
+    except (InvalidOperation, AttributeError):
+        return _ZERO_USD
+    return parsed if parsed >= _ZERO_USD else _ZERO_USD
+
+
+def llm_cost_usd_to_cents(value: Any) -> int:
+    normalized = coerce_llm_cost_usd(value)
+    return int((normalized * _USD_TO_CENTS).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def llm_review_month_start_utc(now: datetime | None = None) -> datetime:
+    current = now.astimezone(timezone.utc) if now is not None else datetime.now(timezone.utc)
+    return current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def llm_review_enabled() -> bool:
+    return env_flag("LLM_REVIEW_ENABLED", default=True)
+
+
+def llm_review_monthly_budget_cents() -> int:
+    raw_value = os.getenv("LLM_REVIEW_MONTHLY_BUDGET_CENTS", "0")
+    try:
+        return max(0, int(raw_value))
+    except ValueError:
+        return 0
+
+
+def llm_review_accept_gray_zone_on_budget_exhaustion() -> bool:
+    return env_flag("LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE", default=False)
+
+
+async def get_llm_review_monthly_quota_snapshot(
+    cursor: psycopg.AsyncCursor[Any],
+) -> dict[str, Any]:
+    month_start = llm_review_month_start_utc()
+    await cursor.execute(
+        """
+        select
+          coalesce(sum(cost_estimate_usd), 0) as month_to_date_cost_usd
+        from llm_review_log
+        where created_at >= %s
+          and scope = 'criterion'
+        """,
+        (month_start,),
+    )
+    row = await cursor.fetchone() or {}
+    month_to_date_cost_usd = coerce_llm_cost_usd(row.get("month_to_date_cost_usd"))
+    budget_cents = llm_review_monthly_budget_cents()
+    budget_usd = Decimal(budget_cents) / _USD_TO_CENTS
+    quota_enabled = budget_cents > 0
+    monthly_quota_reached = quota_enabled and month_to_date_cost_usd >= budget_usd
+    remaining_cents = (
+        llm_cost_usd_to_cents(max(budget_usd - month_to_date_cost_usd, Decimal("0")))
+        if quota_enabled
+        else None
+    )
+    return {
+        "enabled": llm_review_enabled(),
+        "monthlyBudgetCents": budget_cents,
+        "monthToDateCostUsd": float(month_to_date_cost_usd),
+        "monthToDateCostCents": llm_cost_usd_to_cents(month_to_date_cost_usd),
+        "remainingMonthlyBudgetCents": remaining_cents,
+        "monthlyQuotaReached": monthly_quota_reached,
+        "acceptGrayZoneOnBudgetExhaustion": llm_review_accept_gray_zone_on_budget_exhaustion(),
+        "monthStart": month_start,
+    }
+
+
+def resolve_criterion_gray_zone_runtime_resolution(
+    quota_snapshot: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    if not bool(quota_snapshot.get("enabled", True)):
+        return {
+            "reason": "llm_review_disabled",
+            "policy": "reject_gray_zone",
+            "providerDecision": "reject",
+            "finalDecision": "irrelevant",
+        }
+    if not bool(quota_snapshot.get("monthlyQuotaReached")):
+        return None
+    accept_gray_zone = bool(quota_snapshot.get("acceptGrayZoneOnBudgetExhaustion"))
+    return {
+        "reason": "monthly_budget_exhausted",
+        "policy": "accept_gray_zone" if accept_gray_zone else "reject_gray_zone",
+        "providerDecision": "approve" if accept_gray_zone else "reject",
+        "finalDecision": "relevant" if accept_gray_zone else "irrelevant",
+    }
+
+
+def build_llm_budget_gate_explain(
+    *,
+    quota_snapshot: Mapping[str, Any],
+    resolution: Mapping[str, Any],
+) -> dict[str, Any]:
+    month_start = quota_snapshot.get("monthStart")
+    return {
+        "reason": str(resolution.get("reason") or ""),
+        "policy": str(resolution.get("policy") or ""),
+        "enabled": bool(quota_snapshot.get("enabled", True)),
+        "monthlyQuotaReached": bool(quota_snapshot.get("monthlyQuotaReached")),
+        "acceptGrayZoneOnBudgetExhaustion": bool(
+            quota_snapshot.get("acceptGrayZoneOnBudgetExhaustion")
+        ),
+        "monthStartUtc": (
+            month_start.isoformat() if hasattr(month_start, "isoformat") else str(month_start or "")
+        ),
+        "monthToDateCostCents": int(quota_snapshot.get("monthToDateCostCents") or 0),
+        "budgetCents": int(quota_snapshot.get("monthlyBudgetCents") or 0),
+        "remainingMonthlyBudgetCents": quota_snapshot.get("remainingMonthlyBudgetCents"),
+    }
 
 
 def suppress_downstream_outbox(job: Job) -> bool:
@@ -323,6 +480,14 @@ def coerce_positive_int(value: Any, fallback: int = 1) -> int:
     except (TypeError, ValueError):
         return fallback
     return parsed if parsed > 0 else fallback
+
+
+def coerce_nullable_positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def coerce_bool(value: Any, fallback: bool = False) -> bool:
@@ -559,13 +724,28 @@ async def fetch_criterion_for_update(
 
 def extract_raw_rss_payload(article: dict[str, Any]) -> tuple[str, str, str]:
     raw_payload = article.get("raw_payload_json") or {}
+    entry_payload = raw_payload.get("entry") if isinstance(raw_payload, dict) else {}
     rss_payload = raw_payload.get("rss") if isinstance(raw_payload, dict) else {}
+    if not isinstance(entry_payload, dict):
+        entry_payload = {}
     if not isinstance(rss_payload, dict):
         rss_payload = {}
 
-    title_source = str(rss_payload.get("title") or article.get("title") or "")
-    summary_source = str(rss_payload.get("description") or article.get("lead") or "")
-    content_source = str(rss_payload.get("contentEncoded") or article.get("body") or "")
+    title_source = str(article.get("title") or entry_payload.get("title") or rss_payload.get("title") or "")
+    summary_source = str(
+        article.get("extracted_description")
+        or entry_payload.get("description")
+        or rss_payload.get("description")
+        or article.get("lead")
+        or ""
+    )
+    content_source = str(
+        article.get("full_content_html")
+        or entry_payload.get("contentEncoded")
+        or rss_payload.get("contentEncoded")
+        or article.get("body")
+        or ""
+    )
     return (title_source, summary_source, content_source)
 
 
@@ -1254,16 +1434,22 @@ def passes_hard_filters(
     if allowed_languages and article_lang and article_lang not in allowed_languages:
         reasons.append("language")
 
-    time_window_hours = coerce_positive_int(hard_constraints.get("time_window_hours"), 168)
+    time_window_hours = coerce_nullable_positive_int(hard_constraints.get("time_window_hours"))
     published_at = parse_datetime(article.get("published_at"))
     now = datetime.now(timezone.utc)
-    within_window = published_at is not None and hours_between(now, published_at) <= time_window_hours
+    within_window = (
+        True
+        if time_window_hours is None
+        else published_at is not None and hours_between(now, published_at) <= time_window_hours
+    )
     if not within_window:
         reasons.append("time_window")
 
-    for value in coerce_text_list(hard_constraints.get("must_have_terms")):
-        if value.casefold() not in article_text:
-            reasons.append(f"must_have:{value}")
+    must_have_terms = coerce_text_list(hard_constraints.get("must_have_terms"))
+    if must_have_terms and not any(
+        value.casefold() in article_text for value in must_have_terms
+    ):
+        reasons.append("must_have_any")
 
     for value in coerce_text_list(hard_constraints.get("must_not_have_terms")):
         if value.casefold() in article_text:
@@ -1295,29 +1481,34 @@ async def upsert_system_feed_result(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: str | uuid.UUID,
 ) -> dict[str, Any]:
+    article = await fetch_article_for_update(cursor, doc_id)
+    final_selection_result = await upsert_final_selection_result(
+        cursor,
+        article=article,
+    )
     previous_result = await fetch_system_feed_result_row(cursor, doc_id)
-    await cursor.execute(
-        """
-        select
-          count(*)::int as total_criteria_count,
-          count(*) filter (where decision = 'relevant')::int as relevant_criteria_count,
-          count(*) filter (where decision = 'irrelevant')::int as irrelevant_criteria_count,
-          count(*) filter (where decision = 'gray_zone')::int as pending_llm_criteria_count
-        from criterion_match_results
-        where doc_id = %s
-        """,
-        (doc_id,),
-    )
-    counts = await cursor.fetchone() or {}
+    total_criteria_count = int(final_selection_result["totalFilterCount"])
+    relevant_criteria_count = int(final_selection_result["matchedFilterCount"])
+    pending_llm_criteria_count = int(final_selection_result["grayZoneFilterCount"])
+    irrelevant_criteria_count = int(
+        final_selection_result["noMatchFilterCount"]
+    ) + int(final_selection_result["technicalFilteredOutCount"])
     summary = summarize_system_feed_result(
-        total_criteria_count=int(counts.get("total_criteria_count") or 0),
-        relevant_criteria_count=int(counts.get("relevant_criteria_count") or 0),
-        irrelevant_criteria_count=int(counts.get("irrelevant_criteria_count") or 0),
-        pending_llm_criteria_count=int(counts.get("pending_llm_criteria_count") or 0),
+        total_criteria_count=total_criteria_count,
+        relevant_criteria_count=relevant_criteria_count,
+        irrelevant_criteria_count=irrelevant_criteria_count,
+        pending_llm_criteria_count=pending_llm_criteria_count,
     )
-
-    explain_json = coerce_json_object(summary.get("explain_json"))
-    criteria_counts = coerce_json_object(explain_json.get("criteriaCounts"))
+    compatibility_decision = str(final_selection_result["compatSystemFeedDecision"])
+    compatibility_eligible = bool(final_selection_result["compatEligibleForFeed"])
+    explain_json = {
+        **coerce_json_object(summary.get("explain_json")),
+        "source": "final_selection_results",
+        "compatibilityProjection": True,
+        "finalSelection": coerce_json_object(final_selection_result.get("explain_json")),
+    }
+    if compatibility_decision != str(summary.get("decision") or ""):
+        explain_json["compatibilityDecisionOverride"] = compatibility_decision
     await cursor.execute(
         """
         insert into system_feed_results (
@@ -1344,18 +1535,25 @@ async def upsert_system_feed_result(
         """,
         (
             doc_id,
-            str(summary["decision"]),
-            bool(summary["eligible_for_feed"]),
-            int(criteria_counts.get("total") or 0),
-            int(criteria_counts.get("relevant") or 0),
-            int(criteria_counts.get("irrelevant") or 0),
-            int(criteria_counts.get("pendingLlm") or 0),
+            compatibility_decision,
+            compatibility_eligible,
+            total_criteria_count,
+            relevant_criteria_count,
+            irrelevant_criteria_count,
+            pending_llm_criteria_count,
             Json(make_json_safe(explain_json)),
         ),
     )
     return {
-        "decision": str(summary["decision"]),
-        "eligible_for_feed": bool(summary["eligible_for_feed"]),
+        "selection_source": "final_selection_results",
+        "decision": compatibility_decision,
+        "eligible_for_feed": compatibility_eligible,
+        "final_selection_decision": str(final_selection_result["decision"]),
+        "final_selection_selected": bool(final_selection_result["isSelected"]),
+        "previous_final_selection_decision": final_selection_result.get("previousDecision"),
+        "previous_final_selection_selected": bool(
+            final_selection_result.get("previousSelected")
+        ),
         "previous_decision": (
             str(previous_result.get("decision") or "")
             if previous_result is not None
@@ -1366,6 +1564,176 @@ async def upsert_system_feed_result(
             if previous_result is not None
             else False
         ),
+    }
+
+
+async def fetch_final_selection_result_row(
+    cursor: psycopg.AsyncCursor[Any],
+    doc_id: str | uuid.UUID,
+) -> dict[str, Any] | None:
+    await cursor.execute(
+        """
+        select
+          final_decision,
+          is_selected,
+          compat_system_feed_decision,
+          verification_target_type,
+          verification_target_id,
+          verification_state,
+          total_filter_count,
+          matched_filter_count,
+          no_match_filter_count,
+          gray_zone_filter_count,
+          technical_filtered_out_count,
+          explain_json
+        from final_selection_results
+        where doc_id = %s
+        """,
+        (doc_id,),
+    )
+    return await cursor.fetchone()
+
+
+async def upsert_final_selection_result(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    article: Mapping[str, Any],
+) -> dict[str, Any]:
+    doc_id = uuid.UUID(str(article["doc_id"]))
+    previous_result = await fetch_final_selection_result_row(cursor, doc_id)
+    selection_context = await resolve_interest_filter_context(
+        cursor,
+        article=article,
+        prefer_story_cluster=True,
+    )
+    await cursor.execute(
+        """
+        select
+          count(*)::int as total_filter_count,
+          count(*) filter (where semantic_decision = 'match')::int as matched_filter_count,
+          count(*) filter (where semantic_decision = 'no_match')::int as no_match_filter_count,
+          count(*) filter (where semantic_decision = 'gray_zone')::int as gray_zone_filter_count,
+          count(*) filter (where technical_filter_state = 'filtered_out')::int as technical_filtered_out_count
+        from interest_filter_results
+        where doc_id = %s
+          and filter_scope = 'system_criterion'
+        """,
+        (doc_id,),
+    )
+    counts = await cursor.fetchone() or {}
+    summary = summarize_final_selection_result(
+        total_filter_count=int(counts.get("total_filter_count") or 0),
+        matched_filter_count=int(counts.get("matched_filter_count") or 0),
+        no_match_filter_count=int(counts.get("no_match_filter_count") or 0),
+        gray_zone_filter_count=int(counts.get("gray_zone_filter_count") or 0),
+        technical_filtered_out_count=int(counts.get("technical_filtered_out_count") or 0),
+        verification_state=selection_context.get("verificationState"),
+    )
+    explain_json = coerce_json_object(summary.get("explain_json"))
+    explain_json["canonicalDocumentId"] = (
+        None
+        if selection_context.get("canonicalDocumentId") is None
+        else str(selection_context["canonicalDocumentId"])
+    )
+    explain_json["storyClusterId"] = (
+        None
+        if selection_context.get("storyClusterId") is None
+        else str(selection_context["storyClusterId"])
+    )
+    explain_json["verification"] = {
+        "targetType": selection_context.get("verificationTargetType"),
+        "targetId": (
+            None
+            if selection_context.get("verificationTargetId") is None
+            else str(selection_context["verificationTargetId"])
+        ),
+        "state": selection_context.get("verificationState"),
+    }
+    await cursor.execute(
+        """
+        insert into final_selection_results (
+          doc_id,
+          canonical_document_id,
+          story_cluster_id,
+          verification_target_type,
+          verification_target_id,
+          verification_state,
+          total_filter_count,
+          matched_filter_count,
+          no_match_filter_count,
+          gray_zone_filter_count,
+          technical_filtered_out_count,
+          final_decision,
+          is_selected,
+          compat_system_feed_decision,
+          explain_json
+        )
+        values (
+          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb
+        )
+        on conflict (doc_id) do update
+        set
+          canonical_document_id = excluded.canonical_document_id,
+          story_cluster_id = excluded.story_cluster_id,
+          verification_target_type = excluded.verification_target_type,
+          verification_target_id = excluded.verification_target_id,
+          verification_state = excluded.verification_state,
+          total_filter_count = excluded.total_filter_count,
+          matched_filter_count = excluded.matched_filter_count,
+          no_match_filter_count = excluded.no_match_filter_count,
+          gray_zone_filter_count = excluded.gray_zone_filter_count,
+          technical_filtered_out_count = excluded.technical_filtered_out_count,
+          final_decision = excluded.final_decision,
+          is_selected = excluded.is_selected,
+          compat_system_feed_decision = excluded.compat_system_feed_decision,
+          explain_json = excluded.explain_json,
+          updated_at = now()
+        """,
+        (
+            doc_id,
+            selection_context.get("canonicalDocumentId"),
+            selection_context.get("storyClusterId"),
+            selection_context.get("verificationTargetType"),
+            selection_context.get("verificationTargetId"),
+            selection_context.get("verificationState"),
+            int(counts.get("total_filter_count") or 0),
+            int(counts.get("matched_filter_count") or 0),
+            int(counts.get("no_match_filter_count") or 0),
+            int(counts.get("gray_zone_filter_count") or 0),
+            int(counts.get("technical_filtered_out_count") or 0),
+            str(summary["decision"]),
+            bool(summary["isSelected"]),
+            str(summary["compatSystemFeedDecision"]),
+            Json(make_json_safe(explain_json)),
+        ),
+    )
+    return {
+        "decision": str(summary["decision"]),
+        "isSelected": bool(summary["isSelected"]),
+        "compatSystemFeedDecision": str(summary["compatSystemFeedDecision"]),
+        "compatEligibleForFeed": bool(summary["compatEligibleForFeed"]),
+        "selectionReason": str(summary["selectionReason"]),
+        "verificationState": selection_context.get("verificationState"),
+        "verificationTargetType": selection_context.get("verificationTargetType"),
+        "verificationTargetId": selection_context.get("verificationTargetId"),
+        "canonicalDocumentId": selection_context.get("canonicalDocumentId"),
+        "storyClusterId": selection_context.get("storyClusterId"),
+        "totalFilterCount": int(counts.get("total_filter_count") or 0),
+        "matchedFilterCount": int(counts.get("matched_filter_count") or 0),
+        "noMatchFilterCount": int(counts.get("no_match_filter_count") or 0),
+        "grayZoneFilterCount": int(counts.get("gray_zone_filter_count") or 0),
+        "technicalFilteredOutCount": int(counts.get("technical_filtered_out_count") or 0),
+        "previousDecision": (
+            str(previous_result.get("final_decision") or "")
+            if previous_result is not None
+            else None
+        ),
+        "previousSelected": (
+            bool(previous_result.get("is_selected"))
+            if previous_result is not None
+            else False
+        ),
+        "explain_json": explain_json,
     }
 
 
@@ -1391,7 +1759,49 @@ async def fetch_system_feed_result_row(
     return await cursor.fetchone()
 
 
+async def fetch_selection_gate_result_row(
+    cursor: psycopg.AsyncCursor[Any],
+    doc_id: str | uuid.UUID,
+) -> dict[str, Any] | None:
+    final_selection_result = await fetch_final_selection_result_row(cursor, doc_id)
+    if final_selection_result is not None:
+        return {
+            "selection_source": "final_selection_results",
+            "decision": str(final_selection_result.get("final_decision") or ""),
+            "is_selected": bool(final_selection_result.get("is_selected")),
+            "compat_system_feed_decision": str(
+                final_selection_result.get("compat_system_feed_decision") or ""
+            ),
+            "verification_target_type": final_selection_result.get(
+                "verification_target_type"
+            ),
+            "verification_target_id": final_selection_result.get("verification_target_id"),
+            "verification_state": final_selection_result.get("verification_state"),
+        }
+
+    system_feed_result = await fetch_system_feed_result_row(cursor, doc_id)
+    if system_feed_result is None:
+        return None
+
+    return {
+        "selection_source": "system_feed_results",
+        "decision": str(system_feed_result.get("decision") or ""),
+        "is_selected": bool(system_feed_result.get("eligible_for_feed")),
+        "compat_system_feed_decision": str(system_feed_result.get("decision") or ""),
+        "verification_target_type": None,
+        "verification_target_id": None,
+        "verification_state": None,
+    }
+
+
 def should_dispatch_clustering(system_feed_result: Mapping[str, Any]) -> bool:
+    if (
+        "final_selection_selected" in system_feed_result
+        or "previous_final_selection_selected" in system_feed_result
+    ):
+        return bool(system_feed_result.get("final_selection_selected")) and not bool(
+            system_feed_result.get("previous_final_selection_selected")
+        )
     return bool(system_feed_result.get("eligible_for_feed")) and not bool(
         system_feed_result.get("previous_eligible_for_feed")
     )
@@ -1403,8 +1813,8 @@ async def is_article_eligible_for_personalization(
 ) -> bool:
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
-            result = await fetch_system_feed_result_row(cursor, doc_id)
-    return bool(result and result.get("eligible_for_feed"))
+            result = await fetch_selection_gate_result_row(cursor, doc_id)
+    return bool(result and result.get("is_selected"))
 
 
 async def list_compiled_criteria(
@@ -1849,6 +2259,7 @@ async def fetch_user_notification_channels(
         from user_notification_channels
         where user_id = %s
           and is_enabled = true
+          and channel_type in ('web_push', 'telegram')
         order by channel_type, created_at
         """,
         (user_id,),
@@ -1946,6 +2357,485 @@ async def update_notification_delivery_status(
             notification_id,
         ),
     )
+
+
+async def fetch_user_digest_channel(
+    cursor: psycopg.AsyncCursor[Any],
+    user_id: uuid.UUID,
+) -> dict[str, Any] | None:
+    await cursor.execute(
+        """
+        select
+          channel_binding_id::text as channel_binding_id,
+          config_json,
+          verified_at
+        from user_notification_channels
+        where user_id = %s
+          and channel_type = 'email_digest'
+          and is_enabled = true
+        order by created_at desc
+        limit 1
+        """,
+        (user_id,),
+    )
+    return await cursor.fetchone()
+
+
+async def insert_digest_delivery_log_row(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    user_id: uuid.UUID,
+    digest_kind: str,
+    cadence: str | None,
+    status: str,
+    recipient_email: str,
+    subject: str,
+    body_text: str,
+    body_html: str,
+    metadata_json: dict[str, Any] | None = None,
+    error_text: str | None = None,
+) -> uuid.UUID:
+    await cursor.execute(
+        """
+        insert into digest_delivery_log (
+          user_id,
+          digest_kind,
+          cadence,
+          status,
+          recipient_email,
+          subject,
+          body_text,
+          body_html,
+          metadata_json,
+          error_text
+        )
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+        returning digest_delivery_id
+        """,
+        (
+            user_id,
+            digest_kind,
+            cadence,
+            status,
+            recipient_email,
+            subject,
+            body_text,
+            body_html,
+            Json(make_json_safe(metadata_json or {})),
+            error_text,
+        ),
+    )
+    row = await cursor.fetchone()
+    return row["digest_delivery_id"]
+
+
+async def upsert_digest_delivery_items(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    digest_delivery_id: uuid.UUID,
+    content_item_ids: Sequence[str],
+) -> None:
+    for index, content_item_id in enumerate(content_item_ids):
+        await cursor.execute(
+            """
+            insert into digest_delivery_items (
+              digest_delivery_id,
+              item_position,
+              content_item_id
+            )
+            values (%s, %s, %s)
+            on conflict (digest_delivery_id, item_position) do update
+            set content_item_id = excluded.content_item_id
+            """,
+            (digest_delivery_id, index, content_item_id),
+        )
+
+
+async def update_digest_delivery_status(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    digest_delivery_id: uuid.UUID,
+    status: str,
+    error_text: str | None = None,
+) -> None:
+    await cursor.execute(
+        """
+        update digest_delivery_log
+        set
+          status = %s,
+          error_text = %s,
+          sent_at = case
+            when %s = 'sent' then coalesce(sent_at, now())
+            else sent_at
+          end,
+          updated_at = now()
+        where digest_delivery_id = %s
+        """,
+        (status, error_text, status, digest_delivery_id),
+    )
+
+
+async def update_user_digest_settings_runtime_state(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    user_id: uuid.UUID,
+    next_run_at: datetime | None,
+    last_sent_at: datetime | None = None,
+    last_delivery_status: str | None = None,
+    last_delivery_error: str | None = None,
+) -> None:
+    await cursor.execute(
+        """
+        update user_digest_settings
+        set
+          next_run_at = %s,
+          last_sent_at = coalesce(%s, last_sent_at),
+          last_delivery_status = %s,
+          last_delivery_error = %s,
+          updated_at = now()
+        where user_id = %s
+        """,
+        (
+            next_run_at,
+            last_sent_at,
+            last_delivery_status,
+            last_delivery_error,
+            user_id,
+        ),
+    )
+
+
+async def fetch_queued_manual_digest_rows(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    await cursor.execute(
+        """
+        select
+          digest_delivery_id,
+          user_id,
+          recipient_email,
+          subject,
+          body_text,
+          body_html
+        from digest_delivery_log
+        where digest_kind = 'manual_saved'
+          and status = 'queued'
+        order by requested_at asc
+        limit %s
+        """,
+        (limit,),
+    )
+    return list(await cursor.fetchall())
+
+
+async def fetch_due_digest_settings_rows(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    await cursor.execute(
+        """
+        select
+          uds.user_id,
+          uds.is_enabled,
+          uds.cadence,
+          uds.send_hour,
+          uds.send_minute,
+          uds.timezone,
+          uds.skip_if_empty,
+          uds.next_run_at,
+          uds.last_sent_at,
+          uds.last_delivery_status,
+          uds.last_delivery_error
+        from user_digest_settings uds
+        where uds.is_enabled = true
+          and (uds.next_run_at is null or uds.next_run_at <= now())
+        order by coalesce(uds.next_run_at, uds.created_at) asc
+        limit %s
+        """,
+        (limit,),
+    )
+    return list(await cursor.fetchall())
+
+
+async def fetch_scheduled_digest_items(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    user_id: uuid.UUID,
+    since_at: datetime | None,
+    until_at: datetime,
+) -> list[DigestItem]:
+    await cursor.execute(
+        """
+        with ranked_matches as (
+          select
+            'editorial:' || a.doc_id::text as content_item_id,
+            a.title,
+            a.url,
+            a.lead,
+            coalesce(a.extracted_source_name, sc.name) as source_name,
+            coalesce(a.published_at, a.ingested_at)::text as published_at,
+            row_number() over (
+              partition by coalesce(a.canonical_doc_id, a.doc_id)
+              order by
+                a.published_at desc nulls last,
+                a.ingested_at desc,
+                a.doc_id
+            ) as family_rank
+          from interest_match_results imr
+          join articles a on a.doc_id = imr.doc_id
+          join source_channels sc on sc.channel_id = a.channel_id
+          left join final_selection_results fsr on fsr.doc_id = a.doc_id
+          left join system_feed_results sfr on sfr.doc_id = a.doc_id
+          where imr.user_id = %s
+            and imr.decision = 'notify'
+            and imr.created_at <= %s
+            and (%s::timestamptz is null or imr.created_at > %s::timestamptz)
+            and a.visibility_state = 'visible'
+            and coalesce(fsr.is_selected, coalesce(sfr.eligible_for_feed, false)) = true
+        )
+        select
+          content_item_id,
+          title,
+          url,
+          lead,
+          source_name,
+          published_at
+        from ranked_matches
+        where family_rank = 1
+        order by published_at desc nulls last, content_item_id
+        """,
+        (user_id, until_at, since_at, since_at),
+    )
+    rows = await cursor.fetchall()
+    return [
+        DigestItem(
+            content_item_id=str(row.get("content_item_id") or ""),
+            title=str(row.get("title") or "Untitled article"),
+            url=str(row.get("url") or "").strip() or None,
+            summary=str(row.get("lead") or "").strip() or None,
+            source_name=str(row.get("source_name") or "").strip() or None,
+            published_at=str(row.get("published_at") or "").strip() or None,
+        )
+        for row in rows
+        if str(row.get("content_item_id") or "").strip()
+    ]
+
+
+async def process_queued_manual_digests() -> None:
+    connection = await open_connection()
+    async with connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                rows = await fetch_queued_manual_digest_rows(cursor)
+                for row in rows:
+                    digest_delivery_id = row["digest_delivery_id"]
+                    recipient_email = str(row.get("recipient_email") or "").strip()
+                    if not recipient_email:
+                        await update_digest_delivery_status(
+                            cursor,
+                            digest_delivery_id=digest_delivery_id,
+                            status="failed",
+                            error_text="Recipient email is missing.",
+                        )
+                        continue
+
+                    attempt = dispatch_channel_message(
+                        "email_digest",
+                        {"email": recipient_email},
+                        str(row.get("subject") or "Saved digest"),
+                        str(row.get("body_text") or ""),
+                        body_html=str(row.get("body_html") or "").strip() or None,
+                    )
+                    await update_digest_delivery_status(
+                        cursor,
+                        digest_delivery_id=digest_delivery_id,
+                        status=attempt.status,
+                        error_text=None if attempt.status == "sent" else attempt.detail,
+                    )
+
+
+async def process_due_scheduled_digests() -> None:
+    now = datetime.now(timezone.utc)
+    connection = await open_connection()
+    async with connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                rows = await fetch_due_digest_settings_rows(cursor)
+                for row in rows:
+                    user_id = row["user_id"]
+                    cadence = coerce_digest_cadence(row.get("cadence"))
+                    send_hour = coerce_digest_send_hour(row.get("send_hour"))
+                    send_minute = coerce_digest_send_minute(row.get("send_minute"))
+                    timezone_name = str(row.get("timezone") or "").strip()
+                    next_run_at = parse_datetime(row.get("next_run_at"))
+                    last_sent_at = parse_datetime(row.get("last_sent_at"))
+                    skip_if_empty = bool(row.get("skip_if_empty", True))
+
+                    try:
+                        validated_timezone = validate_timezone_name(timezone_name)
+                    except ValueError as error:
+                        await update_user_digest_settings_runtime_state(
+                            cursor,
+                            user_id=user_id,
+                            next_run_at=None,
+                            last_delivery_status="failed",
+                            last_delivery_error=str(error),
+                        )
+                        continue
+
+                    if next_run_at is None:
+                        initialized_next_run = compute_next_digest_run_at(
+                            now=now,
+                            cadence=cadence,
+                            timezone_name=validated_timezone,
+                            send_hour=send_hour,
+                            send_minute=send_minute,
+                        )
+                        await update_user_digest_settings_runtime_state(
+                            cursor,
+                            user_id=user_id,
+                            next_run_at=initialized_next_run,
+                            last_delivery_status="queued",
+                            last_delivery_error=None,
+                        )
+                        continue
+
+                    recipient_channel = await fetch_user_digest_channel(cursor, user_id)
+                    recipient_email = (
+                        str(
+                            (
+                                recipient_channel.get("config_json")
+                                if recipient_channel and isinstance(recipient_channel.get("config_json"), dict)
+                                else {}
+                            ).get("email")
+                            or ""
+                        ).strip()
+                    )
+                    next_scheduled_run = compute_next_digest_run_at(
+                        now=now,
+                        cadence=cadence,
+                        timezone_name=validated_timezone,
+                        send_hour=send_hour,
+                        send_minute=send_minute,
+                        base_run_at=next_run_at,
+                    )
+
+                    if not recipient_email:
+                        await update_user_digest_settings_runtime_state(
+                            cursor,
+                            user_id=user_id,
+                            next_run_at=next_scheduled_run,
+                            last_delivery_status="failed",
+                            last_delivery_error="Connected digest email is missing.",
+                        )
+                        continue
+
+                    run_cutoff = now
+                    items = await fetch_scheduled_digest_items(
+                        cursor,
+                        user_id=user_id,
+                        since_at=last_sent_at,
+                        until_at=run_cutoff,
+                    )
+                    subject = build_digest_subject(
+                        digest_kind="scheduled_matches",
+                        item_count=len(items),
+                        cadence=cadence,
+                    )
+
+                    if not items and skip_if_empty:
+                        await insert_digest_delivery_log_row(
+                            cursor,
+                            user_id=user_id,
+                            digest_kind="scheduled_matches",
+                            cadence=cadence,
+                            status="skipped_empty",
+                            recipient_email=recipient_email,
+                            subject=subject,
+                            body_text="",
+                            body_html="",
+                            metadata_json={
+                                "itemCount": 0,
+                                "skipIfEmpty": True,
+                            },
+                        )
+                        await update_user_digest_settings_runtime_state(
+                            cursor,
+                            user_id=user_id,
+                            next_run_at=next_scheduled_run,
+                            last_delivery_status="skipped_empty",
+                            last_delivery_error=None,
+                        )
+                        continue
+
+                    intro = (
+                        "New personalized matches from the system-selected collection since your last successful digest."
+                    )
+                    body_text = render_digest_text(
+                        heading=subject,
+                        intro=intro,
+                        items=items,
+                    )
+                    body_html = render_digest_html(
+                        heading=subject,
+                        intro=intro,
+                        items=items,
+                    )
+                    digest_delivery_id = await insert_digest_delivery_log_row(
+                        cursor,
+                        user_id=user_id,
+                        digest_kind="scheduled_matches",
+                        cadence=cadence,
+                        status="queued",
+                        recipient_email=recipient_email,
+                        subject=subject,
+                        body_text=body_text,
+                        body_html=body_html,
+                        metadata_json={
+                            "itemCount": len(items),
+                            "scheduledRunAt": next_run_at.isoformat(),
+                            "windowEnd": run_cutoff.isoformat(),
+                            "windowStart": last_sent_at.isoformat() if last_sent_at else None,
+                        },
+                    )
+                    await upsert_digest_delivery_items(
+                        cursor,
+                        digest_delivery_id=digest_delivery_id,
+                        content_item_ids=[item.content_item_id for item in items],
+                    )
+                    attempt = dispatch_channel_message(
+                        "email_digest",
+                        {"email": recipient_email},
+                        subject,
+                        body_text,
+                        body_html=body_html,
+                    )
+                    await update_digest_delivery_status(
+                        cursor,
+                        digest_delivery_id=digest_delivery_id,
+                        status=attempt.status,
+                        error_text=None if attempt.status == "sent" else attempt.detail,
+                    )
+                    if attempt.status == "sent":
+                        await update_user_digest_settings_runtime_state(
+                            cursor,
+                            user_id=user_id,
+                            next_run_at=next_scheduled_run,
+                            last_sent_at=run_cutoff,
+                            last_delivery_status="sent",
+                            last_delivery_error=None,
+                        )
+                    else:
+                        await update_user_digest_settings_runtime_state(
+                            cursor,
+                            user_id=user_id,
+                            next_run_at=now + timedelta(minutes=15),
+                            last_delivery_status="failed",
+                            last_delivery_error=attempt.detail,
+                        )
 
 
 async def insert_notification_suppression(
@@ -2124,6 +3014,24 @@ async def process_normalize(job: Job, _job_token: str) -> dict[str, Any]:
     return {"status": "normalized", "docId": doc_id}
 
 
+async def process_article_extract(job: Job, _job_token: str) -> dict[str, Any]:
+    from .task_engine.pipeline_plugins import ArticleExtractPlugin
+
+    plugin = ArticleExtractPlugin()
+    event_id = str(job.data.get("eventId"))
+    doc_id = str(job.data.get("docId"))
+    force_enrichment = coerce_bool(job.data.get("forceEnrichment"))
+
+    return await plugin.execute(
+        {},
+        {
+            "event_id": event_id,
+            "doc_id": doc_id,
+            "force_enrichment": force_enrichment,
+        },
+    )
+
+
 async def process_dedup(job: Job, _job_token: str) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
@@ -2195,6 +3103,13 @@ async def process_dedup(job: Job, _job_token: str) -> dict[str, Any]:
                         next_state,
                         doc_id,
                     ),
+                )
+                await sync_article_canonical_document(
+                    cursor,
+                    article,
+                    canonical_document_id=canonical_doc_id,
+                    is_exact_duplicate=is_exact_duplicate,
+                    is_near_duplicate=is_near_duplicate,
                 )
                 await record_processed_event(cursor, DEDUP_CONSUMER, event_id)
 
@@ -2388,12 +3303,34 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
                 current_state = str(article.get("processing_state") or "raw")
                 if PROCESSING_STATE_ORDER.get(current_state, 0) < PROCESSING_STATE_ORDER["embedded"]:
                     raise ValueError(f"Article {doc_id} must be embedded before clustering.")
-                system_feed_result = await fetch_system_feed_result_row(cursor, article["doc_id"])
-                if system_feed_result is None or not bool(system_feed_result.get("eligible_for_feed")):
+                story_cluster_result = await sync_story_cluster_and_verification(
+                    cursor,
+                    article=article,
+                    vector_version=vector_version,
+                )
+                system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
+                if system_feed_result is None or not bool(
+                    system_feed_result.get(
+                        "final_selection_selected",
+                        system_feed_result.get("eligible_for_feed"),
+                    )
+                ):
                     await record_processed_event(cursor, CLUSTER_CONSUMER, event_id)
                     return {
                         "status": "skipped-system-feed",
                         "docId": doc_id,
+                        "selectionSource": str(
+                            system_feed_result.get("selection_source")
+                            if system_feed_result is not None
+                            else "pending"
+                        ),
+                        "storyClusterId": story_cluster_result.get("storyClusterId"),
+                        "storyVerificationState": story_cluster_result.get(
+                            "storyVerificationState"
+                        ),
+                        "canonicalVerificationState": story_cluster_result.get(
+                            "canonicalVerificationState"
+                        ),
                     }
 
                 article_features = await fetch_article_features_row(cursor, article["doc_id"])
@@ -2483,6 +3420,12 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
         "docId": doc_id,
         "isNewCluster": is_new_cluster,
         "clusterId": str(cluster_id),
+        "storyClusterId": story_cluster_result.get("storyClusterId"),
+        "storyVerificationState": story_cluster_result.get("storyVerificationState"),
+        "canonicalVerificationState": story_cluster_result.get(
+            "canonicalVerificationState"
+        ),
+        "isNewStoryCluster": bool(story_cluster_result.get("isNewStoryCluster")),
     }
 
 
@@ -2507,6 +3450,12 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                 article_vectors = await fetch_article_vectors(cursor, article["doc_id"])
                 criteria_rows = await list_compiled_criteria(cursor)
                 prompt_template = await find_prompt_template(cursor, "criteria")
+                llm_quota_snapshot = await get_llm_review_monthly_quota_snapshot(cursor)
+                filter_context = await resolve_interest_filter_context(
+                    cursor,
+                    article=article,
+                    prefer_story_cluster=False,
+                )
                 criteria_count = 0
 
                 for criterion in criteria_rows:
@@ -2580,6 +3529,17 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                         "S_final": score_final,
                         "metaComponents": meta_components,
                     }
+                    runtime_resolution = None
+                    if decision == "gray_zone":
+                        runtime_resolution = resolve_criterion_gray_zone_runtime_resolution(
+                            llm_quota_snapshot
+                        )
+                        if runtime_resolution is not None:
+                            decision = str(runtime_resolution["finalDecision"])
+                            explain_json["llmBudgetGate"] = build_llm_budget_gate_explain(
+                                quota_snapshot=llm_quota_snapshot,
+                                resolution=runtime_resolution,
+                            )
                     await cursor.execute(
                         """
                         insert into criterion_match_results (
@@ -2617,7 +3577,40 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                             Json(make_json_safe(explain_json)),
                         ),
                     )
-                    if decision == "gray_zone" and not historical_backfill:
+                    technical_filter_state, semantic_decision = resolve_criterion_filter_outcome(
+                        pass_filters=pass_filters,
+                        compat_decision=decision,
+                    )
+                    await upsert_interest_filter_result(
+                        cursor,
+                        filter_scope="system_criterion",
+                        doc_id=uuid.UUID(str(article["doc_id"])),
+                        canonical_document_id=filter_context["canonicalDocumentId"],
+                        story_cluster_id=filter_context["storyClusterId"],
+                        user_id=None,
+                        criterion_id=uuid.UUID(str(criterion["criterion_id"])),
+                        interest_id=None,
+                        technical_filter_state=technical_filter_state,
+                        semantic_decision=semantic_decision,
+                        compat_decision=decision,
+                        verification_target_type=filter_context["verificationTargetType"],
+                        verification_target_id=filter_context["verificationTargetId"],
+                        verification_state=filter_context["verificationState"],
+                        semantic_score=score_final,
+                        explain_json=build_interest_filter_explain(
+                            base_explain_json=make_json_safe(explain_json),
+                            technical_filter_state=technical_filter_state,
+                            semantic_decision=semantic_decision,
+                            compat_decision=decision,
+                            filter_scope="system_criterion",
+                            context=filter_context,
+                        ),
+                    )
+                    if (
+                        decision == "gray_zone"
+                        and runtime_resolution is None
+                        and not historical_backfill
+                    ):
                         await insert_outbox_event(
                             cursor,
                             LLM_REVIEW_REQUESTED_EVENT,
@@ -2678,16 +3671,29 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                     return {"status": "duplicate-event", "docId": doc_id}
 
                 article = await fetch_article_for_update(cursor, doc_id)
-                system_feed_result = await fetch_system_feed_result_row(cursor, article["doc_id"])
-                if system_feed_result is None or not bool(system_feed_result.get("eligible_for_feed")):
+                selection_gate = await fetch_selection_gate_result_row(
+                    cursor,
+                    article["doc_id"],
+                )
+                if selection_gate is None or not bool(selection_gate.get("is_selected")):
                     await record_processed_event(cursor, INTEREST_MATCH_CONSUMER, event_id)
                     return {
                         "status": "skipped-system-feed",
                         "docId": doc_id,
                         "interestCount": 0,
+                        "selectionSource": str(
+                            selection_gate.get("selection_source")
+                            if selection_gate is not None
+                            else "pending"
+                        ),
                     }
                 article_features = await fetch_article_features_row(cursor, article["doc_id"])
                 article_vectors = await fetch_article_vectors(cursor, article["doc_id"])
+                filter_context = await resolve_interest_filter_context(
+                    cursor,
+                    article=article,
+                    prefer_story_cluster=True,
+                )
                 if scoped_user_id or scoped_interest_id:
                     cleanup_filters = ["doc_id = %s"]
                     cleanup_params: list[Any] = [article["doc_id"]]
@@ -2703,6 +3709,21 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                         where {' and '.join(cleanup_filters)}
                         """,
                         tuple(cleanup_params),
+                    )
+                    interest_filter_cleanup_filters = ["doc_id = %s", "filter_scope = 'user_interest'"]
+                    interest_filter_cleanup_params: list[Any] = [article["doc_id"]]
+                    if scoped_user_id:
+                        interest_filter_cleanup_filters.append("user_id = %s")
+                        interest_filter_cleanup_params.append(scoped_user_id)
+                    if scoped_interest_id:
+                        interest_filter_cleanup_filters.append("interest_id = %s")
+                        interest_filter_cleanup_params.append(scoped_interest_id)
+                    await cursor.execute(
+                        f"""
+                        delete from interest_filter_results
+                        where {' and '.join(interest_filter_cleanup_filters)}
+                        """,
+                        tuple(interest_filter_cleanup_params),
                     )
 
                 interest_rows = await list_compiled_interests(
@@ -2807,6 +3828,7 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                             "user_id": user_id,
                             "interest_id": interest_id,
                             "cluster_id": cluster_id,
+                            "pass_filters": pass_filters,
                             "score_pos": positive_score,
                             "score_neg": negative_score,
                             "score_meta": meta_score,
@@ -2883,6 +3905,35 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                             row["score_user"],
                             row["decision"],
                             Json(make_json_safe(row["explain_json"])),
+                        ),
+                    )
+                    technical_filter_state, semantic_decision = resolve_user_interest_filter_outcome(
+                        pass_filters=bool(row.get("pass_filters")),
+                        compat_decision=str(row["decision"]),
+                    )
+                    await upsert_interest_filter_result(
+                        cursor,
+                        filter_scope="user_interest",
+                        doc_id=uuid.UUID(str(row["doc_id"])),
+                        canonical_document_id=filter_context["canonicalDocumentId"],
+                        story_cluster_id=filter_context["storyClusterId"],
+                        user_id=row["user_id"],
+                        criterion_id=None,
+                        interest_id=row["interest_id"],
+                        technical_filter_state=technical_filter_state,
+                        semantic_decision=semantic_decision,
+                        compat_decision=str(row["decision"]),
+                        verification_target_type=filter_context["verificationTargetType"],
+                        verification_target_id=filter_context["verificationTargetId"],
+                        verification_state=filter_context["verificationState"],
+                        semantic_score=float(row["score_interest"]),
+                        explain_json=build_interest_filter_explain(
+                            base_explain_json=make_json_safe(row["explain_json"]),
+                            technical_filter_state=technical_filter_state,
+                            semantic_decision=semantic_decision,
+                            compat_decision=str(row["decision"]),
+                            filter_scope="user_interest",
+                            context=filter_context,
                         ),
                     )
 
@@ -3181,6 +4232,99 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                     )
                     review_context = await cursor.fetchone() or {}
 
+                if scope == "criterion":
+                    llm_quota_snapshot = await get_llm_review_monthly_quota_snapshot(cursor)
+                    runtime_resolution = resolve_criterion_gray_zone_runtime_resolution(
+                        llm_quota_snapshot
+                    )
+                    if runtime_resolution is not None:
+                        final_decision = str(runtime_resolution["finalDecision"])
+                        llm_budget_gate_explain = build_llm_budget_gate_explain(
+                            quota_snapshot=llm_quota_snapshot,
+                            resolution=runtime_resolution,
+                        )
+                        await cursor.execute(
+                            """
+                            update criterion_match_results
+                            set
+                              decision = %s,
+                              explain_json = explain_json || %s::jsonb
+                            where doc_id = %s and criterion_id = %s
+                        """,
+                            (
+                                final_decision,
+                                Json(
+                                    {
+                                        "llmBudgetGate": llm_budget_gate_explain
+                                    }
+                                ),
+                                article["doc_id"],
+                                target_id,
+                            ),
+                        )
+                        filter_context = await resolve_interest_filter_context(
+                            cursor,
+                            article=article,
+                            prefer_story_cluster=False,
+                        )
+                        technical_filter_state, semantic_decision = resolve_criterion_filter_outcome(
+                            pass_filters=True,
+                            compat_decision=final_decision,
+                        )
+                        base_filter_explain = coerce_json_object(review_context.get("explain_json"))
+                        base_filter_explain["llmBudgetGate"] = llm_budget_gate_explain
+                        await upsert_interest_filter_result(
+                            cursor,
+                            filter_scope="system_criterion",
+                            doc_id=uuid.UUID(str(article["doc_id"])),
+                            canonical_document_id=filter_context["canonicalDocumentId"],
+                            story_cluster_id=filter_context["storyClusterId"],
+                            user_id=None,
+                            criterion_id=uuid.UUID(str(target_id)),
+                            interest_id=None,
+                            technical_filter_state=technical_filter_state,
+                            semantic_decision=semantic_decision,
+                            compat_decision=final_decision,
+                            verification_target_type=filter_context["verificationTargetType"],
+                            verification_target_id=filter_context["verificationTargetId"],
+                            verification_state=filter_context["verificationState"],
+                            semantic_score=float(
+                                coerce_json_object(review_context.get("explain_json")).get(
+                                    "S_final"
+                                )
+                                or 0.0
+                            ),
+                            explain_json=build_interest_filter_explain(
+                                base_explain_json=make_json_safe(base_filter_explain),
+                                technical_filter_state=technical_filter_state,
+                                semantic_decision=semantic_decision,
+                                compat_decision=final_decision,
+                                filter_scope="system_criterion",
+                                context=filter_context,
+                            ),
+                        )
+                        system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
+                        if (
+                            should_dispatch_clustering(system_feed_result)
+                            and not historical_backfill
+                            and not suppress_pipeline_fanout
+                        ):
+                            await insert_outbox_event(
+                                cursor,
+                                ARTICLE_CRITERIA_MATCHED_EVENT,
+                                "article",
+                                article["doc_id"],
+                                {"docId": str(article["doc_id"]), "version": 1},
+                            )
+                        await record_processed_event(cursor, LLM_REVIEW_CONSUMER, event_id)
+                        return {
+                            "status": "review-skipped-runtime-policy",
+                            "docId": doc_id,
+                            "scope": scope,
+                            "decision": str(runtime_resolution["providerDecision"]),
+                            "runtimePolicyReason": str(runtime_resolution["reason"]),
+                        }
+
                 prompt = render_llm_prompt_template(
                     template_text,
                     article=article,
@@ -3260,6 +4404,46 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                             target_id,
                         ),
                     )
+                    filter_context = await resolve_interest_filter_context(
+                        cursor,
+                        article=article,
+                        prefer_story_cluster=False,
+                    )
+                    technical_filter_state, semantic_decision = resolve_criterion_filter_outcome(
+                        pass_filters=True,
+                        compat_decision=final_decision,
+                    )
+                    base_filter_explain = coerce_json_object(review_context.get("explain_json"))
+                    base_filter_explain["llmReview"] = {
+                        "reviewId": str(review_row["review_id"]),
+                        "decision": review_result.decision,
+                        "score": review_result.score,
+                    }
+                    await upsert_interest_filter_result(
+                        cursor,
+                        filter_scope="system_criterion",
+                        doc_id=uuid.UUID(str(article["doc_id"])),
+                        canonical_document_id=filter_context["canonicalDocumentId"],
+                        story_cluster_id=filter_context["storyClusterId"],
+                        user_id=None,
+                        criterion_id=uuid.UUID(str(target_id)),
+                        interest_id=None,
+                        technical_filter_state=technical_filter_state,
+                        semantic_decision=semantic_decision,
+                        compat_decision=final_decision,
+                        verification_target_type=filter_context["verificationTargetType"],
+                        verification_target_id=filter_context["verificationTargetId"],
+                        verification_state=filter_context["verificationState"],
+                        semantic_score=float(base_filter_explain.get("S_final") or 0.0),
+                        explain_json=build_interest_filter_explain(
+                            base_explain_json=make_json_safe(base_filter_explain),
+                            technical_filter_state=technical_filter_state,
+                            semantic_decision=semantic_decision,
+                            compat_decision=final_decision,
+                            filter_scope="system_criterion",
+                            context=filter_context,
+                        ),
+                    )
                     system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
                     if (
                         should_dispatch_clustering(system_feed_result)
@@ -3298,6 +4482,46 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                             ),
                             article["doc_id"],
                             target_id,
+                        ),
+                    )
+                    filter_context = await resolve_interest_filter_context(
+                        cursor,
+                        article=article,
+                        prefer_story_cluster=True,
+                    )
+                    technical_filter_state, semantic_decision = resolve_user_interest_filter_outcome(
+                        pass_filters=True,
+                        compat_decision=final_decision,
+                    )
+                    base_filter_explain = coerce_json_object(review_context.get("explain_json"))
+                    base_filter_explain["llmReview"] = {
+                        "reviewId": str(review_row["review_id"]),
+                        "decision": review_result.decision,
+                        "score": review_result.score,
+                    }
+                    await upsert_interest_filter_result(
+                        cursor,
+                        filter_scope="user_interest",
+                        doc_id=uuid.UUID(str(article["doc_id"])),
+                        canonical_document_id=filter_context["canonicalDocumentId"],
+                        story_cluster_id=filter_context["storyClusterId"],
+                        user_id=uuid.UUID(str(review_context["user_id"])),
+                        criterion_id=None,
+                        interest_id=uuid.UUID(str(target_id)),
+                        technical_filter_state=technical_filter_state,
+                        semantic_decision=semantic_decision,
+                        compat_decision=final_decision,
+                        verification_target_type=filter_context["verificationTargetType"],
+                        verification_target_id=filter_context["verificationTargetId"],
+                        verification_state=filter_context["verificationState"],
+                        semantic_score=float(base_filter_explain.get("S_interest") or 0.0),
+                        explain_json=build_interest_filter_explain(
+                            base_explain_json=make_json_safe(base_filter_explain),
+                            technical_filter_state=technical_filter_state,
+                            semantic_decision=semantic_decision,
+                            compat_decision=final_decision,
+                            filter_scope="user_interest",
+                            context=filter_context,
                         ),
                     )
                     if (
@@ -3435,6 +4659,8 @@ async def prepare_historical_backfill_snapshot(
     reindex_job_id: str,
     doc_ids: Sequence[str] | None = None,
     system_feed_only: bool = False,
+    include_enrichment: bool = False,
+    force_enrichment: bool = False,
 ) -> int:
     existing_total = await count_historical_backfill_snapshot_targets(reindex_job_id)
     if existing_total > 0:
@@ -3443,16 +4669,40 @@ async def prepare_historical_backfill_snapshot(
     async with await open_connection() as connection:
         async with connection.transaction():
             async with connection.cursor() as cursor:
+                enrichment_clause = ""
+                if include_enrichment:
+                    enrichment_clause = """
+                      and coalesce(articles.url, '') ~* '^https?://'
+                    """
+                    if not force_enrichment:
+                        enrichment_clause += """
+                          and coalesce(articles.enrichment_state, 'pending') in ('pending', 'failed', 'skipped')
+                        """
                 if doc_ids:
                     system_feed_clause = ""
                     if system_feed_only:
                         system_feed_clause = """
                           and articles.visibility_state = 'visible'
-                          and exists (
-                            select 1
-                            from system_feed_results sfr
-                            where sfr.doc_id = articles.doc_id
-                              and coalesce(sfr.eligible_for_feed, false) = true
+                          and (
+                            exists (
+                              select 1
+                              from final_selection_results fsr
+                              where fsr.doc_id = articles.doc_id
+                                and fsr.is_selected = true
+                            )
+                            or (
+                              not exists (
+                                select 1
+                                from final_selection_results fsr_missing
+                                where fsr_missing.doc_id = articles.doc_id
+                              )
+                              and exists (
+                                select 1
+                                from system_feed_results sfr
+                                where sfr.doc_id = articles.doc_id
+                                  and coalesce(sfr.eligible_for_feed, false) = true
+                              )
+                            )
                           )
                         """
                     await cursor.execute(
@@ -3470,6 +4720,7 @@ async def prepare_historical_backfill_snapshot(
                         where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           and doc_id = any(%s::uuid[])
                           {system_feed_clause}
+                          {enrichment_clause}
                         on conflict do nothing
                         """,
                         (reindex_job_id, list(doc_ids)),
@@ -3479,11 +4730,26 @@ async def prepare_historical_backfill_snapshot(
                     if system_feed_only:
                         system_feed_clause = """
                           and articles.visibility_state = 'visible'
-                          and exists (
-                            select 1
-                            from system_feed_results sfr
-                            where sfr.doc_id = articles.doc_id
-                              and coalesce(sfr.eligible_for_feed, false) = true
+                          and (
+                            exists (
+                              select 1
+                              from final_selection_results fsr
+                              where fsr.doc_id = articles.doc_id
+                                and fsr.is_selected = true
+                            )
+                            or (
+                              not exists (
+                                select 1
+                                from final_selection_results fsr_missing
+                                where fsr_missing.doc_id = articles.doc_id
+                              )
+                              and exists (
+                                select 1
+                                from system_feed_results sfr
+                                where sfr.doc_id = articles.doc_id
+                                  and coalesce(sfr.eligible_for_feed, false) = true
+                              )
+                            )
                           )
                         """
                     await cursor.execute(
@@ -3500,6 +4766,7 @@ async def prepare_historical_backfill_snapshot(
                         from articles
                         where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           {system_feed_clause}
+                          {enrichment_clause}
                         on conflict do nothing
                         """,
                         (reindex_job_id,),
@@ -3618,6 +4885,8 @@ async def replay_historical_articles(
     user_id: str | None = None,
     interest_id: str | None = None,
     system_feed_only: bool = False,
+    include_enrichment: bool = False,
+    force_enrichment: bool = False,
 ) -> dict[str, Any]:
     return await replay_historical_articles_with_snapshot(
         reindex_job_id=reindex_job_id,
@@ -3626,11 +4895,17 @@ async def replay_historical_articles(
         user_id=user_id,
         interest_id=interest_id,
         system_feed_only=system_feed_only,
+        include_enrichment=include_enrichment,
+        force_enrichment=force_enrichment,
         dependencies=HistoricalBackfillDependencies(
             prepare_target_snapshot=prepare_historical_backfill_snapshot,
             list_target_batch=list_historical_backfill_snapshot_batch,
             update_job_options=update_reindex_job_options,
             publish_outbox_event=ensure_published_outbox_event,
+            process_article_extract=process_article_extract,
+            process_normalize=process_normalize,
+            process_dedup=process_dedup,
+            process_embed=process_embed,
             process_cluster=process_cluster,
             process_match_criteria=process_match_criteria,
             process_match_interests=process_match_interests,
@@ -3771,6 +5046,8 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
             target_user_id = coerce_optional_string(job_options.get("userId"))
             target_interest_id = coerce_optional_string(job_options.get("interestId"))
             system_feed_only = coerce_bool(job_options.get("systemFeedOnly"))
+            include_enrichment = coerce_bool(job_options.get("includeEnrichment"))
+            force_enrichment = coerce_bool(job_options.get("forceEnrichment"))
             result["backfill"] = await replay_historical_articles(
                 reindex_job_id=reindex_job_id,
                 batch_size=batch_size,
@@ -3778,6 +5055,8 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
                 user_id=target_user_id,
                 interest_id=target_interest_id,
                 system_feed_only=system_feed_only,
+                include_enrichment=include_enrichment,
+                force_enrichment=force_enrichment,
             )
     except Exception as error:
         async with await open_connection() as connection:
@@ -4232,10 +5511,26 @@ def on_worker_error(label: str):
     return handler
 
 
+async def run_user_digest_scheduler_until_stopped(stop_event: asyncio.Event) -> None:
+    poll_interval = user_digest_poll_interval_seconds()
+    while not stop_event.is_set():
+        try:
+            await process_queued_manual_digests()
+            await process_due_scheduled_digests()
+        except Exception as error:  # pragma: no cover - runtime/env dependent
+            LOGGER.error("User digest scheduler poll failed: %s", error)
+
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=poll_interval)
+        except TimeoutError:
+            continue
+
+
 async def run_workers() -> None:
     enable_legacy_queue_consumers = legacy_queue_consumers_enabled()
     enable_sequence_runner = sequence_runner_enabled()
     enable_sequence_cron_scheduler = sequence_cron_scheduler_enabled()
+    enable_user_digest_scheduler = user_digest_scheduler_enabled()
     legacy_workers: list[tuple[str, str, Worker]] = []
     if enable_legacy_queue_consumers:
         legacy_workers = [
@@ -4425,6 +5720,11 @@ async def run_workers() -> None:
         sequence_scheduler_task = asyncio.create_task(
             sequence_scheduler.run_until_stopped(stop_event)
         )
+    user_digest_scheduler_task: asyncio.Task[None] | None = None
+    if enable_user_digest_scheduler:
+        user_digest_scheduler_task = asyncio.create_task(
+            run_user_digest_scheduler_until_stopped(stop_event)
+        )
 
     consumed_queues = [queue_name for _label, queue_name, _worker in legacy_workers]
     if sequence_worker is not None:
@@ -4439,12 +5739,19 @@ async def run_workers() -> None:
             "Sequence cron scheduler enabled with poll interval %.1fs.",
             sequence_cron_poll_interval_seconds(),
         )
+    if enable_user_digest_scheduler:
+        LOGGER.info(
+            "User digest scheduler enabled with poll interval %.1fs.",
+            user_digest_poll_interval_seconds(),
+        )
     if enable_legacy_queue_consumers:
         LOGGER.warning("Legacy queue consumers are enabled alongside sequence runtime.")
     await stop_event.wait()
     LOGGER.info("Worker shutdown requested. Closing BullMQ consumers.")
     if sequence_scheduler_task is not None:
         await sequence_scheduler_task
+    if user_digest_scheduler_task is not None:
+        await user_digest_scheduler_task
     for _label, _queue_name, worker in legacy_workers:
         await worker.close()
     if sequence_worker is not None:
@@ -4455,6 +5762,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     check_database()
     check_redis()
+    if discovery_enabled():
+        configure_discovery_runtime(build_live_discovery_runtime())
+        LOGGER.info("Discovery runtime configured with live adapters.")
+    else:
+        LOGGER.info("Discovery runtime remains disabled; default unavailable adapters stay active.")
     asyncio.run(run_workers())
 
 

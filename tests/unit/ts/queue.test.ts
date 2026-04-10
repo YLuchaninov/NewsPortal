@@ -18,6 +18,7 @@ import {
   OUTBOX_EVENT_QUEUE_MAP,
   REINDEX_QUEUE,
   REINDEX_REQUESTED_EVENT,
+  RESOURCE_INGEST_REQUESTED_EVENT,
   SEQUENCE_QUEUE,
   SEQUENCE_MANAGED_OUTBOX_EVENTS,
   SEQUENCE_RUN_STATUSES,
@@ -29,6 +30,7 @@ import {
   isInterestCompileOutboxEvent,
   isLlmReviewOutboxEvent,
   isNotificationFeedbackOutboxEvent,
+  isResourceOutboxEvent,
   isSequenceManagedOutboxEvent,
   isReindexOutboxEvent,
   buildOutboxEventQueueMap
@@ -52,6 +54,7 @@ test("legacy embed fanout option is a no-op after sequence-first cutover", () =>
 test("sequence-managed events are explicit after relay cutover", () => {
   assert.deepEqual(SEQUENCE_MANAGED_OUTBOX_EVENTS, [
     ARTICLE_INGEST_REQUESTED_EVENT,
+    RESOURCE_INGEST_REQUESTED_EVENT,
     INTEREST_COMPILE_REQUESTED_EVENT,
     CRITERION_COMPILE_REQUESTED_EVENT,
     LLM_REVIEW_REQUESTED_EVENT,
@@ -66,6 +69,8 @@ test("event classifiers distinguish article, compile, review, feedback and reind
   assert.equal(isArticleOutboxEvent(ARTICLE_INGEST_REQUESTED_EVENT), true);
   assert.equal(isArticleOutboxEvent(ARTICLE_CRITERIA_MATCHED_EVENT), true);
   assert.equal(isArticleOutboxEvent(INTEREST_COMPILE_REQUESTED_EVENT), false);
+  assert.equal(isResourceOutboxEvent(RESOURCE_INGEST_REQUESTED_EVENT), true);
+  assert.equal(isResourceOutboxEvent(ARTICLE_INGEST_REQUESTED_EVENT), false);
 
   assert.equal(isInterestCompileOutboxEvent(INTEREST_COMPILE_REQUESTED_EVENT), true);
   assert.equal(isCriterionCompileOutboxEvent(CRITERION_COMPILE_REQUESTED_EVENT), true);

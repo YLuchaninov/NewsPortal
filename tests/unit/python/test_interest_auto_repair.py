@@ -137,6 +137,13 @@ def _install_worker_import_stubs() -> None:
     if "services.workers.app.gemini" not in sys.modules:
         gemini_stub = types.ModuleType("services.workers.app.gemini")
         gemini_stub.review_with_gemini = lambda *args, **kwargs: None
+        gemini_stub.DEFAULT_PRICE_CARD = {
+            "default": {
+                "input_cost_per_million_tokens_usd": 0.10,
+                "output_cost_per_million_tokens_usd": 0.40,
+            }
+        }
+        gemini_stub.PRICE_CARD_VERSION = "test"
         sys.modules["services.workers.app.gemini"] = gemini_stub
 
 
@@ -184,7 +191,49 @@ class _FakeConnection:
         return _FakeCursor()
 
 
+class _RecordingCursor(_FakeCursor):
+    def __init__(self, fetchone_results: list[dict[str, object] | None] | None = None):
+        self.executed: list[tuple[str, tuple[object, ...] | None]] = []
+        self._fetchone_results = list(fetchone_results or [])
+
+    async def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+        return None
+
+    async def fetchone(self):
+        if self._fetchone_results:
+            return self._fetchone_results.pop(0)
+        return None
+
+
+class _RecordingConnection(_FakeConnection):
+    def __init__(self, cursor: _RecordingCursor):
+        self.cursor_instance = cursor
+
+    def cursor(self):
+        return self.cursor_instance
+
+
 class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
+    async def test_llm_review_monthly_quota_snapshot_uses_precise_budget_math(self) -> None:
+        cursor = _RecordingCursor([{"month_to_date_cost_usd": "0.995"}])
+        with patch.dict(
+            worker_main.os.environ,
+            {
+                "LLM_REVIEW_ENABLED": "1",
+                "LLM_REVIEW_MONTHLY_BUDGET_CENTS": "100",
+                "LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE": "0",
+            },
+            clear=False,
+        ):
+            snapshot = await worker_main.get_llm_review_monthly_quota_snapshot(cursor)
+
+        self.assertFalse(snapshot["monthlyQuotaReached"])
+        self.assertEqual(snapshot["monthToDateCostCents"], 100)
+        self.assertEqual(snapshot["remainingMonthlyBudgetCents"], 1)
+        self.assertEqual(snapshot["monthlyBudgetCents"], 100)
+        self.assertIn("scope = 'criterion'", cursor.executed[0][0])
+
     def test_build_interest_auto_repair_job_options_is_scoped(self) -> None:
         options = worker_main.build_interest_auto_repair_job_options(
             user_id="user-1",
@@ -445,6 +494,184 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["criteriaCount"], 1)
 
+    async def test_process_match_criteria_applies_budget_fallback_without_queueing(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "ai policy",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "22222222-2222-2222-2222-222222222222",
+            "processing_state": "embedded",
+            "title": "AI policy",
+            "lead": "Lead",
+            "body": "Body",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(
+                worker_main,
+                "get_llm_review_monthly_quota_snapshot",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "monthlyBudgetCents": 100,
+                        "monthToDateCostCents": 100,
+                        "remainingMonthlyBudgetCents": 0,
+                        "monthlyQuotaReached": True,
+                        "acceptGrayZoneOnBudgetExhaustion": True,
+                        "monthStart": "2026-04-01T00:00:00+00:00",
+                    }
+                ),
+            ),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.25)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", return_value=0.0),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.6),
+            patch.object(worker_main, "decide_criterion", return_value="gray_zone"),
+            patch.object(worker_main, "insert_outbox_event", AsyncMock()) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "eligible",
+                        "eligible_for_feed": True,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-budget-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_not_awaited()
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "relevant")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertEqual(explain_json["llmBudgetGate"]["reason"], "monthly_budget_exhausted")
+        self.assertEqual(explain_json["llmBudgetGate"]["policy"], "accept_gray_zone")
+        filter_insert_sql, filter_insert_params = next(
+            item for item in cursor.executed if "insert into interest_filter_results" in item[0]
+        )
+        del filter_insert_sql
+        self.assertEqual(filter_insert_params[0], "system_criterion")
+        self.assertEqual(filter_insert_params[8], "passed")
+        self.assertEqual(filter_insert_params[9], "match")
+        self.assertEqual(filter_insert_params[10], "relevant")
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
+    async def test_process_llm_review_skips_provider_when_runtime_policy_blocks(self) -> None:
+        article_row = {
+            "doc_id": "22222222-2222-2222-2222-222222222222",
+            "processing_state": "matched",
+            "title": "AI policy",
+            "lead": "Lead",
+            "body": "Body",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor([None, {"criterion_match_id": "cmr-1", "decision": "gray_zone"}])
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(
+                worker_main,
+                "get_llm_review_monthly_quota_snapshot",
+                AsyncMock(
+                    return_value={
+                        "enabled": False,
+                        "monthlyBudgetCents": 500,
+                        "monthToDateCostCents": 0,
+                        "remainingMonthlyBudgetCents": 500,
+                        "monthlyQuotaReached": False,
+                        "acceptGrayZoneOnBudgetExhaustion": False,
+                        "monthStart": "2026-04-01T00:00:00+00:00",
+                    }
+                ),
+            ),
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "filtered_out",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()) as record_processed_event,
+            patch.object(worker_main, "review_with_gemini") as review_with_gemini,
+        ):
+            result = await worker_main.process_llm_review(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-llm-budget-1",
+                        "docId": article_row["doc_id"],
+                        "scope": "criterion",
+                        "targetId": "11111111-1111-1111-1111-111111111111",
+                    }
+                ),
+                "",
+            )
+
+        review_with_gemini.assert_not_called()
+        record_processed_event.assert_awaited_once()
+        update_sql, update_params = next(
+            item for item in cursor.executed if "update criterion_match_results" in item[0]
+        )
+        del update_sql
+        self.assertEqual(update_params[0], "irrelevant")
+        explain_json_param = update_params[1]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertEqual(explain_json["llmBudgetGate"]["reason"], "llm_review_disabled")
+        self.assertEqual(result["status"], "review-skipped-runtime-policy")
+        self.assertEqual(result["decision"], "reject")
+
     async def test_process_cluster_skips_articles_outside_system_feed(self) -> None:
         article_row = {
             "doc_id": "33333333-3333-3333-3333-333333333333",
@@ -457,7 +684,18 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
             patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
             patch.object(
                 worker_main,
-                "fetch_system_feed_result_row",
+                "sync_story_cluster_and_verification",
+                AsyncMock(
+                    return_value={
+                        "storyClusterId": None,
+                        "storyVerificationState": None,
+                        "canonicalVerificationState": None,
+                    }
+                ),
+            ),
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
                 AsyncMock(return_value={"eligible_for_feed": False}),
             ),
             patch.object(worker_main, "record_processed_event", AsyncMock()) as record_processed_event,
@@ -476,6 +714,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         record_processed_event.assert_awaited_once()
         self.assertEqual(result["status"], "skipped-system-feed")
         self.assertEqual(result["docId"], article_row["doc_id"])
+        self.assertIsNone(result["storyClusterId"])
+        self.assertIsNone(result["storyVerificationState"])
+        self.assertIsNone(result["canonicalVerificationState"])
 
     async def test_process_match_interests_skips_articles_outside_system_feed(self) -> None:
         article_row = {
@@ -508,6 +749,87 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "skipped-system-feed")
         self.assertEqual(result["docId"], article_row["doc_id"])
         self.assertEqual(result["interestCount"], 0)
+        self.assertEqual(result["selectionSource"], "system_feed_results")
+
+    async def test_process_match_interests_prefers_final_selection_gate_when_available(self) -> None:
+        article_row = {
+            "doc_id": "55555555-5555-5555-5555-555555555555",
+            "processing_state": "embedded",
+        }
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(
+                worker_main,
+                "fetch_final_selection_result_row",
+                AsyncMock(return_value={"final_decision": "rejected", "is_selected": False}),
+            ),
+            patch.object(
+                worker_main,
+                "fetch_system_feed_result_row",
+                AsyncMock(),
+            ) as fetch_system_feed_result_row,
+            patch.object(worker_main, "record_processed_event", AsyncMock()) as record_processed_event,
+        ):
+            result = await worker_main.process_match_interests(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-interests-2",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        record_processed_event.assert_awaited_once()
+        fetch_system_feed_result_row.assert_not_awaited()
+        self.assertEqual(result["status"], "skipped-system-feed")
+        self.assertEqual(result["selectionSource"], "final_selection_results")
+
+    async def test_is_article_eligible_for_personalization_prefers_final_selection_result(self) -> None:
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
+            patch.object(
+                worker_main,
+                "fetch_final_selection_result_row",
+                AsyncMock(return_value={"final_decision": "selected", "is_selected": True}),
+            ),
+            patch.object(
+                worker_main,
+                "fetch_system_feed_result_row",
+                AsyncMock(),
+            ) as fetch_system_feed_result_row,
+        ):
+            eligible = await worker_main.is_article_eligible_for_personalization(
+                doc_id="66666666-6666-6666-6666-666666666666"
+            )
+
+        self.assertTrue(eligible)
+        fetch_system_feed_result_row.assert_not_awaited()
+
+    def test_should_dispatch_clustering_prefers_final_selection_transition(self) -> None:
+        self.assertTrue(
+            worker_main.should_dispatch_clustering(
+                {
+                    "final_selection_selected": True,
+                    "previous_final_selection_selected": False,
+                    "eligible_for_feed": False,
+                    "previous_eligible_for_feed": False,
+                }
+            )
+        )
+        self.assertFalse(
+            worker_main.should_dispatch_clustering(
+                {
+                    "final_selection_selected": True,
+                    "previous_final_selection_selected": True,
+                    "eligible_for_feed": True,
+                    "previous_eligible_for_feed": False,
+                }
+            )
+        )
 
 
 if __name__ == "__main__":

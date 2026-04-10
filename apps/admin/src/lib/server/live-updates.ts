@@ -7,6 +7,7 @@ import {
   type AdminCollectionSignal,
   type AdminDashboardLiveSnapshot,
   type AdminDashboardSummarySnapshot,
+  type AdminLlmBudgetSnapshot,
   type AdminLiveUpdateSurface,
   type AdminLiveUpdatesSnapshot,
   type AdminObservabilityLiveSnapshot,
@@ -124,6 +125,16 @@ async function loadDashboardSnapshot(): Promise<AdminDashboardLiveSnapshot> {
     attentionChannels: asInt(summaryRaw.attention_channels, 0),
     queuedReindexJobs: pendingCounts.queuedCount,
     runningReindexJobs: pendingCounts.runningCount,
+    llmBudgetEnabled: summaryRaw.llm_review_enabled === true,
+    llmMonthlyBudgetCents: asInt(summaryRaw.llm_monthly_budget_cents, 0),
+    llmMonthToDateCostCents: asInt(summaryRaw.llm_month_to_date_cost_cents, 0),
+    llmRemainingMonthlyBudgetCents:
+      summaryRaw.llm_remaining_monthly_budget_cents == null
+        ? null
+        : asInt(summaryRaw.llm_remaining_monthly_budget_cents, 0),
+    llmMonthlyQuotaReached: summaryRaw.llm_monthly_quota_reached === true,
+    llmAcceptGrayZoneOnBudgetExhaustion:
+      summaryRaw.llm_accept_gray_zone_on_budget_exhaustion === true,
     revision: buildAdminLiveRevision([
       summaryRaw.active_news,
       summaryRaw.processed_today,
@@ -135,6 +146,12 @@ async function loadDashboardSnapshot(): Promise<AdminDashboardLiveSnapshot> {
       summaryRaw.attention_channels,
       pendingCounts.queuedCount,
       pendingCounts.runningCount,
+      summaryRaw.llm_review_enabled,
+      summaryRaw.llm_monthly_budget_cents,
+      summaryRaw.llm_month_to_date_cost_cents,
+      summaryRaw.llm_remaining_monthly_budget_cents,
+      summaryRaw.llm_monthly_quota_reached,
+      summaryRaw.llm_accept_gray_zone_on_budget_exhaustion,
     ]),
   };
 
@@ -176,16 +193,41 @@ function readUsageWindow(
   };
 }
 
+function readLlmBudgetSnapshot(summary: JsonRecord): AdminLlmBudgetSnapshot {
+  return {
+    enabled: summary.enabled === true,
+    monthlyBudgetCents: asInt(summary.monthlyBudgetCents, 0),
+    monthToDateCostCents: asInt(summary.monthToDateCostCents, 0),
+    remainingMonthlyBudgetCents:
+      summary.remainingMonthlyBudgetCents == null
+        ? null
+        : asInt(summary.remainingMonthlyBudgetCents, 0),
+    monthlyQuotaReached: summary.monthlyQuotaReached === true,
+    acceptGrayZoneOnBudgetExhaustion:
+      summary.acceptGrayZoneOnBudgetExhaustion === true,
+    revision: buildAdminLiveRevision([
+      summary.enabled,
+      summary.monthlyBudgetCents,
+      summary.monthToDateCostCents,
+      summary.remainingMonthlyBudgetCents,
+      summary.monthlyQuotaReached,
+      summary.acceptGrayZoneOnBudgetExhaustion,
+    ]),
+  };
+}
+
 async function loadObservabilitySnapshot(): Promise<AdminObservabilityLiveSnapshot> {
   const sdk = createSdk();
-  const [usageSummary, fetchRunsPage, llmReviewsPage] = await Promise.all([
+  const [usageSummary, llmBudgetSummary, fetchRunsPage, llmReviewsPage] = await Promise.all([
     sdk.getLlmUsageSummary<JsonRecord>(),
+    sdk.getLlmBudgetSummary<JsonRecord>(),
     sdk.listFetchRunsPage<JsonRecord>({ page: 1, pageSize: 1 }),
     sdk.listLlmReviewsPage<JsonRecord>({ page: 1, pageSize: 1 }),
   ]);
 
   const usage24h = readUsageWindow(usageSummary, "24h");
   const usage7d = readUsageWindow(usageSummary, "7d");
+  const llmBudget = readLlmBudgetSnapshot(llmBudgetSummary);
   const fetchRuns = buildCollectionSignal(fetchRunsPage.total, fetchRunsPage.items[0] ?? null, [
     "channel_id",
     "started_at",
@@ -204,12 +246,14 @@ async function loadObservabilitySnapshot(): Promise<AdminObservabilityLiveSnapsh
     revision: buildAdminLiveRevision([
       usage24h.revision,
       usage7d.revision,
+      llmBudget.revision,
       fetchRuns.revision,
       llmReviews.revision,
     ]),
     hasPendingWork: false,
     usage24h,
     usage7d,
+    llmBudget,
     fetchRuns,
     llmReviews,
   };
@@ -240,7 +284,7 @@ function readProgressValues(job: JsonRecord): {
   return {
     processedArticles,
     totalArticles,
-    progressLabel: `${processedArticles}/${totalArticles} articles`,
+    progressLabel: `${processedArticles}/${totalArticles} content items`,
   };
 }
 

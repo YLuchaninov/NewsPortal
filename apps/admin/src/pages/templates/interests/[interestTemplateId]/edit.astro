@@ -27,7 +27,7 @@ const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 type R = Record<string, unknown>;
 const interestTemplateId = String(Astro.params.interestTemplateId ?? "");
-const template = await sdk.getInterestTemplate<R>(interestTemplateId);
+const template = await sdk.getSystemInterest<R>(interestTemplateId);
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 
 function asLines(value: unknown): string {
@@ -37,12 +37,12 @@ function asLines(value: unknown): string {
 const isActive = template.is_active === true;
 ---
 
-<AdminShell title="Edit Interest Template — Admin" session={session} flash={flash} activeNav="interest-templates">
+<AdminShell title="Edit System Interest — Admin" session={session} flash={flash} activeNav="interest-templates">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <a href={appPath("/templates/interests")} class="hover:text-foreground">Interest Templates</a>
+      <a href={appPath("/templates/interests")} class="hover:text-foreground">System Interests</a>
       <span>/</span>
       <span class="text-foreground font-medium">Edit</span>
     </nav>
@@ -52,13 +52,13 @@ const isActive = template.is_active === true;
     <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
       <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit</p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(template.name ?? "Interest template")}</h1>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(template.name ?? "System interest")}</h1>
         <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Use this editor for deeper topic curation, including optional lexical hints and activation state, without cluttering the catalog list.
+          Use this editor for deeper global-selection curation, including content-kind gates, lexical hints, and activation state.
         </p>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
         <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Status</p>
           <p class="mt-2 text-sm font-semibold">{isActive ? "Active" : "Archived"}</p>
@@ -68,8 +68,16 @@ const isActive = template.is_active === true;
           <p class="mt-2 text-sm font-semibold">{Array.isArray(template.positive_texts) ? (template.positive_texts as unknown[]).length : 0}</p>
         </div>
         <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Allowed kinds</p>
+          <p class="mt-2 text-sm font-semibold">{Array.isArray(template.allowed_content_kinds) ? (template.allowed_content_kinds as unknown[]).length : 0}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Priority</p>
           <p class="mt-2 text-sm font-semibold">{String(template.priority ?? 1)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Time window</p>
+          <p class="mt-2 text-sm font-semibold">{template.time_window_hours == null ? "Any time" : `${String(template.time_window_hours)}h`}</p>
         </div>
       </div>
     </div>
@@ -89,6 +97,8 @@ const isActive = template.is_active === true;
         mustNotHaveTerms: asLines(template.must_not_have_terms),
         places: asLines(template.places),
         languagesAllowed: asLines(template.languages_allowed),
+        timeWindowHours: template.time_window_hours == null ? "" : String(template.time_window_hours),
+        allowedContentKinds: asLines(template.allowed_content_kinds),
         shortTokensRequired: asLines(template.short_tokens_required),
         shortTokensForbidden: asLines(template.short_tokens_forbidden),
         priority: String(template.priority ?? 1),
@@ -101,18 +111,18 @@ const isActive = template.is_active === true;
         <div class="max-w-2xl">
           <h2 class="text-base font-semibold text-foreground">Danger zone</h2>
           <p class="mt-1 text-sm text-muted-foreground">
-            Archive when a topic should leave the active catalog but remain recoverable. Delete only when the topic should disappear from the admin library completely.
+            Archive when a system interest should leave the active catalog but remain recoverable. Delete only when it should disappear from the admin library completely.
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
           <AdminConfirmAction
             action={appPath("/bff/admin/templates")}
-            title={isActive ? "Archive template" : "Reactivate template"}
+            title={isActive ? "Archive system interest" : "Reactivate system interest"}
             description={isActive
-              ? "Archived templates stay visible to operators but stop appearing in the active predefined-topic catalog."
-              : "Reactivating the template puts it back into the active predefined-topic catalog."}
+              ? "Archived system interests stay visible to operators but stop appearing in the active global-selection catalog."
+              : "Reactivating the system interest puts it back into the active global-selection catalog."}
             triggerLabel={isActive ? "Archive" : "Activate"}
-            confirmLabel={isActive ? "Archive template" : "Activate template"}
+            confirmLabel={isActive ? "Archive system interest" : "Activate system interest"}
             fields={[
               { name: "kind", value: "interest" },
               { name: "intent", value: isActive ? "archive" : "activate" },
@@ -125,10 +135,10 @@ const isActive = template.is_active === true;
           />
           <AdminConfirmAction
             action={appPath("/bff/admin/templates")}
-            title="Delete template"
-            description="Delete permanently only when this predefined topic should be removed from the admin library entirely."
+            title="Delete system interest"
+            description="Delete permanently only when this system interest should be removed from the admin library entirely."
             triggerLabel="Delete"
-            confirmLabel="Delete template"
+            confirmLabel="Delete system interest"
             fields={[
               { name: "kind", value: "interest" },
               { name: "intent", value: "delete" },

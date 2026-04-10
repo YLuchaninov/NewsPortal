@@ -67,7 +67,7 @@ function resolveListHref(nextPage: number): string {
 
   <Fragment slot="header-actions">
     <a href={appPath("/templates/interests")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-      Interest templates
+      System interests
     </a>
     <a href={appPath("/templates/llm/new")} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
       New LLM template
@@ -152,7 +152,9 @@ function resolveListHref(nextPage: number): string {
                           ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                           : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
                       ]}>
-                        {String(template.scope ?? "—")}
+                        {String(template.scope ?? "—") === "criteria"
+                          ? "system-interests"
+                          : String(template.scope ?? "—")}
                       </span>
                     </td>
                     <td class="px-5 py-4 align-top">

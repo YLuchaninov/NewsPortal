@@ -25,6 +25,18 @@
 
 ## Текущие contract docs
 
+- `docs/contracts/browser-assisted-websites.md`
+  Durable contract для JS-heavy / soft anti-bot website handling: fetchers-owned browser runtime, internal discovery probe, browser provenance, unsupported challenge policy и deterministic local hard-site proof.
+- `docs/contracts/content-model.md`
+  Durable contract для публичной universal-content модели: `content_item`, `content_kind`, `system interest`, `user interest`, `system-selected collection`, and the rule that editorial/article is one subtype rather than the product-wide default.
+- `docs/contracts/discovery-agent.md`
+  Durable contract для adaptive discovery cutover: graph-first mission model, hypothesis-class registry, source profiling/scoring, portfolio snapshots, feedback loop, re-evaluation и proof contour under `/maintenance/discovery/*`.
+- `docs/contracts/independent-recall-discovery.md`
+  Durable contract для additive independent-recall discovery cutover: generic source-quality snapshots, neutral recall-first acquisition, promotion boundaries and compatibility rules with the existing graph-first mission flow.
+- `docs/contracts/feed-ingress-adapters.md`
+  Durable contract для aggregator-aware RSS/Atom intake: internal adapter strategies, Reddit/HN/Google normalization, pre-ingest stale gating, adapter provenance и operator/API visibility without new provider types.
+- `docs/contracts/zero-shot-interest-filtering.md`
+  Durable cutover contract для перехода к full-flow zero-shot filtering architecture: raw observations, canonical documents, duplicate/story clustering, verification state, semantic interest filtering, final selection truth и doc-sync/cutover discipline.
 - `docs/contracts/test-access-and-fixtures.md`
   Repo-specific contract для stateful backend test access, fixture creation, persistent artifact tracking и cleanup discipline.
 - `docs/contracts/universal-task-engine.md`

@@ -12,6 +12,8 @@ export interface InterestTemplateEditorValue {
   mustNotHaveTerms: string;
   places: string;
   languagesAllowed: string;
+  timeWindowHours: string;
+  allowedContentKinds: string;
   shortTokensRequired: string;
   shortTokensForbidden: string;
   priority: string;
@@ -51,19 +53,19 @@ export function InterestTemplateEditorForm({
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-5">
           <h2 className="text-base font-semibold text-foreground">
-            {mode === "create" ? "Interest template basics" : "Edit interest template"}
+            {mode === "create" ? "System interest basics" : "Edit system interest"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Interest templates power the ready-made topics users can subscribe to without creating custom interests from scratch.
+            System interests define the global themes the platform uses to build the system-selected collection before any per-user personalization kicks in.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
-            label="Template name"
+            label="System interest name"
             name="interest-template-name"
             required
-            helpText="Short label shown to operators and reused when users browse predefined topics."
+            helpText="Short label shown to operators and reused when discovery or user-interest tooling references this system interest."
           >
             <Input
               id="interest-template-name"
@@ -77,7 +79,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Lifecycle state"
             name="interest-template-active"
-            helpText="Archived templates stay visible in admin and can be reactivated later."
+            helpText="Archived system interests stay visible in admin and can be reactivated later."
           >
             <select
               id="interest-template-active"
@@ -95,7 +97,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Description"
             name="interest-template-description"
-            helpText="Explain what kind of stories this topic should surface to end users."
+            helpText="Explain what kind of content this system interest should allow into the global collection."
             helpWide
           >
             <Textarea
@@ -114,7 +116,7 @@ export function InterestTemplateEditorForm({
             label="Positive prototypes"
             name="interest-template-positive-texts"
             required
-            helpText="One example headline per line that should match this template."
+            helpText="One example item per line that should match this system interest."
             helpWide
           >
             <Textarea
@@ -129,7 +131,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Negative prototypes"
             name="interest-template-negative-texts"
-            helpText="Near-neighbor examples that should not match this template, to reduce false positives."
+            helpText="Near-neighbor examples that should not match this system interest, to reduce false positives."
             helpWide
           >
             <Textarea
@@ -148,7 +150,7 @@ export function InterestTemplateEditorForm({
           <div>
             <p className="text-base font-semibold text-foreground">Advanced matching hints</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Optional lexical constraints and geographic hints for more precise topic matching.
+              Optional lexical constraints, geographic hints, time-window gating, and content-kind gates for more precise global selection.
             </p>
           </div>
           <span className="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
@@ -215,6 +217,22 @@ export function InterestTemplateEditorForm({
           </FormField>
 
           <FormField
+            label="Allowed content kinds"
+            name="interest-template-allowed-kinds"
+            helpText="One content kind per line. Leave blank only if you want the default full universal set."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-allowed-kinds"
+              name="allowed_content_kinds"
+              rows={4}
+              defaultValue={value.allowedContentKinds}
+              placeholder={"editorial\nlisting\nentity\ndocument\ndata_file\napi_payload"}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
             label="Required short tokens"
             name="interest-template-short-required"
             helpText="Short keywords, acronyms, or stock tickers that must be present."
@@ -245,11 +263,29 @@ export function InterestTemplateEditorForm({
           </FormField>
         </div>
 
-        <div className="mt-4 max-w-xs">
+        <div className="mt-4 grid gap-4 md:max-w-2xl md:grid-cols-2">
+          <FormField
+            label="Time window (hours)"
+            name="interest-template-time-window"
+            helpText="Articles older than this window fail the hard filter before scoring. Leave blank to accept content from any time period."
+            helpWide
+          >
+            <Input
+              id="interest-template-time-window"
+              name="time_window_hours"
+              type="number"
+              min={1}
+              step={1}
+              placeholder="168"
+              defaultValue={value.timeWindowHours}
+              className={inputClassName}
+            />
+          </FormField>
+
           <FormField
             label="Priority"
             name="interest-template-priority"
-            helpText="Relative weighting applied when multiple templates compete for the same story cluster."
+            helpText="Relative weighting applied when multiple system interests compete for the same content cluster."
             helpWide
           >
             <Input

@@ -56,6 +56,7 @@ class SourceRegistrarAdapter(Protocol):
         dry_run: bool,
         created_by: str | None,
         tags: list[str],
+        provider_type: str,
     ) -> Any: ...
 
 
@@ -87,6 +88,15 @@ class ArticleEnricherAdapter(Protocol):
         enrichment: Any,
         mode: str,
         target_field: str | None,
+    ) -> Any: ...
+
+
+class WebsiteProbeAdapter(Protocol):
+    def probe_websites(
+        self,
+        *,
+        urls: list[str],
+        sample_count: int,
     ) -> Any: ...
 
 
@@ -167,6 +177,7 @@ class UnavailableSourceRegistrarAdapter(_UnavailableAdapter):
         dry_run: bool,
         created_by: str | None,
         tags: list[str],
+        provider_type: str,
     ) -> Any:
         return self._raise()
 
@@ -211,6 +222,13 @@ class UnavailableArticleEnricherAdapter(_UnavailableAdapter):
         return self._raise()
 
 
+class UnavailableWebsiteProbeAdapter(_UnavailableAdapter):
+    capability = "website probe adapter"
+
+    def probe_websites(self, *, urls: list[str], sample_count: int) -> Any:
+        return self._raise()
+
+
 @dataclass
 class DiscoveryRuntime:
     web_search: WebSearchAdapter = field(default_factory=UnavailableWebSearchAdapter)
@@ -228,6 +246,7 @@ class DiscoveryRuntime:
     article_enricher: ArticleEnricherAdapter = field(
         default_factory=UnavailableArticleEnricherAdapter
     )
+    website_probe: WebsiteProbeAdapter = field(default_factory=UnavailableWebsiteProbeAdapter)
 
 
 _DISCOVERY_RUNTIME = DiscoveryRuntime()
@@ -268,4 +287,5 @@ __all__ = [
     "SourceRegistrarAdapter",
     "UrlValidatorAdapter",
     "WebSearchAdapter",
+    "WebsiteProbeAdapter",
 ]

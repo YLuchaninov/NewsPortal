@@ -251,6 +251,24 @@ class InMemorySequenceRepository:
         raise KeyError(task_run_id)
 
 
+class DelayedVisibilitySequenceRepository(InMemorySequenceRepository):
+    def __init__(
+        self,
+        *,
+        sequences: dict[str, SequenceDefinition],
+        runs: dict[str, SequenceRunRecord],
+        hidden_get_run_calls: int,
+    ) -> None:
+        super().__init__(sequences=sequences, runs=runs)
+        self.hidden_get_run_calls = hidden_get_run_calls
+
+    async def get_run(self, run_id: str) -> SequenceRunRecord | None:
+        if self.hidden_get_run_calls > 0:
+            self.hidden_get_run_calls -= 1
+            return None
+        return await super().get_run(run_id)
+
+
 class ContextManagerTests(unittest.TestCase):
     def test_context_manager_preserves_reserved_keys_and_keeps_control_flags(self) -> None:
         manager = ContextManager(
@@ -381,11 +399,35 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.task_runs[0]["status"], "failed")
         self.assertIn("timed out", repository.task_runs[0]["error_text"])
 
+    async def test_executor_retries_run_lookup_until_sequence_run_is_visible(self) -> None:
+        slept_for: list[float] = []
+
+        async def fake_sleep(delay: float) -> None:
+            slept_for.append(delay)
+
+        executor, repository = self._build_executor(
+            task_graph=[
+                {"key": "emit", "module": "Emit", "options": {"key": "value", "value": 7}}
+            ],
+            sleep=fake_sleep,
+            repository_class=DelayedVisibilitySequenceRepository,
+            repository_kwargs={"hidden_get_run_calls": 1},
+        )
+
+        result = await executor.execute_run("run-1")
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(repository.runs["run-1"].status, "completed")
+        self.assertEqual(repository.runs["run-1"].context_json["value"], 7)
+        self.assertEqual(slept_for, [0.1])
+
     def _build_executor(
         self,
         *,
         task_graph: list[Mapping[str, Any]],
         sleep=None,
+        repository_class=InMemorySequenceRepository,
+        repository_kwargs: dict[str, Any] | None = None,
     ) -> tuple[SequenceExecutor, InMemorySequenceRepository]:
         registry = TaskPluginRegistry()
         for plugin_class in (EmitPlugin, CombinePlugin, StopPlugin, FlakyPlugin, TimeoutPlugin):
@@ -408,9 +450,10 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
             trigger_type="manual",
             trigger_meta={"source": "unit-test"},
         )
-        repository = InMemorySequenceRepository(
+        repository = repository_class(
             sequences={"sequence-1": sequence},
             runs={"run-1": run},
+            **(repository_kwargs or {}),
         )
         return (
             SequenceExecutor(

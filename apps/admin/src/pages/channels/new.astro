@@ -1,4 +1,13 @@
 ---
+import {
+  DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+  parseApiChannelConfig,
+  parseEmailImapChannelConfig,
+  parseRssChannelConfig,
+  parseWebsiteChannelConfig,
+  resolveRssChannelAdapterStrategy,
+  resolveRssChannelMaxEntryAgeHours,
+} from "@newsportal/contracts";
 import AdminShell from "../../layouts/AdminShell.astro";
 import { ChannelEditorForm } from "../../components/ChannelEditorForm";
 import { resolveAdminSession } from "../../lib/server/auth";
@@ -8,6 +17,9 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
+import {
+  resolveAdminChannelProviderType,
+} from "../../lib/channel-providers";
 
 export const prerender = false;
 
@@ -21,6 +33,27 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const editorPath = `${Astro.url.pathname}${Astro.url.search}`;
+const providerType = resolveAdminChannelProviderType(
+  Astro.url.searchParams.get("providerType") ?? "rss"
+);
+const defaultWebsiteConfig = parseWebsiteChannelConfig({});
+const defaultRssConfig = parseRssChannelConfig({});
+const defaultApiConfig = parseApiChannelConfig({});
+const defaultEmailImapConfig = parseEmailImapChannelConfig({});
+const title = providerType === "website"
+  ? "Add website channel"
+  : providerType === "api"
+    ? "Add API channel"
+    : providerType === "email_imap"
+      ? "Add Email IMAP channel"
+      : "Add RSS channel";
+const description = providerType === "website"
+  ? "Create one website ingestion channel at a time when you want a deliberate setup flow with safe discovery defaults."
+  : providerType === "api"
+    ? "Create one JSON API ingestion channel at a time when you want an explicit payload mapping and authenticated fetch support."
+    : providerType === "email_imap"
+      ? "Create one mailbox ingestion channel at a time when you want deliberate credential, mailbox, and sender-filter setup."
+      : "Create one feed at a time when you want a deliberate setup flow. Bulk onboarding lives on a separate import screen.";
 ---
 
 <AdminShell title="New Channel — Admin" session={session} flash={flash} activeNav="channels">
@@ -37,10 +70,8 @@ const editorPath = `${Astro.url.pathname}${Astro.url.search}`;
   <div class="space-y-6">
     <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Create</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Add RSS channel</h1>
-      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Create one feed at a time when you want a deliberate setup flow. Bulk onboarding lives on a separate import screen.
-      </p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">{title}</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
 
     <ChannelEditorForm
@@ -48,19 +79,100 @@ const editorPath = `${Astro.url.pathname}${Astro.url.search}`;
       mode="create"
       redirectTo={editorPath}
       cancelHref={appPath("/channels")}
-      value={{
-        name: "",
-        fetchUrl: "",
-        language: "en",
-        isActive: true,
-        pollIntervalSeconds: 300,
-        adaptiveEnabled: true,
-        maxPollIntervalSeconds: 4800,
-        maxItemsPerPoll: 20,
-        requestTimeoutMs: 10000,
-        userAgent: "NewsPortalFetchers/0.1",
-        preferContentEncoded: true,
-      }}
+      value={providerType === "website"
+        ? {
+            providerType: "website",
+            name: "",
+            fetchUrl: "",
+            language: "en",
+            isActive: true,
+            pollIntervalSeconds: 900,
+            adaptiveEnabled: true,
+            maxPollIntervalSeconds: 14400,
+            requestTimeoutMs: defaultWebsiteConfig.requestTimeoutMs,
+            userAgent: defaultWebsiteConfig.userAgent,
+            maxResourcesPerPoll: defaultWebsiteConfig.maxResourcesPerPoll,
+            totalPollTimeoutMs: defaultWebsiteConfig.totalPollTimeoutMs,
+            crawlDelayMs: defaultWebsiteConfig.crawlDelayMs,
+            sitemapDiscoveryEnabled: defaultWebsiteConfig.sitemapDiscoveryEnabled,
+            feedDiscoveryEnabled: defaultWebsiteConfig.feedDiscoveryEnabled,
+            collectionDiscoveryEnabled: defaultWebsiteConfig.collectionDiscoveryEnabled,
+            downloadDiscoveryEnabled: defaultWebsiteConfig.downloadDiscoveryEnabled,
+            browserFallbackEnabled: defaultWebsiteConfig.browserFallbackEnabled,
+            collectionSeedUrlsText: "",
+            allowedUrlPatternsText: "",
+            blockedUrlPatternsText: "",
+            hasAuthorizationHeader: false,
+          }
+        : providerType === "api"
+          ? {
+              providerType: "api",
+              name: "",
+              fetchUrl: "",
+              language: "en",
+              isActive: true,
+              pollIntervalSeconds: 300,
+              adaptiveEnabled: true,
+              maxPollIntervalSeconds: 4800,
+              maxItemsPerPoll: defaultApiConfig.maxItemsPerPoll,
+              requestTimeoutMs: defaultApiConfig.requestTimeoutMs,
+              userAgent: defaultApiConfig.userAgent,
+              itemsPath: defaultApiConfig.itemsPath,
+              titleField: defaultApiConfig.titleField,
+              leadField: defaultApiConfig.leadField,
+              bodyField: defaultApiConfig.bodyField,
+              urlField: defaultApiConfig.urlField,
+              publishedAtField: defaultApiConfig.publishedAtField,
+              externalIdField: defaultApiConfig.externalIdField,
+              languageField: defaultApiConfig.languageField,
+              enrichmentEnabled: true,
+              enrichmentMinBodyLength: DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+              hasAuthorizationHeader: false,
+            }
+          : providerType === "email_imap"
+            ? {
+                providerType: "email_imap",
+                name: "",
+                fetchUrl: "",
+                language: "en",
+                isActive: true,
+                pollIntervalSeconds: 300,
+                adaptiveEnabled: true,
+                maxPollIntervalSeconds: 4800,
+                requestTimeoutMs: undefined,
+                userAgent: undefined,
+                maxItemsPerPoll: defaultEmailImapConfig.maxItemsPerPoll,
+                enrichmentEnabled: true,
+                enrichmentMinBodyLength: DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+                host: defaultEmailImapConfig.host,
+                port: defaultEmailImapConfig.port,
+                secure: defaultEmailImapConfig.secure,
+                username: defaultEmailImapConfig.username,
+                mailbox: defaultEmailImapConfig.mailbox,
+                searchFrom: defaultEmailImapConfig.searchFrom ?? "",
+                hasPassword: false,
+              }
+            : {
+                providerType: "rss",
+                name: "",
+                fetchUrl: "",
+                language: "en",
+                isActive: true,
+                pollIntervalSeconds: 300,
+                adaptiveEnabled: true,
+                maxPollIntervalSeconds: 4800,
+                maxItemsPerPoll: defaultRssConfig.maxItemsPerPoll,
+                requestTimeoutMs: defaultRssConfig.requestTimeoutMs,
+                userAgent: defaultRssConfig.userAgent,
+                preferContentEncoded: defaultRssConfig.preferContentEncoded,
+                adapterStrategy: defaultRssConfig.adapterStrategy,
+                maxEntryAgeHours: defaultRssConfig.maxEntryAgeHours,
+                resolvedAdapterStrategy: resolveRssChannelAdapterStrategy("", defaultRssConfig),
+                resolvedMaxEntryAgeHours: resolveRssChannelMaxEntryAgeHours("", defaultRssConfig),
+                enrichmentEnabled: true,
+                enrichmentMinBodyLength: DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+                hasAuthorizationHeader: false,
+              }}
     />
   </div>
 </AdminShell>

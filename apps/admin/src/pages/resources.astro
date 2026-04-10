@@ -1,0 +1,416 @@
+---
+import {
+  DEFAULT_PAGE,
+  DEFAULT_PAGE_SIZE,
+  RESOURCE_KINDS,
+  type WebResourcePreview,
+} from "@newsportal/contracts";
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { PaginationNav } from "@newsportal/ui";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/",
+});
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+
+type ChannelRow = Record<string, unknown>;
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function resolveSafeHref(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    const normalized = new URL(rawValue);
+    if (!["http:", "https:"].includes(normalized.protocol)) {
+      return null;
+    }
+    return normalized.toString();
+  } catch {
+    return null;
+  }
+}
+
+function formatTimestamp(rawValue: unknown): string {
+  if (!rawValue) {
+    return "—";
+  }
+  const date = new Date(String(rawValue));
+  if (Number.isNaN(date.getTime())) {
+    return String(rawValue);
+  }
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function readDiscoverySource(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : "manual";
+}
+
+function formatDiscoverySource(value: unknown): string {
+  const source = readDiscoverySource(value);
+  if (source === "browser_assisted_dom") {
+    return "browser DOM";
+  }
+  if (source === "browser_assisted_network") {
+    return "browser network";
+  }
+  if (source === "browser_assisted_download") {
+    return "browser download";
+  }
+  return source;
+}
+
+function isBrowserDiscoverySource(value: unknown): boolean {
+  return readDiscoverySource(value).startsWith("browser_assisted");
+}
+
+const requestedPage = Number.parseInt(
+  Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE),
+  10
+);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const selectedChannelId = Astro.url.searchParams.get("channelId")?.trim() ?? "";
+const requestedExtractionState = Astro.url.searchParams.get("extractionState")?.trim() ?? "";
+const selectedExtractionState = ["", "pending", "enriched", "skipped", "failed"].includes(requestedExtractionState)
+  ? requestedExtractionState
+  : "";
+const requestedProjection = Astro.url.searchParams.get("projection")?.trim() || "all";
+const selectedProjection = ["all", "projected", "resource_only"].includes(requestedProjection)
+  ? requestedProjection
+  : "all";
+const requestedResourceKind = Astro.url.searchParams.get("resourceKind")?.trim() ?? "";
+const selectedResourceKind = RESOURCE_KINDS.includes(requestedResourceKind as typeof RESOURCE_KINDS[number])
+  ? requestedResourceKind
+  : "";
+
+const [resources, websiteChannelsPage] = await Promise.all([
+  sdk.listWebResourcesPage<WebResourcePreview>({
+    page,
+    pageSize: DEFAULT_PAGE_SIZE,
+    channelId: selectedChannelId || undefined,
+    extractionState: selectedExtractionState || undefined,
+    projection: selectedProjection === "all" ? undefined : selectedProjection,
+    resourceKind: selectedResourceKind || undefined,
+  }),
+  sdk.listChannelsPage<ChannelRow>({
+    page: 1,
+    pageSize: 100,
+    providerType: "website",
+  }),
+]);
+
+const websiteChannels = websiteChannelsPage.items.map((item) => ({
+  channelId: readString(item.channel_id),
+  name: readString(item.name) || "Unnamed website channel",
+}));
+const selectedChannel = websiteChannels.find((channel) => channel.channelId === selectedChannelId) ?? null;
+
+function resolvePageHref(nextPage: number): string {
+  const target = new URL(Astro.url);
+  if (nextPage <= DEFAULT_PAGE) {
+    target.searchParams.delete("page");
+  } else {
+    target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function badgeClass(kind: string): string {
+  switch (kind) {
+    case "enriched":
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+    case "skipped":
+      return "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
+    case "failed":
+      return "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
+    case "pending":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+    case "editorial":
+      return "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300";
+    case "document":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
+    case "entity":
+      return "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300";
+    case "listing":
+      return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300";
+    case "data_file":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
+    default:
+      return "bg-muted text-muted-foreground";
+  }
+}
+
+const projectedOnPage = resources.items.filter((item) => item.projected_article_id).length;
+const resourceOnlyOnPage = resources.items.filter((item) => !item.projected_article_id).length;
+const failedOnPage = resources.items.filter((item) => String(item.extraction_state ?? "") === "failed").length;
+
+const pagePaths = {
+  dashboard: appPath("/"),
+  channels: appPath("/channels"),
+};
+---
+
+<AdminShell title="Resources — Admin" session={session} flash={flash} activeNav="resources">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Resources</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+      <div class="max-w-3xl">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Website closeout</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">Website resources</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          Browse the persisted <code class="rounded bg-muted px-1 py-0.5">web_resources</code> lane directly. Editorial rows can project into
+          articles, while non-editorial resources stay visible here instead of disappearing behind an article-only workflow.
+        </p>
+        {selectedChannel && (
+          <p class="mt-2 text-sm text-muted-foreground">
+            Filtered to website channel <span class="font-medium text-foreground">{selectedChannel.name}</span>.
+          </p>
+        )}
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Results</p>
+          <p class="mt-1 text-2xl font-semibold">{resources.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Projected</p>
+          <p class="mt-1 text-2xl font-semibold">{projectedOnPage}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Resource-only</p>
+          <p class="mt-1 text-2xl font-semibold">{resourceOnlyOnPage}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Failed on page</p>
+          <p class="mt-1 text-2xl font-semibold">{failedOnPage}</p>
+        </div>
+      </div>
+    </div>
+
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div>
+        <h2 class="text-base font-semibold">Filters</h2>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Narrow the list by website channel, extraction state, projection status, or resource kind. This surface is for operator inspection, not for changing runtime ownership.
+        </p>
+      </div>
+      <form method="get" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Website channel</span>
+          <select name="channelId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <option value="">All website channels</option>
+            {websiteChannels.map((channel) => (
+              <option value={channel.channelId} selected={channel.channelId === selectedChannelId}>{channel.name}</option>
+            ))}
+          </select>
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Extraction state</span>
+          <select name="extractionState" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <option value="" selected={selectedExtractionState === ""}>All states</option>
+            {["pending", "enriched", "skipped", "failed"].map((state) => (
+              <option value={state} selected={selectedExtractionState === state}>{state}</option>
+            ))}
+          </select>
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Projection</span>
+          <select name="projection" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <option value="all" selected={selectedProjection === "all"}>All resources</option>
+            <option value="projected" selected={selectedProjection === "projected"}>Projected to article</option>
+            <option value="resource_only" selected={selectedProjection === "resource_only"}>Resource-only</option>
+          </select>
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Resource kind</span>
+          <select name="resourceKind" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <option value="" selected={selectedResourceKind === ""}>All kinds</option>
+            {RESOURCE_KINDS.map((kind) => (
+              <option value={kind} selected={selectedResourceKind === kind}>{kind}</option>
+            ))}
+          </select>
+        </label>
+        <div class="md:col-span-2 xl:col-span-4 flex flex-wrap gap-2">
+          <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+            Apply filters
+          </button>
+          <a href={appPath("/resources")} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+            Clear
+          </a>
+        </div>
+      </form>
+    </section>
+
+    <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div class="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold">Persisted website resources</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {resources.total} resource{resources.total !== 1 ? "s" : ""} total
+            {resources.total > 0 && ` — page ${resources.page} of ${Math.max(resources.totalPages, 1)}`}
+          </p>
+        </div>
+      </div>
+
+      {resources.total === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No website resources match these filters</p>
+          <p class="mt-2 text-sm text-muted-foreground">
+            Start with a website channel on <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a>, run ingest, then come back here to inspect projected and non-projecting rows.
+          </p>
+        </div>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[1080px] text-sm">
+            <thead>
+              <tr class="border-b border-border bg-muted/30">
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Resource</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Kind / discovery</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Extraction</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Projection</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Observed</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resources.items.length === 0 ? (
+                <tr>
+                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No resources on this page</td>
+                </tr>
+              ) : resources.items.map((resource) => {
+                const resourceHref = appPath(`/resources/${encodeURIComponent(String(resource.resource_id ?? ""))}`);
+                const projectedArticleHref = resource.projected_article_id
+                  ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
+                  : null;
+                const sourceHref = resolveSafeHref(resource.final_url ?? resource.url);
+                return (
+                  <tr class="border-b border-border last:border-b-0">
+                    <td class="px-5 py-4 align-top">
+                      <a href={resourceHref} class="text-sm font-semibold hover:text-primary">
+                        {String(resource.title ?? "Untitled resource")}
+                      </a>
+                      <p class="mt-1 text-xs text-muted-foreground">{String(resource.channel_name ?? "Unknown website channel")}</p>
+                      <p class="mt-2 max-w-xl break-all text-sm text-muted-foreground">{String(resource.final_url ?? resource.url ?? "—")}</p>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex flex-wrap gap-2">
+                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(String(resource.resource_kind ?? "unknown"))}`}>
+                          {String(resource.resource_kind ?? "unknown")}
+                        </span>
+                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${isBrowserDiscoverySource(resource.discovery_source) ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200" : "bg-muted text-muted-foreground"}`}>
+                          {formatDiscoverySource(resource.discovery_source)}
+                        </span>
+                      </div>
+                      <p class="mt-3 text-xs text-muted-foreground">
+                        docs {String(resource.documents_count ?? 0)} · media {String(resource.media_count ?? 0)} · links {String(resource.links_out_count ?? 0)}
+                      </p>
+                      {isBrowserDiscoverySource(resource.discovery_source) && (
+                        <p class="mt-2 text-xs text-muted-foreground">
+                          Browser-assisted discovery supplied this resource instead of the cheap static modes.
+                        </p>
+                      )}
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(String(resource.extraction_state ?? "pending"))}`}>
+                        {String(resource.extraction_state ?? "pending")}
+                      </span>
+                      <p class="mt-3 text-xs text-muted-foreground">
+                        {resource.extraction_error ? String(resource.extraction_error) : "No extraction error recorded."}
+                      </p>
+                    </td>
+                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                      {resource.projected_article_id ? (
+                        <>
+                          <p class="font-medium text-foreground">Projected</p>
+                          <a href={projectedArticleHref ?? "#"} class="mt-1 inline-flex text-xs text-primary hover:underline">
+                            {String(resource.projected_article_title ?? resource.projected_article_id)}
+                          </a>
+                        </>
+                      ) : (
+                        <>
+                          <p class="font-medium text-foreground">Resource-only</p>
+                          <p class="mt-1 text-xs text-muted-foreground">
+                            {resource.content_item_ready ? "Eligible for non-editorial content surfaces." : "Not projected into articles."}
+                          </p>
+                        </>
+                      )}
+                    </td>
+                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                      <p>Discovered: {formatTimestamp(resource.discovered_at)}</p>
+                      <p class="mt-1">Published: {formatTimestamp(resource.published_at)}</p>
+                      <p class="mt-1">Updated: {formatTimestamp(resource.updated_at)}</p>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex flex-wrap gap-2">
+                        <a href={resourceHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                          Detail
+                        </a>
+                        {projectedArticleHref && (
+                          <a href={projectedArticleHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                            Article
+                          </a>
+                        )}
+                        {sourceHref && (
+                          <a href={sourceHref} target="_blank" rel="noopener noreferrer" class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                            Open source
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+
+    {(resources.hasPrev || resources.hasNext) && (
+      <PaginationNav
+        page={resources.page}
+        totalPages={resources.totalPages}
+        hasPrev={resources.hasPrev}
+        hasNext={resources.hasNext}
+        prevHref={resolvePageHref(resources.page - 1)}
+        nextHref={resolvePageHref(resources.page + 1)}
+      />
+    )}
+  </div>
+</AdminShell>

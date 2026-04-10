@@ -1,0 +1,268 @@
+{
+  "interest_templates": [
+    {
+      "name": "Buyer requests for outsourced product build",
+      "description": "Direct buyer-authored signals that a founder, business owner, product team, or company wants an external agency, software house, or development team to build, launch, or take over a product, app, portal, MVP, or codebase.",
+      "positive_prototypes": [
+        "Founder looking for software agency to build SaaS MVP",
+        "Business owner needs external team to launch mobile app",
+        "Company wants development partner to take over existing codebase",
+        "Startup requests agency proposals for web app build",
+        "Product team searching for software house to deliver customer portal",
+        "CEO looking for reliable dev shop for marketplace platform",
+        "Need outsourced team to ship product without in-house hiring",
+        "Company seeks vendor to build platform from design to release"
+      ],
+      "negative_prototypes": [
+        "Agency publishes case study about fintech MVP delivery",
+        "We are a software house available for hire worldwide",
+        "Freelance developer available to build your MVP",
+        "Startup hires first in-house engineer for product build",
+        "Ranking of top MVP development agencies",
+        "Vendor promotes fixed-price MVP package",
+        "New no-code builder helps founders launch faster",
+        "Consultancy landing page for custom software services"
+      ],
+      "must_have_terms": [
+        "looking for an agency",
+        "looking for a developer",
+        "looking for a development team",
+        "need an agency",
+        "need a developer",
+        "development partner",
+        "software house",
+        "dev shop",
+        "external team",
+        "outsourced team",
+        "take over our codebase"
+      ],
+      "must_not_have_terms": [
+        "available for hire",
+        "case study",
+        "fixed-price mvp",
+        "our services"
+      ],
+      "allowed_content_kinds": [
+        "editorial",
+        "listing"
+      ],
+      "time_window_hours": 168,
+      "priority": 1.0
+    },
+    {
+      "name": "Staff augmentation and dedicated team demand",
+      "description": "Signals that an organization wants outside engineering capacity such as staff augmentation, contract developers, a dedicated team, nearshore delivery, or managed software capacity to accelerate an active roadmap or delivery backlog.",
+      "positive_prototypes": [
+        "Engineering manager seeks staff augmentation partner for backend and QA",
+        "Company needs contract developers to hit delivery deadline",
+        "Product team wants dedicated nearshore engineers for 6-month backlog",
+        "Business looks for external squad to accelerate roadmap",
+        "Enterprise adds contractors to support ERP rollout",
+        "Company needs managed engineering capacity instead of full-time hiring",
+        "CTO seeks outside team for sprint delivery and support",
+        "Organization requests vendor for team augmentation across product and QA"
+      ],
+      "negative_prototypes": [
+        "Company opens hiring for full-time engineers and recruiters",
+        "Staff augmentation firm advertises available bench",
+        "Recruiter posts contract vacancies for one employer",
+        "Engineering team expands internal headcount",
+        "Outsourcing provider publishes article about delivery velocity",
+        "Agency offers dedicated team services on landing page",
+        "Hiring marketplace launches new feature for recruiters",
+        "Blog post compares staff augmentation versus outsourcing"
+      ],
+      "must_have_terms": [
+        "staff augmentation",
+        "team augmentation",
+        "dedicated team",
+        "contract developers",
+        "contract engineers",
+        "managed capacity",
+        "nearshore team",
+        "offshore team",
+        "external squad",
+        "engineering capacity"
+      ],
+      "must_not_have_terms": [
+        "job opening",
+        "career page",
+        "available bench",
+        "our dedicated team services"
+      ],
+      "allowed_content_kinds": [
+        "editorial",
+        "listing"
+      ],
+      "time_window_hours": 168,
+      "priority": 0.95
+    },
+    {
+      "name": "Software procurement and vendor selection",
+      "description": "Explicit procurement signals that a company, public body, or institution is sourcing an outside software vendor, implementation partner, integrator, managed services provider, or development contractor through a formal buying process.",
+      "positive_prototypes": [
+        "City issues RFP for application modernization vendor",
+        "Enterprise launches vendor selection for ERP implementation partner",
+        "Bank publishes RFQ for data migration contractor",
+        "Government tender seeks software delivery supplier",
+        "University requests proposals for external app development vendor",
+        "Company shortlists vendors for CRM rollout and integration",
+        "Healthcare group invites bids for managed application services",
+        "Buyer prepares implementation contract for outside software partner"
+      ],
+      "negative_prototypes": [
+        "Software vendor releases new procurement product",
+        "Consulting firm wins award for delivery excellence",
+        "Guide on how to write an RFP response",
+        "Ranking of top systems integrators",
+        "Procurement team hires internally after budget approval",
+        "Agency announces contract win elsewhere",
+        "Market report on public-sector tenders",
+        "Vendor marketing page for procurement automation"
+      ],
+      "must_have_terms": [
+        "rfp",
+        "rfq",
+        "request for proposal",
+        "request for quotation",
+        "tender",
+        "invites bids",
+        "requests proposals",
+        "vendor selection",
+        "supplier shortlist",
+        "statement of work",
+        "implementation contract"
+      ],
+      "must_not_have_terms": [
+        "how to write an rfp",
+        "rfp response",
+        "award winner",
+        "magic quadrant",
+        "ranked among"
+      ],
+      "allowed_content_kinds": [
+        "editorial",
+        "listing",
+        "document",
+        "data_file",
+        "api_payload"
+      ],
+      "time_window_hours": 336,
+      "priority": 1.0
+    },
+    {
+      "name": "Implementation partner search for migration or replacement",
+      "description": "Company-side delivery programs that are only relevant when the text explicitly points to an outside implementation partner, systems integrator, migration vendor, or external delivery team for rollout, replacement, modernization, or remediation work.",
+      "positive_prototypes": [
+        "Company seeks implementation partner for ERP rollout",
+        "Organization evaluates systems integrator for CRM replacement",
+        "Business needs outside team for legacy platform replacement",
+        "Enterprise requests vendor for cloud migration delivery",
+        "Data migration program brings in external specialists under deadline",
+        "Retailer searches for partner to execute replatforming project",
+        "Bank needs managed delivery partner for core system modernization",
+        "Company seeks contractor to take over delayed transformation program"
+      ],
+      "negative_prototypes": [
+        "Company announces digital transformation strategy",
+        "Government accelerates digital transformation tasks",
+        "CIO discusses modernization roadmap with no vendor search",
+        "Vendor publishes cloud migration best practices",
+        "Internal team handles ERP rollout internally",
+        "Consultancy explains internal controls for cloud migration",
+        "Product launch for migration tooling",
+        "Generic partnership press release"
+      ],
+      "must_have_terms": [
+        "implementation partner",
+        "systems integrator",
+        "integration partner",
+        "delivery partner",
+        "migration partner",
+        "external engineering support",
+        "outside specialists",
+        "delivery vendor",
+        "managed delivery partner",
+        "external delivery team"
+      ],
+      "must_not_have_terms": [
+        "best practices",
+        "internal controls",
+        "thought leadership",
+        "modernization roadmap"
+      ],
+      "allowed_content_kinds": [
+        "editorial",
+        "listing",
+        "document"
+      ],
+      "time_window_hours": 168,
+      "priority": 0.9
+    },
+    {
+      "name": "Legacy system rescue and support takeover",
+      "description": "Signals that an organization needs a new outside vendor to rescue, stabilize, maintain, or take over an inherited software project, legacy system, delayed implementation, or abandoned codebase.",
+      "positive_prototypes": [
+        "Company needs new vendor to take over abandoned software project",
+        "Business wants support partner for inherited legacy platform",
+        "Product owner seeks external team to rescue delayed implementation",
+        "Organization replaces previous contractor and needs takeover team",
+        "Enterprise needs maintenance vendor for critical legacy application",
+        "Buyer seeks outside team for code audit and stabilization before handover",
+        "Need partner to continue development after internal team exit",
+        "Company wants legacy application support plus modernization handoff"
+      ],
+      "negative_prototypes": [
+        "Agency advertises rescue project services",
+        "Postmortem on how we rescued a codebase internally",
+        "Internal incident report about delayed project",
+        "Vendor blog about legacy modernization trends",
+        "Hiring maintenance engineer in house",
+        "Consulting pitch for application support services",
+        "Community discussion about bad outsourcing experiences",
+        "Thought piece on technical debt reduction"
+      ],
+      "must_have_terms": [
+        "take over",
+        "takeover team",
+        "rescue project",
+        "replace current vendor",
+        "stabilize codebase",
+        "maintain legacy system",
+        "support partner",
+        "continue development",
+        "handover",
+        "legacy application support"
+      ],
+      "must_not_have_terms": [
+        "case study",
+        "thought leadership",
+        "our support services",
+        "technical debt article"
+      ],
+      "allowed_content_kinds": [
+        "editorial",
+        "listing"
+      ],
+      "time_window_hours": 168,
+      "priority": 0.85
+    }
+  ],
+  "llm_templates": [
+    {
+      "template_name": "Outsourcing buyer-intent interest review",
+      "scope": "interests",
+      "prompt_template": "You are a strict relevance reviewer for outsourcing demand signals. The user is interested in \"{interest_name}\".\n\nDecide whether the article is a useful lead showing that a real buyer wants outside software delivery help.\n\nArticle title: {title}\nArticle lead: {lead}\nArticle body: {body}\n\nRespond with a JSON object:\n{\n  \"decision\": \"approve\" or \"reject\" or \"uncertain\",\n  \"score\": 0.0 to 1.0,\n  \"reason\": \"brief explanation\"\n}\n\nApprove when the article clearly shows at least one of these:\n- a founder, product owner, manager, procurement team, or company is actively looking for an agency, software house, dev team, contractor, or implementation partner\n- a real organization is running procurement, RFP, RFQ, tender, bid, vendor selection, or supplier shortlisting for software work\n- a company has a live migration, replacement, rescue, support takeover, or backlog problem and explicitly wants outside help\n- a Reddit, forum, or community post is written by the buyer and describes an active project or sourcing need\n\nReject when the article is mainly about:\n- agency, vendor, consultant, or freelancer self-promotion\n- case studies, awards, rankings, landing pages, or thought leadership\n- internal hiring only\n- generic startup, product, AI, market, or transformation news with no buying signal\n- community discussion, advice, or commentary where nobody is actively sourcing delivery help\n- tutorials, release notes, playbooks, or best-practice articles\n\nImportant:\n- buyer intent matters more than broad topic similarity\n- a consultancy article about migration or controls is not a lead unless it reports a real buyer procurement or sourcing request\n- words like agency, partner, outsourcing, MVP, migration, or transformation are not enough on their own\n- use \"uncertain\" only if the author appears to be the buyer but the sourcing intent is still incomplete\n- if evidence is weak, truncated, or ambiguous, return \"reject\""
+    },
+    {
+      "template_name": "Outsourcing buyer-intent criterion review",
+      "scope": "criteria",
+      "prompt_template": "You are a strict B2B buyer-intent reviewer.\n\nThe system criterion is: \"{criterion_name}\".\n\nDecide whether the article indicates that a real organization is likely to buy or source outside software delivery capacity now.\n\nArticle title: {title}\nArticle lead: {lead}\nArticle body: {body}\nExtra context: {explain_json}\n\nRespond with a JSON object:\n{\n  \"decision\": \"approve\" or \"reject\" or \"uncertain\",\n  \"score\": 0.0 to 1.0,\n  \"reason\": \"brief explanation\"\n}\n\nApprove only when there is meaningful evidence of at least one of these:\n1. Formal sourcing or procurement\n- RFP, RFQ, tender, bid, procurement notice, vendor shortlist, statement of work, implementation contract\n\n2. Direct buyer request\n- a founder, owner, manager, product team, procurement team, or company explicitly looking for an agency, software house, contractor, staff augmentation partner, systems integrator, or implementation vendor\n\n3. Delivery pressure with explicit externalization\n- migration, ERP or CRM rollout, legacy replacement, rescue, support takeover, platform rebuild, data migration, or remediation work\n- and the text clearly says they need outside help, contractors, vendor evaluation, partner search, or an external delivery team\n\nReject when the article is mainly about:\n- agency, vendor, consultancy, or freelancer self-promotion\n- case studies, awards, rankings, service pages, bench availability, or thought leadership\n- internal hiring or recruiter content\n- generic transformation, modernization, or migration news with no sourcing signal\n- community or HN or Reddit discussion where commenters debate outsourcing but no buyer is asking for help\n- product launches, funding, market commentary, policy news, or technical content unrelated to buying outside delivery\n\nDecision policy:\n- prefer precision over recall\n- explicit procurement and direct buyer-authored sourcing requests are the strongest positives\n- indirect transformation signals are positive only when externalization is explicit\n- if the text is mostly commentary, forum chatter, or an advisory article, reject\n- words like agency, partner, outsourcing, MVP, migration, modernization, or digital transformation are not enough by themselves\n- if unsure, return \"reject\""
+    },
+    {
+      "template_name": "Outsourcing buyer-intent global review",
+      "scope": "global",
+      "prompt_template": "You are a conservative reviewer deciding whether an article should enter a lead feed for software outsourcing companies.\n\nArticle title: {title}\nArticle lead: {lead}\nArticle body: {body}\nContext: {context}\n\nRespond with a JSON object:\n{\n  \"decision\": \"approve\" or \"reject\" or \"uncertain\",\n  \"score\": 0.0 to 1.0,\n  \"reason\": \"brief explanation\"\n}\n\nStrong positives:\n- formal procurement or sourcing for software delivery, implementation, support, migration, or integration\n- direct buyer requests for an agency, software house, dedicated team, contractor, or staff augmentation partner\n- explicit search for an implementation partner, systems integrator, rescue team, or takeover vendor\n- community posts where the original poster is the buyer and is clearly trying to source outside delivery help\n\nStrong negatives:\n- agency or vendor marketing, rankings, awards, portfolios, service pages, and case studies\n- internal hiring or recruiting\n- generic digital transformation, cloud migration, or modernization commentary without a buyer sourcing signal\n- advisory or best-practice content from consultancies or vendors\n- technical chatter, tutorials, product releases, funding news, and opinion pieces\n- comment threads or forum discussions with no active buyer request\n\nDefault behavior:\n- false positives are expensive\n- approve only when there is clear evidence of present buyer intent for outside software delivery capacity\n- if the signal is indirect, missing, or based only on broad keywords, return \"reject\""
+    }
+  ]
+}

@@ -66,6 +66,29 @@ function resolveTemplateEditPath(
   );
 }
 
+export function formatTemplateBrowserErrorMessage(
+  error: unknown,
+  kind: TemplateKind
+): string {
+  if (!(error instanceof Error)) {
+    return "Unable to save the template right now.";
+  }
+
+  const message = error.message;
+  if (
+    /column .* does not exist/i.test(message) ||
+    /is of type .* but expression is of type/i.test(message) ||
+    /null value in column .*time_window_hours.*violates not-null constraint/i.test(message) ||
+    /violates check constraint .*time_window_hours/i.test(message)
+  ) {
+    return kind === "interest"
+      ? "System interest save failed because the interest form and database schema are out of sync. Apply the latest migrations or write-path fix, then retry."
+      : "Template save failed because the template form and database schema are out of sync. Apply the latest migrations, then retry.";
+  }
+
+  return message;
+}
+
 async function writeAuditLog(
   client: Pick<PoolClient, "query">,
   actorUserId: string,
@@ -163,7 +186,7 @@ export const POST: APIRoute = async ({ request }) => {
           return buildFlashRedirect(request, {
             section: "templates",
             status: "success",
-            message: result.created ? "Interest template created" : "Interest template updated",
+            message: result.created ? "System interest created" : "System interest updated",
             redirectTo: entityPath,
           });
         }
@@ -202,7 +225,7 @@ export const POST: APIRoute = async ({ request }) => {
           return buildFlashRedirect(request, {
             section: "templates",
             status: "success",
-            message: "Interest template archived",
+            message: "System interest archived",
             redirectTo,
           });
         }
@@ -240,7 +263,7 @@ export const POST: APIRoute = async ({ request }) => {
           return buildFlashRedirect(request, {
             section: "templates",
             status: "success",
-            message: "Interest template reactivated",
+            message: "System interest reactivated",
             redirectTo,
           });
         }
@@ -261,7 +284,7 @@ export const POST: APIRoute = async ({ request }) => {
         return buildFlashRedirect(request, {
           section: "templates",
           status: "success",
-          message: "Interest template deleted",
+          message: "System interest deleted",
           redirectTo: listPath,
         });
       }
@@ -381,10 +404,7 @@ export const POST: APIRoute = async ({ request }) => {
       return buildFlashRedirect(request, {
         section: "templates",
         status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to save the template right now.",
+        message: formatTemplateBrowserErrorMessage(error, kind),
         redirectTo,
       });
     }

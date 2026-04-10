@@ -1,21 +1,3 @@
-import { createHash } from "node:crypto";
-
-export interface ParsedRssItem {
-  guid: string | null;
-  title: string;
-  url: string | null;
-  summaryHtml: string;
-  contentHtml: string;
-  publishedAt: string | null;
-  rawXmlHash: string;
-}
-
-interface ParsedRssFeed {
-  title: string | null;
-  language: string | null;
-  items: ParsedRssItem[];
-}
-
 const HTML_ENTITY_MAP: Record<string, string> = {
   amp: "&",
   apos: "'",
@@ -24,10 +6,6 @@ const HTML_ENTITY_MAP: Record<string, string> = {
   nbsp: " ",
   quot: "\""
 };
-
-function stripCdata(value: string): string {
-  return value.replace(/^<!\[CDATA\[/, "").replace(/\]\]>$/, "");
-}
 
 export function decodeHtmlEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (_, entity: string) => {
@@ -54,40 +32,6 @@ export function stripHtmlTags(value: string): string {
 
 export function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
-}
-
-function normalizeTagContent(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const withoutCdata = stripCdata(value.trim());
-  return decodeHtmlEntities(withoutCdata).trim();
-}
-
-function escapeTagName(tagName: string): string {
-  return tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function extractTagContent(block: string, tagName: string): string | null {
-  const pattern = new RegExp(
-    `<${escapeTagName(tagName)}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapeTagName(tagName)}>`,
-    "i"
-  );
-  const match = block.match(pattern);
-  return normalizeTagContent(match?.[1] ?? null);
-}
-
-function extractFirstTagContent(block: string, tagNames: string[]): string | null {
-  for (const tagName of tagNames) {
-    const value = extractTagContent(block, tagName);
-
-    if (value) {
-      return value;
-    }
-  }
-
-  return null;
 }
 
 export function canonicalizeUrl(rawUrl: string): string {
@@ -122,56 +66,4 @@ export function canonicalizeUrl(rawUrl: string): string {
   }
 
   return url.toString();
-}
-
-function parseDate(rawValue: string | null): string | null {
-  if (!rawValue) {
-    return null;
-  }
-
-  const parsed = new Date(rawValue);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-}
-
-export function parseRssFeed(xml: string): ParsedRssFeed {
-  if (!/<rss[\s>]/i.test(xml) || !/<channel[\s>]/i.test(xml)) {
-    throw new Error("Invalid RSS feed: expected <rss> and <channel> markup.");
-  }
-
-  const channelBlockMatch = xml.match(/<channel(?:\s[^>]*)?>([\s\S]*?)<\/channel>/i);
-  const channelBlock = channelBlockMatch?.[1] ?? xml;
-  const itemBlocks = Array.from(xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi));
-
-  const items = itemBlocks.map((match) => {
-    const itemBlock = match[1];
-    const guid = extractFirstTagContent(itemBlock, ["guid"]);
-    const title =
-      collapseWhitespace(extractFirstTagContent(itemBlock, ["title"]) ?? "") ||
-      "Untitled RSS item";
-    const rawUrl = extractFirstTagContent(itemBlock, ["link"]);
-
-    return {
-      guid,
-      title,
-      url: rawUrl,
-      summaryHtml: extractFirstTagContent(itemBlock, ["description"]) ?? "",
-      contentHtml:
-        extractFirstTagContent(itemBlock, ["content:encoded", "content"]) ?? "",
-      publishedAt: parseDate(
-        extractFirstTagContent(itemBlock, [
-          "pubDate",
-          "published",
-          "dc:date",
-          "updated"
-        ])
-      ),
-      rawXmlHash: createHash("sha256").update(itemBlock).digest("hex")
-    } satisfies ParsedRssItem;
-  });
-
-  return {
-    title: extractFirstTagContent(channelBlock, ["title"]),
-    language: extractFirstTagContent(channelBlock, ["language"]),
-    items
-  };
 }

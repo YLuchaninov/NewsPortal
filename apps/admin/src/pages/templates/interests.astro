@@ -35,7 +35,7 @@ function parsePage(paramName: string): number {
 }
 
 const page = parsePage("page");
-const templates = await sdk.listInterestTemplatesPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
+const templates = await sdk.listSystemInterestsPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
 const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
 const activeCount = templates.items.filter((item) => item.is_active === true).length;
 
@@ -50,12 +50,12 @@ function resolveListHref(nextPage: number): string {
 }
 ---
 
-<AdminShell title="Interest Templates — Admin" session={session} flash={flash} activeNav="interest-templates">
+<AdminShell title="System Interests — Admin" session={session} flash={flash} activeNav="interest-templates">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <span class="text-foreground font-medium">Interest Templates</span>
+      <span class="text-foreground font-medium">System Interests</span>
     </nav>
   </Fragment>
 
@@ -67,17 +67,17 @@ function resolveListHref(nextPage: number): string {
       LLM templates
     </a>
     <a href={appPath("/templates/interests/new")} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-      New interest template
+      New system interest
     </a>
   </Fragment>
 
   <div class="space-y-6">
     <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-2xl">
-        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Predefined topics</p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight">Interest templates</h1>
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Global selection</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">System interests</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          These templates define reusable topic prototypes. Active templates are synced into the live criteria set used by fresh ingest and historical reindex, while this list focuses on lifecycle state and coverage.
+          These system interests define the reusable prototypes, hard constraints, time windows, and content-kind gates that shape the global system-selected collection. Active entries sync their matching constraints into the live criterion set used by fresh ingest and historical reindex, while allowed content kinds remain template-owned gates for which resource kinds may appear in the collection.
           Editing one specific user's real `user_interests` happens on the separate <a href={appPath("/user-interests")} class="text-primary hover:underline">User Interests</a> page.
         </p>
       </div>
@@ -99,19 +99,19 @@ function resolveListHref(nextPage: number): string {
 
     <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div class="border-b border-border px-5 py-4">
-        <h2 class="text-base font-semibold">Template catalog</h2>
+        <h2 class="text-base font-semibold">System interest catalog</h2>
         <p class="mt-1 text-sm text-muted-foreground">
-          {templates.total} template{templates.total !== 1 ? "s" : ""} total
+          {templates.total} system interest{templates.total !== 1 ? "s" : ""} total
           {templates.total > 0 && ` — page ${templates.page} of ${Math.max(templates.totalPages, 1)}`}
         </p>
       </div>
 
       {templates.total === 0 ? (
         <div class="px-6 py-14 text-center">
-          <p class="text-base font-medium">No interest templates yet</p>
-          <p class="mt-2 text-sm text-muted-foreground">Create the first predefined topic so users can subscribe quickly.</p>
+          <p class="text-base font-medium">No system interests yet</p>
+          <p class="mt-2 text-sm text-muted-foreground">Create the first system interest so the platform can start selecting content globally.</p>
           <a href={appPath("/templates/interests/new")} class="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-            Create template
+            Create system interest
           </a>
         </div>
       ) : (
@@ -119,8 +119,9 @@ function resolveListHref(nextPage: number): string {
           <table class="w-full min-w-[920px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Template</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">System interest</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Coverage</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Content kinds</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Priority</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Status</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
@@ -129,17 +130,20 @@ function resolveListHref(nextPage: number): string {
             <tbody>
               {templates.items.length === 0 ? (
                 <tr>
-                  <td colspan="5" class="px-5 py-10 text-center text-sm text-muted-foreground">No templates on this page</td>
+                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No system interests on this page</td>
                 </tr>
               ) : templates.items.map((template) => {
                 const interestTemplateId = String(template.interest_template_id ?? "");
                 const isActive = template.is_active === true;
                 const positiveCount = Array.isArray(template.positive_texts) ? (template.positive_texts as unknown[]).length : 0;
                 const negativeCount = Array.isArray(template.negative_texts) ? (template.negative_texts as unknown[]).length : 0;
+                const allowedKinds = Array.isArray(template.allowed_content_kinds)
+                  ? (template.allowed_content_kinds as unknown[]).map((entry) => String(entry ?? "")).filter(Boolean)
+                  : [];
                 return (
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
-                      <p class="text-sm font-semibold">{String(template.name ?? "Unnamed template")}</p>
+                      <p class="text-sm font-semibold">{String(template.name ?? "Unnamed system interest")}</p>
                       <p class="mt-1 max-w-lg line-clamp-2 text-sm text-muted-foreground">{String(template.description ?? "No description yet.")}</p>
                     </td>
                     <td class="px-5 py-4 align-top">
@@ -150,6 +154,15 @@ function resolveListHref(nextPage: number): string {
                         <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-medium text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
                           {negativeCount} negative
                         </span>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="flex max-w-xs flex-wrap gap-2">
+                        {(allowedKinds.length > 0 ? allowedKinds : ["editorial", "listing", "entity", "document", "data_file", "api_payload"]).map((kind) => (
+                          <span class="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+                            {kind}
+                          </span>
+                        ))}
                       </div>
                     </td>
                     <td class="px-5 py-4 align-top text-sm text-muted-foreground">
@@ -172,12 +185,12 @@ function resolveListHref(nextPage: number): string {
                         </a>
                         <AdminConfirmAction
                           action={appPath("/bff/admin/templates")}
-                          title={isActive ? "Archive template" : "Reactivate template"}
+                          title={isActive ? "Archive system interest" : "Reactivate system interest"}
                           description={isActive
-                            ? "Archived templates stay visible to operators but disappear from the active catalog until you reactivate them."
-                            : "Reactivating this template makes it available again for operators and downstream topic selection."}
+                            ? "Archived system interests stay visible to operators but disappear from the active catalog until you reactivate them."
+                            : "Reactivating this system interest makes it available again for operators and downstream content selection."}
                           triggerLabel={isActive ? "Archive" : "Activate"}
-                          confirmLabel={isActive ? "Archive template" : "Activate template"}
+                          confirmLabel={isActive ? "Archive system interest" : "Activate system interest"}
                           fields={[
                             { name: "kind", value: "interest" },
                             { name: "intent", value: isActive ? "archive" : "activate" },
@@ -190,10 +203,10 @@ function resolveListHref(nextPage: number): string {
                         />
                         <AdminConfirmAction
                           action={appPath("/bff/admin/templates")}
-                          title="Delete template"
-                          description="Delete permanently only when this predefined topic should no longer exist in the admin library at all."
+                          title="Delete system interest"
+                          description="Delete permanently only when this global selection rule should no longer exist in the admin library at all."
                           triggerLabel="Delete"
-                          confirmLabel="Delete template"
+                          confirmLabel="Delete system interest"
                           fields={[
                             { name: "kind", value: "interest" },
                             { name: "intent", value: "delete" },

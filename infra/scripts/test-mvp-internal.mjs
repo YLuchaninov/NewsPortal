@@ -527,7 +527,7 @@ function countInterestMatches(env, { docId, interestId }) {
   );
 }
 
-function countNotifications(env, { docId, interestId = null, status = null }) {
+function countNotifications(env, { docId, interestId = null, status = null, channelType = null }) {
   const filters = [`doc_id = ${sqlLiteral(docId)}`];
   if (interestId) {
     filters.push(`interest_id = ${sqlLiteral(interestId)}`);
@@ -535,12 +535,27 @@ function countNotifications(env, { docId, interestId = null, status = null }) {
   if (status) {
     filters.push(`status = ${sqlLiteral(status)}`);
   }
+  if (channelType) {
+    filters.push(`channel_type = ${sqlLiteral(channelType)}`);
+  }
   return queryPostgresInt(
     env,
     `
       select count(*)::int
       from notification_log
       where ${filters.join("\n        and ")};
+    `
+  );
+}
+
+function countNotificationFeedback(env, { userId, notificationId }) {
+  return queryPostgresInt(
+    env,
+    `
+      select count(*)::int
+      from notification_feedback
+      where user_id = ${sqlLiteral(userId)}
+        and notification_id = ${sqlLiteral(notificationId)};
     `
   );
 }
@@ -591,6 +606,32 @@ function normalizeMailMessages(payload) {
   return [];
 }
 
+function countDigestDeliveries(env, { userId, digestKind = null, status = null }) {
+  const filters = [`user_id = ${sqlLiteral(userId)}`];
+  if (digestKind) {
+    filters.push(`digest_kind = ${sqlLiteral(digestKind)}`);
+  }
+  if (status) {
+    filters.push(`status = ${sqlLiteral(status)}`);
+  }
+  return queryPostgresInt(
+    env,
+    `
+      select count(*)::int
+      from digest_delivery_log
+      where ${filters.join("\n        and ")};
+    `
+  );
+}
+
+async function fetchMailMessages() {
+  const response = await fetch("http://127.0.0.1:8025/api/v1/messages");
+  if (!response.ok) {
+    throw new Error(`Mailpit messages API responded with ${response.status}`);
+  }
+  return normalizeMailMessages(await response.json());
+}
+
 async function main() {
   const env = await readEnvFile(".env.dev");
   const firebaseApiKey = requireConfigured(env, "FIREBASE_WEB_API_KEY");
@@ -607,7 +648,7 @@ async function main() {
   const adminPassword = `NewsPortal!${runId}`;
   const notificationEmail = `internal-user-${runId}@example.test`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
-  const articleSourceUrl = `https://example.test/articles/${runId}`;
+  const articleSourceUrl = `https://example.test/content/${encodeURIComponent(`editorial:${runId}`)}`;
   const adminFreshRunId = `${runId}-admin-fresh`;
   const adminFreshArticleTitle = `EU AI policy update reaches Brussels and Warsaw ${adminFreshRunId}`;
   let stackStarted = false;
@@ -756,13 +797,29 @@ async function main() {
       throw new Error("Web bootstrap did not return a session cookie and user id.");
     }
 
+    await assertHtmlContains("http://127.0.0.1:4321/saved", ["Nothing saved yet", "Browse collection"], {
+      cookie: webCookie
+    });
+    await assertHtmlContains("http://127.0.0.1:4321/following", ["No followed stories yet", "Browse collection"], {
+      cookie: webCookie
+    });
+    await assertHtmlContains(
+      "http://127.0.0.1:4321/notifications",
+      ["No notifications yet", 'href="/settings"'],
+      { cookie: webCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:4321/matches",
+      ["No personal matches yet", 'href="/interests"'],
+      { cookie: webCookie }
+    );
+
     const webPreferenceRedirect = await postBrowserForm(
       "http://127.0.0.1:4321/bff/preferences",
       {
         themePreference: "light",
         webPushEnabled: "true",
-        telegramEnabled: "true",
-        weeklyEmailDigestEnabled: "true"
+        telegramEnabled: "true"
       },
       {
         cookie: webCookie
@@ -775,8 +832,8 @@ async function main() {
       message: "Preferences saved"
     });
 
-    log("Creating interest and email digest channel.");
-    await postForm(
+    log("Creating interest plus digest and immediate notification channels.");
+    const userInterest = await postForm(
       "http://127.0.0.1:4321/bff/interests",
       {
         description: "AI policy changes in the European Union",
@@ -791,11 +848,25 @@ async function main() {
         cookie: webCookie
       }
     );
+    const userInterestId = String(userInterest.json?.interestId ?? "");
+    if (!userInterestId) {
+      throw new Error("User interest creation did not return an interestId.");
+    }
     await postForm(
       "http://127.0.0.1:4321/bff/notification-channels",
       {
         channelType: "email_digest",
         email: notificationEmail
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    await postForm(
+      "http://127.0.0.1:4321/bff/notification-channels",
+      {
+        channelType: "telegram",
+        chatId: `internal-${runId}`
       },
       {
         cookie: webCookie
@@ -808,6 +879,78 @@ async function main() {
       (payload) =>
         Array.isArray(payload?.interests) &&
         payload.interests.some((interest) => interest.compile_status === "compiled")
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:4321/interests",
+      [
+        "AI policy changes in the European Union",
+        "Edit / Clone / Delete"
+      ],
+      { cookie: webCookie }
+    );
+    await postForm(
+      `http://127.0.0.1:4321/bff/interests/${encodeURIComponent(userInterestId)}`,
+      {
+        _action: "update",
+        description: "AI policy changes in the European Union and Poland"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    await waitFor(
+      "updated user interest description",
+      async () => fetchJson("http://127.0.0.1:4321/bff/interests", { cookie: webCookie }),
+      (payload) =>
+        Array.isArray(payload?.interests) &&
+        payload.interests.some(
+          (interest) =>
+            String(interest?.interest_id ?? "") === userInterestId &&
+            String(interest?.description ?? "") === "AI policy changes in the European Union and Poland"
+        )
+    );
+    const clonedInterestResponse = await postForm(
+      `http://127.0.0.1:4321/bff/interests/${encodeURIComponent(userInterestId)}`,
+      {
+        _action: "clone",
+        description: "AI policy clone for acceptance"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    const clonedInterestId = String(clonedInterestResponse.json?.interestId ?? "");
+    if (!clonedInterestId) {
+      throw new Error("Cloned user interest did not return a new interestId.");
+    }
+    await waitFor(
+      "cloned user interest",
+      async () => fetchJson("http://127.0.0.1:4321/bff/interests", { cookie: webCookie }),
+      (payload) =>
+        Array.isArray(payload?.interests) &&
+        payload.interests.some(
+          (interest) =>
+            String(interest?.interest_id ?? "") === clonedInterestId &&
+            String(interest?.description ?? "") === "AI policy clone for acceptance"
+        )
+    );
+    await postForm(
+      `http://127.0.0.1:4321/bff/interests/${encodeURIComponent(clonedInterestId)}`,
+      {
+        _action: "delete"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    await waitFor(
+      "deleted cloned user interest",
+      async () => fetchJson("http://127.0.0.1:4321/bff/interests", { cookie: webCookie }),
+      (payload) =>
+        Array.isArray(payload?.interests) &&
+        !payload.interests.some(
+          (interest) => String(interest?.interest_id ?? "") === clonedInterestId
+        )
     );
 
     log("Creating allowlisted Firebase admin identity.");
@@ -1017,9 +1160,13 @@ async function main() {
       }
     });
 
-    const nginxArticles = await fetchJson("http://127.0.0.1:8080/api/articles");
-    if (!Array.isArray(nginxArticles)) {
-      throw new Error("Expected nginx /api/articles to resolve to the public API array response.");
+    const nginxContentItems = await fetchJson(
+      "http://127.0.0.1:8080/api/content-items?page=1&pageSize=20"
+    );
+    if (!Array.isArray(nginxContentItems?.items)) {
+      throw new Error(
+        "Expected nginx /api/content-items to resolve to the canonical paginated content-items response."
+      );
     }
 
     const nginxWebBootstrap = await postBrowserForm("http://127.0.0.1:8080/bff/auth/bootstrap", {});
@@ -1090,7 +1237,22 @@ async function main() {
     );
     await assertHtmlContains(
       "http://127.0.0.1:8080/admin/templates/interests",
-      ['href="/admin/templates/interests/new"', "Template catalog", "Interest templates"],
+      ['href="/admin/templates/interests/new"', "System interest catalog", "System interests"],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/help",
+      ["Admin Guide", "System Overview", "Discovery Control Plane"],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/clusters",
+      ["Event Clusters", "What are event clusters?"],
+      { cookie: nginxAdminCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:8080/admin/observability",
+      ["Observability", "Fetch Runs", "Understanding these metrics"],
       { cookie: nginxAdminCookie }
     );
     const nginxAdminLogout = await postBrowserForm(
@@ -1110,6 +1272,30 @@ async function main() {
         next: "/admin/"
       }
     });
+
+    log("Creating a system interest so the global collection has an active selection rule.");
+    const systemInterest = await postForm(
+      "http://127.0.0.1:4322/bff/admin/templates",
+      {
+        kind: "interest",
+        intent: "save",
+        name: `Internal MVP system interest ${runId}`,
+        description: "Deterministic editorial selection for the internal MVP acceptance flow.",
+        positive_texts: "EU AI policy update\nBrussels AI guidance\nWarsaw AI guidance",
+        negative_texts: "sports\ncelebrity gossip",
+        allowed_content_kinds: "editorial",
+        languages_allowed: "en",
+        priority: "1",
+        isActive: "true"
+      },
+      {
+        cookie: adminCookie
+      }
+    );
+    const systemInterestId = String(systemInterest.json?.interestTemplateId ?? "");
+    if (!systemInterestId) {
+      throw new Error("System interest creation did not return an interestTemplateId.");
+    }
 
     log("Creating RSS channel through the admin surface.");
     const adminChannel = await postForm(
@@ -1159,38 +1345,18 @@ async function main() {
       (row) => Array.isArray(row) && row.length === 3
     );
     const docId = articleRow[0];
-
     await waitFor(
-      "notification delivery status",
-      async () => {
-        const row = queryPostgres(
-          env,
-          `
-            select
-              status,
-              coalesce(delivery_payload_json ->> 'detail', '')
-            from notification_log
-            where doc_id = ${sqlLiteral(docId)}
-            order by created_at desc
-            limit 1;
-          `
-        );
-        if (!row) {
-          return null;
-        }
-        const [status, detail] = row.split("|");
-        if (status === "failed") {
-          throw new Error(
-            `Notification delivery failed for ${docId}: ${detail || "no detail"}`
-          );
-        }
-        return status;
-      },
-      (value) => value === "sent"
+      "user interest match for scheduled/manual digest content",
+      async () =>
+        countInterestMatches(env, {
+          docId,
+          interestId: userInterestId
+        }),
+      (value) => value === 1
     );
 
     await waitFor(
-      "article notified state",
+      "article match lifecycle state",
       async () =>
         queryPostgres(
           env,
@@ -1200,41 +1366,36 @@ async function main() {
             where doc_id = ${sqlLiteral(docId)};
           `
         ),
-      (value) => value === "notified"
+      (value) => value === "matched" || value === "notified"
     );
 
-    log("Verifying email arrival in the local SMTP sink.");
-    await waitFor(
-      "mail sink message",
-      async () => {
-        const response = await fetch("http://127.0.0.1:8025/api/v1/messages");
-        if (!response.ok) {
-          throw new Error(`Mailpit messages API responded with ${response.status}`);
-        }
-        return response.json();
-      },
-      (payload) =>
-        normalizeMailMessages(payload).some((message) =>
-          JSON.stringify(message).includes(articleTitle)
-        )
-    );
-
-    log("Verifying the public feed links articles to the original source.");
-    const publicFeed = await fetchJson("http://127.0.0.1:8000/feed?page=1&pageSize=20");
-    const publicFeedArticle = Array.isArray(publicFeed?.items)
-      ? publicFeed.items.find((item) => String(item?.doc_id ?? "") === docId)
+    const editorialContentItemId = `editorial:${docId}`;
+    log("Verifying the system-selected collection keeps source urls while the web UI routes through internal content detail pages.");
+    const publicCollection = await fetchJson("http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=20");
+    const publicCollectionItem = Array.isArray(publicCollection?.items)
+      ? publicCollection.items.find((item) => String(item?.content_item_id ?? "") === editorialContentItemId)
       : null;
-    if (!publicFeedArticle) {
-      throw new Error(`Expected /feed to include article ${docId} on the first page.`);
+    if (!publicCollectionItem) {
+      throw new Error(`Expected /collections/system-selected to include content item ${editorialContentItemId} on the first page.`);
     }
-    if (String(publicFeedArticle.url ?? "") !== articleSourceUrl) {
+    if (String(publicCollectionItem.url ?? "") !== articleSourceUrl) {
       throw new Error(
-        `Expected /feed article ${docId} to expose source url ${articleSourceUrl}, got ${String(publicFeedArticle.url ?? "<none>")}.`
+        `Expected /collections/system-selected item ${editorialContentItemId} to expose source url ${articleSourceUrl}, got ${String(publicCollectionItem.url ?? "<none>")}.`
       );
     }
     await assertHtmlContains(
       "http://127.0.0.1:4321/",
-      [articleTitle, articleSourceUrl],
+      [articleTitle, articleSourceUrl, `/content/${encodeURIComponent(editorialContentItemId)}`],
+      { cookie: webCookie }
+    );
+    await assertHtmlContains(
+      "http://127.0.0.1:4321/matches",
+      [articleTitle, "My Matches"],
+      { cookie: webCookie }
+    );
+    await assertHtmlContains(
+      `http://127.0.0.1:4321/content/${encodeURIComponent(editorialContentItemId)}`,
+      [articleTitle, articleSourceUrl, "Mark unread", "Save", "Follow story"],
       { cookie: webCookie }
     );
     await assertHtmlDoesNotContain(
@@ -1242,6 +1403,322 @@ async function main() {
       [`/articles/${docId}/explain`],
       { cookie: webCookie }
     );
+    if (
+      countNotifications(env, {
+        docId,
+        channelType: "email_digest"
+      }) !== 0
+    ) {
+      throw new Error(`Immediate notification flow should not write email_digest rows for ${docId}.`);
+    }
+
+    const seenState = queryPostgres(
+      env,
+      `
+        select
+          (first_seen_at is not null)::text,
+          (last_seen_at is not null)::text
+        from user_content_state
+        where user_id = ${sqlLiteral(userId)}
+          and content_item_id = ${sqlLiteral(editorialContentItemId)}
+        limit 1;
+      `
+    );
+    if (seenState !== "true|true") {
+      throw new Error(
+        `Opening content detail should mark ${editorialContentItemId} seen, got ${seenState || "<none>"}.`
+      );
+    }
+
+    const unreadState = await postForm(
+      "http://127.0.0.1:4321/bff/content-state",
+      {
+        contentItemId: editorialContentItemId,
+        action: "mark_unread"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    if (unreadState.json?.userState?.is_new !== false || unreadState.json?.userState?.is_seen !== false) {
+      throw new Error("Mark unread should keep the item seen historically but unread currently.");
+    }
+
+    const saveState = await postForm(
+      "http://127.0.0.1:4321/bff/content-state",
+      {
+        contentItemId: editorialContentItemId,
+        action: "save"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    if (saveState.json?.userState?.saved_state !== "saved") {
+      throw new Error(`Save action did not persist saved_state for ${editorialContentItemId}.`);
+    }
+
+    const followState = await postForm(
+      "http://127.0.0.1:4321/bff/story-follow",
+      {
+        contentItemId: editorialContentItemId,
+        action: "follow"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    if (!followState.json?.userState?.is_following_story) {
+      throw new Error(`Follow story action did not persist follow state for ${editorialContentItemId}.`);
+    }
+
+    await assertHtmlContains("http://127.0.0.1:4321/saved", [articleTitle, "Preview selected digest"], {
+      cookie: webCookie
+    });
+    await assertHtmlContains("http://127.0.0.1:4321/following", [articleTitle], {
+      cookie: webCookie
+    });
+    await assertHtmlContains(
+      "http://127.0.0.1:4321/notifications",
+      [articleTitle, "Notification History"],
+      { cookie: webCookie }
+    );
+    await assertHtmlContains(
+      `http://127.0.0.1:4321/saved/digest?item=${encodeURIComponent(editorialContentItemId)}`,
+      [articleTitle, "Download HTML", "Send to email"],
+      { cookie: webCookie }
+    );
+
+    const exportDigestResponse = await sendRequest(
+      `http://127.0.0.1:4321/saved/digest/export?item=${encodeURIComponent(editorialContentItemId)}`,
+      {
+        headers: {
+          Cookie: webCookie
+        }
+      }
+    );
+    if (exportDigestResponse.status !== 200) {
+      throw new Error(`Expected saved digest export to return 200, got ${exportDigestResponse.status}.`);
+    }
+    if (!readHeader(exportDigestResponse.headers, "content-disposition").includes("saved-digest.html")) {
+      throw new Error("Saved digest export should include a saved-digest.html attachment filename.");
+    }
+    if (!exportDigestResponse.text.includes(articleTitle)) {
+      throw new Error("Saved digest export did not render the selected article.");
+    }
+
+    const manualDigestMailCountBefore = (await fetchMailMessages()).length;
+    const manualDigestRedirect = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/saved-digest",
+      {
+        returnTo: `/saved/digest?item=${encodeURIComponent(editorialContentItemId)}`,
+        item: editorialContentItemId
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    if (manualDigestRedirect.status !== 303) {
+      throw new Error(`Expected manual saved digest queue request to redirect, got ${manualDigestRedirect.status}.`);
+    }
+    const manualDigestLocation = new URL(
+      readHeader(manualDigestRedirect.headers, "location"),
+      "http://127.0.0.1:4321"
+    );
+    if (manualDigestLocation.pathname !== "/saved/digest") {
+      throw new Error(`Expected manual saved digest redirect to /saved/digest, got ${manualDigestLocation.pathname}.`);
+    }
+    if (manualDigestLocation.searchParams.get("flash_status") !== "success") {
+      throw new Error("Manual saved digest queue request did not report success.");
+    }
+
+    await waitFor(
+      "manual saved digest delivery",
+      async () =>
+        queryPostgres(
+          env,
+          `
+            select status
+            from digest_delivery_log
+            where user_id = ${sqlLiteral(userId)}
+              and digest_kind = 'manual_saved'
+            order by requested_at desc
+            limit 1;
+          `
+        ),
+      (value) => value === "sent"
+    );
+    await waitFor(
+      "manual saved digest email",
+      async () => fetchMailMessages(),
+      (messages) =>
+        messages.length > manualDigestMailCountBefore &&
+        messages.some((message) => {
+          const serialized = JSON.stringify(message);
+          return serialized.includes("Saved digest") && serialized.includes(articleTitle);
+        })
+    );
+
+    log("Saving scheduled digest cadence settings.");
+    const digestSettingsResponse = await postForm(
+      "http://127.0.0.1:4321/bff/digest-settings",
+      {
+        digestEnabled: "true",
+        digestCadence: "every_3_days",
+        digestTime: "09:15",
+        digestTimezone: "Europe/Warsaw",
+        digestSkipIfEmpty: "true"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    if (!digestSettingsResponse.json?.digestSettings?.is_enabled) {
+      throw new Error("Scheduled digest settings did not enable digest delivery.");
+    }
+    if (String(digestSettingsResponse.json?.digestSettings?.cadence ?? "") !== "every_3_days") {
+      throw new Error("Scheduled digest settings did not persist the selected cadence.");
+    }
+    if (!String(digestSettingsResponse.json?.digestSettings?.next_run_at ?? "").trim()) {
+      throw new Error("Scheduled digest settings did not compute the next run timestamp.");
+    }
+
+    queryPostgres(
+      env,
+      `
+        update user_digest_settings
+        set
+          next_run_at = now() - interval '2 minutes',
+          last_sent_at = null,
+          last_delivery_status = null,
+          last_delivery_error = null,
+          updated_at = now()
+        where user_id = ${sqlLiteral(userId)};
+      `
+    );
+    const scheduledDigestMailCountBefore = (await fetchMailMessages()).length;
+    await waitFor(
+      "scheduled digest delivery",
+      async () =>
+        queryPostgres(
+          env,
+          `
+            select status
+            from digest_delivery_log
+            where user_id = ${sqlLiteral(userId)}
+              and digest_kind = 'scheduled_matches'
+            order by requested_at desc
+            limit 1;
+          `
+        ),
+      (value) => value === "sent"
+    );
+    await waitFor(
+      "scheduled digest email",
+      async () => fetchMailMessages(),
+      (messages) =>
+        messages.length > scheduledDigestMailCountBefore &&
+        messages.some((message) => {
+          const serialized = JSON.stringify(message);
+          return serialized.includes("every 3 days") && serialized.includes(articleTitle);
+        })
+    );
+    if (
+      countDigestDeliveries(env, {
+        userId,
+        digestKind: "scheduled_matches",
+        status: "sent"
+      }) < 1
+    ) {
+      throw new Error(`Expected at least one scheduled digest delivery row for ${userId}.`);
+    }
+
+    const notificationRow = queryPostgres(
+      env,
+      `
+        select notification_id::text
+        from notification_log
+        where user_id = ${sqlLiteral(userId)}
+          and doc_id = ${sqlLiteral(docId)}
+        order by sent_at desc nulls last, created_at desc
+        limit 1;
+      `
+    );
+    if (!notificationRow) {
+      throw new Error(`Expected a notification row for ${docId} before feedback checks.`);
+    }
+    const helpfulFeedbackRedirect = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/feedback",
+      {
+        notificationId: notificationRow,
+        docId,
+        interestId: userInterestId,
+        feedbackValue: "helpful"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    assertFlashRedirect(helpfulFeedbackRedirect, {
+      origin: "http://127.0.0.1:4321",
+      pathname: "/",
+      section: "notifications",
+      status: "success",
+      message: "Feedback recorded"
+    });
+    if (
+      countNotificationFeedback(env, {
+        userId,
+        notificationId: notificationRow
+      }) !== 1
+    ) {
+      throw new Error("Helpful notification feedback did not persist exactly one row.");
+    }
+    let feedbackValue = queryPostgres(
+      env,
+      `
+        select feedback_value
+        from notification_feedback
+        where user_id = ${sqlLiteral(userId)}
+          and notification_id = ${sqlLiteral(notificationRow)}
+        limit 1;
+      `
+    );
+    if (feedbackValue !== "helpful") {
+      throw new Error(`Expected helpful feedback value, got ${feedbackValue || "<none>"}.`);
+    }
+    const notHelpfulFeedbackRedirect = await postBrowserForm(
+      "http://127.0.0.1:4321/bff/feedback",
+      {
+        notificationId: notificationRow,
+        docId,
+        interestId: userInterestId,
+        feedbackValue: "not_helpful"
+      },
+      {
+        cookie: webCookie
+      }
+    );
+    assertFlashRedirect(notHelpfulFeedbackRedirect, {
+      origin: "http://127.0.0.1:4321",
+      pathname: "/",
+      section: "notifications",
+      status: "success",
+      message: "Feedback recorded"
+    });
+    feedbackValue = queryPostgres(
+      env,
+      `
+        select feedback_value
+        from notification_feedback
+        where user_id = ${sqlLiteral(userId)}
+          and notification_id = ${sqlLiteral(notificationRow)}
+        limit 1;
+      `
+    );
+    if (feedbackValue !== "not_helpful") {
+      throw new Error(`Expected feedback update to not_helpful, got ${feedbackValue || "<none>"}.`);
+    }
 
     log("Exercising moderation block/unblock and verifying audit trail.");
     await postForm(
@@ -1257,7 +1734,7 @@ async function main() {
     );
     await waitFor(
       "blocked article visibility",
-      async () => fetchJson(`http://127.0.0.1:8000/articles/${docId}`),
+      async () => fetchJson(`http://127.0.0.1:8000/maintenance/articles/${docId}`),
       (payload) => payload?.visibility_state === "blocked"
     );
 
@@ -1274,7 +1751,7 @@ async function main() {
     );
     await waitFor(
       "unblocked article visibility",
-      async () => fetchJson(`http://127.0.0.1:8000/articles/${docId}`),
+      async () => fetchJson(`http://127.0.0.1:8000/maintenance/articles/${docId}`),
       (payload) => payload?.visibility_state === "visible"
     );
 
@@ -1419,59 +1896,41 @@ async function main() {
         }),
       (value) => value === 1
     );
-
-    const freshDeliveryResolution = await waitFor(
-      "fresh article delivery resolution",
-      async () => {
-        const sentCount = countNotifications(env, {
-          docId: freshDocId,
-          interestId: adminManagedInterestId,
-          status: "sent"
-        });
-        const failedCount = countNotifications(env, {
-          docId: freshDocId,
-          interestId: adminManagedInterestId,
-          status: "failed"
-        });
-        const suppressionCount = countSuppressions(env, {
-          docId: freshDocId,
-          interestId: adminManagedInterestId
-        });
-        if (failedCount > 0) {
-          throw new Error(
-            `Notification delivery failed for ${freshDocId} and interest ${adminManagedInterestId}.`
-          );
-        }
-        return {
-          sentCount,
-          suppressionCount,
-          suppressionReason:
-            suppressionCount > 0
-              ? latestSuppressionReason(env, {
-                  docId: freshDocId,
-                  interestId: adminManagedInterestId
-                })
-              : null
-        };
-      },
-      (value) => value.sentCount > 0 || value.suppressionCount > 0
+    await waitFor(
+      "fresh article lifecycle state",
+      async () =>
+        queryPostgres(
+          env,
+          `
+            select processing_state
+            from articles
+            where doc_id = ${sqlLiteral(freshDocId)};
+          `
+        ),
+      (value) => value === "matched" || value === "notified"
     );
-
     if (
-      freshDeliveryResolution.suppressionCount > 0 &&
-      freshDeliveryResolution.suppressionReason !== "recent_send_history"
+      countNotifications(env, {
+        docId: freshDocId,
+        channelType: "email_digest"
+      }) !== 0
     ) {
-      throw new Error(
-        `Expected fresh article ${freshDocId} suppression to come from recent_send_history, got ${freshDeliveryResolution.suppressionReason || "<none>"}.`
-      );
+      throw new Error(`Fresh article ${freshDocId} should not create immediate email_digest notification rows.`);
     }
 
     const freshAdminMatchCountBeforeBackfill = countInterestMatches(env, {
       docId: freshDocId,
       interestId: adminManagedInterestId
     });
-    const freshNotificationCountBeforeBackfill = freshDeliveryResolution.sentCount;
-    const freshSuppressionCountBeforeBackfill = freshDeliveryResolution.suppressionCount;
+    const freshNotificationCountBeforeBackfill = countNotifications(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId,
+      status: "sent"
+    });
+    const freshSuppressionCountBeforeBackfill = countSuppressions(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
 
     log("Queueing historical backfill after the admin-managed interest is live.");
     const backfillJob = await postForm(
@@ -1561,6 +2020,84 @@ async function main() {
     if (freshSuppressionCountAfterBackfill !== freshSuppressionCountBeforeBackfill) {
       throw new Error(
         `Expected backfill to keep fresh article ${freshDocId} suppression cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshSuppressionCountBeforeBackfill}, after=${freshSuppressionCountAfterBackfill}.`
+      );
+    }
+
+    log("Verifying the admin article detail surface and enrichment retry flow on the fresh article.");
+    await assertHtmlContains(
+      `http://127.0.0.1:4322/articles/${freshDocId}`,
+      [adminFreshArticleTitle, "Retry enrichment", "Raw enrichment debug"],
+      { cookie: adminCookie }
+    );
+    const enrichmentRetryAuditBefore = countNotifications(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
+    const retryAuditCountBefore = queryPostgresInt(
+      env,
+      `
+        select count(*)::int
+        from audit_log
+        where action_type = 'article_enrichment_retry'
+          and entity_type = 'article'
+          and entity_id = ${sqlLiteral(freshDocId)};
+      `
+    );
+    const retryResponse = await postBrowserForm(
+      "http://127.0.0.1:4322/bff/admin/articles/enrichment-retry",
+      {
+        docId: freshDocId,
+        redirectTo: `/articles/${freshDocId}`,
+      },
+      {
+        cookie: adminCookie
+      }
+    );
+    assertFlashRedirect(retryResponse, {
+      origin: "http://127.0.0.1:4322",
+      pathname: `/articles/${freshDocId}`,
+      section: "articles",
+      status: "success",
+      message: "Enrichment retry queued"
+    });
+    await waitFor(
+      "fresh article enrichment retry audit row",
+      async () =>
+        queryPostgresInt(
+          env,
+          `
+            select count(*)::int
+            from audit_log
+            where action_type = 'article_enrichment_retry'
+              and entity_type = 'article'
+              and entity_id = ${sqlLiteral(freshDocId)};
+          `
+        ),
+      (count) => count >= retryAuditCountBefore + 1
+    );
+    await waitFor(
+      "fresh article manual enrichment retry sequence run",
+      async () =>
+        queryPostgres(
+          env,
+          `
+            select status
+            from sequence_runs
+            where trigger_type = 'manual'
+              and context_json ->> 'doc_id' = ${sqlLiteral(freshDocId)}
+            order by created_at desc
+            limit 1;
+          `
+        ),
+      (status) => status === "completed"
+    );
+    const freshNotificationCountAfterRetry = countNotifications(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
+    if (freshNotificationCountAfterRetry < enrichmentRetryAuditBefore) {
+      throw new Error(
+        `Expected fresh article retry to avoid deleting notification history for ${freshDocId}; before=${enrichmentRetryAuditBefore}, after=${freshNotificationCountAfterRetry}.`
       );
     }
 

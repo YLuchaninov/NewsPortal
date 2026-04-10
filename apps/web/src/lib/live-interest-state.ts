@@ -84,8 +84,8 @@ export function resolveInterestRepairState(
       tone: "warning",
       label: "Syncing matches",
       detail: hasNumericProgress
-        ? `${job.processedArticles}/${job.totalArticles} historical articles`
-        : "Replaying prior system-feed articles",
+        ? `${job.processedArticles}/${job.totalArticles} historical content items`
+        : "Replaying prior system-selected content",
     };
   }
 
@@ -93,7 +93,7 @@ export function resolveInterestRepairState(
     return {
       tone: "error",
       label: "Match sync failed",
-      detail: job.errorText ?? "Unable to replay historical articles",
+      detail: job.errorText ?? "Unable to replay historical content items",
     };
   }
 

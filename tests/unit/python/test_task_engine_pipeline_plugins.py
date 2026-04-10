@@ -4,12 +4,14 @@ from unittest.mock import patch
 
 from services.workers.app.task_engine import TaskPluginRegistry, register_builtin_plugins
 from services.workers.app.task_engine.pipeline_plugins import (
+    ArticleExtractPlugin,
     EmbedArticlePlugin,
     FeedbackIngestPlugin,
     InterestCompilePlugin,
     LlmReviewPlugin,
     MatchInterestsPlugin,
     ReindexPlugin,
+    ResourceExtractPlugin,
 )
 
 
@@ -31,13 +33,20 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
                 "article.match_interests",
                 "article.normalize",
                 "article.notify",
+                "enrichment.article_extract",
+                "enrichment.resource_extract",
                 "discovery.content_sampler",
+                "discovery.evaluate_results",
                 "discovery.llm_analyzer",
+                "discovery.execute_hypotheses",
+                "discovery.plan_hypotheses",
+                "discovery.re_evaluate_sources",
                 "discovery.relevance_scorer",
                 "discovery.rss_probe",
                 "discovery.source_registrar",
                 "discovery.url_validator",
                 "discovery.web_search",
+                "discovery.website_probe",
                 "enrichment.article_enricher",
                 "enrichment.article_loader",
                 "maintenance.criterion_compile",
@@ -95,6 +104,86 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["model_key"], "unit-test-model")
         self.assertEqual(result["dimensions"], 384)
         self.assertEqual(result["legacy_handler"], "process_embed")
+
+    async def test_article_extract_plugin_calls_fetchers_contract_and_normalizes_context(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def fake_request(job_data: dict[str, Any]) -> dict[str, Any]:
+            captured["job_data"] = dict(job_data)
+            return {
+                "status": "enriched",
+                "doc_id": job_data["docId"],
+                "enrichment_state": "enriched",
+                "body_replaced": True,
+                "media_asset_count": 2,
+            }
+
+        plugin = ArticleExtractPlugin()
+        with patch.object(plugin, "_request_enrichment", side_effect=fake_request):
+            result = await plugin.execute(
+                options={"force_enrichment": True},
+                context={
+                    "doc_id": "doc-9",
+                    "event_id": "event-9",
+                },
+            )
+
+        self.assertEqual(
+            captured["job_data"],
+            {
+                "eventId": "event-9",
+                "docId": "doc-9",
+                "forceEnrichment": True,
+            },
+        )
+        self.assertEqual(result["status"], "enriched")
+        self.assertEqual(result["doc_id"], "doc-9")
+        self.assertEqual(result["event_id"], "event-9")
+        self.assertEqual(result["enrichment_state"], "enriched")
+        self.assertTrue(result["body_replaced"])
+        self.assertEqual(result["media_asset_count"], 2)
+        self.assertTrue(result["force_enrichment"])
+
+    async def test_resource_extract_plugin_calls_fetchers_contract_and_normalizes_context(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def fake_request(job_data: dict[str, Any]) -> dict[str, Any]:
+            captured["job_data"] = dict(job_data)
+            return {
+                "status": "enriched",
+                "resource_id": job_data["resourceId"],
+                "resource_kind": "editorial",
+                "extraction_state": "enriched",
+                "projected_doc_id": "doc-123",
+                "documents_count": 1,
+                "media_count": 2,
+            }
+
+        plugin = ResourceExtractPlugin()
+        with patch.object(plugin, "_request_enrichment", side_effect=fake_request):
+            result = await plugin.execute(
+                options={"force": True},
+                context={
+                    "resource_id": "resource-1",
+                    "event_id": "event-1",
+                    "version": 2,
+                },
+            )
+
+        self.assertEqual(
+            captured["job_data"],
+            {
+                "eventId": "event-1",
+                "resourceId": "resource-1",
+                "forceEnrichment": True,
+            },
+        )
+        self.assertEqual(result["status"], "enriched")
+        self.assertEqual(result["resource_id"], "resource-1")
+        self.assertEqual(result["resource_kind"], "editorial")
+        self.assertEqual(result["extraction_state"], "enriched")
+        self.assertEqual(result["projected_doc_id"], "doc-123")
+        self.assertTrue(result["force_enrichment"])
 
     async def test_match_interests_plugin_prefers_options_and_keeps_scope_fields(self) -> None:
         captured: dict[str, Any] = {}

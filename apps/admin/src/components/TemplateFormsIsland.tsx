@@ -9,37 +9,37 @@ interface LlmTemplateFormProps {
 const SCOPE_HELP: Record<string, { label: string; description: string; example: string }> = {
   interests: {
     label: "Interests",
-    description: "Used when a user interest match falls in the gray zone (score 0.45–0.72). The LLM reviews whether the article truly matches the user's interest.",
-    example: `You are a news relevance reviewer. The user is interested in "{interest_name}".
+    description: "Used when a user-interest match falls in the gray zone (score 0.45–0.72). The LLM reviews whether the content item truly matches the user's interest.",
+    example: `You are a content relevance reviewer. The user is interested in "{interest_name}".
 
-Given the article below, decide if it is relevant to this interest.
+Given the content item below, decide if it is relevant to this interest.
 
-Article title: {title}
-Article lead: {lead}
+Content title: {title}
+Content summary: {lead}
 
 Return JSON: {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}`,
   },
   criteria: {
-    label: "Criteria",
-    description: "Used when a system criterion match falls in the gray zone. The LLM reviews whether the article meets the system-wide criterion.",
-    example: `You are a news classification reviewer. The system criterion is: "{criterion_name}".
+    label: "System Interests",
+    description: "Used when a system-interest match falls in the gray zone. The LLM reviews whether the content meets the system-wide selection rule.",
+    example: `You are a content classification reviewer. The system interest is: "{criterion_name}".
 
-Given the article below, decide if it matches this criterion.
+Given the content item below, decide if it matches this system interest.
 
-Article title: {title}
-Article lead: {lead}
+Content title: {title}
+Content summary: {lead}
 
 Return JSON: {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}`,
   },
   global: {
     label: "Global",
     description: "A fallback template applied to any gray-zone review that doesn't have a scope-specific template. Keep it generic.",
-    example: `You are a news relevance reviewer.
+    example: `You are a content relevance reviewer.
 
-Given the article below, decide whether it should be sent to the user based on the context provided.
+Given the content item below, decide whether it should be sent to the user based on the context provided.
 
-Article title: {title}
-Article lead: {lead}
+Content title: {title}
+Content summary: {lead}
 Context: {context}
 
 Return JSON: {"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}`,
@@ -78,7 +78,7 @@ export function LlmTemplateForm({ action }: LlmTemplateFormProps) {
     <div className="rounded-xl border border-border bg-card p-4">
       <h2 className="font-semibold text-sm mb-1">Create LLM Template</h2>
       <p className="text-[11px] text-muted-foreground mb-3">
-        LLM templates define the prompt sent to an external AI model when an article lands in the
+        LLM templates define the prompt sent to an external AI model when a content item lands in the
         gray zone — a score range where the system can't confidently decide relevance.
       </p>
 
@@ -99,7 +99,7 @@ export function LlmTemplateForm({ action }: LlmTemplateFormProps) {
         <FormField
           label="Scope"
           name="llm-template-scope"
-          helpText="Determines when this template is used: interests = user interest reviews, criteria = system criterion reviews, global = fallback for all reviews."
+          helpText="Determines when this template is used: interests = user-interest reviews, system interests = system-interest reviews, global = fallback for all reviews."
           helpWide
         >
           <select
@@ -110,7 +110,7 @@ export function LlmTemplateForm({ action }: LlmTemplateFormProps) {
             className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="interests">interests — user interest gray-zone review</option>
-            <option value="criteria">criteria — system criterion gray-zone review</option>
+            <option value="criteria">system interests — gray-zone review</option>
             <option value="global">global — fallback for any gray-zone review</option>
           </select>
           <p className="text-[11px] text-muted-foreground">{scopeInfo.description}</p>
@@ -205,11 +205,11 @@ export function InterestTemplateForm({ action }: InterestTemplateFormProps) {
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <h2 className="font-semibold text-sm mb-1">Create Interest Template</h2>
+      <h2 className="font-semibold text-sm mb-1">Create System Interest</h2>
       <p className="text-[11px] text-muted-foreground mb-3">
-        Interest templates are predefined topic configurations that users can pick when setting up
-        their news interests. Each template contains prototypes — example headlines that teach the
-        system what to match.
+        System interests are predefined global selection rules. Each one contains prototypes that
+        teach the system what kinds of content items should or should not enter the
+        system-selected collection.
       </p>
 
       <form method="post" action={action} onSubmit={handleSubmit} className="grid gap-3">
@@ -229,7 +229,7 @@ export function InterestTemplateForm({ action }: InterestTemplateFormProps) {
         <FormField
           label="Description"
           name="interest-template-description"
-          helpText="A short explanation of this interest topic. Shown to users when they browse available interests."
+          helpText="A short explanation of this system interest for operators."
           helpWide
         >
           <Textarea
@@ -248,7 +248,7 @@ export function InterestTemplateForm({ action }: InterestTemplateFormProps) {
           name="interest-template-positive-texts"
           required
           error={errors.positive_texts}
-          helpText="Example headlines that SHOULD match this interest. One per line. The system converts these into embeddings to find similar articles. More examples = better matching."
+          helpText="Example titles or descriptors that SHOULD match this interest. One per line. The system converts these into embeddings to find similar content items. More examples = better matching."
           helpWide
         >
           <Textarea
@@ -268,7 +268,7 @@ export function InterestTemplateForm({ action }: InterestTemplateFormProps) {
         <FormField
           label="Negative prototypes"
           name="interest-template-negative-texts"
-          helpText="Example headlines that should NOT match this interest, even though they might seem related. Helps reduce false positives. For example, for AI policy you may want to exclude consumer gadget launches."
+          helpText="Example titles or descriptors that should NOT match this interest, even though they might seem related. Helps reduce false positives. For example, for AI policy you may want to exclude consumer gadget launches."
           helpWide
         >
           <Textarea
@@ -290,7 +290,7 @@ export function InterestTemplateForm({ action }: InterestTemplateFormProps) {
           type="submit"
           className="h-8 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
         >
-          Save Interest Template
+          Save System Interest
         </button>
       </form>
     </div>

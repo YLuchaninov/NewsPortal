@@ -124,7 +124,7 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">User interests</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
           This page edits <strong>real per-user interests</strong> for one selected account at a time.
-          It does not change global interest templates or system criteria. Admin acts explicitly on behalf
+          It does not change global system interests or system-wide selection logic. Admin acts explicitly on behalf
           of the chosen user, and every write stays auditable.
         </p>
       </div>
@@ -294,7 +294,7 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
               <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
                 <div>
                   <p class="text-sm font-semibold">Advanced matching hints</p>
-                  <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, and place hints.</p>
+                  <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, place hints, and time-window gating. Term lists accept line breaks or commas, and a blank time window means any age.</p>
                 </div>
                 <span class="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
               </summary>
@@ -303,10 +303,12 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                 <label class="grid gap-1.5">
                   <span class="text-sm font-medium">Must-have terms</span>
                   <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                  <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
                 </label>
                 <label class="grid gap-1.5">
                   <span class="text-sm font-medium">Must-not-have terms</span>
                   <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                  <span class="text-xs text-muted-foreground">One term per line or comma-separated. Any match blocks the interest.</span>
                 </label>
                 <label class="grid gap-1.5">
                   <span class="text-sm font-medium">Places</span>
@@ -315,6 +317,11 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                 <label class="grid gap-1.5">
                   <span class="text-sm font-medium">Allowed languages</span>
                   <input name="languages_allowed" type="text" value="en" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-sm font-medium">Time window (hours)</span>
+                  <input name="time_window_hours" type="number" min="1" step="1" placeholder="168" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  <span class="text-xs text-muted-foreground">Leave blank to match content from any time period.</span>
                 </label>
                 <label class="grid gap-1.5">
                   <span class="text-sm font-medium">Required short tokens</span>
@@ -487,7 +494,7 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                           <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
                             <div>
                               <p class="text-sm font-semibold">Advanced matching hints</p>
-                              <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, and place hints.</p>
+                              <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, place hints, and time-window gating. Term lists accept line breaks or commas, and a blank time window means any age.</p>
                             </div>
                             <span class="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
                           </summary>
@@ -496,10 +503,12 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                             <label class="grid gap-1.5">
                               <span class="text-sm font-medium">Must-have terms</span>
                               <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(interest.must_have_terms)}</textarea>
+                              <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
                             </label>
                             <label class="grid gap-1.5">
                               <span class="text-sm font-medium">Must-not-have terms</span>
                               <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(interest.must_not_have_terms)}</textarea>
+                              <span class="text-xs text-muted-foreground">One term per line or comma-separated. Any match blocks the interest.</span>
                             </label>
                             <label class="grid gap-1.5">
                               <span class="text-sm font-medium">Places</span>
@@ -508,6 +517,11 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                             <label class="grid gap-1.5">
                               <span class="text-sm font-medium">Allowed languages</span>
                               <input name="languages_allowed" type="text" value={formatCsvListValue(interest.languages_allowed)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            </label>
+                            <label class="grid gap-1.5">
+                              <span class="text-sm font-medium">Time window (hours)</span>
+                              <input name="time_window_hours" type="number" min="1" step="1" value={interest.time_window_hours == null ? "" : String(interest.time_window_hours)} placeholder="168" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                              <span class="text-xs text-muted-foreground">Leave blank to match content from any time period.</span>
                             </label>
                             <label class="grid gap-1.5">
                               <span class="text-sm font-medium">Required short tokens</span>
@@ -547,7 +561,7 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
                           <AdminConfirmAction
                             action={appPath(`/bff/admin/user-interests/${interestId}`)}
                             title="Delete user interest"
-                            description="Delete this real per-user interest for the selected user. This does not touch global interest templates or criteria."
+                            description="Delete this real per-user interest for the selected user. This does not touch global system interests or system-wide selection logic."
                             triggerLabel="Delete"
                             confirmLabel="Delete interest"
                             fields={[

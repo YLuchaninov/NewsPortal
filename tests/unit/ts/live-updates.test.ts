@@ -130,7 +130,7 @@ test("resolveLiveUpdateDelay switches between idle, fast, hidden, and backoff po
 test("resolveSurfaceUpdateMessage keeps product copy aligned with the planned surfaces", () => {
   assert.equal(
     resolveSurfaceUpdateMessage("feed"),
-    "New system-selected articles available"
+    "New system-selected content available"
   );
   assert.equal(
     resolveSurfaceUpdateMessage("matches"),

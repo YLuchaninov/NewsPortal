@@ -1,22 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveSafeArticleHref } from "../../../apps/web/src/components/ArticleCard.tsx";
+import {
+  resolveInternalContentHref,
+  resolveSafeContentHref
+} from "../../../apps/web/src/components/ContentItemCard.tsx";
 
-test("resolveSafeArticleHref accepts browser-safe article URLs", () => {
+test("resolveSafeContentHref accepts browser-safe content URLs", () => {
   assert.equal(
-    resolveSafeArticleHref("https://example.test/articles/42?ref=feed"),
-    "https://example.test/articles/42?ref=feed"
+    resolveSafeContentHref("https://example.test/content/editorial%3A42?ref=collection"),
+    "https://example.test/content/editorial%3A42?ref=collection"
   );
   assert.equal(
-    resolveSafeArticleHref("http://example.test/news/alpha"),
-    "http://example.test/news/alpha"
+    resolveSafeContentHref("http://example.test/data/alpha"),
+    "http://example.test/data/alpha"
   );
 });
 
-test("resolveSafeArticleHref rejects unsafe or invalid article URLs", () => {
-  assert.equal(resolveSafeArticleHref(undefined), null);
-  assert.equal(resolveSafeArticleHref("javascript:alert(1)"), null);
-  assert.equal(resolveSafeArticleHref("imap://mail.example.test/INBOX/42"), null);
-  assert.equal(resolveSafeArticleHref("not a url"), null);
+test("resolveSafeContentHref rejects unsafe or invalid content URLs", () => {
+  assert.equal(resolveSafeContentHref(undefined), null);
+  assert.equal(resolveSafeContentHref("javascript:alert(1)"), null);
+  assert.equal(resolveSafeContentHref("imap://mail.example.test/INBOX/42"), null);
+  assert.equal(resolveSafeContentHref("not a url"), null);
+});
+
+test("resolveInternalContentHref creates stable internal content detail links", () => {
+  assert.equal(resolveInternalContentHref("editorial:doc-42"), "/content/editorial%3Adoc-42");
+  assert.equal(resolveInternalContentHref("resource:item with spaces"), "/content/resource%3Aitem%20with%20spaces");
+  assert.equal(resolveInternalContentHref(""), null);
 });
