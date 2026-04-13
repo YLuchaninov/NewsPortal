@@ -5,7 +5,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 from urllib.parse import urlparse
 
 import psycopg
@@ -39,7 +39,7 @@ from services.workers.app.task_engine.context import RESERVED_CONTEXT_KEYS
 
 SEQUENCE_DEFINITION_STATUSES = {"draft", "active", "archived"}
 SEQUENCE_RUN_CANCELLABLE_STATUSES = {"pending"}
-DISCOVERY_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed"}
+DISCOVERY_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed", "archived"}
 DISCOVERY_RECALL_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed"}
 DISCOVERY_RECALL_MISSION_KINDS = {"manual", "domain_seed", "query_seed"}
 DISCOVERY_CLASS_STATUSES = {"draft", "active", "archived"}
@@ -134,6 +134,24 @@ def query_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
 def query_one(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
     rows = query_all(sql, params)
     return rows[0] if rows else None
+
+
+def normalize_system_interest_selection_profile_payload(
+    template: Mapping[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(template)
+    family = str(template.get("selection_profile_family") or "").strip()
+    raw_policy = template.get("selection_profile_policy_json")
+    policy = raw_policy if isinstance(raw_policy, Mapping) else {}
+    normalized_policy = dict(policy)
+
+    if family == "compatibility_interest_template":
+        llm_review_mode = str(normalized_policy.get("llmReviewMode") or "").strip()
+        if not llm_review_mode or llm_review_mode == "optional_high_value_only":
+            normalized_policy["llmReviewMode"] = "always"
+
+    normalized["selection_profile_policy_json"] = normalized_policy
+    return normalized
 
 
 def infer_feed_ingress_adapter_strategy(fetch_url: str | None) -> str:
@@ -246,7 +264,12 @@ def effective_system_selected_expr(
     final_alias: str = "fsr",
     system_alias: str = "sfr",
 ) -> str:
-    return f"coalesce({final_alias}.is_selected, coalesce({system_alias}.eligible_for_feed, false))"
+    return f"""
+      case
+        when {final_alias}.doc_id is not null then coalesce({final_alias}.is_selected, false)
+        else coalesce({system_alias}.eligible_for_feed, false)
+      end
+    """
 
 
 def effective_system_selection_decision_expr(
@@ -255,9 +278,9 @@ def effective_system_selection_decision_expr(
 ) -> str:
     return f"""
       case
-        when {final_alias}.final_decision = 'selected' then 'selected'
-        when {final_alias}.final_decision = 'gray_zone' then 'gray_zone'
-        when {final_alias}.final_decision = 'rejected' then 'rejected'
+        when {final_alias}.doc_id is not null and {final_alias}.final_decision = 'selected' then 'selected'
+        when {final_alias}.doc_id is not null and {final_alias}.final_decision = 'gray_zone' then 'gray_zone'
+        when {final_alias}.doc_id is not null and {final_alias}.final_decision = 'rejected' then 'rejected'
         when coalesce({system_alias}.eligible_for_feed, false) then 'selected'
         when {system_alias}.decision = 'pending_llm' then 'pending_ai_review'
         when {system_alias}.decision in ('eligible', 'filtered_out', 'pass_through') then 'filtered_out'
@@ -389,6 +412,489 @@ def resolve_pagination(
 def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
     row = query_one(sql, params)
     return int(row["total"]) if row and row.get("total") is not None else 0
+
+
+def as_json_object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def as_json_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def build_reindex_selection_profile_payload(
+    job_like: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    snapshot = as_json_object(
+        as_json_object(as_json_object(job_like.get("result_json")).get("backfill")).get(
+            "selectionProfileSnapshot"
+        )
+    )
+    if not snapshot:
+        return None
+
+    active_profiles = as_json_int(snapshot.get("activeProfiles"))
+    total_profiles = as_json_int(snapshot.get("totalProfiles"))
+    compatibility_profiles = as_json_int(snapshot.get("compatibilityProfiles"))
+    templates_with_profiles = as_json_int(snapshot.get("templatesWithProfiles"))
+    max_version = as_json_int(snapshot.get("maxVersion"))
+
+    parts: list[str] = []
+    if total_profiles > 0 or active_profiles > 0:
+        parts.append(f"{active_profiles}/{total_profiles} active")
+    if compatibility_profiles > 0:
+        parts.append(f"{compatibility_profiles} compatibility")
+    if templates_with_profiles > 0:
+        parts.append(f"{templates_with_profiles} template-bound")
+    if max_version > 0:
+        parts.append(f"max v{max_version}")
+
+    return {
+        "activeProfiles": active_profiles,
+        "totalProfiles": total_profiles,
+        "compatibilityProfiles": compatibility_profiles,
+        "templatesWithProfiles": templates_with_profiles,
+        "maxVersion": max_version,
+        "summary": " | ".join(parts) if parts else None,
+    }
+
+
+def apply_reindex_selection_profile_payload(
+    job_like: Mapping[str, Any],
+) -> dict[str, Any]:
+    payload = dict(job_like)
+    selection_profile_snapshot = build_reindex_selection_profile_payload(job_like)
+    payload["selection_profile_snapshot"] = selection_profile_snapshot
+    payload["selection_profile_summary"] = (
+        selection_profile_snapshot.get("summary")
+        if isinstance(selection_profile_snapshot, dict)
+        else None
+    )
+    return payload
+
+
+def build_selection_explain_payload(
+    *,
+    selection_like: Mapping[str, Any],
+    final_selection_result: Mapping[str, Any] | None,
+    system_feed_result: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    final_result = final_selection_result or {}
+    system_result = system_feed_result or {}
+    final_explain = as_json_object(final_result.get("explain_json"))
+    filter_counts = as_json_object(final_explain.get("filterCounts"))
+    hold_count = as_json_int(
+        filter_counts.get("hold") or selection_like.get("final_selection_hold_count")
+    )
+    llm_review_pending_count = as_json_int(
+        filter_counts.get("llmReviewPending")
+        or selection_like.get("final_selection_llm_review_pending_count")
+    )
+    candidate_signal_uplift_count = as_json_int(
+        final_explain.get("candidateSignalUpliftCount")
+    )
+    selection_reason = (
+        str(
+            selection_like.get("final_selection_reason")
+            or final_explain.get("selectionReason")
+            or ""
+        ).strip()
+        or None
+    )
+    compatibility_decision = (
+        str(
+            selection_like.get("system_feed_decision")
+            or system_result.get("decision")
+            or ""
+        ).strip()
+        or None
+    )
+    final_decision = (
+        str(
+            selection_like.get("final_selection_decision")
+            or final_result.get("final_decision")
+            or ""
+        ).strip()
+        or None
+    )
+
+    if final_decision == "gray_zone":
+        if candidate_signal_uplift_count and (
+            llm_review_pending_count > 0 or compatibility_decision == "pending_llm"
+        ):
+            selection_mode = "llm_review_pending"
+            selection_summary = "Recovered candidate waiting for LLM review"
+        elif llm_review_pending_count > 0 or compatibility_decision == "pending_llm":
+            selection_mode = "llm_review_pending"
+            selection_summary = "Gray zone pending LLM review"
+        elif candidate_signal_uplift_count and (
+            hold_count > 0 or selection_reason == "candidate_signal_hold"
+        ):
+            selection_mode = "hold"
+            selection_summary = "Recovered candidate held by profile policy"
+        elif hold_count > 0 or selection_reason == "semantic_hold":
+            selection_mode = "hold"
+            selection_summary = "Gray zone held by profile policy"
+        elif candidate_signal_uplift_count:
+            selection_mode = "gray_zone"
+            selection_summary = "Recovered candidate remains in gray zone"
+        else:
+            selection_mode = "gray_zone"
+            selection_summary = "Gray zone unresolved"
+    elif final_decision == "selected":
+        selection_mode = "selected"
+        selection_summary = "Selected by final-selection policy"
+    elif final_decision == "rejected":
+        selection_mode = "rejected"
+        selection_summary = "Rejected by final-selection policy"
+    elif compatibility_decision == "pending_llm":
+        selection_mode = "llm_review_pending"
+        selection_summary = "Compatibility projection waiting for review"
+    elif compatibility_decision:
+        selection_mode = "compatibility_only"
+        selection_summary = f"Compatibility projection: {compatibility_decision}"
+    else:
+        selection_mode = "pending"
+        selection_summary = "Selection not materialized yet"
+
+    if candidate_signal_uplift_count:
+        candidate_recovery_state = (
+            "review_pending"
+            if selection_mode == "llm_review_pending"
+            else "held"
+            if selection_mode == "hold"
+            else "present"
+        )
+        candidate_recovery_summary = (
+            "Recovered candidate signals are materialized and waiting for LLM review."
+            if selection_mode == "llm_review_pending"
+            else "Recovered candidate signals are materialized but currently held."
+            if selection_mode == "hold"
+            else "Recovered candidate signals are materialized on this item."
+        )
+    else:
+        candidate_recovery_state = "absent"
+        candidate_recovery_summary = (
+            "Recovered candidate signals have not materialized on this item yet."
+        )
+
+    return {
+        "source": (
+            "final_selection_results"
+            if final_decision
+            else "system_feed_results"
+            if compatibility_decision
+            else "pending"
+        ),
+        "decision": final_decision or compatibility_decision,
+        "systemSelected": (
+            selection_like.get("final_selection_selected")
+            if selection_like.get("final_selection_selected") is not None
+            else selection_like.get("system_feed_eligible")
+        ),
+        "selectionReason": selection_reason,
+        "selectionMode": selection_mode,
+        "selectionSummary": selection_summary,
+        "llmReviewPendingCount": llm_review_pending_count,
+        "holdCount": hold_count,
+        "candidateSignalUpliftCount": candidate_signal_uplift_count,
+        "candidateRecoveryState": candidate_recovery_state,
+        "candidateRecoverySummary": candidate_recovery_summary,
+        "compatibilityDecision": compatibility_decision,
+        "observationState": selection_like.get("observation_state"),
+        "duplicateKind": selection_like.get("duplicate_kind"),
+        "canonicalDocumentId": selection_like.get("canonical_document_id"),
+        "storyClusterId": selection_like.get("story_cluster_id"),
+        "verificationState": selection_like.get("final_selection_verification_state")
+        or selection_like.get("story_cluster_verification_state")
+        or selection_like.get("canonical_verification_state"),
+        "verificationTargetType": selection_like.get("verification_target_type"),
+        "verificationTargetId": selection_like.get("verification_target_id"),
+        "finalSelectionResult": final_selection_result,
+        "systemFeedResult": system_feed_result,
+    }
+
+
+def build_selection_diagnostics_payload(
+    *,
+    selection_explain: Mapping[str, Any],
+    interest_filter_results: list[Mapping[str, Any]],
+    llm_reviews: list[Mapping[str, Any]],
+    notifications: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    system_criterion_rows = 0
+    user_interest_rows = 0
+    matched_rows = 0
+    no_match_rows = 0
+    gray_zone_rows = 0
+    technical_filtered_out_rows = 0
+
+    for row in interest_filter_results:
+        filter_scope = str(row.get("filter_scope") or "").strip()
+        semantic_decision = str(row.get("semantic_decision") or "").strip()
+        technical_filter_state = str(row.get("technical_filter_state") or "").strip()
+
+        if filter_scope == "system_criterion":
+            system_criterion_rows += 1
+        elif filter_scope == "user_interest":
+            user_interest_rows += 1
+
+        if semantic_decision == "match":
+            matched_rows += 1
+        elif semantic_decision == "no_match":
+            no_match_rows += 1
+        elif semantic_decision == "gray_zone":
+            gray_zone_rows += 1
+
+        if technical_filter_state == "filtered_out":
+            technical_filtered_out_rows += 1
+
+    return {
+        "source": selection_explain.get("source") or "pending",
+        "decision": selection_explain.get("decision"),
+        "selectionMode": selection_explain.get("selectionMode") or "pending",
+        "selectionSummary": selection_explain.get("selectionSummary")
+        or "Selection not explained yet",
+        "selectionReason": selection_explain.get("selectionReason"),
+        "holdCount": as_json_int(selection_explain.get("holdCount")),
+        "llmReviewPendingCount": as_json_int(
+            selection_explain.get("llmReviewPendingCount")
+        ),
+        "candidateSignalUpliftCount": as_json_int(
+            selection_explain.get("candidateSignalUpliftCount")
+        ),
+        "candidateRecoveryState": selection_explain.get("candidateRecoveryState")
+        or "absent",
+        "candidateRecoverySummary": selection_explain.get("candidateRecoverySummary")
+        or "Recovered candidate signals have not materialized on this item yet.",
+        "systemCriterionRows": system_criterion_rows,
+        "userInterestRows": user_interest_rows,
+        "matchedRows": matched_rows,
+        "noMatchRows": no_match_rows,
+        "grayZoneRows": gray_zone_rows,
+        "technicalFilteredOutRows": technical_filtered_out_rows,
+        "llmReviewRows": len(llm_reviews),
+        "notificationRows": len(notifications),
+    }
+
+
+def build_selection_guidance_payload(
+    *, selection_explain: Mapping[str, Any]
+) -> dict[str, Any]:
+    selection_mode = str(selection_explain.get("selectionMode") or "").strip() or "pending"
+    selection_source = str(selection_explain.get("source") or "").strip() or "pending"
+    candidate_signal_uplift_count = as_json_int(
+        selection_explain.get("candidateSignalUpliftCount")
+    )
+
+    if selection_mode == "selected":
+        if selection_source == "system_interest_content_kind":
+            return {
+                "tone": "positive",
+                "summary": "Content-kind eligibility already selected this resource. Use this row mainly to verify projection quality and downstream visibility.",
+            }
+        return {
+            "tone": "positive",
+            "summary": "Final selection already passed. Use this row mainly to verify quality and downstream visibility.",
+        }
+    if selection_mode == "hold":
+        if candidate_signal_uplift_count:
+            return {
+                "tone": "warning",
+                "summary": "A recovered candidate was preserved out of early no-match, but profile policy still kept it on cheap hold. Tune evidence rules or escalation policy before broadening recall.",
+            }
+        return {
+            "tone": "warning",
+            "summary": "Profile policy kept this item on cheap hold. Tune profile definitions or evidence rules before enabling broader escalation.",
+        }
+    if selection_mode == "llm_review_pending":
+        if candidate_signal_uplift_count:
+            return {
+                "tone": "warning",
+                "summary": "A candidate-recovery signal kept this item alive for LLM review. Watch these cases to see whether the new recall path surfaces real wins or only extra noise.",
+            }
+        return {
+            "tone": "warning",
+            "summary": "This item is waiting for the LLM review path. Review budget and profile policy before treating it as a selected result.",
+        }
+    if selection_mode == "compatibility_only":
+        return {
+            "tone": "neutral",
+            "summary": "Only the legacy compatibility projection is materialized here. Prefer final-selection/profile truth before tuning semantics.",
+        }
+    if selection_mode == "rejected":
+        return {
+            "tone": "neutral",
+            "summary": "Final selection rejected this item. Revisit the profile only if you expect this pattern to pass consistently.",
+        }
+    if selection_mode == "gray_zone":
+        if candidate_signal_uplift_count:
+            return {
+                "tone": "warning",
+                "summary": "A recovered candidate remains unresolved in gray zone. Check whether canonical evidence or cluster context should turn this pattern into a cleaner escalation path.",
+            }
+        return {
+            "tone": "warning",
+            "summary": "Gray zone remains unresolved. Check missing evidence and decide whether this profile should hold, reject, or escalate similar cases.",
+        }
+
+    return {
+        "tone": "neutral",
+        "summary": "Selection is not materialized yet. Wait for the final-selection path before using this row for profile tuning decisions.",
+    }
+
+
+def build_content_kind_selection_explain_payload(
+    *, content_like: Mapping[str, Any]
+) -> dict[str, Any]:
+    return {
+        "source": "system_interest_content_kind",
+        "decision": content_like.get("system_selection_decision") or "kind_enabled",
+        "systemSelected": True,
+        "selectionReason": None,
+        "selectionMode": "selected",
+        "selectionSummary": "Selected by content-kind eligibility",
+        "llmReviewPendingCount": 0,
+        "holdCount": 0,
+        "compatibilityDecision": None,
+        "observationState": None,
+        "duplicateKind": None,
+        "canonicalDocumentId": None,
+        "storyClusterId": None,
+        "verificationState": None,
+        "verificationTargetType": None,
+        "verificationTargetId": None,
+        "finalSelectionResult": None,
+        "systemFeedResult": None,
+    }
+
+
+def build_resource_selection_explain_payload(
+    *, resource_like: Mapping[str, Any]
+) -> dict[str, Any]:
+    if resource_like.get("projected_article_id"):
+        return build_selection_explain_payload(
+            selection_like=resource_like,
+            final_selection_result=None,
+            system_feed_result=None,
+        )
+    if resource_like.get("content_item_ready"):
+        return build_content_kind_selection_explain_payload(content_like=resource_like)
+    return {
+        "source": "pending",
+        "decision": None,
+        "systemSelected": False,
+        "selectionReason": None,
+        "selectionMode": "pending",
+        "selectionSummary": "Selection not materialized yet",
+        "llmReviewPendingCount": 0,
+        "holdCount": 0,
+        "compatibilityDecision": None,
+        "observationState": None,
+        "duplicateKind": None,
+        "canonicalDocumentId": None,
+        "storyClusterId": None,
+        "verificationState": None,
+        "verificationTargetType": None,
+        "verificationTargetId": None,
+        "finalSelectionResult": None,
+        "systemFeedResult": None,
+    }
+
+
+def apply_resource_selection_payload(
+    resource_like: Mapping[str, Any],
+    *,
+    interest_filter_results: list[Mapping[str, Any]] | None = None,
+    llm_reviews: list[Mapping[str, Any]] | None = None,
+    notifications: list[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    resource = dict(resource_like)
+    selection_explain = build_resource_selection_explain_payload(resource_like=resource)
+    resource["selection_source"] = selection_explain.get("source")
+    resource["selection_decision"] = selection_explain.get("decision")
+    resource["selection_mode"] = selection_explain.get("selectionMode")
+    resource["selection_summary"] = selection_explain.get("selectionSummary")
+    resource["selection_reason"] = selection_explain.get("selectionReason")
+    resource["selection_hold_count"] = as_json_int(selection_explain.get("holdCount"))
+    resource["selection_llm_review_pending_count"] = as_json_int(
+        selection_explain.get("llmReviewPendingCount")
+    )
+    resource["selection_candidate_signal_uplift_count"] = as_json_int(
+        selection_explain.get("candidateSignalUpliftCount")
+    )
+    resource["selection_candidate_recovery_state"] = selection_explain.get(
+        "candidateRecoveryState"
+    )
+    resource["selection_candidate_recovery_summary"] = selection_explain.get(
+        "candidateRecoverySummary"
+    )
+    resource["selection_guidance"] = build_selection_guidance_payload(
+        selection_explain=selection_explain
+    )
+    if (
+        interest_filter_results is not None
+        and llm_reviews is not None
+        and notifications is not None
+    ):
+        resource["selection_diagnostics"] = build_selection_diagnostics_payload(
+            selection_explain=selection_explain,
+            interest_filter_results=interest_filter_results,
+            llm_reviews=llm_reviews,
+            notifications=notifications,
+        )
+    return resource
+
+
+def apply_article_selection_payload(
+    article_like: Mapping[str, Any],
+    *,
+    interest_filter_results: list[Mapping[str, Any]] | None = None,
+    llm_reviews: list[Mapping[str, Any]] | None = None,
+    notifications: list[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    article = dict(article_like)
+    selection_explain = build_selection_explain_payload(
+        selection_like=article,
+        final_selection_result=None,
+        system_feed_result=None,
+    )
+    article["selection_source"] = selection_explain.get("source")
+    article["selection_decision"] = selection_explain.get("decision")
+    article["selection_mode"] = selection_explain.get("selectionMode")
+    article["selection_summary"] = selection_explain.get("selectionSummary")
+    article["selection_reason"] = selection_explain.get("selectionReason")
+    article["selection_hold_count"] = as_json_int(selection_explain.get("holdCount"))
+    article["selection_llm_review_pending_count"] = as_json_int(
+        selection_explain.get("llmReviewPendingCount")
+    )
+    article["selection_candidate_signal_uplift_count"] = as_json_int(
+        selection_explain.get("candidateSignalUpliftCount")
+    )
+    article["selection_candidate_recovery_state"] = selection_explain.get(
+        "candidateRecoveryState"
+    )
+    article["selection_candidate_recovery_summary"] = selection_explain.get(
+        "candidateRecoverySummary"
+    )
+    article["selection_guidance"] = build_selection_guidance_payload(
+        selection_explain=selection_explain
+    )
+    if (
+        interest_filter_results is not None
+        and llm_reviews is not None
+        and notifications is not None
+    ):
+        article["selection_diagnostics"] = build_selection_diagnostics_payload(
+            selection_explain=selection_explain,
+            interest_filter_results=interest_filter_results,
+            llm_reviews=llm_reviews,
+            notifications=notifications,
+        )
+    return article
 
 
 def resolve_discovery_canonical_domain(url: str | None) -> str:
@@ -675,7 +1181,7 @@ class DiscoveryMissionUpdatePayload(BaseModel):
     max_sources: int | None = Field(default=None, ge=1, alias="maxSources")
     budget_cents: int | None = Field(default=None, ge=0, alias="budgetCents")
     priority: int | None = None
-    status: Literal["planned", "active", "completed", "paused", "failed"] | None = None
+    status: Literal["planned", "active", "completed", "paused", "failed", "archived"] | None = None
 
 
 class DiscoveryMissionRunPayload(BaseModel):
@@ -2193,11 +2699,65 @@ def update_discovery_mission(
     return get_discovery_mission(mission_id)
 
 
+def delete_discovery_mission(mission_id: str) -> dict[str, Any]:
+    mission = get_discovery_mission(mission_id)
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  (select count(*)::int from discovery_hypotheses where mission_id = %s) as hypothesis_count,
+                  (select count(*)::int from discovery_candidates where mission_id = %s) as candidate_count,
+                  (select count(*)::int from discovery_portfolio_snapshots where mission_id = %s) as portfolio_snapshot_count,
+                  (select count(*)::int from discovery_feedback_events where mission_id = %s) as feedback_event_count,
+                  (select count(*)::int from discovery_source_interest_scores where mission_id = %s) as source_interest_score_count,
+                  (select count(*)::int from discovery_strategy_stats where mission_id = %s) as strategy_stat_count,
+                  (select count(*)::int from discovery_cost_log where mission_id = %s) as cost_log_count
+                """,
+                (
+                    mission_id,
+                    mission_id,
+                    mission_id,
+                    mission_id,
+                    mission_id,
+                    mission_id,
+                    mission_id,
+                ),
+            )
+            blockers = cursor.fetchone() or {}
+            has_history = (
+                int(mission.get("run_count") or 0) > 0
+                or int(mission.get("spent_cents") or 0) > 0
+                or mission.get("last_run_at") is not None
+                or any(int(blockers.get(key) or 0) > 0 for key in blockers)
+            )
+            if has_history:
+                raise SequenceConflictError(
+                    "Discovery mission already has generated history. Archive it instead of deleting it."
+                )
+            cursor.execute(
+                """
+                delete from discovery_missions
+                where mission_id = %s
+                returning mission_id::text as mission_id
+                """,
+                (mission_id,),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        raise SequenceNotFoundError(f"Discovery mission {mission_id} was not found.")
+    return {"mission_id": str(row["mission_id"]), "deleted": True}
+
+
 async def compile_discovery_mission_graph(mission_id: str) -> dict[str, Any]:
     repository = DiscoveryCoordinatorRepository()
     mission = await repository.get_mission(mission_id)
     if mission is None:
         raise SequenceNotFoundError(f"Discovery mission {mission_id} was not found.")
+    if mission.get("status") == "archived":
+        raise SequenceConflictError(
+            "Archived discovery missions must be reactivated before compiling the interest graph."
+        )
     await compile_interest_graph_for_mission(mission=mission, repository=repository)
     return get_discovery_mission(mission_id)
 
@@ -2206,7 +2766,11 @@ def request_discovery_mission_run(
     mission_id: str,
     payload: DiscoveryMissionRunPayload,
 ) -> dict[str, Any]:
-    get_discovery_mission(mission_id)
+    mission = get_discovery_mission(mission_id)
+    if mission.get("status") == "archived":
+        raise SequenceConflictError(
+            "Archived discovery missions must be reactivated before they can run."
+        )
     quota_snapshot = get_discovery_monthly_quota_snapshot()
     if quota_snapshot["monthlyQuotaReached"]:
         raise SequenceConflictError(
@@ -2364,6 +2928,37 @@ def update_discovery_class(
     if row is None:
         raise SequenceNotFoundError(f"Discovery class {class_key} was not found.")
     return get_discovery_class(class_key)
+
+
+def delete_discovery_class(class_key: str) -> dict[str, Any]:
+    get_discovery_class(class_key)
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select count(*)::int as hypothesis_count
+                from discovery_hypotheses
+                where class_key = %s
+                """,
+                (class_key,),
+            )
+            blocker_row = cursor.fetchone() or {}
+            if int(blocker_row.get("hypothesis_count") or 0) > 0:
+                raise SequenceConflictError(
+                    "Discovery class already has generated hypotheses. Archive it instead of deleting it."
+                )
+            cursor.execute(
+                """
+                delete from discovery_hypothesis_classes
+                where class_key = %s
+                returning class_key
+                """,
+                (class_key,),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        raise SequenceNotFoundError(f"Discovery class {class_key} was not found.")
+    return {"class_key": str(row["class_key"]), "deleted": True}
 
 
 def list_discovery_candidates_page(
@@ -3268,6 +3863,13 @@ def list_articles(
           fsr.final_decision as final_selection_decision,
           fsr.is_selected as final_selection_selected,
           fsr.verification_state as final_selection_verification_state,
+          fsr.explain_json ->> 'selectionMode' as final_selection_mode,
+          fsr.explain_json ->> 'selectionSummary' as final_selection_summary,
+          fsr.explain_json ->> 'selectionReason' as final_selection_reason,
+          coalesce((fsr.explain_json -> 'filterCounts' ->> 'llmReviewPending')::int, 0)
+            as final_selection_llm_review_pending_count,
+          coalesce((fsr.explain_json -> 'filterCounts' ->> 'hold')::int, 0)
+            as final_selection_hold_count,
           fsr.story_cluster_id::text as story_cluster_id,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
@@ -3288,8 +3890,13 @@ def list_articles(
     paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
         page, page_size, limit
     )
+    def with_article_selection_payload(
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        return [apply_article_selection_payload(row) for row in rows]
+
     if not paginate:
-        return query_all(f"{article_select}\nlimit %s", (limit,))
+        return with_article_selection_payload(query_all(f"{article_select}\nlimit %s", (limit,)))
 
     total = query_count(
         """
@@ -3297,9 +3904,11 @@ def list_articles(
         from articles
         """
     )
-    items = query_all(
-        f"{article_select}\nlimit %s\noffset %s",
-        (resolved_page_size, offset),
+    items = with_article_selection_payload(
+        query_all(
+            f"{article_select}\nlimit %s\noffset %s",
+            (resolved_page_size, offset),
+        )
     )
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
@@ -3426,72 +4035,94 @@ def get_content_item_explain(content_item_id: str) -> dict[str, Any]:
             """,
             (origin_id,),
         )
+        system_interest_matches = query_all(
+            """
+            select *
+            from criterion_match_results
+            where doc_id = %s
+            order by created_at desc
+            """,
+            (origin_id,),
+        )
+        user_interest_matches = query_all(
+            """
+            select *
+            from interest_match_results
+            where doc_id = %s
+            order by created_at desc
+            """,
+            (origin_id,),
+        )
+        ai_reviews = query_all(
+            """
+            select *
+            from llm_review_log
+            where doc_id = %s
+            order by created_at desc
+            """,
+            (origin_id,),
+        )
+        notifications = query_all(
+            """
+            select *
+            from notification_log
+            where doc_id = %s
+            order by created_at desc
+            """,
+            (origin_id,),
+        )
+        interest_filter_results = query_all(
+            """
+            select *
+            from interest_filter_results
+            where doc_id = %s
+            order by filter_scope, created_at desc
+            """,
+            (origin_id,),
+        )
+        selection_explain = build_selection_explain_payload(
+            selection_like=content_item,
+            final_selection_result=final_selection,
+            system_feed_result=system_feed,
+        )
         return {
             "content_item": content_item,
-            "system_interest_matches": query_all(
-                """
-                select *
-                from criterion_match_results
-                where doc_id = %s
-                order by created_at desc
-                """,
-                (origin_id,),
+            "system_interest_matches": system_interest_matches,
+            "user_interest_matches": user_interest_matches,
+            "ai_reviews": ai_reviews,
+            "notifications": notifications,
+            "interest_filter_results": interest_filter_results,
+            "selection_explain": selection_explain,
+            "selection_diagnostics": build_selection_diagnostics_payload(
+                selection_explain=selection_explain,
+                interest_filter_results=interest_filter_results,
+                llm_reviews=ai_reviews,
+                notifications=notifications,
             ),
-            "user_interest_matches": query_all(
-                """
-                select *
-                from interest_match_results
-                where doc_id = %s
-                order by created_at desc
-                """,
-                (origin_id,),
+            "selection_guidance": build_selection_guidance_payload(
+                selection_explain=selection_explain
             ),
-            "ai_reviews": query_all(
-                """
-                select *
-                from llm_review_log
-                where doc_id = %s
-                order by created_at desc
-                """,
-                (origin_id,),
-            ),
-            "notifications": query_all(
-                """
-                select *
-                from notification_log
-                where doc_id = %s
-                order by created_at desc
-                """,
-                (origin_id,),
-            ),
-            "selection_explain": {
-                "source": "final_selection_results" if final_selection is not None else "system_feed_results",
-                "decision": content_item.get("system_selection_decision"),
-                "systemSelected": content_item.get("system_selected"),
-                "observationState": content_item.get("observation_state"),
-                "duplicateKind": content_item.get("duplicate_kind"),
-                "canonicalDocumentId": content_item.get("canonical_document_id"),
-                "storyClusterId": content_item.get("story_cluster_id"),
-                "verificationState": content_item.get("final_selection_verification_state")
-                or content_item.get("story_cluster_verification_state")
-                or content_item.get("canonical_verification_state"),
-                "verificationTargetType": content_item.get("verification_target_type"),
-                "verificationTargetId": content_item.get("verification_target_id"),
-                "finalSelectionResult": final_selection,
-                "systemFeedResult": system_feed,
-            },
         }
+    selection_explain = build_content_kind_selection_explain_payload(
+        content_like=content_item
+    )
     return {
         "content_item": content_item,
         "system_interest_matches": [],
         "user_interest_matches": [],
         "ai_reviews": [],
         "notifications": [],
-        "selection_explain": {
-            "source": "system_interest_content_kind",
-            "contentKind": content_item.get("content_kind"),
-            "systemSelected": True,
-        },
+        "interest_filter_results": [],
+        "selection_explain": selection_explain,
+        "selection_diagnostics": build_selection_diagnostics_payload(
+            selection_explain=selection_explain,
+            interest_filter_results=[],
+            llm_reviews=[],
+            notifications=[],
+        ),
+        "selection_guidance": build_selection_guidance_payload(
+            selection_explain=selection_explain
+        ),
     }
 
 
@@ -3562,6 +4193,22 @@ def list_web_resources_page(
             else null
           end as content_item_id,
           ({content_item_ready_expr}) as content_item_ready,
+          sfr.decision as system_feed_decision,
+          sfr.eligible_for_feed as system_feed_eligible,
+          fsr.final_decision as final_selection_decision,
+          fsr.is_selected as final_selection_selected,
+          fsr.verification_state as final_selection_verification_state,
+          fsr.explain_json ->> 'selectionMode' as final_selection_mode,
+          fsr.explain_json ->> 'selectionSummary' as final_selection_summary,
+          fsr.explain_json ->> 'selectionReason' as final_selection_reason,
+          coalesce(
+            nullif(fsr.explain_json -> 'filterCounts' ->> 'llmReviewPending', '')::int,
+            0
+          ) as final_selection_llm_review_pending_count,
+          coalesce(
+            nullif(fsr.explain_json -> 'filterCounts' ->> 'hold', '')::int,
+            0
+          ) as final_selection_hold_count,
           jsonb_array_length(coalesce(wr.documents_json, '[]'::jsonb))::int as documents_count,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb))::int as media_count,
           jsonb_array_length(coalesce(wr.links_out_json, '[]'::jsonb))::int as links_out_count,
@@ -3569,6 +4216,8 @@ def list_web_resources_page(
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
         left join articles pa on pa.doc_id = wr.projected_article_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+        left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id
         {where_clause}
         order by coalesce(wr.published_at, wr.discovered_at) desc nulls last, wr.updated_at desc, wr.resource_id
     """
@@ -3576,7 +4225,10 @@ def list_web_resources_page(
         page, page_size, limit
     )
     if not paginate:
-        return query_all(f"{resource_select}\nlimit %s", tuple([*params, limit]))
+        return [
+            apply_resource_selection_payload(row)
+            for row in query_all(f"{resource_select}\nlimit %s", tuple([*params, limit]))
+        ]
 
     count_sql = """
         select count(*)::int as total
@@ -3590,6 +4242,7 @@ def list_web_resources_page(
         f"{resource_select}\nlimit %s\noffset %s",
         tuple([*params, resolved_page_size, offset]),
     )
+    items = [apply_resource_selection_payload(row) for row in items]
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
@@ -3652,6 +4305,22 @@ def get_web_resource(resource_id: str) -> dict[str, Any]:
             else null
           end as content_item_id,
           ({content_item_ready_expr}) as content_item_ready,
+          sfr.decision as system_feed_decision,
+          sfr.eligible_for_feed as system_feed_eligible,
+          fsr.final_decision as final_selection_decision,
+          fsr.is_selected as final_selection_selected,
+          fsr.verification_state as final_selection_verification_state,
+          fsr.explain_json ->> 'selectionMode' as final_selection_mode,
+          fsr.explain_json ->> 'selectionSummary' as final_selection_summary,
+          fsr.explain_json ->> 'selectionReason' as final_selection_reason,
+          coalesce(
+            nullif(fsr.explain_json -> 'filterCounts' ->> 'llmReviewPending', '')::int,
+            0
+          ) as final_selection_llm_review_pending_count,
+          coalesce(
+            nullif(fsr.explain_json -> 'filterCounts' ->> 'hold', '')::int,
+            0
+          ) as final_selection_hold_count,
           jsonb_array_length(coalesce(wr.documents_json, '[]'::jsonb))::int as documents_count,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb))::int as media_count,
           jsonb_array_length(coalesce(wr.links_out_json, '[]'::jsonb))::int as links_out_count,
@@ -3666,13 +4335,52 @@ def get_web_resource(resource_id: str) -> dict[str, Any]:
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
         left join articles pa on pa.doc_id = wr.projected_article_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+        left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id
         where wr.resource_id = %s
         """,
         (resource_id,),
     )
     if resource is None:
         raise HTTPException(status_code=404, detail="Web resource not found.")
-    return resource
+    interest_filter_results: list[dict[str, Any]] = []
+    llm_reviews: list[dict[str, Any]] = []
+    notifications: list[dict[str, Any]] = []
+    projected_article_id = str(resource.get("projected_article_id") or "").strip()
+    if projected_article_id:
+        interest_filter_results = query_all(
+            """
+            select *
+            from interest_filter_results
+            where doc_id = %s
+            order by filter_scope, created_at desc
+            """,
+            (projected_article_id,),
+        )
+        llm_reviews = query_all(
+            """
+            select *
+            from llm_review_log
+            where doc_id = %s
+            order by created_at desc
+            """,
+            (projected_article_id,),
+        )
+        notifications = query_all(
+            """
+            select *
+            from notification_log
+            where doc_id = %s
+            order by created_at desc
+            """,
+            (projected_article_id,),
+        )
+    return apply_resource_selection_payload(
+        resource,
+        interest_filter_results=interest_filter_results,
+        llm_reviews=llm_reviews,
+        notifications=notifications,
+    )
 
 
 @app.get("/maintenance/articles/{doc_id}")
@@ -3711,6 +4419,13 @@ def get_article(doc_id: str) -> dict[str, Any]:
           fsr.final_decision as final_selection_decision,
           fsr.is_selected as final_selection_selected,
           fsr.verification_state as final_selection_verification_state,
+          fsr.explain_json ->> 'selectionMode' as final_selection_mode,
+          fsr.explain_json ->> 'selectionSummary' as final_selection_summary,
+          fsr.explain_json ->> 'selectionReason' as final_selection_reason,
+          coalesce((fsr.explain_json -> 'filterCounts' ->> 'llmReviewPending')::int, 0)
+            as final_selection_llm_review_pending_count,
+          coalesce((fsr.explain_json -> 'filterCounts' ->> 'hold')::int, 0)
+            as final_selection_hold_count,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
           coalesce(ars.like_count, 0) as like_count,
@@ -3751,6 +4466,39 @@ def get_article(doc_id: str) -> dict[str, Any]:
         """,
         (doc_id,),
     )
+    interest_filter_results = query_all(
+        """
+        select *
+        from interest_filter_results
+        where doc_id = %s
+        order by filter_scope, created_at desc
+        """,
+        (doc_id,),
+    )
+    llm_reviews = query_all(
+        """
+        select *
+        from llm_review_log
+        where doc_id = %s
+        order by created_at desc
+        """,
+        (doc_id,),
+    )
+    notifications = query_all(
+        """
+        select *
+        from notification_log
+        where doc_id = %s
+        order by created_at desc
+        """,
+        (doc_id,),
+    )
+    article = apply_article_selection_payload(
+        article,
+        interest_filter_results=interest_filter_results,
+        llm_reviews=llm_reviews,
+        notifications=notifications,
+    )
     article["enrichment_debug"] = {
         "state": article.get("enrichment_state"),
         "enriched_at": article.get("enriched_at"),
@@ -3772,13 +4520,6 @@ def get_article_explain(doc_id: str) -> dict[str, Any]:
     article = get_article(doc_id)
     canonical_document_id = article.get("canonical_document_id")
     story_cluster_id = article.get("story_cluster_id")
-    selection_source = (
-        "final_selection_results"
-        if article.get("final_selection_decision")
-        else "system_feed_results"
-        if article.get("system_feed_decision")
-        else "pending"
-    )
     verification_results: list[dict[str, Any]] = []
     if canonical_document_id:
         verification_results.extend(
@@ -3806,35 +4547,77 @@ def get_article_explain(doc_id: str) -> dict[str, Any]:
                 (story_cluster_id,),
             )
         )
+    final_selection_result = query_one(
+        """
+        select *
+        from final_selection_results
+        where doc_id = %s
+        """,
+        (doc_id,),
+    )
+    system_feed_result = query_one(
+        """
+        select *
+        from system_feed_results
+        where doc_id = %s
+        """,
+        (doc_id,),
+    )
+    criteria_matches = query_all(
+        """
+        select *
+        from criterion_match_results
+        where doc_id = %s
+        order by created_at desc
+        """,
+        (doc_id,),
+    )
+    interest_matches = query_all(
+        """
+        select *
+        from interest_match_results
+        where doc_id = %s
+        order by created_at desc
+        """,
+        (doc_id,),
+    )
+    interest_filter_results = query_all(
+        """
+        select *
+        from interest_filter_results
+        where doc_id = %s
+        order by filter_scope, created_at desc
+        """,
+        (doc_id,),
+    )
+    llm_reviews = query_all(
+        """
+        select *
+        from llm_review_log
+        where doc_id = %s
+        order by created_at desc
+        """,
+        (doc_id,),
+    )
+    notifications = query_all(
+        """
+        select *
+        from notification_log
+        where doc_id = %s
+        order by created_at desc
+        """,
+        (doc_id,),
+    )
+    selection_explain = build_selection_explain_payload(
+        selection_like=article,
+        final_selection_result=final_selection_result,
+        system_feed_result=system_feed_result,
+    )
     return {
         "article": article,
-        "criteria_matches": query_all(
-            """
-            select *
-            from criterion_match_results
-            where doc_id = %s
-            order by created_at desc
-            """,
-            (doc_id,),
-        ),
-        "interest_matches": query_all(
-            """
-            select *
-            from interest_match_results
-            where doc_id = %s
-            order by created_at desc
-            """,
-            (doc_id,),
-        ),
-        "interest_filter_results": query_all(
-            """
-            select *
-            from interest_filter_results
-            where doc_id = %s
-            order by filter_scope, created_at desc
-            """,
-            (doc_id,),
-        ),
+        "criteria_matches": criteria_matches,
+        "interest_matches": interest_matches,
+        "interest_filter_results": interest_filter_results,
         "canonical_document": query_one(
             """
             select *
@@ -3856,57 +4639,20 @@ def get_article_explain(doc_id: str) -> dict[str, Any]:
         if story_cluster_id
         else None,
         "verification_results": verification_results,
-        "final_selection_result": query_one(
-            """
-            select *
-            from final_selection_results
-            where doc_id = %s
-            """,
-            (doc_id,),
+        "final_selection_result": final_selection_result,
+        "system_feed_result": system_feed_result,
+        "llm_reviews": llm_reviews,
+        "notifications": notifications,
+        "selection_explain": selection_explain,
+        "selection_diagnostics": build_selection_diagnostics_payload(
+            selection_explain=selection_explain,
+            interest_filter_results=interest_filter_results,
+            llm_reviews=llm_reviews,
+            notifications=notifications,
         ),
-        "system_feed_result": query_one(
-            """
-            select *
-            from system_feed_results
-            where doc_id = %s
-            """,
-            (doc_id,),
+        "selection_guidance": build_selection_guidance_payload(
+            selection_explain=selection_explain
         ),
-        "llm_reviews": query_all(
-            """
-            select *
-            from llm_review_log
-            where doc_id = %s
-            order by created_at desc
-            """,
-            (doc_id,),
-        ),
-        "notifications": query_all(
-            """
-            select *
-            from notification_log
-            where doc_id = %s
-            order by created_at desc
-            """,
-            (doc_id,),
-        ),
-        "selection_explain": {
-            "source": selection_source,
-            "decision": article.get("final_selection_decision")
-            or article.get("system_feed_decision"),
-            "systemSelected": article.get("final_selection_selected")
-            if article.get("final_selection_selected") is not None
-            else article.get("system_feed_eligible"),
-            "observationState": article.get("observation_state"),
-            "duplicateKind": article.get("duplicate_kind"),
-            "canonicalDocumentId": canonical_document_id,
-            "storyClusterId": story_cluster_id,
-            "verificationState": article.get("final_selection_verification_state")
-            or article.get("story_cluster_verification_state")
-            or article.get("canonical_verification_state"),
-            "verificationTargetType": article.get("verification_target_type"),
-            "verificationTargetId": article.get("verification_target_id"),
-        },
     }
 
 
@@ -4538,46 +5284,64 @@ def list_system_interests(
 ) -> dict[str, Any] | list[dict[str, Any]]:
     interest_template_select = """
         select
-          interest_template_id,
-          name,
-          description,
-          positive_texts,
-          negative_texts,
-          must_have_terms,
-          must_not_have_terms,
-          places,
-          languages_allowed,
-          time_window_hours,
+          it.interest_template_id,
+          it.name,
+          it.description,
+          it.positive_texts,
+          it.negative_texts,
+          it.must_have_terms,
+          it.must_not_have_terms,
+          it.places,
+          it.languages_allowed,
+          it.time_window_hours,
           coalesce(
-            allowed_content_kinds,
+            it.allowed_content_kinds,
             '["editorial","listing","entity","document","data_file","api_payload"]'::jsonb
           ) as allowed_content_kinds,
-          short_tokens_required,
-          short_tokens_forbidden,
-          priority,
-          is_active,
-          created_at,
-          updated_at
-        from interest_templates
-        order by is_active desc, updated_at desc, created_at desc
+          it.short_tokens_required,
+          it.short_tokens_forbidden,
+          it.priority,
+          it.is_active,
+          it.created_at,
+          it.updated_at,
+          sp.selection_profile_id::text as selection_profile_id,
+          sp.profile_family as selection_profile_family,
+          sp.status as selection_profile_status,
+          sp.version as selection_profile_version,
+          sp.policy_json as selection_profile_policy_json
+        from interest_templates it
+        left join selection_profiles sp
+          on sp.source_interest_template_id = it.interest_template_id
+        order by it.is_active desc, it.updated_at desc, it.created_at desc
     """
     paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
         page, page_size, 20
     )
     if not paginate:
-        return query_all(interest_template_select)
+        return [
+            normalize_system_interest_selection_profile_payload(item)
+            for item in query_all(interest_template_select)
+        ]
 
     total = query_count(
         """
         select count(*)::int as total
-        from interest_templates
+        from interest_templates it
         """
     )
     items = query_all(
         f"{interest_template_select}\nlimit %s\noffset %s",
         (resolved_page_size, offset),
     )
-    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+    return build_paginated_response(
+        [
+            normalize_system_interest_selection_profile_payload(item)
+            for item in items
+        ],
+        resolved_page,
+        resolved_page_size,
+        total,
+    )
 
 
 @app.get("/system-interests/{interest_template_id}")
@@ -4585,34 +5349,41 @@ def get_system_interest(interest_template_id: str) -> dict[str, Any]:
     template = query_one(
         """
         select
-          interest_template_id,
-          name,
-          description,
-          positive_texts,
-          negative_texts,
-          must_have_terms,
-          must_not_have_terms,
-          places,
-          languages_allowed,
-          time_window_hours,
+          it.interest_template_id,
+          it.name,
+          it.description,
+          it.positive_texts,
+          it.negative_texts,
+          it.must_have_terms,
+          it.must_not_have_terms,
+          it.places,
+          it.languages_allowed,
+          it.time_window_hours,
           coalesce(
-            allowed_content_kinds,
+            it.allowed_content_kinds,
             '["editorial","listing","entity","document","data_file","api_payload"]'::jsonb
           ) as allowed_content_kinds,
-          short_tokens_required,
-          short_tokens_forbidden,
-          priority,
-          is_active,
-          created_at,
-          updated_at
-        from interest_templates
-        where interest_template_id = %s
+          it.short_tokens_required,
+          it.short_tokens_forbidden,
+          it.priority,
+          it.is_active,
+          it.created_at,
+          it.updated_at,
+          sp.selection_profile_id::text as selection_profile_id,
+          sp.profile_family as selection_profile_family,
+          sp.status as selection_profile_status,
+          sp.version as selection_profile_version,
+          sp.policy_json as selection_profile_policy_json
+        from interest_templates it
+        left join selection_profiles sp
+          on sp.source_interest_template_id = it.interest_template_id
+        where it.interest_template_id = %s
         """,
         (interest_template_id,),
     )
     if template is None:
         raise HTTPException(status_code=404, detail="System interest not found.")
-    return template
+    return normalize_system_interest_selection_profile_payload(template)
 
 
 @app.get("/maintenance/reindex-jobs")
@@ -4630,7 +5401,8 @@ def list_reindex_jobs(
         page, page_size, limit
     )
     if not paginate:
-        return query_all(f"{reindex_select}\nlimit %s", (limit,))
+        items = query_all(f"{reindex_select}\nlimit %s", (limit,))
+        return [apply_reindex_selection_profile_payload(item) for item in items]
 
     total = query_count(
         """
@@ -4642,6 +5414,7 @@ def list_reindex_jobs(
         f"{reindex_select}\nlimit %s\noffset %s",
         (resolved_page_size, offset),
     )
+    items = [apply_reindex_selection_profile_payload(item) for item in items]
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
@@ -4778,6 +5551,14 @@ def update_discovery_class_route(
         raise_sequence_http_exception(error)
 
 
+@app.delete("/maintenance/discovery/classes/{class_key}")
+def delete_discovery_class_route(class_key: str) -> dict[str, Any]:
+    try:
+        return delete_discovery_class(class_key)
+    except (SequenceConflictError, SequenceNotFoundError) as error:
+        raise_sequence_http_exception(error)
+
+
 @app.get("/maintenance/discovery/missions")
 def list_discovery_missions(
     limit: int = Query(default=20, ge=1, le=100),
@@ -4877,11 +5658,19 @@ def update_discovery_mission_route(
         raise_sequence_http_exception(error)
 
 
+@app.delete("/maintenance/discovery/missions/{mission_id}")
+def delete_discovery_mission_route(mission_id: str) -> dict[str, Any]:
+    try:
+        return delete_discovery_mission(mission_id)
+    except (SequenceConflictError, SequenceNotFoundError) as error:
+        raise_sequence_http_exception(error)
+
+
 @app.post("/maintenance/discovery/missions/{mission_id}/compile-graph")
 async def compile_discovery_mission_graph_route(mission_id: str) -> dict[str, Any]:
     try:
         return await compile_discovery_mission_graph(mission_id)
-    except SequenceNotFoundError as error:
+    except (SequenceConflictError, SequenceNotFoundError) as error:
         raise_sequence_http_exception(error)
 
 

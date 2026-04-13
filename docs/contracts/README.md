@@ -39,6 +39,8 @@
   Durable cutover contract для перехода к full-flow zero-shot filtering architecture: raw observations, canonical documents, duplicate/story clustering, verification state, semantic interest filtering, final selection truth и doc-sync/cutover discipline.
 - `docs/contracts/test-access-and-fixtures.md`
   Repo-specific contract для stateful backend test access, fixture creation, persistent artifact tracking и cleanup discipline.
+- `docs/contracts/universal-selection-profiles.md`
+  Durable contract для эволюции selection semantics поверх уже shipped zero-shot/final-selection pipeline: universal `selection_profile` / `selection_profile_policy` model, cheap `accept/reject/hold`, optional-only LLM overrides for key cases, compatibility mapping from current templates/criteria и anti-lock-in rules для keeping domain semantics out of engine truth.
 - `docs/contracts/universal-task-engine.md`
   Durable contract для staged Universal Task Engine migration: sequence data model, `q.sequence`, executor/plugin boundaries, trigger routing shape, cutover discipline и minimum proof before the new engine becomes default runtime.
 - `docs/contracts/SUBSYSTEM-CONTRACT-TEMPLATE.md`

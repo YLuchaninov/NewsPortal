@@ -18,6 +18,13 @@ export interface InterestTemplateEditorValue {
   shortTokensForbidden: string;
   priority: string;
   isActive: boolean;
+  selectionProfileId?: string;
+  selectionProfileStatus?: string;
+  selectionProfileVersion?: string;
+  selectionProfileFamily?: string;
+  selectionProfileStrictness?: string;
+  selectionProfileUnresolvedDecision?: string;
+  selectionProfileLlmReviewMode?: string;
 }
 
 interface InterestTemplateEditorFormProps {
@@ -33,6 +40,11 @@ function boolToString(value: boolean): string {
 }
 
 const inputClassName = "h-10 text-sm";
+
+function displayValue(value: string | undefined, fallback: string): string {
+  const normalized = String(value ?? "").trim();
+  return normalized || fallback;
+}
 
 export function InterestTemplateEditorForm({
   action,
@@ -142,6 +154,61 @@ export function InterestTemplateEditorForm({
               className="min-h-[14rem] text-sm"
             />
           </FormField>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-base font-semibold text-foreground">Current runtime profile policy</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This is the human-readable compatibility policy currently synced into the additive <code>selection_profiles</code> layer. It explains how unresolved matches behave at runtime without requiring operators to read worker code.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Strictness</p>
+            <p className="mt-2 text-sm font-semibold">
+              {displayValue(value.selectionProfileStrictness, "balanced")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Keeps the runtime conservative enough for mass-scale filtering without exposing raw thresholds.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Unresolved outcome</p>
+            <p className="mt-2 text-sm font-semibold">
+              {displayValue(value.selectionProfileUnresolvedDecision, "hold")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Uncertain cases stay out of the selected collection unless the runtime review path resolves them more confidently.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">LLM review mode</p>
+            <p className="mt-2 text-sm font-semibold">
+              {displayValue(value.selectionProfileLlmReviewMode, "always")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Gray-zone system-interest cases default to asynchronous LLM review instead of silently collapsing into a cheap hold path.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Profile sync</p>
+            <p className="mt-2 text-sm font-semibold">
+              {displayValue(value.selectionProfileStatus, value.isActive ? "active" : "archived")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {`family ${displayValue(value.selectionProfileFamily, "compatibility_interest_template")} · version ${displayValue(value.selectionProfileVersion, "1")}`}
+            </p>
+            {value.selectionProfileId ? (
+              <p className="mt-1 break-all text-[11px] text-muted-foreground">{value.selectionProfileId}</p>
+            ) : (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                A compatibility profile will be created automatically on save.
+              </p>
+            )}
+          </div>
         </div>
       </section>
 

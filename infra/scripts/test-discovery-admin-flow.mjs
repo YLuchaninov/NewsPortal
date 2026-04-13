@@ -434,6 +434,8 @@ async function main() {
   let sourceProfileId = "";
   let recallCandidateId = "";
   let recallMissionId = "";
+  let deletableMissionId = "";
+  let deletableClassKey = "";
   let adminCreated = false;
 
   try {
@@ -490,6 +492,25 @@ async function main() {
       throw new Error("Discovery mission creation did not return a mission_id.");
     }
 
+    const deleteMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "create_mission",
+      redirectTo: `${discoveryPath}?tab=missions`,
+      title: `Disposable mission ${runId}`,
+      description: "Delete-path mission",
+      seedTopics: "Disposable mission",
+      seedLanguages: "en",
+      seedRegions: "EU",
+      targetProviderTypes: "rss",
+      maxHypotheses: "2",
+      maxSources: "2",
+      budgetCents: "0",
+      priority: "0",
+    }, { cookie: adminCookie });
+    deletableMissionId = String(deleteMission.json?.mission_id ?? "");
+    if (!deletableMissionId) {
+      throw new Error("Deletable discovery mission creation did not return a mission_id.");
+    }
+
     const classKey = `acceptance_${runId}`;
     const createClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
       intent: "create_class",
@@ -507,6 +528,25 @@ async function main() {
     }, { cookie: adminCookie });
     if (String(createClass.json?.class_key ?? "") !== classKey) {
       throw new Error("Discovery class creation did not return the expected class_key.");
+    }
+
+    deletableClassKey = `delete_${runId}`;
+    const deleteClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "create_class",
+      redirectTo: `${discoveryPath}?tab=classes`,
+      classKey: deletableClassKey,
+      displayName: `Disposable class ${runId}`,
+      description: "Delete-path class",
+      status: "draft",
+      generationBackend: "graph_seed_only",
+      defaultProviderTypes: "rss",
+      maxPerMission: "1",
+      sortOrder: "99",
+      seedRulesJson: '{"tactics":["delete_path"]}',
+      configJson: '{"notes":"delete path"}',
+    }, { cookie: adminCookie });
+    if (String(deleteClass.json?.class_key ?? "") !== deletableClassKey) {
+      throw new Error("Deletable discovery class creation did not return the expected class_key.");
     }
 
     log("Updating the discovery class through the admin surface.");
@@ -798,7 +838,7 @@ async function main() {
     );
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=classes`,
-      [`Acceptance class ${runId}`, "Save class"],
+      [`Acceptance class ${runId}`, "Save class", "Delete"],
       { cookie: adminCookie }
     );
     await assertHtmlContains(
@@ -928,12 +968,100 @@ async function main() {
       { cookie: adminCookie }
     );
 
+    log("Archiving and reactivating discovery mission and class through the admin surface.");
+    const archivedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "archive_mission",
+      redirectTo: `${discoveryPath}?tab=missions`,
+      missionId,
+    }, { cookie: adminCookie });
+    if (String(archivedMission.json?.mission_id ?? "") !== missionId) {
+      throw new Error("Discovery mission archive did not return the expected mission_id.");
+    }
+    await waitFor(
+      "archived discovery mission",
+      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`),
+      (payload) => String(payload?.status ?? "") === "archived"
+    );
+    const activatedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "activate_mission",
+      redirectTo: `${discoveryPath}?tab=missions`,
+      missionId,
+    }, { cookie: adminCookie });
+    if (String(activatedMission.json?.mission_id ?? "") !== missionId) {
+      throw new Error("Discovery mission reactivation did not return the expected mission_id.");
+    }
+    await waitFor(
+      "reactivated discovery mission",
+      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`),
+      (payload) => String(payload?.status ?? "") === "planned"
+    );
+
+    const archivedClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "archive_class",
+      redirectTo: `${discoveryPath}?tab=classes`,
+      classKey,
+    }, { cookie: adminCookie });
+    if (String(archivedClass.json?.class_key ?? "") !== classKey) {
+      throw new Error("Discovery class archive did not return the expected class_key.");
+    }
+    await waitFor(
+      "archived discovery class",
+      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`),
+      (payload) => String(payload?.status ?? "") === "archived"
+    );
+    const activatedClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "activate_class",
+      redirectTo: `${discoveryPath}?tab=classes`,
+      classKey,
+    }, { cookie: adminCookie });
+    if (String(activatedClass.json?.class_key ?? "") !== classKey) {
+      throw new Error("Discovery class reactivation did not return the expected class_key.");
+    }
+    await waitFor(
+      "reactivated discovery class",
+      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`),
+      (payload) => String(payload?.status ?? "") === "active"
+    );
+
+    log("Deleting disposable discovery mission and class through the admin surface.");
+    const deletedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "delete_mission",
+      redirectTo: `${discoveryPath}?tab=missions`,
+      missionId: deletableMissionId,
+    }, { cookie: adminCookie });
+    if (deletedMission.json?.deleted !== true) {
+      throw new Error("Discovery mission delete did not report deleted=true.");
+    }
+    await waitFor(
+      "deleted discovery mission",
+      async () =>
+        sendRequest(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(deletableMissionId)}`),
+      (response) => response.status === 404
+    );
+
+    const deletedClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "delete_class",
+      redirectTo: `${discoveryPath}?tab=classes`,
+      classKey: deletableClassKey,
+    }, { cookie: adminCookie });
+    if (deletedClass.json?.deleted !== true) {
+      throw new Error("Discovery class delete did not report deleted=true.");
+    }
+    await waitFor(
+      "deleted discovery class",
+      async () =>
+        sendRequest(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(deletableClassKey)}`),
+      (response) => response.status === 404
+    );
+
     console.log(
       JSON.stringify(
         {
           status: "discovery-admin-ok",
           missionId,
           classKey,
+          deletableMissionId,
+          deletableClassKey,
           discoveryRunId: runIdFromApi,
           candidateId,
           sourceProfileId,

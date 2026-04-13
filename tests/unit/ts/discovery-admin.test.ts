@@ -58,6 +58,8 @@ test("BFF discovery helpers normalize graph-first form inputs and registry inten
   assert.deepEqual(parseProviderTypes("rss, website ,rss"), ["rss", "website", "rss"]);
   assert.deepEqual(parseProviderTypes(""), ["rss", "website", "api", "email_imap", "youtube"]);
   assert.equal(resolveDiscoveryIntent({ intent: "compile_graph" }), "compile_graph");
+  assert.equal(resolveDiscoveryIntent({ intent: "archive_mission" }), "archive_mission");
+  assert.equal(resolveDiscoveryIntent({ intent: "delete_class" }), "delete_class");
   assert.equal(resolveDiscoveryIntent({ intent: "unexpected" }), "create_mission");
   assert.equal(normalizeAuditEntityId("acceptance_class"), null);
   assert.equal(
@@ -160,7 +162,7 @@ test("buildDiscoveryMissionCreateApiPayload converts form state into graph-first
 test("buildDiscoveryMissionUpdateApiPayload, class payload and feedback payload keep optional fields explicit", () => {
   assert.deepEqual(
     buildDiscoveryMissionUpdateApiPayload({
-      status: "paused",
+      status: "archived",
       priority: "2",
       budgetCents: "",
       seedTopics: "",
@@ -169,7 +171,7 @@ test("buildDiscoveryMissionUpdateApiPayload, class payload and feedback payload 
     {
       title: undefined,
       description: undefined,
-      status: "paused",
+      status: "archived",
       priority: 2,
       budgetCents: undefined,
       maxHypotheses: undefined,
@@ -256,6 +258,20 @@ test("buildDiscoveryAuditPayload captures per-intent adaptive details", () => {
       title: "Discovery mission",
       missionId: "mission-9",
       seedTopics: ["AI", "policy"],
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryAuditPayload(
+      "archive_mission",
+      { missionId: "mission-2" },
+      { mission_id: "mission-2" }
+    ),
+    {
+      missionId: "mission-2",
+      status: "archived",
+      priority: undefined,
+      budgetCents: undefined,
     }
   );
 

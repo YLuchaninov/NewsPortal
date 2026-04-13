@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -10,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  buttonVariants,
   cn,
 } from "@newsportal/ui";
 
@@ -30,15 +30,23 @@ export function AdminConfirmSubmitButton({
   triggerClassName,
   confirmClassName,
 }: AdminConfirmSubmitButtonProps) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  function handleConfirm() {
-    const form = triggerRef.current?.closest("form");
-    if (form instanceof HTMLFormElement) {
-      form.requestSubmit();
+  function handleConfirmClick() {
+    const form = triggerRef.current?.form ?? triggerRef.current?.closest("form");
+    if (!(form instanceof HTMLFormElement)) {
+      return;
     }
     setOpen(false);
+    if (typeof form.reportValidity === "function" && !form.reportValidity()) {
+      return;
+    }
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    } else {
+      form.submit();
+    }
   }
 
   return (
@@ -62,13 +70,13 @@ export function AdminConfirmSubmitButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
-          <AlertDialogAction
+          <button
             type="button"
-            onClick={handleConfirm}
-            className={cn(confirmClassName)}
+            onClick={handleConfirmClick}
+            className={cn(buttonVariants(), confirmClassName)}
           >
             {confirmLabel}
-          </AlertDialogAction>
+          </button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

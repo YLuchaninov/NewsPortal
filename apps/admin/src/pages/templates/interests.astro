@@ -48,6 +48,28 @@ function resolveListHref(nextPage: number): string {
   }
   return `${target.pathname}${target.search}`;
 }
+
+function asPolicyRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function resolveLlmReviewMode(
+  profileFamily: unknown,
+  selectionProfilePolicy: Record<string, unknown>
+): string {
+  const configured = String(selectionProfilePolicy.llmReviewMode ?? "").trim();
+  if (configured) {
+    return configured === "optional_high_value_only"
+      && String(profileFamily ?? "") === "compatibility_interest_template"
+      ? "always"
+      : configured;
+  }
+  return String(profileFamily ?? "") === "compatibility_interest_template"
+    ? "always"
+    : "optional_high_value_only";
+}
 ---
 
 <AdminShell title="System Interests — Admin" session={session} flash={flash} activeNav="interest-templates">
@@ -140,6 +162,11 @@ function resolveListHref(nextPage: number): string {
                 const allowedKinds = Array.isArray(template.allowed_content_kinds)
                   ? (template.allowed_content_kinds as unknown[]).map((entry) => String(entry ?? "")).filter(Boolean)
                   : [];
+                const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_json);
+                const profileFamily = String(template.selection_profile_family ?? "");
+                const unresolvedDecision = String(selectionProfilePolicy.unresolvedDecision ?? "hold");
+                const llmReviewMode = resolveLlmReviewMode(profileFamily, selectionProfilePolicy);
+                const profileStatus = String(template.selection_profile_status ?? (isActive ? "active" : "archived"));
                 return (
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
@@ -166,17 +193,28 @@ function resolveListHref(nextPage: number): string {
                       </div>
                     </td>
                     <td class="px-5 py-4 align-top text-sm text-muted-foreground">
-                      {String(template.priority ?? 1)}
+                      <p>{String(template.priority ?? 1)}</p>
+                      <p class="mt-1 text-xs">
+                        {String(selectionProfilePolicy.strictness ?? "balanced")} · {unresolvedDecision}
+                      </p>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <span class:list={[
-                        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                        isActive
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                          : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
-                      ]}>
-                        {isActive ? "Active" : "Archived"}
-                      </span>
+                      <div class="flex flex-wrap gap-2">
+                        <span class:list={[
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                          isActive
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                        ]}>
+                          {isActive ? "Active" : "Archived"}
+                        </span>
+                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                          unresolved:{unresolvedDecision}
+                        </span>
+                      </div>
+                      <p class="mt-2 text-xs text-muted-foreground">
+                        {profileStatus} · llm:{llmReviewMode}
+                      </p>
                     </td>
                     <td class="px-5 py-4 align-top">
                       <div class="flex flex-wrap gap-2">

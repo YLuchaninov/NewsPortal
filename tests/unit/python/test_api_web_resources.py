@@ -32,7 +32,14 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertIn("/maintenance/web-resources/{resource_id}", paths)
 
     def test_list_web_resources_page_uses_filters_and_projection_truth(self) -> None:
-        items = [{"resource_id": "resource-1", "resource_kind": "entity"}]
+        items = [
+            {
+                "resource_id": "resource-1",
+                "resource_kind": "entity",
+                "content_item_ready": True,
+                "projected_article_id": None,
+            }
+        ]
         with (
             patch.object(api_main, "query_count", return_value=7) as query_count,
             patch.object(api_main, "query_all", return_value=items) as query_all,
@@ -50,7 +57,9 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertEqual(result["total"], 7)
         self.assertEqual(result["page"], 2)
         self.assertEqual(result["pageSize"], 3)
-        self.assertEqual(result["items"], items)
+        self.assertEqual(result["items"][0]["resource_id"], "resource-1")
+        self.assertEqual(result["items"][0]["selection_mode"], "selected")
+        self.assertEqual(result["items"][0]["selection_guidance"]["tone"], "positive")
 
         count_sql, count_params = query_count.call_args.args
         self.assertIn("from web_resources wr", count_sql)
@@ -64,6 +73,9 @@ class ApiWebResourcesTests(unittest.TestCase):
 
         items_sql, items_params = query_all.call_args.args
         self.assertIn("left join articles pa on pa.doc_id = wr.projected_article_id", items_sql)
+        self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id", items_sql)
+        self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id", items_sql)
+        self.assertIn("sfr.eligible_for_feed as system_feed_eligible", items_sql)
         self.assertIn("then 'resource:' || wr.resource_id::text", items_sql)
         self.assertIn("wr.resource_kind <> 'editorial'", items_sql)
         self.assertIn("from interest_templates it", items_sql)
@@ -92,6 +104,54 @@ class ApiWebResourcesTests(unittest.TestCase):
                 api_main.get_web_resource("resource-404")
 
         self.assertEqual(error.exception.status_code, 404)
+
+    def test_get_web_resource_includes_selection_diagnostics_for_projected_article(self) -> None:
+        with (
+            patch.object(
+                api_main,
+                "query_one",
+                return_value={
+                    "resource_id": "resource-1",
+                    "projected_article_id": "doc-1",
+                    "final_selection_decision": "gray_zone",
+                    "final_selection_mode": "hold",
+                    "final_selection_summary": "Gray zone held by profile policy",
+                    "final_selection_reason": "semantic_hold",
+                    "final_selection_hold_count": 1,
+                    "final_selection_llm_review_pending_count": 0,
+                    "system_feed_decision": "filtered_out",
+                },
+            ) as query_one,
+            patch.object(api_main, "query_all", side_effect=[[{"filter_scope": "system_criterion", "semantic_decision": "gray_zone"}], [], []]),
+        ):
+            resource = api_main.get_web_resource("resource-1")
+
+        self.assertEqual(resource["selection_mode"], "hold")
+        self.assertEqual(resource["selection_summary"], "Gray zone held by profile policy")
+        self.assertEqual(resource["selection_diagnostics"]["grayZoneRows"], 1)
+        self.assertEqual(resource["selection_guidance"]["tone"], "warning")
+        sql = query_one.call_args.args[0]
+        self.assertIn("sfr.eligible_for_feed as system_feed_eligible", sql)
+        self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id", sql)
+        self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id", sql)
+
+    def test_get_web_resource_marks_content_kind_selected_resource_without_article_projection(self) -> None:
+        with patch.object(
+            api_main,
+            "query_one",
+            return_value={
+                "resource_id": "resource-2",
+                "projected_article_id": None,
+                "content_item_ready": True,
+                "system_selection_decision": "kind_enabled",
+            },
+        ):
+            resource = api_main.get_web_resource("resource-2")
+
+        self.assertEqual(resource["selection_mode"], "selected")
+        self.assertEqual(resource["selection_source"], "system_interest_content_kind")
+        self.assertEqual(resource["selection_summary"], "Selected by content-kind eligibility")
+        self.assertEqual(resource["selection_guidance"]["tone"], "positive")
 
 
 if __name__ == "__main__":

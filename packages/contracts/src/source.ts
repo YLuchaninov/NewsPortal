@@ -69,6 +69,14 @@ export interface WebResourcePreview {
   projected_article_title?: string | null;
   content_item_id?: string | null;
   content_item_ready?: boolean;
+  selection_source?: string | null;
+  selection_decision?: string | null;
+  selection_mode?: string | null;
+  selection_summary?: string | null;
+  selection_reason?: string | null;
+  selection_hold_count?: number | null;
+  selection_llm_review_pending_count?: number | null;
+  selection_guidance?: Record<string, unknown> | null;
   documents_count?: number;
   media_count?: number;
   links_out_count?: number;
@@ -85,6 +93,7 @@ export interface WebResourceDetail extends WebResourcePreview {
   links_out_json?: unknown[] | null;
   child_resources_json?: unknown[] | null;
   raw_payload_json?: Record<string, unknown> | null;
+  selection_diagnostics?: Record<string, unknown> | null;
 }
 
 export interface SourceChannelSchedulePatch {

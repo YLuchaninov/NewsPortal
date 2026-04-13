@@ -26,4 +26,9 @@ test("sanitizeOptionalTimestamptzInput accepts valid timestamps and rejects malf
   assert.equal(sanitizeOptionalTimestamptzInput({ published: "2026-04-08" }), null);
   assert.equal(sanitizeOptionalTimestamptzInput("[object Object]"), null);
   assert.equal(sanitizeOptionalTimestamptzInput("9971-69-38"), null);
+  assert.equal(sanitizeOptionalTimestamptzInput("0000-06-19T00:00:00.000Z"), null);
+  assert.equal(
+    sanitizeOptionalTimestamptzInput(new Date("0000-06-19T00:00:00.000Z")),
+    null
+  );
 });

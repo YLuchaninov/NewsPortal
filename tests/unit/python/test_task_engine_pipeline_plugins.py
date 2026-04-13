@@ -1,8 +1,12 @@
+import http.client
+import io
 import unittest
 from typing import Any
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 
 from services.workers.app.task_engine import TaskPluginRegistry, register_builtin_plugins
+from services.workers.app.task_engine.exceptions import TaskExecutionError
 from services.workers.app.task_engine.pipeline_plugins import (
     ArticleExtractPlugin,
     EmbedArticlePlugin,
@@ -13,6 +17,20 @@ from services.workers.app.task_engine.pipeline_plugins import (
     ReindexPlugin,
     ResourceExtractPlugin,
 )
+
+
+class _FakeUrlopenResponse:
+    def __init__(self, payload: str):
+        self._payload = payload.encode("utf-8")
+
+    def __enter__(self) -> "_FakeUrlopenResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return self._payload
 
 
 class CorePipelinePluginRegistryTests(unittest.TestCase):
@@ -184,6 +202,116 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["extraction_state"], "enriched")
         self.assertEqual(result["projected_doc_id"], "doc-123")
         self.assertTrue(result["force_enrichment"])
+
+    def test_article_extract_request_retries_transient_transport_failure(self) -> None:
+        plugin = ArticleExtractPlugin()
+        attempts: list[int] = []
+
+        def fake_urlopen(*_args: Any, **_kwargs: Any) -> _FakeUrlopenResponse:
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise URLError(ConnectionRefusedError("Connection refused"))
+            return _FakeUrlopenResponse('{"status":"enriched","enrichmentState":"enriched"}')
+
+        with patch(
+            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            side_effect=fake_urlopen,
+        ), patch(
+            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+        ) as sleep_mock:
+            result = plugin._request_enrichment(
+                {
+                    "docId": "doc-retry",
+                    "eventId": "event-retry",
+                    "forceEnrichment": False,
+                }
+            )
+
+        self.assertEqual(len(attempts), 2)
+        sleep_mock.assert_called_once_with()
+        self.assertEqual(result["status"], "enriched")
+        self.assertEqual(result["enrichmentState"], "enriched")
+
+    def test_article_extract_request_raises_retryable_error_after_transient_failures_exhaust(self) -> None:
+        plugin = ArticleExtractPlugin()
+
+        with patch(
+            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            side_effect=URLError(ConnectionRefusedError("Connection refused")),
+        ), patch(
+            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+        ) as sleep_mock:
+            with self.assertRaises(TaskExecutionError) as context:
+                plugin._request_enrichment(
+                    {
+                        "docId": "doc-fail",
+                        "eventId": "event-fail",
+                        "forceEnrichment": False,
+                    }
+                )
+
+        self.assertTrue(context.exception.retryable)
+        self.assertIn("Connection refused", str(context.exception))
+        self.assertEqual(sleep_mock.call_count, 2)
+
+    def test_resource_extract_request_retries_remote_disconnect(self) -> None:
+        plugin = ResourceExtractPlugin()
+        attempts: list[int] = []
+
+        def fake_urlopen(*_args: Any, **_kwargs: Any) -> _FakeUrlopenResponse:
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise http.client.RemoteDisconnected(
+                    "Remote end closed connection without response"
+                )
+            return _FakeUrlopenResponse('{"status":"enriched","resourceKind":"editorial"}')
+
+        with patch(
+            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            side_effect=fake_urlopen,
+        ), patch(
+            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+        ) as sleep_mock:
+            result = plugin._request_enrichment(
+                {
+                    "resourceId": "resource-retry",
+                    "eventId": "event-retry",
+                    "forceEnrichment": False,
+                }
+            )
+
+        self.assertEqual(len(attempts), 2)
+        sleep_mock.assert_called_once_with()
+        self.assertEqual(result["status"], "enriched")
+        self.assertEqual(result["resourceKind"], "editorial")
+
+    def test_article_extract_request_does_not_retry_permanent_http_errors(self) -> None:
+        plugin = ArticleExtractPlugin()
+        http_error = HTTPError(
+            url="http://fetchers/internal/enrichment/articles/doc-permanent",
+            code=400,
+            msg="Bad Request",
+            hdrs=None,
+            fp=io.BytesIO(b"bad request"),
+        )
+
+        with patch(
+            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            side_effect=http_error,
+        ), patch(
+            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+        ) as sleep_mock:
+            with self.assertRaises(RuntimeError) as context:
+                plugin._request_enrichment(
+                    {
+                        "docId": "doc-permanent",
+                        "eventId": "event-permanent",
+                        "forceEnrichment": False,
+                    }
+                )
+
+        sleep_mock.assert_not_called()
+        self.assertIn("HTTP 400", str(context.exception))
 
     async def test_match_interests_plugin_prefers_options_and_keeps_scope_fields(self) -> None:
         captured: dict[str, Any] = {}

@@ -152,13 +152,20 @@ export function sanitizeOptionalPositiveInt(value: unknown): number | null {
 }
 
 export function sanitizeOptionalTimestamptzInput(value: unknown): string | null {
+  const isPersistableDate = (candidate: Date): boolean => {
+    if (!Number.isFinite(candidate.getTime())) {
+      return false;
+    }
+    return candidate.getUTCFullYear() >= 1;
+  };
+
   if (value instanceof Date) {
-    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+    return isPersistableDate(value) ? value.toISOString() : null;
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
     const parsed = new Date(value);
-    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+    return isPersistableDate(parsed) ? parsed.toISOString() : null;
   }
 
   const rawValue = readOptionalString(value);
@@ -167,7 +174,7 @@ export function sanitizeOptionalTimestamptzInput(value: unknown): string | null 
   }
 
   const parsed = new Date(rawValue);
-  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+  return isPersistableDate(parsed) ? parsed.toISOString() : null;
 }
 
 function readRawPayloadEntry(rawPayload: unknown): RawPayloadEntry {

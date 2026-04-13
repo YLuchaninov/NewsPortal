@@ -51,6 +51,46 @@ function readProgressLabel(job: ReindexRow): string | null {
   }
   return `${processed}/${total} content items`;
 }
+
+function readSelectionProfileSummary(job: ReindexRow): string | null {
+  const summary = String(job.selection_profile_summary ?? "").trim();
+  return summary || null;
+}
+
+function readSelectionProfileSnapshot(
+  job: ReindexRow
+): {
+  activeProfiles: number;
+  totalProfiles: number;
+  compatibilityProfiles: number;
+  templatesWithProfiles: number;
+  maxVersion: number;
+} | null {
+  const snapshot =
+    job.selection_profile_snapshot &&
+    typeof job.selection_profile_snapshot === "object"
+      ? (job.selection_profile_snapshot as Record<string, unknown>)
+      : null;
+  if (!snapshot) {
+    return null;
+  }
+
+  const readInt = (value: unknown): number => {
+    const parsed = Number(value ?? NaN);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const payload = {
+    activeProfiles: readInt(snapshot.activeProfiles),
+    totalProfiles: readInt(snapshot.totalProfiles),
+    compatibilityProfiles: readInt(snapshot.compatibilityProfiles),
+    templatesWithProfiles: readInt(snapshot.templatesWithProfiles),
+    maxVersion: readInt(snapshot.maxVersion),
+  };
+
+  return Object.values(payload).some((value) => value > 0) ? payload : null;
+}
+
 const initialJobs = {
   total: reindexJobs.total,
   page: reindexJobs.page,
@@ -64,6 +104,8 @@ const initialJobs = {
       job.reindex_job_id,
       job.status,
       readProgressLabel(job),
+      readSelectionProfileSnapshot(job),
+      readSelectionProfileSummary(job),
       job.created_at,
     ])
   ),
@@ -80,14 +122,19 @@ const initialJobs = {
       jobKind: String(job.job_kind ?? "rebuild"),
       status: String(job.status ?? "pending"),
       createdAt: job.created_at ? String(job.created_at) : null,
+      createdAtLabel: job.created_at ? String(job.created_at) : null,
       processedArticles:
         Number.isFinite(processedArticles) ? processedArticles : null,
       totalArticles: Number.isFinite(totalArticles) ? totalArticles : null,
       progressLabel: readProgressLabel(job),
+      selectionProfileSnapshot: readSelectionProfileSnapshot(job),
+      selectionProfileSummary: readSelectionProfileSummary(job),
       revision: JSON.stringify([
         job.reindex_job_id,
         job.status,
         readProgressLabel(job),
+        readSelectionProfileSnapshot(job),
+        readSelectionProfileSummary(job),
         job.created_at,
       ]),
     };
@@ -131,7 +178,7 @@ const initialJobs = {
           </p>
           <p class="text-xs text-muted-foreground mt-2">
             If you also want already persisted content items to be corrected in PostgreSQL, use <strong>Rebuild + repair existing content</strong>.
-            That mode rematches historical rows against the current system-interest set, including active interest-template-backed rules, and reruns gray-zone LLM review with the current templates, but it does <strong>not</strong>
+            That mode rematches historical rows against the current system-interest set, including the active compatibility <code>selection_profiles</code> snapshot and any policy-allowed optional LLM review, but it does <strong>not</strong>
             resend retro notifications.
           </p>
           <p class="text-xs text-muted-foreground mt-2">
@@ -161,7 +208,7 @@ const initialJobs = {
           </select>
         </div>
         <p class="text-xs text-muted-foreground">
-          Reindexing runs asynchronously in the background. Historical repair rematches existing content items in the DB against the current system-interest set and reuses current LLM templates,
+          Reindexing runs asynchronously in the background. Historical repair rematches existing content items in the DB against the current system-interest set and records the active compatibility selection-profile snapshot used for replay,
           but intentionally skips retro notification delivery.
         </p>
         <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">

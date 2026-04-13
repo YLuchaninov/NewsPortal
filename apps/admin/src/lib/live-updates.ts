@@ -54,9 +54,18 @@ export interface AdminReindexJobSnapshot {
   jobKind: string;
   status: string;
   createdAt: string | null;
+  createdAtLabel: string | null;
   processedArticles: number | null;
   totalArticles: number | null;
   progressLabel: string | null;
+  selectionProfileSnapshot: {
+    activeProfiles: number;
+    totalProfiles: number;
+    compatibilityProfiles: number;
+    templatesWithProfiles: number;
+    maxVersion: number;
+  } | null;
+  selectionProfileSummary: string | null;
   revision: string;
 }
 

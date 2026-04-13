@@ -57,11 +57,32 @@ interface CriterionSyncRow {
   compile_status: string;
 }
 
+interface SelectionProfileSyncRow {
+  selection_profile_id: string;
+  source_criterion_id: string | null;
+  name: string;
+  description: string;
+  profile_scope: string;
+  profile_family: string;
+  definition_json: unknown;
+  policy_json: unknown;
+  facets_json: unknown;
+  bindings_json: unknown;
+  status: string;
+  version: number;
+}
+
 export interface InterestTemplateCriterionSyncResult {
   criterionId: string;
   version: number;
   created: boolean;
   compileRequested: boolean;
+}
+
+export interface InterestTemplateSelectionProfileSyncResult {
+  selectionProfileId: string;
+  version: number;
+  created: boolean;
 }
 
 const DEFAULT_ALLOWED_CONTENT_KINDS = RESOURCE_KINDS.filter((kind) => kind !== "unknown");
@@ -175,6 +196,27 @@ function textListsEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(normalizeTextList(left)) === JSON.stringify(normalizeTextList(right));
 }
 
+function normalizeJsonStructure(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeJsonStructure(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, normalizeJsonStructure(nested)])
+    );
+  }
+  return value;
+}
+
+function jsonStructuresEqual(left: unknown, right: unknown): boolean {
+  return (
+    JSON.stringify(normalizeJsonStructure(left)) ===
+    JSON.stringify(normalizeJsonStructure(right))
+  );
+}
+
 function resolveCriterionDescription(input: InterestTemplateInput): string {
   const name = input.name.trim();
   if (name) {
@@ -182,6 +224,102 @@ function resolveCriterionDescription(input: InterestTemplateInput): string {
   }
   const description = input.description.trim();
   return description || "Interest template";
+}
+
+async function readCriterionForProfileSync(
+  queryable: Queryable,
+  interestTemplateId: string
+): Promise<{ criterionId: string | null; criterionDescription: string | null }> {
+  const result = await queryable.query<{
+    criterion_id: string;
+    description: string;
+  }>(
+    `
+      select
+        criterion_id::text as criterion_id,
+        description
+      from criteria
+      where source_interest_template_id = $1
+      limit 1
+    `,
+    [interestTemplateId]
+  );
+  const row = result.rows[0];
+  return {
+    criterionId: row?.criterion_id ?? null,
+    criterionDescription: row?.description ?? null,
+  };
+}
+
+function buildSelectionProfileCompatibilityPayload(
+  template: InterestTemplateInput,
+  input: {
+    interestTemplateId: string;
+    criterionId: string | null;
+    criterionDescription: string | null;
+  }
+): {
+  name: string;
+  description: string;
+  profileScope: string;
+  profileFamily: string;
+  definitionJson: Record<string, unknown>;
+  policyJson: Record<string, unknown>;
+  facetsJson: unknown[];
+  bindingsJson: Record<string, unknown>;
+  status: string;
+} {
+  const profileName = resolveCriterionDescription(template);
+  const description = template.description.trim();
+
+  return {
+    name: profileName,
+    description,
+    profileScope: "system",
+    profileFamily: "compatibility_interest_template",
+    definitionJson: {
+      description,
+      positiveDefinitions: [...template.positiveTexts],
+      negativeDefinitions: [...template.negativeTexts],
+      requiredEvidence: {
+        mustHaveTerms: [...template.mustHaveTerms],
+        shortTokensRequired: [...template.shortTokensRequired],
+      },
+      forbiddenEvidence: {
+        mustNotHaveTerms: [...template.mustNotHaveTerms],
+        shortTokensForbidden: [...template.shortTokensForbidden],
+      },
+      constraints: {
+        places: [...template.places],
+        languagesAllowed: [...template.languagesAllowed],
+        timeWindowHours: template.timeWindowHours,
+      },
+      compatibility: {
+        source: "interest_template",
+        sourceInterestTemplateId: input.interestTemplateId,
+        sourceCriterionId: input.criterionId,
+        sourceCriterionDescription: input.criterionDescription,
+      },
+    },
+    policyJson: {
+      strictness: "balanced",
+      unresolvedDecision: "hold",
+      llmReviewMode: "always",
+      finalSelectionMode: "compatibility_system_selected",
+      priority: Number(template.priority ?? 1),
+      allowedContentKinds: [...template.allowedContentKinds],
+    },
+    facetsJson: [],
+    bindingsJson: {
+      sourceBindingMode: "compatibility_system_template",
+      allowedContentKinds: [...template.allowedContentKinds],
+      compatibility: {
+        sourceInterestTemplateId: input.interestTemplateId,
+        sourceCriterionId: input.criterionId,
+      },
+    },
+    status: template.isActive ? "active" : "archived",
+  };
 }
 
 async function readInterestTemplateForSync(
@@ -439,6 +577,157 @@ export async function syncInterestTemplateCriterion(
     version: nextVersion,
     created: false,
     compileRequested,
+  };
+}
+
+export async function syncInterestTemplateSelectionProfile(
+  queryable: Queryable,
+  interestTemplateId: string
+): Promise<InterestTemplateSelectionProfileSyncResult> {
+  const template = await readInterestTemplateForSync(queryable, interestTemplateId);
+  const criterion = await readCriterionForProfileSync(queryable, interestTemplateId);
+  const nextProfile = buildSelectionProfileCompatibilityPayload(template, {
+    interestTemplateId,
+    criterionId: criterion.criterionId,
+    criterionDescription: criterion.criterionDescription,
+  });
+  const existingResult = await queryable.query<SelectionProfileSyncRow>(
+    `
+      select
+        selection_profile_id::text as selection_profile_id,
+        source_criterion_id::text as source_criterion_id,
+        name,
+        description,
+        profile_scope,
+        profile_family,
+        definition_json,
+        policy_json,
+        facets_json,
+        bindings_json,
+        status,
+        version
+      from selection_profiles
+      where source_interest_template_id = $1
+      limit 1
+    `,
+    [interestTemplateId]
+  );
+  const existing = existingResult.rows[0];
+
+  if (!existing) {
+    const insertResult = await queryable.query<{
+      selection_profile_id: string;
+      version: number;
+    }>(
+      `
+        insert into selection_profiles (
+          selection_profile_id,
+          source_interest_template_id,
+          source_criterion_id,
+          name,
+          description,
+          profile_scope,
+          profile_family,
+          definition_json,
+          policy_json,
+          facets_json,
+          bindings_json,
+          status,
+          version
+        )
+        values (
+          gen_random_uuid(),
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7::jsonb,
+          $8::jsonb,
+          $9::jsonb,
+          $10::jsonb,
+          $11,
+          1
+        )
+        returning selection_profile_id::text as selection_profile_id, version
+      `,
+      [
+        interestTemplateId,
+        criterion.criterionId,
+        nextProfile.name,
+        nextProfile.description,
+        nextProfile.profileScope,
+        nextProfile.profileFamily,
+        JSON.stringify(nextProfile.definitionJson),
+        JSON.stringify(nextProfile.policyJson),
+        JSON.stringify(nextProfile.facetsJson),
+        JSON.stringify(nextProfile.bindingsJson),
+        nextProfile.status,
+      ]
+    );
+    const created = insertResult.rows[0];
+    return {
+      selectionProfileId: created.selection_profile_id,
+      version: created.version,
+      created: true,
+    };
+  }
+
+  const dataChanged =
+    existing.source_criterion_id !== criterion.criterionId ||
+    existing.name !== nextProfile.name ||
+    existing.description !== nextProfile.description ||
+    existing.profile_scope !== nextProfile.profileScope ||
+    existing.profile_family !== nextProfile.profileFamily ||
+    !jsonStructuresEqual(existing.definition_json, nextProfile.definitionJson) ||
+    !jsonStructuresEqual(existing.policy_json, nextProfile.policyJson) ||
+    !jsonStructuresEqual(existing.facets_json, nextProfile.facetsJson) ||
+    !jsonStructuresEqual(existing.bindings_json, nextProfile.bindingsJson) ||
+    existing.status !== nextProfile.status;
+
+  const nextVersion = dataChanged
+    ? Number(existing.version ?? 1) + 1
+    : Number(existing.version ?? 1);
+
+  await queryable.query(
+    `
+      update selection_profiles
+      set
+        source_criterion_id = $2,
+        name = $3,
+        description = $4,
+        profile_scope = $5,
+        profile_family = $6,
+        definition_json = $7::jsonb,
+        policy_json = $8::jsonb,
+        facets_json = $9::jsonb,
+        bindings_json = $10::jsonb,
+        status = $11,
+        version = $12,
+        updated_at = now()
+      where selection_profile_id = $1
+    `,
+    [
+      existing.selection_profile_id,
+      criterion.criterionId,
+      nextProfile.name,
+      nextProfile.description,
+      nextProfile.profileScope,
+      nextProfile.profileFamily,
+      JSON.stringify(nextProfile.definitionJson),
+      JSON.stringify(nextProfile.policyJson),
+      JSON.stringify(nextProfile.facetsJson),
+      JSON.stringify(nextProfile.bindingsJson),
+      nextProfile.status,
+      nextVersion,
+    ]
+  );
+
+  return {
+    selectionProfileId: existing.selection_profile_id,
+    version: nextVersion,
+    created: false,
   };
 }
 

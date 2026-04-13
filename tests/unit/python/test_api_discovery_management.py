@@ -30,6 +30,7 @@ class _FakeCursor:
     def __init__(self, rows: list[dict[str, object]] | None = None) -> None:
         self.rows = list(rows or [])
         self.executed: list[tuple[str, tuple[object, ...] | None]] = []
+        self._row_index = 0
 
     def __enter__(self) -> "_FakeCursor":
         return self
@@ -41,7 +42,11 @@ class _FakeCursor:
         self.executed.append((sql, params))
 
     def fetchone(self) -> dict[str, object] | None:
-        return self.rows[0] if self.rows else None
+        if self._row_index >= len(self.rows):
+            return None
+        row = self.rows[self._row_index]
+        self._row_index += 1
+        return row
 
 
 class _FakeConnection:
@@ -314,6 +319,116 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         get_mission.assert_called_once_with("mission-1")
         self.assertEqual(result["interest_graph_status"], "compiled")
 
+    def test_delete_discovery_mission_removes_empty_mission(self) -> None:
+        fake_connection = _FakeConnection(
+            rows=[
+                {
+                    "hypothesis_count": 0,
+                    "candidate_count": 0,
+                    "portfolio_snapshot_count": 0,
+                    "feedback_event_count": 0,
+                    "source_interest_score_count": 0,
+                    "strategy_stat_count": 0,
+                    "cost_log_count": 0,
+                },
+                {"mission_id": "mission-empty"},
+            ]
+        )
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_mission",
+                return_value={
+                    "mission_id": "mission-empty",
+                    "run_count": 0,
+                    "spent_cents": 0,
+                    "last_run_at": None,
+                },
+            ),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            result = api_main.delete_discovery_mission("mission-empty")
+
+        self.assertEqual(result, {"mission_id": "mission-empty", "deleted": True})
+        self.assertIn(
+            "delete from discovery_missions",
+            fake_connection.cursor_instance.executed[1][0].lower(),
+        )
+
+    def test_delete_discovery_mission_rejects_mission_with_history(self) -> None:
+        fake_connection = _FakeConnection(
+            rows=[
+                {
+                    "hypothesis_count": 1,
+                    "candidate_count": 0,
+                    "portfolio_snapshot_count": 0,
+                    "feedback_event_count": 0,
+                    "source_interest_score_count": 0,
+                    "strategy_stat_count": 0,
+                    "cost_log_count": 0,
+                }
+            ]
+        )
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_mission",
+                return_value={
+                    "mission_id": "mission-history",
+                    "run_count": 0,
+                    "spent_cents": 0,
+                    "last_run_at": None,
+                },
+            ),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            with self.assertRaises(api_main.SequenceConflictError) as error:
+                api_main.delete_discovery_mission("mission-history")
+
+        self.assertIn("Archive it instead of deleting it", str(error.exception))
+
+    def test_delete_discovery_class_removes_unreferenced_class(self) -> None:
+        fake_connection = _FakeConnection(
+            rows=[
+                {"hypothesis_count": 0},
+                {"class_key": "empty_class"},
+            ]
+        )
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_class",
+                return_value={"class_key": "empty_class"},
+            ),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            result = api_main.delete_discovery_class("empty_class")
+
+        self.assertEqual(result, {"class_key": "empty_class", "deleted": True})
+        self.assertIn(
+            "delete from discovery_hypothesis_classes",
+            fake_connection.cursor_instance.executed[1][0].lower(),
+        )
+
+    def test_delete_discovery_class_rejects_class_with_hypotheses(self) -> None:
+        fake_connection = _FakeConnection(rows=[{"hypothesis_count": 1}])
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_class",
+                return_value={"class_key": "history_class"},
+            ),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            with self.assertRaises(api_main.SequenceConflictError) as error:
+                api_main.delete_discovery_class("history_class")
+
+        self.assertIn("Archive it instead of deleting it", str(error.exception))
+
     def test_create_discovery_recall_candidate_links_existing_source_profile_by_canonical_domain(self) -> None:
         payload = api_main.DiscoveryRecallCandidateCreatePayload.model_validate(
             {
@@ -402,6 +517,19 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
                 api_main.request_discovery_mission_run("mission-1", payload)
 
         self.assertIn("Monthly discovery quota is exhausted", str(error.exception))
+
+    def test_request_discovery_mission_run_rejects_archived_mission(self) -> None:
+        payload = api_main.DiscoveryMissionRunPayload.model_validate({"requestedBy": "admin-1"})
+
+        with patch.object(
+            api_main,
+            "get_discovery_mission",
+            return_value={"mission_id": "mission-1", "status": "archived"},
+        ):
+            with self.assertRaises(api_main.SequenceConflictError) as error:
+                api_main.request_discovery_mission_run("mission-1", payload)
+
+        self.assertIn("reactivated before they can run", str(error.exception))
 
     def test_monthly_quota_snapshot_uses_precise_usd_comparison(self) -> None:
         with (

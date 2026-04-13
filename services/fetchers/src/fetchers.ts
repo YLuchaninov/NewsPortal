@@ -421,36 +421,80 @@ class FetcherService {
     }
   }
 
+  private async withChannelLease<T>(
+    channelId: string,
+    task: () => Promise<T>
+  ): Promise<T | null> {
+    const client = await this.pool.connect();
+    let locked = false;
+
+    try {
+      const result = await client.query<{ locked: boolean }>(
+        `
+          select pg_try_advisory_lock(
+            hashtext('fetch_channel'),
+            hashtext($1)
+          ) as locked
+        `,
+        [channelId]
+      );
+      locked = result.rows[0]?.locked === true;
+      if (!locked) {
+        return null;
+      }
+      return await task();
+    } finally {
+      if (locked) {
+        await client.query(
+          `
+            select pg_advisory_unlock(
+              hashtext('fetch_channel'),
+              hashtext($1)
+            )
+          `,
+          [channelId]
+        );
+      }
+      client.release();
+    }
+  }
+
   private async pollLoadedChannelSafely(channel: SourceChannelRow): Promise<void> {
     const startedAt = new Date().toISOString();
-    try {
-      await this.pollLoadedChannel(channel, startedAt);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown fetcher channel failure";
-      const completion =
-        error instanceof ChannelFetchError
-          ? {
-              ...error.completion,
-              startedAt,
-              finishedAt: new Date().toISOString(),
-              cursorUpdates: error.completion.cursorUpdates ?? []
-            }
-          : {
-              startedAt,
-              finishedAt: new Date().toISOString(),
-              outcome: classifyUnexpectedFailure(message),
-              httpStatus: null,
-              retryAfterSeconds: null,
-              fetchedItemCount: 0,
-              newArticleCount: 0,
-              duplicateSuppressedCount: 0,
-              cursorChanged: false,
-              errorMessage: message,
-              cursorUpdates: []
-            };
+    const leased = await this.withChannelLease(channel.channelId, async () => {
+      try {
+        await this.pollLoadedChannel(channel, startedAt);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown fetcher channel failure";
+        const completion =
+          error instanceof ChannelFetchError
+            ? {
+                ...error.completion,
+                startedAt,
+                finishedAt: new Date().toISOString(),
+                cursorUpdates: error.completion.cursorUpdates ?? []
+              }
+            : {
+                startedAt,
+                finishedAt: new Date().toISOString(),
+                outcome: classifyUnexpectedFailure(message),
+                httpStatus: null,
+                retryAfterSeconds: null,
+                fetchedItemCount: 0,
+                newArticleCount: 0,
+                duplicateSuppressedCount: 0,
+                cursorChanged: false,
+                errorMessage: message,
+                cursorUpdates: []
+              };
 
-      await this.markChannelFailure(channel, completion).catch(() => undefined);
-      throw error;
+        await this.markChannelFailure(channel, completion).catch(() => undefined);
+        throw error;
+      }
+    });
+
+    if (leased === null) {
+      return;
     }
   }
 

@@ -13,6 +13,7 @@ import {
   setInterestTemplateActiveState,
   setLlmTemplateActiveState,
   syncInterestTemplateCriterion,
+  syncInterestTemplateSelectionProfile,
 } from "../../../lib/server/admin-templates";
 import {
   buildAdminSignInPath,
@@ -78,6 +79,7 @@ export function formatTemplateBrowserErrorMessage(
   if (
     /column .* does not exist/i.test(message) ||
     /is of type .* but expression is of type/i.test(message) ||
+    /relation .*selection_profiles.* does not exist/i.test(message) ||
     /null value in column .*time_window_hours.*violates not-null constraint/i.test(message) ||
     /violates check constraint .*time_window_hours/i.test(message)
   ) {
@@ -149,6 +151,10 @@ export const POST: APIRoute = async ({ request }) => {
         const template = parseInterestTemplateInput(payload);
         const result = await saveInterestTemplate(client, template);
         const syncResult = await syncInterestTemplateCriterion(client, result.interestTemplateId);
+        const profileSyncResult = await syncInterestTemplateSelectionProfile(
+          client,
+          result.interestTemplateId
+        );
         if (syncResult.compileRequested) {
           await insertOutboxEvent(client, {
             eventType: CRITERION_COMPILE_REQUESTED_EVENT,
@@ -178,6 +184,8 @@ export const POST: APIRoute = async ({ request }) => {
             criterionId: syncResult.criterionId,
             criterionVersion: syncResult.version,
             criterionCompileRequested: syncResult.compileRequested,
+            selectionProfileId: profileSyncResult.selectionProfileId,
+            selectionProfileVersion: profileSyncResult.version,
           }
         );
         await client.query("commit");
@@ -208,6 +216,10 @@ export const POST: APIRoute = async ({ request }) => {
       if (intent === "archive") {
         await setInterestTemplateActiveState(client, interestTemplateId, false);
         const syncResult = await syncInterestTemplateCriterion(client, interestTemplateId);
+        const profileSyncResult = await syncInterestTemplateSelectionProfile(
+          client,
+          interestTemplateId
+        );
         await writeAuditLog(
           client,
           session.userId,
@@ -218,6 +230,8 @@ export const POST: APIRoute = async ({ request }) => {
             criterionId: syncResult.criterionId,
             criterionVersion: syncResult.version,
             criterionCompileRequested: syncResult.compileRequested,
+            selectionProfileId: profileSyncResult.selectionProfileId,
+            selectionProfileVersion: profileSyncResult.version,
           }
         );
         await client.query("commit");
@@ -235,6 +249,10 @@ export const POST: APIRoute = async ({ request }) => {
       if (intent === "activate") {
         await setInterestTemplateActiveState(client, interestTemplateId, true);
         const syncResult = await syncInterestTemplateCriterion(client, interestTemplateId);
+        const profileSyncResult = await syncInterestTemplateSelectionProfile(
+          client,
+          interestTemplateId
+        );
         if (syncResult.compileRequested) {
           await insertOutboxEvent(client, {
             eventType: CRITERION_COMPILE_REQUESTED_EVENT,
@@ -256,6 +274,8 @@ export const POST: APIRoute = async ({ request }) => {
             criterionId: syncResult.criterionId,
             criterionVersion: syncResult.version,
             criterionCompileRequested: syncResult.compileRequested,
+            selectionProfileId: profileSyncResult.selectionProfileId,
+            selectionProfileVersion: profileSyncResult.version,
           }
         );
         await client.query("commit");

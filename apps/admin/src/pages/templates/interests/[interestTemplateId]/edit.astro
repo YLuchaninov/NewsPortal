@@ -34,7 +34,14 @@ function asLines(value: unknown): string {
   return Array.isArray(value) ? (value as unknown[]).map((entry) => String(entry ?? "")).join("\n") : "";
 }
 
+function asPolicyRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 const isActive = template.is_active === true;
+const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_json);
 ---
 
 <AdminShell title="Edit System Interest — Admin" session={session} flash={flash} activeNav="interest-templates">
@@ -103,6 +110,13 @@ const isActive = template.is_active === true;
         shortTokensForbidden: asLines(template.short_tokens_forbidden),
         priority: String(template.priority ?? 1),
         isActive,
+        selectionProfileId: String(template.selection_profile_id ?? ""),
+        selectionProfileStatus: String(template.selection_profile_status ?? ""),
+        selectionProfileVersion: template.selection_profile_version == null ? "" : String(template.selection_profile_version),
+        selectionProfileFamily: String(template.selection_profile_family ?? ""),
+        selectionProfileStrictness: String(selectionProfilePolicy.strictness ?? ""),
+        selectionProfileUnresolvedDecision: String(selectionProfilePolicy.unresolvedDecision ?? ""),
+        selectionProfileLlmReviewMode: String(selectionProfilePolicy.llmReviewMode ?? ""),
       }}
     />
 

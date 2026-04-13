@@ -1,4 +1,4 @@
-version: 41
+version: 42
 mode: Minimal
 initialized: true
 core:
@@ -49,6 +49,7 @@ project:
     - docs/contracts/discovery-agent.md
     - docs/contracts/independent-recall-discovery.md
     - docs/contracts/zero-shot-interest-filtering.md
+    - docs/contracts/universal-selection-profiles.md
     - docs/contracts/test-access-and-fixtures.md
     - docs/contracts/universal-task-engine.md
   entry_points:
@@ -225,6 +226,7 @@ proof_contours:
 runtime_facts:
   zero_shot_filtering:
     deep_contract: docs/contracts/zero-shot-interest-filtering.md
+    profile_evolution_contract: docs/contracts/universal-selection-profiles.md
     stage1_tables:
       - canonical_documents
       - document_observations
@@ -248,19 +250,66 @@ runtime_facts:
       - services/api/app/main.py::editorial_content_select_sql
     stage6_operator_surfaces:
       - services/api/app/main.py::get_article
+  universal_selection_profiles:
+    deep_contract: docs/contracts/universal-selection-profiles.md
+    stage1_tables:
+      - selection_profiles
+    stage1_runtime_owners:
+      - apps/admin/src/lib/server/admin-templates.ts::syncInterestTemplateSelectionProfile
+      - apps/admin/src/pages/bff/admin/templates.ts::POST
+    stage1_compatibility_sources:
+      - interest_templates
+      - criteria
+    stage2_runtime_owners:
+      - services/workers/app/selection_profiles.py::coerce_selection_profile_runtime
+      - services/workers/app/main.py::process_match_criteria
+    stage2_behavior:
+      - profile_backed_gray_zone_defaults_to_hold
+      - llm_review_optional_only_by_profile_policy
+      - legacy_criteria_without_profile_keep_always_review_fallback
+    stage3_runtime_owners:
+      - services/workers/app/final_selection.py::summarize_final_selection_result
+      - services/workers/app/main.py::upsert_final_selection_result
+      - services/workers/app/main.py::upsert_system_feed_result
+    stage3_behavior:
+      - final_selection_distinguishes_llm_review_pending_from_hold
+      - profile_backed_hold_projects_as_filtered_out_compatibility
+      - legacy_profileless_gray_zone_can_still_project_pending_llm
+    stage4_explain_surfaces:
       - services/api/app/main.py::get_article_explain
       - services/api/app/main.py::get_content_item_explain
+      - services/api/app/main.py::list_system_interests
+      - services/api/app/main.py::get_system_interest
+      - services/api/app/main.py::build_selection_explain_payload
       - apps/admin/src/pages/articles.astro
       - apps/admin/src/pages/articles/[docId].astro
-      - apps/admin/src/pages/discovery.astro
-      - apps/admin/src/pages/observability.astro
-      - apps/admin/src/pages/help.astro
-    stage6_shared_helper: apps/admin/src/lib/server/operator-surfaces.ts
-    stage7_runtime_owners:
-      - services/workers/app/main.py::fetch_selection_gate_result_row
-      - services/workers/app/main.py::is_article_eligible_for_personalization
-      - services/workers/app/smoke.py::run_reindex_backfill_smoke
-    stage7_backfill_proof_command: pnpm test:reindex-backfill:compose
+      - apps/admin/src/pages/resources.astro
+      - apps/admin/src/pages/resources/[resourceId].astro
+      - apps/admin/src/pages/templates/interests.astro
+      - apps/admin/src/pages/templates/interests/new.astro
+      - apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro
+    stage4_shared_helper: apps/admin/src/lib/server/operator-surfaces.ts
+    stage4_behavior:
+      - explain_surfaces_expose_selection_reason_and_counts
+      - operator_surfaces_translate_hold_vs_pending_review_without_fixed_taxonomy
+      - api_explain_payloads_expose_generic_selection_diagnostics
+      - system_interest_authoring_surfaces_expose_profile_policy_summary
+    stage5_runtime_owners:
+      - services/workers/app/main.py::read_active_selection_profile_snapshot
+      - services/workers/app/main.py::process_reindex
+      - services/api/app/main.py::list_reindex_jobs
+      - services/api/app/main.py::get_article
+      - services/api/app/main.py::list_articles
+      - apps/admin/src/pages/reindex.astro
+      - apps/admin/src/lib/server/live-updates.ts::mapReindexJob
+      - apps/admin/src/lib/server/operator-surfaces.ts::resolveArticleOperatorState
+    stage5_backfill_proof_command: pnpm test:reindex-backfill:compose
+    stage5_behavior:
+      - backfill_and_repair_results_record_selection_profile_snapshot
+      - maintenance_reindex_reads_project_selection_profile_summary
+      - maintenance_reindex_reads_project_structured_selection_profile_snapshot
+      - article_operator_reads_project_generic_selection_payloads
+      - compatibility_only_selection_state_is_normalized
     stage3_filter_scopes:
       - system_criterion
       - user_interest

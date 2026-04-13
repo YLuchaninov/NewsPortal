@@ -58,9 +58,10 @@ class ApiFeedDedupTests(unittest.TestCase):
         self.assertIn("select count(*)::int as total from (", count_sql)
         self.assertIn("partition by coalesce(a.canonical_doc_id, a.doc_id)", count_sql)
         self.assertIn(
-            "coalesce(fsr.is_selected, coalesce(sfr.eligible_for_feed, false)) = true",
+            "when fsr.doc_id is not null then coalesce(fsr.is_selected, false)",
             count_sql,
         )
+        self.assertIn("else coalesce(sfr.eligible_for_feed, false)", count_sql)
         self.assertIn("where ranked.family_rank = 1", count_sql)
 
         items_sql, items_params = query_all.call_args.args
@@ -111,9 +112,10 @@ class ApiFeedDedupTests(unittest.TestCase):
             sql,
         )
         self.assertIn(
-            "coalesce(fsr.is_selected, coalesce(sfr.eligible_for_feed, false)) = true",
+            "when fsr.doc_id is not null then coalesce(fsr.is_selected, false)",
             sql,
         )
+        self.assertIn("else coalesce(sfr.eligible_for_feed, false)", sql)
         self.assertIn("from final_selection_results fsr_processed", api_main.processed_article_clause("a"))
         self.assertIn("from system_feed_results sfr_processed", sql)
         budget_sql = query_one.call_args_list[1].args[0]

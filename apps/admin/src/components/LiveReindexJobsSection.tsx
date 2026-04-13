@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationNav } from "@newsportal/ui";
 
@@ -55,6 +55,26 @@ function formatTimestamp(value: string | null): string | null {
   });
 }
 
+function hydrateTimestampLabels(
+  snapshot: AdminReindexJobsSnapshot
+): AdminReindexJobsSnapshot {
+  return {
+    ...snapshot,
+    items: snapshot.items.map((job) => ({
+      ...job,
+      createdAtLabel: formatTimestamp(job.createdAt) ?? job.createdAt,
+    })),
+  };
+}
+
+function hasSelectionProfileSnapshot(
+  job: AdminReindexJobSnapshot
+): job is AdminReindexJobSnapshot & {
+  selectionProfileSnapshot: NonNullable<AdminReindexJobSnapshot["selectionProfileSnapshot"]>;
+} {
+  return job.selectionProfileSnapshot !== null;
+}
+
 function mergeItemsById(
   currentItems: AdminReindexJobSnapshot[],
   nextItems: AdminReindexJobSnapshot[]
@@ -75,11 +95,21 @@ export function LiveReindexJobsSection({
   const baselineIdsRef = useRef(
     initialJobs.items.map((item) => item.reindexJobId).join("|")
   );
+  const hydratedInitialJobs = useMemo(
+    () => hydrateTimestampLabels(initialJobs),
+    [initialJobs]
+  );
+
+  useEffect(() => {
+    setJobs((currentJobs) =>
+      currentJobs === initialJobs ? hydratedInitialJobs : currentJobs
+    );
+  }, [hydratedInitialJobs, initialJobs]);
 
   useEffect(() => {
     const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
     if (isAdminLiveSurfaceSnapshot(currentSnapshot, "reindex")) {
-      setJobs(currentSnapshot.jobs);
+      setJobs(hydrateTimestampLabels(currentSnapshot.jobs));
       if (currentPage === 1) {
         baselineIdsRef.current = currentSnapshot.jobs.items
           .map((item) => item.reindexJobId)
@@ -98,7 +128,7 @@ export function LiveReindexJobsSection({
       const compositionChanged = baselineIdsRef.current !== nextIds;
 
       if (currentPage === 1 || !compositionChanged) {
-        setJobs(nextJobs);
+        setJobs(hydrateTimestampLabels(nextJobs));
         if (currentPage === 1) {
           baselineIdsRef.current = nextIds;
         }
@@ -106,9 +136,10 @@ export function LiveReindexJobsSection({
         return;
       }
 
+      const hydratedNextJobs = hydrateTimestampLabels(nextJobs);
       setJobs((currentJobs) => ({
-        ...nextJobs,
-        items: mergeItemsById(currentJobs.items, nextJobs.items),
+        ...hydratedNextJobs,
+        items: mergeItemsById(currentJobs.items, hydratedNextJobs.items),
       }));
       setNeedsRefreshNotice(true);
     }
@@ -171,9 +202,31 @@ export function LiveReindexJobsSection({
                   {job.jobKind}
                   {job.progressLabel && ` • ${job.progressLabel}`}
                 </p>
-                {formatTimestamp(job.createdAt) && (
+                {job.selectionProfileSummary && (
+                  <p className="text-[11px] text-muted-foreground">
+                    selection profiles: {job.selectionProfileSummary}
+                  </p>
+                )}
+                {hasSelectionProfileSnapshot(job) && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {job.selectionProfileSnapshot.activeProfiles}/
+                      {job.selectionProfileSnapshot.totalProfiles} active
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {job.selectionProfileSnapshot.compatibilityProfiles} compatibility
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {job.selectionProfileSnapshot.templatesWithProfiles} template-bound
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      max v{job.selectionProfileSnapshot.maxVersion}
+                    </span>
+                  </div>
+                )}
+                {job.createdAtLabel && (
                   <p className="text-xs text-muted-foreground">
-                    {formatTimestamp(job.createdAt)}
+                    {job.createdAtLabel}
                   </p>
                 )}
               </div>

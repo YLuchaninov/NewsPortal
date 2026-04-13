@@ -2,7 +2,6 @@ import * as React from "react";
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -10,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  buttonVariants,
   cn,
 } from "@newsportal/ui";
 
@@ -29,6 +29,28 @@ interface AdminConfirmActionProps {
   confirmClassName?: string;
 }
 
+function submitHiddenForm(action: string, fields: HiddenField[]): void {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = action;
+  form.style.display = "none";
+
+  for (const field of fields) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = field.name;
+    input.value = String(field.value);
+    form.appendChild(input);
+  }
+
+  document.body.appendChild(form);
+  if (typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+    return;
+  }
+  form.submit();
+}
+
 export function AdminConfirmAction({
   action,
   title,
@@ -39,8 +61,15 @@ export function AdminConfirmAction({
   triggerClassName,
   confirmClassName,
 }: AdminConfirmActionProps) {
+  const [open, setOpen] = React.useState(false);
+
+  function handleConfirmClick() {
+    setOpen(false);
+    submitHiddenForm(action, fields);
+  }
+
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <button
           type="button"
@@ -57,30 +86,16 @@ export function AdminConfirmAction({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        <form method="post" action={action} className="space-y-4">
-          {fields.map((field) => (
-            <input
-              key={`${field.name}-${String(field.value)}`}
-              type="hidden"
-              name={field.name}
-              value={String(field.value)}
-            />
-          ))}
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <button
-                type="submit"
-                className={cn(
-                  "inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90",
-                  confirmClassName
-                )}
-              >
-                {confirmLabel}
-              </button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </form>
+        <AlertDialogFooter>
+          <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+          <button
+            type="button"
+            onClick={handleConfirmClick}
+            className={cn(buttonVariants(), confirmClassName)}
+          >
+            {confirmLabel}
+          </button>
+        </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );

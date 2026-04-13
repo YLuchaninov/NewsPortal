@@ -61,13 +61,17 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
   - `graph_seed_llm`
   - `graph_seed_only`
 - Archived classes must remain readable for historical hypotheses but must not participate in new planning.
+- Hard delete for a class is only valid while it has no generated hypotheses yet; once hypothesis history exists, operators must archive/reactivate the class instead of deleting it.
 
 ## Mission and graph contract
 
 - Mission create/update stores seed inputs plus an authoritative `interest_graph`.
+- Mission lifecycle now supports `planned`, `active`, `paused`, `completed`, `failed`, and `archived`.
 - `interest_graph_status` truthfully records whether the stored graph is pending, compiled or failed.
 - Graph compilation may use LLM assistance but must have a deterministic fallback and schema validation.
 - Flat `topics`/`languages`/`regions` no longer drive planning directly; they are only mission seed inputs and list/filter metadata.
+- Archived missions must remain readable in admin/API history but must not compile or run until they are reactivated into the planned backlog.
+- Hard delete for a mission is only valid while it has no generated discovery history yet; runs, hypotheses, portfolio snapshots, feedback, contextual source scores, strategy stats, or mission-linked cost rows must force operators onto the archive/reactivate path instead.
 
 ## Scoring and portfolio contract
 

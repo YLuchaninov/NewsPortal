@@ -32,7 +32,7 @@ interface LiveInterestsSectionProps {
   pageSize: number;
   currentPath: string;
   interestsPath: string;
-  interestPath: (id: string) => string;
+  interestPathBase: string;
 }
 
 function buildPageHref(currentPath: string, nextPage: number): string {
@@ -51,7 +51,7 @@ export function LiveInterestsSection({
   pageSize,
   currentPath,
   interestsPath,
-  interestPath,
+  interestPathBase,
 }: LiveInterestsSectionProps) {
   const [allInterests, setAllInterests] = useState<InterestRecord[]>(
     replaceLiveInterestRecords([], initialInterests)
@@ -123,7 +123,7 @@ export function LiveInterestsSection({
       <InterestManager
         interests={pageState.items}
         interestsPath={interestsPath}
-        interestPath={interestPath}
+        interestPathBase={interestPathBase}
         hasAnyInterests={pageState.total > 0}
         onMutationSuccess={handleMutationSuccess}
         readRepairState={(interestId) =>

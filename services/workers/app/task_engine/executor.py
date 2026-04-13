@@ -12,6 +12,14 @@ from .repository import SequenceRepository
 
 RUN_LOOKUP_RETRY_ATTEMPTS = 20
 RUN_LOOKUP_RETRY_DELAY_SECONDS = 0.1
+TRANSIENT_DATABASE_RETRY_ATTEMPTS = 3
+TRANSIENT_DATABASE_RETRY_DELAY_SECONDS = 1.0
+TRANSIENT_DATABASE_SQLSTATES = {"40P01", "40001", "55P03"}
+TRANSIENT_DATABASE_ERROR_NAMES = {
+    "DeadlockDetected",
+    "SerializationFailure",
+    "LockNotAvailable",
+}
 
 
 class SequenceExecutor:
@@ -175,8 +183,13 @@ class SequenceExecutor:
         plugin = self._registry.create(task.module)
         attempts = task.retry.attempts
         delay_seconds = task.retry.delay_ms / 1000
+        transient_delay_seconds = max(
+            delay_seconds,
+            TRANSIENT_DATABASE_RETRY_DELAY_SECONDS,
+        )
+        transient_attempts = max(attempts, TRANSIENT_DATABASE_RETRY_ATTEMPTS)
 
-        for attempt in range(1, attempts + 1):
+        for attempt in range(1, transient_attempts + 1):
             try:
                 await plugin.on_before_execute(task.options, context)
                 result = await asyncio.wait_for(
@@ -205,6 +218,9 @@ class SequenceExecutor:
                 raise
             except Exception as error:
                 await self._notify_plugin_error(plugin, task.options, context, error)
+                if self._is_transient_database_error(error) and attempt < transient_attempts:
+                    await self._sleep(transient_delay_seconds)
+                    continue
                 raise
 
         raise RuntimeError(f"Task {task.key} exhausted retries without returning.")
@@ -244,3 +260,27 @@ class SequenceExecutor:
 
     def _duration_ms_since(self, started_at: float) -> int:
         return max(0, int((time.perf_counter() - started_at) * 1000))
+
+    def _is_transient_database_error(self, error: Exception) -> bool:
+        error_name = error.__class__.__name__
+        if error_name in TRANSIENT_DATABASE_ERROR_NAMES:
+            return True
+
+        sqlstate = getattr(error, "sqlstate", None)
+        if isinstance(sqlstate, str) and sqlstate in TRANSIENT_DATABASE_SQLSTATES:
+            return True
+
+        diag = getattr(error, "diag", None)
+        diag_sqlstate = getattr(diag, "sqlstate", None)
+        if isinstance(diag_sqlstate, str) and diag_sqlstate in TRANSIENT_DATABASE_SQLSTATES:
+            return True
+
+        message = str(error).lower()
+        return any(
+            marker in message
+            for marker in (
+                "deadlock detected",
+                "could not serialize access",
+                "lock not available",
+            )
+        )

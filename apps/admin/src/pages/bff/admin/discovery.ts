@@ -6,6 +6,7 @@ import {
   buildAdminSignInPath,
   buildFlashRedirect,
   requestPrefersHtmlNavigation,
+  resolveAdminAppPath,
   resolveAdminRedirectPath,
 } from "../../../lib/server/browser-flow";
 import {
@@ -30,10 +31,16 @@ const UUID_PATTERN =
 type DiscoveryIntent =
   | "create_mission"
   | "update_mission"
+  | "archive_mission"
+  | "activate_mission"
+  | "delete_mission"
   | "run_mission"
   | "compile_graph"
   | "create_class"
   | "update_class"
+  | "archive_class"
+  | "activate_class"
+  | "delete_class"
   | "review_candidate"
   | "submit_feedback"
   | "re_evaluate";
@@ -42,10 +49,16 @@ export function resolveDiscoveryIntent(payload: Record<string, unknown>): Discov
   const value = String(payload.intent ?? "").trim();
   if (
     value === "update_mission" ||
+    value === "archive_mission" ||
+    value === "activate_mission" ||
+    value === "delete_mission" ||
     value === "run_mission" ||
     value === "compile_graph" ||
     value === "create_class" ||
     value === "update_class" ||
+    value === "archive_class" ||
+    value === "activate_class" ||
+    value === "delete_class" ||
     value === "review_candidate" ||
     value === "submit_feedback" ||
     value === "re_evaluate"
@@ -236,12 +249,27 @@ export function buildDiscoveryAuditPayload(
       seedTopics: parseTextList(payload.seedTopics ?? payload.topics),
     };
   }
-  if (intent === "update_mission") {
+  if (
+    intent === "update_mission" ||
+    intent === "archive_mission" ||
+    intent === "activate_mission"
+  ) {
     return {
       missionId: String(payload.missionId ?? "").trim() || null,
-      status: String(payload.status ?? "").trim() || null,
+      status:
+        intent === "archive_mission"
+          ? "archived"
+          : intent === "activate_mission"
+            ? "planned"
+            : String(payload.status ?? "").trim() || null,
       priority: parseOptionalNumber(payload.priority),
       budgetCents: parseOptionalNumber(payload.budgetCents),
+    };
+  }
+  if (intent === "delete_mission") {
+    return {
+      missionId: String(payload.missionId ?? "").trim() || null,
+      deleted: apiResult.deleted === true,
     };
   }
   if (intent === "run_mission") {
@@ -257,14 +285,30 @@ export function buildDiscoveryAuditPayload(
       interestGraphVersion: apiResult.interest_graph_version ?? null,
     };
   }
-  if (intent === "create_class" || intent === "update_class") {
+  if (
+    intent === "create_class" ||
+    intent === "update_class" ||
+    intent === "archive_class" ||
+    intent === "activate_class"
+  ) {
     const resolvedClassKey =
       apiResult.class_key ?? (String(payload.classKey ?? payload.class_key ?? "").trim() || null);
     return {
       classKey: resolvedClassKey,
       displayName: String(payload.displayName ?? "").trim() || null,
-      status: String(payload.status ?? "").trim() || null,
+      status:
+        intent === "archive_class"
+          ? "archived"
+          : intent === "activate_class"
+            ? "active"
+            : String(payload.status ?? "").trim() || null,
       generationBackend: String(payload.generationBackend ?? "").trim() || null,
+    };
+  }
+  if (intent === "delete_class") {
+    return {
+      classKey: String(payload.classKey ?? payload.class_key ?? "").trim() || null,
+      deleted: apiResult.deleted === true,
     };
   }
   if (intent === "submit_feedback") {
@@ -432,6 +476,69 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
+    if (intent === "archive_mission" || intent === "activate_mission") {
+      const missionId = String(payload.missionId ?? "").trim();
+      if (!missionId) {
+        throw new Error("Mission ID is required.");
+      }
+      const result = await callDiscoveryApi<{ mission_id: string }>(
+        `/maintenance/discovery/missions/${missionId}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            status: intent === "archive_mission" ? "archived" : "planned",
+          }),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        intent === "archive_mission"
+          ? "discovery_mission_archived"
+          : "discovery_mission_activated",
+        "discovery_mission",
+        missionId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        intent === "archive_mission"
+          ? "Adaptive discovery mission archived"
+          : "Adaptive discovery mission reactivated",
+        result
+      );
+    }
+
+    if (intent === "delete_mission") {
+      const missionId = String(payload.missionId ?? "").trim();
+      if (!missionId) {
+        throw new Error("Mission ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/missions/${missionId}`,
+        {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_mission_deleted",
+        "discovery_mission",
+        missionId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        resolveAdminAppPath(request, "/discovery?tab=missions"),
+        "Adaptive discovery mission deleted",
+        result
+      );
+    }
+
     if (intent === "run_mission") {
       const missionId = String(payload.missionId ?? "").trim();
       if (!missionId) {
@@ -539,6 +646,65 @@ export const POST: APIRoute = async ({ request }) => {
         browserRequest,
         redirectTo,
         "Hypothesis class updated",
+        result
+      );
+    }
+
+    if (intent === "archive_class" || intent === "activate_class") {
+      const classKey = String(payload.classKey ?? "").trim();
+      if (!classKey) {
+        throw new Error("Class key is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/classes/${classKey}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            status: intent === "archive_class" ? "archived" : "active",
+          }),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        intent === "archive_class" ? "discovery_class_archived" : "discovery_class_activated",
+        "discovery_hypothesis_class",
+        classKey,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        intent === "archive_class" ? "Hypothesis class archived" : "Hypothesis class reactivated",
+        result
+      );
+    }
+
+    if (intent === "delete_class") {
+      const classKey = String(payload.classKey ?? "").trim();
+      if (!classKey) {
+        throw new Error("Class key is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/classes/${classKey}`,
+        {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_class_deleted",
+        "discovery_hypothesis_class",
+        classKey,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        resolveAdminAppPath(request, "/discovery?tab=classes"),
+        "Hypothesis class deleted",
         result
       );
     }

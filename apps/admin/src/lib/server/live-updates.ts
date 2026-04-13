@@ -290,21 +290,47 @@ function readProgressValues(job: JsonRecord): {
 
 function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
   const progress = readProgressValues(job);
+  const selectionProfileSummary = normalizeMaybeText(
+    job.selection_profile_summary
+  );
+  const createdAt =
+    normalizeMaybeText(job.created_at) ?? normalizeMaybeText(job.requested_at);
+  const selectionProfileSnapshotRecord = asRecord(job.selection_profile_snapshot);
+  const selectionProfileSnapshot =
+    Object.keys(selectionProfileSnapshotRecord).length > 0
+      ? {
+          activeProfiles: asInt(selectionProfileSnapshotRecord.activeProfiles, 0),
+          totalProfiles: asInt(selectionProfileSnapshotRecord.totalProfiles, 0),
+          compatibilityProfiles: asInt(
+            selectionProfileSnapshotRecord.compatibilityProfiles,
+            0
+          ),
+          templatesWithProfiles: asInt(
+            selectionProfileSnapshotRecord.templatesWithProfiles,
+            0
+          ),
+          maxVersion: asInt(selectionProfileSnapshotRecord.maxVersion, 0),
+        }
+      : null;
   return {
     reindexJobId: normalizeText(job.reindex_job_id),
     indexName: normalizeText(job.index_name) || "—",
     jobKind: normalizeText(job.job_kind) || "rebuild",
     status: normalizeText(job.status) || "pending",
-    createdAt:
-      normalizeMaybeText(job.created_at) ?? normalizeMaybeText(job.requested_at),
+    createdAt,
+    createdAtLabel: createdAt,
     processedArticles: progress.processedArticles,
     totalArticles: progress.totalArticles,
     progressLabel: progress.progressLabel,
+    selectionProfileSnapshot,
+    selectionProfileSummary,
     revision: buildAdminLiveRevision([
       job.reindex_job_id,
       job.status,
       progress.processedArticles,
       progress.totalArticles,
+      selectionProfileSnapshot,
+      selectionProfileSummary,
       job.updated_at,
       job.created_at,
       job.requested_at,

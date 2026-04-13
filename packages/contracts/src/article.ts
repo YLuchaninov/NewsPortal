@@ -46,6 +46,19 @@ export interface ArticlePreview {
   final_selection_decision?: string | null;
   final_selection_selected?: boolean;
   final_selection_verification_state?: string | null;
+  final_selection_mode?: string | null;
+  final_selection_summary?: string | null;
+  final_selection_reason?: string | null;
+  final_selection_llm_review_pending_count?: number | null;
+  final_selection_hold_count?: number | null;
+  selection_source?: string | null;
+  selection_decision?: string | null;
+  selection_mode?: string | null;
+  selection_summary?: string | null;
+  selection_reason?: string | null;
+  selection_hold_count?: number | null;
+  selection_llm_review_pending_count?: number | null;
+  selection_guidance?: Record<string, unknown> | null;
   system_feed_decision?: string | null;
   system_feed_eligible?: boolean;
   observation_state?: string | null;
@@ -102,6 +115,7 @@ export interface ArticleDetail extends ArticlePreview {
   extracted_published_at?: string | null;
   extracted_source_name?: string | null;
   enrichment_debug?: Record<string, unknown> | null;
+  selection_diagnostics?: Record<string, unknown> | null;
   media_assets?: ArticleMediaAsset[];
 }
 

@@ -51,9 +51,10 @@ class ApiMatchesTests(unittest.TestCase):
         self.assertIn("select distinct coalesce(a.canonical_doc_id, a.doc_id) as family_doc_id", count_sql)
         self.assertIn("imr.decision = 'notify'", count_sql)
         self.assertIn(
-            "coalesce(fsr.is_selected, coalesce(sfr.eligible_for_feed, false)) = true",
+            "when fsr.doc_id is not null then coalesce(fsr.is_selected, false)",
             count_sql,
         )
+        self.assertIn("else coalesce(sfr.eligible_for_feed, false)", count_sql)
         self.assertEqual(count_params, ("user-1",))
 
         items_sql, items_params = query_all.call_args.args

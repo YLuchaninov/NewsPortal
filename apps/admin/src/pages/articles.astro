@@ -5,7 +5,10 @@ import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminShell from "../layouts/AdminShell.astro";
-import { resolveArticleOperatorState } from "../lib/server/operator-surfaces";
+import {
+  resolveArticleOperatorGuidance,
+  resolveArticleOperatorState,
+} from "../lib/server/operator-surfaces";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
   buildAdminSignInPath,
@@ -73,6 +76,17 @@ const finalSelectionColor: Record<string, string> = {
   rejected: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
 };
 
+const selectionModeColor: Record<string, string> = {
+  selected: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  rejected: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
+  hold: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  llm_review_pending:
+    "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+  gray_zone: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  compatibility_only: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  pending: "bg-muted text-muted-foreground",
+};
+
 const verificationColor: Record<string, string> = {
   strong: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   medium: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
@@ -138,7 +152,7 @@ function shortId(value: unknown): string {
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 shrink-0">system gate</span>
-            <p class="text-[11px]">Use the extra selection badges on each row to compare the new final decision (<em>selected</em>, <em>gray_zone</em>, <em>rejected</em>) with the temporary compatibility projection (<em>eligible</em>, <em>pending_llm</em>, <em>filtered_out</em>, <em>pass_through</em>).</p>
+            <p class="text-[11px]">Use the extra selection badges on each row to compare the new final decision (<em>selected</em>, <em>gray_zone</em>, <em>rejected</em>) with the temporary compatibility projection (<em>eligible</em>, <em>pending_llm</em>, <em>filtered_out</em>, <em>pass_through</em>). Profile-backed gray zones can now stay on cheap <em>hold</em> instead of automatically becoming review-pending.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 shrink-0">blocked</span>
@@ -182,13 +196,17 @@ function shortId(value: unknown): string {
                   <td class="px-4 py-3 hidden sm:table-cell">
                     {(() => {
                       const operatorState = resolveArticleOperatorState(a);
+                      const operatorGuidance = resolveArticleOperatorGuidance(a);
 
                       return (
                         <div class="space-y-1">
                           <div class="flex flex-wrap gap-1">
+                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${selectionModeColor[String(operatorState.selectionMode)] ?? "bg-muted text-muted-foreground"}`}>
+                              mode:{String(operatorState.selectionMode)}
+                            </span>
                             {operatorState.selectionDecision && (
                               <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${finalSelectionColor[String(operatorState.selectionDecision)] ?? systemFeedColor[String(operatorState.selectionDecision)] ?? "bg-muted text-muted-foreground"}`}>
-                                select:{String(operatorState.selectionDecision)}
+                                decision:{String(operatorState.selectionDecision)}
                               </span>
                             )}
                             {operatorState.verificationState && (
@@ -212,6 +230,15 @@ function shortId(value: unknown): string {
                           </div>
                           <div class="text-[10px] text-muted-foreground">
                             raw:{String(operatorState.processingState ?? "raw")} · enrich:{String(operatorState.enrichmentState ?? "pending")} · compat:{String(operatorState.compatDecision ?? "—")}
+                          </div>
+                          <div class="text-[10px] text-muted-foreground">
+                            {operatorState.selectionSummary}
+                            {operatorState.selectionReason ? ` · reason:${operatorState.selectionReason}` : ""}
+                            {operatorState.holdCount > 0 ? ` · hold:${operatorState.holdCount}` : ""}
+                            {operatorState.llmReviewPendingCount > 0 ? ` · pending review:${operatorState.llmReviewPendingCount}` : ""}
+                          </div>
+                          <div class="text-[10px] text-muted-foreground">
+                            next:{operatorGuidance.summary}
                           </div>
                           {a.visibility_state && a.visibility_state !== "visible" && (
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">

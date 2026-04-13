@@ -45,7 +45,8 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             result = api_main.list_articles(page=1, page_size=20)
 
         self.assertEqual(result["total"], 1)
-        self.assertEqual(result["items"], [{"doc_id": "doc-1"}])
+        self.assertEqual(result["items"][0]["doc_id"], "doc-1")
+        self.assertEqual(result["items"][0]["selection_guidance"]["tone"], "neutral")
         query_count.assert_called_once()
         items_sql = query_all.call_args.args[0]
         self.assertIn("left join document_observations obs", items_sql)
@@ -54,6 +55,11 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("obs.canonical_document_id::text as canonical_document_id", items_sql)
         self.assertIn("fsr.story_cluster_id::text as story_cluster_id", items_sql)
         self.assertIn("fsr.verification_target_type", items_sql)
+        self.assertIn("fsr.explain_json ->> 'selectionMode' as final_selection_mode", items_sql)
+        self.assertIn("fsr.explain_json ->> 'selectionSummary' as final_selection_summary", items_sql)
+        self.assertIn("fsr.explain_json ->> 'selectionReason' as final_selection_reason", items_sql)
+        self.assertIn("as final_selection_llm_review_pending_count", items_sql)
+        self.assertIn("as final_selection_hold_count", items_sql)
 
     def test_get_article_query_exposes_canonical_and_story_cluster_context(self) -> None:
         with (
@@ -71,6 +77,61 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("left join verification_results vrc", sql)
         self.assertIn("canonical_document_url", sql)
         self.assertIn("story_cluster_verification_state", sql)
+        self.assertIn("final_selection_mode", sql)
+        self.assertIn("final_selection_summary", sql)
+        self.assertIn("final_selection_reason", sql)
+        self.assertIn("final_selection_llm_review_pending_count", sql)
+        self.assertIn("final_selection_hold_count", sql)
+
+    def test_get_article_includes_selection_diagnostics_from_article_read_model(self) -> None:
+        with (
+            patch.object(
+                api_main,
+                "query_one",
+                return_value={
+                    "doc_id": "doc-1",
+                    "final_selection_decision": "gray_zone",
+                    "final_selection_mode": "hold",
+                    "final_selection_summary": "Gray zone held by profile policy",
+                    "final_selection_reason": "semantic_hold",
+                    "final_selection_hold_count": 1,
+                    "final_selection_llm_review_pending_count": 0,
+                    "system_feed_decision": "filtered_out",
+                },
+            ),
+            patch.object(api_main, "query_all", side_effect=[[], [], [], []]),
+        ):
+            article = api_main.get_article("doc-1")
+
+        diagnostics = article["selection_diagnostics"]
+        self.assertEqual(article["selection_mode"], "hold")
+        self.assertEqual(article["selection_source"], "final_selection_results")
+        self.assertEqual(diagnostics["selectionMode"], "hold")
+        self.assertEqual(diagnostics["selectionSummary"], "Gray zone held by profile policy")
+        self.assertEqual(diagnostics["holdCount"], 1)
+        self.assertEqual(diagnostics["notificationRows"], 0)
+        self.assertEqual(article["selection_guidance"]["tone"], "warning")
+
+    def test_get_article_marks_compatibility_only_selection_payload_when_final_row_missing(self) -> None:
+        with (
+            patch.object(
+                api_main,
+                "query_one",
+                return_value={
+                    "doc_id": "doc-compat",
+                    "system_feed_decision": "eligible",
+                    "system_feed_eligible": True,
+                },
+            ),
+            patch.object(api_main, "query_all", side_effect=[[], [], [], []]),
+        ):
+            article = api_main.get_article("doc-compat")
+
+        self.assertEqual(article["selection_source"], "system_feed_results")
+        self.assertEqual(article["selection_decision"], "eligible")
+        self.assertEqual(article["selection_mode"], "compatibility_only")
+        self.assertEqual(article["selection_summary"], "Compatibility projection: eligible")
+        self.assertEqual(article["selection_guidance"]["tone"], "neutral")
 
     def test_get_article_explain_returns_stage6_selection_summary(self) -> None:
         article = {
@@ -78,6 +139,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             "final_selection_decision": "selected",
             "final_selection_selected": True,
             "final_selection_verification_state": "strong",
+            "final_selection_reason": "semantic_match",
+            "final_selection_llm_review_pending_count": 0,
+            "final_selection_hold_count": 0,
             "system_feed_decision": "eligible",
             "system_feed_eligible": True,
             "observation_state": "canonicalized",
@@ -109,10 +173,10 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 api_main,
                 "query_one",
                 side_effect=[
-                    {"canonical_document_id": "canonical-1"},
-                    {"story_cluster_id": "cluster-1"},
                     {"final_decision": "selected"},
                     {"decision": "eligible"},
+                    {"canonical_document_id": "canonical-1"},
+                    {"story_cluster_id": "cluster-1"},
                 ],
             ),
         ):
@@ -122,6 +186,11 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(result["selection_explain"]["canonicalDocumentId"], "canonical-1")
         self.assertEqual(result["selection_explain"]["storyClusterId"], "cluster-1")
         self.assertEqual(result["selection_explain"]["verificationState"], "strong")
+        self.assertEqual(result["selection_explain"]["selectionMode"], "selected")
+        self.assertEqual(result["selection_explain"]["selectionReason"], "semantic_match")
+        self.assertEqual(result["selection_diagnostics"]["selectionMode"], "selected")
+        self.assertEqual(result["selection_diagnostics"]["systemCriterionRows"], 0)
+        self.assertEqual(result["selection_guidance"]["tone"], "positive")
         self.assertEqual(len(result["verification_results"]), 2)
 
     def test_content_item_explain_includes_operator_selection_fields(self) -> None:
@@ -138,6 +207,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                     "canonical_document_id": "canonical-1",
                     "story_cluster_id": "cluster-1",
                     "final_selection_verification_state": "strong",
+                    "final_selection_reason": "semantic_match",
+                    "final_selection_hold_count": 0,
+                    "final_selection_llm_review_pending_count": 0,
                     "verification_target_type": "story_cluster",
                     "verification_target_id": "cluster-1",
                 },
@@ -159,6 +231,104 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(explain["storyClusterId"], "cluster-1")
         self.assertEqual(explain["verificationState"], "strong")
         self.assertEqual(explain["verificationTargetType"], "story_cluster")
+        self.assertEqual(explain["selectionMode"], "selected")
+        self.assertEqual(explain["selectionSummary"], "Selected by final-selection policy")
+        self.assertEqual(result["selection_diagnostics"]["selectionMode"], "selected")
+        self.assertEqual(result["selection_diagnostics"]["notificationRows"], 0)
+        self.assertEqual(result["selection_guidance"]["tone"], "positive")
+
+    def test_content_item_explain_marks_compatibility_projection_as_compatibility_only(self) -> None:
+        with (
+            patch.object(
+                api_main,
+                "get_content_item",
+                return_value={
+                    "origin_type": "editorial",
+                    "system_feed_decision": "eligible",
+                    "system_feed_eligible": True,
+                },
+            ),
+            patch.object(api_main, "query_all", return_value=[]),
+            patch.object(
+                api_main,
+                "query_one",
+                side_effect=[None, {"decision": "eligible"}],
+            ),
+        ):
+            result = api_main.get_content_item_explain("editorial:doc-compat")
+
+        explain = result["selection_explain"]
+        self.assertEqual(explain["source"], "system_feed_results")
+        self.assertEqual(explain["decision"], "eligible")
+        self.assertEqual(explain["selectionMode"], "compatibility_only")
+        self.assertEqual(explain["selectionSummary"], "Compatibility projection: eligible")
+        self.assertEqual(result["selection_guidance"]["tone"], "neutral")
+
+    def test_article_explain_marks_profile_hold_as_hold_in_selection_summary(self) -> None:
+        article = {
+            "doc_id": "doc-2",
+            "final_selection_decision": "gray_zone",
+            "final_selection_selected": False,
+            "final_selection_verification_state": "weak",
+            "final_selection_reason": "semantic_hold",
+            "final_selection_llm_review_pending_count": 0,
+            "final_selection_hold_count": 1,
+            "system_feed_decision": "filtered_out",
+            "system_feed_eligible": False,
+            "observation_state": "canonicalized",
+            "duplicate_kind": "canonical",
+            "canonical_document_id": "canonical-2",
+            "story_cluster_id": "cluster-2",
+            "verification_target_type": "story_cluster",
+            "verification_target_id": "cluster-2",
+            "story_cluster_verification_state": "weak",
+            "canonical_verification_state": "weak",
+        }
+
+        with (
+            patch.object(api_main, "get_article", return_value=article),
+            patch.object(
+                api_main,
+                "query_all",
+                side_effect=[
+                    [{"target_type": "canonical_document", "target_id": "canonical-2"}],
+                    [{"target_type": "story_cluster", "target_id": "cluster-2"}],
+                    [],
+                    [],
+                    [],
+                    [],
+                    [],
+                ],
+            ),
+            patch.object(
+                api_main,
+                "query_one",
+                side_effect=[
+                    {
+                        "final_decision": "gray_zone",
+                        "explain_json": {
+                            "selectionReason": "semantic_hold",
+                            "filterCounts": {"hold": 1, "llmReviewPending": 0},
+                        },
+                    },
+                    {"decision": "filtered_out"},
+                    {"canonical_document_id": "canonical-2"},
+                    {"story_cluster_id": "cluster-2"},
+                ],
+            ),
+        ):
+            result = api_main.get_article_explain("doc-2")
+
+        explain = result["selection_explain"]
+        self.assertEqual(explain["selectionMode"], "hold")
+        self.assertEqual(explain["selectionReason"], "semantic_hold")
+        self.assertEqual(explain["holdCount"], 1)
+        self.assertEqual(explain["llmReviewPendingCount"], 0)
+        diagnostics = result["selection_diagnostics"]
+        self.assertEqual(diagnostics["selectionMode"], "hold")
+        self.assertEqual(diagnostics["grayZoneRows"], 0)
+        self.assertEqual(diagnostics["holdCount"], 1)
+        self.assertEqual(result["selection_guidance"]["tone"], "warning")
 
 
 if __name__ == "__main__":

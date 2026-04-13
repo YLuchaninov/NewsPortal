@@ -26,7 +26,6 @@ const bffPaths = {
   liveUpdates: resolvePageAppPath("../bff/live-updates"),
   preferences: resolvePageAppPath("../bff/preferences"),
   interests: resolvePageAppPath("../bff/interests"),
-  interest: (id: string) => resolvePageAppPath(`../bff/interests/${id}`),
 };
 const INTERESTS_PAGE_SIZE = 6;
 
@@ -61,7 +60,7 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
     pageSize={INTERESTS_PAGE_SIZE}
     currentPath={currentPath}
     interestsPath={bffPaths.interests}
-    interestPath={bffPaths.interest}
+    interestPathBase={bffPaths.interests}
     client:load
   />
 </Shell>

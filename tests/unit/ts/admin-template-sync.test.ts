@@ -5,6 +5,7 @@ import {
   parseInterestTemplateInput,
   saveInterestTemplate,
   syncInterestTemplateCriterion,
+  syncInterestTemplateSelectionProfile,
 } from "../../../apps/admin/src/lib/server/admin-templates";
 
 type QueryResponse = { rows: any[] };
@@ -242,6 +243,173 @@ test("syncInterestTemplateCriterion passes through a blank template time window 
     compileRequested: true,
   });
   assert.equal(queryable.calls[2].params?.[8], null);
+});
+
+test("syncInterestTemplateSelectionProfile inserts a compatibility profile for an active template", async () => {
+  const queryable = createQueryable([
+    {
+      rows: [
+        {
+          interest_template_id: "template-profile-1",
+          name: "AI Policy",
+          description: "Policy changes around AI",
+          positive_texts: ["EU AI act"],
+          negative_texts: ["sports"],
+          must_have_terms: ["policy"],
+          must_not_have_terms: ["football"],
+          places: ["Brussels"],
+          languages_allowed: ["en"],
+          time_window_hours: 168,
+          allowed_content_kinds: ["editorial", "document"],
+          short_tokens_required: ["AI"],
+          short_tokens_forbidden: ["NBA"],
+          priority: 0.9,
+          is_active: true,
+        },
+      ],
+    },
+    {
+      rows: [
+        {
+          criterion_id: "criterion-profile-1",
+          description: "AI Policy",
+        },
+      ],
+    },
+    { rows: [] },
+    {
+      rows: [
+        {
+          selection_profile_id: "profile-1",
+          version: 1,
+        },
+      ],
+    },
+  ]);
+
+  const result = await syncInterestTemplateSelectionProfile(
+    queryable as any,
+    "template-profile-1"
+  );
+
+  assert.deepEqual(result, {
+    selectionProfileId: "profile-1",
+    version: 1,
+    created: true,
+  });
+  assert.equal(queryable.calls.length, 4);
+  assert.deepEqual(queryable.calls[3].params?.slice(0, 4), [
+    "template-profile-1",
+    "criterion-profile-1",
+    "AI Policy",
+    "Policy changes around AI",
+  ]);
+  assert.equal(queryable.calls[3].params?.[10], "active");
+});
+
+test("syncInterestTemplateSelectionProfile bumps version when compatibility payload changes", async () => {
+  const queryable = createQueryable([
+    {
+      rows: [
+        {
+          interest_template_id: "template-profile-2",
+          name: "AI Safety",
+          description: "",
+          positive_texts: ["AI safety bill", "model audit rules"],
+          negative_texts: ["gaming laptops"],
+          must_have_terms: ["safety"],
+          must_not_have_terms: [],
+          places: ["EU"],
+          languages_allowed: ["en"],
+          time_window_hours: 168,
+          allowed_content_kinds: ["editorial"],
+          short_tokens_required: ["AI"],
+          short_tokens_forbidden: [],
+          priority: 1,
+          is_active: false,
+        },
+      ],
+    },
+    {
+      rows: [
+        {
+          criterion_id: "criterion-profile-2",
+          description: "AI Safety",
+        },
+      ],
+    },
+    {
+      rows: [
+        {
+          selection_profile_id: "profile-2",
+          source_criterion_id: "criterion-profile-2",
+          name: "AI Safety",
+          description: "",
+          profile_scope: "system",
+          profile_family: "compatibility_interest_template",
+          definition_json: {
+            description: "",
+            positiveDefinitions: ["AI safety bill"],
+            negativeDefinitions: ["gaming laptops"],
+            requiredEvidence: {
+              mustHaveTerms: ["safety"],
+              shortTokensRequired: ["AI"],
+            },
+            forbiddenEvidence: {
+              mustNotHaveTerms: [],
+              shortTokensForbidden: [],
+            },
+            constraints: {
+              places: ["EU"],
+              languagesAllowed: ["en"],
+              timeWindowHours: 168,
+            },
+            compatibility: {
+              source: "interest_template",
+              sourceInterestTemplateId: "template-profile-2",
+              sourceCriterionId: "criterion-profile-2",
+              sourceCriterionDescription: "AI Safety",
+            },
+          },
+          policy_json: {
+            strictness: "balanced",
+            unresolvedDecision: "hold",
+            llmReviewMode: "always",
+            finalSelectionMode: "compatibility_system_selected",
+            priority: 1,
+            allowedContentKinds: ["editorial"],
+          },
+          facets_json: [],
+          bindings_json: {
+            sourceBindingMode: "compatibility_system_template",
+            allowedContentKinds: ["editorial"],
+            compatibility: {
+              sourceInterestTemplateId: "template-profile-2",
+              sourceCriterionId: "criterion-profile-2",
+            },
+          },
+          status: "active",
+          version: 2,
+        },
+      ],
+    },
+    { rows: [] },
+  ]);
+
+  const result = await syncInterestTemplateSelectionProfile(
+    queryable as any,
+    "template-profile-2"
+  );
+
+  assert.deepEqual(result, {
+    selectionProfileId: "profile-2",
+    version: 3,
+    created: false,
+  });
+  assert.equal(queryable.calls.length, 4);
+  assert.equal(queryable.calls[3].params?.[0], "profile-2");
+  assert.equal(queryable.calls[3].params?.[10], "archived");
+  assert.equal(queryable.calls[3].params?.[11], 3);
 });
 
 test("parseInterestTemplateInput accepts blank time_window_hours as any-time and falls back to default content kinds", () => {

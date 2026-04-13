@@ -5,15 +5,11 @@ from dataclasses import replace
 from itertools import count
 from typing import Any
 
-from services.workers.app.task_engine import (
-    ContextManager,
-    SequenceDefinition,
-    SequenceExecutor,
-    SequenceRunRecord,
-    TaskExecutionError,
-    TaskPlugin,
-    TaskPluginRegistry,
-)
+from services.workers.app.task_engine.context import ContextManager
+from services.workers.app.task_engine.exceptions import TaskExecutionError
+from services.workers.app.task_engine.executor import SequenceExecutor
+from services.workers.app.task_engine.models import SequenceDefinition, SequenceRunRecord
+from services.workers.app.task_engine.plugins import TaskPlugin, TaskPluginRegistry
 
 
 class EmitPlugin(TaskPlugin):
@@ -81,6 +77,29 @@ class FlakyPlugin(TaskPlugin):
         if self.calls == 1:
             raise TaskExecutionError("retry me", retryable=True)
         return {"flakySucceeded": True}
+
+
+class DeadlockDetected(Exception):
+    sqlstate = "40P01"
+
+
+class TransientDatabaseFlakyPlugin(TaskPlugin):
+    name = "TransientDatabaseFlaky"
+    description = "Fails once with a transient database error, then succeeds."
+    category = "test"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def execute(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        self.calls += 1
+        if self.calls == 1:
+            raise DeadlockDetected("deadlock detected while updating articles")
+        return {"transientRetrySucceeded": True}
 
 
 class TimeoutPlugin(TaskPlugin):
@@ -380,6 +399,32 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.runs["run-1"].context_json["flakySucceeded"], True)
         self.assertEqual(slept_for, [0.025])
 
+    async def test_executor_retries_transient_database_errors_without_explicit_task_retry(self) -> None:
+        slept_for: list[float] = []
+
+        async def fake_sleep(delay: float) -> None:
+            slept_for.append(delay)
+
+        executor, repository = self._build_executor(
+            task_graph=[
+                {
+                    "key": "deadlock-once",
+                    "module": "TransientDatabaseFlaky",
+                    "options": {},
+                }
+            ],
+            sleep=fake_sleep,
+        )
+
+        result = await executor.execute_run("run-1")
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(repository.task_runs[0]["status"], "completed")
+        self.assertEqual(
+            repository.runs["run-1"].context_json["transientRetrySucceeded"], True
+        )
+        self.assertEqual(slept_for, [1.0])
+
     async def test_executor_marks_timeout_as_failed_run(self) -> None:
         executor, repository = self._build_executor(
             task_graph=[
@@ -430,7 +475,14 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
         repository_kwargs: dict[str, Any] | None = None,
     ) -> tuple[SequenceExecutor, InMemorySequenceRepository]:
         registry = TaskPluginRegistry()
-        for plugin_class in (EmitPlugin, CombinePlugin, StopPlugin, FlakyPlugin, TimeoutPlugin):
+        for plugin_class in (
+            EmitPlugin,
+            CombinePlugin,
+            StopPlugin,
+            FlakyPlugin,
+            TransientDatabaseFlakyPlugin,
+            TimeoutPlugin,
+        ):
             registry.register(plugin_class)
 
         sequence = SequenceDefinition.from_record(

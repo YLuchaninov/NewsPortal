@@ -31,7 +31,7 @@ interface InterestRepairState {
 interface InterestSheetProps {
   interests: Interest[];
   interestsPath: string;
-  interestPath: (id: string) => string;
+  interestPathBase: string;
   onMutationSuccess?: () => Promise<void> | void;
   readRepairState?: (interestId: string) => InterestRepairState | null;
   hasAnyInterests?: boolean;
@@ -67,7 +67,7 @@ function statusBadgeClass(status: string): string {
 export function InterestManager({
   interests,
   interestsPath,
-  interestPath,
+  interestPathBase,
   onMutationSuccess,
   readRepairState,
   hasAnyInterests = interests.length > 0,
@@ -77,6 +77,10 @@ export function InterestManager({
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function buildInterestActionPath(id: string): string {
+    return `${interestPathBase.replace(/\/+$/, "")}/${encodeURIComponent(id)}`;
+  }
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -113,7 +117,7 @@ export function InterestManager({
     for (const [k, v] of data.entries()) body.append(k, String(v));
     body.set("_action", action);
 
-    const res = await fetch(interestPath(id), { method: "POST", body });
+    const res = await fetch(buildInterestActionPath(id), { method: "POST", body });
     if (res.ok || res.redirected) {
       const msg =
         action === "delete"

@@ -2,6 +2,7 @@
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
+import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -571,7 +572,13 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <div class="divide-y divide-border">
             {missionItems.length === 0 ? (
               <p class="px-5 py-8 text-sm text-muted-foreground">No adaptive discovery missions yet.</p>
-            ) : missionItems.map((mission) => (
+            ) : missionItems.map((mission) => {
+              const missionId = String(mission.mission_id ?? "");
+              const missionStatus = String(mission.status ?? "planned");
+              const isMissionArchived = missionStatus === "archived";
+              const missionActionLabel = isMissionArchived ? "Activate" : "Archive";
+              const missionActionIntent = isMissionArchived ? "activate_mission" : "archive_mission";
+              return (
               <div class="px-5 py-4">
                 <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                   <div class="space-y-1">
@@ -595,43 +602,83 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   <div class="flex flex-wrap gap-2">
                     <form method="post" action={bffPath}>
                       <input type="hidden" name="intent" value="compile_graph" />
-                      <input type="hidden" name="missionId" value={String(mission.mission_id ?? "")} />
+                      <input type="hidden" name="missionId" value={missionId} />
                       <input type="hidden" name="redirectTo" value={currentPath} />
-                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                      <button
+                        type="submit"
+                        disabled={isMissionArchived}
+                        class:list={[
+                          "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                          isMissionArchived
+                            ? "cursor-not-allowed border-border bg-muted text-muted-foreground"
+                            : "border-input hover:bg-accent",
+                        ]}
+                      >
                         Compile graph
                       </button>
                     </form>
                     <form method="post" action={bffPath}>
                       <input type="hidden" name="intent" value="run_mission" />
-                      <input type="hidden" name="missionId" value={String(mission.mission_id ?? "")} />
+                      <input type="hidden" name="missionId" value={missionId} />
                       <input type="hidden" name="redirectTo" value={currentPath} />
                       <button
                         type="submit"
-                        disabled={monthlyQuotaReached}
+                        disabled={monthlyQuotaReached || isMissionArchived}
                         class:list={[
                           "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors",
-                          monthlyQuotaReached
+                          monthlyQuotaReached || isMissionArchived
                             ? "cursor-not-allowed bg-muted text-muted-foreground"
                             : "bg-primary text-primary-foreground hover:bg-primary/90",
                         ]}
                       >
-                        {monthlyQuotaReached ? "Quota blocked" : "Run mission"}
+                        {isMissionArchived ? "Archived" : monthlyQuotaReached ? "Quota blocked" : "Run mission"}
                       </button>
                     </form>
-                    <a href={resolveMissionScopedHref(String(mission.mission_id ?? ""))} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                    <a href={resolveMissionScopedHref(missionId)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
                       Open portfolio
                     </a>
+                    <AdminConfirmAction
+                      action={bffPath}
+                      title={isMissionArchived ? "Reactivate mission" : "Archive mission"}
+                      description={isMissionArchived
+                        ? "Reactivating this mission returns it to the planned backlog so operators can compile or run it again."
+                        : "Archiving keeps the mission readable in discovery history but removes it from active planning and execution."}
+                      triggerLabel={missionActionLabel}
+                      confirmLabel={isMissionArchived ? "Reactivate mission" : "Archive mission"}
+                      fields={[
+                        { name: "intent", value: missionActionIntent },
+                        { name: "missionId", value: missionId },
+                        { name: "redirectTo", value: currentPath },
+                      ]}
+                      triggerClassName={isMissionArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
+                      confirmClassName={isMissionArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
+                      client:load
+                    />
+                    <AdminConfirmAction
+                      action={bffPath}
+                      title="Delete mission"
+                      description="Delete permanently only when this mission has no generated discovery history. Missions with hypotheses, runs, feedback, or portfolio state must be archived instead."
+                      triggerLabel="Delete"
+                      confirmLabel="Delete mission"
+                      fields={[
+                        { name: "intent", value: "delete_mission" },
+                        { name: "missionId", value: missionId },
+                        { name: "redirectTo", value: currentPath },
+                      ]}
+                      triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                      client:load
+                    />
                   </div>
                 </div>
                 <form method="post" action={bffPath} class="mt-4 grid gap-3 md:grid-cols-4">
                   <input type="hidden" name="intent" value="update_mission" />
-                  <input type="hidden" name="missionId" value={String(mission.mission_id ?? "")} />
+                  <input type="hidden" name="missionId" value={missionId} />
                   <input type="hidden" name="redirectTo" value={currentPath} />
                   <label class="grid gap-1">
                     <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
                     <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                      {["planned", "active", "paused", "completed", "failed"].map((option) => (
-                        <option value={option} selected={String(mission.status ?? "planned") === option}>{option}</option>
+                      {["planned", "active", "paused", "completed", "failed", "archived"].map((option) => (
+                        <option value={option} selected={missionStatus === option}>{option}</option>
                       ))}
                     </select>
                   </label>
@@ -651,7 +698,8 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   </div>
                 </form>
               </div>
-            ))}
+            );
+            })}
           </div>
           {(missions.hasPrev || missions.hasNext) && (
             <PaginationNav
@@ -863,7 +911,11 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <div class="divide-y divide-border">
             {classItems.length === 0 ? (
               <p class="px-5 py-8 text-sm text-muted-foreground">No hypothesis classes yet.</p>
-            ) : classItems.map((item) => (
+            ) : classItems.map((item) => {
+              const classKey = String(item.class_key ?? "");
+              const classStatus = String(item.status ?? "draft");
+              const isClassArchived = classStatus === "archived";
+              return (
               <div class="px-5 py-4">
                 <div class="flex flex-wrap items-center gap-2">
                   <h3 class="text-sm font-semibold">{String(item.display_name ?? item.class_key ?? "Class")}</h3>
@@ -878,15 +930,48 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 <p class="mt-1 text-xs text-muted-foreground">
                   Backend: {String(item.generation_backend ?? "graph_seed_llm")} · Providers: {asStringList(item.default_provider_types).join(", ") || "rss, website, api, email_imap, youtube"} · Max/mission: {String(item.max_per_mission ?? 0)}
                 </p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <AdminConfirmAction
+                    action={bffPath}
+                    title={isClassArchived ? "Reactivate class" : "Archive class"}
+                    description={isClassArchived
+                      ? "Reactivating this class makes it eligible again for future mission planning."
+                      : "Archiving keeps the class visible historically but removes it from new mission planning."}
+                    triggerLabel={isClassArchived ? "Activate" : "Archive"}
+                    confirmLabel={isClassArchived ? "Reactivate class" : "Archive class"}
+                    fields={[
+                      { name: "intent", value: isClassArchived ? "activate_class" : "archive_class" },
+                      { name: "classKey", value: classKey },
+                      { name: "redirectTo", value: currentPath },
+                    ]}
+                    triggerClassName={isClassArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
+                    confirmClassName={isClassArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
+                    client:load
+                  />
+                  <AdminConfirmAction
+                    action={bffPath}
+                    title="Delete class"
+                    description="Delete permanently only when this class has no generated hypotheses yet. Once mission history exists, archive it instead."
+                    triggerLabel="Delete"
+                    confirmLabel="Delete class"
+                    fields={[
+                      { name: "intent", value: "delete_class" },
+                      { name: "classKey", value: classKey },
+                      { name: "redirectTo", value: currentPath },
+                    ]}
+                    triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                    client:load
+                  />
+                </div>
                 <form method="post" action={bffPath} class="mt-4 grid gap-3 md:grid-cols-4">
                   <input type="hidden" name="intent" value="update_class" />
-                  <input type="hidden" name="classKey" value={String(item.class_key ?? "")} />
+                  <input type="hidden" name="classKey" value={classKey} />
                   <input type="hidden" name="redirectTo" value={currentPath} />
                   <label class="grid gap-1">
                     <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
                     <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
                       {["draft", "active", "archived"].map((option) => (
-                        <option value={option} selected={String(item.status ?? "draft") === option}>{option}</option>
+                        <option value={option} selected={classStatus === option}>{option}</option>
                       ))}
                     </select>
                   </label>
@@ -906,7 +991,8 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   </div>
                 </form>
               </div>
-            ))}
+            );
+            })}
           </div>
           {(classes.hasPrev || classes.hasNext) && (
             <PaginationNav

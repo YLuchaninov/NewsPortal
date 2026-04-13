@@ -139,8 +139,12 @@ Bundle содержит 3 LLM templates:
 Их общая политика теперь такая:
 
 - explicit procurement и direct buyer requests являются strongest positives;
+- `criteria` template теперь опирается на конкретный `criterion_name` как на authoritative semantic frame, а не на один универсальный build-only prompt;
+- `interests` template тоже привязан к самому интересу и допускает `uncertain`, когда buyer-side signal plausibly есть, но externalization еще недоказана;
 - advisory content, market commentary и broad transformation stories не должны одобряться сами по себе;
 - forum / Reddit / HN posts одобряются только когда автор выглядит самим покупателем и явно пытается source-ить outside delivery help;
+- seller-authored marketplace / `[FOR HIRE]` posts теперь явно описаны как negative path;
+- employment/career postings теперь тоже явно зафиксированы как negative path: `job details`, `required profile`, `contract type`, `reports to`, recruiter/career-page wording и внутренний найм не должны трактоваться как buyer procurement;
 - слова `agency`, `partner`, `outsourcing`, `MVP`, `migration`, `modernization` больше не считаются достаточным основанием сами по себе.
 
 ## Рекомендации по применению

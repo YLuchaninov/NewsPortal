@@ -17347,7 +17347,7 @@
   },
   {
     "name": "Hasjob Construkt — Contractors / Travelers",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://construkt.hasjob.co/feed",
     "language": "en",
     "pollIntervalSeconds": 3600,
@@ -17431,7 +17431,7 @@
   },
   {
     "name": "Cryptocurrency Jobs — All Jobs",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://cryptocurrencyjobs.co/index.xml",
     "language": "en",
     "pollIntervalSeconds": 1800,
@@ -17445,7 +17445,7 @@
   },
   {
     "name": "Hasjob CTO — Leadership / CTO",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://cto.hasjob.co/feed",
     "language": "en",
     "pollIntervalSeconds": 3600,
@@ -17473,7 +17473,7 @@
   },
   {
     "name": "Django Job Board — ATOM",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://djangojobboard.com/feed/atom/",
     "language": "en",
     "pollIntervalSeconds": 3600,
@@ -19307,7 +19307,7 @@
   },
   {
     "name": "Hasjob — All Jobs",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://hasjob.co/feed",
     "language": "en",
     "pollIntervalSeconds": 1800,
@@ -20259,7 +20259,7 @@
   },
   {
     "name": "Hasjob Intern — Internships",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://intern.hasjob.co/feed",
     "language": "en",
     "pollIntervalSeconds": 3600,
@@ -25565,7 +25565,7 @@
   },
   {
     "name": "Hasjob Rootconf — Engineering",
-    "providerType": "atom",
+    "providerType": "rss",
     "fetchUrl": "https://rootconf.hasjob.co/feed",
     "language": "en",
     "pollIntervalSeconds": 3600,

@@ -215,6 +215,72 @@ class _RecordingConnection(_FakeConnection):
 
 
 class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_article_for_update_locks_only_article_row(self) -> None:
+        cursor = _RecordingCursor(
+            [
+                {
+                    "doc_id": "article-1",
+                    "channel_id": "channel-1",
+                    "channel_language": "en",
+                }
+            ]
+        )
+
+        article = await worker_main.fetch_article_for_update(cursor, "article-1")
+
+        self.assertEqual(article["doc_id"], "article-1")
+        self.assertIn("for update of a", cursor.executed[0][0].lower())
+        self.assertNotIn("for update\n", cursor.executed[0][0].lower())
+
+    async def test_process_reindex_records_selection_profile_snapshot_for_backfill(self) -> None:
+        job = SimpleNamespace(
+            data={
+                "eventId": "evt-reindex-1",
+                "reindexJobId": "job-1",
+                "indexName": worker_main.INTEREST_CENTROIDS_INDEX_NAME,
+            }
+        )
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(
+                worker_main,
+                "read_reindex_job_context",
+                AsyncMock(return_value=("repair", {"batchSize": 5})),
+            ),
+            patch.object(
+                worker_main,
+                "read_active_selection_profile_snapshot",
+                AsyncMock(
+                    return_value={
+                        "totalProfiles": 4,
+                        "activeProfiles": 3,
+                        "compatibilityProfiles": 3,
+                        "templatesWithProfiles": 3,
+                        "maxVersion": 7,
+                    }
+                ),
+            ),
+            patch.object(
+                worker_main,
+                "replay_historical_articles",
+                AsyncMock(return_value={"processedArticles": 2}),
+            ),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_reindex(job, "")
+
+        self.assertEqual(result.get("status"), "completed", result)
+        payload = result["result"]
+        self.assertEqual(payload["jobKind"], "repair")
+        self.assertEqual(payload["rebuild"]["reason"], "repair_job_skips_rebuild")
+        self.assertEqual(payload["backfill"]["processedArticles"], 2)
+        self.assertEqual(
+            payload["backfill"]["selectionProfileSnapshot"]["activeProfiles"], 3
+        )
+        self.assertEqual(payload["backfill"]["selectionProfileSnapshot"]["maxVersion"], 7)
+
     async def test_llm_review_monthly_quota_snapshot_uses_precise_budget_math(self) -> None:
         cursor = _RecordingCursor([{"month_to_date_cost_usd": "0.995"}])
         with patch.dict(
@@ -494,6 +560,398 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["criteriaCount"], 1)
 
+    async def test_process_match_criteria_uplifts_near_threshold_candidate_to_gray_zone(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "implementation partner",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "22222222-2222-2222-2222-222222222222",
+            "processing_state": "embedded",
+            "title": "Looking for an ERP implementation partner",
+            "lead": "Migration support needed for an enterprise replacement.",
+            "body": "We need a partner for implementation and migration work.",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.22)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", side_effect=[0.28, 0.0]),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.445),
+            patch.object(worker_main, "decide_criterion", return_value="irrelevant"),
+            patch.object(
+                worker_main,
+                "resolve_interest_filter_context",
+                AsyncMock(
+                    return_value={
+                        "canonicalDocumentId": None,
+                        "storyClusterId": None,
+                        "verificationTargetType": "canonical_document",
+                        "verificationTargetId": None,
+                        "verificationState": "medium",
+                    }
+                ),
+            ),
+            patch.object(
+                worker_main,
+                "insert_outbox_event",
+                AsyncMock(),
+            ) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "pending_llm",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-candidate-uplift-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_awaited_once()
+        call_args = insert_outbox_event.await_args.args
+        self.assertEqual(call_args[1], worker_main.LLM_REVIEW_REQUESTED_EVENT)
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "gray_zone")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertTrue(explain_json["candidateSignals"]["upliftedToGrayZone"])
+        self.assertEqual(
+            explain_json["candidateSignals"]["reason"],
+            "document_candidate_signal_uplift",
+        )
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
+    async def test_process_match_criteria_uplifts_story_cluster_backed_candidate_to_gray_zone(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "implementation roadmap",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "33333333-3333-3333-3333-333333333333",
+            "processing_state": "embedded",
+            "title": "ERP implementation roadmap",
+            "lead": "Migration plan for an enterprise stack.",
+            "body": "Detailed implementation notes for a platform transition.",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.21)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", side_effect=[0.27, 0.0]),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.405),
+            patch.object(worker_main, "decide_criterion", return_value="irrelevant"),
+            patch.object(
+                worker_main,
+                "resolve_interest_filter_context",
+                AsyncMock(
+                    return_value={
+                        "canonicalDocumentId": "canonical-1",
+                        "storyClusterId": "cluster-1",
+                        "verificationTargetType": "story_cluster",
+                        "verificationTargetId": "cluster-1",
+                        "verificationState": "medium",
+                    }
+                ),
+            ),
+            patch.object(
+                worker_main,
+                "insert_outbox_event",
+                AsyncMock(),
+            ) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "pending_llm",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-candidate-uplift-cluster-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_awaited_once()
+        call_args = insert_outbox_event.await_args.args
+        self.assertEqual(call_args[1], worker_main.LLM_REVIEW_REQUESTED_EVENT)
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "gray_zone")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertTrue(explain_json["candidateSignals"]["upliftedToGrayZone"])
+        self.assertTrue(explain_json["candidateSignals"]["contextBackedUplift"])
+        self.assertEqual(
+            explain_json["candidateSignals"]["reason"],
+            "context_backed_candidate_signal_uplift",
+        )
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
+    async def test_process_match_criteria_uplifts_multi_group_canonical_medium_candidate(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "implementation partner demand",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "66666666-6666-6666-6666-666666666666",
+            "processing_state": "embedded",
+            "title": "ERP implementation partner sees rising demand",
+            "lead": "Migration partner demand is growing across enterprise replacements.",
+            "body": "Demand for implementation partners keeps rising.",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.91)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", side_effect=[0.0, 0.0]),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.29),
+            patch.object(worker_main, "decide_criterion", return_value="irrelevant"),
+            patch.object(
+                worker_main,
+                "resolve_interest_filter_context",
+                AsyncMock(
+                    return_value={
+                        "canonicalDocumentId": "canonical-1",
+                        "storyClusterId": None,
+                        "verificationTargetType": "canonical_document",
+                        "verificationTargetId": "canonical-1",
+                        "verificationState": "medium",
+                    }
+                ),
+            ),
+            patch.object(
+                worker_main,
+                "insert_outbox_event",
+                AsyncMock(),
+            ) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "pending_llm",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-candidate-uplift-canonical-medium-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_awaited_once()
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "gray_zone")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertTrue(explain_json["candidateSignals"]["upliftedToGrayZone"])
+        self.assertTrue(explain_json["candidateSignals"]["contextBackedUplift"])
+        self.assertGreaterEqual(explain_json["candidateSignals"]["positiveSignalCount"], 2)
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
+    async def test_process_match_criteria_keeps_profile_gray_zone_as_hold_without_queueing(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "selection_profile_id": "profile-criterion-1",
+            "selection_profile_version": 1,
+            "selection_profile_status": "active",
+            "selection_profile_family": "compatibility_interest_template",
+            "selection_profile_policy_json": {
+                "llmReviewMode": "optional_high_value_only",
+                "unresolvedDecision": "hold",
+            },
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "ai policy",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "22222222-2222-2222-2222-222222222222",
+            "processing_state": "embedded",
+            "title": "AI policy",
+            "lead": "Lead",
+            "body": "Body",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.25)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", return_value=0.0),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.6),
+            patch.object(worker_main, "decide_criterion", return_value="gray_zone"),
+            patch.object(worker_main, "insert_outbox_event", AsyncMock()) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "pending_llm",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-profile-hold-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_not_awaited()
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "gray_zone")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertEqual(explain_json["grayZonePolicy"]["reason"], "selection_profile_runtime_policy")
+        self.assertEqual(explain_json["grayZonePolicy"]["finalDecision"], "gray_zone")
+        self.assertFalse(explain_json["selectionProfile"]["llmReviewAllowed"])
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
     async def test_process_match_criteria_applies_budget_fallback_without_queueing(self) -> None:
         criterion_row = {
             "criterion_id": "11111111-1111-1111-1111-111111111111",
@@ -597,6 +1055,169 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["criteriaCount"], 1)
 
+    async def test_process_match_criteria_holds_recovered_candidate_when_budget_is_exhausted(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "implementation partner",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "44444444-4444-4444-4444-444444444444",
+            "processing_state": "embedded",
+            "title": "Looking for an ERP implementation partner",
+            "lead": "Migration support needed for an enterprise replacement.",
+            "body": "We need a partner for implementation and migration work.",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(
+                worker_main,
+                "get_llm_review_monthly_quota_snapshot",
+                AsyncMock(
+                    return_value={
+                        "enabled": True,
+                        "monthlyBudgetCents": 100,
+                        "monthToDateCostCents": 100,
+                        "remainingMonthlyBudgetCents": 0,
+                        "monthlyQuotaReached": True,
+                        "acceptGrayZoneOnBudgetExhaustion": True,
+                        "monthStart": "2026-04-01T00:00:00+00:00",
+                    }
+                ),
+            ),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.22)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", side_effect=[0.28, 0.0]),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.445),
+            patch.object(worker_main, "decide_criterion", return_value="irrelevant"),
+            patch.object(
+                worker_main,
+                "resolve_interest_filter_context",
+                AsyncMock(
+                    return_value={
+                        "canonicalDocumentId": None,
+                        "storyClusterId": None,
+                        "verificationTargetType": "canonical_document",
+                        "verificationTargetId": None,
+                        "verificationState": "medium",
+                    }
+                ),
+            ),
+            patch.object(worker_main, "insert_outbox_event", AsyncMock()) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "filtered_out",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-budget-recovered-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_not_awaited()
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "gray_zone")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertEqual(
+            explain_json["llmBudgetGate"]["policy"],
+            "hold_candidate_recovery_gray_zone",
+        )
+        self.assertEqual(
+            explain_json["grayZonePolicy"]["reason"],
+            "candidate_recovery_runtime_policy",
+        )
+        self.assertFalse(explain_json["runtimeReviewState"]["reviewQueued"])
+        self.assertTrue(explain_json["runtimeReviewState"]["candidateRecoveryProtected"])
+        filter_insert_sql, filter_insert_params = next(
+            item for item in cursor.executed if "insert into interest_filter_results" in item[0]
+        )
+        del filter_insert_sql
+        self.assertEqual(filter_insert_params[8], "passed")
+        self.assertEqual(filter_insert_params[9], "gray_zone")
+        self.assertEqual(filter_insert_params[10], "gray_zone")
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
+    async def test_upsert_final_selection_result_prefers_runtime_review_state_for_hold_counts(self) -> None:
+        cursor = _RecordingCursor(
+            [
+                None,
+                {
+                    "total_filter_count": 1,
+                    "matched_filter_count": 0,
+                    "no_match_filter_count": 0,
+                    "gray_zone_filter_count": 1,
+                    "llm_review_pending_filter_count": 0,
+                    "hold_filter_count": 1,
+                    "candidate_signal_uplift_count": 1,
+                    "technical_filtered_out_count": 0,
+                },
+            ]
+        )
+        article_row = {"doc_id": "55555555-5555-5555-5555-555555555555"}
+
+        with patch.object(
+            worker_main,
+            "resolve_interest_filter_context",
+            AsyncMock(
+                return_value={
+                    "canonicalDocumentId": None,
+                    "storyClusterId": None,
+                    "verificationTargetType": "canonical_document",
+                    "verificationTargetId": None,
+                    "verificationState": "medium",
+                }
+            ),
+        ):
+            result = await worker_main.upsert_final_selection_result(cursor, article=article_row)
+
+        counts_query_sql = cursor.executed[1][0]
+        self.assertIn("runtimeReviewState", counts_query_sql)
+        self.assertEqual(result["decision"], "gray_zone")
+        self.assertEqual(result["holdFilterCount"], 1)
+        self.assertEqual(result["llmReviewPendingFilterCount"], 0)
+        self.assertEqual(result["selectionReason"], "candidate_signal_hold")
+
     async def test_process_llm_review_skips_provider_when_runtime_policy_blocks(self) -> None:
         article_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
@@ -672,6 +1293,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "review-skipped-runtime-policy")
         self.assertEqual(result["decision"], "reject")
 
+
     async def test_process_cluster_skips_articles_outside_system_feed(self) -> None:
         article_row = {
             "doc_id": "33333333-3333-3333-3333-333333333333",
@@ -712,8 +1334,10 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
             )
 
         record_processed_event.assert_awaited_once()
-        self.assertEqual(result["status"], "skipped-system-feed")
+        self.assertEqual(result["status"], "skipped-selection-gate")
         self.assertEqual(result["docId"], article_row["doc_id"])
+        self.assertEqual(result["selectionDecision"], "")
+        self.assertFalse(result["selectionSelected"])
         self.assertIsNone(result["storyClusterId"])
         self.assertIsNone(result["storyVerificationState"])
         self.assertIsNone(result["canonicalVerificationState"])
@@ -746,10 +1370,11 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
             )
 
         record_processed_event.assert_awaited_once()
-        self.assertEqual(result["status"], "skipped-system-feed")
+        self.assertEqual(result["status"], "skipped-selection-gate")
         self.assertEqual(result["docId"], article_row["doc_id"])
         self.assertEqual(result["interestCount"], 0)
         self.assertEqual(result["selectionSource"], "system_feed_results")
+        self.assertFalse(result["selectionSelected"])
 
     async def test_process_match_interests_prefers_final_selection_gate_when_available(self) -> None:
         article_row = {
@@ -785,8 +1410,10 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
 
         record_processed_event.assert_awaited_once()
         fetch_system_feed_result_row.assert_not_awaited()
-        self.assertEqual(result["status"], "skipped-system-feed")
+        self.assertEqual(result["status"], "skipped-selection-gate")
         self.assertEqual(result["selectionSource"], "final_selection_results")
+        self.assertEqual(result["selectionDecision"], "rejected")
+        self.assertFalse(result["selectionSelected"])
 
     async def test_is_article_eligible_for_personalization_prefers_final_selection_result(self) -> None:
         with (

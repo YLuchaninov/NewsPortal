@@ -95,6 +95,25 @@ function toRecord(rawValue: unknown): Record<string, unknown> {
     : {};
 }
 
+function selectionBadgeClass(modeLike: unknown): string {
+  switch (String(modeLike ?? "").trim()) {
+    case "selected":
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+    case "hold":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+    case "llm_review_pending":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
+    case "rejected":
+      return "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300";
+    case "gray_zone":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+    case "compatibility_only":
+      return "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
+    default:
+      return "bg-muted text-muted-foreground";
+  }
+}
+
 const sourceHref = resolveSafeHref(resource.final_url ?? resource.url);
 const projectedArticleHref = resource.projected_article_id
   ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
@@ -111,6 +130,15 @@ const browserCaptureSource = String(discoverySignals.browserCaptureSource ?? "")
 const browserChallengeKind = String(discoverySignals.browserChallengeKind ?? "").trim() || "—";
 const browserSeedUrl = String(discoverySignals.browserSeedUrl ?? "").trim() || "—";
 const browserPageUrl = String(discoverySignals.browserPageUrl ?? "").trim() || "—";
+const selectionGuidance = toRecord(resource.selection_guidance);
+const selectionDiagnostics = toRecord(resource.selection_diagnostics);
+const selectionMode = String(resource.selection_mode ?? "pending").trim() || "pending";
+const selectionDecision = String(resource.selection_decision ?? "").trim();
+const selectionSummary =
+  String(resource.selection_summary ?? "").trim() || "Selection not materialized yet.";
+const selectionGuidanceTone = String(selectionGuidance.tone ?? "neutral").trim() || "neutral";
+const selectionGuidanceSummary =
+  String(selectionGuidance.summary ?? "").trim() || "Selection guidance is not available yet.";
 ---
 
 <AdminShell title="Resource Detail — Admin" session={session} flash={flash} activeNav="resources">
@@ -157,9 +185,29 @@ const browserPageUrl = String(discoverySignals.browserPageUrl ?? "").trim() || "
         <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
           {String(resource.discovery_source ?? "manual")}
         </span>
+        <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${selectionBadgeClass(selectionMode)}`}>
+          mode:{selectionMode}
+        </span>
+        {selectionDecision && (
+          <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${selectionBadgeClass(selectionDecision)}`}>
+            decision:{selectionDecision}
+          </span>
+        )}
       </div>
       <h1 class="mt-4 text-2xl font-semibold tracking-tight">{String(resource.title ?? "Untitled resource")}</h1>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{String(resource.summary ?? "No summary captured.")}</p>
+      <div
+        class={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+          selectionGuidanceTone === "positive"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-100"
+            : selectionGuidanceTone === "warning"
+              ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100"
+              : "border-border bg-background text-foreground"
+        }`}
+      >
+        <p class="font-medium">{selectionSummary}</p>
+        <p class="mt-1 text-sm opacity-90">{selectionGuidanceSummary}</p>
+      </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div class="rounded-2xl border border-border bg-background p-4">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Channel</p>
@@ -211,6 +259,37 @@ const browserPageUrl = String(discoverySignals.browserPageUrl ?? "").trim() || "
       </section>
 
       <div class="space-y-6">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold">Selection diagnostics</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Server-owned selection summary for this resource or its projected article.
+            </p>
+          </div>
+          <dl class="grid gap-3 text-sm">
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Source</dt>
+              <dd class="mt-1 text-foreground">{String(selectionDiagnostics.source ?? resource.selection_source ?? "pending")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Reason</dt>
+              <dd class="mt-1 text-foreground">{String(selectionDiagnostics.selectionReason ?? resource.selection_reason ?? "—")}</dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Hold / review</dt>
+              <dd class="mt-1 text-foreground">
+                hold {String(selectionDiagnostics.holdCount ?? resource.selection_hold_count ?? 0)} · pending review {String(selectionDiagnostics.llmReviewPendingCount ?? resource.selection_llm_review_pending_count ?? 0)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Filter rows</dt>
+              <dd class="mt-1 text-foreground">
+                matched {String(selectionDiagnostics.matchedRows ?? 0)} · no-match {String(selectionDiagnostics.noMatchRows ?? 0)} · gray-zone {String(selectionDiagnostics.grayZoneRows ?? 0)}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
         <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div class="mb-4">
             <h2 class="text-base font-semibold">Resolved URLs</h2>

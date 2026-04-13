@@ -52,7 +52,10 @@ from .digests import (
     render_digest_text,
     validate_timezone_name,
 )
-from .final_selection import summarize_final_selection_result
+from .final_selection import (
+    apply_document_candidate_signal_uplift,
+    summarize_final_selection_result,
+)
 from .interest_filters import (
     build_interest_filter_explain,
     resolve_criterion_filter_outcome,
@@ -88,6 +91,12 @@ from .scoring import (
     parse_datetime,
     place_match_score,
     semantic_prototype_score,
+)
+from .selection_profiles import (
+    build_selection_profile_runtime_explain,
+    coerce_selection_profile_runtime,
+    resolve_profile_gray_zone_decision,
+    selection_profile_allows_llm_review,
 )
 from .story_clusters import sync_story_cluster_and_verification
 from .system_feed import summarize_system_feed_result
@@ -332,8 +341,17 @@ async def get_llm_review_monthly_quota_snapshot(
 
 def resolve_criterion_gray_zone_runtime_resolution(
     quota_snapshot: Mapping[str, Any],
+    *,
+    preserve_candidate_gray_zone: bool = False,
 ) -> dict[str, Any] | None:
     if not bool(quota_snapshot.get("enabled", True)):
+        if preserve_candidate_gray_zone:
+            return {
+                "reason": "llm_review_disabled",
+                "policy": "hold_candidate_recovery_gray_zone",
+                "providerDecision": "hold",
+                "finalDecision": "gray_zone",
+            }
         return {
             "reason": "llm_review_disabled",
             "policy": "reject_gray_zone",
@@ -343,6 +361,13 @@ def resolve_criterion_gray_zone_runtime_resolution(
     if not bool(quota_snapshot.get("monthlyQuotaReached")):
         return None
     accept_gray_zone = bool(quota_snapshot.get("acceptGrayZoneOnBudgetExhaustion"))
+    if preserve_candidate_gray_zone:
+        return {
+            "reason": "monthly_budget_exhausted",
+            "policy": "hold_candidate_recovery_gray_zone",
+            "providerDecision": "hold",
+            "finalDecision": "gray_zone",
+        }
     return {
         "reason": "monthly_budget_exhausted",
         "policy": "accept_gray_zone" if accept_gray_zone else "reject_gray_zone",
@@ -674,7 +699,7 @@ async def fetch_article_for_update(
         from articles a
         join source_channels sc on sc.channel_id = a.channel_id
         where a.doc_id = %s
-        for update
+        for update of a
         """,
         (doc_id,),
     )
@@ -1489,10 +1514,12 @@ async def upsert_system_feed_result(
     previous_result = await fetch_system_feed_result_row(cursor, doc_id)
     total_criteria_count = int(final_selection_result["totalFilterCount"])
     relevant_criteria_count = int(final_selection_result["matchedFilterCount"])
-    pending_llm_criteria_count = int(final_selection_result["grayZoneFilterCount"])
+    pending_llm_criteria_count = int(final_selection_result["llmReviewPendingFilterCount"])
     irrelevant_criteria_count = int(
         final_selection_result["noMatchFilterCount"]
-    ) + int(final_selection_result["technicalFilteredOutCount"])
+    ) + int(final_selection_result["technicalFilteredOutCount"]) + int(
+        final_selection_result["holdFilterCount"]
+    )
     summary = summarize_system_feed_result(
         total_criteria_count=total_criteria_count,
         relevant_criteria_count=relevant_criteria_count,
@@ -1613,6 +1640,25 @@ async def upsert_final_selection_result(
           count(*) filter (where semantic_decision = 'match')::int as matched_filter_count,
           count(*) filter (where semantic_decision = 'no_match')::int as no_match_filter_count,
           count(*) filter (where semantic_decision = 'gray_zone')::int as gray_zone_filter_count,
+          count(*) filter (
+            where semantic_decision = 'gray_zone'
+              and coalesce(
+                (explain_json -> 'runtimeReviewState' ->> 'reviewQueued')::boolean,
+                (explain_json -> 'selectionProfile' ->> 'llmReviewAllowed')::boolean,
+                true
+              )
+          )::int as llm_review_pending_filter_count,
+          count(*) filter (
+            where semantic_decision = 'gray_zone'
+              and coalesce(
+                (explain_json -> 'runtimeReviewState' ->> 'reviewQueued')::boolean,
+                (explain_json -> 'selectionProfile' ->> 'llmReviewAllowed')::boolean,
+                true
+              ) = false
+          )::int as hold_filter_count,
+          count(*) filter (
+            where coalesce((explain_json -> 'candidateSignals' ->> 'upliftedToGrayZone')::boolean, false)
+          )::int as candidate_signal_uplift_count,
           count(*) filter (where technical_filter_state = 'filtered_out')::int as technical_filtered_out_count
         from interest_filter_results
         where doc_id = %s
@@ -1626,10 +1672,20 @@ async def upsert_final_selection_result(
         matched_filter_count=int(counts.get("matched_filter_count") or 0),
         no_match_filter_count=int(counts.get("no_match_filter_count") or 0),
         gray_zone_filter_count=int(counts.get("gray_zone_filter_count") or 0),
+        llm_review_pending_filter_count=int(
+            counts.get("llm_review_pending_filter_count") or 0
+        ),
+        hold_filter_count=int(counts.get("hold_filter_count") or 0),
         technical_filtered_out_count=int(counts.get("technical_filtered_out_count") or 0),
         verification_state=selection_context.get("verificationState"),
+        candidate_signal_uplift_count=int(
+            counts.get("candidate_signal_uplift_count") or 0
+        ),
     )
     explain_json = coerce_json_object(summary.get("explain_json"))
+    explain_json["candidateSignalUpliftCount"] = int(
+        counts.get("candidate_signal_uplift_count") or 0
+    )
     explain_json["canonicalDocumentId"] = (
         None
         if selection_context.get("canonicalDocumentId") is None
@@ -1722,6 +1778,13 @@ async def upsert_final_selection_result(
         "matchedFilterCount": int(counts.get("matched_filter_count") or 0),
         "noMatchFilterCount": int(counts.get("no_match_filter_count") or 0),
         "grayZoneFilterCount": int(counts.get("gray_zone_filter_count") or 0),
+        "llmReviewPendingFilterCount": int(
+            counts.get("llm_review_pending_filter_count") or 0
+        ),
+        "holdFilterCount": int(counts.get("hold_filter_count") or 0),
+        "candidateSignalUpliftCount": int(
+            counts.get("candidate_signal_uplift_count") or 0
+        ),
         "technicalFilteredOutCount": int(counts.get("technical_filtered_out_count") or 0),
         "previousDecision": (
             str(previous_result.get("final_decision") or "")
@@ -1824,14 +1887,21 @@ async def list_compiled_criteria(
         """
         select
           c.criterion_id::text as criterion_id,
+          c.source_interest_template_id::text as source_interest_template_id,
           c.description,
           c.enabled,
           c.priority,
           cc.source_version,
           cc.compiled_json,
-          cc.source_snapshot_json
+          cc.source_snapshot_json,
+          sp.selection_profile_id::text as selection_profile_id,
+          sp.profile_family as selection_profile_family,
+          sp.status as selection_profile_status,
+          sp.version as selection_profile_version,
+          sp.policy_json as selection_profile_policy_json
         from criteria c
         join criteria_compiled cc on cc.criterion_id = c.criterion_id
+        left join selection_profiles sp on sp.source_criterion_id = c.criterion_id
         where c.enabled = true
           and c.compiled = true
           and cc.compile_status = 'compiled'
@@ -2594,7 +2664,12 @@ async def fetch_scheduled_digest_items(
             and imr.created_at <= %s
             and (%s::timestamptz is null or imr.created_at > %s::timestamptz)
             and a.visibility_state = 'visible'
-            and coalesce(fsr.is_selected, coalesce(sfr.eligible_for_feed, false)) = true
+            and (
+              case
+                when fsr.doc_id is not null then coalesce(fsr.is_selected, false)
+                else coalesce(sfr.eligible_for_feed, false)
+              end
+            ) = true
         )
         select
           content_item_id,
@@ -3317,12 +3392,31 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
                 ):
                     await record_processed_event(cursor, CLUSTER_CONSUMER, event_id)
                     return {
-                        "status": "skipped-system-feed",
+                        "status": "skipped-selection-gate",
                         "docId": doc_id,
                         "selectionSource": str(
                             system_feed_result.get("selection_source")
                             if system_feed_result is not None
                             else "pending"
+                        ),
+                        "selectionDecision": str(
+                            (
+                                system_feed_result.get(
+                                    "final_selection_decision",
+                                    system_feed_result.get("decision"),
+                                )
+                                or ""
+                            )
+                            if system_feed_result is not None
+                            else ""
+                        ),
+                        "selectionSelected": bool(
+                            system_feed_result.get(
+                                "final_selection_selected",
+                                system_feed_result.get("eligible_for_feed"),
+                            )
+                            if system_feed_result is not None
+                            else False
                         ),
                         "storyClusterId": story_cluster_result.get("storyClusterId"),
                         "storyVerificationState": story_cluster_result.get(
@@ -3520,6 +3614,24 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                         else 0.0
                     )
                     decision = decide_criterion(score_final) if pass_filters else "irrelevant"
+                    decision, candidate_signal_explain = apply_document_candidate_signal_uplift(
+                        title=str(article.get("title") or ""),
+                        lead=str(article.get("lead") or ""),
+                        body=str(article.get("body") or ""),
+                        score_final=score_final,
+                        positive_score=positive_score,
+                        lexical_score=lexical_score,
+                        canonical_document_id=(
+                            str(filter_context.get("canonicalDocumentId") or "").strip()
+                            or None
+                        ),
+                        story_cluster_id=(
+                            str(filter_context.get("storyClusterId") or "").strip() or None
+                        ),
+                        verification_state=filter_context.get("verificationState"),
+                        base_decision=decision,
+                    )
+                    selection_profile_runtime = coerce_selection_profile_runtime(criterion)
                     explain_json = {
                         "filterReasons": filter_reasons,
                         "S_pos": positive_score,
@@ -3528,18 +3640,70 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                         "S_meta": meta_score,
                         "S_final": score_final,
                         "metaComponents": meta_components,
+                        "selectionProfile": build_selection_profile_runtime_explain(
+                            selection_profile_runtime
+                        ),
                     }
+                    if candidate_signal_explain is not None:
+                        explain_json["candidateSignals"] = candidate_signal_explain
                     runtime_resolution = None
+                    llm_review_allowed = selection_profile_allows_llm_review(
+                        selection_profile_runtime
+                    )
+                    candidate_recovery_protected = bool(
+                        candidate_signal_explain
+                        and candidate_signal_explain.get("upliftedToGrayZone")
+                    )
                     if decision == "gray_zone":
-                        runtime_resolution = resolve_criterion_gray_zone_runtime_resolution(
-                            llm_quota_snapshot
-                        )
-                        if runtime_resolution is not None:
-                            decision = str(runtime_resolution["finalDecision"])
-                            explain_json["llmBudgetGate"] = build_llm_budget_gate_explain(
-                                quota_snapshot=llm_quota_snapshot,
-                                resolution=runtime_resolution,
+                        if llm_review_allowed:
+                            runtime_resolution = resolve_criterion_gray_zone_runtime_resolution(
+                                llm_quota_snapshot,
+                                preserve_candidate_gray_zone=candidate_recovery_protected,
                             )
+                            if runtime_resolution is not None:
+                                decision = str(runtime_resolution["finalDecision"])
+                                explain_json["llmBudgetGate"] = build_llm_budget_gate_explain(
+                                    quota_snapshot=llm_quota_snapshot,
+                                    resolution=runtime_resolution,
+                                )
+                                if decision == "gray_zone":
+                                    explain_json["grayZonePolicy"] = {
+                                        "reason": "candidate_recovery_runtime_policy",
+                                        "finalDecision": decision,
+                                        "llmReviewQueued": False,
+                                        "blockedBy": str(
+                                            runtime_resolution.get("reason") or ""
+                                        ),
+                                    }
+                        else:
+                            decision = resolve_profile_gray_zone_decision(
+                                selection_profile_runtime
+                            )
+                            explain_json["grayZonePolicy"] = {
+                                "reason": "selection_profile_runtime_policy",
+                                "finalDecision": decision,
+                                "llmReviewQueued": False,
+                            }
+                    llm_review_queued = (
+                        decision == "gray_zone"
+                        and runtime_resolution is None
+                        and llm_review_allowed
+                        and not historical_backfill
+                    )
+                    if decision == "gray_zone":
+                        runtime_review_reason = "queued" if llm_review_queued else None
+                        if runtime_review_reason is None and historical_backfill and llm_review_allowed:
+                            runtime_review_reason = "historical_backfill_skip"
+                        if runtime_review_reason is None:
+                            runtime_review_reason = str(
+                                coerce_json_object(explain_json.get("grayZonePolicy")).get("reason")
+                                or ""
+                            ).strip() or "not_queued"
+                        explain_json["runtimeReviewState"] = {
+                            "reviewQueued": llm_review_queued,
+                            "reason": runtime_review_reason,
+                            "candidateRecoveryProtected": candidate_recovery_protected,
+                        }
                     await cursor.execute(
                         """
                         insert into criterion_match_results (
@@ -3606,11 +3770,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                             context=filter_context,
                         ),
                     )
-                    if (
-                        decision == "gray_zone"
-                        and runtime_resolution is None
-                        and not historical_backfill
-                    ):
+                    if llm_review_queued:
                         await insert_outbox_event(
                             cursor,
                             LLM_REVIEW_REQUESTED_EVENT,
@@ -3678,13 +3838,23 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
                 if selection_gate is None or not bool(selection_gate.get("is_selected")):
                     await record_processed_event(cursor, INTEREST_MATCH_CONSUMER, event_id)
                     return {
-                        "status": "skipped-system-feed",
+                        "status": "skipped-selection-gate",
                         "docId": doc_id,
                         "interestCount": 0,
                         "selectionSource": str(
                             selection_gate.get("selection_source")
                             if selection_gate is not None
                             else "pending"
+                        ),
+                        "selectionDecision": str(
+                            selection_gate.get("decision")
+                            if selection_gate is not None
+                            else ""
+                        ),
+                        "selectionSelected": bool(
+                            selection_gate.get("is_selected")
+                            if selection_gate is not None
+                            else False
                         ),
                     }
                 article_features = await fetch_article_features_row(cursor, article["doc_id"])
@@ -4915,6 +5085,35 @@ async def replay_historical_articles(
     )
 
 
+async def read_active_selection_profile_snapshot() -> dict[str, Any]:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select
+                  count(*)::int as total_profiles,
+                  count(*) filter (where status = 'active')::int as active_profiles,
+                  count(*) filter (
+                    where profile_family = 'compatibility_interest_template'
+                  )::int as compatibility_profiles,
+                  count(distinct source_interest_template_id)::int
+                    as templates_with_profiles,
+                  coalesce(max(version), 0)::int as max_version
+                from selection_profiles
+                """
+            )
+            row = await cursor.fetchone()
+
+    snapshot = row or {}
+    return {
+        "totalProfiles": int(snapshot.get("total_profiles") or 0),
+        "activeProfiles": int(snapshot.get("active_profiles") or 0),
+        "compatibilityProfiles": int(snapshot.get("compatibility_profiles") or 0),
+        "templatesWithProfiles": int(snapshot.get("templates_with_profiles") or 0),
+        "maxVersion": int(snapshot.get("max_version") or 0),
+    }
+
+
 def build_interest_auto_repair_job_options(
     *,
     user_id: str,
@@ -5048,6 +5247,7 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
             system_feed_only = coerce_bool(job_options.get("systemFeedOnly"))
             include_enrichment = coerce_bool(job_options.get("includeEnrichment"))
             force_enrichment = coerce_bool(job_options.get("forceEnrichment"))
+            selection_profile_snapshot = await read_active_selection_profile_snapshot()
             result["backfill"] = await replay_historical_articles(
                 reindex_job_id=reindex_job_id,
                 batch_size=batch_size,
@@ -5058,6 +5258,10 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
                 include_enrichment=include_enrichment,
                 force_enrichment=force_enrichment,
             )
+            if isinstance(result["backfill"], dict):
+                result["backfill"]["selectionProfileSnapshot"] = (
+                    selection_profile_snapshot
+                )
     except Exception as error:
         async with await open_connection() as connection:
             async with connection.transaction():

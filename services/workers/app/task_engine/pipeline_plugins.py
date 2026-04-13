@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import http.client
 import json
 import os
 import re
+import socket
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Awaitable, Callable, Final, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .exceptions import TaskExecutionError
 from .plugins import TASK_REGISTRY, TaskPlugin, TaskPluginRegistry
 
 LegacyHandler = Callable[[Any, str], Awaitable[dict[str, Any]]]
@@ -18,6 +22,17 @@ _CAMEL_CASE_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 _MISSING: Final = object()
 _BOOLEAN_TRUE_VALUES = {"1", "true", "yes", "on"}
 _BOOLEAN_FALSE_VALUES = {"0", "false", "no", "off"}
+FETCHERS_INTERNAL_RETRY_ATTEMPTS: Final = 3
+FETCHERS_INTERNAL_RETRY_DELAY_SECONDS: Final = 1.0
+FETCHERS_INTERNAL_RETRYABLE_HTTP_STATUS: Final = {429, 502, 503, 504}
+_FETCHERS_INTERNAL_RETRYABLE_REASON_SUBSTRINGS: Final = (
+    "connection refused",
+    "connection reset by peer",
+    "name or service not known",
+    "temporary failure in name resolution",
+    "remote end closed connection without response",
+    "timed out",
+)
 
 
 @dataclass(frozen=True)
@@ -60,6 +75,100 @@ def fetchers_internal_timeout_seconds() -> float:
         return max(1.0, float(raw_value))
     except ValueError:
         return 30.0
+
+
+def _is_retryable_fetchers_transport_reason(reason: Any) -> bool:
+    if isinstance(
+        reason,
+        (
+            TimeoutError,
+            ConnectionError,
+            socket.timeout,
+            socket.gaierror,
+            http.client.RemoteDisconnected,
+        ),
+    ):
+        return True
+    if isinstance(reason, str):
+        normalized = reason.strip().lower()
+        return any(
+            fragment in normalized
+            for fragment in _FETCHERS_INTERNAL_RETRYABLE_REASON_SUBSTRINGS
+        )
+    return False
+
+
+def _sleep_fetchers_internal_retry() -> None:
+    time.sleep(FETCHERS_INTERNAL_RETRY_DELAY_SECONDS)
+
+
+def _request_fetchers_json(
+    *,
+    request: Request,
+    subject_label: str,
+    subject_id: str,
+) -> dict[str, Any]:
+    payload = ""
+    for attempt in range(1, FETCHERS_INTERNAL_RETRY_ATTEMPTS + 1):
+        try:
+            with urlopen(request, timeout=fetchers_internal_timeout_seconds()) as response:
+                payload = response.read().decode("utf-8")
+            break
+        except HTTPError as error:
+            error_body = error.read().decode("utf-8", errors="replace")
+            detail = error_body or str(error.reason)
+            if (
+                error.code in FETCHERS_INTERNAL_RETRYABLE_HTTP_STATUS
+                and attempt < FETCHERS_INTERNAL_RETRY_ATTEMPTS
+            ):
+                _sleep_fetchers_internal_retry()
+                continue
+            if error.code in FETCHERS_INTERNAL_RETRYABLE_HTTP_STATUS:
+                raise TaskExecutionError(
+                    f"Fetchers enrichment request for {subject_label} {subject_id} failed with HTTP {error.code}: {detail}",
+                    retryable=True,
+                ) from error
+            raise RuntimeError(
+                f"Fetchers enrichment request for {subject_label} {subject_id} failed with HTTP {error.code}: {detail}"
+            ) from error
+        except URLError as error:
+            detail = str(error.reason)
+            if (
+                _is_retryable_fetchers_transport_reason(error.reason)
+                and attempt < FETCHERS_INTERNAL_RETRY_ATTEMPTS
+            ):
+                _sleep_fetchers_internal_retry()
+                continue
+            if _is_retryable_fetchers_transport_reason(error.reason):
+                raise TaskExecutionError(
+                    f"Fetchers enrichment request for {subject_label} {subject_id} failed: {detail}",
+                    retryable=True,
+                ) from error
+            raise RuntimeError(
+                f"Fetchers enrichment request for {subject_label} {subject_id} failed: {detail}"
+            ) from error
+        except http.client.RemoteDisconnected as error:
+            if attempt < FETCHERS_INTERNAL_RETRY_ATTEMPTS:
+                _sleep_fetchers_internal_retry()
+                continue
+            raise TaskExecutionError(
+                f"Fetchers enrichment request for {subject_label} {subject_id} failed: {error}",
+                retryable=True,
+            ) from error
+
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"Fetchers enrichment request for {subject_label} {subject_id} returned invalid JSON."
+        ) from error
+
+    if not isinstance(parsed, dict):
+        raise TypeError(
+            f"Fetchers enrichment request for {subject_label} {subject_id} must return a JSON object."
+        )
+
+    return parsed
 
 
 class LegacyHandlerTaskPlugin(TaskPlugin):
@@ -433,34 +542,11 @@ class ArticleExtractPlugin(LegacyHandlerTaskPlugin):
             },
             method="POST",
         )
-
-        try:
-            with urlopen(request, timeout=fetchers_internal_timeout_seconds()) as response:
-                payload = response.read().decode("utf-8")
-        except HTTPError as error:
-            error_body = error.read().decode("utf-8", errors="replace")
-            detail = error_body or str(error.reason)
-            raise RuntimeError(
-                f"Fetchers enrichment request for article {doc_id} failed with HTTP {error.code}: {detail}"
-            ) from error
-        except URLError as error:
-            raise RuntimeError(
-                f"Fetchers enrichment request for article {doc_id} failed: {error.reason}"
-            ) from error
-
-        try:
-            parsed = json.loads(payload)
-        except json.JSONDecodeError as error:
-            raise RuntimeError(
-                f"Fetchers enrichment request for article {doc_id} returned invalid JSON."
-            ) from error
-
-        if not isinstance(parsed, dict):
-            raise TypeError(
-                f"Fetchers enrichment request for article {doc_id} must return a JSON object."
-            )
-
-        return parsed
+        return _request_fetchers_json(
+            request=request,
+            subject_label="article",
+            subject_id=doc_id,
+        )
 
 
 class ResourceExtractPlugin(LegacyHandlerTaskPlugin):
@@ -569,34 +655,11 @@ class ResourceExtractPlugin(LegacyHandlerTaskPlugin):
             },
             method="POST",
         )
-
-        try:
-            with urlopen(request, timeout=fetchers_internal_timeout_seconds()) as response:
-                payload = response.read().decode("utf-8")
-        except HTTPError as error:
-            error_body = error.read().decode("utf-8", errors="replace")
-            detail = error_body or str(error.reason)
-            raise RuntimeError(
-                f"Fetchers resource enrichment request for resource {resource_id} failed with HTTP {error.code}: {detail}"
-            ) from error
-        except URLError as error:
-            raise RuntimeError(
-                f"Fetchers resource enrichment request for resource {resource_id} failed: {error.reason}"
-            ) from error
-
-        try:
-            parsed = json.loads(payload)
-        except json.JSONDecodeError as error:
-            raise RuntimeError(
-                f"Fetchers resource enrichment request for resource {resource_id} returned invalid JSON."
-            ) from error
-
-        if not isinstance(parsed, dict):
-            raise TypeError(
-                f"Fetchers resource enrichment request for resource {resource_id} must return a JSON object."
-            )
-
-        return parsed
+        return _request_fetchers_json(
+            request=request,
+            subject_label="resource",
+            subject_id=resource_id,
+        )
 
 
 class DedupArticlePlugin(LegacyHandlerTaskPlugin):

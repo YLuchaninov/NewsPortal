@@ -14,6 +14,297 @@
 
 ## Completed items
 
+### 2026-04-13 — C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY — Restored article-pipeline resilience and re-opened the gray-zone LLM lane
+
+- Тип записи: capability archive
+- Финальный статус: archived at implementation layer
+- Зачем понадобилось: the user reported that the pipeline processed thousands of articles while finding zero selected rows, showed no visible gray-zone review, and must be repaired without erasing the current DB so the local baseline stayed analysable.
+- Что изменилось:
+  - shipped generic transient deadlock resilience inside [`services/workers/app/task_engine/executor.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/executor.py), so sequence tasks now retry deadlock-like PostgreSQL failures inside the task boundary instead of immediately turning them into permanent run failure;
+  - re-aligned compatibility system-interest profile semantics across runtime, admin sync, and historical local rows: [`services/workers/app/selection_profiles.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/selection_profiles.py), [`apps/admin/src/lib/server/admin-templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/admin-templates.ts), [`database/migrations/0033_compatibility_profile_llm_review_defaults.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0033_compatibility_profile_llm_review_defaults.sql), [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts), and [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro) now make compatibility profiles default to `llmReviewMode = always`, repair the 5 stale local rows, and expose truthful pending-review wording instead of cheap-hold ambiguity;
+  - reduced the dominant compose contention hotspot by narrowing [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py) article locking to `FOR UPDATE OF a` and by adding a per-channel PostgreSQL advisory lease in [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts), so the same `source_channel` is no longer polled concurrently across periodic/manual fetch paths;
+  - hardened fetchers-owned enrichment adapters in [`services/workers/app/task_engine/pipeline_plugins.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/pipeline_plugins.py) so short-lived internal transport failures and retryable gateway statuses are retried inside the adapter before the sequence task is failed, with regression proof in [`tests/unit/python/test_task_engine_pipeline_plugins.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_task_engine_pipeline_plugins.py).
+- Что проверено:
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_task_engine tests.unit.python.test_selection_profiles`
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_api_system_interests tests.unit.python.test_selection_profiles tests.unit.python.test_task_engine`
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_system_interests tests.unit.python.test_selection_profiles tests.unit.python.test_task_engine`
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_task_engine_pipeline_plugins`
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_task_engine tests.unit.python.test_task_engine_pipeline_plugins`
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `node --import tsx --test tests/unit/ts/admin-operator-surfaces.test.ts tests/unit/ts/admin-template-sync.test.ts`
+  - `node --import tsx --test tests/unit/ts/fetcher-channel-lease.test.ts tests/unit/ts/fetcher-duplicate-preflight.test.ts tests/unit/ts/admin-operator-surfaces.test.ts tests/unit/ts/admin-template-sync.test.ts`
+  - `pnpm db:migrate`
+  - compose restarts for `worker`, `api`, `admin`, and `fetchers` without volume reset
+  - live/runtime evidence via `curl -sS 'http://127.0.0.1:8000/system-interests?pageSize=5'`, `docker logs docker-worker-1 --since 45m`, and read-only `docker exec docker-postgres-1 psql ...` queries for `sequence_runs` and `llm_review_log`
+  - `git diff --check --` on the touched files for each stage
+- Что capability доказала:
+  - the local article pipeline is no longer stuck behind the earlier runaway backlog/deadlock symptom: `article.ingest.requested` moved from thousands of pending runs to a drained state with `36527 completed` and only the historical `132 failed` rows left in place;
+  - the gray-zone LLM lane is live again for compatibility system interests: `llm_review_log` moved from `0` to `3` rows across `2` reviewed docs after the repaired profile/default path began flowing;
+  - the repair stayed architecture-safe and non-destructive: PostgreSQL/outbox/`q.sequence` ownership remained intact, no historical DB data was deleted, and no direct replay/cleanup shortcut was used.
+- Риски или gaps:
+  - this capability did not replay the existing failed historical runs; they remain as evidence in the current DB;
+  - runtime resilience is recovered, but candidate quality is still poor because the current source mix remains heavily off-target and still drives near-total `rejected` / `no_match`.
+- Follow-up:
+  - continue in a separate capability focused on source-quality pressure and buyer-intent recovery rather than reopening runtime reliability or gray-zone policy semantics.
+
+### 2026-04-13 — SWEEP-FULL-UI-BUTTON-AUDIT-2026-04-12 — Closed the full web/admin button audit with one honest Web Push proof residual
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the earlier targeted CRUD/operator proof had turned specific surfaces green, the user explicitly escalated to a truthful product-wide pass and asked for every meaningful user/admin button to be checked by real clicks rather than by API assumptions.
+- Что изменилось:
+  - turned [`infra/scripts/test-ui-button-audit.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-ui-button-audit.mjs) into the durable proof owner for the full browser sweep: the harness now boots the local compose baseline, seeds truthful web/admin fixtures, resolves real rows instead of brittle placeholder assumptions, and inventories current button actions across surfaced `apps/web` and `apps/admin` routes with explicit `checked`, `notApplicable`, and `skipped` outcomes;
+  - hardened the sweep around real UI behavior instead of lucky locators: fixed stale row resolution after interest rename/clone, switched hidden-input settings interactions to real label clicks, re-opened redirecting pages such as `/notifications` between feedback actions, anchored create/save forms in channels, automation, and discovery to their actual form owners, re-resolved renamed cards/details rows before follow-up actions, and normalized destructive-confirm handling so row-level delete/archive flows use the trigger’s actual custom-dialog label instead of an assumed generic confirm string;
+  - made the proof fixtures truthful enough for later routes: the harness now seeds deterministic `notification_log` rows for immediate-channel feedback, uses a real current-run web user id for admin-managed user interests, promotes seeded discovery classes into the visible sort window, and targets the actual discovery feedback tab/form rather than the earlier wrong route;
+  - verified that the remaining `/settings -> Connect Web Push` gap is a proof-environment limitation, not a silently accepted product regression: focused browser probes showed the current headless/incognito Chromium run does not complete Push API subscription, so the final sweep records that action as an honest skip with the surfaced `PushManager.subscribe(...): no active Service Worker` failure instead of pretending it passed.
+- Что проверено:
+  - repeated runs of `node infra/scripts/test-ui-button-audit.mjs` during harness repair
+  - final green proof on 2026-04-13: `node infra/scripts/test-ui-button-audit.mjs` (`runId=0443abd5`, `status=ui-button-audit-ok`)
+  - `git diff --check -- infra/scripts/test-ui-button-audit.mjs`
+- Что item доказал:
+  - the repo now has a truthful browser-level inventory for current product button actions on both web and admin, and the final sweep proves real clicks for collection/mobile-shell/content/saved/interests/settings/notifications/matches plus system-interest, LLM-template, channel, user-interest, article, resources, reindex, automation, and discovery operator buttons;
+  - the formerly open discovery mission/class lifecycle gap is no longer a hole in the broad sweep: create/save/archive/activate/delete, compile/run, candidate approve/reject, and feedback submit all remain live-proven inside the same full-pass harness;
+  - the only residual from the product-wide pass is bounded and explicit: `/settings -> Connect Web Push` is still unproven in the current local headless/incognito browser mode because Push API subscription does not succeed there.
+- Риски или gaps:
+  - this archive does not claim a universal cross-browser/manual proof for `web_push`; it only claims that the current automated browser mode cannot finish the subscription flow and that the sweep honestly records that fact;
+  - `/settings` still emitted non-blocking React `#418` console noise during the successful sweep even though the proven settings buttons completed their flows.
+- Follow-up:
+  - open a fresh bounded item only if the user wants product-side `web_push` debugging/proof in a browser mode that supports real service-worker-backed push subscription, or wants the remaining settings React noise investigated separately.
+
+### 2026-04-12 — PATCH-DISCOVERY-MISSION-CLASS-LIFECYCLE-2026-04-12 — Closed the remaining discovery mission/class lifecycle product gap
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly asked to close the last discovery CRUD product gap, and the current admin/runtime truth still lacked operator-visible archive/delete lifecycle support for discovery missions and hypothesis classes even though the rest of discovery admin was already live.
+- Что изменилось:
+  - added real discovery mission lifecycle support across [`database/migrations/0032_discovery_mission_archive_status.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0032_discovery_mission_archive_status.sql), [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), and [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts): missions now accept `status='archived'`, compile/run reject archived missions until they are reactivated, admin BFF now exposes archive/reactivate/delete intents, and hard delete is guarded so it only succeeds for history-free missions instead of silently dropping already-used discovery state;
+  - added class archive/reactivate/delete UX and guarded delete semantics across [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts), and [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro): archive/activate now use the same custom `AlertDialog` confirm pattern as the other admin surfaces, while hard delete refuses classes that already have generated hypotheses and pushes operators onto the archive path instead;
+  - widened proof owners in [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py), [`tests/unit/ts/discovery-admin.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-admin.test.ts), and [`infra/scripts/test-discovery-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-admin-flow.mjs), then synced durable contract/proof truth in [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md) and [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md);
+  - during final compose proof the local PostgreSQL volume turned out to be discovery-drifted even though `schema_migrations` claimed `0030_discovery_schema_drift_repair.sql` had already run; the item therefore also replayed that idempotent repair migration on the local compose DB so `/discovery` could render and the updated discovery acceptance/browser proof could run on a truthful baseline again.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `pnpm test:migrations:smoke`
+  - `pnpm db:migrate`
+  - `pnpm --filter @newsportal/admin build`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build api admin migrate nginx`
+  - `git diff --check -- database/migrations/0032_discovery_mission_archive_status.sql apps/admin/src/pages/discovery.astro apps/admin/src/pages/bff/admin/discovery.ts services/api/app/main.py tests/unit/python/test_api_discovery_management.py tests/unit/ts/discovery-admin.test.ts infra/scripts/test-discovery-admin-flow.mjs docs/work.md`
+  - `docker exec -i docker-postgres-1 psql -U newsportal -d newsportal < database/migrations/0030_discovery_schema_drift_repair.sql`
+  - `pnpm test:discovery:admin:compose`
+  - `node /tmp/browser_button_check.mjs`
+- Что item доказал:
+  - discovery missions and classes now have real operator lifecycle support in admin: mission/class rows can be archived, reactivated, and deleted through the surfaced buttons and same-origin BFF writes;
+  - mission archive is now a truthful persisted runtime state rather than a UI fiction, and archived missions cannot compile or run until reactivated;
+  - mission/class hard delete no longer risks silent historical loss: disposable entities delete cleanly, while entities with discovery history are forced onto the archive path;
+  - the updated discovery acceptance lane and the targeted browser click smoke both stay green on the repaired local compose baseline, so the new buttons work as actual custom confirm interactions rather than as API-only paths.
+- Риски или gaps:
+  - the local compose baseline had schema drift outside this code patch, so future discovery/runtime work should remember that a volume can still claim `0030` in `schema_migrations` while missing actual discovery tables until repaired;
+  - the worktree remains heavily mixed, so this archive does not imply a clean commit-ready tree.
+- Follow-up:
+  - no immediate follow-up is required for discovery mission/class lifecycle; open a fresh bounded item only if the user later wants broader discovery lifecycle semantics beyond the new guarded archive/reactivate/delete contract.
+
+### 2026-04-12 — PATCH-ADMIN-WEB-RESOURCES-AND-REACT-NOISE-2026-04-12 — Closed the last local website-admin and reindex runtime residuals
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the confirm-dialog repair, two residuals were still left on the local compose baseline: `pnpm test:website:admin:compose` failed immediately because `/maintenance/web-resources?page=1&pageSize=1` returned `500 Internal Server Error`, and a targeted admin browser probe still reproduced a React `#418` hydration error on plain `/reindex`.
+- Что изменилось:
+  - repaired [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) so the web-resources list/detail queries read the real compatibility column `system_feed_results.eligible_for_feed` instead of the nonexistent `sfr.is_eligible`; that removed the local API/runtime regression blocking `/maintenance/web-resources` and the admin `/resources*` operator lane;
+  - made [`apps/admin/src/components/LiveReindexJobsSection.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LiveReindexJobsSection.tsx) hydration-safe by stopping client-first timestamp localization during the first render; the reindex live snapshot contract now carries `createdAtLabel` through [`apps/admin/src/lib/live-updates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/live-updates.ts), [`apps/admin/src/lib/server/live-updates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/live-updates.ts), and [`apps/admin/src/pages/reindex.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/reindex.astro), so the browser no longer re-renders the initial timestamp text during hydration;
+  - widened targeted regression coverage in [`tests/unit/python/test_api_web_resources.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_web_resources.py) and [`tests/unit/ts/admin-reindex-live-updates.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-reindex-live-updates.test.ts), then rebuilt `api` and `admin` and re-proved both the website-admin acceptance lane and the broader browser smoke lane.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `python -m unittest tests.unit.python.test_api_web_resources`
+  - `node --import tsx --test tests/unit/ts/admin-reindex-live-updates.test.ts`
+  - `pnpm --filter @newsportal/admin build`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml build api admin`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d api admin nginx`
+  - `curl -sS -i 'http://127.0.0.1:8000/maintenance/web-resources?page=1&pageSize=1'`
+  - `node /tmp/admin_react_probe.mjs`
+  - `pnpm test:website:admin:compose`
+  - `node /tmp/browser_button_check.mjs`
+- Что item доказал:
+  - `/maintenance/web-resources` now responds normally on the local compose baseline, and the dedicated `website-admin` acceptance lane is green again, including `/resources`, `/resources/{resource_id}`, and provider-specific website/API/Email IMAP admin flows;
+  - the plain `/reindex` admin page no longer emits the reproduced React `#418` hydration error during browser load;
+  - the broader browser smoke still stays green after these fixes, so the custom confirm dialogs and click-driven actions repaired earlier were not regressed.
+- Риски или gaps:
+  - discovery mission/class delete/archive remains unsupported product/runtime scope rather than a regression;
+  - the worktree remains heavily mixed, so future tasks still need explicit overlap framing.
+- Follow-up:
+  - no immediate follow-up is required for the local website-admin or reindex residuals; open a new bounded item only if a fresh runtime regression appears on those surfaces.
+
+### 2026-04-12 — PATCH-CUSTOM-CONFIRM-DIALOGS-2026-04-12 — Restored custom admin confirm dialogs without regressing live click behavior
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the earlier browser-button repair had temporarily replaced the broken custom confirm flow with native `window.confirm(...)`, but the user explicitly wanted product-styled custom dialogs rather than browser-default confirms.
+- Что изменилось:
+  - rewired [`apps/admin/src/components/AdminConfirmAction.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminConfirmAction.tsx) back to shared `@newsportal/ui` `AlertDialog` primitives while keeping the safe standalone POST path: confirm actions now open a custom modal, then submit through a temporary hidden form outside any existing page forms, which preserves the working destructive/operator behavior without reintroducing nested-form bugs;
+  - rewired [`apps/admin/src/components/AdminConfirmSubmitButton.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminConfirmSubmitButton.tsx) back to the same custom `AlertDialog` contract while keeping the reliable form submission path: confirm clicks now call `form.requestSubmit()` (with `reportValidity()` / `submit()` fallback behavior) against the surrounding form instead of relying on native browser confirms;
+  - rebuilt the local `admin` compose image, updated the temporary browser harness so it clicks custom modal confirm buttons truthfully, and re-proved both destructive confirms and submit-style confirms from real browser interactions.
+- Что проверено:
+  - `pnpm --filter @newsportal/admin build`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml build admin`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d admin nginx`
+  - `node /tmp/browser_button_check.mjs`
+  - `git diff --check -- apps/admin/src/components/AdminConfirmAction.tsx apps/admin/src/components/AdminConfirmSubmitButton.tsx docs/work.md docs/history.md`
+- Что item доказал:
+  - admin system-interest and LLM-template archive/reactivate/delete flows once again work through custom in-product confirm dialogs rather than native browser confirms;
+  - admin `AdminConfirmSubmitButton` also remains live-proven after the rewrite: `Apply schedule` on `/channels` updates RSS scheduling state, and `Queue maintenance job` on `/reindex` creates a real `reindex_jobs` row through the UI;
+  - the broader browser regression harness still remains green for the previously repaired surfaces: web `/interests`, admin-managed user interests, channel delete/archive, and discovery actions all continue to work after the custom-dialog restore.
+- Риски или gaps:
+  - the unrelated local `website-admin` residual remains open: `pnpm test:website:admin:compose` still fails because `/maintenance/web-resources?page=1&pageSize=1` returns `500 Internal Server Error`;
+  - the long browser smoke still emitted non-blocking minified React `#418` console noise during one admin flow, but it did not block the patched confirm actions and was intentionally left outside this bounded patch.
+- Follow-up:
+  - if the next request touches website/resources, open a new bounded patch for the `/maintenance/web-resources` `500`;
+  - if the React `#418` console noise becomes user-visible or reproducible outside smoke logging, open a separate bounded patch rather than reopening the confirm-dialog item.
+
+### 2026-04-12 — SPIKE-BROWSER-BUTTON-ACTIONS-2026-04-12 — Repaired browser-visible button actions across admin and web surfaces
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the earlier CRUD spike proved backend/BFF support, but the user clarified that the real requirement was browser-visible click behavior. Several operator buttons looked present yet did not reliably produce the expected action when clicked in the UI.
+- Что изменилось:
+  - repaired admin confirm controls in [`apps/admin/src/components/AdminConfirmAction.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminConfirmAction.tsx) and [`apps/admin/src/components/AdminConfirmSubmitButton.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminConfirmSubmitButton.tsx): the previous Radix-based confirm path was not reliably producing real browser submits, so the local worktree now uses native `window.confirm(...)` trigger flows with guaranteed form submission semantics and without illegal nested forms on pages such as [`apps/admin/src/pages/user-interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/user-interests.astro);
+  - repaired the web interests mutation path in [`apps/web/src/components/InterestManager.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/components/InterestManager.tsx), [`apps/web/src/components/LiveInterestsSection.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/components/LiveInterestsSection.tsx), and [`apps/web/src/pages/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/pages/interests.astro): update/clone/delete had been passing a non-serializable function prop from `.astro` into a client-loaded React tree, which hydrated into `r is not a function`; the client now receives a string base path and computes interest action URLs locally;
+  - rebuilt the local `web` and `admin` compose images and re-ran the full browser click smoke against the compose baseline, including container-reachable RSS fixture URLs (`http://web:4321/...`) so the stored-history channel archive path could be proven truthfully from a real click.
+- Что проверено:
+  - repo-local build proof:
+    - `pnpm --filter @newsportal/web build`
+    - `pnpm --filter @newsportal/admin build`
+    - `git diff --check -- apps/web/src/components/InterestManager.tsx apps/web/src/components/LiveInterestsSection.tsx apps/web/src/pages/interests.astro apps/admin/src/components/AdminConfirmAction.tsx apps/admin/src/components/AdminConfirmSubmitButton.tsx docs/work.md`
+  - compose refresh:
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml build web admin`
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d web admin nginx`
+  - full browser click proof:
+    - `node /tmp/browser_button_check.mjs`
+- Что item доказал:
+  - system-interest buttons now work from real clicks: create, save, archive, reactivate, and delete all produced the expected browser-visible POSTs and server-side state changes;
+  - LLM-template buttons now work from real clicks: create, save, archive, reactivate, and delete all completed through the UI;
+  - web `/interests` buttons now work from real clicks: create, save/update, clone, and delete all emitted the expected browser requests and persisted the right state;
+  - admin-managed user-interest buttons now work from real clicks: create, save/update, clone, and delete all completed without the earlier hydration/runtime suspicion;
+  - channel buttons now work from real clicks for the covered lifecycle branches: provider-specific create/update, delete of an empty RSS channel, and archive of an RSS channel with stored history;
+  - discovery buttons now work from real clicks for the currently supported lifecycle: mission create/update/compile/run, class create/update, candidate approve/reject, feedback submission, and mission re-evaluation.
+- Риски или gaps:
+  - this item intentionally did not add new product support for discovery mission/class delete/archive; those intents are still unsupported by the current BFF and remain a separate product/runtime gap;
+  - the unrelated local website/resources residual remains open: `pnpm test:website:admin:compose` still fails because `/maintenance/web-resources?page=1&pageSize=1` returns `500 Internal Server Error`.
+- Follow-up:
+  - if the next request touches website/resources, open a new bounded patch for the `/maintenance/web-resources` `500`;
+  - otherwise the browser-button spike is complete and should not be reopened without a new request.
+
+### 2026-04-12 — SPIKE-ADMIN-CRUD-COVERAGE-2026-04-12 — Verified current admin and user-interest CRUD coverage on the local compose baseline
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly asked to check whether the admin panel currently allows editing, archiving, and deleting system interests, LLM templates, channels, discovery goals, and user interests, so the repo needed a truthful separation between live-proven CRUD behavior, code-present-but-unproven paths, and genuinely unsupported lifecycle actions.
+- Что изменилось:
+  - opened a bounded spike in [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md), reloaded the required runtime/deep-contract context, and audited the current BFF/API write paths for [`apps/admin/src/pages/bff/admin/templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/templates.ts), [`apps/admin/src/pages/bff/admin/channels.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/channels.ts), [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts), and [`apps/admin/src/pages/bff/admin/user-interests.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/user-interests.ts) plus [`apps/admin/src/pages/bff/admin/user-interests/[interestId].ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/user-interests/%5BinterestId%5D.ts);
+  - ran the existing repo proof owners and then added targeted live BFF/API CRUD smoke checks to cover the missing lifecycle branches: system interests and LLM templates were proven for update/archive/reactivate/delete, user-managed and admin-managed interests were proven for create/update/clone/delete, `website` / `api` / `email_imap` channels were proven for create/update, and channel delete/archive branching was proven live through the shared `source_channels` delete path;
+  - recorded the one current local runtime residual instead of misclassifying it as missing product support: [`infra/scripts/test-website-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-website-admin-flow.mjs) currently fails before its provider-specific operator checks because `GET /maintenance/web-resources?page=1&pageSize=1` returns `500 Internal Server Error`;
+  - recorded the real discovery lifecycle boundary instead of overstating CRUD coverage: discovery admin remains live for create/update/run/review/feedback/re-evaluate, but [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts) still exposes no delete/archive intents for missions or classes.
+- Что проверено:
+  - required-read-order reload of `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, and `docs/contracts/test-access-and-fixtures.md`
+  - worktree coherence check via `git status --short`
+  - `pnpm unit_tests`
+  - `pnpm test:mvp:internal`
+  - `pnpm test:discovery:admin:compose`
+  - `pnpm dev:mvp:internal:no-build`
+  - targeted `node --input-type=module` live CRUD smoke for system interests, LLM templates, user-managed interests, admin-managed interests, and channel delete/archive semantics
+  - targeted `node --input-type=module` live channel create/update smoke for `website`, `api`, and `email_imap`
+  - `pnpm test:website:admin:compose` (failed twice with `GET /maintenance/web-resources?page=1&pageSize=1 -> 500`)
+  - `curl -sS 'http://127.0.0.1:8000/maintenance/web-resources?page=1&pageSize=1'`
+- Что item доказал:
+  - current local admin/runtime behavior does allow live edit/archive/delete for system interests and LLM templates;
+  - current local behavior does allow live create/update/clone/delete for user-managed interests and admin-managed interests;
+  - current local behavior does allow live create/update for `website`, `api`, and `email_imap` channels, and the shared admin delete path truthfully deletes empty channels and archives channels that already have stored content;
+  - discovery admin is not “full CRUD”: it is live-proven for create/update/run/review/feedback/re-evaluate, but delete/archive lifecycle actions for missions/classes are currently unsupported by the BFF rather than merely missing acceptance coverage.
+- Риски или gaps:
+  - the website/resources operator lane is currently red on the local baseline because `/maintenance/web-resources` returns `500`, so `pnpm test:website:admin:compose` cannot currently prove its full website/resources/read-model flow;
+  - this spike verified current local behavior in a heavily mixed worktree, so local regressions should not be silently rewritten into durable shipped truth without a bounded fix item;
+  - targeted CRUD smoke created new local rows in fresh PostgreSQL volumes after `pnpm test:mvp:internal` tore the old volumes down and `pnpm dev:mvp:internal:no-build` re-booted the stack.
+- Follow-up:
+  - open a bounded patch if the next request is to fix the `/maintenance/web-resources` `500` and re-green `pnpm test:website:admin:compose`;
+  - open a separate product/runtime item if the admin surface should support delete/archive lifecycle actions for discovery missions or classes.
+
+### 2026-04-10 — SWEEP-DOCS-AND-ARCHITECTURE-SYNC — Audited current docs/JSON truth and added a visual architecture walkthrough
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after the universal selection-profile capability was archived, the user explicitly asked for a full doc/config check to make sure the repo-level truth really matches what was shipped, to validate the JSON assets living under `docs/`, and to leave behind a dedicated architecture walkthrough with diagrams instead of forcing future readers to reconstruct the system from `blueprint.md` alone.
+- Что изменилось:
+  - audited the main runtime/process truth layers and synced the few drifted phrases that still spoke in stage-local or partially stale wording: [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md), [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md), [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), [`docs/contracts/universal-selection-profiles.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/universal-selection-profiles.md), and [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml) now reflect the shipped stage-5 closeout rather than an earlier in-flight view;
+  - validated every `docs/data_scripts/*.json` file syntactically and then fixed one real contract drift in [`docs/data_scripts/outsource.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource.json): seven legacy rows used `providerType = "atom"` even though the shipped runtime treats Atom as an `rss` adapter concern rather than a separate provider type;
+  - added [`docs/data_scripts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/README.md) to explain what the JSON assets are, which fields are required vs optional overrides, why partially omitted `requestTimeoutMs` / `userAgent` / `preferContentEncoded` values are still valid, and why Atom belongs under `providerType = "rss"`;
+  - added [`docs/architecture-overview.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/architecture-overview.md), a dedicated current-state walkthrough with Mermaid diagrams for the top-level system, ingest/canonicalization, zero-shot selection, final-selection/read-model truth, maintenance replay/backfill, and the dual-path discovery model.
+- Что проверено:
+  - `find docs -type f \( -name '*.json' -o -name '*.md' -o -name '*.yaml' \) | sort`
+  - `python -m json.tool docs/data_scripts/it_news.json`
+  - `python -m json.tool docs/data_scripts/outsource.json`
+  - `python -m json.tool docs/data_scripts/outsource_balanced_templates.json`
+  - `python -m json.tool docs/data_scripts/outsource_cleaned_balanced_tenders_and_company_signals.json`
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md docs/engineering.md docs/verification.md .aidp/os.yaml docs/contracts/universal-selection-profiles.md docs/data_scripts/outsource.json docs/data_scripts/README.md docs/architecture-overview.md`
+- Что item доказал:
+  - current docs now describe the shipped selection-profile/discovery architecture more truthfully and no longer leave the stage-5 closeout half-described as an earlier active stage;
+  - the JSON assets under `docs/data_scripts` are syntactically valid, their role is now documented, optional sparse fields are explained as intentional overrides, and the only actual provider-type drift was corrected;
+  - the repo now has a dedicated visual architecture document that explains how ingest, selection, maintenance replay, and discovery fit together without requiring chat history or deep code archaeology.
+- Риски или gaps:
+  - `docs/architecture-overview.md` is intentionally a walkthrough, not the durable contract owner; future structural changes still need to update the canonical truth layers first and then keep the overview in sync;
+  - `docs/data_scripts/*` remain example/import assets rather than a full declarative runtime config system.
+- Follow-up:
+  - none required for this sweep; open a new bounded item only if the user wants a broader documentation IA pass or richer operator-facing import/export tooling.
+
+### 2026-04-10 — C-UNIVERSAL-CONFIGURABLE-SELECTION-PROFILES — Archived the universal configurable selection-profile capability
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the zero-shot pipeline had already become additive and final-selection-first, but its semantics still behaved like a narrow system-interest/template bundle with hidden compatibility assumptions, optional LLM review leaking into the default path, and operator surfaces that required code archaeology to understand why an item was selected, rejected, held, or still waiting on legacy review.
+- Что capability в итоге delivered:
+  - durable profile-driven truth now lives in [`docs/contracts/universal-selection-profiles.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/universal-selection-profiles.md), additive profile config persists through [`database/migrations/0031_universal_selection_profiles.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0031_universal_selection_profiles.sql), and admin template writes in [`apps/admin/src/lib/server/admin-templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/admin-templates.ts) plus [`apps/admin/src/pages/bff/admin/templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/templates.ts) now keep compatibility `selection_profiles` synchronized with existing system-interest authoring instead of leaving that config implicit;
+  - worker runtime in [`services/workers/app/selection_profiles.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/selection_profiles.py), [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py), and [`services/workers/app/final_selection.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/final_selection.py) now evaluates profile-backed unresolved policy cheaply, keeps `hold` as the default gray-zone outcome for profile-backed criteria unless optional review is explicitly allowed, separates cheap `hold` from true `llm_review_pending`, and preserves `final_selection_results` as the owner of downstream editorial truth while keeping `system_feed_results` as bounded compatibility projection only;
+  - operator/read-model closeout in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts), article/resource screens, reindex/live-update surfaces, and article/resource contracts now exposes server-owned `selection_*`, diagnostics, guidance, profile-policy summaries, and replay provenance; compatibility-only rows are explicitly marked as `compatibility_only` instead of looking like first-class selection modes, and historical backfill/repair now records plus surfaces the `selectionProfileSnapshot` it replayed against.
+- Что проверено для capability closeout:
+  - stage-level proof already landed across stages 0 through 5, including targeted Python/TS coverage, migration smoke, and earlier compose smoke recorded during the stage entries;
+  - final closeout proof on 2026-04-10:
+    - `pnpm unit_tests`
+    - `pnpm typecheck`
+    - `pnpm test:reindex-backfill:compose`
+    - `git diff --check -- services/api/app/main.py packages/contracts/src/article.ts apps/admin/src/lib/server/operator-surfaces.ts tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/ts/admin-operator-surfaces.test.ts docs/work.md`
+- Что capability closeout доказал:
+  - the current zero-shot pipeline is now truthfully profile-driven without requiring fixed actor/content taxonomies, preset bundles, or mandatory LLM review on the default path;
+  - additive compatibility migration is no longer hidden: replay/backfill records the profile snapshot it used, maintenance/operator reads show that provenance, and legacy-only compatibility states are visible as compatibility projections instead of pretending to be ordinary final-selection modes;
+  - low-cost runtime remains the default path while optional LLM review is bounded to the profile policies that explicitly allow it.
+- Риски или gaps:
+  - legacy compatibility projections still exist intentionally as bounded fallback/read models; this capability did not delete them outright;
+  - future work can build richer profile authoring UX, stricter compatibility retirement, or broader profile-family management without reopening this completed migration arc.
+- Follow-up:
+  - none required for this capability; open a new bounded item only if the user wants another profile-management layer, deletion of legacy compatibility projections, or a new domain capability on top of the shipped selection-profile engine.
+
+### 2026-04-10 — STAGE-4-EXPLAIN-AND-OPERATOR-TUNING-SURFACES — Closed the profile-driven explain and operator-surface stage for universal selection profiles
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: after stages 0 through 3 had already made `selection_profiles`, cheap `hold`, and profile-aware final-selection semantics real in the runtime, the next truthful gap was operator drift. The system still required too much internal knowledge to understand why an item was selected, rejected, held, or still waiting for optional LLM review.
+- Что изменилось:
+  - article/content explain payloads in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now expose precomputed `selectionReason`, `selectionSummary`, `selectionMode`, `selectionDiagnostics`, and server-owned `selectionGuidance` instead of forcing UI code to reverse-engineer `final_selection_results.explain_json`;
+  - admin article list/detail in [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro), [`apps/admin/src/pages/articles/[docId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles/%5BdocId%5D.astro), and shared helper logic in [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts) now distinguish `hold`, true `llm_review_pending`, compatibility-only states, and normal final decisions through human-readable badges, guidance, and generic diagnostics;
+  - adjacent resource surfaces in [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro) and [`apps/admin/src/pages/resources/[resourceId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources/%5BresourceId%5D.astro), plus `web_resources` read-model projection in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) and [`packages/contracts/src/source.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/contracts/src/source.ts), now surface the same server-owned `selection_*` vocabulary for both projected editorial rows and content-kind-selected resource-only rows;
+  - system-interest authoring surfaces in [`apps/admin/src/components/InterestTemplateEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/InterestTemplateEditorForm.tsx), [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro), [`apps/admin/src/pages/templates/interests/new.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests/new.astro), and [`apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests/%5BinterestTemplateId%5D/edit.astro) now show the current compatibility `selection_profile` policy summary, including strictness, unresolved outcome, LLM review mode, and profile sync/version state, so operators can tune the current runtime without reading worker code;
+  - system-interest API reads now join the additive profile layer, so `/system-interests*` surfaces expose `selection_profile_id`, `selection_profile_family`, `selection_profile_status`, `selection_profile_version`, and `selection_profile_policy_json` as first-class read-model fields.
+- Что проверено:
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `git diff --check -- docs/work.md docs/history.md docs/contracts/universal-selection-profiles.md services/api/app/main.py apps/admin/src/lib/server/operator-surfaces.ts apps/admin/src/pages/articles.astro 'apps/admin/src/pages/articles/[docId].astro' apps/admin/src/pages/resources.astro 'apps/admin/src/pages/resources/[resourceId].astro' apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/pages/templates/interests.astro apps/admin/src/pages/templates/interests/new.astro 'apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro' packages/contracts/src/article.ts packages/contracts/src/source.ts tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_web_resources.py tests/unit/python/test_api_system_interests.py tests/unit/ts/admin-operator-surfaces.test.ts`
+- Что stage-4 доказал:
+  - profile-driven explain truth no longer lives only in worker internals; the API now owns stable human-readable selection semantics for operator surfaces;
+  - operators can distinguish cheap `hold`, optional LLM review, compatibility-only projection, and ordinary selected/rejected outcomes without a fixed actor/content taxonomy;
+  - the same server-owned explain vocabulary now spans article, content, resource, and system-interest authoring surfaces, reducing UI-local drift before Stage 5 migration/backfill closeout.
+- Риски или gaps:
+  - stage-4 deliberately did not finish migration/backfill compatibility closeout; historical repair observability and remaining compatibility assumptions still belonged to the next stage;
+  - this stage kept public selected-content behavior stable and did not attempt a broad admin redesign.
+- Follow-up:
+  - continue with `STAGE-5-MIGRATION-BACKFILL-AND-COMPATIBILITY-CLOSEOUT` rather than reopening stage-4.
+
 ### 2026-04-09 — C-UI-INTERACTIVE-VERIFICATION-AND-REPAIR — Closed interactive web/admin verification and repair on the local compose baseline
 
 - Тип записи: capability archive
