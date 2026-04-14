@@ -1,6 +1,7 @@
 import unittest
 import sys
 import types
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -1328,6 +1329,204 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["holdFilterCount"], 1)
         self.assertEqual(result["llmReviewPendingFilterCount"], 0)
         self.assertEqual(result["selectionReason"], "candidate_signal_hold")
+
+    async def test_upsert_final_selection_result_tracks_canonical_reuse_metadata(self) -> None:
+        cursor = _RecordingCursor(
+            [
+                None,
+                {
+                    "total_filter_count": 1,
+                    "matched_filter_count": 1,
+                    "no_match_filter_count": 0,
+                    "gray_zone_filter_count": 0,
+                    "llm_review_pending_filter_count": 0,
+                    "hold_filter_count": 0,
+                    "candidate_signal_uplift_count": 0,
+                    "canonical_review_reused_count": 1,
+                    "technical_filtered_out_count": 0,
+                },
+                {"duplicate_article_count": 4},
+            ]
+        )
+        article_row = {"doc_id": "77777777-7777-7777-7777-777777777777"}
+
+        with patch.object(
+            worker_main,
+            "resolve_interest_filter_context",
+            AsyncMock(
+                return_value={
+                    "canonicalDocumentId": "88888888-8888-8888-8888-888888888888",
+                    "storyClusterId": None,
+                    "verificationTargetType": "canonical_document",
+                    "verificationTargetId": "88888888-8888-8888-8888-888888888888",
+                    "verificationState": "strong",
+                }
+            ),
+        ):
+            result = await worker_main.upsert_final_selection_result(cursor, article=article_row)
+
+        self.assertTrue(result["canonicalReviewReused"])
+        self.assertEqual(result["canonicalReviewReusedCount"], 1)
+        self.assertEqual(result["duplicateArticleCountForCanonical"], 4)
+        self.assertTrue(result["canonicalSelectionReused"])
+
+    async def test_fetch_selection_gate_result_row_reuses_canonical_final_selection_when_exact_row_missing(self) -> None:
+        cursor = _RecordingCursor(
+            [
+                {"canonical_doc_id": "99999999-9999-9999-9999-999999999999"},
+                {
+                    "final_decision": "selected",
+                    "is_selected": True,
+                    "compat_system_feed_decision": "eligible",
+                    "verification_target_type": "canonical_document",
+                    "verification_target_id": "99999999-9999-9999-9999-999999999999",
+                    "verification_state": "strong",
+                },
+            ]
+        )
+
+        with (
+            patch.object(worker_main, "fetch_final_selection_result_row", AsyncMock(return_value=None)),
+            patch.object(worker_main, "fetch_system_feed_result_row", AsyncMock(return_value=None)),
+        ):
+            result = await worker_main.fetch_selection_gate_result_row(
+                cursor,
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["selection_source"], "final_selection_results")
+        self.assertEqual(result["selection_reuse_source"], "canonical_reused")
+        self.assertTrue(result["is_selected"])
+
+    async def test_process_match_criteria_reuses_canonical_review_without_queueing(self) -> None:
+        article_row = {
+            "doc_id": "12121212-1212-1212-1212-121212121212",
+            "processing_state": "embedded",
+            "title": "Need help replacing a legacy finance stack",
+            "lead": "External implementation assistance required.",
+            "body": "Body",
+        }
+        criterion_row = {
+            "criterion_id": "34343434-3434-3434-3434-343434343434",
+            "compiled_json": {},
+            "selection_profile_definition_json": {},
+        }
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection()))
+            )
+            stack.enter_context(patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)))
+            stack.enter_context(
+                patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row))
+            )
+            stack.enter_context(
+                patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={}))
+            )
+            stack.enter_context(
+                patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={}))
+            )
+            stack.enter_context(
+                patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row]))
+            )
+            stack.enter_context(
+                patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None))
+            )
+            stack.enter_context(
+                patch.object(
+                    worker_main, "get_llm_review_monthly_quota_snapshot", AsyncMock(return_value={})
+                )
+            )
+            stack.enter_context(
+                patch.object(
+                    worker_main,
+                    "resolve_interest_filter_context",
+                    AsyncMock(
+                        return_value={
+                            "canonicalDocumentId": "56565656-5656-5656-5656-565656565656",
+                            "storyClusterId": None,
+                            "verificationTargetType": "canonical_document",
+                            "verificationTargetId": "56565656-5656-5656-5656-565656565656",
+                            "verificationState": "medium",
+                        }
+                    ),
+                )
+            )
+            stack.enter_context(patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)))
+            stack.enter_context(
+                patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.2))
+            )
+            stack.enter_context(
+                patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[]))
+            )
+            stack.enter_context(patch.object(worker_main, "semantic_prototype_score", return_value=0.0))
+            stack.enter_context(patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})))
+            stack.enter_context(patch.object(worker_main, "compute_criterion_final_score", return_value=0.4))
+            stack.enter_context(patch.object(worker_main, "decide_criterion", return_value="gray_zone"))
+            stack.enter_context(
+                patch.object(worker_main, "selection_profile_allows_llm_review", return_value=True)
+            )
+            stack.enter_context(
+                patch.object(
+                    worker_main,
+                    "find_reusable_criterion_llm_review",
+                    AsyncMock(
+                        return_value={
+                            "review_id": "review-1",
+                            "reviewed_doc_id": "90909090-9090-9090-9090-909090909090",
+                            "reviewed_canonical_document_id": "56565656-5656-5656-5656-565656565656",
+                            "provider_decision": "approve",
+                            "score": 0.88,
+                            "prompt_template_id": "template-1",
+                            "prompt_version": 2,
+                        }
+                    ),
+                )
+            )
+            persist_criterion_review_resolution = stack.enter_context(
+                patch.object(
+                    worker_main,
+                    "persist_criterion_review_resolution",
+                    AsyncMock(return_value={"finalDecision": "relevant"}),
+                )
+            )
+            stack.enter_context(patch.object(worker_main, "upsert_interest_filter_result", AsyncMock()))
+            stack.enter_context(
+                patch.object(
+                    worker_main,
+                    "upsert_system_feed_result",
+                    AsyncMock(
+                        return_value={
+                            "eligible_for_feed": False,
+                            "final_selection_selected": False,
+                            "previous_final_selection_selected": False,
+                        }
+                    ),
+                )
+            )
+            stack.enter_context(patch.object(worker_main, "should_dispatch_clustering", return_value=False))
+            record_processed_event = stack.enter_context(
+                patch.object(worker_main, "record_processed_event", AsyncMock())
+            )
+            insert_outbox_event = stack.enter_context(
+                patch.object(worker_main, "insert_outbox_event", AsyncMock())
+            )
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criterion-reuse-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        persist_criterion_review_resolution.assert_awaited_once()
+        insert_outbox_event.assert_not_awaited()
+        record_processed_event.assert_awaited_once()
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
 
     async def test_process_llm_review_skips_provider_when_runtime_policy_blocks(self) -> None:
         article_row = {

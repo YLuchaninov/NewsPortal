@@ -35,15 +35,9 @@ _GENERIC_POSITIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
         " rfp",
         " shortlist",
         " bid process",
-    ),
-    "evaluationMarket": (
-        "best ",
-        "top ",
-        " comparison",
-        " what to look for",
-        " evaluation",
-        " options",
-        " shortlist",
+        " vendor evaluation",
+        " solution evaluation",
+        " request for quote",
     ),
 }
 

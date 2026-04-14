@@ -26,6 +26,14 @@ function asInteger(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function asBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
 function asString(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
   return normalized ? normalized : null;
@@ -237,6 +245,8 @@ export function resolveDiscoveryRecallCandidateState(
 
 export interface ArticleOperatorState {
   selectionSource: "final_selection_results" | "system_feed_results" | "pending";
+  selectionReuseSource: "article_level" | "canonical_reused";
+  reviewSource: "fresh_llm_review" | "reused_canonical_llm_review" | null;
   selectionDecision: string | null;
   compatDecision: string | null;
   selectionReason: string | null;
@@ -254,6 +264,10 @@ export interface ArticleOperatorState {
   candidateSignalUpliftCount: number;
   candidateRecoveryState: "absent" | "present" | "review_pending" | "held";
   candidateRecoverySummary: string;
+  canonicalReviewReused: boolean;
+  canonicalReviewReusedCount: number;
+  canonicalSelectionReused: boolean;
+  duplicateArticleCountForCanonical: number;
   observationState: string | null;
   duplicateKind: string | null;
   canonicalDocumentId: string | null;
@@ -309,6 +323,21 @@ export function resolveArticleOperatorState(articleLike: unknown): ArticleOperat
     asInteger(article.selection_hold_count) ?? asInteger(article.final_selection_hold_count) ?? 0;
   const candidateSignalUpliftCount =
     asInteger(article.selection_candidate_signal_uplift_count) ?? 0;
+  const canonicalReviewReused = asBoolean(article.selection_canonical_review_reused);
+  const canonicalReviewReusedCount =
+    asInteger(article.selection_canonical_review_reused_count) ?? 0;
+  const canonicalSelectionReused = asBoolean(article.selection_canonical_reused);
+  const duplicateArticleCountForCanonical =
+    asInteger(article.selection_duplicate_article_count_for_canonical) ?? 0;
+  const selectionReuseSource =
+    (asString(article.selection_reuse_source) as
+      | ArticleOperatorState["selectionReuseSource"]
+      | null) ?? "article_level";
+  const reviewSource =
+    (asString(article.selection_review_source) as
+      | ArticleOperatorState["reviewSource"]
+      | null) ??
+    (canonicalReviewReused ? "reused_canonical_llm_review" : null);
 
   let selectionMode: ArticleOperatorState["selectionMode"] =
     (genericSelectionMode as ArticleOperatorState["selectionMode"] | null) ??
@@ -400,6 +429,12 @@ export function resolveArticleOperatorState(articleLike: unknown): ArticleOperat
     candidateSignalUpliftCount,
     candidateRecoveryState,
     candidateRecoverySummary,
+    canonicalReviewReused,
+    canonicalReviewReusedCount,
+    canonicalSelectionReused,
+    duplicateArticleCountForCanonical,
+    selectionReuseSource,
+    reviewSource,
     observationState: asString(article.observation_state),
     duplicateKind: asString(article.duplicate_kind),
     canonicalDocumentId: asString(article.canonical_document_id),

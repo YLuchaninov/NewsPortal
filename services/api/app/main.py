@@ -515,6 +515,19 @@ def as_json_int(value: Any) -> int:
         return 0
 
 
+def as_json_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def as_json_str(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
 def build_reindex_selection_profile_payload(
     job_like: Mapping[str, Any],
 ) -> dict[str, Any] | None:
@@ -585,6 +598,34 @@ def build_selection_explain_payload(
     )
     candidate_signal_uplift_count = as_json_int(
         final_explain.get("candidateSignalUpliftCount")
+    )
+    canonical_review_reused = as_json_bool(
+        final_explain.get("canonicalReviewReused")
+        if "canonicalReviewReused" in final_explain
+        else selection_like.get("final_selection_canonical_review_reused")
+    )
+    canonical_review_reused_count = as_json_int(
+        final_explain.get("canonicalReviewReusedCount")
+        if "canonicalReviewReusedCount" in final_explain
+        else selection_like.get("final_selection_canonical_review_reused_count")
+    )
+    duplicate_article_count_for_canonical = as_json_int(
+        final_explain.get("duplicateArticleCountForCanonical")
+        if "duplicateArticleCountForCanonical" in final_explain
+        else selection_like.get("final_selection_duplicate_article_count_for_canonical")
+    )
+    canonical_selection_reused = as_json_bool(
+        final_explain.get("canonicalSelectionReused")
+        if "canonicalSelectionReused" in final_explain
+        else selection_like.get("final_selection_canonical_selection_reused")
+    )
+    selection_reuse_source = (
+        as_json_str(
+            final_explain.get("selectionReuseSource")
+            if "selectionReuseSource" in final_explain
+            else selection_like.get("final_selection_reuse_source")
+        )
+        or "article_level"
     )
     selection_reason = (
         str(
@@ -693,6 +734,14 @@ def build_selection_explain_payload(
         "candidateSignalUpliftCount": candidate_signal_uplift_count,
         "candidateRecoveryState": candidate_recovery_state,
         "candidateRecoverySummary": candidate_recovery_summary,
+        "canonicalReviewReused": canonical_review_reused,
+        "canonicalReviewReusedCount": canonical_review_reused_count,
+        "canonicalSelectionReused": canonical_selection_reused,
+        "duplicateArticleCountForCanonical": duplicate_article_count_for_canonical,
+        "selectionReuseSource": selection_reuse_source,
+        "reviewSource": (
+            "reused_canonical_llm_review" if canonical_review_reused else None
+        ),
         "compatibilityDecision": compatibility_decision,
         "observationState": selection_like.get("observation_state"),
         "duplicateKind": selection_like.get("duplicate_kind"),
@@ -849,6 +898,16 @@ def build_content_kind_selection_explain_payload(
         "selectionSummary": "Selected by content-kind eligibility",
         "llmReviewPendingCount": 0,
         "holdCount": 0,
+        "candidateSignalUpliftCount": 0,
+        "candidateRecoveryState": "absent",
+        "candidateRecoverySummary":
+            "Recovered candidate signals have not materialized on this item yet.",
+        "canonicalReviewReused": False,
+        "canonicalReviewReusedCount": 0,
+        "canonicalSelectionReused": False,
+        "duplicateArticleCountForCanonical": 0,
+        "selectionReuseSource": "article_level",
+        "reviewSource": None,
         "compatibilityDecision": None,
         "observationState": None,
         "duplicateKind": None,
@@ -882,6 +941,16 @@ def build_resource_selection_explain_payload(
         "selectionSummary": "Selection not materialized yet",
         "llmReviewPendingCount": 0,
         "holdCount": 0,
+        "candidateSignalUpliftCount": 0,
+        "candidateRecoveryState": "absent",
+        "candidateRecoverySummary":
+            "Recovered candidate signals have not materialized on this item yet.",
+        "canonicalReviewReused": False,
+        "canonicalReviewReusedCount": 0,
+        "canonicalSelectionReused": False,
+        "duplicateArticleCountForCanonical": 0,
+        "selectionReuseSource": "article_level",
+        "reviewSource": None,
         "compatibilityDecision": None,
         "observationState": None,
         "duplicateKind": None,
@@ -922,6 +991,20 @@ def apply_resource_selection_payload(
     resource["selection_candidate_recovery_summary"] = selection_explain.get(
         "candidateRecoverySummary"
     )
+    resource["selection_canonical_review_reused"] = selection_explain.get(
+        "canonicalReviewReused"
+    )
+    resource["selection_canonical_review_reused_count"] = as_json_int(
+        selection_explain.get("canonicalReviewReusedCount")
+    )
+    resource["selection_canonical_reused"] = selection_explain.get(
+        "canonicalSelectionReused"
+    )
+    resource["selection_duplicate_article_count_for_canonical"] = as_json_int(
+        selection_explain.get("duplicateArticleCountForCanonical")
+    )
+    resource["selection_reuse_source"] = selection_explain.get("selectionReuseSource")
+    resource["selection_review_source"] = selection_explain.get("reviewSource")
     resource["selection_guidance"] = build_selection_guidance_payload(
         selection_explain=selection_explain
     )
@@ -970,6 +1053,20 @@ def apply_article_selection_payload(
     article["selection_candidate_recovery_summary"] = selection_explain.get(
         "candidateRecoverySummary"
     )
+    article["selection_canonical_review_reused"] = selection_explain.get(
+        "canonicalReviewReused"
+    )
+    article["selection_canonical_review_reused_count"] = as_json_int(
+        selection_explain.get("canonicalReviewReusedCount")
+    )
+    article["selection_canonical_reused"] = selection_explain.get(
+        "canonicalSelectionReused"
+    )
+    article["selection_duplicate_article_count_for_canonical"] = as_json_int(
+        selection_explain.get("duplicateArticleCountForCanonical")
+    )
+    article["selection_reuse_source"] = selection_explain.get("selectionReuseSource")
+    article["selection_review_source"] = selection_explain.get("reviewSource")
     article["selection_guidance"] = build_selection_guidance_payload(
         selection_explain=selection_explain
     )
@@ -4039,6 +4136,15 @@ def list_articles(
             as final_selection_llm_review_pending_count,
           coalesce((fsr.explain_json -> 'filterCounts' ->> 'hold')::int, 0)
             as final_selection_hold_count,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReused')::boolean, false)
+            as final_selection_canonical_review_reused,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReusedCount')::int, 0)
+            as final_selection_canonical_review_reused_count,
+          coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
+            as final_selection_canonical_selection_reused,
+          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
+            as final_selection_duplicate_article_count_for_canonical,
+          fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           fsr.story_cluster_id::text as story_cluster_id,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
@@ -4416,6 +4522,15 @@ def list_web_resources_page(
             nullif(fsr.explain_json -> 'filterCounts' ->> 'hold', '')::int,
             0
           ) as final_selection_hold_count,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReused')::boolean, false)
+            as final_selection_canonical_review_reused,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReusedCount')::int, 0)
+            as final_selection_canonical_review_reused_count,
+          coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
+            as final_selection_canonical_selection_reused,
+          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
+            as final_selection_duplicate_article_count_for_canonical,
+          fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           jsonb_array_length(coalesce(wr.documents_json, '[]'::jsonb))::int as documents_count,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb))::int as media_count,
           jsonb_array_length(coalesce(wr.links_out_json, '[]'::jsonb))::int as links_out_count,
@@ -4528,6 +4643,15 @@ def get_web_resource(resource_id: str) -> dict[str, Any]:
             nullif(fsr.explain_json -> 'filterCounts' ->> 'hold', '')::int,
             0
           ) as final_selection_hold_count,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReused')::boolean, false)
+            as final_selection_canonical_review_reused,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReusedCount')::int, 0)
+            as final_selection_canonical_review_reused_count,
+          coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
+            as final_selection_canonical_selection_reused,
+          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
+            as final_selection_duplicate_article_count_for_canonical,
+          fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           jsonb_array_length(coalesce(wr.documents_json, '[]'::jsonb))::int as documents_count,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb))::int as media_count,
           jsonb_array_length(coalesce(wr.links_out_json, '[]'::jsonb))::int as links_out_count,
@@ -4633,6 +4757,15 @@ def get_article(doc_id: str) -> dict[str, Any]:
             as final_selection_llm_review_pending_count,
           coalesce((fsr.explain_json -> 'filterCounts' ->> 'hold')::int, 0)
             as final_selection_hold_count,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReused')::boolean, false)
+            as final_selection_canonical_review_reused,
+          coalesce((fsr.explain_json ->> 'canonicalReviewReusedCount')::int, 0)
+            as final_selection_canonical_review_reused_count,
+          coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
+            as final_selection_canonical_selection_reused,
+          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
+            as final_selection_duplicate_article_count_for_canonical,
+          fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
           coalesce(ars.like_count, 0) as like_count,

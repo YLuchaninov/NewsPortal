@@ -164,6 +164,8 @@ test("resolveArticleOperatorState prefers final-selection truth over compatibili
 
   assert.deepEqual(state, {
     selectionSource: "final_selection_results",
+    selectionReuseSource: "article_level",
+    reviewSource: null,
     selectionDecision: "selected",
     compatDecision: "eligible",
     selectionReason: "semantic_match",
@@ -175,6 +177,10 @@ test("resolveArticleOperatorState prefers final-selection truth over compatibili
     candidateRecoveryState: "absent",
     candidateRecoverySummary:
       "Recovered candidate signals have not materialized on this item yet.",
+    canonicalReviewReused: false,
+    canonicalReviewReusedCount: 0,
+    canonicalSelectionReused: false,
+    duplicateArticleCountForCanonical: 0,
     observationState: "canonicalized",
     duplicateKind: "canonical",
     canonicalDocumentId: "canonical-1",
@@ -192,6 +198,8 @@ test("resolveArticleOperatorState falls back to compatibility truth when final s
   });
 
   assert.equal(state.selectionSource, "system_feed_results");
+  assert.equal(state.selectionReuseSource, "article_level");
+  assert.equal(state.reviewSource, null);
   assert.equal(state.selectionDecision, "pending_llm");
   assert.equal(state.compatDecision, "pending_llm");
   assert.equal(state.selectionMode, "llm_review_pending");
@@ -214,6 +222,7 @@ test("resolveArticleOperatorState prefers generic server-owned selection payload
   });
 
   assert.equal(state.selectionSource, "system_feed_results");
+  assert.equal(state.selectionReuseSource, "article_level");
   assert.equal(state.selectionDecision, "eligible");
   assert.equal(state.selectionMode, "compatibility_only");
   assert.equal(state.selectionSummary, "Compatibility projection: eligible");
@@ -233,6 +242,7 @@ test("resolveArticleOperatorState distinguishes cheap hold from review-pending g
   });
 
   assert.equal(state.selectionSource, "final_selection_results");
+  assert.equal(state.selectionReuseSource, "article_level");
   assert.equal(state.selectionMode, "hold");
   assert.equal(state.selectionSummary, "Gray zone held by profile policy");
   assert.equal(state.selectionReason, "semantic_hold");
@@ -259,6 +269,30 @@ test("resolveArticleOperatorState trusts precomputed API selection summary when 
   assert.equal(state.llmReviewPendingCount, 1);
   assert.equal(state.candidateSignalUpliftCount, 1);
   assert.equal(state.candidateRecoveryState, "review_pending");
+});
+
+test("resolveArticleOperatorState surfaces canonical review reuse metadata", () => {
+  const state = resolveArticleOperatorState({
+    final_selection_decision: "selected",
+    final_selection_mode: "selected",
+    final_selection_summary: "Selected by final-selection policy",
+    final_selection_reason: "semantic_match",
+    final_selection_llm_review_pending_count: 0,
+    final_selection_hold_count: 0,
+    selection_canonical_review_reused: true,
+    selection_canonical_review_reused_count: 2,
+    selection_canonical_reused: true,
+    selection_duplicate_article_count_for_canonical: 5,
+    selection_reuse_source: "canonical_reused",
+    selection_review_source: "reused_canonical_llm_review",
+  });
+
+  assert.equal(state.selectionReuseSource, "canonical_reused");
+  assert.equal(state.reviewSource, "reused_canonical_llm_review");
+  assert.equal(state.canonicalReviewReused, true);
+  assert.equal(state.canonicalReviewReusedCount, 2);
+  assert.equal(state.canonicalSelectionReused, true);
+  assert.equal(state.duplicateArticleCountForCanonical, 5);
 });
 
 test("resolveArticleSelectionDiagnostics summarizes explain payload rows generically", () => {

@@ -60,6 +60,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("fsr.explain_json ->> 'selectionReason' as final_selection_reason", items_sql)
         self.assertIn("as final_selection_llm_review_pending_count", items_sql)
         self.assertIn("as final_selection_hold_count", items_sql)
+        self.assertIn("as final_selection_canonical_review_reused", items_sql)
+        self.assertIn("as final_selection_duplicate_article_count_for_canonical", items_sql)
+        self.assertIn("as final_selection_reuse_source", items_sql)
 
     def test_get_article_query_exposes_canonical_and_story_cluster_context(self) -> None:
         with (
@@ -82,6 +85,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("final_selection_reason", sql)
         self.assertIn("final_selection_llm_review_pending_count", sql)
         self.assertIn("final_selection_hold_count", sql)
+        self.assertIn("final_selection_canonical_review_reused", sql)
+        self.assertIn("final_selection_duplicate_article_count_for_canonical", sql)
+        self.assertIn("final_selection_reuse_source", sql)
 
     def test_get_article_includes_selection_diagnostics_from_article_read_model(self) -> None:
         with (
@@ -192,6 +198,52 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(result["selection_diagnostics"]["systemCriterionRows"], 0)
         self.assertEqual(result["selection_guidance"]["tone"], "positive")
         self.assertEqual(len(result["verification_results"]), 2)
+
+    def test_get_article_explain_surfaces_canonical_reuse_metadata(self) -> None:
+        article = {
+            "doc_id": "doc-reused",
+            "final_selection_decision": "selected",
+            "final_selection_selected": True,
+            "final_selection_verification_state": "strong",
+            "system_feed_decision": "eligible",
+            "system_feed_eligible": True,
+            "canonical_document_id": "canonical-reused",
+        }
+
+        with (
+            patch.object(api_main, "get_article", return_value=article),
+            patch.object(api_main, "query_all", return_value=[]),
+            patch.object(
+                api_main,
+                "query_one",
+                side_effect=[
+                    {
+                        "final_decision": "selected",
+                        "is_selected": True,
+                        "verification_state": "strong",
+                        "explain_json": {
+                            "canonicalReviewReused": True,
+                            "canonicalReviewReusedCount": 3,
+                            "canonicalSelectionReused": True,
+                            "duplicateArticleCountForCanonical": 6,
+                            "selectionReuseSource": "canonical_reused",
+                        },
+                    },
+                    {"decision": "eligible"},
+                    None,
+                    None,
+                ],
+            ),
+        ):
+            result = api_main.get_article_explain("doc-reused")
+
+        explain = result["selection_explain"]
+        self.assertEqual(explain["selectionReuseSource"], "canonical_reused")
+        self.assertEqual(explain["reviewSource"], "reused_canonical_llm_review")
+        self.assertEqual(explain["canonicalReviewReused"], True)
+        self.assertEqual(explain["canonicalReviewReusedCount"], 3)
+        self.assertEqual(explain["canonicalSelectionReused"], True)
+        self.assertEqual(explain["duplicateArticleCountForCanonical"], 6)
 
     def test_content_item_explain_includes_operator_selection_fields(self) -> None:
         with (

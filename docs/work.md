@@ -24,6 +24,7 @@ Durable completed detail переносится в `docs/history.md`.
 - Runtime core инициализирован; ordinary implementation work разрешен.
 - `docs/blueprint.md` остается главным architectural source of truth для boundaries, ownership и durable system behavior.
 - `docs/contracts/test-access-and-fixtures.md` обязателен whenever work touches local PostgreSQL/Redis-backed proof, Firebase identities, Mailpit, web-push subscriptions или other persistent test artifacts.
+- `docs/contracts/article-pipeline-core.md` обязателен whenever work touches the shipped article/selection pipeline core: ingest-to-selection ownership, canonical review/selection reuse, final-selection gating, or reset preserve-set discipline.
 - `docs/contracts/discovery-agent.md` обязателен whenever work touches adaptive discovery missions, class registry, source profiles/scores, portfolio snapshots, feedback or re-evaluation.
 - `docs/contracts/independent-recall-discovery.md` обязателен whenever work touches additive recall-first discovery entities, generic source-quality snapshots, or the long-term cutover away from discovery being owned by `interest_graph`.
 - `docs/contracts/browser-assisted-websites.md` обязателен whenever work touches JS-heavy website polling, browser-assisted discovery, website hard-site probing, or unsupported challenge behavior.
@@ -73,6 +74,17 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Active capabilities
 
+- `C-PIPELINE-CANONICAL-REUSE-AND-SELECTION-QUALITY-HARDENING`
+  - Goal: remove the current duplicate-spend and duplicate-selection distortions in the zero-shot pipeline, restore bounded candidate yield after technical pass, and tighten outsourcing application precision without reintroducing domain-specific shortcuts into the generic engine.
+  - Outcome: criterion LLM review reuse works at canonical-document scope, selected/feed read behavior becomes canonical-first, current false-positive vendor/listicle patterns are reduced through app-layer semantics plus safer generic structural cues, and residual runtime inefficiencies stay explicitly measured rather than hidden inside duplicate-heavy throughput.
+  - Full completion condition: one canonical document plus one criterion no longer creates repeated LLM reviews by default; operator/user read models stop treating duplicate article rows as separate selected winners; current outsourcing application semantics stop promoting the known ranking/listicle false positives; candidate-yield stays bounded but real after technical pass; runtime/process docs and proof expectations are synced to the shipped behavior.
+  - Proposed stage breakdown:
+    1. `STAGE-1-CANONICAL-LLM-REVIEW-REUSE`
+    2. `STAGE-2-CANONICAL-FIRST-SELECTION-READ-AND-OPERATOR-SUMMARIES`
+    3. `STAGE-3-GENERIC-CANDIDATE-YIELD-AND-APPLICATION-PRECISION-HARDENING`
+    4. `STAGE-4-RUNTIME-EFFICIENCY-AND-DOCS-CLOSEOUT`
+  - Immediate next stage: `STAGE-4-RUNTIME-EFFICIENCY-AND-DOCS-CLOSEOUT`
+
 - `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY`
   - Goal: restore general pipeline health for sequence-managed article processing and recover truthful gray-zone-to-LLM behavior for system-interest criteria without bypassing PostgreSQL/outbox/`q.sequence` architecture.
   - Outcome: article backlog stops degrading under normal compose concurrency, transient DB deadlocks and short-lived internal fetchers outages no longer turn into permanent per-run failure by default, and gray-zone system criteria can truthfully route into LLM review under durable profile policy instead of silently collapsing into cheap hold.
@@ -109,6 +121,156 @@ Durable completed detail переносится в `docs/history.md`.
   - Immediate next stage: `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`
 
 ### Active work items
+
+- `PATCH-PIPELINE-CORE-GUARDRAILS-DOC-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: document the current article/selection pipeline core in one durable contract so future work can preserve the now-working behavior instead of accidentally regressing it.
+  - In scope:
+    - new deep contract doc for the current article pipeline core and guardrails
+    - sync of contract-doc indexes and runtime-core references that point future work to that new document
+    - live work-state sync for the new contract
+  - Out of scope:
+    - code changes
+    - DB mutations
+    - behavioral tuning
+    - pipeline refactors
+  - Allowed paths:
+    - `docs/contracts/article-pipeline-core.md`
+    - `docs/contracts/README.md`
+    - `docs/blueprint.md`
+    - `docs/engineering.md`
+    - `docs/work.md`
+  - Depends on:
+    - `PATCH-LOCAL-RUNTIME-DATA-CLEAR-AND-RESTART-2026-04-14`
+  - Required proof:
+    - targeted consistency proof for the new contract doc and updated references
+    - `git diff --check --` on touched docs
+  - Risk:
+    - low; this is docs-only, but the main risk is writing a summary that drifts from the already-shipped pipeline truth.
+  - Worktree overlap:
+    - docs-only overlap with the mixed implementation worktree; do not reframe code scope while closing this contract doc.
+  - Executed proof:
+    - sync of the new contract in `docs/contracts/article-pipeline-core.md`
+    - reference sync in `docs/contracts/README.md`, `docs/blueprint.md`, `docs/engineering.md`, and `docs/work.md`
+    - `git diff --check -- docs/contracts/article-pipeline-core.md docs/contracts/README.md docs/blueprint.md docs/engineering.md docs/work.md`
+  - Progress now:
+    - the new deep contract doc now captures the current shipped article/selection pipeline core as a practical guardrail: ingest-to-selection ownership, canonical review/selection reuse, safe tuning layers, anti-regression rules, and truthful reset preserve-set discipline.
+    - runtime-core references are now synced so future work touching the current article pipeline must load this contract explicitly instead of relying on fragmented knowledge across prior spikes and patches.
+
+- `PATCH-LOCAL-RUNTIME-DATA-CLEAR-AND-RESTART-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: clear local article/runtime/result data so the compose baseline can start fresh again, while preserving the current admin-owned channel, system-interest, profile, and LLM-template configuration intact.
+  - In scope:
+    - destructive local compose DB/Redis reset only after the preserved subset is exported
+    - truthful restore of the current preserve-set (`source_providers`, `source_channels`, `interest_templates`, `criteria`, `criteria_compiled`, `selection_profiles`, `llm_prompt_templates`)
+    - clearing poll/runtime state so all channels can start again from zero
+    - post-reset health, zero-state, and first-motion verification
+  - Out of scope:
+    - code changes beyond process-doc sync
+    - source/channel list edits
+    - prompt/interest tuning
+    - schema changes or data replay of historical runtime rows
+  - Allowed paths:
+    - `docs/work.md`
+    - optional `/tmp` reset artifacts and SQL snapshots
+  - Depends on:
+    - `-`
+  - Required proof:
+    - preserved snapshot artifact path recorded before destructive action
+    - destructive reset commands recorded in executed proof
+    - post-restore counts proving preserve-set exists while runtime tables are empty/fresh
+    - first-motion proof showing new ingest/runtime rows materialize again after restart
+  - Risk:
+    - high; this is an intentional destructive local reset, so the main risk is losing configuration truth if the preserve-set export/restore is incomplete or inconsistent.
+  - Worktree overlap:
+    - process/docs-only overlap with the currently mixed implementation worktree; do not revert or package the existing code edits while performing this local runtime reset.
+  - Executed proof:
+    - preserve-set export and pre-reset snapshot to `/tmp/newsportal-reset-2026-04-14T2026-04-14T161410Z`
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal:no-build`
+    - restore of `source_providers`, `source_channels`, `interest_templates`, `criteria`, `criteria_compiled`, `selection_profiles`, and `llm_prompt_templates` into the fresh DB
+    - explicit poll/runtime cleanup after restore via PostgreSQL (`articles/results/runtime tables -> 0`, channel timestamps/errors cleared)
+    - `docker start docker-relay-1 docker-worker-1 docker-fetchers-1`
+    - post-reset health and first-motion evidence captured in `/tmp/newsportal-reset-2026-04-14T2026-04-14T161410Z/post_restore_services.txt`, `/tmp/newsportal-reset-2026-04-14T2026-04-14T161410Z/post_restore_zero_state_counts.tsv`, and `/tmp/newsportal-reset-2026-04-14T2026-04-14T161410Z/first_motion_counts.tsv`
+  - Progress now:
+    - preserve-set export completed before any destructive action and contains the current local `source_providers`, `source_channels`, `interest_templates`, `criteria`, `criteria_compiled`, `selection_profiles`, and `llm_prompt_templates`.
+    - the local compose volumes were intentionally destroyed and recreated; the fresh DB was then repopulated only with the preserved configuration subset.
+    - a final zero-state cleanup after restore left the fresh baseline at `articles = 0`, `document_observations = 0`, `canonical_documents = 0`, `verification_results = 0`, `interest_filter_results = 0`, `final_selection_results = 0`, `llm_review_log = 0`, `fetch_cursors = 0`, `source_channel_runtime_state = 0`, `sequence_runs = 0` while preserving `source_providers = 5`, `source_channels = 5185`, `interest_templates = 5`, `criteria = 5`, `criteria_compiled = 5`, `selection_profiles = 5`, and `llm_prompt_templates = 3`.
+    - after restarting `relay`, `worker`, and `fetchers`, fresh motion resumed immediately on the clean baseline: `/tmp/newsportal-reset-2026-04-14T2026-04-14T161410Z/first_motion_counts.tsv` reached `394` `articles`, `394` `document_observations`, `54` `fetch_cursors`, `189` `source_channel_runtime_state`, and `367` `sequence_runs` within the first short window, while downstream result tables were still at `0`, which is consistent with the very first early-ingest phase.
+
+- `STAGE-1-CANONICAL-LLM-REVIEW-REUSE`
+  - Kind: Stage
+  - Status: done
+  - Goal: stop repeated criterion-scope LLM spend on duplicate article rows that already collapse to the same canonical document, while preserving article-level provenance and explainability.
+  - In scope:
+    - worker-side canonical review reuse lookup for `scope = criterion`
+    - reuse-aware criterion explain payloads and final-selection/system-feed metadata
+    - read/operator summaries needed to distinguish fresh vs reused criterion review
+    - targeted unit coverage for reuse behavior
+  - Out of scope:
+    - source/channel changes
+    - destructive DB reset/replay
+    - broad feed/API rewrite beyond the reuse-facing selection/read summaries needed by this stage
+    - outsourcing-only code-level heuristics
+  - Allowed paths:
+    - `services/workers/app/main.py`
+    - `services/api/app/main.py`
+    - `apps/admin/src/lib/server/operator-surfaces.ts`
+    - `tests/unit/python/test_interest_auto_repair.py`
+    - `tests/unit/python/test_api_zero_shot_operator_surfaces.py`
+    - `tests/unit/ts/admin-operator-surfaces.test.ts`
+    - `docs/work.md`
+  - Depends on:
+    - `SPIKE-FULL-PIPELINE-FORENSIC-RECHECK-2026-04-14`
+  - Required proof:
+    - targeted Python unit proof that repeated canonical criterion review reuses an existing verdict instead of enqueueing/spending again
+    - targeted API/admin proof for fresh vs reused review/read summaries
+    - `git diff --check --` on touched files
+  - Risk:
+    - medium/high; this changes criterion-review routing and selection explain semantics, so the main risks are breaking current gray-zone materialization or making read models silently disagree with article-level provenance.
+  - Worktree overlap:
+    - this stage intentionally overlaps the current zero-shot worker/API/admin surfaces; do not change channels or restart the baseline DB during this slice.
+  - Executed proof:
+    - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_zero_shot_operator_surfaces`
+    - `node --import tsx --test tests/unit/ts/admin-operator-surfaces.test.ts`
+    - `pnpm typecheck`
+    - `git diff --check -- services/workers/app/main.py services/workers/app/final_selection.py services/api/app/main.py apps/admin/src/lib/server/operator-surfaces.ts tests/unit/python/test_final_selection.py tests/unit/python/test_interest_auto_repair.py tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/ts/admin-operator-surfaces.test.ts docs/work.md`
+  - Progress now:
+    - worker criterion routing now checks for an existing resolved `llm_review_log` verdict on the same `canonical_document_id + criterion_id` before publishing a fresh `llm.review.requested`; duplicate article rows can therefore reuse the canonical review outcome instead of spending the same criterion-scope LLM review repeatedly.
+    - reused criterion reviews are now written back into the current article-level `criterion_match_results` and `interest_filter_results` with explicit `llmReview.source = reused_canonical_llm_review` plus `runtimeReviewState` resolution metadata, while fresh provider reviews reuse the same persistence helper with `fresh_llm_review`.
+    - final-selection explain payloads now surface canonical reuse metadata (`canonicalReviewReused`, `canonicalReviewReusedCount`, `duplicateArticleCountForCanonical`, `canonicalSelectionReused`, `selectionReuseSource`) so operator/API read models can distinguish provenance-preserving duplicate rows from canonical-first selected truth.
+    - selection-gate fallback now reuses canonical-sibling `final_selection_results` or compatibility `system_feed_results` when exact article-level selection truth is absent, which keeps downstream personalization/read paths canonical-first without deleting article-level provenance rows.
+    - admin/API read models now expose the new canonical reuse summaries, and the generic candidate-signal fallback was tightened at the same time so weak ranking/listicle wording such as `top` / `best` / generic `options` no longer acts as sufficient generic positive evidence.
+    - local `worker`, `api`, and `admin` containers were rebuilt and restarted after this slice so the preserved compose baseline is now running the new canonical-reuse/read-summary code without a DB reset.
+
+- `STAGE-4-RUNTIME-EFFICIENCY-AND-DOCS-CLOSEOUT`
+  - Kind: Stage
+  - Status: ready
+  - Goal: measure the live effect of canonical review reuse on the preserved local baseline, then close remaining runtime/docs gaps around duplicate-heavy throughput and known non-fatal enrichment residuals.
+  - In scope:
+    - read-only live measurement of duplicate LLM-review volume after worker rebuild/restart
+    - residual runtime classification for backlog, transient fetch failures, and non-fatal enrichment/oEmbed noise
+    - final docs/history sync if the capability no longer needs another implementation slice
+  - Out of scope:
+    - destructive DB reset/replay
+    - source/channel changes
+    - broad new semantics work outside the duplicate-efficiency lane
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - optional `/tmp` forensic artifacts
+  - Depends on:
+    - `STAGE-1-CANONICAL-LLM-REVIEW-REUSE`
+  - Required proof:
+    - fresh read-only SQL/log evidence after rebuilding the affected runtimes
+    - before/after duplicate-review counts per canonical document
+    - synced runtime/process docs if the capability is closed
+  - Risk:
+    - medium; the main risk is declaring the duplicate-spend problem solved before the rebuilt local runtime has actually produced post-change evidence.
+  - Worktree overlap:
+    - read-only runtime follow-up plus docs sync only; do not reopen application semantics or source-management scope inside this stage unless new evidence proves it is necessary.
 
 - `SPIKE-FULL-PIPELINE-FORENSIC-RECHECK-2026-04-14`
   - Kind: Spike

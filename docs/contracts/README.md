@@ -25,6 +25,8 @@
 
 ## Текущие contract docs
 
+- `docs/contracts/article-pipeline-core.md`
+  Durable guardrail contract для уже shipped article/selection pipeline core: ingest-to-selection ownership, canonical review/selection reuse, safe tuning layers, reset preserve-set discipline и anti-regression rules for future changes.
 - `docs/contracts/browser-assisted-websites.md`
   Durable contract для JS-heavy / soft anti-bot website handling: fetchers-owned browser runtime, internal discovery probe, browser provenance, unsupported challenge policy и deterministic local hard-site proof.
 - `docs/contracts/content-model.md`

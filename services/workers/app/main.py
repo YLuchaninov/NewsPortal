@@ -1621,6 +1621,180 @@ async def fetch_final_selection_result_row(
     return await cursor.fetchone()
 
 
+async def find_reusable_criterion_llm_review(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    doc_id: str | uuid.UUID,
+    criterion_id: str | uuid.UUID,
+    canonical_document_id: str | uuid.UUID | None,
+) -> dict[str, Any] | None:
+    canonical_uuid = None
+    if str(canonical_document_id or "").strip():
+        try:
+            canonical_uuid = uuid.UUID(str(canonical_document_id))
+        except (TypeError, ValueError):
+            canonical_uuid = None
+    doc_uuid = uuid.UUID(str(doc_id))
+    criterion_uuid = uuid.UUID(str(criterion_id))
+    await cursor.execute(
+        """
+        select
+          lrl.review_id::text as review_id,
+          lrl.doc_id::text as reviewed_doc_id,
+          reviewed_article.canonical_doc_id::text as reviewed_canonical_document_id,
+          lrl.decision as provider_decision,
+          lrl.score,
+          lrl.prompt_template_id::text as prompt_template_id,
+          lrl.prompt_version,
+          lrl.created_at
+        from llm_review_log lrl
+        join articles reviewed_article on reviewed_article.doc_id = lrl.doc_id
+        where lrl.scope = 'criterion'
+          and lrl.target_id = %s
+          and (
+            (%s::uuid is not null and reviewed_article.canonical_doc_id = %s::uuid)
+            or (%s::uuid is null and lrl.doc_id = %s)
+          )
+        order by lrl.created_at desc
+        limit 1
+        """,
+        (
+            criterion_uuid,
+            canonical_uuid,
+            canonical_uuid,
+            canonical_uuid,
+            doc_uuid,
+        ),
+    )
+    return await cursor.fetchone()
+
+
+def resolve_criterion_review_final_decision(provider_decision: str | None) -> str:
+    return "relevant" if str(provider_decision or "").strip() == "approve" else "irrelevant"
+
+
+async def persist_criterion_review_resolution(
+    cursor: psycopg.AsyncCursor[Any],
+    *,
+    article: Mapping[str, Any],
+    criterion_id: str | uuid.UUID,
+    review_context: Mapping[str, Any],
+    provider_decision: str,
+    provider_score: float | None,
+    review_source: str,
+    review_id: str | None,
+    reused_from_doc_id: str | None = None,
+    reused_canonical_document_id: str | None = None,
+    prompt_template_id: str | None = None,
+    prompt_version: int | None = None,
+    refresh_selection_gate: bool,
+    historical_backfill: bool,
+    suppress_pipeline_fanout: bool,
+) -> dict[str, Any]:
+    final_decision = resolve_criterion_review_final_decision(provider_decision)
+    base_explain = coerce_json_object(review_context.get("explain_json"))
+    runtime_review_state = coerce_json_object(base_explain.get("runtimeReviewState"))
+    llm_review_payload: dict[str, Any] = {
+        "decision": str(provider_decision),
+        "score": provider_score,
+        "source": review_source,
+    }
+    if review_id is not None:
+        llm_review_payload["reviewId"] = str(review_id)
+    if reused_from_doc_id is not None:
+        llm_review_payload["reusedFromDocId"] = str(reused_from_doc_id)
+    if reused_canonical_document_id is not None:
+        llm_review_payload["reusedCanonicalDocumentId"] = str(reused_canonical_document_id)
+    if prompt_template_id is not None:
+        llm_review_payload["promptTemplateId"] = str(prompt_template_id)
+    if prompt_version is not None:
+        llm_review_payload["promptVersion"] = int(prompt_version)
+    base_explain["llmReview"] = make_json_safe(llm_review_payload)
+    base_explain["runtimeReviewState"] = {
+        "reviewQueued": False,
+        "reason": review_source,
+        "candidateRecoveryProtected": bool(
+            runtime_review_state.get("candidateRecoveryProtected")
+        ),
+        "resolvedByReview": True,
+    }
+    await cursor.execute(
+        """
+        update criterion_match_results
+        set
+          decision = %s,
+          explain_json = explain_json || %s::jsonb
+        where doc_id = %s and criterion_id = %s
+        """,
+        (
+            final_decision,
+            Json(
+                {
+                    "llmReview": llm_review_payload,
+                    "runtimeReviewState": base_explain["runtimeReviewState"],
+                }
+            ),
+            article["doc_id"],
+            criterion_id,
+        ),
+    )
+    filter_context = await resolve_interest_filter_context(
+        cursor,
+        article=article,
+        prefer_story_cluster=False,
+    )
+    technical_filter_state, semantic_decision = resolve_criterion_filter_outcome(
+        pass_filters=True,
+        compat_decision=final_decision,
+    )
+    await upsert_interest_filter_result(
+        cursor,
+        filter_scope="system_criterion",
+        doc_id=uuid.UUID(str(article["doc_id"])),
+        canonical_document_id=filter_context["canonicalDocumentId"],
+        story_cluster_id=filter_context["storyClusterId"],
+        user_id=None,
+        criterion_id=uuid.UUID(str(criterion_id)),
+        interest_id=None,
+        technical_filter_state=technical_filter_state,
+        semantic_decision=semantic_decision,
+        compat_decision=final_decision,
+        verification_target_type=filter_context["verificationTargetType"],
+        verification_target_id=filter_context["verificationTargetId"],
+        verification_state=filter_context["verificationState"],
+        semantic_score=float(base_explain.get("S_final") or 0.0),
+        explain_json=build_interest_filter_explain(
+            base_explain_json=make_json_safe(base_explain),
+            technical_filter_state=technical_filter_state,
+            semantic_decision=semantic_decision,
+            compat_decision=final_decision,
+            filter_scope="system_criterion",
+            context=filter_context,
+        ),
+    )
+    system_feed_result: dict[str, Any] | None = None
+    if refresh_selection_gate:
+        system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
+        if (
+            should_dispatch_clustering(system_feed_result)
+            and not historical_backfill
+            and not suppress_pipeline_fanout
+        ):
+            await insert_outbox_event(
+                cursor,
+                ARTICLE_CRITERIA_MATCHED_EVENT,
+                "article",
+                article["doc_id"],
+                {"docId": str(article["doc_id"]), "version": 1},
+            )
+    return {
+        "finalDecision": final_decision,
+        "reviewSource": review_source,
+        "llmReview": llm_review_payload,
+        "systemFeedResult": system_feed_result,
+    }
+
+
 async def upsert_final_selection_result(
     cursor: psycopg.AsyncCursor[Any],
     *,
@@ -1659,6 +1833,9 @@ async def upsert_final_selection_result(
           count(*) filter (
             where coalesce((explain_json -> 'candidateSignals' ->> 'upliftedToGrayZone')::boolean, false)
           )::int as candidate_signal_uplift_count,
+          count(*) filter (
+            where coalesce(explain_json -> 'llmReview' ->> 'source', '') = 'reused_canonical_llm_review'
+          )::int as canonical_review_reused_count,
           count(*) filter (where technical_filter_state = 'filtered_out')::int as technical_filtered_out_count
         from interest_filter_results
         where doc_id = %s
@@ -1667,6 +1844,21 @@ async def upsert_final_selection_result(
         (doc_id,),
     )
     counts = await cursor.fetchone() or {}
+    duplicate_article_count = 1
+    if selection_context.get("canonicalDocumentId") is not None:
+        await cursor.execute(
+            """
+            select count(*)::int as duplicate_article_count
+            from articles
+            where canonical_doc_id = %s
+            """,
+            (selection_context["canonicalDocumentId"],),
+        )
+        duplicate_row = await cursor.fetchone() or {}
+        duplicate_article_count = max(
+            int(duplicate_row.get("duplicate_article_count") or 0),
+            1,
+        )
     summary = summarize_final_selection_result(
         total_filter_count=int(counts.get("total_filter_count") or 0),
         matched_filter_count=int(counts.get("matched_filter_count") or 0),
@@ -1685,6 +1877,21 @@ async def upsert_final_selection_result(
     explain_json = coerce_json_object(summary.get("explain_json"))
     explain_json["candidateSignalUpliftCount"] = int(
         counts.get("candidate_signal_uplift_count") or 0
+    )
+    explain_json["canonicalReviewReused"] = bool(
+        counts.get("canonical_review_reused_count") or 0
+    )
+    explain_json["canonicalReviewReusedCount"] = int(
+        counts.get("canonical_review_reused_count") or 0
+    )
+    explain_json["duplicateArticleCountForCanonical"] = duplicate_article_count
+    explain_json["canonicalSelectionReused"] = bool(
+        duplicate_article_count > 1 and bool(summary["isSelected"])
+    )
+    explain_json["selectionReuseSource"] = (
+        "canonical_reused"
+        if duplicate_article_count > 1 and bool(summary["isSelected"])
+        else "article_level"
     )
     explain_json["canonicalDocumentId"] = (
         None
@@ -1785,6 +1992,14 @@ async def upsert_final_selection_result(
         "candidateSignalUpliftCount": int(
             counts.get("candidate_signal_uplift_count") or 0
         ),
+        "canonicalReviewReused": bool(counts.get("canonical_review_reused_count") or 0),
+        "canonicalReviewReusedCount": int(
+            counts.get("canonical_review_reused_count") or 0
+        ),
+        "duplicateArticleCountForCanonical": duplicate_article_count,
+        "canonicalSelectionReused": bool(
+            duplicate_article_count > 1 and bool(summary["isSelected"])
+        ),
         "technicalFilteredOutCount": int(counts.get("technical_filtered_out_count") or 0),
         "previousDecision": (
             str(previous_result.get("final_decision") or "")
@@ -1840,11 +2055,73 @@ async def fetch_selection_gate_result_row(
             ),
             "verification_target_id": final_selection_result.get("verification_target_id"),
             "verification_state": final_selection_result.get("verification_state"),
+            "selection_reuse_source": "article_level",
         }
+
+    await cursor.execute(
+        """
+        select canonical_doc_id
+        from articles
+        where doc_id = %s
+        """,
+        (doc_id,),
+    )
+    article_row = await cursor.fetchone() or {}
+    canonical_document_id = article_row.get("canonical_doc_id")
+    if canonical_document_id is not None:
+        await cursor.execute(
+            """
+            select
+              fsr.final_decision,
+              fsr.is_selected,
+              fsr.compat_system_feed_decision,
+              fsr.verification_target_type,
+              fsr.verification_target_id,
+              fsr.verification_state
+            from final_selection_results fsr
+            where fsr.canonical_document_id = %s
+            order by fsr.is_selected desc, fsr.updated_at desc, fsr.doc_id asc
+            limit 1
+            """,
+            (canonical_document_id,),
+        )
+        canonical_final_selection = await cursor.fetchone()
+        if canonical_final_selection is not None:
+            return {
+                "selection_source": "final_selection_results",
+                "decision": str(canonical_final_selection.get("final_decision") or ""),
+                "is_selected": bool(canonical_final_selection.get("is_selected")),
+                "compat_system_feed_decision": str(
+                    canonical_final_selection.get("compat_system_feed_decision") or ""
+                ),
+                "verification_target_type": canonical_final_selection.get(
+                    "verification_target_type"
+                ),
+                "verification_target_id": canonical_final_selection.get(
+                    "verification_target_id"
+                ),
+                "verification_state": canonical_final_selection.get("verification_state"),
+                "selection_reuse_source": "canonical_reused",
+            }
 
     system_feed_result = await fetch_system_feed_result_row(cursor, doc_id)
     if system_feed_result is None:
-        return None
+        if canonical_document_id is None:
+            return None
+        await cursor.execute(
+            """
+            select sfr.*
+            from system_feed_results sfr
+            join articles a on a.doc_id = sfr.doc_id
+            where a.canonical_doc_id = %s
+            order by coalesce(sfr.eligible_for_feed, false) desc, sfr.updated_at desc, sfr.doc_id asc
+            limit 1
+            """,
+            (canonical_document_id,),
+        )
+        system_feed_result = await cursor.fetchone()
+        if system_feed_result is None:
+            return None
 
     return {
         "selection_source": "system_feed_results",
@@ -1854,6 +2131,9 @@ async def fetch_selection_gate_result_row(
         "verification_target_type": None,
         "verification_target_id": None,
         "verification_state": None,
+        "selection_reuse_source": (
+            "canonical_reused" if canonical_document_id is not None else "article_level"
+        ),
     }
 
 
@@ -3779,6 +4059,53 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                             context=filter_context,
                         ),
                     )
+                    reused_review = None
+                    if llm_review_queued:
+                        reused_review = await find_reusable_criterion_llm_review(
+                            cursor,
+                            doc_id=article["doc_id"],
+                            criterion_id=criterion["criterion_id"],
+                            canonical_document_id=filter_context["canonicalDocumentId"],
+                        )
+                        if reused_review is not None:
+                            await persist_criterion_review_resolution(
+                                cursor,
+                                article=article,
+                                criterion_id=criterion["criterion_id"],
+                                review_context={"explain_json": explain_json},
+                                provider_decision=str(
+                                    reused_review.get("provider_decision") or "reject"
+                                ),
+                                provider_score=(
+                                    float(reused_review.get("score"))
+                                    if reused_review.get("score") is not None
+                                    else None
+                                ),
+                                review_source="reused_canonical_llm_review",
+                                review_id=str(reused_review.get("review_id") or "").strip()
+                                or None,
+                                reused_from_doc_id=str(
+                                    reused_review.get("reviewed_doc_id") or ""
+                                ).strip()
+                                or None,
+                                reused_canonical_document_id=str(
+                                    reused_review.get("reviewed_canonical_document_id") or ""
+                                ).strip()
+                                or None,
+                                prompt_template_id=str(
+                                    reused_review.get("prompt_template_id") or ""
+                                ).strip()
+                                or None,
+                                prompt_version=(
+                                    int(reused_review.get("prompt_version"))
+                                    if reused_review.get("prompt_version") is not None
+                                    else None
+                                ),
+                                refresh_selection_gate=False,
+                                historical_backfill=historical_backfill,
+                                suppress_pipeline_fanout=suppress_pipeline_fanout,
+                            )
+                            llm_review_queued = False
                     if llm_review_queued:
                         await insert_outbox_event(
                             cursor,
@@ -4554,88 +4881,27 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
                 review_row = await cursor.fetchone()
 
                 if scope == "criterion":
-                    if review_result.decision == "approve":
-                        final_decision = "relevant"
-                    elif review_result.decision == "reject":
-                        final_decision = "irrelevant"
-                    else:
-                        final_decision = "irrelevant"
-                    await cursor.execute(
-                        """
-                        update criterion_match_results
-                        set
-                          decision = %s,
-                          explain_json = explain_json || %s::jsonb
-                        where doc_id = %s and criterion_id = %s
-                        """,
-                        (
-                            final_decision,
-                            Json(
-                                {
-                                    "llmReview": {
-                                        "reviewId": str(review_row["review_id"]),
-                                        "decision": review_result.decision,
-                                        "score": review_result.score,
-                                    }
-                                }
-                            ),
-                            article["doc_id"],
-                            target_id,
-                        ),
-                    )
-                    filter_context = await resolve_interest_filter_context(
+                    await persist_criterion_review_resolution(
                         cursor,
                         article=article,
-                        prefer_story_cluster=False,
-                    )
-                    technical_filter_state, semantic_decision = resolve_criterion_filter_outcome(
-                        pass_filters=True,
-                        compat_decision=final_decision,
-                    )
-                    base_filter_explain = coerce_json_object(review_context.get("explain_json"))
-                    base_filter_explain["llmReview"] = {
-                        "reviewId": str(review_row["review_id"]),
-                        "decision": review_result.decision,
-                        "score": review_result.score,
-                    }
-                    await upsert_interest_filter_result(
-                        cursor,
-                        filter_scope="system_criterion",
-                        doc_id=uuid.UUID(str(article["doc_id"])),
-                        canonical_document_id=filter_context["canonicalDocumentId"],
-                        story_cluster_id=filter_context["storyClusterId"],
-                        user_id=None,
-                        criterion_id=uuid.UUID(str(target_id)),
-                        interest_id=None,
-                        technical_filter_state=technical_filter_state,
-                        semantic_decision=semantic_decision,
-                        compat_decision=final_decision,
-                        verification_target_type=filter_context["verificationTargetType"],
-                        verification_target_id=filter_context["verificationTargetId"],
-                        verification_state=filter_context["verificationState"],
-                        semantic_score=float(base_filter_explain.get("S_final") or 0.0),
-                        explain_json=build_interest_filter_explain(
-                            base_explain_json=make_json_safe(base_filter_explain),
-                            technical_filter_state=technical_filter_state,
-                            semantic_decision=semantic_decision,
-                            compat_decision=final_decision,
-                            filter_scope="system_criterion",
-                            context=filter_context,
+                        criterion_id=target_id,
+                        review_context=review_context,
+                        provider_decision=review_result.decision,
+                        provider_score=review_result.score,
+                        review_source="fresh_llm_review",
+                        review_id=str(review_row["review_id"]),
+                        prompt_template_id=(
+                            str(review_row.get("prompt_template_id") or "").strip() or None
                         ),
+                        prompt_version=(
+                            int(review_row.get("prompt_version"))
+                            if review_row.get("prompt_version") is not None
+                            else None
+                        ),
+                        refresh_selection_gate=True,
+                        historical_backfill=historical_backfill,
+                        suppress_pipeline_fanout=suppress_pipeline_fanout,
                     )
-                    system_feed_result = await upsert_system_feed_result(cursor, article["doc_id"])
-                    if (
-                        should_dispatch_clustering(system_feed_result)
-                        and not historical_backfill
-                        and not suppress_pipeline_fanout
-                    ):
-                        await insert_outbox_event(
-                            cursor,
-                            ARTICLE_CRITERIA_MATCHED_EVENT,
-                            "article",
-                            article["doc_id"],
-                            {"docId": str(article["doc_id"]), "version": 1},
-                        )
                 else:
                     final_decision = "suppress"
                     if review_result.decision == "approve":

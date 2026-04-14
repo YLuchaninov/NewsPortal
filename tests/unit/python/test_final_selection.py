@@ -279,7 +279,26 @@ class FinalSelectionLogicTests(unittest.TestCase):
         self.assertIsNotNone(explain)
         self.assertEqual(explain["signalSource"], "selection_profile_definition")
         self.assertTrue(explain["upliftedToGrayZone"])
-        self.assertGreaterEqual(explain["positiveSignalCount"], 2)
+
+    def test_candidate_signal_uplift_does_not_treat_top_vendor_listicles_as_generic_positive_signal(self) -> None:
+        decision, explain = apply_document_candidate_signal_uplift(
+            title="Top 10 implementation partners in 2026",
+            lead="Our picks and options worth your time.",
+            body="Comparison article for market awareness.",
+            score_final=0.44,
+            positive_score=0.28,
+            lexical_score=0.21,
+            canonical_document_id=None,
+            story_cluster_id=None,
+            verification_state="medium",
+            base_decision="irrelevant",
+        )
+
+        self.assertEqual(decision, "irrelevant")
+        self.assertIsNotNone(explain)
+        self.assertEqual(explain["signalSource"], "generic_fallback")
+        self.assertLessEqual(explain["positiveSignalCount"], 1)
+        self.assertFalse(explain["upliftedToGrayZone"])
 
 
 

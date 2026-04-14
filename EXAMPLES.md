@@ -120,6 +120,9 @@
 - `must_have_terms` стоит включать только для действительно обязательных идентификаторов, без которых interest теряет смысл;
 - не перегружайте `must_have_terms` длинными списками общих слов вроде `partner`, `migration`, `transformation`, иначе вы получите массовый early drop вместо полезного recall;
 - `must_not_have_terms` и negative candidate cues обычно безопаснее, чем `must_have_terms`, потому что они режут явный шум, а не весь поток;
+- duplicate article rows одного и того же canonical документа не должны считаться отдельными победителями: operator/user surfaces должны показывать один canonical-selected сигнал, а повторные article rows нужны для provenance, а не для надувания `selected` и `LLM review` метрик;
+- если видите повторный review/selected по одной и той же canonical семье, сначала проверяйте canonical reuse и negative cues, а не расширяйте `must_have_terms`;
+- для recall-first baseline generic candidate cues должны оставаться структурными (`request`, `replacement`, `procurement`, `implementation pressure`); listicle/ranking wording вроде `top`, `best`, `our picks`, `worth your time` лучше подавлять через negative cues и prompt semantics конкретного application bundle, а не считать достаточным позитивным сигналом.
 - если нужен более точный контроль, держите broad тему в прототипах и candidate cues, а hard constraints добавляйте только после наблюдений по живому потоку.
 
 ### Что теперь обязательно заполнять для каждого system interest
