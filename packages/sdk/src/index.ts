@@ -1,3 +1,4 @@
+import type { WebContentListQuery } from "../../contracts/src/content.ts";
 import type { PaginatedResponse, PaginationQuery } from "../../contracts/src/pagination.ts";
 
 export interface NewsPortalSdkOptions {
@@ -113,10 +114,12 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
   }
 
   return {
-    listSystemSelectedContentItems: <T>(params?: PaginationQuery) =>
+    listSystemSelectedContentItems: <T>(params?: WebContentListQuery) =>
       getPaginated<T>("/collections/system-selected", {
         page: params?.page,
         pageSize: params?.pageSize,
+        sort: params?.sort,
+        q: params?.q?.trim() || undefined,
       }),
     listContentItemsPage: <T>(params?: PaginationQuery) =>
       getPaginated<T>("/content-items", {
@@ -329,10 +332,12 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         pageSize: params?.pageSize,
       }),
     listMatches: <T>(userId: string) => getJson<T>(`/users/${userId}/matches`),
-    listMatchesPage: <T>(userId: string, params?: PaginationQuery) =>
+    listMatchesPage: <T>(userId: string, params?: WebContentListQuery) =>
       getPaginated<T>(`/users/${userId}/matches`, {
         page: params?.page,
         pageSize: params?.pageSize,
+        sort: params?.sort,
+        q: params?.q?.trim() || undefined,
       }),
     listInterests: <T>(userId: string) => getJson<T>(`/users/${userId}/interests`),
     listInterestsPage: <T>(userId: string, params?: PaginationQuery) =>

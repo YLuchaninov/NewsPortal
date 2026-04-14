@@ -57,7 +57,7 @@
 - shipped stage-3 runtime now lets `final_selection_results` and bounded `system_feed_results` distinguish profile-backed cheap `hold` from true LLM-pending gray-zone cases: unresolved profile-backed criteria still surface `final_decision = gray_zone`, but only rows with profile-approved LLM review remain compatibility `pending_llm`, while cheap holds project as compatibility `filtered_out` with explicit `semantic_hold` explain reason;
 - `services/api/app/main.py` uses `final_selection_results` as the primary internal editorial gate for the public/admin selected-content read path;
 - `apps/admin/src/pages/bff/admin/templates.ts` now syncs `interest_templates` into both compatibility `criteria` and additive `selection_profiles`, so current domain semantics are no longer stored only as implicit engine-side template truth;
-- shipped stage-4 operator/explain truth now surfaces profile-driven `selectionMode`, summaries, guidance, diagnostics, and compatibility profile-policy summaries across article/content/resource/system-interest authoring reads instead of leaving those semantics buried only in worker tables or local UI heuristics;
+- shipped stage-4 operator/explain truth now surfaces profile-driven `selectionMode`, summaries, guidance, diagnostics, and compatibility profile-policy summaries across article/content/resource/system-interest authoring reads; system-interest authoring forms now also expose editable compatibility policy controls seeded from those defaults instead of leaving the policy buried only in worker tables or local UI heuristics;
 - shipped stage-5 migration truth now records the active `selectionProfileSnapshot` in historical `backfill` / `repair` results and projects both a human-readable `selection_profile_summary` and the structured replay snapshot itself through maintenance reindex read surfaces, so replay provenance is explicit during compatibility closeout;
 - active semantics remain materially biased by the current system templates, active criteria, and narrow source cohorts, even though the additive runtime architecture itself is already more general than those semantics.
 
@@ -194,7 +194,7 @@ Explain surfaces must favor human-readable reasoning over opaque raw scores.
 - expose profile-driven explain surfaces and operator-tunable controls;
 - keep authoring approachable through description/examples/evidence/policy rather than through hidden code-level semantics;
 - do not require operator understanding of embeddings, thresholds, or prompt internals just to tune a profile.
-- shipped stage-4 truth now centralizes explain vocabulary in API/read models: article/content/resource surfaces expose `selectionReason`, `selectionSummary`, `selectionMode`, `selectionDiagnostics`, and `selectionGuidance`, while system-interest list/edit/create surfaces expose the current compatibility `selection_profile` policy summary instead of hiding it in runtime code.
+- shipped stage-4 truth now centralizes explain vocabulary in API/read models: article/content/resource surfaces expose `selectionReason`, `selectionSummary`, `selectionMode`, `selectionDiagnostics`, and `selectionGuidance`, while system-interest list/edit/create surfaces expose the current compatibility `selection_profile` policy summary and prefilled editable controls instead of hiding that policy in runtime code.
 
 ### `STAGE-5-MIGRATION-BACKFILL-AND-COMPATIBILITY-CLOSEOUT`
 

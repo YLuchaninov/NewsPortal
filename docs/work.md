@@ -17,7 +17,7 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current mode
 
 - Operating mode: normal
-- Why now: the user asked to reset the local compose DB and rerun channel polling from a near-zero baseline while preserving system interests, their runtime companions, LLM templates, and channels.
+- Why now: the current live focus has moved back to the preserved fresh-baseline measurement/tuning lane; the outsourcing-decoupling package is now archived, while the DB-preserving runtime and recall work remain active.
 
 ## Current memory
 
@@ -33,10 +33,17 @@ Durable completed detail переносится в `docs/history.md`.
 - Non-sequence relay fallback remains only for `foundation.smoke.requested` and `source.channel.sync.requested`.
 - Canonical local compose/dev baseline for this lane now sets `WORKER_SEQUENCE_RUNNER_CONCURRENCY=4`, while Python runtime fallback still defaults to `1` when the env is unset.
 - Worktree остается heavily mixed с unrelated in-flight edits, поэтому любой новый item обязан заново объявлять overlap paths вместо предположения о clean baseline.
+- Manual saved digest now defaults to the full saved queue when the flow is opened without explicit `item` ids, so `/saved/digest`, HTML export, and email queueing no longer collapse to the current `DEFAULT_PAGE_SIZE = 20` page unless the user intentionally submits a page-local subset.
+- Saved/editorial `content_item_id` handling is now root-cause-fixed at the API boundary: `/content-items/{id}` falls back to the direct article read-model when a selected exact-duplicate article is absent from the family-canonical collection surface, so `/saved`, `/saved/digest`, `/content/{id}`, and `/following` no longer depend on that hidden `family_rank = 1` assumption.
+- Web user-content state now family-normalizes editorial duplicates on both read and write paths: saved/seen state falls back across the visible editorial family representative, new `user_content_state` writes target that representative, and `/saved` plus manual saved-digest selection collapse historical duplicate family refs to the same visible item id.
 - New local stateful request on 2026-04-13 explicitly allows a destructive local DB reset, but only if the preserved subset is exported first and later restored truthfully.
 - The minimum truthful preserved subset for this reset is now confirmed as `source_providers`, `source_channels`, `interest_templates`, `criteria`, `criteria_compiled`, `selection_profiles`, and `llm_prompt_templates`; preserving only templates/channels would break current system-interest runtime dependencies after reset.
 - To restart channel polling from zero, restored `source_channels` must come back without prior fetch/runtime state: `fetch_cursors` and `source_channel_runtime_state` should stay empty/fresh, while channel-side last-fetch/error timestamps must be cleared after restore.
+- System-interest authoring now keeps compatibility profile defaults visible but no longer locked: create/edit forms prefill `strictness`, `unresolvedDecision`, and `llmReviewMode` from the current policy and let operators override them explicitly without DB migrations or worker-code edits.
+- The outsourcing-decoupling package is archived in `docs/history.md`: generic runtime no longer treats outsourcing vocabulary or the legacy JSON bundle as hidden system truth, while the local worktree still carries the shipped implementation/files until the user decides how to package the commit(s).
+- Built-in outsourcing operator docs are now anchored in `EXAMPLES.md` Example C; `docs/data_scripts/outsource_balanced_templates.md` remains only a focused companion, and `docs/data_scripts/outsource_balanced_templates.json` stays a manual/reference asset rather than a competing primary guide.
 - Repo-level UI proof now includes `pnpm test:web:viewports` for web desktop/tablet/mobile browser coverage and `pnpm test:discovery:admin:compose` for `/admin/discovery` operator flows.
+- Web collection and matches now support URL-backed `sort` plus basic `q` filtering on the existing paginated server read-models: default order remains newest-first, operators/users can switch to oldest/title A-Z/title Z-A, and basic case-insensitive substring search now spans title plus lead/body or summary/body without changing `/saved` or `/following`.
 - The local website-admin operator lane is green again on the rebuilt compose baseline: `/maintenance/web-resources` responds normally, `/resources*` reads render, and provider-specific website/API/Email IMAP admin acceptance is live-proven.
 - Fresh local verification on 2026-04-12 proved live edit/archive/delete flows for system interests and LLM templates, live create/update/clone/delete for user-managed and admin-managed interests, live provider-specific create/update for `website` / `api` / `email_imap` channels, and live channel delete/archive behavior for `rss`.
 - Discovery admin is now live-proven for create/update/archive/reactivate/delete on mission/class rows in addition to compile/run/review/feedback/re-evaluate flows; mission archive is a real persisted lifecycle state, and hard delete is intentionally guarded to history-free entities only.
@@ -102,6 +109,293 @@ Durable completed detail переносится в `docs/history.md`.
   - Immediate next stage: `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`
 
 ### Active work items
+
+- `SPIKE-FULL-PIPELINE-FORENSIC-RECHECK-2026-04-14`
+  - Kind: Spike
+  - Status: done
+  - Goal: re-check the full fresh local pipeline end-to-end after the latest admin-layer tuning and docs closeout, then identify current bottlenecks, suspicious behavior, and any remaining mismatches between intended and actual runtime behavior.
+  - In scope:
+    - read-only diagnostics across ingest, sequence backlog, enrichment, canonicalization, verification, interest filtering, final selection, system feed projection, and LLM review
+    - worker/fetcher/relay log inspection for fresh runtime anomalies
+    - evidence-backed identification of narrow points and misbehavior on the current preserved local baseline
+    - sync of the key findings into `docs/work.md`
+  - Out of scope:
+    - code changes
+    - DB mutations or cleanup
+    - channel/source edits
+    - prompt/template edits
+  - Allowed paths:
+    - `docs/work.md`
+    - optional `/tmp` forensic artifacts
+  - Depends on:
+    - `PATCH-ADMIN-LAYER-SYSTEM-INTEREST-HARD-FILTER-RELAXATION-2026-04-14`
+  - Required proof:
+    - fresh read-only diagnostics pack or equivalent `/tmp` evidence
+    - read-only SQL counts covering ingest -> filter -> final-selection -> LLM path
+    - targeted log evidence for any claimed runtime anomaly
+    - `git diff --check -- docs/work.md`
+  - Risk:
+    - low/medium; this is read-only, but a shallow check could misclassify transient noise as a structural regression.
+  - Worktree overlap:
+    - docs-only plus read-only runtime inspection; do not reopen code or DB-mutation scope during this spike.
+  - Executed proof:
+    - `pnpm article:yield:diagnostics`
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml ps`
+    - read-only `docker logs --tail ...` for `worker`, `fetchers`, and `relay`
+    - read-only `docker exec docker-postgres-1 psql ...` funnel, backlog, selection, and LLM-review queries
+    - `git diff --check -- docs/work.md`
+  - Progress now:
+    - runtime is alive rather than stalled: the compose stack is healthy, `Default Article Pipeline` currently shows `18763` completed runs, `14724` pending, and `4` running, while the last `15m` vs `60m` counts (`2286 completed / 722 created` in `15m`, `10104 completed / 6347 created` in `60m`) show the backlog draining rather than freezing.
+    - the biggest operational narrow points remain upstream and transport-side, not code crashes: the latest diagnostics pack at `/tmp/newsportal-article-yield-2026-04-14T152355221Z` still shows `15648` pending article-ingest runs at snapshot time, `1634` transient fetch failures, and `21781` duplicate article rows, with failure cohorts dominated by `hnrss.org` `502/timeout`, `reddit.com` timeout/401, and XML entity-expansion failures on `stackoverflow.com` and `dev.to`.
+    - the admin-layer hard-filter relaxation is working on the *current* live window even though historical rows still dominate aggregate counters: all 5 live `interest_templates` and `criteria` now have `must_have_terms = []` and empty `time_window_hours`, and the last `15m` of `interest_filter_results` show only `32 filtered_out/not_evaluated` rows versus `11583 passed/no_match`; the remaining fresh technical rejections are mostly explicit `must_not:*` negatives rather than the old blanket `must_have_any/time_window` gates.
+    - the new main bottleneck is semantic yield, not technical filtering: current totals show `80006 filtered_out/not_evaluated`, `11434 passed/no_match`, and only `35 match`; the fresh `15m` window shows `0` `match`, `0` `gray_zone`, and only `rejected` final rows, so most articles now reach scoring but still die as semantic `no_match`.
+    - candidate-signal explainability is present structurally but weak in practice on the current corpus: `710` fresh `15m` rows carry `explain_json.candidateSignals`, yet `positiveGroupHitCount > 0` is `0` in the same window, which means the shipped candidate-uplift layer is recording explain payloads but not finding positive hits in the live feed mix.
+    - the LLM lane is alive but currently low-yield and somewhat inefficient: `llm_review_log = 73` total / `76` completed LLM-review resume sequences, with `35 approve / 26 uncertain / 12 reject` overall, but the fresh `15m` window shows only `11 uncertain / 5 reject` and no resulting selected winners.
+    - there is a strong duplicate-spend / duplicate-selection smell around canonical documents: in the last `60m`, `Show HN: DynamoSQL – I made a SQL query engine for DynamoDB` produced `18` LLM reviews on `1` canonical document, and `Who are the best Microsoft ERP implementation partners? Our top 4 picks of 2026 - TechHQ` produced `28` reviews on `1` canonical document; the same pattern leaks into selected/feed rows where `19` selected rows collapse to only `5` canonical docs, including `14` selected rows for the same TechHQ ERP-partners canonical and `4` rows for the same ERP Software Blog canonical.
+    - current false-positive quality remains poor on the selected set: the selected/feed corpus is dominated by vendor-ranking/listicle content such as `Who are the best Microsoft ERP implementation partners? Our top 4 picks of 2026 - TechHQ`, `ERP Software Blog Announces the 2026 Best Microsoft Dynamics ERP Partners...`, `Top IT Staff Augmentation Companies in 2026...`, and `Top 10 Construction Software Development Companies in 2026`, which is inconsistent with a strict buyer-intent interpretation.
+    - fresh enrichment is moving, but extraction quality still has residual defects: `articles` currently show `15331 pending`, `14246 skipped`, `4102 enriched`, and `227 failed`, while recent failed examples cluster around `reuters.com`, `news.ycombinator.com`, `dl.acm.org`, `bloomberg.com`, `news.sky.com`, and `medium.com`; fetchers logs show recurring `Article enrichment extract failed.` plus `oEmbed resolution failed.` entries even though the overall service remains healthy.
+
+- `PATCH-ADMIN-LAYER-SYSTEM-INTEREST-HARD-FILTER-RELAXATION-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: recover system-interest candidate flow by relaxing only the admin-managed hard filters that currently block almost every article before semantic/LLM evaluation.
+  - In scope:
+    - read-only forensic inspection of current `interest_templates`, `criteria`, `criteria_compiled`, `interest_filter_results`, and `final_selection_results`
+    - application-layer config updates for the five active system interests only
+    - synchronized DB updates for the admin-owned truth layers (`interest_templates`, `criteria`, and compiled hard-constraint snapshots) without code changes
+    - before/after measurement of hard-filter reasons and LLM-lane entry
+  - Out of scope:
+    - worker/API/admin code changes
+    - destructive DB reset or cleanup
+    - source/channel changes
+    - changing prompt templates in this patch
+  - Allowed paths:
+    - `docs/work.md`
+    - optional `/tmp` artifacts
+  - Depends on:
+    - `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION`
+  - Required proof:
+    - read-only before/after SQL counts for `must_have_any`, `time_window`, `interest_filter_results`, `final_selection_results`, and `llm_review_log`
+    - explicit record of which admin-layer settings changed
+    - `git diff --check -- docs/work.md`
+  - Risk:
+    - medium; if the hard-filter relaxation is too broad, the system can flood semantic/LLM lanes with noise, but if it is too narrow, the current zero-gray-zone state will persist.
+  - Worktree overlap:
+    - stateful local DB patch only; do not reopen the already archived outsourcing-decoupling code package while doing this configuration repair.
+  - Executed proof:
+    - read-only baseline SQL over `interest_filter_results`, `final_selection_results`, `llm_review_log`, `selection_profiles`, `sequence_runs`, and `outbox_events`
+    - `docker exec docker-postgres-1 psql ... > /tmp/system_interest_hard_filters_before_2026-04-14.tsv`
+    - transactional local DB updates for `interest_templates`, `criteria`, `criteria_compiled`, and `selection_profiles`
+    - `docker exec docker-postgres-1 psql ... > /tmp/system_interest_hard_filters_after_2026-04-14.tsv`
+    - read-only after-fix SQL over fresh `interest_filter_results`, `final_selection_results`, `llm_review_log`, and candidate-signal explain rows
+    - `git diff --check -- docs/work.md`
+  - Progress now:
+    - read-only diagnosis on 2026-04-14 shows the LLM lane is currently empty because nothing reaches `gray_zone`: `llm_review_log = 0`, `final_selection_results = 0 selected / 0 gray_zone / 10920 rejected`, and `selection_profiles` still correctly read `llmReviewMode = always` for all five active compatibility profiles.
+    - the real blocker is early hard filtering: `interest_filter_results` currently shows `55954` rows as `technical_filter_state = filtered_out` with `semantic_decision = not_evaluated`, while only `141` rows even reach `passed + no_match`.
+    - `filterReasons` are dominated by `must_have_any = 55708` and then `time_window = 25529`, and the current five `interest_templates`/`criteria` all use highly restrictive outsourcing-specific `must_have_terms`, so the next step is to relax those admin-managed constraints without touching the engine.
+    - the local admin-layer repair is now applied to the five active system interests: `must_have_terms` were cleared across `interest_templates`, `criteria`, and `criteria_compiled`, `time_window_hours` were cleared across the same admin-owned truth layers, and the five `selection_profiles` received broader positive `candidateSignals` groups without changing worker code.
+    - the fresh pipeline effect is already visible: first the lane moved from `11` to `532` fresh `technical_filter_state = passed` rows after removing `must_have_terms`, and after clearing `time_window_hours` plus widening positive candidate cues, the latest 2-minute window now shows `977 passed/no_match`, `16 passed/match`, `3 passed/gray_zone`, only `4 filtered_out/not_evaluated`, `9 final_selected`, and `26` `llm_review_log` rows in the last 15 minutes.
+    - the LLM lane is therefore no longer blocked by admin-layer hard filters; any remaining tuning is now about precision/noise and should be handled as a separate follow-up rather than reopening this hard-filter patch.
+
+- `PATCH-EXAMPLES-HARD-FILTER-DOC-CLOSEOUT-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: align `EXAMPLES.md` with the now-proven admin-layer tuning model so operators do not treat `must_have_terms` and `time_window_hours` as mandatory baseline settings.
+  - In scope:
+    - operator-facing wording in `EXAMPLES.md`
+    - clarification that `must_have_terms` and `time_window_hours` are optional hard filters
+    - outsourcing example C baseline updated to keep those hard filters empty by default while preserving later-tightening suggestions
+  - Out of scope:
+    - channel list changes
+    - code, DB, or runtime behavior changes
+    - rewriting the focused companion docs outside the single docs closeout path
+  - Allowed paths:
+    - `docs/work.md`
+    - `EXAMPLES.md`
+  - Depends on:
+    - `PATCH-ADMIN-LAYER-SYSTEM-INTEREST-HARD-FILTER-RELAXATION-2026-04-14`
+  - Required proof:
+    - `git diff --check -- docs/work.md EXAMPLES.md`
+  - Risk:
+    - low; the main risk is documentation drift that would cause operators to reintroduce overly aggressive hard filters through admin settings.
+  - Worktree overlap:
+    - docs-only closeout; do not reopen runtime/code scope.
+  - Executed proof:
+    - `git diff --check -- docs/work.md EXAMPLES.md`
+  - Progress now:
+    - `EXAMPLES.md` no longer describes `must_have_terms` and `time_window_hours` as required baseline inputs across all three scenarios; they are now documented as optional hard filters for later tighten-up only.
+    - the common guidance now explains that recall-first baselines should rely on prototypes, `must_not_have_terms`, candidate cues, and `balanced / hold / always` policy before adding early hard gates.
+    - Example C now matches the live-proven outsourcing admin configuration more closely: baseline `must_have_terms` and `time_window_hours` are intentionally blank, while the previous values are preserved as optional follow-up tighten-up suggestions.
+
+- `PATCH-WEB-FEED-SORT-AND-SEARCH-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: add user-facing sort controls and basic title/text search to the web collection and matches surfaces without changing their existing content boundaries or default newest-first behavior.
+  - In scope:
+    - backward-compatible `sort` / `q` query params for `/collections/system-selected` and `/users/{user_id}/matches`
+    - shared web-content query contract + SDK wiring for collection/matches pagination
+    - GET filter bar plus empty-state distinctions on `/` and `/matches`
+    - targeted API/SDK/web proof for sort/search behavior
+  - Out of scope:
+    - `/saved` or `/following` filter/sort UI
+    - relevance-ranked or PostgreSQL FTS search
+    - durable architecture/process-contract changes outside live work state
+  - Allowed paths:
+    - `docs/work.md`
+    - `packages/contracts/src/content.ts`
+    - `packages/sdk/src/index.ts`
+    - `services/api/app/main.py`
+    - `apps/web/src/pages/index.astro`
+    - `apps/web/src/pages/matches.astro`
+    - `tests/unit/python/test_api_feed_dedup.py`
+    - `tests/unit/python/test_api_matches.py`
+    - `tests/unit/ts/sdk-pagination.test.ts`
+  - Depends on:
+    - `-`
+  - Required proof:
+    - targeted TS unit coverage for collection/matches query serialization
+    - targeted Python unit coverage for collection/matches SQL sort/search branches
+    - `pnpm typecheck`
+    - `git diff --check --` on touched files
+  - Risk:
+    - medium; mismatched count/item filters or unstable SQL ordering would create broken pagination, while an over-broad search clause could unintentionally hide or reorder visible content families.
+  - Worktree overlap:
+    - explicit short-overlap secondary patch only; stay inside the collection/matches API, shared contract, web page, and test surfaces listed above and do not reopen the unrelated saved-digest/admin/runtime edits already present in the mixed worktree.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/sdk-pagination.test.ts`
+    - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_api_feed_dedup tests.unit.python.test_api_matches`
+    - `pnpm typecheck`
+    - `git diff --check -- docs/work.md packages/contracts/src/content.ts packages/sdk/src/index.ts services/api/app/main.py apps/web/src/pages/index.astro apps/web/src/pages/matches.astro tests/unit/python/test_api_feed_dedup.py tests/unit/python/test_api_matches.py tests/unit/ts/sdk-pagination.test.ts`
+  - Progress now:
+    - the shared contracts/SDK now accept a bounded web-content query shape with `sort` and `q`, and both `/collections/system-selected` plus `/users/{user_id}/matches` forward those params without widening unrelated pagination APIs.
+    - API list reads now keep canonical family dedup intact while applying matching search clauses to both `count(*)` and `items`, support newest/oldest/title A-Z/title Z-A ordering, and use case-insensitive substring search over visible title plus lead/body or summary/body.
+    - `/` and `/matches` now expose GET filter bars with URL-stable sort/search state, preserve filters through pagination links, reset naturally to page 1 on new submissions, and distinguish “no content” from “no results for the current filters.”
+
+- `PATCH-USER-CONTENT-STATE-FAMILY-NORMALIZATION-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: make editorial user-content state (`seen`/`saved`/`archived`) follow the visible canonical family representative instead of fragmenting across exact-duplicate article ids.
+  - In scope:
+    - detect same-family editorial state when the current visible card uses a different `doc_id`
+    - normalize new editorial user-state writes toward the current visible family representative
+    - collapse historical exact-duplicate saved refs to the current editorial family representative on saved-page and manual-digest read paths
+    - targeted proof for family-normalized user-content state behavior
+  - Out of scope:
+    - collapsing historical saved-page rows into one record per family
+    - changing resource-content state semantics
+    - broad schema redesign of `user_content_state`
+  - Allowed paths:
+    - `docs/work.md`
+    - `apps/web/src/lib/server/user-content-state.ts`
+    - `apps/web/src/lib/server/saved-digest.ts`
+    - `tests/unit/ts/user-content-state.test.ts`
+    - `tests/unit/ts/saved-digest.test.ts`
+  - Depends on:
+    - `PATCH-SAVED-DIGEST-MISSING-CONTENT-TOLERANCE-2026-04-14`
+  - Required proof:
+    - targeted TS unit coverage for editorial family-normalized state reads/writes
+    - targeted TS unit coverage for saved-ref/digest representative dedupe
+    - `pnpm typecheck`
+    - `git diff --check --` on touched files
+  - Risk:
+    - medium; if normalization picks the wrong representative or merges family state too broadly, it could blur distinct user actions across unrelated items.
+  - Worktree overlap:
+    - stay inside web user-content-state code and tests only; do not reopen unrelated admin/worker/API scope in this follow-up.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/user-content-state.test.ts tests/unit/ts/saved-digest.test.ts`
+    - `pnpm typecheck`
+    - `git diff --check -- docs/work.md apps/web/src/lib/server/user-content-state.ts apps/web/src/lib/server/saved-digest.ts tests/unit/ts/user-content-state.test.ts tests/unit/ts/saved-digest.test.ts`
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d web`
+    - `curl -I http://127.0.0.1:4321/api/health`
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml ps web`
+  - Progress now:
+    - live DB audit on 2026-04-14 found `2` current `saved` rows whose stored editorial `content_item_id` is no longer the visible family representative (`saved_non_primary_rows = 2`), proving the same canonical-family mismatch still leaked into user-state semantics even after the API `404` fix.
+    - `apps/web/src/lib/server/user-content-state.ts` now resolves the visible editorial family representative before `seen`/`saved` writes, falls back to family-level state on reads, and collapses saved-page refs by representative so historical duplicate save rows no longer surface as separate saved cards.
+    - `apps/web/src/lib/server/saved-digest.ts` now reuses the same representative mapping, so all-saved preview/send and explicit item selections both dedupe historical editorial family duplicates instead of reintroducing them through the manual digest path.
+
+- `PATCH-SAVED-DIGEST-MISSING-CONTENT-TOLERANCE-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: keep `/saved` and manual saved-digest preview working when saved editorial ids point to selected exact-duplicate articles that the canonical collection read-model no longer returns directly.
+  - In scope:
+    - root-cause analysis for why saved editorial ids can return `404` while the underlying article row still exists and remains selected
+    - API fallback for selected editorial content items whose exact `content_item_id` is absent from the family-canonical collection read-model
+    - remove any temporary saved-flow masking that would hide genuine backend errors
+    - targeted proof for exact-duplicate saved-content handling
+  - Out of scope:
+    - automatic cleanup/deletion of stale `user_content_state` rows
+    - changes to non-saved surfaces like `/following`
+    - broad SDK error-model redesign
+  - Allowed paths:
+    - `docs/work.md`
+    - `services/api/app/main.py`
+    - `tests/unit/python/test_api_zero_shot_operator_surfaces.py`
+    - `apps/web/src/lib/server/saved-digest.ts`
+    - `apps/web/src/pages/saved.astro`
+    - `tests/unit/ts/saved-digest.test.ts`
+  - Depends on:
+    - `PATCH-SAVED-DIGEST-ALL-SAVED-SELECTION-2026-04-14`
+  - Required proof:
+    - targeted Python unit coverage for saved exact-duplicate content-item fallback
+    - targeted TS unit coverage still green for saved-digest selection semantics
+    - `pnpm typecheck`
+    - `git diff --check --` on touched files
+  - Risk:
+    - medium; if the editorial fallback is too broad, non-selected or actually missing articles could leak past the canonical collection boundary.
+  - Worktree overlap:
+    - stay inside the saved web flow only; do not disturb the existing mixed admin/worker/docs edits.
+  - Executed proof:
+    - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_api_zero_shot_operator_surfaces`
+    - `node --import tsx --test tests/unit/ts/saved-digest.test.ts`
+    - `pnpm typecheck`
+    - `git diff --check -- docs/work.md services/api/app/main.py apps/web/src/lib/server/saved-digest.ts apps/web/src/pages/saved.astro tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/ts/saved-digest.test.ts`
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d api web`
+    - live API probe: `curl -sS -o /tmp/saved-probe.json -w "%{http_code}\n" http://127.0.0.1:8000/content-items/editorial%3A80114343-198c-45db-afb3-acf0bc080ce3`
+    - targeted repo scan: `rg -n "sdk\\.getContentItem<|getContentItem\\(|/content-items/\\{content_item_id\\}|content_item_id\\)" apps services tests packages -g '!**/dist/**'`
+  - Progress now:
+    - live `docker-web-1` logs after the rebuilt `web` prove the failure mode: `/saved` and `/saved/digest` both abort on `Request failed with 404 Not Found`.
+    - direct DB inspection disproved “broken save rows” as the primary cause for the reproduced failing item `editorial:80114343-198c-45db-afb3-acf0bc080ce3`: the article row still exists, stays `visible`, and remains `selected` in both `final_selection_results` and `system_feed_results`.
+    - the root cause is the API read-path mismatch: saved state stores an exact `editorial:<doc_id>`, but `/content-items/{id}` first reads from the family-canonical `combined_content_items_select_sql()` surface where `editorial_content_select_sql()` keeps only `family_rank = 1`; saved exact-duplicate articles therefore 404 even though `get_article(doc_id)` can still read them.
+    - the shipped fix now falls back to an article-derived content-item preview for editorial rows when the family-canonical preview is absent but the article still exists, so exact-duplicate saved/followed/detail rows stay readable without weakening the canonical list endpoints themselves.
+    - targeted repo scan of `sdk.getContentItem(...)` consumers found only `/saved`, `/saved/digest`, `/content/{id}`, and `/following` in the web app; all of them now share the same repaired API route, while `notification_log`, scheduled digests, and live updates do not persist/re-read `content_item_id` through the vulnerable canonical preview path in the same way.
+
+- `PATCH-SAVED-DIGEST-ALL-SAVED-SELECTION-2026-04-14`
+  - Kind: Patch
+  - Status: done
+  - Goal: make the manual saved digest preview/export/email include the full saved queue by default instead of only the current paginated `/saved` page.
+  - In scope:
+    - diagnose and remove the page-size coupling in the `/saved` -> `/saved/digest` flow
+    - keep explicit subset previews possible when the user manually checks only visible items
+    - targeted proof for saved-digest selection semantics and touched web paths
+  - Out of scope:
+    - scheduled digest behavior
+    - changing repo-wide pagination defaults outside the saved-digest flow
+    - stateful Mailpit/email-delivery proof unless the code fix requires it
+  - Allowed paths:
+    - `docs/work.md`
+    - `apps/web/src/lib/server/saved-digest.ts`
+    - `apps/web/src/pages/saved.astro`
+    - `apps/web/src/pages/saved/digest.astro`
+    - `apps/web/src/pages/saved/digest/export.ts`
+    - `apps/web/src/pages/bff/saved-digest.ts`
+    - `tests/unit/ts/saved-digest.test.ts`
+  - Depends on: -
+  - Required proof:
+    - targeted TS unit coverage for saved-digest selection fallback plus rendering
+    - `pnpm typecheck`
+    - `git diff --check --` on touched files
+  - Risk:
+    - medium; digest-selection fixes can silently change subset semantics if "all saved" versus "selected items" is not kept explicit across preview/export/send.
+  - Worktree overlap:
+    - the repo worktree is already mixed in unrelated admin/worker/docs files; this patch must stay confined to the saved-digest web flow plus `docs/work.md`.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/saved-digest.test.ts`
+    - `pnpm typecheck`
+    - `git diff --check -- docs/work.md apps/web/src/lib/server/saved-digest.ts apps/web/src/pages/saved.astro apps/web/src/pages/saved/digest.astro apps/web/src/pages/saved/digest/export.ts apps/web/src/pages/bff/saved-digest.ts tests/unit/ts/saved-digest.test.ts`
+  - Progress now:
+    - investigation showed the manual digest renderer and email queue never imposed a hard `20` item cap; the cap came from `/saved`, which paginated with `DEFAULT_PAGE_SIZE = 20` and submitted only the current page's `savedItems` as hidden `item` fields to `/saved/digest`.
+    - `apps/web/src/lib/server/saved-digest.ts` now resolves the full saved queue whenever no explicit item list is provided, while still preserving explicit subset order/filtering when the user submits checked items manually.
+    - `/saved` now exposes an all-saved preview CTA instead of silently packaging only the visible page, and `/saved/digest` now carries the resolved full item-id list through export and send-to-email so later steps keep the same full selection.
 
 - `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2`
   - Kind: Patch
@@ -272,6 +566,44 @@ Durable completed detail переносится в `docs/history.md`.
     - a short-lived attempt to hard-code an anti-employment buyer-side guard in the generic criterion runtime was rejected as too application-specific for a system that must support arbitrary information domains, so that approach has been removed instead of shipped.
     - the current bounded next move stays in the outsourcing application layer only: bundle prompt semantics now explicitly reject employment/career postings and internal hiring language, while the generic engine remains unchanged.
     - those outsourcing prompt semantics have now been tightened again and pushed straight into the local proof DB from the JSON bundle, lifting all three outsourcing templates to `version = 3`; in the immediate post-refresh window the runtime has not yet produced new review rows, so this semantic change is shipped but still awaiting fresh materialization in `llm_review_log`.
+
+- `SWEEP-EXAMPLES-PRIMARY-OUTSOURCE-DOC-SYNC-2026-04-14`
+  - Kind: Sweep
+  - Status: done
+  - Goal: make `EXAMPLES.md` the primary operator-facing source for the built-in outsourcing example and remove contradictory guidance across the remaining outsourcing reference docs.
+  - In scope:
+    - promote `EXAMPLES.md` Example C to the primary built-in outsourcing configuration guide
+    - align outsourcing prompt names/scopes, template classes, and authoring guidance with the current admin-managed/runtime-backed bundle semantics
+    - reduce `docs/data_scripts/outsource_balanced_templates.md` to a non-contradictory companion/reference role
+    - sync durable truth in `docs/blueprint.md`, `docs/data_scripts/README.md`, `docs/work.md`, and `docs/history.md`
+  - Out of scope:
+    - changing runtime code or live DB rows
+    - changing the actual channel import bundles outside doc/reference wording
+    - introducing a new machine-owned import format for outsourcing templates
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `docs/blueprint.md`
+    - `EXAMPLES.md`
+    - `docs/data_scripts/README.md`
+    - `docs/data_scripts/outsource_balanced_templates.md`
+    - `docs/data_scripts/outsource_balanced_templates.json`
+  - Depends on:
+    - `-`
+  - Required proof:
+    - targeted consistency review across touched outsourcing-doc surfaces
+    - `git diff --check --` on touched files
+  - Risk:
+    - medium; if the docs disagree about the primary source or preserve stale outsourcing bundle semantics, operators can recreate the wrong prompts/templates even though the runtime itself is now admin-managed.
+  - Worktree overlap:
+    - explicit short-overlap secondary docs sweep only; the worktree is already mixed and these paths overlap earlier outsourcing/runtime documentation edits, so stay inside the declared docs surfaces and preserve unrelated in-flight changes.
+  - Executed proof:
+    - targeted line review of `EXAMPLES.md`, `docs/data_scripts/README.md`, `docs/data_scripts/outsource_balanced_templates.md`, and `docs/blueprint.md`
+    - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md EXAMPLES.md docs/data_scripts/README.md docs/data_scripts/outsource_balanced_templates.md`
+  - Progress now:
+    - `EXAMPLES.md` now explicitly owns the built-in outsourcing walkthrough and Example C was synced to the current 5-template buyer-intent bundle plus the shipped `Outsourcing buyer-intent * review` prompt names/scopes.
+    - the narrow outsourcing Markdown and the data-scripts README now describe `docs/data_scripts/outsource_balanced_templates.md` as a focused companion to Example C instead of a competing primary handbook.
+    - `docs/history.md` now records the docs ownership change, and `docs/blueprint.md` carries the updated durable truth for the built-in outsourcing operator path.
 
 - `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13`
   - Kind: Patch
@@ -601,12 +933,13 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Next recommended action
 
-- Continue `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt baseline: inspect the new post-reset corpus and verify whether candidate-uplift / gray-zone / LLM-review behavior improves on this truly fresh rerun.
+- Keep the preserved/fresh DB intact and observe fresh corpus behavior with the newly generic candidate-uplift runtime plus admin-managed candidate cues.
+- If follow-up work is needed, make it a new proof-oriented item around live materialization quality rather than reintroducing domain-specific code paths.
 
 ### Archive sync status
 
 - Completed item or capability awaiting archive sync:
-  none; the full UI button-audit sweep was archived in `docs/history.md` during this sync cycle.
+  none; the outsourcing-decoupling capability and its done follow-on patches were archived in `docs/history.md` during this sync cycle.
 - Why it is still live, if applicable:
   n/a.
 - Archive action required next:
@@ -622,6 +955,8 @@ Durable completed detail переносится в `docs/history.md`.
   none recorded; proof reused declared local env contracts only.
 - Seeded or imported data:
   fresh local compose volumes now contain run-scoped articles, channels, interests, notification rows, discovery mission/class/candidate rows, and targeted CRUD-check entities created by `pnpm test:mvp:internal`, `pnpm test:discovery:admin:compose`, the targeted admin/user/channel smoke checks, and the temporary idempotent replay of `0030_discovery_schema_drift_repair.sql` used to heal the drifted local discovery schema before final discovery acceptance/browser proof.
+- Admin-managed runtime config changed locally on 2026-04-14:
+  the five active system-interest rows in `interest_templates`, their synced `criteria` / `criteria_compiled` hard-constraint snapshots, and their `selection_profiles` candidate-signal definitions were updated in place to relax `must_have_terms`, clear `time_window_hours`, and widen positive candidate cues for the current local application-layer tuning pass.
 - Cleanup status:
   Firebase aliases were cleaned; on 2026-04-13 the local PostgreSQL/Redis volumes were intentionally destroyed and recreated for `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13`, then again for `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2`; the preserved system-interest/source/template subset is now restored from `/tmp/newsportal-reset-r2-2026-04-13T191252Z`, and compose services are currently running on the second fresh baseline.
 - Reset note:
@@ -630,7 +965,7 @@ Durable completed detail переносится в `docs/history.md`.
 ## Handoff state
 
 - Current item status:
-  `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY` is implementation-complete through `STAGE-4-TRANSIENT-FETCHERS-ENRICHMENT-RETRY-HARDENING`; `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION` has completed `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE`, `STAGE-1-DOCUMENT-AND-CLUSTER-CANDIDATE-SIGNALS`, `STAGE-2-GRAY-ZONE-AND-LLM-CANDIDATE-ROUTING`, and `STAGE-3-NOISE-TOLERANT-PROOF-AND-OPERATOR-VISIBILITY`; `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13` and `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2` are done; `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` has now completed the fresh-corpus spike plus stages 1 and 2, and is currently in `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt second fresh baseline.
+  `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY` is implementation-complete through `STAGE-4-TRANSIENT-FETCHERS-ENRICHMENT-RETRY-HARDENING`; `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION` has completed `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE`, `STAGE-1-DOCUMENT-AND-CLUSTER-CANDIDATE-SIGNALS`, `STAGE-2-GRAY-ZONE-AND-LLM-CANDIDATE-ROUTING`, and `STAGE-3-NOISE-TOLERANT-PROOF-AND-OPERATOR-VISIBILITY`; `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13` and `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2` are done; `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` remains in `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt second fresh baseline; `C-OUTSOURCE-CONFIG-DECOUPLING-FROM-GENERIC-RUNTIME` is archived in `docs/history.md` and no longer has live work items in this document.
 - Executed proof:
   - required read-order reload for `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/test-access-and-fixtures.md`, and `docs/contracts/universal-task-engine.md`
   - read-only forensic diagnostics on 2026-04-13 via `pnpm article:yield:diagnostics`, targeted SQL counts, and compose worker/relay log inspection
@@ -653,6 +988,13 @@ Durable completed detail переносится в `docs/history.md`.
   - read-only baseline for `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE` via `docker exec docker-postgres-1 psql ...` over `interest_filter_results`, `final_selection_results`, `verification_results`, `llm_review_log`, `criteria`, and sampled article/title cohorts
   - read-only spike artifact written to `/tmp/newsportal-candidate-loss-spike-2026-04-13/report.md`
   - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair`
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_system_interests`
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `pnpm typecheck`
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `pnpm typecheck`
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/contracts/universal-selection-profiles.md apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/lib/server/admin-templates.ts apps/admin/src/pages/bff/admin/templates.ts tests/unit/ts/admin-template-sync.test.ts`
+  - `git diff --check -- apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/lib/server/admin-templates.ts apps/admin/src/pages/bff/admin/templates.ts apps/admin/src/pages/templates/interests.astro apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro apps/admin/src/pages/templates/interests/new.astro docs/blueprint.md docs/data_scripts/README.md docs/data_scripts/outsource_balanced_templates.md docs/work.md services/api/app/main.py services/fetchers/src/cli/article-yield-remediate.ts services/workers/app/final_selection.py services/workers/app/main.py tests/unit/python/test_api_system_interests.py tests/unit/python/test_final_selection.py tests/unit/python/test_interest_auto_repair.py tests/unit/ts/admin-template-sync.test.ts`
   - `git diff --check -- services/workers/app/final_selection.py services/workers/app/main.py services/api/app/main.py tests/unit/python/test_final_selection.py tests/unit/python/test_interest_auto_repair.py`
   - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_api_system_interests tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair`
   - `node --import tsx --test tests/unit/ts/admin-operator-surfaces.test.ts`

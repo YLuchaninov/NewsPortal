@@ -28,8 +28,18 @@ export interface InterestTemplateInput {
   allowedContentKinds: string[];
   shortTokensRequired: string[];
   shortTokensForbidden: string[];
+  candidatePositiveSignals: CandidateSignalGroup[];
+  candidateNegativeSignals: CandidateSignalGroup[];
+  selectionProfileStrictness: "strict" | "balanced" | "broad";
+  selectionProfileUnresolvedDecision: "hold" | "reject";
+  selectionProfileLlmReviewMode: "disabled" | "optional_high_value_only" | "always";
   priority: number;
   isActive: boolean;
+}
+
+export interface CandidateSignalGroup {
+  name: string;
+  cues: string[];
 }
 
 type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
@@ -72,6 +82,17 @@ interface SelectionProfileSyncRow {
   version: number;
 }
 
+interface CandidateSignalDefinition {
+  positiveGroups: CandidateSignalGroup[];
+  negativeGroups: CandidateSignalGroup[];
+}
+
+interface SelectionProfilePolicyDefinition {
+  strictness: "strict" | "balanced" | "broad";
+  unresolvedDecision: "hold" | "reject";
+  llmReviewMode: "disabled" | "optional_high_value_only" | "always";
+}
+
 export interface InterestTemplateCriterionSyncResult {
   criterionId: string;
   version: number;
@@ -86,6 +107,11 @@ export interface InterestTemplateSelectionProfileSyncResult {
 }
 
 const DEFAULT_ALLOWED_CONTENT_KINDS = RESOURCE_KINDS.filter((kind) => kind !== "unknown");
+const DEFAULT_SELECTION_PROFILE_POLICY: SelectionProfilePolicyDefinition = {
+  strictness: "balanced",
+  unresolvedDecision: "hold",
+  llmReviewMode: "always",
+};
 
 function readOptionalString(value: unknown): string | null {
   if (value == null) {
@@ -137,6 +163,24 @@ function readPositiveNumber(value: unknown, fallback: number, fieldName: string)
   return parsed;
 }
 
+function readStringEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: T,
+  fieldName: string
+): T {
+  const normalized = readOptionalString(value);
+  if (!normalized) {
+    return fallback;
+  }
+  if ((allowed as readonly string[]).includes(normalized)) {
+    return normalized as T;
+  }
+  throw new Error(
+    `Template field "${fieldName}" must be one of: ${allowed.join(", ")}.`
+  );
+}
+
 function readNullablePositiveInteger(
   value: unknown,
   fieldName: string
@@ -172,6 +216,131 @@ function readTextList(value: unknown): string[] {
     .split("\n")
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function slugifyCandidateSignalName(value: string, fallback: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized || fallback;
+}
+
+function parseCandidateSignalGroups(value: unknown): CandidateSignalGroup[] {
+  const lines = readTextList(value);
+  const groups: CandidateSignalGroup[] = [];
+
+  for (const [index, line] of lines.entries()) {
+    const separatorIndex = line.indexOf(":");
+    const rawName = separatorIndex >= 0 ? line.slice(0, separatorIndex).trim() : "";
+    const rawCueBlock = separatorIndex >= 0 ? line.slice(separatorIndex + 1) : line;
+    const cues = rawCueBlock
+      .split("|")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (cues.length === 0) {
+      continue;
+    }
+
+    groups.push({
+      name: slugifyCandidateSignalName(rawName, `group_${index + 1}`),
+      cues,
+    });
+  }
+
+  return groups;
+}
+
+function normalizeCandidateSignalGroup(value: unknown): CandidateSignalGroup | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const cues = Array.isArray(record.cues)
+    ? record.cues.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : Array.isArray(record.terms)
+      ? record.terms.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [];
+  if (cues.length === 0) {
+    return null;
+  }
+
+  return {
+    name: slugifyCandidateSignalName(String(record.name ?? ""), "group"),
+    cues,
+  };
+}
+
+function normalizeCandidateSignalGroups(value: unknown): CandidateSignalGroup[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => normalizeCandidateSignalGroup(entry))
+    .filter((entry): entry is CandidateSignalGroup => entry !== null);
+}
+
+function readCandidateSignalDefinition(
+  definitionJson: unknown
+): CandidateSignalDefinition {
+  if (!definitionJson || typeof definitionJson !== "object" || Array.isArray(definitionJson)) {
+    return {
+      positiveGroups: [],
+      negativeGroups: [],
+    };
+  }
+
+  const record = definitionJson as Record<string, unknown>;
+  const rawCandidateSignals = record.candidateSignals;
+  if (
+    !rawCandidateSignals ||
+    typeof rawCandidateSignals !== "object" ||
+    Array.isArray(rawCandidateSignals)
+  ) {
+    return {
+      positiveGroups: [],
+      negativeGroups: [],
+    };
+  }
+
+  const candidateSignals = rawCandidateSignals as Record<string, unknown>;
+  return {
+    positiveGroups: normalizeCandidateSignalGroups(candidateSignals.positiveGroups),
+    negativeGroups: normalizeCandidateSignalGroups(candidateSignals.negativeGroups),
+  };
+}
+
+function readSelectionProfilePolicyDefinition(
+  policyJson: unknown
+): SelectionProfilePolicyDefinition {
+  if (!policyJson || typeof policyJson !== "object" || Array.isArray(policyJson)) {
+    return { ...DEFAULT_SELECTION_PROFILE_POLICY };
+  }
+
+  const record = policyJson as Record<string, unknown>;
+  return {
+    strictness: readStringEnum(
+      record.strictness,
+      ["strict", "balanced", "broad"] as const,
+      DEFAULT_SELECTION_PROFILE_POLICY.strictness,
+      "selection_profile_strictness"
+    ),
+    unresolvedDecision: readStringEnum(
+      record.unresolvedDecision,
+      ["hold", "reject"] as const,
+      DEFAULT_SELECTION_PROFILE_POLICY.unresolvedDecision,
+      "selection_profile_unresolved_decision"
+    ),
+    llmReviewMode: readStringEnum(
+      record.llmReviewMode,
+      ["disabled", "optional_high_value_only", "always"] as const,
+      DEFAULT_SELECTION_PROFILE_POLICY.llmReviewMode,
+      "selection_profile_llm_review_mode"
+    ),
+  };
 }
 
 function normalizeTextList(value: unknown): string[] {
@@ -271,6 +440,16 @@ function buildSelectionProfileCompatibilityPayload(
 } {
   const profileName = resolveCriterionDescription(template);
   const description = template.description.trim();
+  const candidateSignals = {
+    positiveGroups: template.candidatePositiveSignals.map((group) => ({
+      name: group.name,
+      cues: [...group.cues],
+    })),
+    negativeGroups: template.candidateNegativeSignals.map((group) => ({
+      name: group.name,
+      cues: [...group.cues],
+    })),
+  };
 
   return {
     name: profileName,
@@ -300,11 +479,12 @@ function buildSelectionProfileCompatibilityPayload(
         sourceCriterionId: input.criterionId,
         sourceCriterionDescription: input.criterionDescription,
       },
+      candidateSignals,
     },
     policyJson: {
-      strictness: "balanced",
-      unresolvedDecision: "hold",
-      llmReviewMode: "always",
+      strictness: template.selectionProfileStrictness,
+      unresolvedDecision: template.selectionProfileUnresolvedDecision,
+      llmReviewMode: template.selectionProfileLlmReviewMode,
       finalSelectionMode: "compatibility_system_selected",
       priority: Number(template.priority ?? 1),
       allowedContentKinds: [...template.allowedContentKinds],
@@ -384,6 +564,12 @@ async function readInterestTemplateForSync(
     allowedContentKinds: normalizeTextList(row.allowed_content_kinds),
     shortTokensRequired: normalizeTextList(row.short_tokens_required),
     shortTokensForbidden: normalizeTextList(row.short_tokens_forbidden),
+    candidatePositiveSignals: [],
+    candidateNegativeSignals: [],
+    selectionProfileStrictness: DEFAULT_SELECTION_PROFILE_POLICY.strictness,
+    selectionProfileUnresolvedDecision:
+      DEFAULT_SELECTION_PROFILE_POLICY.unresolvedDecision,
+    selectionProfileLlmReviewMode: DEFAULT_SELECTION_PROFILE_POLICY.llmReviewMode,
     priority: Number(row.priority ?? 1),
     isActive: row.is_active === true,
   };
@@ -582,15 +768,10 @@ export async function syncInterestTemplateCriterion(
 
 export async function syncInterestTemplateSelectionProfile(
   queryable: Queryable,
-  interestTemplateId: string
+  interestTemplateId: string,
+  templateOverride?: InterestTemplateInput
 ): Promise<InterestTemplateSelectionProfileSyncResult> {
   const template = await readInterestTemplateForSync(queryable, interestTemplateId);
-  const criterion = await readCriterionForProfileSync(queryable, interestTemplateId);
-  const nextProfile = buildSelectionProfileCompatibilityPayload(template, {
-    interestTemplateId,
-    criterionId: criterion.criterionId,
-    criterionDescription: criterion.criterionDescription,
-  });
   const existingResult = await queryable.query<SelectionProfileSyncRow>(
     `
       select
@@ -613,6 +794,28 @@ export async function syncInterestTemplateSelectionProfile(
     [interestTemplateId]
   );
   const existing = existingResult.rows[0];
+  const candidateSignalsFromExisting = readCandidateSignalDefinition(existing?.definition_json);
+  const existingPolicy = readSelectionProfilePolicyDefinition(existing?.policy_json);
+  const nextTemplate: InterestTemplateInput = {
+    ...template,
+    candidatePositiveSignals:
+      templateOverride?.candidatePositiveSignals ?? candidateSignalsFromExisting.positiveGroups,
+    candidateNegativeSignals:
+      templateOverride?.candidateNegativeSignals ?? candidateSignalsFromExisting.negativeGroups,
+    selectionProfileStrictness:
+      templateOverride?.selectionProfileStrictness ?? existingPolicy.strictness,
+    selectionProfileUnresolvedDecision:
+      templateOverride?.selectionProfileUnresolvedDecision ??
+      existingPolicy.unresolvedDecision,
+    selectionProfileLlmReviewMode:
+      templateOverride?.selectionProfileLlmReviewMode ?? existingPolicy.llmReviewMode,
+  };
+  const criterion = await readCriterionForProfileSync(queryable, interestTemplateId);
+  const nextProfile = buildSelectionProfileCompatibilityPayload(nextTemplate, {
+    interestTemplateId,
+    criterionId: criterion.criterionId,
+    criterionDescription: criterion.criterionDescription,
+  });
 
   if (!existing) {
     const insertResult = await queryable.query<{
@@ -772,6 +975,26 @@ export function parseInterestTemplateInput(
       : [...DEFAULT_ALLOWED_CONTENT_KINDS],
     shortTokensRequired: readTextList(payload.short_tokens_required),
     shortTokensForbidden: readTextList(payload.short_tokens_forbidden),
+    candidatePositiveSignals: parseCandidateSignalGroups(payload.candidate_positive_signals),
+    candidateNegativeSignals: parseCandidateSignalGroups(payload.candidate_negative_signals),
+    selectionProfileStrictness: readStringEnum(
+      payload.selection_profile_strictness,
+      ["strict", "balanced", "broad"] as const,
+      DEFAULT_SELECTION_PROFILE_POLICY.strictness,
+      "selection_profile_strictness"
+    ),
+    selectionProfileUnresolvedDecision: readStringEnum(
+      payload.selection_profile_unresolved_decision,
+      ["hold", "reject"] as const,
+      DEFAULT_SELECTION_PROFILE_POLICY.unresolvedDecision,
+      "selection_profile_unresolved_decision"
+    ),
+    selectionProfileLlmReviewMode: readStringEnum(
+      payload.selection_profile_llm_review_mode,
+      ["disabled", "optional_high_value_only", "always"] as const,
+      DEFAULT_SELECTION_PROFILE_POLICY.llmReviewMode,
+      "selection_profile_llm_review_mode"
+    ),
     priority: readPositiveNumber(payload.priority, 1.0, "priority"),
     isActive: readBoolean(payload.isActive, true, "isActive"),
   };

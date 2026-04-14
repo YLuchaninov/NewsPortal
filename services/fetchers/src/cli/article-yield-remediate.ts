@@ -1,48 +1,19 @@
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  CRITERION_COMPILE_REQUESTED_EVENT,
   normalizeMaxPollIntervalSeconds,
   parseRssChannelConfig
 } from "@newsportal/contracts";
 import type { PoolClient } from "pg";
 
 import {
-  parseInterestTemplateInput,
-  saveInterestTemplate,
-  syncInterestTemplateCriterion
-} from "../../../../apps/admin/src/lib/server/admin-templates";
-import {
   buildComparison,
   collectArticleYieldSnapshot,
   createArticleYieldPackRoot,
   createConfiguredPoolFromLocalEnv,
-  repoRoot,
   writeComparisonPack,
   writeSnapshotPack
 } from "./article-yield-shared";
-
-interface BundleTemplate {
-  name: string;
-  description?: string;
-  positive_prototypes?: string[];
-  negative_prototypes?: string[];
-  must_have_terms?: string[];
-  must_not_have_terms?: string[];
-  places?: string[];
-  languages_allowed?: string[];
-  time_window_hours?: number | null;
-  allowed_content_kinds?: string[];
-  short_tokens_required?: string[];
-  short_tokens_forbidden?: string[];
-  priority?: number;
-}
-
-interface BundleFile {
-  interest_templates?: BundleTemplate[];
-}
 
 interface HnChannelRow {
   channelId: string;
@@ -56,131 +27,6 @@ interface HnChannelRow {
 
 function hasFlag(flag: string): boolean {
   return process.argv.slice(2).includes(flag);
-}
-
-function toMultiline(value: string[] | undefined): string {
-  return (value ?? []).map((entry) => String(entry).trim()).filter(Boolean).join("\n");
-}
-
-async function readTemplateBundle(): Promise<BundleTemplate[]> {
-  const raw = await readFile(
-    path.join(repoRoot, "docs", "data_scripts", "outsource_balanced_templates.json"),
-    "utf8"
-  );
-  const parsed = JSON.parse(raw) as BundleFile;
-  return Array.isArray(parsed.interest_templates) ? parsed.interest_templates : [];
-}
-
-async function insertOutboxEvent(
-  client: Pick<PoolClient, "query">,
-  input: {
-    eventType: string;
-    aggregateType: string;
-    aggregateId: string;
-    payload: Record<string, unknown>;
-  }
-): Promise<void> {
-  await client.query(
-    `
-      insert into outbox_events (
-        event_id,
-        event_type,
-        aggregate_type,
-        aggregate_id,
-        payload_json
-      )
-      values ($1, $2, $3, $4, $5::jsonb)
-    `,
-    [
-      randomUUID(),
-      input.eventType,
-      input.aggregateType,
-      input.aggregateId,
-      JSON.stringify(input.payload)
-    ]
-  );
-}
-
-async function syncCanonicalInterestTemplates(client: PoolClient): Promise<{
-  updatedCount: number;
-  createdCount: number;
-  compileRequestedCount: number;
-  touchedTemplateIds: string[];
-}> {
-  const templates = await readTemplateBundle();
-  const existingTemplates = await client.query<{
-    interest_template_id: string;
-    name: string;
-  }>(
-    `
-      select
-        interest_template_id::text as interest_template_id,
-        name
-      from interest_templates
-      where name = any($1::text[])
-    `,
-    [templates.map((template) => template.name)]
-  );
-
-  const existingByName = new Map(
-    existingTemplates.rows.map((row) => [row.name, row.interest_template_id])
-  );
-
-  let updatedCount = 0;
-  let createdCount = 0;
-  let compileRequestedCount = 0;
-  const touchedTemplateIds: string[] = [];
-
-  for (const template of templates) {
-    const interestTemplateId = existingByName.get(template.name);
-    const input = parseInterestTemplateInput({
-      interestTemplateId,
-      name: template.name,
-      description: template.description ?? "",
-      positive_texts: toMultiline(template.positive_prototypes),
-      negative_texts: toMultiline(template.negative_prototypes),
-      must_have_terms: toMultiline(template.must_have_terms),
-      must_not_have_terms: toMultiline(template.must_not_have_terms),
-      places: toMultiline(template.places),
-      languages_allowed: toMultiline(template.languages_allowed),
-      time_window_hours:
-        template.time_window_hours == null ? "" : String(template.time_window_hours),
-      allowed_content_kinds: toMultiline(template.allowed_content_kinds),
-      short_tokens_required: toMultiline(template.short_tokens_required),
-      short_tokens_forbidden: toMultiline(template.short_tokens_forbidden),
-      priority: String(template.priority ?? 1),
-      isActive: "true"
-    });
-
-    const saveResult = await saveInterestTemplate(client, input);
-    const syncResult = await syncInterestTemplateCriterion(client, saveResult.interestTemplateId);
-    if (syncResult.compileRequested) {
-      await insertOutboxEvent(client, {
-        eventType: CRITERION_COMPILE_REQUESTED_EVENT,
-        aggregateType: "criterion",
-        aggregateId: syncResult.criterionId,
-        payload: {
-          criterionId: syncResult.criterionId,
-          version: syncResult.version
-        }
-      });
-      compileRequestedCount += 1;
-    }
-
-    if (saveResult.created) {
-      createdCount += 1;
-    } else {
-      updatedCount += 1;
-    }
-    touchedTemplateIds.push(saveResult.interestTemplateId);
-  }
-
-  return {
-    updatedCount,
-    createdCount,
-    compileRequestedCount,
-    touchedTemplateIds
-  };
 }
 
 async function quarantineGoogleRssChannels(client: PoolClient): Promise<number> {
@@ -358,12 +204,14 @@ async function tuneHnChannels(client: PoolClient): Promise<{
 }
 
 async function applyRemediation(client: PoolClient): Promise<Record<string, unknown>> {
-  const templateSync = await syncCanonicalInterestTemplates(client);
   const googleChannelsQuarantined = await quarantineGoogleRssChannels(client);
   const hnTuning = await tuneHnChannels(client);
 
   return {
-    templateSync,
+    templateSync: {
+      mode: "skipped",
+      reason: "runtime_truth_lives_in_admin"
+    },
     googleChannelsQuarantined,
     hnTuning
   };

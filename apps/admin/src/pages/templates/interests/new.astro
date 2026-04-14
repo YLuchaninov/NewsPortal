@@ -61,6 +61,8 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
         allowedContentKinds: "editorial\nlisting\nentity\ndocument\ndata_file\napi_payload",
         shortTokensRequired: "",
         shortTokensForbidden: "",
+        candidatePositiveSignals: "",
+        candidateNegativeSignals: "",
         priority: "1.0",
         isActive: true,
         selectionProfileId: "",
@@ -70,6 +72,9 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
         selectionProfileStrictness: "balanced",
         selectionProfileUnresolvedDecision: "hold",
         selectionProfileLlmReviewMode: "always",
+        candidateSignalSource: "generic_fallback",
+        candidatePositiveSignalGroupCount: "0",
+        candidateNegativeSignalGroupCount: "0",
       }}
     />
   </div>

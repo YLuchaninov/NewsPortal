@@ -83,6 +83,12 @@ class ApiSystemInterestsTests(unittest.TestCase):
                         "interest_template_id": "template-1",
                         "selection_profile_status": "active",
                         "selection_profile_family": "compatibility_interest_template",
+                        "selection_profile_definition_json": {
+                            "candidateSignals": {
+                                "positiveGroups": [{"name": "request_search", "cues": ["looking for"]}],
+                                "negativeGroups": [{"name": "hiring_noise", "cues": ["hiring"]}],
+                            }
+                        },
                         "selection_profile_policy_json": {
                             "strictness": "balanced",
                             "unresolvedDecision": "hold",
@@ -99,9 +105,18 @@ class ApiSystemInterestsTests(unittest.TestCase):
             result["items"][0]["selection_profile_policy_json"]["llmReviewMode"],
             "always",
         )
+        self.assertEqual(
+            result["items"][0]["selection_profile_candidate_signal_summary"]["source"],
+            "selection_profile_definition",
+        )
+        self.assertEqual(
+            result["items"][0]["selection_profile_candidate_signal_summary"]["positiveGroupCount"],
+            1,
+        )
         items_sql = query_all.call_args.args[0]
         self.assertIn("left join selection_profiles sp", items_sql)
         self.assertIn("sp.selection_profile_id::text as selection_profile_id", items_sql)
+        self.assertIn("sp.definition_json as selection_profile_definition_json", items_sql)
         self.assertIn("sp.policy_json as selection_profile_policy_json", items_sql)
         count_sql = query_count.call_args.args[0]
         self.assertIn("from interest_templates it", count_sql)
@@ -116,6 +131,12 @@ class ApiSystemInterestsTests(unittest.TestCase):
                 "selection_profile_status": "active",
                 "selection_profile_version": 3,
                 "selection_profile_family": "compatibility_interest_template",
+                "selection_profile_definition_json": {
+                    "candidateSignals": {
+                        "positiveGroups": [{"name": "request_search", "cues": ["looking for"]}],
+                        "negativeGroups": [],
+                    }
+                },
                 "selection_profile_policy_json": {
                     "strictness": "balanced",
                     "unresolvedDecision": "hold",
@@ -128,10 +149,15 @@ class ApiSystemInterestsTests(unittest.TestCase):
         self.assertEqual(result["selection_profile_id"], "profile-1")
         self.assertEqual(result["selection_profile_policy_json"]["unresolvedDecision"], "hold")
         self.assertEqual(result["selection_profile_policy_json"]["llmReviewMode"], "always")
+        self.assertEqual(
+            result["selection_profile_candidate_signal_summary"]["positiveGroupCount"],
+            1,
+        )
         sql = query_one.call_args.args[0]
         self.assertIn("left join selection_profiles sp", sql)
         self.assertIn("sp.profile_family as selection_profile_family", sql)
         self.assertIn("sp.version as selection_profile_version", sql)
+        self.assertIn("sp.definition_json as selection_profile_definition_json", sql)
 
     def test_non_compatibility_profiles_keep_persisted_policy_mode(self) -> None:
         with patch.object(

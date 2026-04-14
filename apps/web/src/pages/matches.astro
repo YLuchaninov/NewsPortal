@@ -1,6 +1,6 @@
 ---
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
-import type { ContentItemPreview } from "@newsportal/contracts";
+import type { ContentItemPreview, WebContentListSort } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
@@ -14,6 +14,17 @@ import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap } from "../lib/server/user-content-state";
 
 export const prerender = false;
+const WEB_CONTENT_SORT_OPTIONS: Array<{ value: WebContentListSort; label: string }> = [
+  { value: "latest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "title_asc", label: "Title A-Z" },
+  { value: "title_desc", label: "Title Z-A" },
+];
+
+function isWebContentListSort(value: string | null): value is WebContentListSort {
+  return WEB_CONTENT_SORT_OPTIONS.some((option) => option.value === value);
+}
+
 const session = await resolveWebSession(Astro.request);
 
 if (!session) {
@@ -43,8 +54,20 @@ const bffPaths = {
 
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const requestedQuery = Astro.url.searchParams.get("q") ?? "";
+const searchQuery = requestedQuery.trim();
+const requestedSort = Astro.url.searchParams.get("sort");
+const selectedSort: WebContentListSort = isWebContentListSort(requestedSort)
+  ? requestedSort
+  : "latest";
+const hasActiveFilters = searchQuery.length > 0 || selectedSort !== "latest";
 const [matches, profile] = await Promise.all([
-  sdk.listMatchesPage<ContentItemPreview>(session.userId, { page, pageSize: DEFAULT_PAGE_SIZE }),
+  sdk.listMatchesPage<ContentItemPreview>(session.userId, {
+    page,
+    pageSize: DEFAULT_PAGE_SIZE,
+    sort: selectedSort,
+    q: searchQuery || undefined,
+  }),
   queryOne<Record<string, unknown>>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
 ]);
 const userStateMap = await getUserContentStateMap(getPool(), session.userId, matches.items);
@@ -57,6 +80,7 @@ const matchesRevision = buildLiveRevision([
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const clearFiltersHref = Astro.url.pathname;
 
 function resolvePageHref(nextPage: number): string {
   const target = new URL(Astro.url);
@@ -120,6 +144,48 @@ function readMatchNote(match: ContentItemPreview): string | null {
     />
   </div>
 
+  <form method="get" action={Astro.url.pathname} class="mb-8 rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+      <div class="flex-1">
+        <label for="matches-search" class="mb-1 block text-sm font-medium text-foreground">Search</label>
+        <input
+          id="matches-search"
+          type="search"
+          name="q"
+          value={searchQuery}
+          placeholder="Search title or text"
+          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
+      <div class="w-full lg:w-56">
+        <label for="matches-sort" class="mb-1 block text-sm font-medium text-foreground">Sort</label>
+        <select
+          id="matches-sort"
+          name="sort"
+          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {WEB_CONTENT_SORT_OPTIONS.map((option) => (
+            <option value={option.value} selected={option.value === selectedSort}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+      <div class="flex gap-2 lg:pb-0">
+        <button
+          type="submit"
+          class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Apply
+        </button>
+        <a
+          href={clearFiltersHref}
+          class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          Clear filters
+        </a>
+      </div>
+    </div>
+  </form>
+
   {matches.total === 0 ? (
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -127,14 +193,17 @@ function readMatchNote(match: ContentItemPreview): string | null {
           <path d="M20 6 9 17l-5-5"/>
         </svg>
       </div>
-      <p class="font-semibold text-lg">No personal matches yet</p>
+      <p class="font-semibold text-lg">{hasActiveFilters ? "No filtered matches found" : "No personal matches yet"}</p>
       <p class="text-muted-foreground text-sm mt-1 max-w-md">
-        This page only fills with content that passed the global system-selected collection and also matched your interests.
-        Create or update an interest, then give the background sync a moment to replay existing selected content.
+        {hasActiveFilters
+          ? "Try a different search or sort option, or clear the current filters to see all of your matches."
+          : "This page only fills with content that passed the global system-selected collection and also matched your interests. Create or update an interest, then give the background sync a moment to replay existing selected content."}
       </p>
-      <a href="/interests" class="mt-4 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-        Manage Interests
-      </a>
+      {!hasActiveFilters && (
+        <a href="/interests" class="mt-4 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+          Manage Interests
+        </a>
+      )}
     </div>
   ) : (
     <>

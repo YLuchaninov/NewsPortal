@@ -40,8 +40,56 @@ function asPolicyRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function asCandidateSignalGroups(
+  value: unknown,
+  key: "positiveGroups" | "negativeGroups"
+): Array<{ name: string; cues: string[] }> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const record = value as Record<string, unknown>;
+  const candidateSignals =
+    record.candidateSignals && typeof record.candidateSignals === "object" && !Array.isArray(record.candidateSignals)
+      ? (record.candidateSignals as Record<string, unknown>)
+      : {};
+  const groups = candidateSignals[key];
+  if (!Array.isArray(groups)) {
+    return [];
+  }
+
+  return groups
+    .map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return null;
+      }
+      const group = entry as Record<string, unknown>;
+      const cues = Array.isArray(group.cues)
+        ? group.cues.map((item) => String(item ?? "").trim()).filter(Boolean)
+        : [];
+      if (cues.length === 0) {
+        return null;
+      }
+      return {
+        name: String(group.name ?? "").trim() || "group",
+        cues,
+      };
+    })
+    .filter((entry): entry is { name: string; cues: string[] } => entry !== null);
+}
+
+function candidateGroupsToLines(groups: Array<{ name: string; cues: string[] }>): string {
+  return groups.map((group) => `${group.name}: ${group.cues.join(" | ")}`).join("\n");
+}
+
 const isActive = template.is_active === true;
 const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_json);
+const selectionProfileDefinition = asPolicyRecord(template.selection_profile_definition_json);
+const candidatePositiveGroups = asCandidateSignalGroups(selectionProfileDefinition, "positiveGroups");
+const candidateNegativeGroups = asCandidateSignalGroups(selectionProfileDefinition, "negativeGroups");
+const candidateSignalSummary =
+  template.selection_profile_candidate_signal_summary && typeof template.selection_profile_candidate_signal_summary === "object"
+    ? (template.selection_profile_candidate_signal_summary as Record<string, unknown>)
+    : {};
 ---
 
 <AdminShell title="Edit System Interest — Admin" session={session} flash={flash} activeNav="interest-templates">
@@ -108,6 +156,8 @@ const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_
         allowedContentKinds: asLines(template.allowed_content_kinds),
         shortTokensRequired: asLines(template.short_tokens_required),
         shortTokensForbidden: asLines(template.short_tokens_forbidden),
+        candidatePositiveSignals: candidateGroupsToLines(candidatePositiveGroups),
+        candidateNegativeSignals: candidateGroupsToLines(candidateNegativeGroups),
         priority: String(template.priority ?? 1),
         isActive,
         selectionProfileId: String(template.selection_profile_id ?? ""),
@@ -117,6 +167,9 @@ const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_
         selectionProfileStrictness: String(selectionProfilePolicy.strictness ?? ""),
         selectionProfileUnresolvedDecision: String(selectionProfilePolicy.unresolvedDecision ?? ""),
         selectionProfileLlmReviewMode: String(selectionProfilePolicy.llmReviewMode ?? ""),
+        candidateSignalSource: String(candidateSignalSummary.source ?? "generic_fallback"),
+        candidatePositiveSignalGroupCount: String(candidateSignalSummary.positiveGroupCount ?? candidatePositiveGroups.length),
+        candidateNegativeSignalGroupCount: String(candidateSignalSummary.negativeGroupCount ?? candidateNegativeGroups.length),
       }}
     />
 

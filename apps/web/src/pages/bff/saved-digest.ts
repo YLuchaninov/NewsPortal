@@ -43,9 +43,6 @@ export const POST: APIRoute = async ({ request }) => {
   const formData = await request.formData();
   const itemIds = parseSelectedDigestItemIds(formData);
   const returnTo = String(formData.get("returnTo") ?? "/saved/digest").trim() || "/saved/digest";
-  if (itemIds.length === 0) {
-    return buildReturnRedirect(request, returnTo, "error", "Select at least one saved item.");
-  }
 
   try {
     const items = await loadSavedDigestItems(getPool(), session.userId, itemIds);

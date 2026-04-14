@@ -50,6 +50,7 @@ DISCOVERY_HYPOTHESIS_STATUSES = {"pending", "running", "completed", "failed", "s
 DISCOVERY_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
 CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
 WEB_RESOURCE_EXTRACTION_STATES = {"pending", "enriched", "skipped", "failed"}
+WEB_CONTENT_LIST_SORTS = {"latest", "oldest", "title_asc", "title_desc"}
 WEB_RESOURCE_KINDS = {
     "editorial",
     "listing",
@@ -150,7 +151,29 @@ def normalize_system_interest_selection_profile_payload(
         if not llm_review_mode or llm_review_mode == "optional_high_value_only":
             normalized_policy["llmReviewMode"] = "always"
 
+    raw_definition = template.get("selection_profile_definition_json")
+    definition_json = raw_definition if isinstance(raw_definition, Mapping) else {}
+    raw_candidate_signals = (
+        definition_json.get("candidateSignals")
+        if isinstance(definition_json.get("candidateSignals"), Mapping)
+        else {}
+    )
+    positive_groups = raw_candidate_signals.get("positiveGroups")
+    negative_groups = raw_candidate_signals.get("negativeGroups")
+    positive_group_count = len(positive_groups) if isinstance(positive_groups, list) else 0
+    negative_group_count = len(negative_groups) if isinstance(negative_groups, list) else 0
+
     normalized["selection_profile_policy_json"] = normalized_policy
+    normalized["selection_profile_definition_json"] = definition_json
+    normalized["selection_profile_candidate_signal_summary"] = {
+        "source": (
+            "selection_profile_definition"
+            if positive_group_count > 0 or negative_group_count > 0
+            else "generic_fallback"
+        ),
+        "positiveGroupCount": positive_group_count,
+        "negativeGroupCount": negative_group_count,
+    }
     return normalized
 
 
@@ -412,6 +435,73 @@ def resolve_pagination(
 def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
     row = query_one(sql, params)
     return int(row["total"]) if row and row.get("total") is not None else 0
+
+
+def normalize_web_content_list_sort(value: str | None) -> str:
+    if not isinstance(value, str):
+        return "latest"
+    normalized = str(value or "").strip().lower()
+    if normalized in WEB_CONTENT_LIST_SORTS:
+        return normalized
+    return "latest"
+
+
+def normalize_web_content_search_query(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def build_web_content_search_pattern(query: str) -> str:
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def build_web_content_search_clause(
+    query: str | None,
+    *,
+    alias: str,
+) -> tuple[str, tuple[Any, ...]]:
+    if query is None:
+        return "", ()
+    return (
+        f"where coalesce({alias}._search_text, '') ilike %s escape '\\'",
+        (build_web_content_search_pattern(query),),
+    )
+
+
+def build_web_content_order_clause(sort: str, *, alias: str) -> str:
+    if sort == "oldest":
+        return (
+            f"order by {alias}.published_at asc nulls last, "
+            f"{alias}.ingested_at asc nulls last, {alias}.content_item_id"
+        )
+    if sort == "title_asc":
+        return (
+            f"order by {alias}._normalized_title asc nulls last, "
+            f"{alias}.published_at desc nulls last, "
+            f"{alias}.ingested_at desc nulls last, {alias}.content_item_id"
+        )
+    if sort == "title_desc":
+        return (
+            f"order by {alias}._normalized_title desc nulls last, "
+            f"{alias}.published_at desc nulls last, "
+            f"{alias}.ingested_at desc nulls last, {alias}.content_item_id"
+        )
+    return (
+        f"order by {alias}.published_at desc nulls last, "
+        f"{alias}.ingested_at desc nulls last, {alias}.content_item_id"
+    )
+
+
+def strip_web_content_internal_fields(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in row.items() if not key.startswith("_")}
+        for row in rows
+    ]
 
 
 def as_json_object(value: Any) -> dict[str, Any]:
@@ -906,9 +996,15 @@ def resolve_discovery_canonical_domain(url: str | None) -> str:
     return domain
 
 
-def editorial_content_select_sql() -> str:
+def editorial_content_select_sql(*, include_internal_fields: bool = False) -> str:
     family_expr = canonical_article_family_expr("a")
     family_order = canonical_article_family_order_clause("a")
+    internal_projection = ""
+    if include_internal_fields:
+        internal_projection = """
+            nullif(lower(btrim(coalesce(a.title, ''))), '') as _normalized_title,
+            concat_ws(' ', coalesce(a.title, ''), coalesce(a.lead, ''), coalesce(a.body, '')) as _search_text,
+        """
     return f"""
         select
           ranked.content_item_id,
@@ -941,6 +1037,7 @@ def editorial_content_select_sql() -> str:
           ranked.matched_interest_description,
           ranked.interest_match_score,
           ranked.interest_match_decision
+          {", ranked._normalized_title, ranked._search_text" if include_internal_fields else ""}
         from (
           select
             {repr('editorial:')} || a.doc_id::text as content_item_id,
@@ -973,6 +1070,7 @@ def editorial_content_select_sql() -> str:
             null::text as matched_interest_description,
             null::double precision as interest_match_score,
             null::text as interest_match_decision,
+            {internal_projection if include_internal_fields else ""}
             row_number() over (
               partition by {family_expr}
               order by {family_order}
@@ -990,7 +1088,14 @@ def editorial_content_select_sql() -> str:
     """
 
 
-def resource_content_select_sql() -> str:
+def resource_content_select_sql(*, include_internal_fields: bool = False) -> str:
+    internal_projection = ""
+    if include_internal_fields:
+        internal_projection = """
+          ,
+          nullif(lower(btrim(coalesce(wr.title, ''))), '') as _normalized_title,
+          concat_ws(' ', coalesce(wr.title, ''), coalesce(wr.summary, ''), coalesce(wr.body, '')) as _search_text
+        """
     return f"""
         select
           {repr('resource:')} || wr.resource_id::text as content_item_id,
@@ -1023,6 +1128,7 @@ def resource_content_select_sql() -> str:
           null::text as matched_interest_description,
           null::double precision as interest_match_score,
           null::text as interest_match_decision
+          {internal_projection}
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
         where wr.resource_kind <> 'editorial'
@@ -1031,15 +1137,78 @@ def resource_content_select_sql() -> str:
     """
 
 
-def combined_content_items_select_sql() -> str:
+def combined_content_items_select_sql(*, include_internal_fields: bool = False) -> str:
     return f"""
       select *
       from (
-        {editorial_content_select_sql()}
+        {editorial_content_select_sql(include_internal_fields=include_internal_fields)}
         union all
-        {resource_content_select_sql()}
+        {resource_content_select_sql(include_internal_fields=include_internal_fields)}
       ) content_items
     """
+
+
+def build_editorial_content_item_preview_from_article(
+    article: Mapping[str, Any],
+) -> dict[str, Any]:
+    final_selection_decision = str(article.get("final_selection_decision") or "").strip()
+    system_feed_decision = str(article.get("system_feed_decision") or "").strip()
+    final_selection_selected = article.get("final_selection_selected")
+    system_feed_eligible = article.get("system_feed_eligible")
+    system_selected = (
+        bool(final_selection_selected)
+        if final_selection_selected is not None
+        else bool(system_feed_eligible)
+    )
+
+    if final_selection_decision == "selected":
+        system_selection_decision = "selected"
+    elif final_selection_decision == "gray_zone":
+        system_selection_decision = "gray_zone"
+    elif final_selection_decision == "rejected":
+        system_selection_decision = "rejected"
+    elif system_feed_eligible:
+        system_selection_decision = "selected"
+    elif system_feed_decision == "pending_llm":
+        system_selection_decision = "pending_ai_review"
+    elif system_feed_decision in {"eligible", "filtered_out", "pass_through"}:
+        system_selection_decision = "filtered_out"
+    else:
+        system_selection_decision = "unknown"
+
+    return {
+        "content_item_id": build_content_item_id(
+            "editorial", str(article.get("doc_id") or "")
+        ),
+        "content_kind": "editorial",
+        "origin_type": "editorial",
+        "origin_id": str(article.get("doc_id") or ""),
+        "url": article.get("url"),
+        "title": article.get("title"),
+        "lead": article.get("lead"),
+        "lang": article.get("lang"),
+        "published_at": article.get("published_at"),
+        "ingested_at": article.get("ingested_at"),
+        "updated_at": article.get("updated_at"),
+        "source_name": article.get("source_name"),
+        "author_name": article.get("author_name"),
+        "read_time_seconds": article.get("read_time_seconds"),
+        "system_selection_decision": system_selection_decision,
+        "system_selected": system_selected,
+        "has_media": article.get("has_media"),
+        "primary_media_kind": article.get("primary_media_kind"),
+        "primary_media_url": article.get("primary_media_url"),
+        "primary_media_thumbnail_url": article.get("primary_media_thumbnail_url"),
+        "primary_media_source_url": article.get("primary_media_source_url"),
+        "primary_media_title": article.get("primary_media_title"),
+        "primary_media_alt_text": article.get("primary_media_alt_text"),
+        "like_count": article.get("like_count", 0),
+        "dislike_count": article.get("dislike_count", 0),
+        "matched_interest_id": None,
+        "matched_interest_description": None,
+        "interest_match_score": None,
+        "interest_match_decision": None,
+    }
 
 
 def get_selected_content_item_preview(content_item_id: str) -> dict[str, Any]:
@@ -3917,18 +4086,36 @@ def list_system_selected_content_items_page(
     *,
     page: int = 1,
     page_size: int = 20,
+    sort: str | None = None,
+    q: str | None = None,
 ) -> dict[str, Any]:
     offset = (page - 1) * page_size
-    base_select = combined_content_items_select_sql()
-    total = query_count(f"select count(*)::int as total from ({base_select}) counted")
-    items = query_all(
-        f"""
-        {base_select}
-        order by published_at desc nulls last, ingested_at desc nulls last, content_item_id
-        limit %s
-        offset %s
-        """,
-        (page_size, offset),
+    resolved_sort = normalize_web_content_list_sort(sort)
+    resolved_query = normalize_web_content_search_query(q)
+    base_select = combined_content_items_select_sql(include_internal_fields=True)
+    visible_select = f"select * from ({base_select}) content_items"
+    search_clause, search_params = build_web_content_search_clause(
+        resolved_query, alias="content_items"
+    )
+    order_clause = build_web_content_order_clause(resolved_sort, alias="content_items")
+    filtered_select = f"""
+        {visible_select}
+        {search_clause}
+    """
+    total = query_count(
+        f"select count(*)::int as total from ({filtered_select}) counted",
+        search_params,
+    )
+    items = strip_web_content_internal_fields(
+        query_all(
+            f"""
+            {filtered_select}
+            {order_clause}
+            limit %s
+            offset %s
+            """,
+            tuple([*search_params, page_size, offset]),
+        )
     )
     return build_paginated_response(items, page, page_size, total)
 
@@ -3937,16 +4124,30 @@ def list_system_selected_content_items_page(
 def list_system_selected_content_items(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
+    sort: str | None = Query(default=None),
+    q: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    return list_system_selected_content_items_page(page=page, page_size=page_size)
+    return list_system_selected_content_items_page(
+        page=page,
+        page_size=page_size,
+        sort=sort,
+        q=q,
+    )
 
 
 @app.get("/content-items")
 def list_content_items(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
+    sort: str | None = Query(default=None),
+    q: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    return list_system_selected_content_items_page(page=page, page_size=page_size)
+    return list_system_selected_content_items_page(
+        page=page,
+        page_size=page_size,
+        sort=sort,
+        q=q,
+    )
 
 
 def get_resource_content_item(resource_id: str) -> dict[str, Any]:
@@ -4002,13 +4203,19 @@ def get_resource_content_item(resource_id: str) -> dict[str, Any]:
 @app.get("/content-items/{content_item_id}")
 def get_content_item(content_item_id: str) -> dict[str, Any]:
     origin_type, origin_id = parse_content_item_id(content_item_id)
-    content_item = get_selected_content_item_preview(content_item_id)
     if origin_type == "editorial":
         article = get_article(origin_id)
+        try:
+            content_item = get_selected_content_item_preview(content_item_id)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            content_item = build_editorial_content_item_preview_from_article(article)
         article.update(content_item)
         article["summary"] = article.get("summary") or article.get("lead")
         article["body_html"] = article.get("body_html") or article.get("full_content_html")
         return article
+    content_item = get_selected_content_item_preview(content_item_id)
     resource = get_resource_content_item(origin_id)
     resource.update(content_item)
     return resource
@@ -5071,6 +5278,8 @@ def list_user_matches(
     limit: int = Query(default=20, ge=1, le=100),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
+    sort: str | None = Query(default=None),
+    q: str | None = Query(default=None),
 ) -> dict[str, Any] | list[dict[str, Any]]:
     family_expr = canonical_article_family_expr("a")
     ranked_match_select = f"""
@@ -5105,6 +5314,8 @@ def list_user_matches(
           ui.description as matched_interest_description,
           imr.score_interest as interest_match_score,
           imr.decision as interest_match_decision,
+          nullif(lower(btrim(coalesce(a.title, ''))), '') as _normalized_title,
+          concat_ws(' ', coalesce(a.title, ''), coalesce(a.lead, ''), coalesce(a.body, '')) as _search_text,
           row_number() over (
             partition by {family_expr}
             order by
@@ -5162,35 +5373,55 @@ def list_user_matches(
           matched.matched_interest_id,
           matched.matched_interest_description,
           matched.interest_match_score,
-          matched.interest_match_decision
+          matched.interest_match_decision,
+          matched._normalized_title,
+          matched._search_text
         from ({ranked_match_select}) matched
         where matched.family_rank = 1
     """
+    resolved_sort = normalize_web_content_list_sort(sort)
+    resolved_query = normalize_web_content_search_query(q)
     if not paginate:
-        return query_all(
-            f"{deduped_select}\norder by matched.published_at desc nulls last, matched.ingested_at desc\nlimit %s",
-            tuple([*ranked_params, limit]),
+        visible_matches_select = f"select * from ({deduped_select}) matched_items"
+        search_clause, search_params = build_web_content_search_clause(
+            resolved_query, alias="matched_items"
+        )
+        order_clause = build_web_content_order_clause(resolved_sort, alias="matched_items")
+        return strip_web_content_internal_fields(
+            query_all(
+                f"""
+                {visible_matches_select}
+                {search_clause}
+                {order_clause}
+                limit %s
+                """,
+                tuple([*ranked_params, *search_params, limit]),
+            )
         )
 
-    total = query_count(
-        f"""
-        select count(*)::int as total
-        from (
-          select distinct {family_expr} as family_doc_id
-          from interest_match_results imr
-          join articles a on a.doc_id = imr.doc_id
-          {final_selection_join_clause("a", "fsr")}
-          {system_feed_join_clause("a", "sfr")}
-          where imr.user_id = %s
-            and imr.decision = 'notify'
-            and {feed_eligible_article_clause("a", "fsr", "sfr")}
-        ) deduped
-        """,
-        ranked_params,
+    visible_matches_select = f"select * from ({deduped_select}) matched_items"
+    search_clause, search_params = build_web_content_search_clause(
+        resolved_query, alias="matched_items"
     )
-    items = query_all(
-        f"{deduped_select}\norder by matched.published_at desc nulls last, matched.ingested_at desc\nlimit %s\noffset %s",
-        tuple([*ranked_params, resolved_page_size, offset]),
+    order_clause = build_web_content_order_clause(resolved_sort, alias="matched_items")
+    filtered_select = f"""
+        {visible_matches_select}
+        {search_clause}
+    """
+    total = query_count(
+        f"select count(*)::int as total from ({filtered_select}) counted",
+        tuple([*ranked_params, *search_params]),
+    )
+    items = strip_web_content_internal_fields(
+        query_all(
+            f"""
+            {filtered_select}
+            {order_clause}
+            limit %s
+            offset %s
+            """,
+            tuple([*ranked_params, *search_params, resolved_page_size, offset]),
+        )
     )
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
@@ -5308,6 +5539,7 @@ def list_system_interests(
           sp.profile_family as selection_profile_family,
           sp.status as selection_profile_status,
           sp.version as selection_profile_version,
+          sp.definition_json as selection_profile_definition_json,
           sp.policy_json as selection_profile_policy_json
         from interest_templates it
         left join selection_profiles sp
@@ -5373,6 +5605,7 @@ def get_system_interest(interest_template_id: str) -> dict[str, Any]:
           sp.profile_family as selection_profile_family,
           sp.status as selection_profile_status,
           sp.version as selection_profile_version,
+          sp.definition_json as selection_profile_definition_json,
           sp.policy_json as selection_profile_policy_json
         from interest_templates it
         left join selection_profiles sp

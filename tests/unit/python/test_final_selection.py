@@ -229,6 +229,58 @@ class FinalSelectionLogicTests(unittest.TestCase):
         self.assertFalse(explain["upliftedToGrayZone"])
         self.assertGreaterEqual(explain["noiseSignalCount"], 1)
 
+    def test_candidate_signal_uplift_does_not_treat_vendor_words_as_generic_runtime_truth(self) -> None:
+        decision, explain = apply_document_candidate_signal_uplift(
+            title="Trusted implementation partner for enterprise delivery",
+            lead="Your external consultant for software modernization.",
+            body="",
+            score_final=0.445,
+            positive_score=0.28,
+            lexical_score=0.21,
+            canonical_document_id=None,
+            story_cluster_id=None,
+            verification_state="medium",
+            base_decision="irrelevant",
+        )
+
+        self.assertEqual(decision, "irrelevant")
+        self.assertIsNotNone(explain)
+        self.assertEqual(explain["signalSource"], "generic_fallback")
+        self.assertFalse(explain["upliftedToGrayZone"])
+
+    def test_candidate_signal_uplift_supports_profile_defined_vendor_cues(self) -> None:
+        decision, explain = apply_document_candidate_signal_uplift(
+            title="Trusted implementation partner for enterprise delivery",
+            lead="Looking for an implementation partner for a migration programme.",
+            body="Need an outside systems integrator to support the rollout.",
+            score_final=0.445,
+            positive_score=0.28,
+            lexical_score=0.21,
+            canonical_document_id=None,
+            story_cluster_id=None,
+            verification_state="medium",
+            base_decision="irrelevant",
+            candidate_signal_config={
+                "positiveGroups": [
+                    {
+                        "name": "external_delivery",
+                        "cues": ["implementation partner", "systems integrator"],
+                    },
+                    {
+                        "name": "request_search",
+                        "cues": ["looking for", "need an outside"],
+                    },
+                ],
+                "negativeGroups": [],
+            },
+        )
+
+        self.assertEqual(decision, "gray_zone")
+        self.assertIsNotNone(explain)
+        self.assertEqual(explain["signalSource"], "selection_profile_definition")
+        self.assertTrue(explain["upliftedToGrayZone"])
+        self.assertGreaterEqual(explain["positiveSignalCount"], 2)
+
 
 
 if __name__ == "__main__":

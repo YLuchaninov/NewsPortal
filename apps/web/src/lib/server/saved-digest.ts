@@ -3,6 +3,11 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import type { Pool } from "pg";
 
+import {
+  collapseRepresentativeContentItemIds,
+  resolveRepresentativeContentItemIds,
+} from "./user-content-state";
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -53,19 +58,41 @@ async function resolveSavedItemIds(
     [userId, itemIds]
   );
   const allowed = new Set(result.rows.map((row) => row.content_item_id));
-  return itemIds.filter((itemId) => allowed.has(itemId));
+  const filteredItemIds = itemIds.filter((itemId) => allowed.has(itemId));
+  const representativeMap = await resolveRepresentativeContentItemIds(pool, filteredItemIds);
+  return collapseRepresentativeContentItemIds(filteredItemIds, representativeMap);
 }
 
-export async function loadSavedDigestItems(
+async function listAllSavedItemIds(pool: Pool, userId: string): Promise<string[]> {
+  const result = await pool.query<{ content_item_id: string }>(
+    `
+      select content_item_id
+      from user_content_state
+      where user_id = $1
+        and saved_state = 'saved'
+      order by saved_at desc nulls last, updated_at desc, content_item_id
+    `,
+    [userId]
+  );
+  const itemIds = result.rows
+    .map((row) => String(row.content_item_id ?? "").trim())
+    .filter(Boolean);
+  const representativeMap = await resolveRepresentativeContentItemIds(pool, itemIds);
+  return collapseRepresentativeContentItemIds(itemIds, representativeMap);
+}
+
+export async function resolveSavedDigestItemIds(
   pool: Pool,
   userId: string,
   requestedItemIds: string[]
-): Promise<ContentItemDetail[]> {
-  const itemIds = await resolveSavedItemIds(pool, userId, requestedItemIds);
-  if (itemIds.length === 0) {
-    return [];
+): Promise<string[]> {
+  if (requestedItemIds.length === 0) {
+    return listAllSavedItemIds(pool, userId);
   }
+  return resolveSavedItemIds(pool, userId, requestedItemIds);
+}
 
+function createContentItemLoader() {
   const sdk = createNewsPortalSdk({
     baseUrl: readRuntimeConfig(process.env, {
       defaultAppBaseUrl: "http://127.0.0.1:4321/",
@@ -73,10 +100,31 @@ export async function loadSavedDigestItems(
     fetchImpl: fetch,
   });
 
-  const items = await Promise.all(
-    itemIds.map((contentItemId) => sdk.getContentItem<ContentItemDetail>(contentItemId))
-  );
-  return items;
+  return (contentItemId: string) => sdk.getContentItem<ContentItemDetail>(contentItemId);
+}
+
+export async function loadSavedDigestSelection(
+  pool: Pool,
+  userId: string,
+  requestedItemIds: string[]
+): Promise<{ itemIds: string[]; items: ContentItemDetail[] }> {
+  const itemIds = await resolveSavedDigestItemIds(pool, userId, requestedItemIds);
+  if (itemIds.length === 0) {
+    return { itemIds: [], items: [] };
+  }
+
+  const loadItem = createContentItemLoader();
+  const items = await Promise.all(itemIds.map((contentItemId) => loadItem(contentItemId)));
+  return { itemIds, items };
+}
+
+export async function loadSavedDigestItems(
+  pool: Pool,
+  userId: string,
+  requestedItemIds: string[]
+): Promise<ContentItemDetail[]> {
+  const selection = await loadSavedDigestSelection(pool, userId, requestedItemIds);
+  return selection.items;
 }
 
 export function renderSavedDigestText(items: ContentItemDetail[]): string {

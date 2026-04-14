@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
 
-test("listSystemSelectedContentItems sends pagination params and returns the paginated envelope", async () => {
+test("listSystemSelectedContentItems sends pagination, sort, and search params", async () => {
   let requestedUrl = "";
   const expected = {
     items: [{ content_item_id: "editorial:article-1" }],
@@ -29,13 +29,18 @@ test("listSystemSelectedContentItems sends pagination params and returns the pag
   const response = await sdk.listSystemSelectedContentItems<Record<string, unknown>>({
     page: 2,
     pageSize: 50,
+    sort: "title_asc",
+    q: "AI policy",
   });
 
-  assert.equal(requestedUrl, "http://api.example.test/collections/system-selected?page=2&pageSize=50");
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/collections/system-selected?page=2&pageSize=50&sort=title_asc&q=AI+policy"
+  );
   assert.deepEqual(response, expected);
 });
 
-test("listSystemSelectedContentItems omits empty pagination params", async () => {
+test("listSystemSelectedContentItems omits empty pagination params and blank search", async () => {
   let requestedUrl = "";
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test/",
@@ -59,9 +64,46 @@ test("listSystemSelectedContentItems omits empty pagination params", async () =>
     }) as typeof fetch,
   });
 
-  await sdk.listSystemSelectedContentItems();
+  await sdk.listSystemSelectedContentItems({ q: "   " });
 
   assert.equal(requestedUrl, "http://api.example.test/collections/system-selected");
+});
+
+test("listMatchesPage sends pagination, sort, and search params", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.listMatchesPage<Record<string, unknown>>("user-42", {
+    page: 3,
+    pageSize: 10,
+    sort: "title_desc",
+    q: "robotics",
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/users/user-42/matches?page=3&pageSize=10&sort=title_desc&q=robotics"
+  );
 });
 
 test("listArticlesPage sends pagination params to the admin article list", async () => {

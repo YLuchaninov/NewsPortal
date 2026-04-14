@@ -2,7 +2,7 @@
 
 > **Для кого этот документ:** для администратора, который уже поднял NewsPortal и хочет быстро наполнить систему готовыми RSS-каналами, LLM-шаблонами и шаблонами интересов под типовой сценарий.
 >
-> **Что этот документ покрывает:** content-configuration bundle для RSS + Templates и отдельный appendix по discovery mode, который помогает расширять эти же сценарии новыми источниками.
+> **Что этот документ покрывает:** primary operator-facing source для built-in example bundles (`RSS + Templates`) и отдельный appendix по discovery mode, который помогает расширять эти же сценарии новыми источниками.
 >
 > **Что этот документ не покрывает полностью:** полный `.env.dev` bootstrap, весь manual MVP runbook, полный website/hard-site operator pass и live-internet edge cases вне bounded local setup.
 >
@@ -48,6 +48,9 @@
 1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels
 2. **LLM-шаблоны** — два active baseline промпта (scope: `criteria`, `global`) и один optional future-ready промпт (`interests`) для возможной opt-in / premium персонализации
 3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке и синхронизируются в live `criteria`
+4. **Profile policy, hard filters и candidate cues** — для каждого system interest теперь важно заполнить прототипы, profile policy (`Strictness`, `Unresolved outcome`, `LLM review mode`), `must_not_have_terms`, `allowed_content_kinds`, `priority` и `candidate uplift positive/negative cues`; `must_have_terms` и `time_window_hours` остаются опциональными hard filters и для recall-first baseline обычно оставляются пустыми
+
+Для built-in example bundles именно этот файл должен считаться первичным human-facing источником. Узкие companion docs в `docs/data_scripts/*` могут помогать отдельному use case, но не должны расходиться с этим документом и не должны переопределять его.
 
 Перед использованием примеров убедитесь, что у вас уже есть:
 
@@ -61,9 +64,10 @@
 1. Импортировать каналы (Channels → Bulk Import)
 2. Создать LLM-шаблоны (Templates → левая колонка)
 3. Создать шаблоны интересов (Templates → правая колонка)
-4. Запустить переиндексацию (Reindex → interest_centroids)
-5. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
-6. Если нужен полный MVP/manual verification pass, вернуться к `docs/manual-mvp-runbook.md`, а не останавливаться на этом документе
+4. Для каждого system interest проверить `Strictness = balanced`, `Unresolved outcome = hold`, `LLM review mode = always`, а `must_have_terms` и `time_window_hours` заполнять только если без них смысл interest действительно распадается
+5. Запустить переиндексацию (Reindex → interest_centroids)
+6. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
+7. Если нужен полный MVP/manual verification pass, вернуться к `docs/manual-mvp-runbook.md`, а не останавливаться на этом документе
 ```
 
 > ⚠️ **Не забудьте переиндексацию!** После создания или изменения шаблонов интересов всегда запускайте переиндексацию `interest_centroids`. Это обновит derived index, а режим repair/backfill поможет пересчитать уже существующие статьи по текущему системному набору тем.
@@ -108,12 +112,40 @@
 - `must_have_terms` работают как `OR`: статья проходит этот фильтр, если в `title + lead + body` встретился хотя бы один из указанных термов.
 - `must_not_have_terms` работают как блокирующий список: достаточно одного совпадения, чтобы статья была отфильтрована.
 - `short_tokens_required` работают жёстче и ближе к `AND`: требуемые short tokens должны присутствовать в извлечённых признаках статьи.
+- `time_window_hours` тоже является hard gate: всё, что старше окна, не дойдёт до semantic/LLM stage.
 
 Практический вывод:
 
-- для альтернативных buyer-intent формулировок вроде `rfp`, `rfq`, `vendor selection`, `looking for an agency` теперь удобно использовать именно `must_have_terms`;
-- не перегружайте `must_have_terms` длинными списками общих слов вроде `partner`, `migration`, `transformation`, иначе они станут слишком широким OR-фильтром;
-- если нужен более точный контроль, держите broad тему в прототипах, а hard constraints используйте только для сильных маркеров намерения.
+- для большинства recall-first сценариев первый baseline лучше запускать с пустыми `must_have_terms` и пустым `time_window_hours`, чтобы не убить редкие формулировки до semantic/LLM stage;
+- `must_have_terms` стоит включать только для действительно обязательных идентификаторов, без которых interest теряет смысл;
+- не перегружайте `must_have_terms` длинными списками общих слов вроде `partner`, `migration`, `transformation`, иначе вы получите массовый early drop вместо полезного recall;
+- `must_not_have_terms` и negative candidate cues обычно безопаснее, чем `must_have_terms`, потому что они режут явный шум, а не весь поток;
+- если нужен более точный контроль, держите broad тему в прототипах и candidate cues, а hard constraints добавляйте только после наблюдений по живому потоку.
+
+### Что теперь обязательно заполнять для каждого system interest
+
+Во всех трёх примерах ниже шаблон считается настроенным полностью только если вы заполнили:
+
+- `Positive prototypes`
+- `Negative prototypes`
+- `Must-not-have terms`
+- `Allowed content kinds`
+- `Priority`
+- `Candidate uplift positive cues`
+- `Candidate uplift negative cues`
+- runtime policy в additive `selection_profiles`:
+  - `Strictness = balanced`
+  - `Unresolved outcome = hold`
+  - `LLM review mode = always`
+
+Опционально и только при необходимости точечного tighten-up:
+
+- `Must-have terms`
+- `Time window hours`
+- `Required short tokens`
+- `Forbidden short tokens`
+
+Ниже в примерах A, B и C каналы остаются без изменений, а недостающие operator settings добавлены так, чтобы каждый сценарий можно было воспроизвести через админку полностью.
 
 ---
 
@@ -401,6 +433,35 @@ When in doubt, reject. It is better to miss a borderline article than to clutter
 
 Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
 
+#### Общие runtime-настройки для всех job-board шаблонов
+
+Во всех 8 шаблонах примера A используйте одинаковую profile policy:
+
+| Поле | Значение |
+|---|---|
+| **Strictness** | `balanced` |
+| **Unresolved outcome** | `hold` |
+| **LLM review mode** | `always` |
+| **Candidate cue source** | `selection_profile_definition` |
+
+Общие принципы для job-board сценария:
+
+- `Allowed content kinds` почти всегда: `listing`, `editorial`
+- первый baseline лучше запускать с пустыми `must_have_terms` и пустым `time_window_hours`; включайте их позже только если уже увидели устойчивый шум и точно понимаете, что режете
+- если всё-таки нужен hard filter, `must_have_terms` должны содержать только действительно обязательные hiring markers, а не широкие role/topic words
+- negative candidate cues должны отрезать карьерные советы, market analysis, layoffs, salary reports и generic company news
+- positive candidate cues должны поднимать только случаи, где есть реальная вакансия, hiring-announcement или конкретный recruiting intent
+
+Важно: блоки `Must-have terms` и `Time window hours` ниже следует читать как optional tightening candidates, а не как обязательный baseline для первого прогона.
+
+Общие negative candidate cues для большинства job-board шаблонов:
+
+```text
+career_advice_noise: interview tips | resume guide | career advice | how to get hired
+market_report_noise: salary survey | labor statistics | market analysis | hiring trends
+non_opening_noise: layoffs | restructuring | earnings report | product launch
+```
+
 ---
 
 #### 1. Backend Engineering Jobs
@@ -430,6 +491,39 @@ Tech industry salary survey reveals backend engineers earn 15% more than average
 Company announces migration from monolith to microservices architecture
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+backend engineer
+backend developer
+python backend
+java backend
+go engineer
+node.js engineer
+microservices
+api platform
+```
+
+**Must-not-have terms:**
+```text
+interview guide
+salary survey
+quarterly revenue
+migration case study
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `336`
+**Priority:** `1.00`
+
+**Candidate uplift positive cues:**
+```text
+hiring_signal: hiring | we are hiring | position | opening
+role_core: backend engineer | backend developer | python | java | go | node.js
+job_detail: remote | full-time | skills | experience required
+```
+
 ---
 
 #### 2. Frontend & React Jobs
@@ -457,6 +551,39 @@ Best VS Code extensions for frontend developers in 2026
 Frontend development trends to watch this year
 Chrome DevTools adds new CSS debugging capabilities
 Comparing React Server Components vs traditional client-side rendering
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+frontend engineer
+frontend developer
+react developer
+typescript
+next.js
+vue.js
+angular
+ui engineer
+```
+
+**Must-not-have terms:**
+```text
+frontend trends
+vs code extensions
+browser features
+rendering comparison
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `336`
+**Priority:** `0.98`
+
+**Candidate uplift positive cues:**
+```text
+hiring_signal: hiring | we are looking for | opening | position
+role_core: react | vue | angular | typescript | ui engineer | frontend architect
+job_detail: remote | hybrid | design system | experience required
 ```
 
 ---
@@ -489,6 +616,38 @@ New open-source LLM outperforms commercial models on benchmarks
 Stanford publishes annual AI Index report showing industry growth
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+ml engineer
+machine learning engineer
+nlp scientist
+computer vision engineer
+llm engineer
+mlops engineer
+data scientist
+```
+
+**Must-not-have terms:**
+```text
+annual ai index
+career transition
+funding round
+benchmark report
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `336`
+**Priority:** `1.00`
+
+**Candidate uplift positive cues:**
+```text
+hiring_signal: hiring | needed | position | role
+role_core: ml engineer | nlp | computer vision | llm | mlops | data scientist
+job_detail: phd preferred | remote | experience required | team
+```
+
 ---
 
 #### 4. Remote Work Opportunities
@@ -517,6 +676,37 @@ Best home office setups for remote developers — gear guide
 How to manage remote engineering teams effectively
 Slack introduces new features for asynchronous remote collaboration
 Remote work tax implications for digital nomads in Europe
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+fully remote
+remote position
+remote role
+work from anywhere
+distributed team
+async-first
+```
+
+**Must-not-have terms:**
+```text
+productivity study
+return to office
+gear guide
+tax implications
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `168`
+**Priority:** `0.92`
+
+**Candidate uplift positive cues:**
+```text
+remote_signal: fully remote | remote role | remote position | work from anywhere
+hiring_signal: hiring | needed | opening | role
+distribution_signal: distributed team | async-first | flexible hours
 ```
 
 ---
@@ -549,6 +739,39 @@ Comparison of CI/CD tools: GitHub Actions vs GitLab CI vs Jenkins
 Datadog reports 30% year-over-year revenue growth
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+devops engineer
+site reliability engineer
+sre
+platform engineer
+cloud infrastructure engineer
+kubernetes
+terraform
+observability
+```
+
+**Must-not-have terms:**
+```text
+conference roundup
+exam guide
+tool comparison
+quarterly revenue
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `336`
+**Priority:** `0.97`
+
+**Candidate uplift positive cues:**
+```text
+hiring_signal: hiring | opening | position | wanted
+role_core: devops | sre | platform engineer | kubernetes | terraform
+job_detail: on-call | incident management | aws | gcp | observability
+```
+
 ---
 
 #### 6. Product & Project Management Roles
@@ -577,6 +800,37 @@ Agile vs waterfall debate resurfaces in enterprise software
 Top product management tools compared: Linear vs Jira vs Notion
 CEO shares lessons learned from pivoting the company strategy three times
 What product-led growth means for early-stage startups
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+product manager
+technical program manager
+program manager
+scrum master
+project manager
+group product manager
+```
+
+**Must-not-have terms:**
+```text
+pm guide
+salary trends
+agile debate
+tool comparison
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `336`
+**Priority:** `0.90`
+
+**Candidate uplift positive cues:**
+```text
+hiring_signal: hiring | needed | opening | we are looking for
+role_core: product manager | program manager | scrum master | project manager
+job_detail: roadmap | user research | agile | regulated software
 ```
 
 ---
@@ -609,6 +863,39 @@ Data engineering vs data science: understanding the career differences
 Best practices for building reliable ELT pipelines — engineering blog post
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+data engineer
+analytics engineer
+data platform
+etl
+elt
+dbt
+spark
+airflow
+```
+
+**Must-not-have terms:**
+```text
+earnings
+career differences
+best practices
+acquires
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `336`
+**Priority:** `0.96`
+
+**Candidate uplift positive cues:**
+```text
+hiring_signal: hiring | needed | opening | wanted
+role_core: data engineer | analytics engineer | spark | airflow | dbt | snowflake
+job_detail: pipeline | warehouse | streaming | remote
+```
+
 ---
 
 #### 8. Startup Hiring & Founding Teams
@@ -637,6 +924,37 @@ How to find the right co-founder — startup advice column
 Venture capital funding drops 20% in Q1 2026 compared to last year
 Startup founder shares five mistakes made while scaling from 10 to 100 people
 Accelerator program announces deadline for summer cohort applications
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+technical co-founder
+founding engineer
+first engineering hire
+first product designer
+seed-stage
+pre-seed
+```
+
+**Must-not-have terms:**
+```text
+expansion plans
+startup advice
+funding drops
+accelerator applications
+```
+
+**Allowed content kinds:** `listing`, `editorial`
+**Time window hours:** `168`
+**Priority:** `0.88`
+
+**Candidate uplift positive cues:**
+```text
+early_stage_signal: pre-seed | seed-stage | yc | founding
+hiring_signal: seeking | hiring | looking for | role
+founding_role: co-founder | founding engineer | first hire | equity-heavy
 ```
 
 ---
@@ -963,6 +1281,36 @@ Default to reject if uncertain. Quality over quantity.
 
 Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
 
+#### Общие runtime-настройки для всех dev-news шаблонов
+
+Во всех 8 шаблонах примера B используйте одинаковую profile policy:
+
+| Поле | Значение |
+|---|---|
+| **Strictness** | `balanced` |
+| **Unresolved outcome** | `hold` |
+| **LLM review mode** | `always` |
+| **Candidate cue source** | `selection_profile_definition` |
+
+Общие принципы для developer-news сценария:
+
+- `Allowed content kinds` чаще всего: `editorial`, `document`; для инфраструктурных и отраслевых тем можно добавлять `api_payload`
+- первый baseline лучше запускать с пустыми `must_have_terms` и пустым `time_window_hours`; эти hard filters добавляйте только после наблюдений по реальному шуму
+- если нужен hard filter, `must_have_terms` должны описывать действительно обязательный news marker, а не просто общий topic vocabulary
+- negative candidate cues должны отрезать gadget reviews, earnings, beginner tutorials, generic marketing, lifestyle и non-technical business coverage
+- positive candidate cues должны поднимать release notes, breaking changes, CVEs, architectural post-mortems, platform policy changes и developer-impact launches
+
+Важно: блоки `Must-have terms` и `Time window hours` ниже являются optional tightening candidates. Для первого прогона developer-news baseline их безопаснее оставить пустыми.
+
+Общие negative candidate cues для большинства dev-news шаблонов:
+
+```text
+consumer_noise: smartphone review | gadget roundup | lifestyle piece | buying guide
+finance_noise: earnings report | quarterly revenue | valuation update | stock performance
+evergreen_noise: beginner guide | how to | tutorial | explainer article
+marketing_noise: thought leadership | press release | sponsored content | vendor blog
+```
+
 ---
 
 #### 1. AI & LLM Breakthroughs
@@ -991,6 +1339,38 @@ Samsung adds AI photo editing features to new Galaxy smartphone
 AI-powered toothbrush promises perfect brushing technique
 Startup raises $50M to build AI customer service chatbot
 Celebrity uses AI-generated art for album cover sparking copyright debate
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+language model
+llm
+multimodal
+model release
+research breakthrough
+alignment
+sparse attention
+```
+
+**Must-not-have terms:**
+```text
+for content marketers
+vacation itinerary
+smartphone
+customer service chatbot
+```
+
+**Allowed content kinds:** `editorial`, `document`
+**Time window hours:** `168`
+**Priority:** `1.00`
+
+**Candidate uplift positive cues:**
+```text
+release_signal: releases | open-sources | publishes research | introduces
+research_signal: breakthrough | alignment | theorem proving | sparse attention
+developer_impact: model | inference | multimodal | compute | benchmark
 ```
 
 ---
@@ -1023,6 +1403,40 @@ Ride-sharing company earnings beat analyst expectations in Q3 report
 Fitness app startup partners with gym chains for corporate wellness programs
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+developer tools startup
+yc-backed
+launches
+series a
+series b
+acquired
+cloud ide
+platform
+```
+
+**Must-not-have terms:**
+```text
+food delivery
+real estate
+crypto exchange
+fashion brand
+wellness
+```
+
+**Allowed content kinds:** `editorial`, `document`
+**Time window hours:** `336`
+**Priority:** `0.94`
+
+**Candidate uplift positive cues:**
+```text
+funding_signal: raises | series a | series b | seed round | valuation
+launch_signal: launches | graduates from yc | general availability | acquired
+developer_fit: developer tools | observability | database | cloud | platform
+```
+
 ---
 
 #### 3. Open Source Releases & Community
@@ -1051,6 +1465,38 @@ Best open-source alternatives to commercial software in 2026
 Company migrates from open-source to proprietary solution citing support needs
 University course teaches students how to build open-source projects
 Top GitHub repositories with most stars this month — curated list
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+open source
+license
+maintainer
+released
+community
+foundation
+fork
+```
+
+**Must-not-have terms:**
+```text
+for beginners
+best alternatives
+course
+curated list
+```
+
+**Allowed content kinds:** `editorial`, `document`
+**Time window hours:** `336`
+**Priority:** `0.96`
+
+**Candidate uplift positive cues:**
+```text
+release_signal: released | stabilizes | accepts | adds
+community_signal: maintainer | burnout | backlash | forks | foundation
+license_signal: relicenses | license | permissive | sspl
 ```
 
 ---
@@ -1083,6 +1529,40 @@ Company reduces cloud bill by 40 percent by switching to reserved instances
 What is serverless computing — beginner explainer article
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+kubernetes
+serverless
+cloudflare
+aws
+google cloud
+infrastructure
+platform
+incident
+```
+
+**Must-not-have terms:**
+```text
+market share report
+spending optimization
+magic quadrant
+reserved instances
+beginner explainer
+```
+
+**Allowed content kinds:** `editorial`, `document`, `api_payload`
+**Time window hours:** `168`
+**Priority:** `0.95`
+
+**Candidate uplift positive cues:**
+```text
+release_signal: announces | introduces | launches | reaches 1.0
+infra_signal: kubernetes | serverless | postgres | dns | outage | edge
+developer_impact: scaling | scheduling | post-mortem | state management
+```
+
 ---
 
 #### 5. Programming Languages & Frameworks
@@ -1111,6 +1591,40 @@ How to build a REST API with Express.js — tutorial for beginners
 Stack Overflow developer survey reveals most loved and dreaded languages
 Career comparison: Rust developer vs Go developer salary and demand
 Best online courses to learn TypeScript from scratch this year
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+released
+rfc
+compiler
+language
+framework
+runtime support
+django
+next.js
+```
+
+**Must-not-have terms:**
+```text
+learn in 2026
+beginners
+tutorial
+salary and demand
+online courses
+```
+
+**Allowed content kinds:** `editorial`, `document`
+**Time window hours:** `168`
+**Priority:** `0.93`
+
+**Candidate uplift positive cues:**
+```text
+release_signal: released | launched | adds | drops support
+language_signal: python | typescript | go | swift | zig | django
+technical_change: jit | generics | orm | compiler | server actions
 ```
 
 ---
@@ -1143,6 +1657,40 @@ Notion vs Obsidian for developer note-taking — which is better
 Pomodoro technique for programmers: boost your focus in 25-minute sprints
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+ide
+cli
+developer tools
+debugging
+ci/cd
+code review
+api v2
+workflow
+```
+
+**Must-not-have terms:**
+```text
+keyboard
+dotfiles guide
+themes
+standing desks
+pomodoro
+```
+
+**Allowed content kinds:** `editorial`, `document`
+**Time window hours:** `168`
+**Priority:** `0.91`
+
+**Candidate uplift positive cues:**
+```text
+release_signal: releases | introduces | adds | launches
+tool_signal: ide | cli | workflow | webhooks | notebooks | package manager
+developer_impact: collaboration | automation | root cause | onboarding | api
+```
+
 ---
 
 #### 7. Cybersecurity for Developers
@@ -1173,6 +1721,40 @@ Government agency warns citizens about rising phishing scam emails
 Cybersecurity job market grows 25 percent as companies increase security budgets
 ```
 
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+vulnerability
+cve
+rce
+supply chain
+zero-day
+patch
+2fa
+extension
+```
+
+**Must-not-have terms:**
+```text
+vpn services
+raises $100m
+strong password
+degree program
+job market
+```
+
+**Allowed content kinds:** `editorial`, `document`, `api_payload`
+**Time window hours:** `168`
+**Priority:** `1.00`
+
+**Candidate uplift positive cues:**
+```text
+security_signal: vulnerability | cve | zero-day | exploited | malicious
+developer_impact: package | ci systems | browser | extension | ssh keys
+response_signal: emergency patches | mandatory | standards | supply chain
+```
+
 ---
 
 #### 8. Tech Industry & Big Tech News
@@ -1201,6 +1783,40 @@ Mark Zuckerberg shares personal fitness routine on Instagram
 Netflix subscriber count grows as new original series launches
 Amazon Prime Day deals on electronics and household items
 Elon Musk tweets about Mars colonization timeline and SpaceX plans
+```
+
+**Дополнительно заполните в админке:**
+
+**Must-have terms:**
+```text
+api
+policy update
+deprecates
+guidelines
+dma
+interoperability
+antitrust
+pricing changes
+```
+
+**Must-not-have terms:**
+```text
+iphone sales
+smartphone review
+fitness routine
+prime day
+mars colonization
+```
+
+**Allowed content kinds:** `editorial`, `document`
+**Time window hours:** `336`
+**Priority:** `0.89`
+
+**Candidate uplift positive cues:**
+```text
+platform_change: deprecates | pricing changes | review guidelines | opens api
+regulation_signal: dma | antitrust | interoperability | sideloading
+developer_impact: migration | third-party app developers | enterprise tooling
 ```
 
 ---
@@ -1364,116 +1980,165 @@ Elon Musk tweets about Mars colonization timeline and SpaceX plans
 
 ### C.2. LLM-шаблоны
 
-Перейдите в **Templates** и создайте в левой колонке как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
+Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/data_scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/data_scripts/outsource_balanced_templates.json` — reference asset для ручного сравнения/переноса, но не отдельный competing handbook.
 
-#### LLM-шаблон 1: interests (optional future-ready, не используется в baseline по умолчанию)
+Перейдите в **Templates** и создайте в левой колонке два active baseline шаблона: `criteria` и `global`. Ниже также приведён `interests` как optional future-ready template, если позже будет включена расширенная персонализация.
+
+#### LLM-шаблон 1: interests (optional future-ready)
 
 | Поле | Значение |
 |---|---|
-| **Template name** | `Outsourcing Leads — Interest Review` |
+| **Template name** | `Outsourcing buyer-intent interest review` |
 | **Scope** | `interests` |
 
 **Prompt template:**
-```
-You are a B2B lead reviewer for a global software outsourcing company.
+```text
+You are a strict relevance reviewer for outsourcing demand signals. The user interest is "{interest_name}", and that interest is authoritative.
 
-The user is tracking this lead category: "{interest_name}"
-
-An article has landed in the gray zone — the system is not confident whether it matches.
+Decide whether the article is a useful lead that materially matches this interest because it shows a real buyer-side or procurement-side need for outside software delivery help.
 
 Article title: {title}
 Article lead: {lead}
-Article body (truncated): {body}
-Match context: {explain_json}
+Article body: {body}
+Context: {context}
 
-Your task: decide whether this content represents a REAL external demand signal for the specified lead category.
+Respond with a JSON object:
+{
+  "decision": "approve" or "reject" or "uncertain",
+  "score": 0.0 to 1.0,
+  "reason": "brief explanation"
+}
 
-APPROVE if:
-- It contains a tender, RFP, procurement notice, vendor search, implementation search, or partner search
-- It describes a company that is actively launching, rebuilding, modernizing, integrating, or scaling a product and is likely to need external delivery capacity
-- It clearly mentions budget, timeline, project scope, vendor shortlist, or search for a development / integration / consulting partner
-- It is a funded startup or expanding company with a concrete build or delivery need, not just generic growth news
+Approve when the article clearly shows one or more of these:
+- a founder, product owner, manager, procurement team, or company is actively looking for an agency, software house, dev team, contractor, implementation partner, rescue/takeover team, or staff-augmentation partner
+- a real organization is running procurement, RFP, RFQ, tender, bid, vendor selection, supplier shortlist, or implementation contracting for software work
+- a company has a live migration, replacement, rescue, support takeover, backlog, or rollout problem and explicitly wants outside help or outside capacity
+- a Reddit, forum, or community post appears to be written by the buyer and describes an active sourcing need
 
-REJECT if:
-- It is pure vendor self-promotion, thought leadership, or agency marketing
-- It is general market analysis about outsourcing with no specific buyer signal
-- It is ordinary hiring news for internal employees with no sign of external partner demand
-- It is M&A, earnings, layoffs, or macro commentary with no project-buying signal
-- It is a generic trend article that only mentions outsourcing, AI, cloud, or transformation abstractly
+Use "uncertain" when the article appears buyer-side and plausibly matches the interest, but authorship, externalization, or sourcing intent is still incomplete, indirect, or truncated.
 
-Respond ONLY with a JSON object:
-{"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
+Reject when the article is mainly about:
+- agency, vendor, consultant, or freelancer self-promotion
+- case studies, awards, rankings, landing pages, benches, or thought leadership
+- internal hiring, recruiter content, employment vacancies, career pages, or job listings
+- employer-side role descriptions such as job details, required profile, contract type, or reports-to structure
+- generic startup, product, AI, market, modernization, or transformation news with no sourcing signal
+- community discussion, advice, or commentary where nobody is actively sourcing delivery help
+- tutorials, release notes, playbooks, or best-practice articles
 
-Be conservative. Approve only when there is a believable client-intent signal.
+Important:
+- follow the stated interest more than broad topic similarity
+- do not require the exact words "outsourcing" or "agency" if the sourcing pattern is otherwise clear
+- words like partner, migration, MVP, modernization, or transformation are not enough on their own
+- seller-authored marketplace or [FOR HIRE] posts should be rejected even if wording overlaps with buyer language
+- hiring an employee, analyst, engineer, manager, or consultant into the organization's own team is not outsourcing demand unless the text explicitly shows third-party vendor sourcing or procurement
+- if evidence is weak and not plausibly buyer-side, return "reject"
 ```
 
-#### LLM-шаблон 2: criteria (проверка системных критериев)
+#### LLM-шаблон 2: criteria (active baseline)
 
 | Поле | Значение |
 |---|---|
-| **Template name** | `Outsourcing Leads — Criterion Review` |
+| **Template name** | `Outsourcing buyer-intent criterion review` |
 | **Scope** | `criteria` |
 
 **Prompt template:**
-```
-You are a content qualification reviewer for a global software outsourcing company.
+```text
+You are a strict reviewer for a specific outsourcing-related system criterion.
 
-The system criterion is: "{criterion_name}"
+The system criterion is authoritative: "{criterion_name}".
 
-An article has landed in the gray zone — the automated scoring was inconclusive.
+Decide whether the article materially matches this criterion because it shows a real buyer-side, procurement-side, or explicitly externalized delivery need related to that criterion.
 
 Article title: {title}
 Article lead: {lead}
-Article body (truncated): {body}
-Scoring details: {explain_json}
+Article body: {body}
+Extra context: {explain_json}
 
-Your task: decide whether this content meets the system criterion.
+Respond with a JSON object:
+{
+  "decision": "approve" or "reject" or "uncertain",
+  "score": 0.0 to 1.0,
+  "reason": "brief explanation"
+}
 
-Key classification rules for outsourcing lead discovery:
-- Direct buyer-side signals (RFPs, tenders, vendor search, implementation partner search) are the PRIMARY content type
-- Fundraising or expansion news is RELEVANT only if it implies a concrete product build, transformation, implementation, or delivery need
-- Enterprise modernization, migration, data platform, AI rollout, and integration projects are RELEVANT when there is evidence the company may use external help
-- General tech news, vendor marketing, opinion pieces, and hiring-only stories are NOT relevant unless they clearly imply external service demand
+Approve when the article clearly matches the criterion through one or more of these:
+1. Formal sourcing or procurement
+- RFP, RFQ, tender, bid, procurement notice, vendor shortlist, statement of work, implementation contract
 
-Respond ONLY with a JSON object:
-{"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
+2. Direct buyer request
+- a founder, owner, manager, product team, procurement team, or company explicitly looking for an agency, software house, contractor, staff augmentation partner, systems integrator, implementation vendor, rescue team, or takeover partner
+
+3. Delivery pressure with explicit externalization
+- migration, ERP or CRM rollout, legacy replacement, rescue, support takeover, backlog pressure, platform rebuild, data migration, or remediation work
+- and the text clearly says they need outside help, contractors, vendor evaluation, partner search, or an external delivery team
+
+Use "uncertain" when the article plausibly matches the criterion, but buyer identity, vendor search, or externalization is still incomplete, indirect, or truncated.
+
+Reject when the article is mainly about:
+- agency, vendor, consultancy, recruiter, or freelancer self-promotion
+- [FOR HIRE] or seller-authored marketplace listings
+- case studies, awards, rankings, service pages, bench availability, or thought leadership
+- internal hiring, recruiter content, employment vacancies, career pages, or job-detail postings
+- employer-side role descriptions such as contract type, required profile, reports-to hierarchy, or candidate requirements
+- generic transformation, modernization, or migration news with no sourcing signal tied to the criterion
+- community or HN or Reddit discussion where commenters debate tools or outsourcing but no buyer is actively asking for help
+- product launches, funding, market commentary, policy news, or technical content unrelated to the criterion's sourcing pattern
+
+Decision policy:
+- anchor your decision to the criterion, not to one universal build-only definition
+- prefer precision, but do not require the exact word "outsourcing" if procurement, vendor search, implementation partnering, takeover, or augmentation intent is otherwise clear
+- use the extra context as supporting evidence, not as the sole reason to approve
+- a company hiring employees, permanent staff, or internal role owners is not vendor demand unless third-party procurement or outside delivery sourcing is explicit
+- words like agency, partner, migration, modernization, or transformation are not enough by themselves
+- if evidence is weak and not plausibly buyer-side, return "reject"
 ```
 
-#### LLM-шаблон 3: global (универсальный запасной)
+#### LLM-шаблон 3: global (active baseline fallback)
 
 | Поле | Значение |
 |---|---|
-| **Template name** | `Outsourcing Leads — Global Fallback` |
+| **Template name** | `Outsourcing buyer-intent global review` |
 | **Scope** | `global` |
 
 **Prompt template:**
-```
-You are a content relevance reviewer for a company that sells outsourced software development, data, cloud, QA, and product delivery services worldwide.
-
-An article has landed in the gray zone — the system is not confident in its relevance decision.
+```text
+You are a conservative reviewer deciding whether an article should enter a lead feed for software outsourcing companies.
 
 Article title: {title}
 Article lead: {lead}
-Article body (truncated): {body}
-Review context: {explain_json}
+Article body: {body}
+Context: {context}
 
-Core question: Does this content contain or strongly signal a company, department, startup, or public buyer that may purchase external software / product / data / cloud delivery services?
+Respond with a JSON object:
+{
+  "decision": "approve" or "reject" or "uncertain",
+  "score": 0.0 to 1.0,
+  "reason": "brief explanation"
+}
 
-APPROVE if the content:
-- Mentions a tender, RFP, procurement notice, or active vendor/partner selection
-- Describes a concrete modernization, migration, build, launch, AI rollout, or implementation initiative with likely external delivery demand
-- Signals a funded or scaling company that needs execution capacity faster than normal in-house hiring alone would provide
+Approve when there is strong evidence of at least one of these:
+- formal procurement or sourcing for software delivery, implementation, support, migration, rescue, or integration
+- direct buyer requests for an agency, software house, dedicated team, contractor, rescue/takeover team, or staff augmentation partner
+- explicit search for an implementation partner, systems integrator, replacement vendor, or takeover supplier
+- community posts where the original poster appears to be the buyer and is clearly trying to source outside delivery help
 
-REJECT if the content:
-- Is agency marketing or self-promotional vendor content
-- Is a general trend or analyst report with no identifiable buyer or project
-- Is only about internal hiring, layoffs, funding, or business results without external service demand
-- Is general product or consumer-tech news unrelated to a services opportunity
+Use "uncertain" when there is plausible buyer-side or procurement-side intent, but the source is truncated, indirect, or does not fully confirm externalization.
 
-Respond ONLY with a JSON object:
-{"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
+Reject when the article is mainly about:
+- agency or vendor marketing, rankings, awards, portfolios, service pages, case studies, or freelancer self-promotion
+- internal hiring, recruiting, employment vacancies, career pages, or seller-authored marketplace listings
+- job-detail pages that describe roles, responsibilities, candidate profiles, contract types, or reporting lines
+- generic digital transformation, cloud migration, modernization, or AI commentary without a buyer sourcing signal
+- advisory or best-practice content from consultancies or vendors
+- technical chatter, tutorials, product releases, funding news, opinion pieces, or community discussion without active sourcing
 
-When in doubt, reject. It is better to miss a vague signal than to flood the pipeline with non-buying noise.
+Important:
+- approve only when an external delivery need is genuinely present
+- terms like partner, agency, migration, modernization, or MVP are not sufficient on their own
+- do not require exact outsourcing vocabulary if procurement or vendor-search intent is otherwise clear
+- employment hiring into the organization's own team is not outsourcing demand unless third-party vendor sourcing is explicit
+- if the article is advisory, promotional, or seller-authored, reject
 ```
 
 ---
@@ -1482,236 +2147,406 @@ When in doubt, reject. It is better to miss a vague signal than to flood the pip
 
 Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
 
----
+Текущий built-in outsourcing baseline intentionally уже и строже старого широкого 8-template варианта. Для рабочего default используйте именно эти 5 шаблонов: они соответствуют текущему `outsource_balanced_templates.json`, outsourcing companion doc и admin-managed/runtime-backed semantics.
 
-#### 1. Startup Funding & MVP Build Signals
+#### Общие runtime-настройки для всех outsourcing шаблонов
 
-| Поле | Значение |
-|---|---|
-| **Name** | `Startup Funding & MVP Build Signals` |
-| **Description** | `Funded startups and early-stage companies likely to outsource MVP, product delivery, or first engineering capacity` |
-
-**Positive prototypes:**
-```
-Seed-stage fintech startup raises $4M and looks for external product team to ship MVP in 12 weeks
-Series A health-tech company seeks development partner to accelerate patient portal launch
-VC-backed B2B SaaS startup needs outsourced engineering team before first enterprise pilot
-Founders announce product roadmap and search for software partner to build v1 quickly
-Startup expands to US market and hires agency to deliver new mobile application
-Newly funded logistics startup looking for dedicated development team to build admin platform
-Pre-seed AI startup needs external engineers to validate product before internal team is staffed
-```
-
-**Negative prototypes:**
-```
-Startup raises $25M and appoints new chief financial officer
-How founders should choose between in-house and outsourced development
-VC market report shows seed funding rebounds in 2026
-Startup valuation trends across Europe and Latin America
-Founder shares lessons from building first MVP with no code tools
-```
-
----
-
-#### 2. Enterprise Digital Transformation Programs
+Во всех 5 шаблонах примера C используйте одинаковую profile policy:
 
 | Поле | Значение |
 |---|---|
-| **Name** | `Enterprise Digital Transformation Programs` |
-| **Description** | `Large organizations launching modernization, digital transformation, self-service, automation, and platform rebuild programs` |
+| **Strictness** | `balanced` |
+| **Unresolved outcome** | `hold` |
+| **LLM review mode** | `always` |
+| **Candidate cue source** | `selection_profile_definition` |
+| **Final selection mode** | `compatibility_system_selected` |
 
-**Positive prototypes:**
-```
-Global insurer starts digital transformation program and invites vendors to modernize claims platform
-Retail chain launches multi-country customer experience rebuild and seeks external delivery partner
-Manufacturing group starts enterprise modernization initiative with RFP for implementation vendors
-Telecom operator searches for product engineering partner to rebuild customer self-service systems
-Bank announces core platform transformation and procurement process for integration partner
-Healthcare network seeks external team for patient app, portal redesign, and backend modernization
-Regional airline launches digital passenger experience project and looks for delivery partner
-```
+Общие принципы для outsourcing buyer-intent discovery:
 
-**Negative prototypes:**
-```
-CEO says digital transformation remains a strategic priority for the company
-Consulting firm publishes annual digital transformation trends report
-Vendor blog explains seven pillars of enterprise modernization
-Company wins innovation award for previous digital transformation work
-Analyst predicts CIO budgets will rise next year
-```
+- `Allowed content kinds` выбирайте по реальному типу сигнала: чаще всего это `editorial`, `listing`, `document`; для формализованного procurement добавляйте `data_file` и `api_payload`
+- baseline для этого сценария лучше запускать с пустыми `must_have_terms` и пустым `time_window_hours`: buyer-intent формулировки слишком разнообразны, и ранний hard filter легко убивает recall ещё до LLM review
+- если позже нужен hard filter, `must_have_terms` должны содержать только очень сильные buyer/procurement markers, а не broad topic words
+- `must_not_have_terms` режут noisy seller/advisory/hiring paths, которые иначе легко выглядят похожими на buyer intent
+- candidate uplift должен поднимать только procurement, explicit vendor search, implementation pressure, takeover и external delivery demand
+- employment/career wording, agency self-promo, rankings, case studies, thought leadership и generic transformation news нужно гасить отдельными negative cues, а не пытаться лечить только LLM review
+- ниже в каждом шаблоне baseline-поля `Must-have terms` и `Time window hours` намеренно оставлены пустыми; рядом сохранены рекомендованные tighten-up варианты на случай, если после первого прогона понадобится более жёсткая precision-настройка
 
 ---
 
-#### 3. RFPs, Tenders & Procurement Notices
+#### 1. Buyer requests for outsourced product build
 
 | Поле | Значение |
 |---|---|
-| **Name** | `RFPs, Tenders & Procurement Notices` |
-| **Description** | `Public and private procurement notices for software development, app delivery, platforms, portals, and managed engineering work` |
+| **Name** | `Buyer requests for outsourced product build` |
+| **Description** | `Direct buyer-authored signals that a founder, business owner, product team, or company wants an external agency, software house, or development team to build, launch, or take over a product, app, portal, MVP, or codebase.` |
 
 **Positive prototypes:**
-```
-Government agency issues RFP for citizen services portal rebuild and ongoing support
-University publishes tender for student mobile app, backend integration, and maintenance
-Municipality seeks supplier for document workflow platform and CRM integration project
-Public hospital procurement notice requests vendor for telemedicine software implementation
-Airport authority opens tender for passenger information platform modernization
-NGO seeks software development partner for grant management system across three countries
-Utility company issues request for proposal for field operations mobile application
+```text
+Founder looking for software agency to build SaaS MVP
+Business owner needs external team to launch mobile app
+Company wants development partner to take over existing codebase
+Startup requests agency proposals for web app build
+Product team searching for software house to deliver customer portal
+CEO looking for reliable dev shop for marketplace platform
+Need outsourced team to ship product without in-house hiring
+Company seeks vendor to build platform from design to release
 ```
 
 **Negative prototypes:**
-```
-Government department announces procurement reform policy update
-How to respond to public sector software tenders successfully
-Tender advisory firm promotes its bid writing services
-Ministry releases annual spending report with no live opportunities
-Opinion article debates whether public procurement moves too slowly
-```
-
----
-
-#### 4. ERP / CRM / Internal Systems Implementation
-
-| Поле | Значение |
-|---|---|
-| **Name** | `ERP / CRM / Internal Systems Implementation` |
-| **Description** | `Buyer-side demand for ERP, CRM, workflow, integration, and back-office systems implementation` |
-
-**Positive prototypes:**
-```
-Distribution company seeks ERP implementation partner for finance, inventory, and warehouse operations
-Nonprofit issues RFP for Salesforce implementation and donor platform integration
-Real estate group starts CRM migration and looks for system integrator with portal expertise
-Hospitality brand needs vendor for Microsoft Dynamics rollout across global properties
-Industrial company searches for partner to replace legacy ERP with cloud platform
-Education provider needs external team to integrate CRM, billing, and student lifecycle workflows
-Regional bank launches vendor selection for internal workflow automation and CRM upgrade
+```text
+Agency publishes case study about fintech MVP delivery
+We are a software house available for hire worldwide
+Freelance developer available to build your MVP
+Startup hires first in-house engineer for product build
+Ranking of top MVP development agencies
+Vendor promotes fixed-price MVP package
+New no-code builder helps founders launch faster
+Consultancy landing page for custom software services
 ```
 
-**Negative prototypes:**
+**Must-have terms (baseline):** оставить пустым
+
+**Suggested optional terms for later tighten-up:**
+```text
+looking for an agency
+looking for a developer
+looking for a development team
+need an agency
+need a developer
+development partner
+software house
+dev shop
+external team
+outsourced team
+take over our codebase
 ```
-Salesforce releases new AI capabilities for enterprise users
-Consultancy shares top five ERP migration mistakes
-CRM software market expected to grow 12 percent annually
-Vendor case study describes successful implementation for unnamed client
-Comparison of Salesforce vs HubSpot for mid-market businesses
+
+**Must-not-have terms:**
+```text
+available for hire
+case study
+fixed-price mvp
+our services
+```
+
+**Allowed content kinds:** `editorial`, `listing`
+**Time window hours (baseline):** оставить пустым
+**Priority:** `1.00`
+
+**Candidate uplift positive cues:**
+```text
+request_search: looking for | need help | seeking | request for
+external_delivery: development partner | external team | outsourced team | take over our codebase
+delivery_change: build mvp | launch mobile app | customer portal | take over existing codebase
+```
+
+**Candidate uplift negative cues:**
+```text
+hiring_noise: career page | job details | required profile | reports to
+seller_noise: available for hire | case study | our services | fixed-price mvp
+marketplace_noise: freelance developer | for hire | per hour | proposals
 ```
 
 ---
 
-#### 5. AI / LLM Implementation Projects
+#### 2. Staff augmentation and dedicated team demand
 
 | Поле | Значение |
 |---|---|
-| **Name** | `AI / LLM Implementation Projects` |
-| **Description** | `Organizations likely to buy external help for AI copilots, LLM integrations, search, automation, and applied AI delivery` |
+| **Name** | `Staff augmentation and dedicated team demand` |
+| **Description** | `Signals that an organization wants outside engineering capacity such as staff augmentation, contract developers, a dedicated team, nearshore delivery, or managed software capacity to accelerate an active roadmap or delivery backlog.` |
 
 **Positive prototypes:**
-```
-Insurance company seeks partner to implement internal AI copilot for service agents
-Enterprise SaaS vendor launches RFP for LLM-powered search and support automation
-Retailer looks for AI implementation partner to deploy forecasting and recommendation models
-Legal firm starts vendor review for document intelligence platform based on generative AI
-Government body seeks supplier for AI-assisted knowledge search across internal systems
-Healthcare provider needs partner to integrate LLM triage assistant into existing patient workflow
-B2B platform company requests proposals for AI summarization and workflow automation rollout
+```text
+Engineering manager seeks staff augmentation partner for backend and QA
+Company needs contract developers to hit delivery deadline
+Product team wants dedicated nearshore engineers for 6-month backlog
+Business looks for external squad to accelerate roadmap
+Enterprise adds contractors to support ERP rollout
+Company needs managed engineering capacity instead of full-time hiring
+CTO seeks outside team for sprint delivery and support
+Organization requests vendor for team augmentation across product and QA
 ```
 
 **Negative prototypes:**
+```text
+Company opens hiring for full-time engineers and recruiters
+Staff augmentation firm advertises available bench
+Recruiter posts contract vacancies for one employer
+Engineering team expands internal headcount
+Outsourcing provider publishes article about delivery velocity
+Agency offers dedicated team services on landing page
+Hiring marketplace launches new feature for recruiters
+Blog post compares staff augmentation versus outsourcing
 ```
-OpenAI releases new multimodal model with better reasoning
-Analyst says enterprise AI spending will double by 2028
-AI consultancy publishes guide to successful LLM adoption
-Vendor announces new AI platform for enterprises worldwide
-Opinion article argues most AI pilots fail without change management
+
+**Must-have terms (baseline):** оставить пустым
+
+**Suggested optional terms for later tighten-up:**
+```text
+staff augmentation
+team augmentation
+dedicated team
+contract developers
+contract engineers
+managed capacity
+nearshore team
+offshore team
+external squad
+engineering capacity
+```
+
+**Must-not-have terms:**
+```text
+job opening
+career page
+available bench
+our dedicated team services
+```
+
+**Allowed content kinds:** `editorial`, `listing`
+**Time window hours (baseline):** оставить пустым
+**Priority:** `0.95`
+
+**Candidate uplift positive cues:**
+```text
+augmentation_need: staff augmentation | team augmentation | dedicated team | managed capacity
+external_capacity: contract developers | contract engineers | external squad | engineering capacity
+delivery_pressure: delivery deadline | accelerate roadmap | support erp rollout | outside team
+```
+
+**Candidate uplift negative cues:**
+```text
+internal_hiring: job opening | career page | full-time engineers | recruiters
+seller_noise: available bench | our dedicated team services | advertises | landing page
+marketplace_noise: contract vacancies | marketplace | for hire | proposals
 ```
 
 ---
 
-#### 6. Data Platform & BI Modernization
+#### 3. Software procurement and vendor selection
 
 | Поле | Значение |
 |---|---|
-| **Name** | `Data Platform & BI Modernization` |
-| **Description** | `Opportunities related to data warehouses, BI migration, analytics engineering, reporting platforms, and data integration` |
+| **Name** | `Software procurement and vendor selection` |
+| **Description** | `Explicit procurement signals that a company, public body, or institution is sourcing an outside software vendor, implementation partner, integrator, managed services provider, or development contractor through a formal buying process.` |
 
 **Positive prototypes:**
-```
-Retail group seeks partner to migrate reporting stack from legacy BI to cloud warehouse
-Healthcare organization starts tender for data lakehouse, dashboards, and ETL modernization
-Media company looks for external team to rebuild analytics platform on Snowflake and dbt
-Logistics business issues RFP for operational reporting, data pipelines, and executive dashboards
-Fintech company needs data engineering partner for warehouse rebuild and self-serve BI rollout
-Global NGO seeks vendor for donor analytics platform and cross-system data integration
-Consumer brand launches procurement for customer data platform implementation and reporting layer
+```text
+City issues RFP for application modernization vendor
+Enterprise launches vendor selection for ERP implementation partner
+Bank publishes RFQ for data migration contractor
+Government tender seeks software delivery supplier
+University requests proposals for external app development vendor
+Company shortlists vendors for CRM rollout and integration
+Healthcare group invites bids for managed application services
+Buyer prepares implementation contract for outside software partner
 ```
 
 **Negative prototypes:**
+```text
+Software vendor releases new procurement product
+Consulting firm wins award for delivery excellence
+Guide on how to write an RFP response
+Ranking of top systems integrators
+Procurement team hires internally after budget approval
+Agency announces contract win elsewhere
+Market report on public-sector tenders
+Vendor marketing page for procurement automation
 ```
-Snowflake reports record quarterly revenue growth
-How to design a modern BI stack for scaling companies
-Consultant explains the difference between ETL and ELT
-Database vendor releases benchmark showing faster query performance
-Thought leadership piece on the future of data mesh
+
+**Must-have terms (baseline):** оставить пустым
+
+**Suggested optional terms for later tighten-up:**
+```text
+rfp
+rfq
+request for proposal
+request for quotation
+tender
+invites bids
+requests proposals
+vendor selection
+supplier shortlist
+statement of work
+implementation contract
+```
+
+**Must-not-have terms:**
+```text
+how to write an rfp
+rfp response
+award winner
+magic quadrant
+ranked among
+```
+
+**Allowed content kinds:** `editorial`, `listing`, `document`, `data_file`, `api_payload`
+**Time window hours (baseline):** оставить пустым
+**Priority:** `1.00`
+
+**Candidate uplift positive cues:**
+```text
+formal_procurement: rfp | rfq | request for proposal | tender
+vendor_selection: vendor selection | supplier shortlist | invites bids | requests proposals
+contracting: statement of work | implementation contract | outside software partner | managed application services
+```
+
+**Candidate uplift negative cues:**
+```text
+advisory_noise: how to write an rfp | rfp response | market report | procurement automation
+seller_noise: award winner | ranking | consulting firm wins award | vendor marketing page
+internal_hiring: hires internally | career page | job details | required profile
 ```
 
 ---
 
-#### 7. Cloud / DevOps / Platform Modernization
+#### 4. Implementation partner search for migration or replacement
 
 | Поле | Значение |
 |---|---|
-| **Name** | `Cloud / DevOps / Platform Modernization` |
-| **Description** | `Signals that a company may need external help with migration, DevOps, Kubernetes, observability, platform engineering, and reliability improvements` |
+| **Name** | `Implementation partner search for migration or replacement` |
+| **Description** | `Company-side delivery programs that are only relevant when the text explicitly points to an outside implementation partner, systems integrator, migration vendor, or external delivery team for rollout, replacement, modernization, or remediation work.` |
 
 **Positive prototypes:**
-```
-Bank seeks cloud migration partner for multi-region infrastructure modernization
-Media platform issues RFP for DevOps transformation, CI/CD rebuild, and observability rollout
-Scale-up needs external SRE team to stabilize platform before global launch
-Public sector body searches for managed Kubernetes and platform engineering vendor
-E-commerce company starts project to migrate monolith to cloud-native stack with outside partner
-Telecom group requests proposals for infrastructure automation and release engineering overhaul
-SaaS provider needs platform modernization partner to improve reliability and deployment speed
+```text
+Company seeks implementation partner for ERP rollout
+Organization evaluates systems integrator for CRM replacement
+Business needs outside team for legacy platform replacement
+Enterprise requests vendor for cloud migration delivery
+Data migration program brings in external specialists under deadline
+Retailer searches for partner to execute replatforming project
+Bank needs managed delivery partner for core system modernization
+Company seeks contractor to take over delayed transformation program
 ```
 
 **Negative prototypes:**
+```text
+Company announces digital transformation strategy
+Government accelerates digital transformation tasks
+CIO discusses modernization roadmap with no vendor search
+Vendor publishes cloud migration best practices
+Internal team handles ERP rollout internally
+Consultancy explains internal controls for cloud migration
+Product launch for migration tooling
+Generic partnership press release
 ```
-AWS launches new managed Kubernetes feature at annual conference
-How to pass the Certified Kubernetes Administrator exam
-DevOps platform vendor announces partnership with cloud provider
-Engineering blog explains why every team should adopt GitOps
-Cloud market revenue expected to reach new record next year
+
+**Must-have terms (baseline):** оставить пустым
+
+**Suggested optional terms for later tighten-up:**
+```text
+implementation partner
+system integrator
+integration partner
+delivery partner
+migration partner
+external engineering support
+outside specialists
+delivery vendor
+managed delivery partner
+external delivery team
+```
+
+**Must-not-have terms:**
+```text
+best practices
+internal controls
+thought leadership
+modernization roadmap
+```
+
+**Allowed content kinds:** `editorial`, `listing`, `document`
+**Time window hours (baseline):** оставить пустым
+**Priority:** `0.90`
+
+**Candidate uplift positive cues:**
+```text
+implementation_partner: implementation partner | systems integrator | integration partner | delivery partner
+migration_delivery: migration partner | delivery vendor | external delivery team | outside specialists
+replacement_pressure: legacy platform replacement | cloud migration delivery | replatforming project | take over delayed transformation program
+```
+
+**Candidate uplift negative cues:**
+```text
+generic_transformation_noise: digital transformation strategy | modernization roadmap | best practices | thought leadership
+internal_delivery: handled internally | internal team | internal controls | product launch
+seller_noise: vendor publishes | consultancy explains | press release | landing page
 ```
 
 ---
 
-#### 8. Agency / White-Label / Delivery Partnership Opportunities
+#### 5. Legacy system rescue and support takeover
 
 | Поле | Значение |
 |---|---|
-| **Name** | `Agency / White-Label / Delivery Partnership Opportunities` |
-| **Description** | `Agencies, consultancies, and system integrators that may need subcontractors, delivery partners, or white-label engineering capacity` |
+| **Name** | `Legacy system rescue and support takeover` |
+| **Description** | `Signals that an organization needs a new outside vendor to rescue, stabilize, maintain, or take over an inherited software project, legacy system, delayed implementation, or abandoned codebase.` |
 
 **Positive prototypes:**
-```
-Digital agency seeks white-label development partner for enterprise portal rollout
-Consulting firm needs subcontracted engineering team to deliver client mobile application
-System integrator looks for offshore delivery partner for backlog-heavy modernization program
-Brand agency searches for technical partner to build ecommerce and loyalty platform for major client
-Regional consultancy needs nearshore QA and development capacity for public sector project
-Implementation partner expands pipeline and looks for external product squad to cover new accounts
-Creative agency wins transformation deal and immediately seeks backend and frontend delivery partner
+```text
+Company needs new vendor to take over abandoned software project
+Business wants support partner for inherited legacy platform
+Product owner seeks external team to rescue delayed implementation
+Organization replaces previous contractor and needs takeover team
+Enterprise needs maintenance vendor for critical legacy application
+Buyer seeks outside team for code audit and stabilization before handover
+Need partner to continue development after internal team exit
+Company wants legacy application support plus modernization handoff
 ```
 
 **Negative prototypes:**
+```text
+Agency advertises rescue project services
+Postmortem on how we rescued a codebase internally
+Internal incident report about delayed project
+Vendor blog about legacy modernization trends
+Hiring maintenance engineer in house
+Consulting pitch for application support services
+Community discussion about bad outsourcing experiences
+Thought piece on technical debt reduction
 ```
-Agency launches new website and rebrands its service offering
-Consultancy publishes report on the future of digital delivery partnerships
-Marketing agency shares tips for choosing a white-label vendor
-System integrator announces annual revenue growth and new office opening
-Opinion piece about whether agencies should build in-house engineering teams
+
+**Must-have terms (baseline):** оставить пустым
+
+**Suggested optional terms for later tighten-up:**
+```text
+take over
+takeover team
+rescue project
+replace current vendor
+stabilize codebase
+maintain legacy system
+support partner
+continue development
+handover
+legacy application support
+```
+
+**Must-not-have terms:**
+```text
+case study
+thought leadership
+our support services
+technical debt article
+```
+
+**Allowed content kinds:** `editorial`, `listing`
+**Time window hours (baseline):** оставить пустым
+**Priority:** `0.85`
+
+**Candidate uplift positive cues:**
+```text
+takeover_need: take over | takeover team | replace current vendor | continue development
+rescue_support: rescue project | stabilize codebase | support partner | legacy application support
+handover_pressure: inherited legacy platform | delayed implementation | handover | maintenance vendor
+```
+
+**Candidate uplift negative cues:**
+```text
+seller_noise: our support services | agency advertises | consulting pitch | vendor blog
+internal_noise: internally | incident report | hiring maintenance engineer | technical debt article
+community_noise: community discussion | thought leadership | bad outsourcing experiences | postmortem
 ```
 
 ---
@@ -1737,8 +2572,12 @@ Opinion piece about whether agencies should build in-house engineering teams
 | **Количество RSS-каналов** | 14 | 16 | 12 |
 | **Источники** | Джоб-борды, агрегаторы вакансий, стартап-блоги | Новостные агрегаторы разработчиков, техно-издания, блоги | Query-based news feeds, funding/enterprise media, техно-издания, сигналы procurement |
 | **Интервал опроса (типичный)** | 15–30 мин (вакансии обновляются реже) | 5–10 мин (новости появляются часто) | 10–30 мин (сигналы появляются неравномерно, но важны быстро) |
-| **Количество шаблонов интересов** | 8 | 8 | 8 |
+| **Количество шаблонов интересов** | 8 | 8 | 5 |
 | **Фокус LLM-промптов** | «Есть ли конкретная вакансия?» | «Полезно ли это разработчику?» | «Есть ли здесь правдоподобный внешний спрос на услуги?» |
+| **Runtime profile policy** | `balanced` / `hold` / `always` | `balanced` / `hold` / `always` | `balanced` / `hold` / `always` |
+| **Типичные content kinds** | `listing`, `editorial` | `editorial`, `document`, иногда `api_payload` | `editorial`, `listing`, `document`, иногда `api_payload` / `data_file` |
+| **Стратегия hard filters** | baseline обычно без `must_have_terms` и без `time_window`; включать позже, если шум уже понятен | baseline обычно без `must_have_terms` и без `time_window`; акцент на prototypes и negative cues | baseline без `must_have_terms` и без `time_window`; precision добирается через negative cues, candidate uplift и LLM |
+| **Главный тип positive candidate cues** | hiring + role + job-detail signals | release + technical-impact + platform-change signals | buyer-request + procurement + implementation-pressure signals |
 | **Главный тип ложных срабатываний** | Новости о компании ≠ вакансия | Обзор гаджета ≠ техническая новость | Funding/news ≠ клиентский спрос |
 | **Стратегия негативных прототипов** | Карьерные советы, обзоры рынка, новости увольнений | Потребительские обзоры, маркетинговые статьи, учебные гайды | Vendor self-promo, hiring-only новости, аналитика без buyer-side сигнала |
 

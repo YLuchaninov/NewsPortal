@@ -153,7 +153,8 @@ export const POST: APIRoute = async ({ request }) => {
         const syncResult = await syncInterestTemplateCriterion(client, result.interestTemplateId);
         const profileSyncResult = await syncInterestTemplateSelectionProfile(
           client,
-          result.interestTemplateId
+          result.interestTemplateId,
+          template
         );
         if (syncResult.compileRequested) {
           await insertOutboxEvent(client, {
@@ -186,6 +187,12 @@ export const POST: APIRoute = async ({ request }) => {
             criterionCompileRequested: syncResult.compileRequested,
             selectionProfileId: profileSyncResult.selectionProfileId,
             selectionProfileVersion: profileSyncResult.version,
+            selectionProfileStrictness: template.selectionProfileStrictness,
+            selectionProfileUnresolvedDecision:
+              template.selectionProfileUnresolvedDecision,
+            selectionProfileLlmReviewMode: template.selectionProfileLlmReviewMode,
+            candidatePositiveSignalGroupCount: template.candidatePositiveSignals.length,
+            candidateNegativeSignalGroupCount: template.candidateNegativeSignals.length,
           }
         );
         await client.query("commit");

@@ -55,6 +55,12 @@ function asPolicyRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function asRecord(value: unknown): R {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as R)
+    : {};
+}
+
 function resolveLlmReviewMode(
   profileFamily: unknown,
   selectionProfilePolicy: Record<string, unknown>
@@ -163,10 +169,16 @@ function resolveLlmReviewMode(
                   ? (template.allowed_content_kinds as unknown[]).map((entry) => String(entry ?? "")).filter(Boolean)
                   : [];
                 const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_json);
+                const candidateSignalSummary = asRecord(
+                  template.selection_profile_candidate_signal_summary
+                );
                 const profileFamily = String(template.selection_profile_family ?? "");
                 const unresolvedDecision = String(selectionProfilePolicy.unresolvedDecision ?? "hold");
                 const llmReviewMode = resolveLlmReviewMode(profileFamily, selectionProfilePolicy);
                 const profileStatus = String(template.selection_profile_status ?? (isActive ? "active" : "archived"));
+                const candidatePositiveCount = Number(candidateSignalSummary.positiveGroupCount ?? 0);
+                const candidateNegativeCount = Number(candidateSignalSummary.negativeGroupCount ?? 0);
+                const candidateSignalSource = String(candidateSignalSummary.source ?? "generic_fallback");
                 return (
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
@@ -181,11 +193,14 @@ function resolveLlmReviewMode(
                         <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-medium text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
                           {negativeCount} negative
                         </span>
+                        <span class="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-medium text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
+                          {candidatePositiveCount}/{candidateNegativeCount} candidate cues
+                        </span>
                       </div>
                     </td>
                     <td class="px-5 py-4 align-top">
                       <div class="flex max-w-xs flex-wrap gap-2">
-                        {(allowedKinds.length > 0 ? allowedKinds : ["editorial", "listing", "entity", "document", "data_file", "api_payload"]).map((kind) => (
+                        {(allowedKinds.length > 0 ? allowedKinds : ["editorial", "listing", "entity", "document", "data_file", "api_payload"]).map((kind: string) => (
                           <span class="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
                             {kind}
                           </span>
@@ -214,6 +229,9 @@ function resolveLlmReviewMode(
                       </div>
                       <p class="mt-2 text-xs text-muted-foreground">
                         {profileStatus} · llm:{llmReviewMode}
+                      </p>
+                      <p class="mt-1 text-xs text-muted-foreground">
+                        candidate:{candidateSignalSource}
                       </p>
                     </td>
                     <td class="px-5 py-4 align-top">

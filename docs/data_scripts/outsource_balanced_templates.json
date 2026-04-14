@@ -42,6 +42,70 @@
         "fixed-price mvp",
         "our services"
       ],
+      "selection_profile_policy": {
+        "strictness": "balanced",
+        "unresolved_decision": "hold",
+        "llm_review_mode": "always",
+        "final_selection_mode": "compatibility_system_selected"
+      },
+      "candidate_positive_signals": [
+        {
+          "name": "request_search",
+          "cues": [
+            "looking for",
+            "need help",
+            "seeking",
+            "request for"
+          ]
+        },
+        {
+          "name": "external_delivery",
+          "cues": [
+            "development partner",
+            "external team",
+            "outsourced team",
+            "take over our codebase"
+          ]
+        },
+        {
+          "name": "delivery_change",
+          "cues": [
+            "build mvp",
+            "launch mobile app",
+            "customer portal",
+            "take over existing codebase"
+          ]
+        }
+      ],
+      "candidate_negative_signals": [
+        {
+          "name": "hiring_noise",
+          "cues": [
+            "career page",
+            "job details",
+            "required profile",
+            "reports to"
+          ]
+        },
+        {
+          "name": "seller_noise",
+          "cues": [
+            "available for hire",
+            "case study",
+            "our services",
+            "fixed-price mvp"
+          ]
+        },
+        {
+          "name": "marketplace_noise",
+          "cues": [
+            "freelance developer",
+            "for hire",
+            "per hour",
+            "proposals"
+          ]
+        }
+      ],
       "allowed_content_kinds": [
         "editorial",
         "listing"
@@ -89,6 +153,70 @@
         "career page",
         "available bench",
         "our dedicated team services"
+      ],
+      "selection_profile_policy": {
+        "strictness": "balanced",
+        "unresolved_decision": "hold",
+        "llm_review_mode": "always",
+        "final_selection_mode": "compatibility_system_selected"
+      },
+      "candidate_positive_signals": [
+        {
+          "name": "augmentation_need",
+          "cues": [
+            "staff augmentation",
+            "team augmentation",
+            "dedicated team",
+            "managed capacity"
+          ]
+        },
+        {
+          "name": "external_capacity",
+          "cues": [
+            "contract developers",
+            "contract engineers",
+            "external squad",
+            "engineering capacity"
+          ]
+        },
+        {
+          "name": "delivery_pressure",
+          "cues": [
+            "delivery deadline",
+            "accelerate roadmap",
+            "support erp rollout",
+            "outside team"
+          ]
+        }
+      ],
+      "candidate_negative_signals": [
+        {
+          "name": "internal_hiring",
+          "cues": [
+            "job opening",
+            "career page",
+            "full-time engineers",
+            "recruiters"
+          ]
+        },
+        {
+          "name": "seller_noise",
+          "cues": [
+            "available bench",
+            "our dedicated team services",
+            "advertises",
+            "landing page"
+          ]
+        },
+        {
+          "name": "marketplace_noise",
+          "cues": [
+            "contract vacancies",
+            "marketplace",
+            "for hire",
+            "proposals"
+          ]
+        }
       ],
       "allowed_content_kinds": [
         "editorial",
@@ -139,6 +267,70 @@
         "award winner",
         "magic quadrant",
         "ranked among"
+      ],
+      "selection_profile_policy": {
+        "strictness": "balanced",
+        "unresolved_decision": "hold",
+        "llm_review_mode": "always",
+        "final_selection_mode": "compatibility_system_selected"
+      },
+      "candidate_positive_signals": [
+        {
+          "name": "formal_procurement",
+          "cues": [
+            "rfp",
+            "rfq",
+            "request for proposal",
+            "tender"
+          ]
+        },
+        {
+          "name": "vendor_selection",
+          "cues": [
+            "vendor selection",
+            "supplier shortlist",
+            "invites bids",
+            "requests proposals"
+          ]
+        },
+        {
+          "name": "contracting",
+          "cues": [
+            "statement of work",
+            "implementation contract",
+            "outside software partner",
+            "managed application services"
+          ]
+        }
+      ],
+      "candidate_negative_signals": [
+        {
+          "name": "advisory_noise",
+          "cues": [
+            "how to write an rfp",
+            "rfp response",
+            "market report",
+            "procurement automation"
+          ]
+        },
+        {
+          "name": "seller_noise",
+          "cues": [
+            "award winner",
+            "ranking",
+            "consulting firm wins award",
+            "vendor marketing page"
+          ]
+        },
+        {
+          "name": "internal_hiring",
+          "cues": [
+            "hires internally",
+            "career page",
+            "job details",
+            "required profile"
+          ]
+        }
       ],
       "allowed_content_kinds": [
         "editorial",
@@ -191,6 +383,70 @@
         "thought leadership",
         "modernization roadmap"
       ],
+      "selection_profile_policy": {
+        "strictness": "balanced",
+        "unresolved_decision": "hold",
+        "llm_review_mode": "always",
+        "final_selection_mode": "compatibility_system_selected"
+      },
+      "candidate_positive_signals": [
+        {
+          "name": "implementation_partner",
+          "cues": [
+            "implementation partner",
+            "systems integrator",
+            "integration partner",
+            "delivery partner"
+          ]
+        },
+        {
+          "name": "migration_delivery",
+          "cues": [
+            "migration partner",
+            "delivery vendor",
+            "external delivery team",
+            "outside specialists"
+          ]
+        },
+        {
+          "name": "replacement_pressure",
+          "cues": [
+            "legacy platform replacement",
+            "cloud migration delivery",
+            "replatforming project",
+            "take over delayed transformation program"
+          ]
+        }
+      ],
+      "candidate_negative_signals": [
+        {
+          "name": "generic_transformation_noise",
+          "cues": [
+            "digital transformation strategy",
+            "modernization roadmap",
+            "best practices",
+            "thought leadership"
+          ]
+        },
+        {
+          "name": "internal_delivery",
+          "cues": [
+            "handled internally",
+            "internal team",
+            "internal controls",
+            "product launch"
+          ]
+        },
+        {
+          "name": "seller_noise",
+          "cues": [
+            "vendor publishes",
+            "consultancy explains",
+            "press release",
+            "landing page"
+          ]
+        }
+      ],
       "allowed_content_kinds": [
         "editorial",
         "listing",
@@ -239,6 +495,70 @@
         "thought leadership",
         "our support services",
         "technical debt article"
+      ],
+      "selection_profile_policy": {
+        "strictness": "balanced",
+        "unresolved_decision": "hold",
+        "llm_review_mode": "always",
+        "final_selection_mode": "compatibility_system_selected"
+      },
+      "candidate_positive_signals": [
+        {
+          "name": "takeover_need",
+          "cues": [
+            "take over",
+            "takeover team",
+            "replace current vendor",
+            "continue development"
+          ]
+        },
+        {
+          "name": "rescue_support",
+          "cues": [
+            "rescue project",
+            "stabilize codebase",
+            "support partner",
+            "legacy application support"
+          ]
+        },
+        {
+          "name": "handover_pressure",
+          "cues": [
+            "inherited legacy platform",
+            "delayed implementation",
+            "handover",
+            "maintenance vendor"
+          ]
+        }
+      ],
+      "candidate_negative_signals": [
+        {
+          "name": "seller_noise",
+          "cues": [
+            "our support services",
+            "agency advertises",
+            "consulting pitch",
+            "vendor blog"
+          ]
+        },
+        {
+          "name": "internal_noise",
+          "cues": [
+            "internally",
+            "incident report",
+            "hiring maintenance engineer",
+            "technical debt article"
+          ]
+        },
+        {
+          "name": "community_noise",
+          "cues": [
+            "community discussion",
+            "thought leadership",
+            "bad outsourcing experiences",
+            "postmortem"
+          ]
+        }
       ],
       "allowed_content_kinds": [
         "editorial",

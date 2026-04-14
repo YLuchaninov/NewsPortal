@@ -17,6 +17,10 @@ interface UserContentStateRow {
   archived_at: string | null;
 }
 
+interface RequestedUserContentStateRow extends UserContentStateRow {
+  requested_content_item_id: string;
+}
+
 interface EditorialFollowRow {
   origin_id: string;
   event_cluster_id: string | null;
@@ -119,6 +123,23 @@ export function buildUserContentStateView(
   };
 }
 
+export function collapseRepresentativeContentItemIds(
+  contentItemIds: string[],
+  representativeMap: Map<string, string>
+): string[] {
+  const seen = new Set<string>();
+  const resolved: string[] = [];
+  for (const contentItemId of contentItemIds) {
+    const representativeId = representativeMap.get(contentItemId) ?? contentItemId;
+    if (seen.has(representativeId)) {
+      continue;
+    }
+    seen.add(representativeId);
+    resolved.push(representativeId);
+  }
+  return resolved;
+}
+
 async function fetchStateRows(
   pool: Pool,
   userId: string,
@@ -142,6 +163,136 @@ async function fetchStateRows(
         and content_item_id = any($2::text[])
     `,
     [userId, contentItemIds]
+  );
+  return result.rows;
+}
+
+export async function resolveRepresentativeContentItemIds(
+  pool: Pool,
+  contentItemIds: string[]
+): Promise<Map<string, string>> {
+  const editorialContentItemIds = Array.from(
+    new Set(contentItemIds.filter((contentItemId) => parseContentItemId(contentItemId).originType === "editorial"))
+  );
+  const representativeMap = new Map<string, string>();
+  if (editorialContentItemIds.length === 0) {
+    return representativeMap;
+  }
+
+  const result = await pool.query<{
+    requested_content_item_id: string;
+    content_item_id: string;
+  }>(
+    `
+      with requested_editorial as (
+        select
+          requested_content_item_id,
+          split_part(requested_content_item_id, ':', 2)::uuid as requested_doc_id
+        from unnest($1::text[]) requested_content_item_id
+        where requested_content_item_id like 'editorial:%'
+      ),
+      requested_families as (
+        select
+          re.requested_content_item_id,
+          coalesce(a.canonical_doc_id, a.doc_id) as family_doc_id
+        from requested_editorial re
+        join articles a on a.doc_id = re.requested_doc_id
+      ),
+      ranked_family as (
+        select
+          rf.requested_content_item_id,
+          'editorial:' || a.doc_id::text as content_item_id,
+          row_number() over (
+            partition by rf.requested_content_item_id
+            order by
+              case when a.doc_id = coalesce(a.canonical_doc_id, a.doc_id) then 0 else 1 end,
+              a.published_at desc nulls last,
+              a.ingested_at desc,
+              a.doc_id
+          ) as family_rank
+        from requested_families rf
+        join articles a
+          on coalesce(a.canonical_doc_id, a.doc_id) = rf.family_doc_id
+        left join final_selection_results fsr on fsr.doc_id = a.doc_id
+        left join system_feed_results sfr on sfr.doc_id = a.doc_id
+        where a.visibility_state = 'visible'
+          and (
+            case
+              when fsr.doc_id is not null then coalesce(fsr.is_selected, false)
+              else coalesce(sfr.eligible_for_feed, false)
+            end
+          ) = true
+      )
+      select requested_content_item_id, content_item_id
+      from ranked_family
+      where family_rank = 1
+    `,
+    [editorialContentItemIds]
+  );
+
+  for (const row of result.rows) {
+    representativeMap.set(row.requested_content_item_id, row.content_item_id);
+  }
+  return representativeMap;
+}
+
+async function fetchEditorialFamilyStateRows(
+  pool: Pool,
+  userId: string,
+  editorialContentItemIds: string[]
+): Promise<RequestedUserContentStateRow[]> {
+  if (editorialContentItemIds.length === 0) {
+    return [];
+  }
+
+  const result = await pool.query<RequestedUserContentStateRow>(
+    `
+      with requested_editorial as (
+        select
+          requested_content_item_id,
+          split_part(requested_content_item_id, ':', 2)::uuid as requested_doc_id
+        from unnest($2::text[]) requested_content_item_id
+        where requested_content_item_id like 'editorial:%'
+      ),
+      requested_families as (
+        select
+          re.requested_content_item_id,
+          coalesce(a.canonical_doc_id, a.doc_id) as family_doc_id
+        from requested_editorial re
+        join articles a on a.doc_id = re.requested_doc_id
+      ),
+      ranked_family_state as (
+        select
+          rf.requested_content_item_id,
+          ucs.content_item_id,
+          ucs.first_seen_at::text as first_seen_at,
+          ucs.last_seen_at::text as last_seen_at,
+          ucs.saved_state,
+          ucs.saved_at::text as saved_at,
+          ucs.archived_at::text as archived_at,
+          row_number() over (
+            partition by rf.requested_content_item_id
+            order by ucs.updated_at desc, ucs.content_item_id
+          ) as row_number
+        from requested_families rf
+        join articles family_articles
+          on coalesce(family_articles.canonical_doc_id, family_articles.doc_id) = rf.family_doc_id
+        join user_content_state ucs
+          on ucs.user_id = $1
+         and ucs.content_item_id = 'editorial:' || family_articles.doc_id::text
+      )
+      select
+        requested_content_item_id,
+        content_item_id,
+        first_seen_at,
+        last_seen_at,
+        saved_state,
+        saved_at,
+        archived_at
+      from ranked_family_state
+      where row_number = 1
+    `,
+    [userId, editorialContentItemIds]
   );
   return result.rows;
 }
@@ -206,6 +357,26 @@ async function fetchSingleStateRow(
   return rows[0] ?? null;
 }
 
+async function fetchSingleEditorialFamilyStateRow(
+  pool: Pool,
+  userId: string,
+  contentItemId: string
+): Promise<UserContentStateRow | null> {
+  const rows = await fetchEditorialFamilyStateRows(pool, userId, [contentItemId]);
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    content_item_id: row.content_item_id,
+    first_seen_at: row.first_seen_at,
+    last_seen_at: row.last_seen_at,
+    saved_state: row.saved_state,
+    saved_at: row.saved_at,
+    archived_at: row.archived_at,
+  };
+}
+
 export async function getUserContentStateMap(
   pool: Pool,
   userId: string,
@@ -218,13 +389,31 @@ export async function getUserContentStateMap(
     .filter((item) => item.origin_type === "editorial")
     .map((item) => String(item.origin_id ?? "").trim())
     .filter(Boolean);
+  const editorialContentItemIds = items
+    .filter((item) => item.origin_type === "editorial")
+    .map((item) => String(item.content_item_id ?? "").trim())
+    .filter(Boolean);
 
-  const [stateRows, editorialRows] = await Promise.all([
+  const [stateRows, familyStateRows, editorialRows] = await Promise.all([
     fetchStateRows(pool, userId, contentItemIds),
+    fetchEditorialFamilyStateRows(pool, userId, editorialContentItemIds),
     fetchEditorialRows(pool, userId, editorialOriginIds),
   ]);
 
   const stateMap = new Map(stateRows.map((row) => [row.content_item_id, row]));
+  const familyStateMap = new Map(
+    familyStateRows.map((row) => [
+      row.requested_content_item_id,
+      {
+        content_item_id: row.content_item_id,
+        first_seen_at: row.first_seen_at,
+        last_seen_at: row.last_seen_at,
+        saved_state: row.saved_state,
+        saved_at: row.saved_at,
+        archived_at: row.archived_at,
+      } satisfies UserContentStateRow,
+    ])
+  );
   const editorialMap = new Map(editorialRows.map((row) => [row.origin_id, row]));
 
   return new Map(
@@ -236,7 +425,10 @@ export async function getUserContentStateMap(
           : null;
       return [
         contentItemId,
-        buildUserContentStateView(stateMap.get(contentItemId) ?? null, editorialRow ?? null),
+        buildUserContentStateView(
+          stateMap.get(contentItemId) ?? familyStateMap.get(contentItemId) ?? null,
+          editorialRow ?? null
+        ),
       ];
     })
   );
@@ -247,11 +439,12 @@ export async function getSingleUserContentState(
   userId: string,
   contentItemId: string
 ): Promise<UserContentStateView> {
-  const [stateRow, editorialRow] = await Promise.all([
+  const [stateRow, familyStateRow, editorialRow] = await Promise.all([
     fetchSingleStateRow(pool, userId, contentItemId),
+    fetchSingleEditorialFamilyStateRow(pool, userId, contentItemId),
     fetchSingleEditorialRow(pool, userId, contentItemId),
   ]);
-  return buildUserContentStateView(stateRow, editorialRow);
+  return buildUserContentStateView(stateRow ?? familyStateRow, editorialRow);
 }
 
 async function resolveEditorialClusterId(
@@ -275,12 +468,24 @@ async function resolveEditorialClusterId(
   return result.rows[0]?.event_cluster_id ?? null;
 }
 
+async function resolveEditorialRepresentativeContentItemId(
+  pool: Pool,
+  contentItemId: string
+): Promise<string> {
+  const representativeMap = await resolveRepresentativeContentItemIds(pool, [contentItemId]);
+  return representativeMap.get(contentItemId) ?? contentItemId;
+}
+
 export async function markContentItemSeen(
   pool: Pool,
   userId: string,
   contentItemId: string
 ): Promise<UserContentStateView> {
-  const clusterId = await resolveEditorialClusterId(pool, contentItemId);
+  const resolvedContentItemId = await resolveEditorialRepresentativeContentItemId(
+    pool,
+    contentItemId
+  );
+  const clusterId = await resolveEditorialClusterId(pool, resolvedContentItemId);
   await pool.query(
     `
       insert into user_content_state (
@@ -296,7 +501,7 @@ export async function markContentItemSeen(
         last_seen_at = excluded.last_seen_at,
         updated_at = now()
     `,
-    [userId, contentItemId]
+    [userId, resolvedContentItemId]
   );
 
   if (clusterId) {
@@ -313,7 +518,7 @@ export async function markContentItemSeen(
     );
   }
 
-  return getSingleUserContentState(pool, userId, contentItemId);
+  return getSingleUserContentState(pool, userId, resolvedContentItemId);
 }
 
 export async function markContentItemUnread(
@@ -321,6 +526,10 @@ export async function markContentItemUnread(
   userId: string,
   contentItemId: string
 ): Promise<UserContentStateView> {
+  const resolvedContentItemId = await resolveEditorialRepresentativeContentItemId(
+    pool,
+    contentItemId
+  );
   await pool.query(
     `
       insert into user_content_state (
@@ -336,10 +545,10 @@ export async function markContentItemUnread(
         last_seen_at = null,
         updated_at = now()
     `,
-    [userId, contentItemId]
+    [userId, resolvedContentItemId]
   );
 
-  return getSingleUserContentState(pool, userId, contentItemId);
+  return getSingleUserContentState(pool, userId, resolvedContentItemId);
 }
 
 export async function setContentItemSavedState(
@@ -352,6 +561,10 @@ export async function setContentItemSavedState(
     throw new Error(`Unsupported saved state "${savedState}".`);
   }
 
+  const resolvedContentItemId = await resolveEditorialRepresentativeContentItemId(
+    pool,
+    contentItemId
+  );
   await pool.query(
     `
       insert into user_content_state (
@@ -382,10 +595,10 @@ export async function setContentItemSavedState(
         end,
         updated_at = now()
     `,
-    [userId, contentItemId, savedState]
+    [userId, resolvedContentItemId, savedState]
   );
 
-  return getSingleUserContentState(pool, userId, contentItemId);
+  return getSingleUserContentState(pool, userId, resolvedContentItemId);
 }
 
 export async function setStoryFollowState(
@@ -461,40 +674,43 @@ export async function listSavedContentItemRefs(
   const safePage = Math.max(DEFAULT_PAGE, page);
   const offset = (safePage - 1) * safePageSize;
 
-  const [totalResult, itemsResult] = await Promise.all([
-    pool.query<{ total: number }>(
-      `
-        select count(*)::int as total
-        from user_content_state
-        where user_id = $1
-          and saved_state = 'saved'
-      `,
-      [userId]
-    ),
-    pool.query<SavedContentItemRefRow>(
-      `
-        select
-          content_item_id,
-          saved_at::text as saved_at
-        from user_content_state
-        where user_id = $1
-          and saved_state = 'saved'
-        order by saved_at desc nulls last, updated_at desc, content_item_id
-        limit $2
-        offset $3
-      `,
-      [userId, safePageSize, offset]
-    ),
-  ]);
+  const itemsResult = await pool.query<SavedContentItemRefRow>(
+    `
+      select
+        content_item_id,
+        saved_at::text as saved_at
+      from user_content_state
+      where user_id = $1
+        and saved_state = 'saved'
+      order by saved_at desc nulls last, updated_at desc, content_item_id
+    `,
+    [userId]
+  );
+
+  const representativeMap = await resolveRepresentativeContentItemIds(
+    pool,
+    itemsResult.rows.map((row) => row.content_item_id)
+  );
+  const seen = new Set<string>();
+  const collapsedItems = itemsResult.rows
+    .map((row) => ({
+      contentItemId: representativeMap.get(row.content_item_id) ?? row.content_item_id,
+      savedAt: row.saved_at,
+    }))
+    .filter((row) => {
+      if (seen.has(row.contentItemId)) {
+        return false;
+      }
+      seen.add(row.contentItemId);
+      return true;
+    });
+  const pagedItems = collapsedItems.slice(offset, offset + safePageSize);
 
   return buildPaginatedResponse(
-    itemsResult.rows.map((row) => ({
-      contentItemId: row.content_item_id,
-      savedAt: row.saved_at,
-    })),
+    pagedItems,
     safePage,
     safePageSize,
-    totalResult.rows[0]?.total ?? 0
+    collapsedItems.length
   );
 }
 

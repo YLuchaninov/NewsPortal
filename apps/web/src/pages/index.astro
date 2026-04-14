@@ -4,7 +4,8 @@ import {
   DEFAULT_PAGE,
   DEFAULT_PAGE_SIZE,
   type ContentItemPreview,
-  type PaginatedResponse
+  type PaginatedResponse,
+  type WebContentListSort,
 } from "@newsportal/contracts";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
@@ -18,6 +19,17 @@ import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap } from "../lib/server/user-content-state";
 
 export const prerender = false;
+const WEB_CONTENT_SORT_OPTIONS: Array<{ value: WebContentListSort; label: string }> = [
+  { value: "latest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "title_asc", label: "Title A-Z" },
+  { value: "title_desc", label: "Title Z-A" },
+];
+
+function isWebContentListSort(value: string | null): value is WebContentListSort {
+  return WEB_CONTENT_SORT_OPTIONS.some((option) => option.value === value);
+}
+
 const session = await resolveWebSession(Astro.request);
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({
@@ -42,8 +54,20 @@ const bffPaths = {
 
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const requestedQuery = Astro.url.searchParams.get("q") ?? "";
+const searchQuery = requestedQuery.trim();
+const requestedSort = Astro.url.searchParams.get("sort");
+const selectedSort: WebContentListSort = isWebContentListSort(requestedSort)
+  ? requestedSort
+  : "latest";
+const hasActiveFilters = searchQuery.length > 0 || selectedSort !== "latest";
 const collection: PaginatedResponse<ContentItemPreview> =
-  await sdk.listSystemSelectedContentItems<ContentItemPreview>({ page, pageSize: DEFAULT_PAGE_SIZE });
+  await sdk.listSystemSelectedContentItems<ContentItemPreview>({
+    page,
+    pageSize: DEFAULT_PAGE_SIZE,
+    sort: selectedSort,
+    q: searchQuery || undefined,
+  });
 const contentItems = collection.items;
 const feedRevision = buildLiveRevision([
   collection.total,
@@ -63,6 +87,7 @@ const userStateMap =
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const clearFiltersHref = Astro.url.pathname;
 
 function resolvePageHref(nextPage: number): string {
   const target = new URL(Astro.url);
@@ -112,6 +137,48 @@ function resolvePageHref(nextPage: number): string {
     )}
   </div>
 
+  <form method="get" action={Astro.url.pathname} class="mb-8 rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+      <div class="flex-1">
+        <label for="feed-search" class="mb-1 block text-sm font-medium text-foreground">Search</label>
+        <input
+          id="feed-search"
+          type="search"
+          name="q"
+          value={searchQuery}
+          placeholder="Search title or text"
+          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
+      <div class="w-full lg:w-56">
+        <label for="feed-sort" class="mb-1 block text-sm font-medium text-foreground">Sort</label>
+        <select
+          id="feed-sort"
+          name="sort"
+          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {WEB_CONTENT_SORT_OPTIONS.map((option) => (
+            <option value={option.value} selected={option.value === selectedSort}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+      <div class="flex gap-2 lg:pb-0">
+        <button
+          type="submit"
+          class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Apply
+        </button>
+        <a
+          href={clearFiltersHref}
+          class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          Clear filters
+        </a>
+      </div>
+    </div>
+  </form>
+
   {contentItems.length === 0 ? (
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -119,8 +186,12 @@ function resolvePageHref(nextPage: number): string {
           <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>
         </svg>
       </div>
-      <p class="font-semibold text-lg">No content yet</p>
-      <p class="text-muted-foreground text-sm mt-1">Content will appear here once active system interests allow it into the global collection.</p>
+      <p class="font-semibold text-lg">{hasActiveFilters ? "No results found" : "No content yet"}</p>
+      <p class="text-muted-foreground text-sm mt-1">
+        {hasActiveFilters
+          ? "Try a different search or sort option, or clear the current filters to see the full collection."
+          : "Content will appear here once active system interests allow it into the global collection."}
+      </p>
     </div>
   ) : (
     <>

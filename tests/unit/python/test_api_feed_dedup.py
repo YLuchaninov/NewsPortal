@@ -54,7 +54,7 @@ class ApiFeedDedupTests(unittest.TestCase):
         self.assertEqual(result["pageSize"], 5)
         self.assertEqual(result["items"], items)
 
-        count_sql = query_one.call_args.args[0]
+        count_sql, count_params = query_one.call_args.args
         self.assertIn("select count(*)::int as total from (", count_sql)
         self.assertIn("partition by coalesce(a.canonical_doc_id, a.doc_id)", count_sql)
         self.assertIn(
@@ -63,16 +63,47 @@ class ApiFeedDedupTests(unittest.TestCase):
         )
         self.assertIn("else coalesce(sfr.eligible_for_feed, false)", count_sql)
         self.assertIn("where ranked.family_rank = 1", count_sql)
+        self.assertEqual(count_params, ())
 
         items_sql, items_params = query_all.call_args.args
         self.assertIn("partition by coalesce(a.canonical_doc_id, a.doc_id)", items_sql)
         self.assertIn("left join final_selection_results fsr on fsr.doc_id = a.doc_id", items_sql)
         self.assertIn("where ranked.family_rank = 1", items_sql)
         self.assertIn(
-            "order by published_at desc nulls last, ingested_at desc nulls last, content_item_id",
+            "order by content_items.published_at desc nulls last, content_items.ingested_at desc nulls last, content_items.content_item_id",
             items_sql,
         )
         self.assertEqual(items_params, (5, 5))
+
+    def test_list_system_selected_content_items_supports_search_and_title_sort(self) -> None:
+        with (
+            patch.object(api_main, "query_one", return_value={"total": 1}) as query_one,
+            patch.object(api_main, "query_all", return_value=[]) as query_all,
+        ):
+            api_main.list_system_selected_content_items_page(
+                page=1,
+                page_size=20,
+                sort="title_asc",
+                q="AI policy",
+            )
+
+        count_sql, count_params = query_one.call_args.args
+        self.assertIn(
+            "where coalesce(content_items._search_text, '') ilike %s escape '\\'",
+            count_sql,
+        )
+        self.assertEqual(count_params, ("%AI policy%",))
+
+        items_sql, items_params = query_all.call_args.args
+        self.assertIn(
+            "where coalesce(content_items._search_text, '') ilike %s escape '\\'",
+            items_sql,
+        )
+        self.assertIn(
+            "order by content_items._normalized_title asc nulls last",
+            items_sql,
+        )
+        self.assertEqual(items_params, ("%AI policy%", 20, 0))
 
     def test_dashboard_summary_counts_canonical_feed_families(self) -> None:
         summary = {

@@ -1898,6 +1898,7 @@ async def list_compiled_criteria(
           sp.profile_family as selection_profile_family,
           sp.status as selection_profile_status,
           sp.version as selection_profile_version,
+          sp.definition_json as selection_profile_definition_json,
           sp.policy_json as selection_profile_policy_json
         from criteria c
         join criteria_compiled cc on cc.criterion_id = c.criterion_id
@@ -3630,6 +3631,14 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                         ),
                         verification_state=filter_context.get("verificationState"),
                         base_decision=decision,
+                        candidate_signal_config=(
+                            coerce_json_object(compiled_json.get("candidateSignals"))
+                            or coerce_json_object(
+                                coerce_json_object(
+                                    criterion.get("selection_profile_definition_json")
+                                ).get("candidateSignals")
+                            )
+                        ),
                     )
                     selection_profile_runtime = coerce_selection_profile_runtime(criterion)
                     explain_json = {

@@ -6,7 +6,7 @@ import { getPool, queryOne } from "../../lib/server/db";
 import { resolveWebSession } from "../../lib/server/auth";
 import { readFlash } from "../../lib/server/browser-flow";
 import {
-  loadSavedDigestItems,
+  loadSavedDigestSelection,
   parseSelectedDigestItemIds,
 } from "../../lib/server/saved-digest";
 
@@ -19,7 +19,9 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const itemIds = parseSelectedDigestItemIds(Astro.url.searchParams);
-const selectedItems: ContentItemDetail[] = await loadSavedDigestItems(getPool(), session.userId, itemIds);
+const digestSelection = await loadSavedDigestSelection(getPool(), session.userId, itemIds);
+const selectedItemIds = digestSelection.itemIds;
+const selectedItems: ContentItemDetail[] = digestSelection.items;
 if (selectedItems.length === 0) {
   return Astro.redirect("/saved");
 }
@@ -45,7 +47,7 @@ const profile = await queryOne<Record<string, unknown>>(
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const exportUrl = new URL("/saved/digest/export", Astro.url);
-itemIds.forEach((itemId) => exportUrl.searchParams.append("item", itemId));
+selectedItemIds.forEach((itemId) => exportUrl.searchParams.append("item", itemId));
 ---
 
 <Shell
@@ -81,7 +83,7 @@ itemIds.forEach((itemId) => exportUrl.searchParams.append("item", itemId));
         </a>
         <form method="post" action={bffPaths.savedDigest}>
           <input type="hidden" name="returnTo" value={`${Astro.url.pathname}${Astro.url.search}`} />
-          {itemIds.map((itemId) => (
+          {selectedItemIds.map((itemId) => (
             <input type="hidden" name="item" value={itemId} />
           ))}
           <button

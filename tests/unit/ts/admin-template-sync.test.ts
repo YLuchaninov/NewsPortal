@@ -268,6 +268,7 @@ test("syncInterestTemplateSelectionProfile inserts a compatibility profile for a
         },
       ],
     },
+    { rows: [] },
     {
       rows: [
         {
@@ -276,7 +277,6 @@ test("syncInterestTemplateSelectionProfile inserts a compatibility profile for a
         },
       ],
     },
-    { rows: [] },
     {
       rows: [
         {
@@ -289,7 +289,29 @@ test("syncInterestTemplateSelectionProfile inserts a compatibility profile for a
 
   const result = await syncInterestTemplateSelectionProfile(
     queryable as any,
-    "template-profile-1"
+    "template-profile-1",
+    {
+      interestTemplateId: "template-profile-1",
+      name: "AI Policy",
+      description: "Policy changes around AI",
+      positiveTexts: ["EU AI act", "AI regulation package"],
+      negativeTexts: ["sports"],
+      mustHaveTerms: ["policy"],
+      mustNotHaveTerms: ["football"],
+      places: ["Brussels"],
+      languagesAllowed: ["en"],
+      timeWindowHours: 168,
+      allowedContentKinds: ["editorial", "document"],
+      shortTokensRequired: ["AI"],
+      shortTokensForbidden: ["NBA"],
+      candidatePositiveSignals: [],
+      candidateNegativeSignals: [],
+      selectionProfileStrictness: "broad",
+      selectionProfileUnresolvedDecision: "reject",
+      selectionProfileLlmReviewMode: "disabled",
+      priority: 0.9,
+      isActive: true,
+    }
   );
 
   assert.deepEqual(result, {
@@ -305,6 +327,21 @@ test("syncInterestTemplateSelectionProfile inserts a compatibility profile for a
     "Policy changes around AI",
   ]);
   assert.equal(queryable.calls[3].params?.[10], "active");
+  assert.deepEqual(
+    JSON.parse(String(queryable.calls[3].params?.[6] ?? "{}")).candidateSignals,
+    {
+      positiveGroups: [],
+      negativeGroups: [],
+    }
+  );
+  assert.deepEqual(JSON.parse(String(queryable.calls[3].params?.[7] ?? "{}")), {
+    strictness: "broad",
+    unresolvedDecision: "reject",
+    llmReviewMode: "disabled",
+    finalSelectionMode: "compatibility_system_selected",
+    priority: 0.9,
+    allowedContentKinds: ["editorial", "document"],
+  });
 });
 
 test("syncInterestTemplateSelectionProfile bumps version when compatibility payload changes", async () => {
@@ -327,14 +364,6 @@ test("syncInterestTemplateSelectionProfile bumps version when compatibility payl
           short_tokens_forbidden: [],
           priority: 1,
           is_active: false,
-        },
-      ],
-    },
-    {
-      rows: [
-        {
-          criterion_id: "criterion-profile-2",
-          description: "AI Safety",
         },
       ],
     },
@@ -393,6 +422,14 @@ test("syncInterestTemplateSelectionProfile bumps version when compatibility payl
         },
       ],
     },
+    {
+      rows: [
+        {
+          criterion_id: "criterion-profile-2",
+          description: "AI Safety",
+        },
+      ],
+    },
     { rows: [] },
   ]);
 
@@ -433,6 +470,49 @@ test("parseInterestTemplateInput accepts blank time_window_hours as any-time and
   assert.equal(parsed.priority, 0.8);
   assert.ok(parsed.allowedContentKinds.includes("editorial"));
   assert.ok(parsed.allowedContentKinds.includes("document"));
+  assert.deepEqual(parsed.candidatePositiveSignals, []);
+  assert.deepEqual(parsed.candidateNegativeSignals, []);
+  assert.equal(parsed.selectionProfileStrictness, "balanced");
+  assert.equal(parsed.selectionProfileUnresolvedDecision, "hold");
+  assert.equal(parsed.selectionProfileLlmReviewMode, "always");
+});
+
+test("parseInterestTemplateInput accepts grouped candidate signal cues", () => {
+  const parsed = parseInterestTemplateInput({
+    name: "Outsourcing demand",
+    positive_texts: "Looking for an agency\nRFP for MVP build",
+    selection_profile_strictness: "strict",
+    selection_profile_unresolved_decision: "reject",
+    selection_profile_llm_review_mode: "optional_high_value_only",
+    candidate_positive_signals:
+      "request_search: looking for | need help | seeking\nexternal_delivery: implementation partner | systems integrator",
+    candidate_negative_signals:
+      "hiring_noise: hiring | recruiter | career page\nmarketplace_noise: freelancer | per hour | bids",
+  });
+
+  assert.deepEqual(parsed.candidatePositiveSignals, [
+    {
+      name: "request_search",
+      cues: ["looking for", "need help", "seeking"],
+    },
+    {
+      name: "external_delivery",
+      cues: ["implementation partner", "systems integrator"],
+    },
+  ]);
+  assert.deepEqual(parsed.candidateNegativeSignals, [
+    {
+      name: "hiring_noise",
+      cues: ["hiring", "recruiter", "career page"],
+    },
+    {
+      name: "marketplace_noise",
+      cues: ["freelancer", "per hour", "bids"],
+    },
+  ]);
+  assert.equal(parsed.selectionProfileStrictness, "strict");
+  assert.equal(parsed.selectionProfileUnresolvedDecision, "reject");
+  assert.equal(parsed.selectionProfileLlmReviewMode, "optional_high_value_only");
 });
 
 test("saveInterestTemplate keeps json casts aligned around nullable time windows on create", async () => {
@@ -451,6 +531,11 @@ test("saveInterestTemplate keeps json casts aligned around nullable time windows
     allowedContentKinds: ["editorial", "document"],
     shortTokensRequired: ["AI"],
     shortTokensForbidden: ["NBA"],
+    candidatePositiveSignals: [],
+    candidateNegativeSignals: [],
+    selectionProfileStrictness: "balanced",
+    selectionProfileUnresolvedDecision: "hold",
+    selectionProfileLlmReviewMode: "always",
     priority: 1,
     isActive: true,
   });

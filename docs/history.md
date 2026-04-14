@@ -14,6 +14,49 @@
 
 ## Completed items
 
+### 2026-04-14 — SWEEP-EXAMPLES-PRIMARY-OUTSOURCE-DOC-SYNC-2026-04-14 — Made `EXAMPLES.md` the primary outsourcing example source and demoted the narrow companion docs
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user explicitly asked for `EXAMPLES.md` to become the main source for the outsourcing example, without contradicting the narrower outsourcing helper docs or the legacy JSON reference asset.
+- Что изменилось:
+  - [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md) now states that it is the primary human-facing source for built-in example bundles, and Example C was rewritten to the current outsourcing bundle truth: active prompt names/scopes now match the shipped admin-managed bundle, and the outsourcing template baseline is now the focused 5-template set rather than the older broader 8-template variant;
+  - [`docs/data_scripts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/README.md) and [`docs/data_scripts/outsource_balanced_templates.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_balanced_templates.md) now describe themselves as companion/reference surfaces that must follow Example C instead of competing with it as a separate primary handbook;
+  - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md) now records the updated durable truth: built-in outsourcing operator guidance is anchored in `EXAMPLES.md` Example C, the outsourcing-only Markdown is a focused companion, and the JSON file remains only a legacy/manual reference asset.
+- Что проверено:
+  - targeted line review of `EXAMPLES.md`, `docs/data_scripts/README.md`, `docs/data_scripts/outsource_balanced_templates.md`, and `docs/blueprint.md`
+  - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md EXAMPLES.md docs/data_scripts/README.md docs/data_scripts/outsource_balanced_templates.md`
+- Что item доказал:
+  - there is now only one primary human-facing guide for the built-in outsourcing example, so operators no longer need to guess whether Example C or the narrow outsourcing helper doc should win;
+  - the built-in outsourcing walkthrough now matches the shipped prompt names/scopes and the currently focused 5-template buyer-intent bundle instead of the older, broader example set.
+- Риски или gaps:
+  - the JSON file still exists as a manual/reference artifact and is intentionally not auto-generated from `EXAMPLES.md`, so future edits still require the docs to stay in sync on purpose rather than by automation.
+
+### 2026-04-14 — C-OUTSOURCE-CONFIG-DECOUPLING-FROM-GENERIC-RUNTIME — Moved outsourcing semantics out of generic runtime and into admin-managed/operator-owned configuration
+
+- Тип записи: capability archive
+- Финальный статус: archived at implementation layer
+- Зачем понадобилось: the user wanted to keep outsourcing as only one supported use case instead of a hidden system specialization, remove the remaining outsourcing-specific assumptions from generic runtime/tooling, and make the full outsourcing configuration reproducible through admin/operator surfaces rather than through code or a runtime-owned JSON bundle.
+- Что изменилось:
+  - generic candidate-uplift runtime no longer carries hardcoded vendor/outsourcing vocabulary: [`services/workers/app/final_selection.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/final_selection.py) and [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py) now read criterion/profile candidate cues from admin-managed compatibility data, while the generic fallback stays limited to structural request/change/evaluation cues;
+  - admin-managed truth now covers candidate cues and compatibility policy semantics end-to-end: [`apps/admin/src/lib/server/admin-templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/admin-templates.ts), [`apps/admin/src/components/InterestTemplateEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/InterestTemplateEditorForm.tsx), [`apps/admin/src/pages/bff/admin/templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/templates.ts), [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro), [`apps/admin/src/pages/templates/interests/new.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests/new.astro), [`apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests/%5BinterestTemplateId%5D/edit.astro), and [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now persist/read candidate cue groups plus editable `strictness` / `unresolvedDecision` / `llmReviewMode` compatibility defaults instead of leaving them buried in runtime code;
+  - operational tooling no longer treats the outsourcing JSON bundle as runtime truth: [`services/fetchers/src/cli/article-yield-remediate.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/article-yield-remediate.ts) was decoupled from `outsource_balanced_templates.json`, while [`docs/data_scripts/outsource_balanced_templates.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_balanced_templates.md) became the then-current operator handbook and [`docs/data_scripts/outsource_balanced_templates.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_balanced_templates.json) stayed only as a manual reference asset with example candidate/profile settings; later docs sync moved the primary operator-facing source to `EXAMPLES.md` Example C.
+  - the operator documentation surface is now complete enough to recreate the three built-in use cases without changing channel lists: [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md), [`docs/data_scripts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/README.md), and [`docs/data_scripts/outsource_balanced_templates.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_balanced_templates.md) now explain the full admin-entered configuration path rather than a code-coupled bundle workflow.
+- Что проверено:
+  - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_api_system_interests tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair`
+  - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - `pnpm typecheck`
+  - `git diff --check -- docs/work.md docs/blueprint.md docs/contracts/universal-selection-profiles.md EXAMPLES.md docs/data_scripts/README.md docs/data_scripts/outsource_balanced_templates.json docs/data_scripts/outsource_balanced_templates.md apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/lib/server/admin-templates.ts apps/admin/src/pages/bff/admin/templates.ts apps/admin/src/pages/templates/interests.astro apps/admin/src/pages/templates/interests/new.astro apps/admin/src/pages/templates/interests/%5BinterestTemplateId%5D/edit.astro services/api/app/main.py services/fetchers/src/cli/article-yield-remediate.ts services/workers/app/final_selection.py services/workers/app/main.py tests/unit/python/test_api_system_interests.py tests/unit/python/test_final_selection.py tests/unit/python/test_interest_auto_repair.py tests/unit/ts/admin-template-sync.test.ts`
+- Что capability доказала:
+  - the generic engine can still work across arbitrary domains because outsourcing-specific vocabulary no longer acts as a hidden universal runtime truth;
+  - the outsourcing use case remains fully supported, but its semantics now live in admin-managed profile/prompt/config data and operator docs instead of in hardcoded worker/tooling behavior;
+  - system-interest operators can now override compatibility profile defaults directly in admin while preserving the old seeded defaults when they do nothing, so there is no longer a hidden policy layer that only code can change.
+- Риски или gaps:
+  - the markdown/operator path is now authoritative for humans, but there is still no one-click admin import that materializes the full handbook automatically;
+  - the local worktree still contains the shipped implementation changes until the user decides how to commit or split them.
+- Follow-up:
+  - if needed, open a separate bounded capability for bulk admin import/export ergonomics; do not reopen generic runtime decoupling unless a new domain-lock-in regression appears.
+
 ### 2026-04-13 — C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY — Restored article-pipeline resilience and re-opened the gray-zone LLM lane
 
 - Тип записи: capability archive

@@ -1,6 +1,8 @@
+import type { PaginationQuery } from "./pagination";
 import type { ResourceKind } from "./source";
 
 export type ContentItemOrigin = "editorial" | "resource";
+export type WebContentListSort = "latest" | "oldest" | "title_asc" | "title_desc";
 export type ContentItemSelectionDecision =
   | "pending_ai_review"
   | "selected"
@@ -9,6 +11,11 @@ export type ContentItemSelectionDecision =
   | "filtered_out"
   | "kind_enabled"
   | "unknown";
+
+export interface WebContentListQuery extends PaginationQuery {
+  sort?: WebContentListSort;
+  q?: string;
+}
 
 export interface ContentItemPreview {
   content_item_id: string;

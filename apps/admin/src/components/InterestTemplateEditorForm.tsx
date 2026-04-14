@@ -1,5 +1,3 @@
-import * as React from "react";
-
 import { FormField, Input, Textarea } from "@newsportal/ui";
 
 export interface InterestTemplateEditorValue {
@@ -16,6 +14,8 @@ export interface InterestTemplateEditorValue {
   allowedContentKinds: string;
   shortTokensRequired: string;
   shortTokensForbidden: string;
+  candidatePositiveSignals: string;
+  candidateNegativeSignals: string;
   priority: string;
   isActive: boolean;
   selectionProfileId?: string;
@@ -25,6 +25,9 @@ export interface InterestTemplateEditorValue {
   selectionProfileStrictness?: string;
   selectionProfileUnresolvedDecision?: string;
   selectionProfileLlmReviewMode?: string;
+  candidateSignalSource?: string;
+  candidatePositiveSignalGroupCount?: string;
+  candidateNegativeSignalGroupCount?: string;
 }
 
 interface InterestTemplateEditorFormProps {
@@ -165,7 +168,7 @@ export function InterestTemplateEditorForm({
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-2xl border border-border bg-background p-4">
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Strictness</p>
             <p className="mt-2 text-sm font-semibold">
@@ -209,6 +212,70 @@ export function InterestTemplateEditorForm({
               </p>
             )}
           </div>
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Candidate cues</p>
+            <p className="mt-2 text-sm font-semibold">
+              {displayValue(value.candidateSignalSource, "generic_fallback")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {`${displayValue(value.candidatePositiveSignalGroupCount, "0")} positive groups · ${displayValue(value.candidateNegativeSignalGroupCount, "0")} negative groups`}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <FormField
+            label="Strictness"
+            name="interest-template-policy-strictness"
+            helpText="Keeps the hidden default unless you explicitly choose a narrower or broader runtime stance."
+            helpWide
+          >
+            <select
+              id="interest-template-policy-strictness"
+              name="selection_profile_strictness"
+              defaultValue={displayValue(value.selectionProfileStrictness, "balanced")}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="strict">strict</option>
+              <option value="balanced">balanced</option>
+              <option value="broad">broad</option>
+            </select>
+          </FormField>
+
+          <FormField
+            label="Unresolved outcome"
+            name="interest-template-policy-unresolved"
+            helpText="Controls whether unresolved cases stay on hold or collapse to reject when no stronger evidence appears."
+            helpWide
+          >
+            <select
+              id="interest-template-policy-unresolved"
+              name="selection_profile_unresolved_decision"
+              defaultValue={displayValue(value.selectionProfileUnresolvedDecision, "hold")}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="hold">hold</option>
+              <option value="reject">reject</option>
+            </select>
+          </FormField>
+
+          <FormField
+            label="LLM review mode"
+            name="interest-template-policy-llm-review"
+            helpText="Leave the default in place or choose a cheaper policy when this system interest should avoid automatic gray-zone review."
+            helpWide
+          >
+            <select
+              id="interest-template-policy-llm-review"
+              name="selection_profile_llm_review_mode"
+              defaultValue={displayValue(value.selectionProfileLlmReviewMode, "always")}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="disabled">disabled</option>
+              <option value="optional_high_value_only">optional_high_value_only</option>
+              <option value="always">always</option>
+            </select>
+          </FormField>
         </div>
       </section>
 
@@ -325,6 +392,36 @@ export function InterestTemplateEditorForm({
               name="short_tokens_forbidden"
               rows={4}
               defaultValue={value.shortTokensForbidden}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Candidate uplift positive cues"
+            name="interest-template-candidate-positive-signals"
+            helpText="One group per line. Format: group_name: cue one | cue two | cue three. These cues help near-threshold items stay alive for gray-zone review."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-candidate-positive-signals"
+              name="candidate_positive_signals"
+              rows={6}
+              defaultValue={value.candidatePositiveSignals}
+              className="text-sm"
+            />
+          </FormField>
+
+          <FormField
+            label="Candidate uplift negative cues"
+            name="interest-template-candidate-negative-signals"
+            helpText="One group per line. Format: group_name: cue one | cue two | cue three. Use these to block marketplace, hiring, or community noise from the candidate-recovery path."
+            helpWide
+          >
+            <Textarea
+              id="interest-template-candidate-negative-signals"
+              name="candidate_negative_signals"
+              rows={6}
+              defaultValue={value.candidateNegativeSignals}
               className="text-sm"
             />
           </FormField>

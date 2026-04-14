@@ -264,6 +264,59 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(explain["selectionSummary"], "Compatibility projection: eligible")
         self.assertEqual(result["selection_guidance"]["tone"], "neutral")
 
+    def test_get_content_item_falls_back_to_editorial_article_when_family_preview_hides_exact_duplicate(self) -> None:
+        article = {
+            "doc_id": "doc-dup",
+            "url": "https://example.test/dup",
+            "title": "Duplicate article",
+            "lead": "Lead",
+            "lang": "en",
+            "published_at": "2026-04-14T09:00:00Z",
+            "ingested_at": "2026-04-14T09:01:00Z",
+            "updated_at": "2026-04-14T09:02:00Z",
+            "source_name": "Example",
+            "author_name": "Reporter",
+            "read_time_seconds": 120,
+            "final_selection_decision": "selected",
+            "final_selection_selected": True,
+            "system_feed_decision": "eligible",
+            "system_feed_eligible": True,
+            "has_media": False,
+            "primary_media_kind": None,
+            "primary_media_url": None,
+            "primary_media_thumbnail_url": None,
+            "primary_media_source_url": None,
+            "primary_media_title": None,
+            "primary_media_alt_text": None,
+            "like_count": 0,
+            "dislike_count": 0,
+            "summary": None,
+            "body_html": None,
+            "full_content_html": "<p>Body</p>",
+        }
+
+        with (
+            patch.object(api_main, "get_article", return_value=article) as get_article,
+            patch.object(
+                api_main,
+                "get_selected_content_item_preview",
+                side_effect=api_main.HTTPException(
+                    status_code=404, detail="Content item not found."
+                ),
+            ) as get_preview,
+        ):
+            result = api_main.get_content_item("editorial:doc-dup")
+
+        get_article.assert_called_once_with("doc-dup")
+        get_preview.assert_called_once_with("editorial:doc-dup")
+        self.assertEqual(result["content_item_id"], "editorial:doc-dup")
+        self.assertEqual(result["origin_type"], "editorial")
+        self.assertEqual(result["origin_id"], "doc-dup")
+        self.assertEqual(result["system_selection_decision"], "selected")
+        self.assertEqual(result["system_selected"], True)
+        self.assertEqual(result["summary"], "Lead")
+        self.assertEqual(result["body_html"], "<p>Body</p>")
+
     def test_article_explain_marks_profile_hold_as_hold_in_selection_summary(self) -> None:
         article = {
             "doc_id": "doc-2",

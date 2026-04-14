@@ -1,26 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-_POSITIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
+_GENERIC_POSITIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
     "requestSearch": (
         "looking for",
         "need help",
         "seeking ",
         "request for",
         "need a ",
-    ),
-    "serviceDelivery": (
-        " consultant",
-        " partner",
-        " agency",
-        " vendor",
-        " solution provider",
-        " service provider",
-        " integrator",
-        " staff augmentation",
-        " dedicated team",
-        " customiz",
+        "wanted ",
     ),
     "implementationChange": (
         "implementation",
@@ -51,13 +41,13 @@ _POSITIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
         "top ",
         " comparison",
         " what to look for",
-        " partners",
-        " agencies",
-        " companies",
+        " evaluation",
+        " options",
+        " shortlist",
     ),
 }
 
-_NEGATIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
+_GENERIC_NEGATIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
     "hiringRole": (
         "[hiring]",
         " hiring ",
@@ -89,6 +79,60 @@ _NEGATIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _coerce_signal_groups(
+    value: Any,
+    *,
+    fallback: dict[str, tuple[str, ...]],
+) -> tuple[dict[str, tuple[str, ...]], str]:
+    if not isinstance(value, Mapping):
+        return fallback, "generic_fallback"
+
+    groups_value = value.get("positiveGroups") or value.get("negativeGroups")
+    if groups_value is None and "groups" in value:
+        groups_value = value.get("groups")
+    if not isinstance(groups_value, list):
+        return fallback, "generic_fallback"
+
+    groups: dict[str, tuple[str, ...]] = {}
+    for index, raw_group in enumerate(groups_value):
+        if not isinstance(raw_group, Mapping):
+            continue
+        raw_name = str(raw_group.get("name") or "").strip() or f"group_{index + 1}"
+        cues = raw_group.get("cues")
+        if not isinstance(cues, list):
+            cues = raw_group.get("terms")
+        normalized_cues = tuple(
+            str(entry).strip().lower()
+            for entry in (cues if isinstance(cues, list) else [])
+            if str(entry).strip()
+        )
+        if normalized_cues:
+            groups[raw_name] = normalized_cues
+
+    return (groups or fallback), ("selection_profile_definition" if groups else "generic_fallback")
+
+
+def _resolve_candidate_signal_groups(
+    candidate_signal_config: Mapping[str, Any] | None,
+) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]], str]:
+    config = candidate_signal_config if isinstance(candidate_signal_config, Mapping) else {}
+    positive_groups, positive_source = _coerce_signal_groups(
+        {"positiveGroups": config.get("positiveGroups")},
+        fallback=_GENERIC_POSITIVE_CANDIDATE_SIGNAL_GROUPS,
+    )
+    negative_groups, negative_source = _coerce_signal_groups(
+        {"negativeGroups": config.get("negativeGroups")},
+        fallback=_GENERIC_NEGATIVE_CANDIDATE_SIGNAL_GROUPS,
+    )
+    signal_source = (
+        "selection_profile_definition"
+        if positive_source == "selection_profile_definition"
+        or negative_source == "selection_profile_definition"
+        else "generic_fallback"
+    )
+    return positive_groups, negative_groups, signal_source
+
+
 def _collect_signal_hits(text: str, groups: dict[str, tuple[str, ...]]) -> dict[str, list[str]]:
     hits: dict[str, list[str]] = {}
     for group_name, fragments in groups.items():
@@ -114,6 +158,7 @@ def evaluate_document_candidate_signals(
     story_cluster_id: str | None,
     verification_state: str | None,
     base_decision: str,
+    candidate_signal_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_text = " ".join(
         part.strip().lower()
@@ -124,8 +169,11 @@ def evaluate_document_candidate_signals(
         )
         if str(part or "").strip()
     )
-    positive_hits = _collect_signal_hits(normalized_text, _POSITIVE_CANDIDATE_SIGNAL_GROUPS)
-    noise_hits = _collect_signal_hits(normalized_text, _NEGATIVE_CANDIDATE_SIGNAL_GROUPS)
+    positive_groups, noise_groups, signal_source = _resolve_candidate_signal_groups(
+        candidate_signal_config
+    )
+    positive_hits = _collect_signal_hits(normalized_text, positive_groups)
+    noise_hits = _collect_signal_hits(normalized_text, noise_groups)
     positive_group_count = len(positive_hits)
     positive_hit_count = _count_signal_hits(positive_hits)
     noise_group_count = len(noise_hits)
@@ -202,6 +250,7 @@ def evaluate_document_candidate_signals(
             if document_only_uplift
             else None
         ),
+        "signalSource": signal_source,
         "reason": (
             "context_backed_candidate_signal_uplift"
             if context_backed_uplift
@@ -224,6 +273,7 @@ def apply_document_candidate_signal_uplift(
     story_cluster_id: str | None,
     verification_state: str | None,
     base_decision: str,
+    candidate_signal_config: Mapping[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
     explain = evaluate_document_candidate_signals(
         title=title,
@@ -236,6 +286,7 @@ def apply_document_candidate_signal_uplift(
         story_cluster_id=story_cluster_id,
         verification_state=verification_state,
         base_decision=base_decision,
+        candidate_signal_config=candidate_signal_config,
     )
     if explain["upliftedToGrayZone"]:
         return ("gray_zone", explain)
