@@ -105,7 +105,7 @@ Durable completed detail переносится в `docs/history.md`.
 
 - `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2`
   - Kind: Patch
-  - Status: active
+  - Status: done
   - Goal: wipe the local compose runtime data again so the current source/interest/template configuration can be rerun from a near-zero baseline and evaluated immediately.
   - In scope:
     - export the current preserved subset before any destructive action
@@ -130,8 +130,11 @@ Durable completed detail переносится в `docs/history.md`.
   - Risk:
     - high; this intentionally destroys local runtime history again, so the main risk is silently omitting a dependency from the preserved subset and booting a misleading “fresh” baseline.
   - Progress now:
-    - the preserved subset remains the same truthful minimum as the first reset: `source_providers`, `source_channels`, `interest_templates`, `criteria`, `criteria_compiled`, `selection_profiles`, and `llm_prompt_templates`.
-    - the current refresh of outsourcing prompt semantics lives in the local DB rows and must be preserved as part of `llm_prompt_templates`.
+    - snapshot/export artifact captured at `/tmp/newsportal-reset-r2-2026-04-13T191252Z` before any destructive action.
+    - the preserved subset remained the same truthful minimum as the first reset: `source_providers`, `source_channels`, `interest_templates`, `criteria`, `criteria_compiled`, `selection_profiles`, and `llm_prompt_templates`.
+    - the fresh compose seed created replacement `source_providers` rows with different UUIDs, so the restore had to replace those baseline providers before `source_channels` could be reimported truthfully.
+    - after restore, `5173` channels had their `last_fetch_at`, `last_success_at`, `last_error_at`, and `last_error_message` cleared so repolling restarted from zero.
+    - first fresh-motion proof on the rebuilt baseline now shows new runtime growth again: `/tmp/newsportal-reset-r2-2026-04-13T191252Z/post_restore_counts.tsv` already reached `20` articles / `30` filter rows, and `/tmp/newsportal-reset-r2-2026-04-13T191252Z/first_motion_counts.tsv` reached `247` articles / `265` filter rows / `53` final-selection rows without restoring any historical runtime tables.
 
 - `SPIKE-FRESH-CORPUS-POSITIVE-SIGNAL-LOSS-2026-04-13`
   - Kind: Spike
@@ -598,7 +601,7 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Next recommended action
 
-- Finish `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2`: export the current preserve-set, wipe the local compose runtime, restore the source/interest/template subset, and confirm that the system is repolling from zero on the rebuilt baseline.
+- Continue `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt baseline: inspect the new post-reset corpus and verify whether candidate-uplift / gray-zone / LLM-review behavior improves on this truly fresh rerun.
 
 ### Archive sync status
 
@@ -620,14 +623,14 @@ Durable completed detail переносится в `docs/history.md`.
 - Seeded or imported data:
   fresh local compose volumes now contain run-scoped articles, channels, interests, notification rows, discovery mission/class/candidate rows, and targeted CRUD-check entities created by `pnpm test:mvp:internal`, `pnpm test:discovery:admin:compose`, the targeted admin/user/channel smoke checks, and the temporary idempotent replay of `0030_discovery_schema_drift_repair.sql` used to heal the drifted local discovery schema before final discovery acceptance/browser proof.
 - Cleanup status:
-  Firebase aliases were cleaned; on 2026-04-13 the local PostgreSQL/Redis volumes were intentionally destroyed and recreated for `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13`, then the preserved system-interest/LLM/channel subset was restored from `/tmp/newsportal-reset-2026-04-13T20260413T165012Z`; compose services are currently running on the fresh baseline.
+  Firebase aliases were cleaned; on 2026-04-13 the local PostgreSQL/Redis volumes were intentionally destroyed and recreated for `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13`, then again for `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2`; the preserved system-interest/source/template subset is now restored from `/tmp/newsportal-reset-r2-2026-04-13T191252Z`, and compose services are currently running on the second fresh baseline.
 - Reset note:
   the user has now explicitly approved a destructive local reset for the compose DB/Redis volumes as long as the preserved system-interest/LLM/channel subset is exported and restored first.
 
 ## Handoff state
 
 - Current item status:
-  `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY` is implementation-complete through `STAGE-4-TRANSIENT-FETCHERS-ENRICHMENT-RETRY-HARDENING`; `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION` has completed `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE`, `STAGE-1-DOCUMENT-AND-CLUSTER-CANDIDATE-SIGNALS`, `STAGE-2-GRAY-ZONE-AND-LLM-CANDIDATE-ROUTING`, and `STAGE-3-NOISE-TOLERANT-PROOF-AND-OPERATOR-VISIBILITY`; `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13` is done; `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` has now completed the fresh-corpus spike plus stages 1 and 2, and is currently in `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the preserved fresh baseline.
+  `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY` is implementation-complete through `STAGE-4-TRANSIENT-FETCHERS-ENRICHMENT-RETRY-HARDENING`; `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION` has completed `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE`, `STAGE-1-DOCUMENT-AND-CLUSTER-CANDIDATE-SIGNALS`, `STAGE-2-GRAY-ZONE-AND-LLM-CANDIDATE-ROUTING`, and `STAGE-3-NOISE-TOLERANT-PROOF-AND-OPERATOR-VISIBILITY`; `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13` and `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2` are done; `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` has now completed the fresh-corpus spike plus stages 1 and 2, and is currently in `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt second fresh baseline.
 - Executed proof:
   - required read-order reload for `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/test-access-and-fixtures.md`, and `docs/contracts/universal-task-engine.md`
   - read-only forensic diagnostics on 2026-04-13 via `pnpm article:yield:diagnostics`, targeted SQL counts, and compose worker/relay log inspection
@@ -653,6 +656,8 @@ Durable completed detail переносится в `docs/history.md`.
   - `git diff --check -- services/workers/app/final_selection.py services/workers/app/main.py services/api/app/main.py tests/unit/python/test_final_selection.py tests/unit/python/test_interest_auto_repair.py`
   - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_api_system_interests tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair`
   - `node --import tsx --test tests/unit/ts/admin-operator-surfaces.test.ts`
+  - second destructive local reset on 2026-04-13 with preserve-set export to `/tmp/newsportal-reset-r2-2026-04-13T191252Z`, `pnpm dev:mvp:internal:down:volumes`, `pnpm dev:mvp:internal:no-build`, restore of `interest_templates` / `criteria` / `criteria_compiled` / `selection_profiles` / `llm_prompt_templates`, replacement restore of `source_providers` plus `source_channels`, and poll-state clearing via PostgreSQL
+  - post-reset health and growth artifacts: `/tmp/newsportal-reset-r2-2026-04-13T191252Z/pre_reset_counts.tsv`, `/tmp/newsportal-reset-r2-2026-04-13T191252Z/post_restore_counts.tsv`, `/tmp/newsportal-reset-r2-2026-04-13T191252Z/first_motion_counts.tsv`, `/tmp/newsportal-reset-r2-2026-04-13T191252Z/post_restore_services.txt`
   - `git diff --check -- services/api/app/main.py apps/admin/src/lib/server/operator-surfaces.ts tests/unit/python/test_api_system_interests.py tests/unit/ts/admin-operator-surfaces.test.ts`
   - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_final_selection tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_system_interests`
   - `node --import tsx --test tests/unit/ts/admin-operator-surfaces.test.ts`
