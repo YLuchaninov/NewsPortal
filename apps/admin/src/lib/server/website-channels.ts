@@ -43,6 +43,7 @@ export interface NormalizedWebsiteAdminChannelInput {
   collectionSeedUrls: string[];
   allowedUrlPatterns: string[];
   blockedUrlPatterns: string[];
+  curated: WebsiteChannelConfig["curated"];
   authorizationHeaderUpdate: AuthorizationHeaderUpdate;
 }
 
@@ -202,6 +203,23 @@ function normalizeWebsiteConfig(payload: Record<string, unknown>): WebsiteChanne
       "crawlDelayMs"
     ),
     classification: DEFAULT_WEBSITE_CONFIG.classification,
+    curated: {
+      preferCollectionDiscovery: readBoolean(
+        payload.curatedPreferCollectionDiscovery,
+        DEFAULT_WEBSITE_CONFIG.curated.preferCollectionDiscovery,
+        "curatedPreferCollectionDiscovery"
+      ),
+      preferBrowserFallback: readBoolean(
+        payload.curatedPreferBrowserFallback,
+        DEFAULT_WEBSITE_CONFIG.curated.preferBrowserFallback,
+        "curatedPreferBrowserFallback"
+      ),
+      editorialUrlPatterns: readTextareaList(payload.curatedEditorialUrlPatterns),
+      listingUrlPatterns: readTextareaList(payload.curatedListingUrlPatterns),
+      entityUrlPatterns: readTextareaList(payload.curatedEntityUrlPatterns),
+      documentUrlPatterns: readTextareaList(payload.curatedDocumentUrlPatterns),
+      dataFileUrlPatterns: readTextareaList(payload.curatedDataFileUrlPatterns),
+    },
     extraction: DEFAULT_WEBSITE_CONFIG.extraction
   });
 }
@@ -294,6 +312,7 @@ export function parseWebsiteAdminChannelInput(
     collectionSeedUrls: config.collectionSeedUrls,
     allowedUrlPatterns: config.allowedUrlPatterns,
     blockedUrlPatterns: config.blockedUrlPatterns,
+    curated: config.curated,
     authorizationHeaderUpdate: resolveAuthorizationHeaderUpdate(
       payload,
       Boolean(readOptionalString(payload.channelId))
@@ -341,6 +360,7 @@ export async function upsertWebsiteChannels(
         downloadPatterns: DEFAULT_WEBSITE_CONFIG.downloadPatterns,
         crawlDelayMs: channel.crawlDelayMs,
         classification: DEFAULT_WEBSITE_CONFIG.classification,
+        curated: channel.curated,
         extraction: DEFAULT_WEBSITE_CONFIG.extraction
       });
 

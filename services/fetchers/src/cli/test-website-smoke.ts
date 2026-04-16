@@ -43,6 +43,13 @@ interface CacheRow {
   sitemapUrls: string[];
   feedUrls: string[];
   httpStatus: number | null;
+  requestValidatorsJson: Record<string, unknown>;
+  responseCacheJson: Record<string, unknown>;
+}
+
+interface FetchRunRow {
+  outcomeKind: string;
+  providerMetricsJson: Record<string, unknown>;
 }
 
 interface SmokeLogger {
@@ -172,18 +179,47 @@ async function startFixtureServer(runId: string): Promise<{
     const sitemapTitle = `Website sitemap story ${runId}`;
     const feedTitle = `Website feed story ${runId}`;
     const entityTitle = `Website entity ${runId}`;
+    const maybeNotModified = (etag: string, lastModified: string): boolean => {
+      const ifNoneMatch = request.headers["if-none-match"];
+      const ifModifiedSince = request.headers["if-modified-since"];
+      return ifNoneMatch === etag || ifModifiedSince === lastModified;
+    };
 
     if (request.url === "/robots.txt") {
+      const etag = `"website-smoke-robots-${runId}"`;
+      const lastModified = "Sat, 28 Mar 2026 10:00:00 GMT";
+      if (maybeNotModified(etag, lastModified)) {
+        response.writeHead(304, {
+          ETag: etag,
+          "Last-Modified": lastModified,
+        });
+        response.end();
+        return;
+      }
       response.writeHead(200, {
         "content-type": "text/plain; charset=utf-8",
+        ETag: etag,
+        "Last-Modified": lastModified,
       });
       response.end(`User-agent: *\nAllow: /\nCrawl-delay: 1\nSitemap: ${sitemapUrl}\n`);
       return;
     }
 
     if (request.url === "/" || request.url === "") {
+      const etag = `"website-smoke-homepage-${runId}"`;
+      const lastModified = "Sat, 28 Mar 2026 10:05:00 GMT";
+      if (maybeNotModified(etag, lastModified)) {
+        response.writeHead(304, {
+          ETag: etag,
+          "Last-Modified": lastModified,
+        });
+        response.end();
+        return;
+      }
       response.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
+        ETag: etag,
+        "Last-Modified": lastModified,
       });
       response.end(`<!doctype html>
 <html lang="en">
@@ -205,8 +241,20 @@ async function startFixtureServer(runId: string): Promise<{
     }
 
     if (request.url === "/sitemap.xml") {
+      const etag = `"website-smoke-sitemap-${runId}"`;
+      const lastModified = "Sat, 28 Mar 2026 11:00:00 GMT";
+      if (maybeNotModified(etag, lastModified)) {
+        response.writeHead(304, {
+          ETag: etag,
+          "Last-Modified": lastModified,
+        });
+        response.end();
+        return;
+      }
       response.writeHead(200, {
         "content-type": "application/xml; charset=utf-8",
+        ETag: etag,
+        "Last-Modified": lastModified,
       });
       response.end(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -219,8 +267,20 @@ async function startFixtureServer(runId: string): Promise<{
     }
 
     if (request.url === "/hidden-feed.xml") {
+      const etag = `"website-smoke-feed-${runId}"`;
+      const lastModified = "Sat, 28 Mar 2026 12:30:00 GMT";
+      if (maybeNotModified(etag, lastModified)) {
+        response.writeHead(304, {
+          ETag: etag,
+          "Last-Modified": lastModified,
+        });
+        response.end();
+        return;
+      }
       response.writeHead(200, {
         "content-type": "application/rss+xml; charset=utf-8",
+        ETag: etag,
+        "Last-Modified": lastModified,
       });
       response.end(`<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
@@ -441,7 +501,9 @@ async function fetchPolicyRow(pool: Pool, domain: string): Promise<CacheRow | nu
         domain,
         sitemap_urls as "sitemapUrls",
         feed_urls as "feedUrls",
-        http_status as "httpStatus"
+        http_status as "httpStatus",
+        request_validators_json as "requestValidatorsJson",
+        response_cache_json as "responseCacheJson"
       from crawl_policy_cache
       where domain = $1
       limit 1
@@ -450,6 +512,26 @@ async function fetchPolicyRow(pool: Pool, domain: string): Promise<CacheRow | nu
   );
 
   return result.rows[0] ?? null;
+}
+
+async function fetchLatestRun(pool: Pool, channelId: string): Promise<FetchRunRow> {
+  const result = await pool.query<FetchRunRow>(
+    `
+      select
+        outcome_kind as "outcomeKind",
+        provider_metrics_json as "providerMetricsJson"
+      from channel_fetch_runs
+      where channel_id = $1
+      order by started_at desc
+      limit 1
+    `,
+    [channelId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error(`Expected a fetch run for website smoke channel ${channelId}.`);
+  }
+  return row;
 }
 
 async function countPublishedOutboxEvents(
@@ -727,6 +809,15 @@ async function assertWebsiteRows(
   if (!policyRow.feedUrls.includes(fixture.hiddenFeedUrl)) {
     throw new Error("Expected crawl policy cache to retain the hidden feed URL from the fixture homepage.");
   }
+  if (!Object.keys(policyRow.requestValidatorsJson).some((key) => key.startsWith("sitemap:"))) {
+    throw new Error("Expected crawl policy cache to retain conditional-request validators for sitemap URLs.");
+  }
+  if (!Object.keys(policyRow.requestValidatorsJson).some((key) => key.startsWith("feed:"))) {
+    throw new Error("Expected crawl policy cache to retain conditional-request validators for feed URLs.");
+  }
+  if (!("homepage" in policyRow.responseCacheJson)) {
+    throw new Error("Expected crawl policy cache to retain a cached homepage response for conditional reuse.");
+  }
 
   const discoveredCursorTypes = new Set(cursorTypes.rows.map((row) => row.cursorType));
   for (const cursorType of ["timestamp", "lastmod", "set_diff"]) {
@@ -789,6 +880,24 @@ async function assertWebsiteRows(
   }
 }
 
+async function assertSecondPollMetrics(pool: Pool, channelId: string): Promise<void> {
+  const latestRun = await fetchLatestRun(pool, channelId);
+  const metrics = latestRun.providerMetricsJson;
+  const conditionalHits = (metrics.conditionalRequestHits ?? {}) as Record<string, unknown>;
+  if (latestRun.outcomeKind !== "no_change") {
+    throw new Error(`Expected second website smoke poll to be no_change, got ${latestRun.outcomeKind}.`);
+  }
+  if (Number(metrics.finalAcceptedCount ?? 0) !== 0) {
+    throw new Error("Expected second website smoke poll to accept zero new resources after cursor filtering.");
+  }
+  if (Number(conditionalHits.sitemap ?? 0) < 1) {
+    throw new Error("Expected second website smoke poll to record at least one sitemap conditional-request hit.");
+  }
+  if (Number(conditionalHits.feed ?? 0) < 1) {
+    throw new Error("Expected second website smoke poll to record at least one feed conditional-request hit.");
+  }
+}
+
 async function main(): Promise<void> {
   const config = loadFetchersConfig();
   const pool = createPgPool(config);
@@ -809,6 +918,8 @@ async function main(): Promise<void> {
     channelIds.push(channelId);
     await service.pollChannel(channelId);
     await assertWebsiteRows(pool, channelId, fixtureServer, runId, resourceEnrichmentService);
+    await service.pollChannel(channelId);
+    await assertSecondPollMetrics(pool, channelId);
     console.log(`Website smoke test passed for channel ${channelId}.`);
   } finally {
     try {

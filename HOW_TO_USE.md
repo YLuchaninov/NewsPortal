@@ -252,6 +252,8 @@ Website channel нужен, когда у источника нет удобно
 
 - `README.md` — для discovery/discovery-env и bounded runtime enable path
 - `docs/manual-mvp-runbook.md` — для полного operator walkthrough и `/resources` проверки
+- `WEBSITE_SOURCES_TESTING.md` — для отдельной пошаговой инструкции именно по `website` sources, `/admin/resources`, projected/resource-only rows и bounded live-site checklist
+- `node infra/scripts/test-live-website-matrix.mjs` — для расширенного bounded live-site прогона по 16 реальным public website targets уже после того, как локальный website proof (`website`, `hard-sites`, `channel-auth`, `website-admin`, `enrichment`) зелёный
 
 ---
 

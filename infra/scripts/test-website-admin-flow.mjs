@@ -847,18 +847,39 @@ async function main() {
       (payload) =>
         Array.isArray(payload?.items) &&
         payload.items.length >= 4 &&
-        payload.items.some((item) => String(item.resource_kind ?? "") === "entity" && !item.projected_article_id) &&
-        payload.items.some((item) => String(item.resource_kind ?? "") === "document" && !item.projected_article_id) &&
-        payload.items.some((item) => String(item.resource_kind ?? "") === "editorial" && item.projected_article_id)
+        payload.items.some(
+          (item) =>
+            String(item.resource_kind ?? "") === "entity" &&
+            !item.projected_article_id &&
+            String(item.extraction_state ?? "") === "enriched" &&
+            String(item.title ?? "").trim().length > 0
+        ) &&
+        payload.items.some(
+          (item) =>
+            String(item.resource_kind ?? "") === "document" &&
+            !item.projected_article_id &&
+            String(item.extraction_state ?? "") === "enriched" &&
+            String(item.title ?? "").trim().length > 0
+        ) &&
+        payload.items.some(
+          (item) =>
+            String(item.resource_kind ?? "") === "editorial" &&
+            item.projected_article_id &&
+            String(item.extraction_state ?? "") === "enriched" &&
+            String(item.title ?? "").trim().length > 0
+        )
+    );
+    const latestResourcesPayload = await fetchJson(
+      `http://127.0.0.1:8000/maintenance/web-resources?channelId=${encodeURIComponent(channelId)}&page=1&pageSize=20`
     );
 
-    const entityResource = resourcesPayload.items.find(
+    const entityResource = latestResourcesPayload.items.find(
       (item) => String(item.resource_kind ?? "") === "entity"
     );
-    const documentResource = resourcesPayload.items.find(
+    const documentResource = latestResourcesPayload.items.find(
       (item) => String(item.resource_kind ?? "") === "document"
     );
-    const projectedEditorial = resourcesPayload.items.find(
+    const projectedEditorial = latestResourcesPayload.items.find(
       (item) => String(item.resource_kind ?? "") === "editorial" && item.projected_article_id
     );
 

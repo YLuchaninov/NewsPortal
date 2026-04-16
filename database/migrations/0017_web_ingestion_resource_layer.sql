@@ -25,12 +25,19 @@ create table if not exists crawl_policy_cache (
   feed_urls text[] not null default '{}'::text[],
   llms_txt_url text,
   llms_txt_body text,
+  request_validators_json jsonb not null default '{}'::jsonb,
+  response_cache_json jsonb not null default '{}'::jsonb,
   fetched_at timestamptz not null default now(),
   expires_at timestamptz not null,
   fetch_error text,
   http_status integer,
   constraint crawl_policy_cache_domain_check
     check (domain = lower(domain))
+  ,
+  constraint crawl_policy_cache_request_validators_json_is_object_check
+    check (jsonb_typeof(request_validators_json) = 'object'),
+  constraint crawl_policy_cache_response_cache_json_is_object_check
+    check (jsonb_typeof(response_cache_json) = 'object')
 );
 
 create index if not exists crawl_policy_cache_expires_idx

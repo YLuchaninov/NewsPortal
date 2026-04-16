@@ -243,6 +243,7 @@ If you want to pre-clean a large candidate list, the repo ships a validator help
    - projected editorial rows with article links
    - resource-only entity/document rows that stay visible even without article projection
    - detail drilldown for at least one specific resource
+    - if you want a dedicated website-only checklist instead of the broader MVP runbook, continue with [WEBSITE_SOURCES_TESTING.md](/Users/user/Documents/workspace/my/NewsPortal/WEBSITE_SOURCES_TESTING.md)
 11. Confirm the dashboard shows the system-selected collection summary plus operational cards.
 12. Open the editorial item list and confirm per-item reaction counters are visible.
 
@@ -269,6 +270,8 @@ Truthful current limitation:
 ## Website channels and hard sites
 
 Use this section only when you intentionally verify the website lane.
+
+If you want a dedicated operator-only walkthrough for this subsystem, use [WEBSITE_SOURCES_TESTING.md](/Users/user/Documents/workspace/my/NewsPortal/WEBSITE_SOURCES_TESTING.md). The checklist below stays as the compact MVP-runbook version.
 
 1. Create a public or static-header-authenticated `website` channel from a homepage/section/sitemap source that does not require interactive login.
 2. If the source requires header auth, fill `Authorization header` with the full raw value; the fetcher will reuse it only for same-origin requests.

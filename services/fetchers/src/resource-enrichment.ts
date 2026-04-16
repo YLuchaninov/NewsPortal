@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
-  extract as extractArticle,
+  extractFromHtml,
   type ArticleData,
 } from "@extractus/article-extractor";
 import type { Pool, PoolClient } from "pg";
@@ -102,6 +102,13 @@ class AsyncSemaphore {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
 }
 
 function normalizeText(value: string): string {
@@ -281,6 +288,167 @@ function buildArticleParserOptions() {
     contentLengthThreshold: 120,
     wordsPerMinute: 240,
   };
+}
+
+interface EditorialExtractorDecision {
+  shouldInvoke: boolean;
+  reason: "short_body" | "missing_title" | "missing_summary" | "missing_published_at" | "not_needed";
+}
+
+function extractDiscoveryClassification(
+  classificationJson: Record<string, unknown>
+): {
+  kind: string;
+  confidence: number | null;
+  reasons: string[];
+  hintedKinds: string[];
+  discoverySource: string | null;
+} {
+  const nestedDiscovery = asRecord(classificationJson.discovery);
+  const discoverySource =
+    readOptionalString(nestedDiscovery.discoverySource) ??
+    readOptionalString(asRecord(classificationJson.observability).discoverySource) ??
+    null;
+  const confidenceValue =
+    typeof nestedDiscovery.confidence === "number" && Number.isFinite(nestedDiscovery.confidence)
+      ? nestedDiscovery.confidence
+      : typeof classificationJson.confidence === "number" && Number.isFinite(classificationJson.confidence)
+      ? (classificationJson.confidence as number)
+      : null;
+  const reasonsSource = asArray(nestedDiscovery.reasons ?? classificationJson.reasons)
+    .map((value) => readOptionalString(value))
+    .filter((value): value is string => Boolean(value));
+  const hintedKinds = asArray(nestedDiscovery.hintedKinds ?? classificationJson.hintedKinds)
+    .map((value) => readOptionalString(value))
+    .filter((value): value is string => Boolean(value));
+  return {
+    kind: readOptionalString(nestedDiscovery.kind) ?? readOptionalString(classificationJson.kind) ?? "unknown",
+    confidence: confidenceValue,
+    reasons: reasonsSource,
+    hintedKinds,
+    discoverySource,
+  };
+}
+
+export function resolveEditorialExtractorDecision(input: {
+  baseBody: string;
+  title: string | null;
+  summary: string | null;
+  publishedAt: string | null;
+  minEditorialBodyLength: number;
+}): EditorialExtractorDecision {
+  if (input.baseBody.length < input.minEditorialBodyLength) {
+    return { shouldInvoke: true, reason: "short_body" };
+  }
+  if (!readOptionalString(input.title)) {
+    return { shouldInvoke: true, reason: "missing_title" };
+  }
+  if (!readOptionalString(input.summary)) {
+    return { shouldInvoke: true, reason: "missing_summary" };
+  }
+  if (!readOptionalString(input.publishedAt)) {
+    return { shouldInvoke: true, reason: "missing_published_at" };
+  }
+  return { shouldInvoke: false, reason: "not_needed" };
+}
+
+export function buildWebsiteResourceClassificationJson(input: {
+  priorClassificationJson: Record<string, unknown>;
+  enrichmentClassification: {
+    kind: ResourceKind;
+    confidence: number;
+    reasons: string[];
+  };
+  resolvedKind: ResourceKind;
+  structuredTypes: string[];
+  hintedKinds: ResourceKind[];
+  reasonSource: "discovery" | "enrichment" | "stored_kind_fallback";
+  resolutionReasons?: string[];
+}): Record<string, unknown> {
+  const discovery = extractDiscoveryClassification(input.priorClassificationJson);
+  const discoveryKind = discovery.kind || "unknown";
+  const resolutionReasons = asArray(input.resolutionReasons)
+    .map((value) => readOptionalString(value))
+    .filter((value): value is string => Boolean(value));
+  const topLevelConfidence =
+    input.reasonSource === "discovery"
+      ? (discovery.confidence ?? input.enrichmentClassification.confidence)
+      : input.enrichmentClassification.confidence;
+  const topLevelReasons =
+    input.reasonSource === "stored_kind_fallback"
+      ? [...input.enrichmentClassification.reasons, "fallback:stored_kind", ...resolutionReasons]
+      : input.reasonSource === "discovery"
+      ? [...discovery.reasons, ...resolutionReasons]
+      : [...input.enrichmentClassification.reasons, ...resolutionReasons];
+  return {
+    kind: input.resolvedKind,
+    confidence: topLevelConfidence,
+    reasons: Array.from(new Set(topLevelReasons)),
+    hintedKinds: input.hintedKinds,
+    discovery: {
+      kind: discoveryKind,
+      confidence: discovery.confidence,
+      reasons: discovery.reasons,
+      hintedKinds: discovery.hintedKinds,
+      discoverySource: discovery.discoverySource,
+    },
+    enrichment: {
+      kind: input.enrichmentClassification.kind,
+      confidence: input.enrichmentClassification.confidence,
+      reasons: input.enrichmentClassification.reasons,
+      hintedKinds: input.hintedKinds,
+      structuredTypes: input.structuredTypes,
+    },
+    resolved: {
+      kind: input.resolvedKind,
+      confidence: topLevelConfidence,
+      reasonSource: input.reasonSource,
+      reasons: resolutionReasons,
+    },
+    transition: {
+      kindChanged: discoveryKind !== input.resolvedKind,
+      fromKind: discoveryKind,
+      toKind: input.resolvedKind,
+      reasonSource: input.reasonSource,
+    },
+  };
+}
+
+function hasEditorialStructuredType(structuredTypes: readonly string[]): boolean {
+  return structuredTypes.some((structuredType) => /(newsarticle|article|blogposting)/i.test(structuredType));
+}
+
+export function shouldRetainDiscoveryEditorialKind(input: {
+  discoveryKind: string;
+  enrichmentKind: ResourceKind;
+  hintedKinds: ResourceKind[];
+  structuredTypes: string[];
+  publishedAt: string | null;
+  title: string | null;
+  summary: string | null;
+  bodyText: string | null;
+  hasRepeatedCards: boolean;
+  hasPagination: boolean;
+}): boolean {
+  if (input.discoveryKind !== "editorial" || input.enrichmentKind !== "listing") {
+    return false;
+  }
+
+  const editorialSignals = [
+    input.hintedKinds.includes("editorial"),
+    hasEditorialStructuredType(input.structuredTypes),
+    Boolean(readOptionalString(input.publishedAt)),
+    normalizeText(input.title ?? "").length >= 24,
+    normalizeText(input.summary ?? "").length >= 80 || normalizeText(input.bodyText ?? "").length >= 500,
+  ].filter(Boolean).length;
+
+  const listingSignals = [
+    input.hintedKinds.includes("listing") && !input.hintedKinds.includes("editorial"),
+    input.hasRepeatedCards,
+    input.hasPagination,
+  ].filter(Boolean).length;
+
+  return editorialSignals >= 3 && editorialSignals > listingSignals;
 }
 
 interface ExtractionPersistShape {
@@ -506,14 +674,32 @@ export class ResourceEnrichmentService {
         langConfidence: contentLanguage ? 0.7 : resource.langConfidence,
         publishedAt: resource.publishedAt,
         modifiedAt: modifiedAt ?? resource.modifiedAt,
-        classificationJson: {
-          kind: resourceKind,
-          confidence: 0.9,
-          reasons: ["content_type:file"],
-        },
+        classificationJson: buildWebsiteResourceClassificationJson({
+          priorClassificationJson: resource.classificationJson,
+          enrichmentClassification: {
+            kind: resourceKind,
+            confidence: 0.9,
+            reasons: ["content_type:file"],
+          },
+          resolvedKind: resourceKind,
+          structuredTypes: [],
+          hintedKinds: inferResourceKindsFromUrl(finalUrl),
+          reasonSource: "enrichment",
+        }),
         attributesJson: {
           contentType,
           sizeBytes: readOptionalString(response.headers.get("content-length")),
+          observability: {
+            structuredTypes: [],
+            linkCount: 0,
+            downloadCount: 1,
+            hasRepeatedCards: false,
+            hasPagination: false,
+            hintedKinds: inferResourceKindsFromUrl(finalUrl),
+            discoverySource: readOptionalString(
+              extractDiscoveryClassification(resource.classificationJson).discoverySource
+            ),
+          },
         },
         documentsJson: [
           {
@@ -544,20 +730,68 @@ export class ResourceEnrichmentService {
     const downloads = extractDownloadLinks(html, finalUrl);
     const hasRepeatedCards = links.length >= 8;
     const hasPagination = /\b(page|pagination|next)\b/i.test(html);
+    const hintedKinds = inferResourceKindsFromUrl(finalUrl);
+    const discoveryClassification = extractDiscoveryClassification(resource.classificationJson);
     const classification = classifyResourceCandidate({
       url: finalUrl,
       title,
       summary,
-      hintedKinds: inferResourceKindsFromUrl(finalUrl),
+      hintedKinds,
       structuredTypes,
       hasRepeatedCards,
       hasPagination,
       hasDownloads: downloads.length > 0,
+      publishedAtHint: resource.publishedAt,
     });
-    const resolvedKind = classification.kind === "unknown"
+    const baseBody = normalizeText(html);
+    const retainDiscoveryEditorialKind = shouldRetainDiscoveryEditorialKind({
+      discoveryKind: discoveryClassification.kind,
+      enrichmentKind: classification.kind,
+      hintedKinds,
+      structuredTypes,
+      publishedAt: resource.publishedAt,
+      title,
+      summary,
+      bodyText: baseBody,
+      hasRepeatedCards,
+      hasPagination,
+    });
+    const resolvedKind = retainDiscoveryEditorialKind
+      ? "editorial"
+      : classification.kind === "unknown"
       ? this.resolveResourceKind(resource.resourceKind)
       : classification.kind;
-    const baseBody = normalizeText(html);
+    const classificationReasonSource: "discovery" | "enrichment" | "stored_kind_fallback" =
+      retainDiscoveryEditorialKind
+        ? "discovery"
+        : classification.kind === "unknown"
+        ? resolvedKind === extractDiscoveryClassification(resource.classificationJson).kind
+          ? "discovery"
+          : "stored_kind_fallback"
+        : resolvedKind === extractDiscoveryClassification(resource.classificationJson).kind
+        ? "discovery"
+        : "enrichment";
+    const resolvedClassificationJson = buildWebsiteResourceClassificationJson({
+      priorClassificationJson: resource.classificationJson,
+      enrichmentClassification: classification,
+      resolvedKind,
+      structuredTypes,
+      hintedKinds,
+      reasonSource: classificationReasonSource,
+      resolutionReasons: retainDiscoveryEditorialKind ? ["guard:retain_editorial_detail"] : [],
+    });
+    const baseSummary = summary ?? summarizeBody(baseBody);
+    const baseObservability = {
+      structuredTypes,
+      linkCount: links.length,
+      downloadCount: downloads.length,
+      hasRepeatedCards,
+      hasPagination,
+      hintedKinds: inferResourceKindsFromUrl(finalUrl),
+      discoverySource: readOptionalString(
+        extractDiscoveryClassification(resource.classificationJson).discoverySource
+      ),
+    };
     const mediaJson = extractImageUrls(html, finalUrl).map((url) => ({
       mediaKind: "image",
       storageKind: "external_url",
@@ -571,46 +805,63 @@ export class ResourceEnrichmentService {
     }));
 
     if (resolvedKind === "editorial") {
+      const extractorDecision = resolveEditorialExtractorDecision({
+        baseBody,
+        title,
+        summary: baseSummary,
+        publishedAt: resource.publishedAt,
+        minEditorialBodyLength: resource.minEditorialBodyLength,
+      });
       let extracted: ArticleData | null = null;
-      try {
-        extracted = await this.withExternalFetchSlot(finalUrl, async () =>
-          extractArticle(
+      if (extractorDecision.shouldInvoke) {
+        try {
+          extracted = await extractFromHtml(
+            html,
             finalUrl,
             buildArticleParserOptions(),
-            {
-              headers: {
-                "user-agent": resource.userAgent,
-              },
-              signal: AbortSignal.timeout(this.config.enrichmentTimeoutMs),
-            },
-          ),
-        );
-      } catch (error) {
-        this.logger.warn({ error, resourceId: resource.resourceId }, "Editorial extraction fallback triggered.");
+          );
+        } catch (error) {
+          this.logger.warn({ error, resourceId: resource.resourceId }, "Editorial extraction fallback triggered.");
+        }
       }
 
       const bodyHtml = readOptionalString(extracted?.content) ?? html;
       const body = normalizeText(bodyHtml);
       const publishedAt = readOptionalString(extracted?.published) ?? resource.publishedAt;
+      const bodyUpliftChars = body.length - baseBody.length;
+      const bodyUpliftRatio = baseBody.length > 0
+        ? Number((body.length / baseBody.length).toFixed(4))
+        : body.length > 0
+        ? 1
+        : 0;
       const extraction: ExtractionPersistShape = {
         status: "enriched",
         resourceKind: "editorial",
         finalUrl,
         title: readOptionalString(extracted?.title) ?? title,
-        summary: readOptionalString(extracted?.description) ?? summary ?? summarizeBody(body),
+        summary: readOptionalString(extracted?.description) ?? baseSummary ?? summarizeBody(body),
         body,
         bodyHtml,
         lang: contentLanguage ? contentLanguage.split(",")[0]?.trim() ?? null : resource.lang,
         langConfidence: contentLanguage ? 0.7 : resource.langConfidence,
         publishedAt,
         modifiedAt: modifiedAt ?? resource.modifiedAt,
-        classificationJson: {
-          ...classification,
-          structuredTypes,
-        },
+        classificationJson: resolvedClassificationJson,
         attributesJson: {
           author: readOptionalString(extracted?.author),
           siteName: readOptionalString(extractMetaContent(html, ["og:site_name"])),
+          observability: baseObservability,
+          editorialExtraction: {
+            articleExtractorInvoked: extractorDecision.shouldInvoke,
+            articleExtractorReason: extractorDecision.reason,
+            articleExtractorFetchReused: extractorDecision.shouldInvoke,
+            baseBodyLength: baseBody.length,
+            finalBodyLength: body.length,
+            bodyUpliftChars,
+            bodyUpliftRatio,
+            bodyChanged: body !== baseBody,
+            extractorImprovedBody: extractorDecision.shouldInvoke && body.length > baseBody.length,
+          },
         },
         documentsJson: downloads.slice(0, 10).map((item) => ({
           url: item.url,
@@ -647,13 +898,11 @@ export class ResourceEnrichmentService {
         langConfidence: contentLanguage ? 0.7 : resource.langConfidence,
         publishedAt: resource.publishedAt,
         modifiedAt: modifiedAt ?? resource.modifiedAt,
-        classificationJson: {
-          ...classification,
-          structuredTypes,
-        },
+        classificationJson: resolvedClassificationJson,
         attributesJson: {
           cardCount: links.length,
           paginationDetected: hasPagination,
+          observability: baseObservability,
         },
         documentsJson: downloads.slice(0, 10),
         mediaJson,
@@ -669,6 +918,7 @@ export class ResourceEnrichmentService {
       const attributesJson = {
         ...extractDefinitionListAttributes(html),
         ...extractTableAttributes(html),
+        observability: baseObservability,
       };
       return {
         status: "enriched",
@@ -682,10 +932,7 @@ export class ResourceEnrichmentService {
         langConfidence: contentLanguage ? 0.7 : resource.langConfidence,
         publishedAt: resource.publishedAt,
         modifiedAt: modifiedAt ?? resource.modifiedAt,
-        classificationJson: {
-          ...classification,
-          structuredTypes,
-        },
+        classificationJson: resolvedClassificationJson,
         attributesJson,
         documentsJson: downloads.slice(0, 10),
         mediaJson,
@@ -709,11 +956,10 @@ export class ResourceEnrichmentService {
       langConfidence: contentLanguage ? 0.7 : resource.langConfidence,
       publishedAt: resource.publishedAt,
       modifiedAt: modifiedAt ?? resource.modifiedAt,
-      classificationJson: {
-        ...classification,
-        structuredTypes,
+      classificationJson: resolvedClassificationJson,
+      attributesJson: {
+        observability: baseObservability,
       },
-      attributesJson: {},
       documentsJson: downloads.slice(0, 10),
       mediaJson,
       childResourcesJson: [],

@@ -49,7 +49,7 @@
 ## Approved Test Identities
 
 - `admin`
-  Allowlisted Firebase identity из `ADMIN_ALLOWLIST_EMAILS`, включая alias patterns `internal-admin-<runId>`, `rss-admin-<runId>`, `website-admin-<runId>`, `automation-admin-<runId>`, `discovery-admin-<runId>` и `viewport-admin-<runId>`.
+  Allowlisted Firebase identity из `ADMIN_ALLOWLIST_EMAILS`, включая alias patterns `internal-admin-<runId>`, `rss-admin-<runId>`, `website-admin-<runId>`, `live-website-matrix-<runId>`, `automation-admin-<runId>`, `discovery-admin-<runId>` и `viewport-admin-<runId>`.
 - `regular user`
   Anonymous web session или local user row, созданный deterministic proof script, включая `internal-user-<runId>@example.test` и `viewport-user-<runId>@example.test`.
 - `disabled user`
@@ -69,6 +69,7 @@
   - `infra/scripts/test-mvp-internal.mjs`
   - `infra/scripts/test-web-viewports.mjs`
   - `infra/scripts/test-website-admin-flow.mjs`
+  - `infra/scripts/test-live-website-matrix.mjs` for bounded repo-owned real-site validation after local compose proof; it is intentionally supplemental rather than deterministic acceptance
   - `infra/scripts/test-automation-admin-flow.mjs`
   - `infra/scripts/test-discovery-admin-flow.mjs`
   - `infra/scripts/test-rss-multi-flow.mjs`
@@ -82,6 +83,8 @@
   - `email+rss-admin-<runId>@...`
   - `website-admin-<runId>@...`
   - `email+website-admin-<runId>@...`
+  - `live-website-matrix-<runId>@...`
+  - `email+live-website-matrix-<runId>@...`
   - `automation-admin-<runId>@...`
   - `email+automation-admin-<runId>@...`
   - `discovery-admin-<runId>@...`

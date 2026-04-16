@@ -61,6 +61,23 @@ function asFloat(v: unknown, fallback = 0): number {
       : Number.parseFloat(String(v ?? ""));
   return Number.isFinite(parsed) ? parsed : fallback;
 }
+function formatFetchRunSummary(run: R): string {
+  const metrics = asRecord(run.provider_metrics_json);
+  if (String(run.provider_type ?? "") === "website" && Object.keys(metrics).length > 0) {
+    const staticAccepted = asInt(metrics.staticAcceptedCount, 0);
+    const browserOnly = asInt(metrics.browserOnlyAcceptedCount, 0);
+    const finalAccepted = asInt(metrics.finalAcceptedCount, 0);
+    const hits = asRecord(metrics.conditionalRequestHits);
+    const total304 =
+      asInt(hits.homepage, 0) +
+      asInt(hits.sitemap, 0) +
+      asInt(hits.feed, 0) +
+      asInt(hits.robots, 0) +
+      asInt(hits.llms, 0);
+    return `${staticAccepted} static / +${browserOnly} browser / ${finalAccepted} final / ${total304} 304`;
+  }
+  return `${String(run.fetched_item_count ?? 0)} fetched / ${String(run.new_article_count ?? 0)} new / ${String(run.duplicate_suppressed_count ?? 0)} dupes`;
+}
 const llmUsage24h = asRecord((llmUsageSummary as R)["24h"]);
 const llmUsage7d = asRecord((llmUsageSummary as R)["7d"]);
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
@@ -248,9 +265,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
                       : "bg-muted text-muted-foreground"
                     }`}>{String(run.outcome_kind ?? "—")}</span>
                   </td>
-                  <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">
-                    {String(run.fetched_item_count ?? 0)} fetched / {String(run.new_article_count ?? 0)} new / {String(run.duplicate_suppressed_count ?? 0)} dupes
-                  </td>
+                  <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">{formatFetchRunSummary(run)}</td>
                   <td class="px-4 py-2.5 text-xs text-muted-foreground">{fmt(run.started_at)}</td>
                   <td class="px-4 py-2.5 hidden md:table-cell text-xs text-muted-foreground">{String(run.fetch_duration_ms ?? "—")}ms</td>
                 </tr>

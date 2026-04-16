@@ -61,6 +61,17 @@ function formatTimestamp(v: unknown): string {
   const d = new Date(String(v));
   return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
+function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
+function formatFetchRunDelta(run: R): string {
+  const metrics = asRecord(run.provider_metrics_json);
+  if (String(run.provider_type ?? "") === "website" && Object.keys(metrics).length > 0) {
+    const staticAccepted = asInt(metrics.staticAcceptedCount, 0);
+    const browserOnly = asInt(metrics.browserOnlyAcceptedCount, 0);
+    const finalAccepted = asInt(metrics.finalAcceptedCount, 0);
+    return `${staticAccepted} static / +${browserOnly} browser / ${finalAccepted} final`;
+  }
+  return `+${String(run.new_article_count ?? 0)} new`;
+}
 
 const kpiCards = !summary ? [] : [
   { label: "System-selected content", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
@@ -245,9 +256,7 @@ const fetchRunsRevision = buildAdminLiveRevision([
                         {String(run.outcome_kind ?? "—")}
                       </span>
                     </td>
-                    <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">
-                      +{String(run.new_article_count ?? 0)} new
-                    </td>
+                    <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">{formatFetchRunDelta(run)}</td>
                     <td class="px-4 py-2.5 text-xs text-muted-foreground">
                       {formatTimestamp(run.started_at)}
                     </td>

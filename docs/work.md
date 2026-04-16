@@ -46,6 +46,11 @@ Durable completed detail переносится в `docs/history.md`.
 - Repo-level UI proof now includes `pnpm test:web:viewports` for web desktop/tablet/mobile browser coverage and `pnpm test:discovery:admin:compose` for `/admin/discovery` operator flows.
 - Web collection and matches now support URL-backed `sort` plus basic `q` filtering on the existing paginated server read-models: default order remains newest-first, operators/users can switch to oldest/title A-Z/title Z-A, and basic case-insensitive substring search now spans title plus lead/body or summary/body without changing `/saved` or `/following`.
 - The local website-admin operator lane is green again on the rebuilt compose baseline: `/maintenance/web-resources` responds normally, `/resources*` reads render, and provider-specific website/API/Email IMAP admin acceptance is live-proven.
+- A standalone operator guide for this lane now exists in `WEBSITE_SOURCES_TESTING.md`: it is now example-driven in the style of `EXAMPLES.md`, with three full website-source bundles for editorial newsroom projection, resource-only documents/tenders portals, and bounded browser-assisted public JS-heavy sites, plus the truthful manual test path for `/admin/resources` and container-side `fetchers run:once` polling.
+- The website hardening lane from the 2026-04-15 audit is now shipped on the rebuilt local compose baseline: `crawl_policy_cache` keeps conditional-request validator/cache JSON, `channel_fetch_runs.provider_metrics_json` captures static-vs-browser telemetry, `web_resources.classification_json` preserves discovery/enrichment transitions, and editorial website enrichment records `articleExtractor*` plus body-uplift telemetry while keeping extractor scope post-discovery only.
+- Bounded live-site validation on 2026-04-15/2026-04-16 now has fresh evidence on the rebuilt stack: European Commission press releases confirmed static editorial projection plus repeat-poll conditional hits, EBRD procurement notices confirmed stable resource-only document/listing behavior, Grafbase Changelog confirmed browser-assisted-only accepted resources with persisted browser provenance, and Intercom Changes truthfully failed as `unsupported_block`; the first rebuilt live pass also exposed and then verified the repair of a real runtime SQL bug in `persistConditionalState()`.
+- A second, fully different 16-site website matrix now has fresh evidence on 2026-04-16 via the new `alt_2026_04_16` harness variant: `National Archives`, `ESA`, `IMF`, four new document-heavy portals, and four new public changelog sites all behaved truthfully, while the alternate browser-heavy cohort surfaced new external classes (`Cloudflare JS challenge` on `Webflow Updates`, `robots.txt` block on `ClickUp Changelog`) and confirmed that browser-candidate weakness remains the main live residual on a different cohort too.
+- A focused public-changelog analog rerun for the `Grafbase Changelog` residual on 2026-04-16 also supports closure rather than more generic code changes: `Supabase Changelog`, `PlanetScale Changelog`, and `Render Changelog` all returned `observed_expected_shape` in the same live matrix harness, while `Vercel Changelog` failed truthfully with upstream `403 captcha`; this makes the current `Grafbase` weakness look site-specific/live rather than a broader changelog-path regression.
 - Fresh local verification on 2026-04-12 proved live edit/archive/delete flows for system interests and LLM templates, live create/update/clone/delete for user-managed and admin-managed interests, live provider-specific create/update for `website` / `api` / `email_imap` channels, and live channel delete/archive behavior for `rss`.
 - Discovery admin is now live-proven for create/update/archive/reactivate/delete on mission/class rows in addition to compile/run/review/feedback/re-evaluate flows; mission archive is a real persisted lifecycle state, and hard delete is intentionally guarded to history-free entities only.
 - Browser-level button proof on 2026-04-12 remains green for the targeted surfaces: the local worktree uses custom `AlertDialog`-based confirm flows in `apps/admin/src/components/AdminConfirmAction.tsx` and `apps/admin/src/components/AdminConfirmSubmitButton.tsx`, preserves the earlier web `/interests` serialization repair, and the rebuilt full browser smoke proves real click-driven actions for system interests, LLM templates, web user interests, admin-managed user interests, channels, bulk RSS schedule/reindex confirm-submit flows, and discovery without the earlier admin React `#418` console noise.
@@ -73,6 +78,27 @@ Durable completed detail переносится в `docs/history.md`.
 ## Capability planning
 
 ### Active capabilities
+
+- `C-WEBSITE-INGESTION-LIVE-QUALITY-HARDENING`
+  - Goal: improve real-world `website` ingestion success on public sites without redesigning the cheap-first architecture, broadening scope into RSS/discovery, or introducing a large site-specific scraping framework.
+  - Outcome: classifier quality improves on newsroom/listing/document-heavy sites, collection-page discovery carries richer item hints into enrichment, browser fallback recommendation becomes more selective and more useful, and a tiny bounded overrides layer can stabilize a small set of important live sites without growing into a new parser platform.
+  - Full completion condition: the shipped website lane keeps the same architecture and proof contours, but produces measurably fewer `unknown`/partial outcomes on the current live matrix, preserves truthful blocked/challenge behavior, and syncs docs/proof expectations to the new bounded improvements.
+  - Proposed stage breakdown:
+    1. `STAGE-1-WEBSITE-CLASSIFIER-COLLECTION-AND-BROWSER-HARDENING`
+    2. `STAGE-2-WEBSITE-LIVE-RERUN-AND-CLOSEOUT`
+  - Immediate next stage:
+    none; focused deterministic proof plus bounded live rerun on 2026-04-16 completed the planned closeout and the detailed change/proof trail should live in `docs/history.md`.
+
+- `C-WEBSITE-NEWSROOM-AND-BROWSER-ROI-TUNING`
+  - Goal: improve the two remaining live-ROI website gaps without reopening architecture work: newsroom/detail-page `editorial` vs `listing` differentiation and browser-candidate recommendation truthfulness/cost control.
+  - Outcome: article-like newsroom detail pages survive classification and enrichment more reliably, browser fallback is skipped more often when static results are already good, and blocked/challenge-heavy browser candidates stay explicit unsupported outcomes instead of looking like generic crawler failure.
+  - Full completion condition: the focused newsroom cohort (`DOJ`, `EUAA`, `ESA`, plus one comparison newsroom site) shows fewer false `listing` outcomes or enrichment downgrades, the focused browser cohort (`Linear`, `Framer`, `Webflow`, `Grafbase`) preserves truthful challenge handling with tighter recommendation reasons, and docs/proof stay synced without widening the cheap-first architecture.
+  - Proposed stage breakdown:
+    1. `STAGE-1-WEBSITE-NEWSROOM-DETAIL-AND-BROWSER-ROI-HARDENING`
+    2. `PATCH-WEBSITE-DOJ-LIKE-NEWSROOM-DETAIL-PRECISION-2026-04-16`
+    3. `SPIKE-WEBSITE-DOJ-ANALOGS-LIVE-VALIDATION-2026-04-16`
+  - Immediate next stage:
+    none; the analog benchmark on 2026-04-16 showed the majority of comparable government press-release sites working as expected, so the remaining `DOJ Press Releases` residual should be treated as site-specific unless the user explicitly wants deeper DOJ-only support.
 
 - `C-PIPELINE-CANONICAL-REUSE-AND-SELECTION-QUALITY-HARDENING`
   - Goal: remove the current duplicate-spend and duplicate-selection distortions in the zero-shot pipeline, restore bounded candidate yield after technical pass, and tighten outsourcing application precision without reintroducing domain-specific shortcuts into the generic engine.
@@ -120,7 +146,369 @@ Durable completed detail переносится в `docs/history.md`.
     4. `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`
   - Immediate next stage: `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`
 
-### Active work items
+- `PATCH-WEBSITE-NEWSROOM-CARD-TITLE-INFERENCE-2026-04-16`
+  - Kind: Patch
+  - Status: done
+  - Goal: remove the remaining listing-heavy newsroom false negatives on live collection pages like `EUAA Press Releases` by inferring stronger article titles from collection-card context when the link text itself is generic (`Read More`, `Learn More`) and then re-proving the focused website path.
+  - In scope:
+    - collection-card title inference inside website collection discovery
+    - targeted website classifier unit coverage for generic CTA links with nearby heading/date context
+    - focused deterministic proof plus a bounded live rerun on `EUAA Press Releases`
+    - minimal work/history sync for the patch result
+  - Out of scope:
+    - new parser frameworks, broader curated logic changes, or browser-strategy changes
+    - RSS/discovery/article-selection changes
+    - broad admin or docs rewrites beyond patch closeout sync
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `services/fetchers/src/web-ingestion.ts`
+    - `tests/unit/ts/web-ingestion-browser.test.ts`
+    - `infra/scripts/test-live-website-matrix.mjs`
+    - optional `/tmp` evidence bundles for the bounded live rerun
+  - Depends on:
+    - `STAGE-1-WEBSITE-CLASSIFIER-COLLECTION-AND-BROWSER-HARDENING`
+  - Required proof:
+    - targeted TS unit proof for the new collection-card title inference
+    - `pnpm test:website:compose`
+    - one bounded live rerun through `node infra/scripts/test-live-website-matrix.mjs --site="EUAA Press Releases"`
+    - `git diff --check --` on touched tracked files
+  - Risk:
+    - low-medium; the main risk is over-inferencing titles from nearby headings and accidentally promoting unrelated CTA links on other collection pages.
+  - Worktree overlap:
+    - overlaps with the already shipped website-ingestion lane; keep the patch bounded to collection-card title inference and do not reopen the broader stage unless the change unexpectedly grows structural.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts`
+    - `pnpm test:website:compose`
+    - `node infra/scripts/test-live-website-matrix.mjs --site="EUAA Press Releases"`
+  - Progress now:
+    - the patch now infers article titles from nearby `h1`-`h4`/`field--name-title` context when the collection link itself is a generic CTA like `Read More`, so the classifier sees the real newsroom headline instead of only the CTA text.
+    - bounded live rerun evidence on 2026-04-16 improved `EUAA Press Releases` from `12 listing / 3 editorial` to `8 listing / 7 editorial` on the first poll while preserving the same cheap `collection_page`-only discovery path.
+    - one residual remains visible on repeat poll: a small pair of `editorial -> listing` enrichment transitions still appears, so future newsroom precision work should look at enrichment-time downgrades rather than collection-link title inference first.
+
+- `STAGE-1-WEBSITE-NEWSROOM-DETAIL-AND-BROWSER-ROI-HARDENING`
+  - Kind: Stage
+  - Status: done
+  - Goal: ship the smallest high-ROI follow-up for website ingestion by reducing false newsroom `listing` outcomes on accessible detail pages and tightening browser recommendation behavior so browser-heavy sites are routed more truthfully and cheaply.
+  - In scope:
+    - fetchers-owned classifier hardening for newsroom/detail pages where `publishedAt`, title/body quality, and detail-like URLs should outweigh ambient listing chrome
+    - enrichment-side downgrade control so article-like detail pages are not too easily pushed from `editorial` back to `listing`
+    - browser recommendation tuning that suppresses fallback when static results are already good and preserves explicit challenge-driven reasons where browser help is still justified
+    - targeted unit coverage and bounded focused live reruns on the existing website matrix harness
+    - minimal work/history sync for the follow-up slice
+  - Out of scope:
+    - browser-first crawling, anti-bot bypass, login/CAPTCHA work, or new parser frameworks
+    - broad admin/API/read-model work
+    - RSS/discovery/article-selection changes
+    - widening `@extractus/article-extractor` usage
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `services/fetchers/src/fetchers.ts`
+    - `services/fetchers/src/web-ingestion.ts`
+    - `services/fetchers/src/resource-enrichment.ts`
+    - `tests/unit/ts/web-ingestion-browser.test.ts`
+    - `tests/unit/ts/resource-enrichment-website.test.ts`
+    - optional `/tmp` evidence bundles for focused live reruns
+  - Depends on:
+    - `STAGE-1-WEBSITE-CLASSIFIER-COLLECTION-AND-BROWSER-HARDENING`
+    - `SPIKE-WEBSITE-ALTERNATE-LIVE-MATRIX-2026-04-16`
+  - Required proof:
+    - targeted TS unit proof for newsroom/detail classification, enrichment transition control, and browser recommendation tuning
+    - `pnpm test:website:compose`
+    - `pnpm test:enrichment:compose`
+    - `pnpm test:hard-sites:compose`
+    - focused live reruns through `node infra/scripts/test-live-website-matrix.mjs` on the relevant newsroom and browser-candidate sites after deterministic proof is green
+    - `git diff --check --` on touched tracked files
+  - Risk:
+    - medium; the main risk is overcorrecting newsroom heuristics and accidentally promoting true listing pages, or suppressing browser fallback too aggressively on the small set of sites where it still adds value.
+  - Worktree overlap:
+    - overlaps with the mixed website-ingestion lane already present in the worktree; keep changes bounded to fetchers/tests/docs above and do not reopen admin/API surfaces unless the code path unexpectedly forces it.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+    - `pnpm test:website:compose`
+    - `pnpm test:enrichment:compose`
+    - `pnpm test:hard-sites:compose`
+    - `node infra/scripts/test-live-website-matrix.mjs --site="EUAA Press Releases" --site="Competition Policy Latest News" --site="Grafbase Changelog"`
+    - `node infra/scripts/test-live-website-matrix.mjs --variant=alt_2026_04_16 --site="DOJ Press Releases" --site="ESA Newsroom" --site="Linear Changelog" --site="Framer Updates" --site="Webflow Updates"`
+    - `git diff --check -- docs/work.md docs/history.md services/fetchers/src/web-ingestion.ts services/fetchers/src/resource-enrichment.ts tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+  - Progress now:
+    - `web-ingestion.ts` now treats Akamai-style interstitials as explicit challenge signals, skips parsing challenge pages as ordinary collection results, and suppresses browser fallback when static results are already strongly editorial; it also softens listing penalties on article-like detail pages so ambient card/pagination chrome no longer dominates newsroom detail classification.
+    - `resource-enrichment.ts` now keeps discovery-time `editorial` truth when enrichment sees a strong article-like detail page but residual listing chrome would otherwise cause a false downgrade, and the persisted `classification_json` now records that guard via `resolved.reasons = ["guard:retain_editorial_detail"]`.
+    - focused live evidence on 2026-04-16 shows the intended bounded ROI:
+    - baseline newsroom rerun kept `EUAA Press Releases` at `8 listing / 7 editorial` with only one visible repeat-poll `editorial -> listing` transition, while `Competition Policy Latest News` stayed `observed_expected_shape`;
+    - alternate newsroom/browser rerun moved `ESA Newsroom` to `7 editorial / 4 listing` and `observed_expected_shape`, left `DOJ Press Releases` as an honest `listing`-heavy partial case instead of pretending browser work would fix it, kept `Linear Changelog` truthful as static-good-enough plus browser `cloudflare_js_challenge`, kept `Framer Updates` as a partial static case without wasteful browser uplift, and classified `Webflow Updates` as an explicit `403 cloudflare_js_challenge` hard failure;
+    - together these reruns show that the remaining weakness is a narrow newsroom/detail precision problem on a small cohort, not a reason to redesign the cheap-first website architecture or broaden browser execution.
+
+- `PATCH-WEBSITE-DOJ-LIKE-NEWSROOM-DETAIL-PRECISION-2026-04-16`
+  - Kind: Patch
+  - Status: blocked
+  - Goal: improve the remaining `DOJ`-like newsroom/detail precision residuals with the smallest generic heuristic change, so accessible newsroom detail pages are less likely to stay trapped in `listing` without reopening browser or architecture work.
+  - In scope:
+    - fetchers-owned newsroom/detail classification tuning based on real residual evidence from `DOJ Press Releases` and one or two comparison newsroom sites
+    - enrichment-side support only if the residual proves to be a late downgrade rather than a discovery-time miss
+    - targeted regression tests plus bounded focused live reruns for `DOJ` and comparison newsroom sources
+    - minimal work/history sync for the patch result
+  - Out of scope:
+    - browser strategy changes, anti-bot work, or any bypass/challenge handling beyond truthful classification
+    - site-specific parser frameworks or broad curated overrides
+    - RSS/discovery/article-selection work
+    - admin/API/read-model changes
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `services/fetchers/src/web-ingestion.ts`
+    - `services/fetchers/src/resource-enrichment.ts`
+    - `tests/unit/ts/web-ingestion-browser.test.ts`
+    - `tests/unit/ts/resource-enrichment-website.test.ts`
+    - optional `/tmp` evidence bundles for focused live reruns
+  - Depends on:
+    - `STAGE-1-WEBSITE-NEWSROOM-DETAIL-AND-BROWSER-ROI-HARDENING`
+  - Required proof:
+    - targeted TS unit proof for the new newsroom/detail precision rule
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose` if truthful unsupported-block handling changes
+    - `pnpm test:enrichment:compose` if enrichment logic changes
+    - bounded live rerun through `node infra/scripts/test-live-website-matrix.mjs` for `DOJ Press Releases` plus at least one comparison newsroom site
+    - `git diff --check --` on touched tracked files
+  - Risk:
+    - medium; the main risk is overpromoting genuine listing pages by overfitting to one newsroom layout while trying to rescue detail-like article pages.
+  - Worktree overlap:
+    - overlaps with the existing website-ingestion lane already present in the worktree; keep the patch strictly generic and bounded to the files above.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - repeated bounded live reruns through `node infra/scripts/test-live-website-matrix.mjs --variant=alt_2026_04_16 --site="DOJ Press Releases" --site="ESA Newsroom"`
+  - Progress now:
+    - bounded code changes shipped in `web-ingestion.ts` for this patch:
+      - collection seed selection now tries to keep `defaultCollectionUrls` near the configured `channelUrl` section instead of wandering arbitrarily across the domain;
+      - weak listing-root candidates from unrelated collection parents are dropped unless they carry stronger detail/article signals;
+      - `blockedUrlPatterns` now apply to `parentUrl` as well as to the candidate resource URL;
+      - dedupe now preserves `parentUrl`, so blocked-parent filtering can still work when a sitemap/root duplicate merges with a collection-derived candidate.
+    - deterministic proof is green, including the new regression path that preserves blocked `parentUrl` through dedupe and the challenge/interstitial tests.
+    - live outcome is still mixed:
+      - `ESA Newsroom` remains `observed_expected_shape`, so the patch did not degrade a good newsroom case;
+      - `DOJ Press Releases` still lands as one `listing` resource on repeated live reruns despite the new guards, which means the remaining residual is not explained by the already-fixed seed/summary/dedupe paths and needs a deeper spike rather than another patch-level heuristic guess.
+    - likely next truthful step, if the user wants to continue, is a `Spike` focused on the exact live runtime divergence for `DOJ`: inspect the fetched HTML/body inside the container path used by `run:once`, confirm which seed/candidate survives after the new guards, and only then decide whether the residual belongs in collection extraction, sitemap handling, or the live harness/config itself.
+
+- `SPIKE-WEBSITE-DOJ-ANALOGS-LIVE-VALIDATION-2026-04-16`
+  - Kind: Spike
+  - Status: done
+  - Goal: determine whether the remaining `DOJ Press Releases` residual is a site-specific outlier or a broader government-newsroom issue by benchmarking several real DOJ-like public press-release/newsroom sites first.
+  - In scope:
+    - current web research for real public `DOJ`-analog government press-release/newsroom sites
+    - focused live validation through the existing website matrix harness on those analogs
+    - comparative decision: close the `DOJ` residual as site-specific if the majority works, or reopen a bounded fix only if the majority fails in the same way
+    - minimal work/history sync for the spike result
+  - Out of scope:
+    - immediate code changes before the analog benchmark says they are warranted
+    - browser architecture changes, anti-bot work, or new parser frameworks
+    - non-website providers or broad product redesign
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `infra/scripts/test-live-website-matrix.mjs`
+    - optional `/tmp` evidence bundles for focused live runs
+  - Depends on:
+    - `PATCH-WEBSITE-DOJ-LIKE-NEWSROOM-DETAIL-PRECISION-2026-04-16`
+  - Required proof:
+    - current-web source attribution for the selected analog sites
+    - bounded live rerun through `node infra/scripts/test-live-website-matrix.mjs` on the shortlisted analogs
+    - `git diff --check --` on touched tracked files
+  - Risk:
+    - low-medium; the main risk is choosing non-analog sites and misreading a DOJ-specific quirk as a general government-newsroom pattern.
+  - Worktree overlap:
+    - keep the spike read-mostly unless the majority-failure result clearly justifies reopening code changes in a new bounded item.
+  - Executed proof:
+    - current-web shortlist validation against the official public press-release/newsroom pages for:
+      - `National Archives Press Releases` — `https://www.archives.gov/press/press-releases`
+      - `FBI Press Releases` — `https://www.fbi.gov/news/press-releases`
+      - `DOL News Releases` — `https://www.dol.gov/newsroom/releases`
+      - `Treasury Press Releases` — `https://home.treasury.gov/news/press-releases`
+      - `HHS Press Room` — `https://www.hhs.gov/press-room/index.html`
+      - `FTC Press Releases` — `https://www.ftc.gov/news-events/news/press-releases`
+    - `node infra/scripts/test-live-website-matrix.mjs --variant=doj_analogs_2026_04_16`
+    - `git diff --check -- docs/work.md docs/history.md infra/scripts/test-live-website-matrix.mjs`
+  - Progress now:
+    - the focused analog cohort now has durable harness support in `infra/scripts/test-live-website-matrix.mjs` under `doj_analogs_2026_04_16`, so the repo can rerun the same DOJ-like government newsroom benchmark without mutating the broader baseline/alt matrices.
+    - live evidence on 2026-04-16 shows `4/6` analog sites as `observed_expected_shape`, `2/6` as truthful blocked/unsupported outcomes, and `0/6` with the same DOJ-style false-listing partial pattern:
+      - expected-shape successes: `National Archives Press Releases`, `DOL News Releases`, `Treasury Press Releases`, `FTC Press Releases`
+      - truthful blocked/unsupported: `FBI Press Releases` (`robots.txt` block) and `HHS Press Room` (`403`)
+    - because the majority works and the non-successes fail in different, explicit ways, the current evidence supports closing the generic fix effort here and treating `DOJ Press Releases` as a site-specific residual rather than a broader website-ingestion defect.
+
+- `STAGE-1-WEBSITE-CLASSIFIER-COLLECTION-AND-BROWSER-HARDENING`
+  - Kind: Stage
+  - Status: done
+  - Goal: ship the smallest high-ROI website-ingestion improvements for real public sites by strengthening resource classification, carrying richer collection-page hints into discovery/enrichment, adding a tiny bounded overrides surface, and making browser recommendation smarter without changing the cheap-first architecture.
+  - In scope:
+    - `WebsiteChannelConfig` additions that stay bounded to tiny curated overrides or browser-decision tuning
+    - fetchers-owned classifier hardening for `editorial/listing/entity/document/data_file`
+    - collection-page item extraction/hints that improve downstream editorial/listing quality without adding acquisition-time `article-extractor`
+    - smarter browser recommendation logic that stays cheap-first and truthful on blocks/challenges
+    - focused unit/smoke/live proof for the improved website path
+    - runtime doc sync for the shipped truth
+  - Out of scope:
+    - RSS, discovery, recall, or article-selection redesign
+    - browser-first crawling, login/CAPTCHA bypass, stealth scraping, or mass site-specific parsers
+    - widening `@extractus/article-extractor` into acquisition/discovery
+    - broad admin UX work beyond config/read-model needs that are strictly necessary for this stage
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `docs/blueprint.md`
+    - `docs/verification.md`
+    - `docs/contracts/browser-assisted-websites.md`
+    - `apps/admin/src/lib/server/website-channels.ts`
+    - `packages/contracts/src/source.ts`
+    - `services/fetchers/src/web-ingestion.ts`
+    - `services/fetchers/src/resource-enrichment.ts`
+    - `services/fetchers/src/fetchers.ts`
+    - `tests/unit/ts/web-ingestion-browser.test.ts`
+    - `tests/unit/ts/resource-enrichment-website.test.ts`
+    - `infra/scripts/test-live-website-matrix.mjs`
+    - `infra/scripts/test-website-admin-flow.mjs`
+    - optional `/tmp` evidence bundles for bounded live reruns
+  - Depends on:
+    - `STAGE-WEBSITE-LIVE-MATRIX-EXPANSION-2026-04-16`
+  - Required proof:
+    - targeted TS unit proof for classifier, collection-hint, overrides, and browser-recommendation behavior
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+    - one bounded live rerun through `node infra/scripts/test-live-website-matrix.mjs` using focused `--group` / `--site` filters on the most relevant public-site slices after deterministic proof is green
+    - `git diff --check --` on touched tracked files
+  - Risk:
+    - medium-high; the main risk is overfitting heuristics to a few live sites or accidentally widening complexity while trying to improve classification and browser-fallback yield.
+  - Worktree overlap:
+    - overlaps with the mixed shipped website-ingestion lane; keep changes bounded to website-only files above, do not revert unrelated in-flight edits, and preserve the already shipped telemetry/auth/live-matrix truth.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+    - `pnpm --filter @newsportal/fetchers typecheck`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+    - `node infra/scripts/test-live-website-matrix.mjs --site="European Commission Digital Strategy News" --site="EUAA Press Releases" --site="Competition Policy Latest News" --site="Grafbase Changelog"`
+  - Progress now:
+    - shipped config truth now includes a tiny bounded `website.curated` slice for `preferCollectionDiscovery`, `preferBrowserFallback`, and narrow URL-pattern kind hints; this stays inside the existing `WebsiteChannelConfig` envelope rather than introducing a new parser subsystem.
+    - collection discovery now extracts richer per-link hints (`summary`, `publishedAt`) from card context and passes them into classification, which materially improved newsroom/editorial shaping on the focused live rerun.
+    - browser recommendation telemetry now carries explicit `browserRecommendationReasons`, while the decision logic also considers static no-change evidence and static kind mix instead of only a very coarse resource-count threshold.
+    - `pnpm test:website:admin:compose` exposed a race where the admin acceptance latched stale pre-enrichment titles; the proof script now waits for enriched/stable resources before asserting HTML, and the deterministic suite returned green afterward.
+    - bounded live rerun on 2026-04-16 moved the three targeted `static_editorial` sites to `observed_expected_shape` with `collection_page`-dominated discoveries and `collection`-first mode ordering, while `Grafbase Changelog` no longer needed browser uplift and now records a truthful `static_no_change_empty` recommendation reason on repeat/browser-forced runs.
+
+- `STAGE-WEBSITE-LIVE-MATRIX-EXPANSION-2026-04-16`
+  - Kind: Stage
+  - Status: done
+  - Goal: expand the bounded website live-validation lane from three example targets into a repeatable multi-category real-site matrix with more than three live websites per website-ingress shape, then run the maximum truthful website-only proof set plus first-poll/repeat-poll/live-browser validation against that matrix.
+  - In scope:
+    - repo-owned live-site harness work for website-only validation on the local compose baseline
+    - expanded real-site candidate matrix covering static editorial, document/download-heavy, public changelog, and browser-candidate website shapes
+    - deterministic website-only proof reruns (`website`, `hard-sites`, `channel-auth`, `website-admin`, `enrichment`, targeted unit checks, and migration smoke as needed)
+    - bounded live validation that records provider metrics, repeat-poll conditional hits, resource-kind mixes, browser uplift, and extractor/body-uplift telemetry where available
+    - operator-facing docs/runtime sync for the expanded matrix and its truthful limits
+  - Out of scope:
+    - RSS, discovery, recall, or article-selection tuning
+    - login-required/CAPTCHA-bypass/stealth scraping
+    - broad runtime refactors outside narrow proof-blocking defects uncovered during live validation
+    - destructive local reset of the compose baseline
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/history.md`
+    - `docs/verification.md`
+    - `docs/contracts/test-access-and-fixtures.md`
+    - `WEBSITE_SOURCES_TESTING.md`
+    - `WEBSITE_SOURCE_EXAMPLES.md`
+    - `README.md`
+    - `HOW_TO_USE.md`
+    - `infra/scripts/test-live-website-matrix.mjs`
+    - `services/fetchers/src/fetchers.ts`
+    - `services/fetchers/src/cli/test-channel-auth-smoke.ts`
+    - `services/fetchers/src/web-ingestion.ts`
+    - `tests/unit/ts/web-ingestion-browser.test.ts`
+    - optional `/tmp` live validation evidence bundles
+  - Depends on:
+    - `SPIKE-WEBSITE-INGESTION-SCRAPING-AUDIT-2026-04-15`
+  - Required proof:
+    - targeted website TS unit proof for the shipped hardening/runtime behavior
+    - `pnpm test:migrations:smoke`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:channel-auth:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+    - bounded live validation against the expanded real-site matrix with persisted JSON evidence and explicit residual classification
+    - `git diff --check --` on touched tracked files
+  - Risk:
+    - high; this stage mixes stateful compose proof with live internet variability, so the main risks are external-site drift, anti-bot/runtime noise, and leaving behind test-created website channels unless cleanup is tracked truthfully.
+  - Worktree overlap:
+    - overlaps with the already mixed website-ingestion worktree and operator docs; do not revert or reframe unrelated in-flight edits, and keep any live-site-only fixes or artifacts bounded to the harness/docs paths above.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts tests/unit/ts/admin-website-channels.test.ts`
+    - `pnpm test:migrations:smoke`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:channel-auth:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+    - `node infra/scripts/test-live-website-matrix.mjs`
+    - `node infra/scripts/test-live-website-matrix.mjs --site="UNICEF Tajikistan Supply and Procurement" --site="Intercom Changes"`
+    - `git diff --check -- docs/work.md docs/history.md docs/verification.md docs/contracts/test-access-and-fixtures.md README.md HOW_TO_USE.md WEBSITE_SOURCE_EXAMPLES.md WEBSITE_SOURCES_TESTING.md infra/scripts/test-live-website-matrix.mjs services/fetchers/src/fetchers.ts services/fetchers/src/cli/test-channel-auth-smoke.ts services/fetchers/src/web-ingestion.ts tests/unit/ts/web-ingestion-browser.test.ts`
+  - Progress now:
+    - the repo-owned bounded live matrix now lives in `infra/scripts/test-live-website-matrix.mjs` and covers 16 public sites across four website-ingress shapes (`static_editorial`, `documents_downloads`, `public_changelog`, `browser_candidate`) with first poll, optional browser-assisted pass, repeat poll, `/maintenance/fetch-runs`, `/maintenance/web-resources*`, and `/admin/resources*` verification plus persisted JSON evidence under `/tmp/newsportal-live-website-matrix-<runId>.json`.
+    - the stage also shipped three narrow runtime/harness fixes discovered while closing the matrix proof: `probeWebsiteCapabilities()` now preserves non-200 homepage auth status from conditional-request state, `pollWebsiteChannel()` treats empty-resource `401/403` website runs as truthful hard failures, and the browser-auth smoke fixture now disables sitemap/feed discovery so shared root hints cannot short-circuit same-origin browser-auth proof.
+    - full live evidence was captured in `/tmp/newsportal-live-website-matrix-9ec1bd4b-3e55-43e2-acab-860bf4459b01.json`; focused rerun evidence in `/tmp/newsportal-live-website-matrix-b74c2708-b7bc-4be9-aac6-46119ee1df64.json` reclassified the two coarse `unexpected_failure` rows into truthful blocks: UNICEF returned upstream `403`, and Intercom stopped on browser `unsupported_block`.
+    - final live verdict summary on 2026-04-16:
+      - `static_editorial`: 4 sites total, 1 expected-shape success (`EEA Newsroom`), 3 partial/listing-heavy shapes (`European Commission Digital Strategy News`, `EUAA Press Releases`, `Competition Policy Latest News`)
+      - `documents_downloads`: 4 sites total, 3 expected-shape successes (`EBRD`, `EIB`, `World Bank`), 1 truthful block (`UNICEF Tajikistan Supply and Procurement` -> upstream `403`)
+      - `public_changelog`: 4 sites total, all 4 expected-shape successes (`WorkOS`, `Auth0`, `Raycast`, `Resend`)
+      - `browser_candidate`: 4 sites total, 1 partial static/listing-heavy shape (`Grafbase`), 3 truthful blocks/challenges (`Browserbase`, `Sentry`, `Intercom`)
+    - residual cleanup truth: the live harness successfully deactivates the created website channels, but several `Live ...` website rows remain archived/inactive in the local compose DB as tracked test artifacts; no destructive DB cleanup was done in this stage.
+
+- `SPIKE-WEBSITE-INGESTION-SCRAPING-AUDIT-2026-04-15`
+  - Kind: Spike
+  - Status: done
+  - Goal: produce an evidence-backed audit of the shipped `website` ingestion/scraping path only, measuring cheap/static website discovery, browser-assisted fallback, auth/challenge handling, resource extraction, and whether `@extractus/article-extractor` should stay scoped to the current website enrichment path or be applied more broadly.
+  - In scope:
+    - code-path audit for `services/fetchers/src/fetchers.ts`, `services/fetchers/src/web-ingestion.ts`, `services/fetchers/src/resource-enrichment.ts`, and the existing browser-assisted website contract
+    - local proof and metric capture for website-only runtime lanes (`website`, hard-sites, channel auth, enrichment, website admin) without reopening RSS/discovery capability scope
+    - comparison against external website-scraping best practices and tools only where they materially inform a keep/harden/change verdict
+    - explicit decision memo covering current strengths, weak points, proof gaps, and the `article-extractor` scope decision
+  - Out of scope:
+    - RSS ingestion or feed-adapter analysis as its own subsystem
+    - discovery/search/recall mission analysis
+    - worker-side matching/selection tuning outside minimal downstream usefulness checks for website resources
+    - code changes to the website runtime unless the audit itself uncovers a narrow proof-blocking defect that must be fixed separately
+  - Allowed paths:
+    - `docs/work.md`
+    - `docs/website-ingestion-scraping-audit-2026-04-15.md`
+    - optional read-only `/tmp` audit artifacts
+  - Depends on:
+    - `-`
+  - Required proof:
+    - local website-only proof via `pnpm test:website:compose`, `pnpm test:hard-sites:compose`, `pnpm test:channel-auth:compose`, `pnpm test:website:admin:compose`, and `pnpm test:enrichment:compose` when the current mixed worktree/runtime allows them
+    - targeted unit proof for touched website-ingestion/browser-auth logic where relevant
+    - explicit citation-backed external comparison notes for any claimed best-practice gap
+    - `git diff --check -- docs/work.md docs/website-ingestion-scraping-audit-2026-04-15.md`
+  - Risk:
+    - medium; the main risk is misclassifying website-ingestion behavior because the current worktree is mixed and `services/fetchers/src/web-ingestion.ts` already has in-flight edits that may not reflect fully shipped baseline truth.
+  - Worktree overlap:
+    - docs-only audit work plus read-only/runtime proof; do not fold this spike into the active pipeline-tuning items, and keep the existing mixed `services/fetchers/src/web-ingestion.ts` delta explicitly separated as in-flight context rather than silent shipped truth.
+  - Executed proof:
+    - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/admin-website-channels.test.ts`
+    - `PYTHONPATH=/tmp:. python -m unittest tests.unit.python.test_discovery_fetchers_website_probe`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:channel-auth:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+    - external reference review against Crawlee BrowserCrawler docs, Playwright Route API docs, Trafilatura feed discovery docs, Google robots guidance, and RFC 9110 conditional-request semantics
+    - `git diff --check -- docs/work.md docs/website-ingestion-scraping-audit-2026-04-15.md`
+  - Progress now:
+    - the completed audit lives in `docs/website-ingestion-scraping-audit-2026-04-15.md` and covers the shipped `website` path only: polling, cheap/static discovery, browser fallback, auth/challenge handling, resource enrichment, editorial projection, and the scoped `article-extractor` decision.
+    - all website-only proof lanes requested by the spike are green on 2026-04-15: `website:compose`, `hard-sites:compose`, `channel-auth:compose`, `website:admin:compose`, and `enrichment:compose` all passed, while targeted TS/Python tests around website-ingestion/browser-auth logic also passed.
+    - the audit verdict is “keep the current website architecture, harden observability and upstream conditional-request support, and do not broaden `@extractus/article-extractor` beyond post-discovery editorial enrichment”; the current website path is structurally sound, but classification heuristics remain the most brittle area and the existing editorial `article-extractor` path already carries duplicate-fetch cost that should be optimized before any expansion.
 
 - `PATCH-PIPELINE-CORE-GUARDRAILS-DOC-2026-04-14`
   - Kind: Patch
@@ -1095,13 +1483,13 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Next recommended action
 
-- Keep the preserved/fresh DB intact and observe fresh corpus behavior with the newly generic candidate-uplift runtime plus admin-managed candidate cues.
-- If follow-up work is needed, make it a new proof-oriented item around live materialization quality rather than reintroducing domain-specific code paths.
+- Continue `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` at `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`: keep the rebuilt fresh baseline intact, measure where the current corpus still collapses into `S_pos = 0` / `no_match`, and separate generic candidate-materialization loss from the already-isolated enrichment-date sanitization path.
+- If the user wants more website work after this archive sync, open a fresh bounded follow-up for broader public-site portfolio coverage, browser-provenance UX/observability polish, or stricter JS-heavy acceptance heuristics instead of reopening the archived website capability.
 
 ### Archive sync status
 
 - Completed item or capability awaiting archive sync:
-  none; the outsourcing-decoupling capability and its done follow-on patches were archived in `docs/history.md` during this sync cycle.
+  none; the outsourcing-decoupling capability and the completed website blocker/verification capability are now archived in `docs/history.md`.
 - Why it is still live, if applicable:
   n/a.
 - Archive action required next:
@@ -1117,6 +1505,8 @@ Durable completed detail переносится в `docs/history.md`.
   none recorded; proof reused declared local env contracts only.
 - Seeded or imported data:
   fresh local compose volumes now contain run-scoped articles, channels, interests, notification rows, discovery mission/class/candidate rows, and targeted CRUD-check entities created by `pnpm test:mvp:internal`, `pnpm test:discovery:admin:compose`, the targeted admin/user/channel smoke checks, and the temporary idempotent replay of `0030_discovery_schema_drift_repair.sql` used to heal the drifted local discovery schema before final discovery acceptance/browser proof.
+- Live website-source verification artifacts on 2026-04-15 / 2026-04-16:
+  run-scoped Firebase admin aliases used by `/tmp/newsportal_live_website_sources.mjs` were cleaned after each pass; the latest rebuilt-stack evidence kept local website channels for European Commission press releases (`65674c8c-837a-416a-8793-91d22b9a400a`), EBRD procurement notices (`0528d0d2-ec36-4cc7-b40d-8f01cc09da42`), Grafbase Changelog (`4d330ce5-145d-4fee-9fa7-ac3be22a6244`), and one truthful unsupported example for Intercom Changes (`0244bbec-2e7f-4b28-9c11-69a78dd81416`); the durable JSON evidence bundles now also include `/tmp/newsportal-live-website-results-9399f95a-434f-43d8-b283-7b672c2a921b.json` and `/tmp/newsportal-live-website-results-882205dd-ec2a-4292-9fa8-1818d4ade8c2.json`.
 - Admin-managed runtime config changed locally on 2026-04-14:
   the five active system-interest rows in `interest_templates`, their synced `criteria` / `criteria_compiled` hard-constraint snapshots, and their `selection_profiles` candidate-signal definitions were updated in place to relax `must_have_terms`, clear `time_window_hours`, and widen positive candidate cues for the current local application-layer tuning pass.
 - Cleanup status:
@@ -1127,7 +1517,8 @@ Durable completed detail переносится в `docs/history.md`.
 ## Handoff state
 
 - Current item status:
-  `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY` is implementation-complete through `STAGE-4-TRANSIENT-FETCHERS-ENRICHMENT-RETRY-HARDENING`; `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION` has completed `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE`, `STAGE-1-DOCUMENT-AND-CLUSTER-CANDIDATE-SIGNALS`, `STAGE-2-GRAY-ZONE-AND-LLM-CANDIDATE-ROUTING`, and `STAGE-3-NOISE-TOLERANT-PROOF-AND-OPERATOR-VISIBILITY`; `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13` and `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2` are done; `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` remains in `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt second fresh baseline; `C-OUTSOURCE-CONFIG-DECOUPLING-FROM-GENERIC-RUNTIME` is archived in `docs/history.md` and no longer has live work items in this document.
+  `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY` is implementation-complete through `STAGE-4-TRANSIENT-FETCHERS-ENRICHMENT-RETRY-HARDENING`; `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION` has completed `SPIKE-CANDIDATE-LOSS-TAXONOMY-BASELINE`, `STAGE-1-DOCUMENT-AND-CLUSTER-CANDIDATE-SIGNALS`, `STAGE-2-GRAY-ZONE-AND-LLM-CANDIDATE-ROUTING`, and `STAGE-3-NOISE-TOLERANT-PROOF-AND-OPERATOR-VISIBILITY`; `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13` and `PATCH-LOCAL-DB-RESET-WITH-PRESERVED-SYSTEM-CONFIG-2026-04-13-R2` are done; `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION` remains in `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING` on the rebuilt second fresh baseline.
+  `C-WEBSITE-INGESTION-COST-AND-OBSERVABILITY-HARDENING`, `C-OUTSOURCE-CONFIG-DECOUPLING-FROM-GENERIC-RUNTIME`, and `C-MULTI-SITE-WEBSITE-BLOCKER-TRIAGE-AND-REPAIR` are archived in `docs/history.md` and no longer have live work items in this document.
 - Executed proof:
   - required read-order reload for `AGENTS.md`, `docs/work.md`, `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/contracts/test-access-and-fixtures.md`, and `docs/contracts/universal-task-engine.md`
   - read-only forensic diagnostics on 2026-04-13 via `pnpm article:yield:diagnostics`, targeted SQL counts, and compose worker/relay log inspection
@@ -1201,14 +1592,14 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Recently changed
 
+- 2026-04-15 — archived `C-MULTI-SITE-WEBSITE-BLOCKER-TRIAGE-AND-REPAIR`: moved the completed multi-site website blocker repairs and live three-shape proof out of live state and into `docs/history.md`, including the shipped fetchers fixes, regression proof, and final `Grafbase Changelog` JS-heavy acceptance.
+- 2026-04-15 — archived `PATCH-WEBSITE-SOURCES-TESTING-GUIDE-2026-04-15`: added a standalone operator guide for website-source manual testing, cross-linked it from the main operator docs, and re-confirmed the current website-admin proof lane (`/maintenance/web-resources`, `/admin/resources*`, `pnpm test:website:admin:compose`) before closing docs-only sync.
 - 2026-04-13 — archived `SWEEP-FULL-UI-BUTTON-AUDIT-2026-04-12`: completed the full browser-level web/admin button audit, hardened the reusable audit harness, and closed the sweep with one honest `Connect Web Push` proof-environment residual.
 - 2026-04-12 — archived `PATCH-DISCOVERY-MISSION-CLASS-LIFECYCLE-2026-04-12`: added mission/class archive/reactivate/delete support across discovery admin UI, BFF, API, migration/runtime proof, and browser-confirm click coverage.
 - 2026-04-12 — archived `PATCH-ADMIN-WEB-RESOURCES-AND-REACT-NOISE-2026-04-12`: repaired `/maintenance/web-resources`, made `LiveReindexJobsSection` hydration-safe, and re-greened website-admin plus browser-smoke proof.
 - 2026-04-12 — archived `PATCH-CUSTOM-CONFIRM-DIALOGS-2026-04-12`: replaced the temporary native confirm fallback with custom `AlertDialog`-based admin confirms, rebuilt `admin`, and re-greened full browser click proof including bulk schedule and reindex submit buttons.
 - 2026-04-12 — archived `SPIKE-BROWSER-BUTTON-ACTIONS-2026-04-12`: repaired admin confirm submission, fixed web `/interests` serialized action paths, rebuilt `web/admin`, and re-greened full browser click proof across templates, user interests, channels, and discovery.
-- 2026-04-12 — archived `SPIKE-ADMIN-CRUD-COVERAGE-2026-04-12`: live proof separated supported CRUD flows from local runtime gaps, confirmed admin/user/template/channel behavior, and recorded the current `web-resources` regression plus missing discovery delete/archive intents.
 - 2026-04-10 — archived `SWEEP-DOCS-AND-ARCHITECTURE-SYNC`: runtime/process docs were re-synced to shipped selection/discovery truth, `docs/data_scripts` assets were validated and documented, legacy `atom` provider rows were normalized back to `rss`, and a new visual walkthrough landed in `docs/architecture-overview.md`.
-- 2026-04-10 — archived `C-UNIVERSAL-CONFIGURABLE-SELECTION-PROFILES`: the repo now has durable profile contracts, additive `selection_profiles`, cheap hold-aware final selection, server-owned explain/guidance/read models, replay provenance, compatibility-only normalization, and green `reindex-backfill` compose proof for the migrated lane.
 
 ## Operating limits
 

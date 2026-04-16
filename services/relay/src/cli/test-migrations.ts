@@ -195,7 +195,13 @@ async function main(): Promise<void> {
             (table_name = 'crawl_policy_cache' and column_name in (
               'sitemap_urls',
               'feed_urls',
-              'expires_at'
+              'expires_at',
+              'request_validators_json',
+              'response_cache_json'
+            ))
+            or
+            (table_name = 'channel_fetch_runs' and column_name in (
+              'provider_metrics_json'
             ))
             or
             (table_name = 'web_resources' and column_name in (
@@ -449,6 +455,9 @@ async function main(): Promise<void> {
       "crawl_policy_cache.sitemap_urls",
       "crawl_policy_cache.feed_urls",
       "crawl_policy_cache.expires_at",
+      "crawl_policy_cache.request_validators_json",
+      "crawl_policy_cache.response_cache_json",
+      "channel_fetch_runs.provider_metrics_json",
       "web_resources.resource_kind",
       "web_resources.classification_json",
       "web_resources.extraction_state",

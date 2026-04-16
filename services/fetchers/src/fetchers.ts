@@ -130,6 +130,7 @@ interface ChannelPollCompletion {
   cursorChanged: boolean;
   errorMessage: string | null;
   cursorUpdates: CursorUpdateInput[];
+  providerMetricsJson?: Record<string, unknown>;
 }
 
 type CursorMap = Record<string, FetchCursorRow>;
@@ -759,28 +760,65 @@ class FetcherService {
       });
     }
 
-    const { resources, cursorUpdates, modes, browserAttempt, homepageStatus } = await discoverWebsiteResources({
+    const {
+      resources,
+      cursorUpdates,
+      modes,
+      browserAttempt,
+      homepageStatus,
+      metrics,
+      policyState,
+    } = await discoverWebsiteResources({
       channelUrl: channel.fetchUrl,
       policy,
       config: websiteConfig,
       cursors,
       authConfig: channel.authConfigJson
     });
-    if (resources.length === 0 && (homepageStatus === 401 || homepageStatus === 403)) {
-      const message = `Website fetch authentication failed for ${channel.channelId}: upstream returned ${homepageStatus}. Check the channel Authorization header.`;
+    await this.crawlPolicyCache.persistConditionalState(
+      channel.fetchUrl,
+      policyState,
+      channel.authConfigJson == null
+        ? undefined
+        : {
+            channelUrl: channel.fetchUrl,
+            authConfig: channel.authConfigJson,
+          }
+    );
+    const providerMetricsJson: Record<string, unknown> = {
+      ...metrics,
+      modes,
+    };
+    const homepageConditionalStatus =
+      policyState.responseCache.homepage?.status ??
+      policyState.requestValidators.homepage?.httpStatus ??
+      null;
+    const authFailureStatus =
+      homepageStatus === 401 || homepageStatus === 403
+        ? homepageStatus
+        : homepageConditionalStatus === 401 || homepageConditionalStatus === 403
+          ? homepageConditionalStatus
+        : policy.httpStatus === 401 || policy.httpStatus === 403
+          ? policy.httpStatus
+          : null;
+    if (resources.length === 0 && authFailureStatus) {
+      const message = `Website fetch authentication failed for ${channel.channelId}: upstream returned ${authFailureStatus}. Check the channel Authorization header.`;
       throw new ChannelFetchError(message, {
         outcome: "hard_failure",
-        httpStatus: homepageStatus,
+        httpStatus: authFailureStatus,
         retryAfterSeconds: null,
         fetchedItemCount: 0,
         newArticleCount: 0,
         duplicateSuppressedCount: 0,
         cursorChanged: false,
-        errorMessage: message
+        errorMessage: message,
+        providerMetricsJson,
       });
     }
-    if (resources.length === 0 && browserAttempt.attempted && browserAttempt.challengeKind) {
-      const message = `Website browser-assisted discovery stopped for ${channel.channelId}: unsupported ${browserAttempt.challengeKind}.`;
+    if (resources.length === 0 && browserAttempt.challengeKind) {
+      const message = browserAttempt.attempted
+        ? `Website browser-assisted discovery stopped for ${channel.channelId}: unsupported ${browserAttempt.challengeKind}.`
+        : `Website discovery stopped for ${channel.channelId}: upstream presented unsupported ${browserAttempt.challengeKind}.`;
       throw new ChannelFetchError(message, {
         outcome: "hard_failure",
         httpStatus: 403,
@@ -789,7 +827,8 @@ class FetcherService {
         newArticleCount: 0,
         duplicateSuppressedCount: 0,
         cursorChanged: false,
-        errorMessage: message
+        errorMessage: message,
+        providerMetricsJson,
       });
     }
     const fetchedAt = new Date().toISOString();
@@ -809,6 +848,7 @@ class FetcherService {
       duplicateSuppressedCount: duplicateCount,
       cursorChanged: cursorUpdates.length > 0,
       errorMessage: null,
+      providerMetricsJson,
       cursorUpdates: cursorUpdates.map((cursorUpdate) => ({
         cursorType: cursorUpdate.cursorType,
         cursorValue: cursorUpdate.cursorValue,
@@ -1283,7 +1323,25 @@ class FetcherService {
         kind: resource.classification.kind,
         confidence: resource.classification.confidence,
         reasons: resource.classification.reasons,
-        hintedKinds: resource.hintedKinds
+        hintedKinds: resource.hintedKinds,
+        discovery: {
+          kind: resource.classification.kind,
+          confidence: resource.classification.confidence,
+          reasons: resource.classification.reasons,
+          hintedKinds: resource.hintedKinds,
+          discoverySource: resource.discoverySource,
+        },
+        resolved: {
+          kind: resource.classification.kind,
+          confidence: resource.classification.confidence,
+          reasonSource: "discovery",
+        },
+        transition: {
+          kindChanged: false,
+          fromKind: resource.classification.kind,
+          toKind: resource.classification.kind,
+          reasonSource: "discovery",
+        }
       },
       rawPayload: {
         fetcher: `website_${resource.discoverySource}`,
@@ -1841,6 +1899,7 @@ class FetcherService {
           duplicate_suppressed_count,
           cursor_changed,
           error_text,
+          provider_metrics_json,
           schedule_snapshot_json
         )
         values (
@@ -1859,7 +1918,8 @@ class FetcherService {
           $13,
           $14,
           $15,
-          $16::jsonb
+          $16::jsonb,
+          $17::jsonb
         )
       `,
       [
@@ -1884,6 +1944,7 @@ class FetcherService {
         completion.duplicateSuppressedCount,
         completion.cursorChanged,
         completion.errorMessage,
+        JSON.stringify(completion.providerMetricsJson ?? {}),
         JSON.stringify(this.buildScheduleSnapshot(channel))
       ]
     );

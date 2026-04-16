@@ -159,6 +159,15 @@ export interface WebsiteChannelConfig {
     enableRoughPageTypeDetection: boolean;
     minConfidenceForTypedExtraction: number;
   };
+  curated: {
+    preferCollectionDiscovery: boolean;
+    preferBrowserFallback: boolean;
+    editorialUrlPatterns: string[];
+    listingUrlPatterns: string[];
+    entityUrlPatterns: string[];
+    documentUrlPatterns: string[];
+    dataFileUrlPatterns: string[];
+  };
   extraction: {
     minEditorialBodyLength: number;
     allowInlineJsonExtraction: boolean;
@@ -227,6 +236,15 @@ const DEFAULT_WEBSITE_CHANNEL_CONFIG: WebsiteChannelConfig = {
   classification: {
     enableRoughPageTypeDetection: true,
     minConfidenceForTypedExtraction: 0.45
+  },
+  curated: {
+    preferCollectionDiscovery: false,
+    preferBrowserFallback: false,
+    editorialUrlPatterns: [],
+    listingUrlPatterns: [],
+    entityUrlPatterns: [],
+    documentUrlPatterns: [],
+    dataFileUrlPatterns: []
   },
   extraction: {
     minEditorialBodyLength: 500,
@@ -622,6 +640,7 @@ export function resolveSourceChannelAuthorizationHeader(
 export function parseWebsiteChannelConfig(config: unknown): WebsiteChannelConfig {
   const candidate = asRecord(config);
   const classification = asRecord(candidate.classification);
+  const curated = asRecord(candidate.curated);
   const extraction = asRecord(candidate.extraction);
 
   return {
@@ -712,6 +731,43 @@ export function parseWebsiteChannelConfig(config: unknown): WebsiteChannelConfig
         "classification.minConfidenceForTypedExtraction",
         0,
         1
+      )
+    },
+    curated: {
+      preferCollectionDiscovery: readBoolean(
+        curated.preferCollectionDiscovery,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.preferCollectionDiscovery,
+        "curated.preferCollectionDiscovery"
+      ),
+      preferBrowserFallback: readBoolean(
+        curated.preferBrowserFallback,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.preferBrowserFallback,
+        "curated.preferBrowserFallback"
+      ),
+      editorialUrlPatterns: readStringList(
+        curated.editorialUrlPatterns,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.editorialUrlPatterns,
+        "curated.editorialUrlPatterns"
+      ),
+      listingUrlPatterns: readStringList(
+        curated.listingUrlPatterns,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.listingUrlPatterns,
+        "curated.listingUrlPatterns"
+      ),
+      entityUrlPatterns: readStringList(
+        curated.entityUrlPatterns,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.entityUrlPatterns,
+        "curated.entityUrlPatterns"
+      ),
+      documentUrlPatterns: readStringList(
+        curated.documentUrlPatterns,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.documentUrlPatterns,
+        "curated.documentUrlPatterns"
+      ),
+      dataFileUrlPatterns: readStringList(
+        curated.dataFileUrlPatterns,
+        DEFAULT_WEBSITE_CHANNEL_CONFIG.curated.dataFileUrlPatterns,
+        "curated.dataFileUrlPatterns"
       )
     },
     extraction: {

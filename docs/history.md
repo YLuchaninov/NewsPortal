@@ -14,6 +14,283 @@
 
 ## Completed items
 
+### 2026-04-16 — SPIKE-WEBSITE-GRAFBASE-CHANGELOG-ANALOGS-LIVE-VALIDATION-2026-04-16 — Benchmarked Grafbase against comparable public changelog sites and closed the generic-fix question
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: after the broader regression proof stayed green but `Grafbase Changelog` still showed a partial live residual in the bounded matrix, the user asked for the next truthful decision rule: pick several close public changelog analogs, rerun them through the same harness, and close the issue if the majority already works; otherwise keep digging for a real product bug.
+- Что изменилось:
+  - no product/runtime code changed for this spike; the decision was based on a focused live rerun using the existing public-changelog matrix path in [`infra/scripts/test-live-website-matrix.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-website-matrix.mjs).
+  - the shortlisted analog cohort used four comparable public changelog/update sites that exercise the same general changelog ingestion path without depending on the exact Grafbase surface:
+    - `Supabase Changelog`
+    - `Vercel Changelog`
+    - `PlanetScale Changelog`
+    - `Render Changelog`
+- Что проверено:
+  - live matrix run:
+    - [/tmp/newsportal-live-website-matrix-alt_2026_04_16-e20cf7a2-60d8-4d68-bbd2-6ef52e437f0a.json](/tmp/newsportal-live-website-matrix-alt_2026_04_16-e20cf7a2-60d8-4d68-bbd2-6ef52e437f0a.json)
+  - `git diff --check -- docs/work.md docs/history.md`
+- Что spike доказал:
+  - the general public-changelog path is working on the current website-ingestion/runtime baseline:
+    - `Supabase Changelog` -> `observed_expected_shape`
+    - `PlanetScale Changelog` -> `observed_expected_shape`
+    - `Render Changelog` -> `observed_expected_shape`
+  - the one non-success in the cohort is an explicit external block rather than the same Grafbase-style partial shape:
+    - `Vercel Changelog` -> truthful upstream `403` with `captcha`
+  - because `3/4` comparable public changelog sites worked as expected and the remaining failure is a different external blocker class, the current `Grafbase Changelog` residual should be treated as site-specific/live rather than as evidence of a broader regression in the changelog ingestion path.
+- Риски или gaps:
+  - public changelog sites remain externally variable, so this spike does not promise that every JS-heavy changelog will work; it only shows that the generic changelog path is not broadly broken on the current baseline.
+  - if the user later wants first-class `Grafbase` support specifically, the next truthful step is a narrow Grafbase-only live/runtime divergence spike, not another wide generic hardening pass.
+- Follow-up:
+  - no generic follow-up is recommended from this spike alone; only reopen the lane if the user wants Grafbase-specific support or if additional changelog analogs start failing in the same partial pattern.
+
+### 2026-04-16 — SPIKE-WEBSITE-DOJ-ANALOGS-LIVE-VALIDATION-2026-04-16 — Benchmarked DOJ against comparable government press-release sites and closed the generic-fix question
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: after the bounded DOJ-like precision patch still left `DOJ Press Releases` as a live partial case, the user asked for the next truthful decision rule: find comparable DOJ-like public sites, test them, and close the generic-fix effort if the majority already works; otherwise keep digging and repair the broader issue.
+- Что изменилось:
+  - [`infra/scripts/test-live-website-matrix.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-website-matrix.mjs) now includes a dedicated `doj_analogs_2026_04_16` live cohort with six public government press-release/newsroom sites:
+    - `National Archives Press Releases`
+    - `FBI Press Releases`
+    - `DOL News Releases`
+    - `Treasury Press Releases`
+    - `HHS Press Room`
+    - `FTC Press Releases`
+  - the cohort keeps the same website-only cheap-first contract as the rest of the matrix harness and exists specifically to answer whether `DOJ Press Releases` is a broader government-newsroom failure mode or a site-specific residual.
+- Что проверено:
+  - current-web validation against the official public newsroom pages for:
+    - [National Archives Press Releases](https://www.archives.gov/press/press-releases)
+    - [FBI Press Releases](https://www.fbi.gov/news/press-releases)
+    - [DOL News Releases](https://www.dol.gov/newsroom/releases)
+    - [Treasury Press Releases](https://home.treasury.gov/news/press-releases)
+    - [HHS Press Room](https://www.hhs.gov/press-room/index.html)
+    - [FTC Press Releases](https://www.ftc.gov/news-events/news/press-releases)
+  - live matrix run:
+    - [/tmp/newsportal-live-website-matrix-doj_analogs_2026_04_16-13816eca-19bc-412f-abda-3c1cc7606b1c.json](/tmp/newsportal-live-website-matrix-doj_analogs_2026_04_16-13816eca-19bc-412f-abda-3c1cc7606b1c.json)
+  - `git diff --check -- docs/work.md docs/history.md infra/scripts/test-live-website-matrix.mjs`
+- Что spike доказал:
+  - `DOJ Press Releases` is not representative of the general government press-release cohort on the current website ingestion architecture:
+    - `4/6` analogs produced `observed_expected_shape` outcomes;
+    - `2/6` analogs failed truthfully as explicit blocked/unsupported cases (`FBI` via `robots.txt`, `HHS` via upstream `403`);
+    - `0/6` reproduced the same DOJ-style false `listing` partial pattern.
+  - the successful analogs show that the generic cheap-first website lane already works on a majority of comparable government newsroom surfaces:
+    - `National Archives Press Releases`
+    - `DOL News Releases`
+    - `Treasury Press Releases`
+    - `FTC Press Releases`
+  - because the majority works and the failures are explicit but different from DOJ, the remaining DOJ issue should be treated as a site-specific residual, not as evidence that the broader government-newsroom classifier/discovery path is still generally broken.
+- Риски или gaps:
+  - some analogs remain externally blocked and should stay classified truthfully instead of becoming new patch targets by default;
+  - if the user later wants first-class `DOJ Press Releases` support specifically, the next truthful step is a DOJ-only spike into the exact live runtime divergence, not a broader classifier hardening arc.
+- Follow-up:
+  - no generic website-ingestion follow-up is recommended from this spike alone; only open a new bounded item if the user explicitly wants DOJ-specific support or wants to add more government newsroom cohorts.
+
+### 2026-04-16 — STAGE-1-WEBSITE-NEWSROOM-DETAIL-AND-BROWSER-ROI-HARDENING — Tightened newsroom detail classification and browser ROI routing without changing the website architecture
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after the broader live website matrices showed that the remaining real-world gaps were concentrated in two narrow places rather than in the whole pipeline, the user asked to implement the focused plan: improve newsroom/detail-page `editorial` vs `listing` differentiation and make `browser_candidate` routing more truthful and less wasteful without redesigning the cheap-first website architecture.
+- Что изменилось:
+  - [`services/fetchers/src/web-ingestion.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts) now hardens newsroom/detail classification and browser decisioning in a bounded way:
+    - article-like detail pages get stronger editorial credit from detail URLs, structured editorial signals, and dated/article-card context even when ambient repeated cards or pagination are also present;
+    - repeated-card and pagination penalties are softened into ambient layout reasons on detail-like article pages instead of immediately forcing `listing`;
+    - Akamai-style interstitial/challenge pages are now detected explicitly via `ACCESS_BLOCK_PATTERN`, and collection discovery skips parsing those challenge pages as if they were ordinary content collections;
+    - browser recommendation now stays cheap-first when static results are already strongly editorial, while still preserving explicit challenge-driven recommendation reasons where browser help is justified;
+  - [`services/fetchers/src/resource-enrichment.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts) now adds a bounded enrichment-side guard for newsroom detail pages:
+    - `shouldRetainDiscoveryEditorialKind(...)` keeps discovery-time `editorial` classification when enrichment sees a strong article-like detail page whose title/body/date signals outweigh listing chrome;
+    - persisted `classification_json` now records that guard through the resolved `reasons` trail so operators can see that a false downgrade was intentionally prevented instead of silently overwritten;
+  - targeted regression proof was extended:
+    - [`tests/unit/ts/web-ingestion-browser.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/web-ingestion-browser.test.ts) now covers strong-static editorial browser suppression and detail-page editorial classification on card-heavy layouts;
+    - [`tests/unit/ts/resource-enrichment-website.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/resource-enrichment-website.test.ts) now covers the enrichment-side editorial-retention guard and the persisted classification-reason trail.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+  - `pnpm test:website:compose`
+  - `pnpm test:enrichment:compose`
+  - `pnpm test:hard-sites:compose`
+  - focused baseline rerun:
+    - [`/tmp/newsportal-live-website-matrix-baseline-34e12af1-5fbf-4da4-8173-14ffb581f3b0.json`](/tmp/newsportal-live-website-matrix-baseline-34e12af1-5fbf-4da4-8173-14ffb581f3b0.json)
+  - focused alternate rerun:
+    - [`/tmp/newsportal-live-website-matrix-alt_2026_04_16-97439501-54a3-467f-b6a4-010ed969edf7.json`](/tmp/newsportal-live-website-matrix-alt_2026_04_16-97439501-54a3-467f-b6a4-010ed969edf7.json)
+  - `git diff --check -- docs/work.md docs/history.md services/fetchers/src/web-ingestion.ts services/fetchers/src/resource-enrichment.ts tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+- Что stage доказала:
+  - the current website architecture did not need a redesign to improve the weakest real-world cases; a bounded heuristic/enrichment patch was enough to make the problem narrower and more honest;
+  - newsroom/detail quality improved where the sites were actually accessible:
+    - `ESA Newsroom` moved to `observed_expected_shape` with `7 editorial / 4 listing` on the focused alternate rerun;
+    - the earlier `EUAA Press Releases` card-title patch stayed effective, and the follow-up rerun now showed only one visible repeat-poll `editorial -> listing` transition instead of a larger downgrade set;
+    - `Competition Policy Latest News` stayed `observed_expected_shape`, confirming the harder newsroom heuristics did not regress an already-good public newsroom case;
+  - browser-candidate truthfulness improved without broadening browser work:
+    - `Grafbase Changelog` and `Linear Changelog` now both demonstrate that static-good-enough outcomes should suppress wasteful browser fallback, while forced browser validation still truthfully surfaces `cloudflare_js_challenge` instead of pretending the crawler failed generically;
+    - `Webflow Updates` is now classified directly as a truthful `403 cloudflare_js_challenge` hard failure, and `Framer Updates` remains a partial static case rather than a fake browser success;
+  - the remaining residual is now clearer: `DOJ Press Releases` still lands as a narrow `listing`-heavy partial case, which points to more newsroom/detail precision tuning if the user wants another bounded follow-up, not to a browser or architecture problem.
+- Риски или gaps:
+  - the enrichment-side editorial-retention guard is intentionally conservative, so it does not magically convert every newsroom detail page; `DOJ Press Releases` remains a truthful partial outcome on the focused rerun;
+  - browser-heavy public websites remain externally unstable by nature, so the shipped improvement is mostly about better routing and clearer unsupported classification rather than materially higher success on protected sites.
+- Follow-up:
+  - if the user wants to continue here, open a fresh bounded newsroom/detail precision follow-up centered on the remaining `DOJ`-like partial cases; do not reopen browser architecture or try anti-bot bypass work inside this lane.
+
+### 2026-04-16 — STAGE-WEBSITE-LIVE-MATRIX-EXPANSION-2026-04-16 — Expanded website live validation to a 16-site real-world matrix and closed the remaining live classification gaps
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to move from the earlier three-site bounded website check to a much broader real-world validation pass: more than a dozen public websites total, at least four websites per ingress shape, and the maximum truthful website-only proof set before and around that live run.
+- Что изменилось:
+  - a repo-owned expanded live harness now exists in [`infra/scripts/test-live-website-matrix.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-website-matrix.mjs):
+    - it validates 16 public websites across four shapes (`static_editorial`, `documents_downloads`, `public_changelog`, `browser_candidate`);
+    - for every candidate it runs first poll, optional browser-assisted rerun, repeat poll, `/maintenance/fetch-runs`, `/maintenance/web-resources*`, and `/admin/resources*` verification;
+    - it persists a JSON evidence bundle under `/tmp/newsportal-live-website-matrix-<runId>.json`;
+    - it now also supports focused reruns via `--group=<groupKey>` and `--site=<candidateName>` plus captured `stdout/stderr` on live failures so small residual sets can be reclassified truthfully without replaying the whole matrix;
+  - the docs/runtime surfaces were synced to make that matrix part of the durable website proof story:
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), [`docs/contracts/test-access-and-fixtures.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/test-access-and-fixtures.md), [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md), [`HOW_TO_USE.md`](/Users/user/Documents/workspace/my/NewsPortal/HOW_TO_USE.md), [`WEBSITE_SOURCE_EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/WEBSITE_SOURCE_EXAMPLES.md), and [`WEBSITE_SOURCES_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/WEBSITE_SOURCES_TESTING.md) now point operators to the expanded matrix harness as the canonical bounded live-site runner after deterministic proof;
+  - closing the matrix exposed and repaired two narrow runtime proof blockers:
+    - [`services/fetchers/src/web-ingestion.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts) now preserves homepage auth/error status from conditional-request validator state even when no cached homepage body exists, so protected website polls no longer collapse into false `no_change`;
+    - [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts) now treats empty-resource website `401/403` runs as truthful hard failures by falling back to policy-level status when homepage probing/auth already proved the upstream refusal;
+    - [`services/fetchers/src/cli/test-channel-auth-smoke.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/test-channel-auth-smoke.ts) now seeds the browser-auth website fixture with sitemap/feed discovery disabled so shared root hints cannot accidentally bypass same-origin browser-auth validation;
+    - [`tests/unit/ts/web-ingestion-browser.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/web-ingestion-browser.test.ts) gained the targeted regression proof for the preserved homepage auth status path.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts tests/unit/ts/admin-website-channels.test.ts`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:website:compose`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm test:channel-auth:compose`
+  - `pnpm test:website:admin:compose`
+  - `pnpm test:enrichment:compose`
+  - full live matrix run:
+    - [`/tmp/newsportal-live-website-matrix-9ec1bd4b-3e55-43e2-acab-860bf4459b01.json`](/tmp/newsportal-live-website-matrix-9ec1bd4b-3e55-43e2-acab-860bf4459b01.json)
+  - focused residual rerun:
+    - [`/tmp/newsportal-live-website-matrix-b74c2708-b7bc-4be9-aac6-46119ee1df64.json`](/tmp/newsportal-live-website-matrix-b74c2708-b7bc-4be9-aac6-46119ee1df64.json)
+  - `git diff --check -- docs/work.md docs/history.md docs/verification.md docs/contracts/test-access-and-fixtures.md README.md HOW_TO_USE.md WEBSITE_SOURCE_EXAMPLES.md WEBSITE_SOURCES_TESTING.md infra/scripts/test-live-website-matrix.mjs services/fetchers/src/fetchers.ts services/fetchers/src/cli/test-channel-auth-smoke.ts services/fetchers/src/web-ingestion.ts tests/unit/ts/web-ingestion-browser.test.ts`
+- Что stage доказала:
+  - the local website-only proof stack now has a truthful large live-validation complement instead of only a narrow three-site spot check: four public-site groups with four candidates each can be exercised from the same admin/runtime contract without widening scope into RSS or discovery;
+  - deterministic website proof still matters before the internet run: the live expansion flushed out a real auth-status regression and a fixture-isolation problem, both of which were repaired before the final matrix was accepted;
+  - the expanded matrix gives a much clearer real-world picture of the current website lane:
+    - `static_editorial`: 1 expected-shape success (`EEA Newsroom`) and 3 partial/listing-heavy outcomes (`European Commission Digital Strategy News`, `EUAA Press Releases`, `Competition Policy Latest News`);
+    - `documents_downloads`: 3 expected-shape successes (`EBRD Procurement Notices`, `EIB Project Procurement`, `World Bank Project Procurement`) plus 1 truthful upstream block (`UNICEF Tajikistan Supply and Procurement` -> `403`);
+    - `public_changelog`: all 4 sites (`WorkOS`, `Auth0`, `Raycast`, `Resend`) produced expected-shape outcomes;
+    - `browser_candidate`: 1 partial/listing-heavy outcome (`Grafbase Changelog`) and 3 truthful blocked/challenge outcomes (`Browserbase Changelog`, `Sentry Changelog`, `Intercom Changes`);
+  - conditional-request reuse is visible on real sites, not just fixtures: the 16-site pass recorded `22` total conditional hits across repeat polls, with the strongest repeat-poll reuse inside the public changelog group.
+- Риски или gaps:
+  - the broadened matrix still did not show positive editorial body-uplift on the sampled live rows chosen during this pass, so body-uplift telemetry is now proven as captured operator truth but not yet as a broad real-world uplift win across the new public-site portfolio;
+  - the live harness deactivates created website channels, but inactive `Live ...` website rows remain in the local compose DB as tracked test artifacts, especially for hard-failure runs where delete/archive cleanup does not fully remove the row;
+  - public browser-heavy websites remain the weakest category of the current lane: the matrix now classifies them honestly, but it does not turn blocked/challenge-heavy public sites into product successes.
+- Follow-up:
+  - if the user wants to continue here, open a fresh bounded follow-up for browser-candidate portfolio expansion, live-channel cleanup automation, or classifier tuning for the partial static-editorial/browser-candidate outcomes instead of reopening this completed stage.
+
+### 2026-04-15 — C-WEBSITE-INGESTION-COST-AND-OBSERVABILITY-HARDENING — Shipped conditional website polling, run telemetry, classification observability, and lower-cost editorial enrichment
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after the website-only scraping audit concluded that the current architecture should be kept but hardened, the user asked to implement the whole follow-up arc in order: upstream conditional requests, static-vs-browser metrics, richer resource observability, bounded `article-extractor` gating, body-uplift telemetry, and bounded validation on real public sites.
+- Что изменилось:
+  - schema/storage truth for the website lane was extended:
+    - [`database/migrations/0034_website_conditional_metrics_and_cache.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0034_website_conditional_metrics_and_cache.sql), [`database/migrations/0017_web_ingestion_resource_layer.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0017_web_ingestion_resource_layer.sql), [`database/ddl/phase2_ingest_foundation.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase2_ingest_foundation.sql), and [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts) now keep `crawl_policy_cache.request_validators_json`, `crawl_policy_cache.response_cache_json`, and `channel_fetch_runs.provider_metrics_json` as first-class persisted website truth;
+  - fetchers-side website polling now reuses upstream validators/cache truthfully:
+    - [`services/fetchers/src/web-ingestion.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts) now sends `If-None-Match` / `If-Modified-Since` for homepage, robots, `llms.txt`, sitemap URLs, and discovered feed URLs, reuses cached homepage body on `304`, carries conditional-request hit counters through discovery, persists updated validator/cache state back into `crawl_policy_cache`, and suppresses unnecessary browser fallback when static no-change evidence already exists;
+  - per-run website telemetry is now persisted and surfaced to operators:
+    - [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts), [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py), [`apps/admin/src/pages/index.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/index.astro), and [`apps/admin/src/pages/observability.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/observability.astro) now persist and render website-specific `provider_metrics_json` fields such as `staticAcceptedCount`, `browserAttempted`, `browserOnlyAcceptedCount`, `resourceKindCounts`, and `conditionalRequestHits` instead of hiding website runs behind generic fetched/new counters;
+  - website resource observability now preserves discovery-to-enrichment truth:
+    - [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts) and [`services/fetchers/src/resource-enrichment.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts) now keep backward-compatible top-level `classification_json` fields while also persisting additive `discovery`, `enrichment`, `resolved`, and `transition` blocks, plus `attributes_json.observability` signals such as `structuredTypes`, `linkCount`, `downloadCount`, `hasRepeatedCards`, `hasPagination`, `hintedKinds`, and `discoverySource`;
+  - editorial website enrichment is now cheaper and instrumented:
+    - [`services/fetchers/src/resource-enrichment.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts) now treats `@extractus/article-extractor` as bounded post-discovery fallback only, builds base editorial extraction from the already fetched HTML first, calls `extractFromHtml(...)` only when that base extraction is materially incomplete, and records `articleExtractorInvoked`, `articleExtractorReason`, `articleExtractorFetchReused`, `baseBodyLength`, `finalBodyLength`, `bodyUpliftChars`, `bodyUpliftRatio`, `bodyChanged`, and `extractorImprovedBody`;
+  - targeted regression coverage was added for the new website-only logic:
+    - [`tests/unit/ts/web-ingestion-browser.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/web-ingestion-browser.test.ts), [`tests/unit/ts/resource-enrichment-website.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/resource-enrichment-website.test.ts), and [`services/fetchers/src/cli/test-website-smoke.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/test-website-smoke.ts) now prove conditional headers, cached homepage reuse, `provider_metrics_json` persistence, extractor gating, and body-uplift telemetry on the deterministic website fixture path;
+  - bounded live-site validation on the rebuilt stack both confirmed the new telemetry and caught one real runtime defect:
+    - the first rebuilt live run exposed a malformed SQL `update crawl_policy_cache ... set ..., where ...` statement inside `persistConditionalState()`, which was then repaired in [`services/fetchers/src/web-ingestion.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts) and covered by a new narrow unit assertion;
+    - after the repair, live validation on `/tmp/newsportal_live_website_sources.mjs` confirmed three real website shapes on the fresh compose baseline: European Commission press releases for static editorial projection, EBRD procurement notices for resource-only listing/document behavior, and Grafbase Changelog for browser-assisted-only accepted resources with persisted browser provenance; Intercom Changes stayed as a truthful `unsupported_block` hard-failure example rather than a hidden bypass.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts tests/unit/ts/admin-website-channels.test.ts`
+  - `pnpm --filter @newsportal/fetchers typecheck`
+  - `python -m py_compile services/api/app/main.py`
+  - `pnpm test:migrations:smoke`
+  - `pnpm test:website:compose`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm test:channel-auth:compose`
+  - `pnpm test:website:admin:compose`
+  - `pnpm test:enrichment:compose`
+  - `pnpm dev:mvp:internal`
+  - live validation via [`/tmp/newsportal_live_website_sources.mjs`](/tmp/newsportal_live_website_sources.mjs) with evidence bundles:
+    - [/tmp/newsportal-live-website-results-9399f95a-434f-43d8-b283-7b672c2a921b.json](/tmp/newsportal-live-website-results-9399f95a-434f-43d8-b283-7b672c2a921b.json)
+    - [/tmp/newsportal-live-website-results-882205dd-ec2a-4292-9fa8-1818d4ade8c2.json](/tmp/newsportal-live-website-results-882205dd-ec2a-4292-9fa8-1818d4ade8c2.json)
+  - direct compose-PostgreSQL readback of persisted website telemetry and resource observability for the live channels:
+    - European Commission press releases (`65674c8c-837a-416a-8793-91d22b9a400a`) showed initial `new_content` with `staticAcceptedCount = 20`, `resourceKindCounts = {"unknown": 18, "editorial": 2}` and later `no_change` with `conditionalRequestHits.feed = 1`;
+    - EBRD procurement notices (`0528d0d2-ec36-4cc7-b40d-8f01cc09da42`) showed stable resource-only `listing` behavior with `staticAcceptedCount = 2` and later `no_change`;
+    - Grafbase Changelog (`4d330ce5-145d-4fee-9fa7-ac3be22a6244`) showed `browserAttempted = true`, `browserRecommended = true`, `browserAcceptedCount = 13`, `browserOnlyAcceptedCount = 13`, and browser-assisted `data_file`/`listing` mix on the assisted run;
+    - Intercom Changes (`0244bbec-2e7f-4b28-9c11-69a78dd81416`) showed truthful hard-failure metrics with `browserChallengeKind = unsupported_block`, `browserAttempted = true`, `browserDiscoveredCount = 18`, and `finalAcceptedCount = 0`;
+    - live newsroom editorial enrichment persisted `articleExtractorInvoked = true`, `articleExtractorFetchReused = true`, `articleExtractorReason = missing_published_at`, `baseBodyLength = 9335`, `finalBodyLength = 4762`, and `bodyUpliftRatio = 0.5101` on resource `0d782a6a-7460-46b7-95ce-1d226d757382`.
+- Что capability доказала:
+  - the website provider can keep its cheap-first architecture while still gaining real cost/observability improvements: upstream conditional requests, persisted per-run static-vs-browser metrics, and classifier/body observability all fit inside the existing fetchers-owned boundary without redesigning discovery or RSS;
+  - bounded post-discovery `article-extractor` usage is sufficient and safer than widening it into acquisition: the repo now avoids duplicate website fetch cost by reusing fetched HTML and records whether extractor fallback materially changed editorial body quality;
+  - bounded real-site validation is valuable even after green deterministic proof because it can expose runtime-only defects on the long-lived stack; in this case it found and then verified the repair of the malformed SQL update in `persistConditionalState()` without reopening the architecture decision itself.
+- Риски или gaps:
+  - real public websites remain unstable by nature; Browserbase still lacked persisted browser provenance on the chosen pass, and Intercom remained an explicit unsupported block rather than a successful browser-assisted target;
+  - the latest live validation harness leaves accepted website channels in the local compose DB by design for operator follow-up, so the repo truth must continue to treat them as tracked local test artifacts rather than silent residue.
+- Follow-up:
+  - if the user wants more from this lane, open a fresh bounded item for follow-up ideas such as auto-cleanup of live-site channels, richer `/maintenance/fetch-runs` operator summaries, or broader public-site portfolio validation rather than reopening this archived hardening capability.
+
+### 2026-04-15 — C-MULTI-SITE-WEBSITE-BLOCKER-TRIAGE-AND-REPAIR — Classified and repaired the real website blockers, then closed the live three-shape website proof
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user first asked for a hybrid website-validation plan, then asked to implement it end-to-end, and later explicitly asked to keep pushing on the blocked JS-heavy public-site lane until at least one real public candidate passed the same admin/channel proof contour.
+- Что изменилось:
+  - the website blocker taxonomy was made explicit across several public sites and separated into durable classes instead of one vague “website blocker” bucket: product bug, candidate misfit, explicit unsupported challenge, cheap-static acceptable, and browser-assisted success;
+  - [`services/fetchers/src/web-ingestion.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts) now contains two shipped product-side repairs:
+    - safe iterative resource accumulation via `appendItems(...)` replaced the earlier `push(...largeArray)` merges in sitemap, collection, browser-assisted, probe, and JSON-LD expansion paths, removing the GOV.UK-style call-stack overflow on large website result sets;
+    - login challenge detection now distinguishes real login gates from ordinary public navigation by checking for password inputs plus stronger sign-in form/text semantics instead of treating any visible `Log in` text as `unsupported login`;
+  - [`tests/unit/ts/web-ingestion-browser.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/web-ingestion-browser.test.ts) gained deterministic regression proof for both repair classes: very large sitemap discovery no longer overflows, a public nav `Log in` link no longer triggers `challengeKindHint = login`, and a real sign-in form with a password field still does;
+  - the live website hybrid proof is now fully closed on the same admin/runtime contract:
+    - newsroom success stayed proven with European Commission press releases;
+    - documents/tenders success stayed proven with EBRD procurement notices;
+    - the missing JS-heavy acceptance is now closed by `Grafbase Changelog`, which remained a `website` provider and showed persisted browser-assisted provenance on the assisted rerun through the full admin/channel flow;
+  - the durable live evidence bundles now include four result artifacts:
+    - [/tmp/newsportal-live-website-results-1e148fea-e811-47a0-821c-d5b7c6ef0df5.json](/tmp/newsportal-live-website-results-1e148fea-e811-47a0-821c-d5b7c6ef0df5.json)
+    - [/tmp/newsportal-live-website-results-69db9f58-8a16-48de-a8fa-767327bad4f4.json](/tmp/newsportal-live-website-results-69db9f58-8a16-48de-a8fa-767327bad4f4.json)
+    - [/tmp/newsportal-live-website-results-5460b688-ad17-41ce-88e9-362dd3f9c904.json](/tmp/newsportal-live-website-results-5460b688-ad17-41ce-88e9-362dd3f9c904.json)
+    - [/tmp/newsportal-live-website-results-72da4ba4-7f93-4f3b-a711-045e369e21c1.json](/tmp/newsportal-live-website-results-72da4ba4-7f93-4f3b-a711-045e369e21c1.json)
+- Разбивка по stages:
+  - `SPIKE-MULTI-SITE-WEBSITE-BLOCKER-TAXONOMY-2026-04-15`
+  - `PATCH-WEBSITE-SITEMAP-SPREAD-OVERFLOW-2026-04-15`
+  - `PATCH-WEBSITE-LOGIN-GATE-FALSE-POSITIVES-2026-04-15`
+  - `PATCH-LIVE-WEBSITE-SOURCE-HYBRID-VERIFICATION-2026-04-15`
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts`
+  - `pnpm typecheck`
+  - `pnpm test:website:compose`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm test:website:admin:compose`
+  - live admin/channel proof via `/tmp/newsportal_live_website_sources.mjs`, including deterministic `fetchers run:once` polling and verification on `/admin/resources*` and `/maintenance/web-resources*`
+- Что capability доказала:
+  - the real product-side website bugs were not in the browser-assisted subsystem contract itself, but in specific fetchers behaviors: unsafe large-array merges and overbroad login challenge heuristics;
+  - the browser-assisted website subsystem remained healthy on its deterministic fixture proof while still classifying public live sites truthfully into unsupported challenges, cheap-static wins, and genuine browser-assisted wins;
+  - the original hybrid acceptance target is now fully satisfied on the real local admin/runtime path: one newsroom, one documents/tenders source, and one public JS-heavy source are all proven without reintroducing stealth, CAPTCHA bypass, login-session replay, or provider-type cheating.
+- Риски или gaps:
+  - live public JS-heavy sites remain inherently unstable and many still classify truthfully as `captcha`, `cloudflare_js_challenge`, `unsupported_block`, `robots.txt` block, or cheap-static-only wins; this capability closes the required acceptance target but does not promise a broad evergreen public-site portfolio;
+  - the worktree still contains separate mixed doc edits and untracked docs outside this archived capability, so archive sync closes the website lane truth but does not imply a clean git worktree.
+- Follow-up:
+  - if the user wants to keep expanding this lane, open a fresh bounded item for broader public-site portfolio coverage, browser-provenance UX/observability polish, or stricter JS-heavy acceptance heuristics rather than reopening this archived capability.
+
+### 2026-04-15 — PATCH-WEBSITE-SOURCES-TESTING-GUIDE-2026-04-15 — Added a dedicated operator guide for website-source testing and synced the main operator docs
+
+- Тип записи: item archive
+- Финальный статус: archived
+- Зачем понадобилось: the user wanted an operator-facing instruction analogous to `EXAMPLES.md`, but focused on actively testing `website` sources, `/admin/resources`, and the persisted `web_resources` lane instead of piecing the workflow together from scattered README/runbook notes.
+- Что изменилось:
+  - [`WEBSITE_SOURCES_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/WEBSITE_SOURCES_TESTING.md) was added as a standalone Russian guide for the website-source lane and then expanded into an example-driven handbook in the style of `EXAMPLES.md`: it now gives three full website-source bundles for editorial newsroom projection, resource-only public documents/tenders portals, and bounded browser-assisted public JS-heavy sites, alongside safe baseline form defaults, truthful manual polling via `fetchers run:once`, `/admin/resources` filters, projected vs resource-only expectations, resource-kind interpretation, and troubleshooting for the main failure modes;
+  - [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md), [`HOW_TO_USE.md`](/Users/user/Documents/workspace/my/NewsPortal/HOW_TO_USE.md), and [`docs/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/manual-mvp-runbook.md) now point operators to the new standalone guide instead of leaving the website testing workflow scattered across broader docs only;
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) was synced so current memory and recent-change history now reflect that the website-source testing guide exists and that the docs-only patch closed without needing a product regression fix.
+- Что проверено:
+  - `python -m unittest tests.unit.python.test_api_web_resources`
+  - `pnpm typecheck`
+  - `pnpm test:website:admin:compose`
+  - `git diff --check -- WEBSITE_SOURCES_TESTING.md README.md HOW_TO_USE.md docs/manual-mvp-runbook.md docs/work.md docs/history.md`
+- Что item доказал:
+  - the current website-source lane is operator-ready enough to support a dedicated testing guide rather than only scattered notes: `/maintenance/web-resources*`, `/admin/resources*`, projected article drilldown, and the persisted resource-only rows are all part of the shipped/testing contract;
+  - operators now have one clear document that explains how to verify projected editorial rows and resource-only `entity` / `document` rows together, including three concrete example configurations and the bounded browser-assisted path for public JS-heavy sites;
+  - no code fix was required while authoring the guide because the current local proof lane remained green, including the deterministic `pnpm test:website:admin:compose` acceptance.
+- Риски или gaps:
+  - the guide intentionally documents the current truthful operator contract and does not pretend that login-required websites, CAPTCHA walls, cookie/session replay, or YouTube onboarding are supported parts of this lane;
+  - the manual local trigger still relies on container-side `fetchers run:once` rather than a dedicated surfaced `Run now` button in admin, so future operator ergonomics work should be framed as a new bounded follow-up rather than folded back into this docs patch.
+
 ### 2026-04-14 — SWEEP-EXAMPLES-PRIMARY-OUTSOURCE-DOC-SYNC-2026-04-14 — Made `EXAMPLES.md` the primary outsourcing example source and demoted the narrow companion docs
 
 - Тип записи: item archive
@@ -3017,3 +3294,91 @@
   - `FIREBASE_CLIENT_CONFIG` и `FIREBASE_ADMIN_CREDENTIALS` пока не используются кодом и остаются документированы как не обязательные для текущего MVP
 - Follow-up:
   - пройти шаги из `firebase_setup.md`, обновить `.env.dev` и повторно запустить `pnpm test:mvp:internal`
+
+### 2026-04-16 — C-WEBSITE-INGESTION-LIVE-QUALITY-HARDENING / STAGE-1 — classifier, collection-hint, and browser-recommendation hardening
+
+- Тип записи: capability stage archive
+- Финальный статус: done
+- Зачем понадобилось: live website matrix на 2026-04-16 показал, что cheapest high-ROI uplift для `website` ingestion находится не в redesign/browser-first crawling, а в более точной cheap-first классификации newsroom pages, richer collection-card hints, tiny bounded site tuning, and clearer browser recommendation telemetry.
+- Что изменилось:
+  - `packages/contracts/src/source.ts` и `apps/admin/src/lib/server/website-channels.ts` теперь поддерживают bounded `website.curated` config slice с `preferCollectionDiscovery`, `preferBrowserFallback`, и narrow URL-pattern kind hints, не превращая это в общий parser framework;
+  - `services/fetchers/src/web-ingestion.ts` теперь извлекает `summary` и `publishedAt` hints из collection-card context, учитывает override kinds/discovery source/published-at in classifier scoring, and distinguishes collection roots like `/changelog` from detail pages more truthfully;
+  - browser recommendation logic и provider metrics now preserve explicit `browserRecommendationReasons`, while the decision itself considers static no-change evidence and static kind mix instead of a purely coarse count threshold;
+  - `infra/scripts/test-live-website-matrix.mjs` now materializes the tiny curated hints for selected real sites so bounded live validation exercises the shipped config path rather than ad hoc manual tweaks;
+  - `infra/scripts/test-website-admin-flow.mjs` now waits for enriched/stable website resources before asserting HTML, removing the stale-title race that appeared once richer enrichment/classification timing landed.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts tests/unit/ts/resource-enrichment-website.test.ts`
+  - `pnpm --filter @newsportal/fetchers typecheck`
+  - `pnpm test:website:compose`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm test:website:admin:compose`
+  - `pnpm test:enrichment:compose`
+  - `node infra/scripts/test-live-website-matrix.mjs --site="European Commission Digital Strategy News" --site="EUAA Press Releases" --site="Competition Policy Latest News" --site="Grafbase Changelog"`
+- Live-result summary:
+  - focused rerun evidence bundle: `/tmp/newsportal-live-website-matrix-f738a809-957a-4752-9f5f-bd7794b5ccfd.json`
+  - three targeted `static_editorial` sites moved to `observed_expected_shape`, all with `collection`-first mode ordering and `collection_page`-dominated accepted resources;
+  - `Competition Policy Latest News` stopped filling from irrelevant sitemap-heavy results and produced `15/15` editorial rows from collection discovery on the first rerun;
+  - `Grafbase Changelog` no longer needed browser uplift in the focused rerun and now records truthful `browserRecommendationReasons` such as `static_no_change_empty` on repeat/browser-forced no-change passes.
+- Риски или gaps:
+  - the tiny curated slice is intentionally bounded, but still needs discipline so it does not grow into a hidden site-specific parser layer;
+  - `EUAA Press Releases` improved enough to pass the focused live verdict, but still skews listing-heavy (`12 listing / 3 editorial`) and remains a good follow-up candidate if newsroom precision becomes a priority.
+- Follow-up:
+  - if a future user asks for the next smallest website uplift, start with tighter newsroom/listing differentiation on the remaining listing-heavy editorial sites before considering any broader browser work.
+
+### 2026-04-16 — PATCH-WEBSITE-NEWSROOM-CARD-TITLE-INFERENCE-2026-04-16
+
+- Тип записи: patch archive
+- Финальный статус: done
+- Зачем понадобилось: after the broader website hardening stage, `EUAA Press Releases` still passed the live verdict but remained listing-heavy because many accepted collection rows carried only a generic CTA link text (`Read More`) instead of the nearby newsroom headline.
+- Что изменилось:
+  - `services/fetchers/src/web-ingestion.ts` now infers collection-card titles from nearby `h1`-`h4` and `field--name-title` context when the anchor text is a generic CTA, so collection discovery passes the real article headline into classification instead of the CTA string;
+  - `tests/unit/ts/web-ingestion-browser.test.ts` now covers this exact newsroom-card pattern.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/web-ingestion-browser.test.ts`
+  - `pnpm test:website:compose`
+  - `node infra/scripts/test-live-website-matrix.mjs --site="EUAA Press Releases"`
+- Live-result summary:
+  - focused rerun evidence bundle: `/tmp/newsportal-live-website-matrix-6b9b2209-d5af-4aaf-b6a4-5b88f7268e12.json`
+  - `EUAA Press Releases` stayed `observed_expected_shape`, but the accepted first-poll mix improved from `12 listing / 3 editorial` to `8 listing / 7 editorial` with the same cheap `collection_page`-only discovery path.
+- Риски или gaps:
+  - repeat poll still showed a small residual (`2` `editorial -> listing` transitions during enrichment), so the next newsroom-precision patch should look at enrichment-time downgrades instead of collection-link title inference.
+- Follow-up:
+  - none required for this patch; only open a new item if the user wants to chase the remaining enrichment-side newsroom downgrades.
+
+### 2026-04-16 — SPIKE-WEBSITE-ALTERNATE-LIVE-MATRIX-2026-04-16
+
+- Тип записи: spike archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь попросил проверить `website` ingestion на полностью другом real-world cohort из 16 сайтов, чтобы понять, всплывут ли новые live-only проблемы beyond the first website matrix.
+- Что изменилось:
+  - `infra/scripts/test-live-website-matrix.mjs` now supports named live-site variants through `--variant=<variantKey>` instead of a single hardcoded matrix, preserving the original baseline while adding `alt_2026_04_16`;
+  - the alternate variant covers four completely new sites in each existing ingress cohort:
+    - `static_editorial`: `National Archives Press Releases`, `DOJ Press Releases`, `ESA Newsroom`, `IMF News`
+    - `documents_downloads`: `ECB Tenders`, `EASA Procurement`, `EMSA Procurement`, `EUROCONTROL Procurement`
+    - `public_changelog`: `Supabase Changelog`, `Vercel Changelog`, `PlanetScale Changelog`, `Render Changelog`
+    - `browser_candidate`: `Linear Changelog`, `Framer Updates`, `Webflow Updates`, `ClickUp Changelog`
+  - the harness now records the chosen `variantKey` in the evidence bundle name/report, classifies `robots.txt` blocks as truthful unsupported outcomes, and preserves cleanup-attempt status even when a live site fails during `run:once`.
+- Что проверено:
+  - `node infra/scripts/test-live-website-matrix.mjs --help`
+  - `pnpm test:website:compose`
+  - `node infra/scripts/test-live-website-matrix.mjs --variant=alt_2026_04_16`
+  - `pnpm test:website:compose`
+  - `node infra/scripts/test-live-website-matrix.mjs --variant=alt_2026_04_16`
+  - `git diff --check -- docs/work.md docs/history.md infra/scripts/test-live-website-matrix.mjs`
+- Live-result summary:
+  - first-pass evidence bundle: `/tmp/newsportal-live-website-matrix-alt_2026_04_16-d06a0625-e206-42c4-926c-6fe8f734d138.json`
+  - final evidence bundle after harness truthfulness fix: `/tmp/newsportal-live-website-matrix-alt_2026_04_16-2b806fa0-7b80-4e29-b3e7-2e558bd955d5.json`
+  - final alternate cohort summary on `2026-04-16`: `11 observed_expected_shape`, `2 observed_partial_or_empty_shape`, `3 observed_truthful_unsupported_or_blocked`, `0 unexpected_failure`, `12` total conditional-request hits, and `0` cleanup residuals
+  - `static_editorial` on the alternate cohort behaved similarly to the first matrix but with a different weak spot: `National Archives`, `ESA`, and `IMF` were `observed_expected_shape`, while `DOJ Press Releases` stayed listing-only/partial rather than clean editorial projection
+  - `documents_downloads` remained strong on four completely different portals: `ECB`, `EASA`, `EMSA`, and `EUROCONTROL` all landed in `observed_expected_shape`
+  - `public_changelog` again proved strong on a different vendor cohort: `Supabase`, `Vercel`, `PlanetScale`, and `Render` all landed in `observed_expected_shape`
+  - the alternate `browser_candidate` cohort surfaced genuinely new external classes:
+    - `Webflow Updates` consistently failed with `403` `cloudflare_js_challenge`
+    - `ClickUp Changelog` was truthfully blocked by `robots.txt`
+    - `Linear Changelog` still produced useful static/editorial rows but the required browser-validation lane hit `cloudflare_js_challenge`, so the overall verdict remains truthful unsupported/blocked for that cohort
+    - `Framer Updates` stayed partial rather than fully blocked, confirming that browser-heavy weakness is not only anti-bot but also quality/yield variability on a different site family
+- Риски или gaps:
+  - browser-heavy public sites remain the weakest live cohort even on a fully different site set; the spike did not reveal a new product-side bug that justifies redesign, but it did confirm a wider class of truthful external constraints (`Cloudflare JS challenge`, `robots.txt`) than the first matrix showed;
+  - `DOJ Press Releases` provides a new non-blocked but weak editorial case, so if the user wants the next small live-quality uplift, newsroom/listing differentiation should now be tested against both EU-style and U.S. government press pages rather than only the original EU newsroom cohort.
+- Follow-up:
+  - no code follow-up is required by default; open a new bounded item only if the user wants to chase either the new `DOJ` listing-only partial shape or the broader browser-candidate truthfulness/coverage gap.

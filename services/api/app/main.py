@@ -6365,12 +6365,18 @@ def list_fetch_runs(
         params.append(channel_id)
 
     where_clause = f"where {' and '.join(fetch_filters)}" if fetch_filters else ""
+    if where_clause:
+        where_clause = where_clause.replace("channel_id", "cfr.channel_id")
     fetch_run_select = f"""
-        select *
-        from channel_fetch_runs
+        select
+          cfr.*,
+          sc.name as channel_name
+        from channel_fetch_runs cfr
+        left join source_channels sc on sc.channel_id = cfr.channel_id
         {where_clause}
-        order by started_at desc
+        order by cfr.started_at desc
     """
+
     paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
         page, page_size, limit
     )
@@ -6380,7 +6386,7 @@ def list_fetch_runs(
             tuple([*params, limit]),
         )
 
-    count_sql = "select count(*)::int as total from channel_fetch_runs"
+    count_sql = "select count(*)::int as total from channel_fetch_runs cfr"
     if where_clause:
         count_sql = f"{count_sql}\n{where_clause}"
     total = query_count(count_sql, tuple(params))

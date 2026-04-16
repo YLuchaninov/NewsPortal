@@ -445,6 +445,8 @@ async function seedWebsiteChannel(
     name: string;
     fetchUrl: string;
     browserFallbackEnabled: boolean;
+    sitemapDiscoveryEnabled?: boolean;
+    feedDiscoveryEnabled?: boolean;
     authorizationHeader?: string | null;
   }
 ): Promise<string> {
@@ -484,8 +486,8 @@ async function seedWebsiteChannel(
         requestTimeoutMs: 5000,
         totalPollTimeoutMs: 30000,
         userAgent: "NewsPortalFetchers/ChannelAuthSmoke",
-        sitemapDiscoveryEnabled: true,
-        feedDiscoveryEnabled: true,
+        sitemapDiscoveryEnabled: input.sitemapDiscoveryEnabled ?? true,
+        feedDiscoveryEnabled: input.feedDiscoveryEnabled ?? true,
         collectionDiscoveryEnabled: true,
         downloadDiscoveryEnabled: false,
         browserFallbackEnabled: input.browserFallbackEnabled,
@@ -749,6 +751,8 @@ async function main(): Promise<void> {
       name: `Website browser auth ${runId}`,
       fetchUrl: fixtureServer.browserWebsiteUrl,
       browserFallbackEnabled: true,
+      sitemapDiscoveryEnabled: false,
+      feedDiscoveryEnabled: false,
       authorizationHeader: websiteAuthorizationHeader
     });
     channelIds.push(websiteBrowserAuthChannelId);

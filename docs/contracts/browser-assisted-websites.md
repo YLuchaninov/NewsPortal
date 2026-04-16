@@ -55,6 +55,14 @@ Cheap modes остаются canonical first pass:
 - cheap modes не вернули acceptable resources; or
 - hard-site evidence already says browser help is recommended.
 
+Bounded operator/site tuning may additionally use the tiny `config_json.curated` slice:
+
+- `preferCollectionDiscovery`
+- `preferBrowserFallback`
+- narrow URL-pattern kind hints for `editorial`, `listing`, `entity`, `document`, and `data_file`
+
+This slice is intentionally not a general per-site scripting or selector framework.
+
 `maxBrowserFetchesPerPoll` caps the number of seed pages that browser assistance may open during one poll/probe.
 
 Browser assistance не должна auto-convert `website` source into `rss`, even if hidden feed hints are discovered. Hidden feeds remain hints inside discovery/provenance state only.
@@ -103,6 +111,10 @@ Allowed persistence surfaces:
 
 - `source_channels.config_json` for non-secret website config
 - `source_channels.auth_config_json` for static channel auth
+- `crawl_policy_cache.request_validators_json` and `crawl_policy_cache.response_cache_json` for domain-scoped conditional-request validators/cacheable text payloads (`homepage`, `robots`, `llms`, discovered sitemap/feed URLs)
+- `channel_fetch_runs.provider_metrics_json` for per-run website telemetry such as `staticAcceptedCount`, `browserAttempted`, `browserOnlyAcceptedCount`, and `conditionalRequestHits`
+- `web_resources.classification_json` for additive `discovery`, `enrichment`, `resolved`, and `transition` classifier truth
+- `web_resources.attributes_json.observability` and `web_resources.attributes_json.editorialExtraction` for classifier signals plus editorial body-uplift / extractor gating telemetry
 - `web_resources.raw_payload_json` / `raw_signals`
 - website cursor JSON `modes`
 
@@ -138,8 +150,24 @@ Current observability lane:
 
 - `/admin/resources`
 - `/admin/resources/[resourceId]`
+- `/maintenance/fetch-runs`
+- existing admin fetch-run summaries on `/` and `/observability`
 
 Browser-assisted rows should render truthful provenance such as DOM vs network capture source and any recorded challenge hint.
+Fetch-run rows for `website` channels should also preserve the cheap-vs-browser split (`staticAcceptedCount`, `browserAcceptedCount`, `browserOnlyAcceptedCount`) and conditional-request reuse signals instead of hiding browser uplift inside generic fetched/new counters.
+When browser assistance is recommended or skipped, `provider_metrics_json.browserRecommendationReasons` should explain why, so operators can distinguish `browser_disabled`, `static_no_change_empty`, and similar cheap-first decisions from real browser execution.
+
+## Editorial extraction scope
+
+`@extractus/article-extractor` remains bounded to post-discovery editorial enrichment only.
+
+Required v1 behavior:
+
+- browser probing, cheap/static discovery, and acquisition-time classification must not call `article-extractor`;
+- editorial enrichment should first attempt heuristic/base extraction from the already fetched HTML;
+- `article-extractor` may run only when the base editorial extraction is materially incomplete;
+- when it runs, it should reuse the already fetched HTML rather than paying a second network fetch when the library supports that path;
+- per-resource telemetry should record whether the extractor ran, why it ran, whether fetch reuse happened, and what body-uplift it produced.
 
 ## Failure contract
 
@@ -176,3 +204,5 @@ Capability closeout requires deterministic local proof:
 - same-origin browser-assisted requests may use the configured `Authorization` header without leaking it to cross-origin assets or requests;
 - unsupported challenges fail explicitly;
 - no live internet target is required.
+
+When the current work item explicitly asks for bounded real-site validation after deterministic proof, that live pass remains supplemental only: it may confirm telemetry quality and classify external residuals, but it does not replace the canonical local proof above.

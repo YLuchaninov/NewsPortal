@@ -319,6 +319,7 @@ create table if not exists channel_fetch_runs (
   duplicate_suppressed_count integer not null default 0,
   cursor_changed boolean not null default false,
   error_text text,
+  provider_metrics_json jsonb not null default '{}'::jsonb,
   schedule_snapshot_json jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   constraint channel_fetch_runs_provider_type_check
@@ -343,6 +344,8 @@ create table if not exists channel_fetch_runs (
     check (new_article_count >= 0),
   constraint channel_fetch_runs_duplicate_suppressed_count_check
     check (duplicate_suppressed_count >= 0),
+  constraint channel_fetch_runs_provider_metrics_json_is_object_check
+    check (jsonb_typeof(provider_metrics_json) = 'object'),
   constraint channel_fetch_runs_finished_after_started_check
     check (finished_at >= started_at)
 );

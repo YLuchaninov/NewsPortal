@@ -23,9 +23,15 @@ const DATE_PATH_PATTERN = /\/20\d{2}\/\d{2}\/\d{2}\//;
 const DOWNLOAD_EXTENSION_PATTERN = /\.(pdf|csv|xlsx|xls|json|xml|zip)(?:$|\?)/i;
 const FEED_HINT_PATTERN = /(rss|atom|feed)(?:\.xml)?(?:$|\?)/i;
 const CAPTCHA_PATTERN = /\b(captcha|recaptcha|hcaptcha|cf-turnstile|turnstile)\b/i;
-const LOGIN_PATTERN = /\b(sign in|log in|login required|member login|password)\b/i;
+const LOGIN_GATE_TEXT_PATTERN =
+  /\b(login required|member login|sign in to continue|log in to continue|please sign in|please log in|password required|enter your password|forgot your password)\b/i;
+const LOGIN_HEADING_PATTERN = /<(?:title|h1|h2)\b[^>]*>[\s\S]{0,160}\b(sign in|log in)\b/i;
+const PASSWORD_INPUT_PATTERN = /<input\b[^>]*type=["']password["'][^>]*>/i;
+const LOGIN_FORM_PATTERN =
+  /<form\b[\s\S]{0,4000}\b(sign in|log in|password|email|username|continue with (?:google|github|sso|email))\b/i;
 const CLOUDFLARE_PATTERN = /\b(cloudflare|checking your browser|cf-browser-verification|just a moment)\b/i;
-const ACCESS_BLOCK_PATTERN = /\b(access denied|bot detected|request blocked|forbidden)\b/i;
+const ACCESS_BLOCK_PATTERN =
+  /\b(access denied|bot detected|request blocked|forbidden|powered and protected by akamai|akamai|bm-verify)\b|\/_sec\/verify\b/i;
 
 export type WebsiteDiscoveryMode =
   | "sitemap"
@@ -41,6 +47,33 @@ export type WebsiteChallengeKind =
   | "cloudflare_js_challenge"
   | "unsupported_block";
 
+type ConditionalFetchRole = "robots" | "homepage" | "llms" | "sitemap" | "feed";
+
+export interface WebsiteConditionalRequestState {
+  etag: string | null;
+  lastModified: string | null;
+  finalUrl: string | null;
+  contentType: string | null;
+  httpStatus: number | null;
+  updatedAt: string | null;
+}
+
+export interface WebsiteCachedTextResponseState {
+  url: string;
+  status: number;
+  contentType: string | null;
+  text: string;
+  updatedAt: string;
+}
+
+export interface WebsiteConditionalRequestHits {
+  homepage: number;
+  sitemap: number;
+  feed: number;
+  robots: number;
+  llms: number;
+}
+
 export interface CrawlPolicyCacheRow {
   domain: string;
   robots_txt_url: string;
@@ -49,10 +82,13 @@ export interface CrawlPolicyCacheRow {
   feed_urls: string[];
   llms_txt_url: string | null;
   llms_txt_body: string | null;
+  request_validators_json: Record<string, unknown>;
+  response_cache_json: Record<string, unknown>;
   fetched_at: string;
   expires_at: string;
   fetch_error: string | null;
   http_status: number | null;
+  conditional_request_hits?: WebsiteConditionalRequestHits;
 }
 
 export interface CursorSnapshot {
@@ -104,8 +140,25 @@ export interface WebsiteCapabilities {
 export interface WebsiteBrowserAttempt {
   attempted: boolean;
   recommended: boolean;
+  recommendationReasons: string[];
   challengeKind: WebsiteChallengeKind | null;
   blockedReason: string | null;
+}
+
+export interface WebsiteDiscoveryMetrics {
+  staticCandidateCount: number;
+  staticAcceptedCount: number;
+  browserRecommended: boolean;
+  browserAttempted: boolean;
+  browserRecommendationReasons: string[];
+  browserChallengeKind: WebsiteChallengeKind | null;
+  browserDiscoveredCount: number;
+  browserAcceptedCount: number;
+  browserOnlyAcceptedCount: number;
+  finalAcceptedCount: number;
+  modeCounts: Record<string, number>;
+  resourceKindCounts: Record<string, number>;
+  conditionalRequestHits: WebsiteConditionalRequestHits;
 }
 
 export interface DiscoveryWebsiteProbeResult {
@@ -130,12 +183,13 @@ export interface DiscoveryWebsiteProbeResult {
   detail_count_estimate: number;
   listing_count_estimate: number;
   document_count_estimate: number;
-  sample_resources: Array<{
-    url: string;
-    title: string | null;
-    kind: ResourceKind;
-    discovery_source: string;
-  }>;
+    sample_resources: Array<{
+      url: string;
+      title: string | null;
+      kind: ResourceKind;
+      discovery_source: string;
+      reasons?: string[];
+    }>;
   is_news_site: boolean;
   has_hidden_rss: boolean;
   hidden_rss_urls: string[];
@@ -149,6 +203,7 @@ export interface DiscoveryWebsiteProbeResult {
     date: string | null;
   }>;
   browser_assisted_recommended: boolean;
+  browser_assisted_recommendation_reasons?: string[];
   challenge_kind: WebsiteChallengeKind | null;
 }
 
@@ -171,6 +226,9 @@ export interface RuntimeCrawlPolicy {
   expiresAt: string;
   fetchError: string | null;
   httpStatus: number | null;
+  requestValidators: Record<string, WebsiteConditionalRequestState>;
+  responseCache: Record<string, WebsiteCachedTextResponseState>;
+  conditionalRequestHits: WebsiteConditionalRequestHits;
   isAllowed: (rawUrl: string, userAgent: string) => boolean;
   crawlDelaySeconds: (userAgent: string) => number | null;
 }
@@ -178,6 +236,99 @@ export interface RuntimeCrawlPolicy {
 interface WebsiteAuthContext {
   channelUrl: string;
   authConfig: unknown;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+function createEmptyConditionalRequestHits(): WebsiteConditionalRequestHits {
+  return {
+    homepage: 0,
+    sitemap: 0,
+    feed: 0,
+    robots: 0,
+    llms: 0,
+  };
+}
+
+function cloneConditionalRequestHits(
+  input?: Partial<WebsiteConditionalRequestHits> | null
+): WebsiteConditionalRequestHits {
+  const toCount = (value: unknown): number => {
+    const numeric = Number(value ?? 0);
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+  return {
+    homepage: toCount(input?.homepage),
+    sitemap: toCount(input?.sitemap),
+    feed: toCount(input?.feed),
+    robots: toCount(input?.robots),
+    llms: toCount(input?.llms),
+  };
+}
+
+function readConditionalRequestStates(
+  value: unknown
+): Record<string, WebsiteConditionalRequestState> {
+  const states: Record<string, WebsiteConditionalRequestState> = {};
+  for (const [key, rawState] of Object.entries(asRecord(value))) {
+    const state = asRecord(rawState);
+    states[key] = {
+      etag: readOptionalString(state.etag),
+      lastModified: readOptionalString(state.lastModified),
+      finalUrl: readOptionalString(state.finalUrl),
+      contentType: readOptionalString(state.contentType),
+      httpStatus:
+        typeof state.httpStatus === "number" && Number.isFinite(state.httpStatus)
+          ? state.httpStatus
+          : (() => {
+              const parsed = Number.parseInt(String(state.httpStatus ?? ""), 10);
+              return Number.isFinite(parsed) ? parsed : null;
+            })(),
+      updatedAt: readOptionalString(state.updatedAt),
+    };
+  }
+  return states;
+}
+
+function readCachedTextResponses(
+  value: unknown
+): Record<string, WebsiteCachedTextResponseState> {
+  const states: Record<string, WebsiteCachedTextResponseState> = {};
+  for (const [key, rawState] of Object.entries(asRecord(value))) {
+    const state = asRecord(rawState);
+    const url = readOptionalString(state.url);
+    const text = typeof state.text === "string" ? state.text : null;
+    if (!url || text == null) {
+      continue;
+    }
+    const status =
+      typeof state.status === "number" && Number.isFinite(state.status)
+        ? state.status
+        : (() => {
+            const parsed = Number.parseInt(String(state.status ?? ""), 10);
+            return Number.isFinite(parsed) ? parsed : 200;
+          })();
+    states[key] = {
+      url,
+      status,
+      contentType: readOptionalString(state.contentType),
+      text,
+      updatedAt: readOptionalString(state.updatedAt) ?? new Date(0).toISOString(),
+    };
+  }
+  return states;
+}
+
+function buildConditionalStateKey(role: ConditionalFetchRole, rawUrl?: string): string {
+  if (!rawUrl || ["robots", "homepage", "llms"].includes(role)) {
+    return role;
+  }
+  return `${role}:${canonicalizeUrl(rawUrl)}`;
 }
 
 function readOptionalString(value: unknown): string | null {
@@ -193,6 +344,17 @@ function normalizeText(value: string): string {
   return collapseWhitespace(decodeHtmlEntities(stripHtmlTags(value)));
 }
 
+function detectLoginGate(html: string | null, normalizedText: string): boolean {
+  const source = html ?? "";
+  if (PASSWORD_INPUT_PATTERN.test(source)) {
+    return true;
+  }
+  if (LOGIN_GATE_TEXT_PATTERN.test(normalizedText)) {
+    return true;
+  }
+  return LOGIN_HEADING_PATTERN.test(source) && LOGIN_FORM_PATTERN.test(source);
+}
+
 function detectWebsiteChallengeKind(html: string | null, textContent?: string | null): WebsiteChallengeKind | null {
   const normalizedText = normalizeText(textContent ?? html ?? "");
   const haystack = `${html ?? ""}\n${normalizedText}`;
@@ -202,7 +364,7 @@ function detectWebsiteChallengeKind(html: string | null, textContent?: string | 
   if (CAPTCHA_PATTERN.test(haystack)) {
     return "captcha";
   }
-  if (LOGIN_PATTERN.test(haystack)) {
+  if (detectLoginGate(html, normalizedText)) {
     return "login";
   }
   if (CLOUDFLARE_PATTERN.test(haystack)) {
@@ -251,6 +413,12 @@ function chooseLatest(left: string | null, right: string | null): string | null 
   return compareIsoTimestamps(left, right) >= 0 ? left : right;
 }
 
+function appendItems<T>(target: T[], incoming: readonly T[]): void {
+  for (const item of incoming) {
+    target.push(item);
+  }
+}
+
 function extractAttribute(tagSource: string, attributeName: string): string | null {
   const expression = new RegExp(`${attributeName}\\s*=\\s*["']([^"']+)["']`, "i");
   return readOptionalString(tagSource.match(expression)?.[1] ?? null);
@@ -267,6 +435,121 @@ function extractAnchorLinks(html: string, baseUrl: string): Array<{ url: string;
     links.push({
       url: normalizedUrl,
       text: normalizeText(match[2] ?? "")
+    });
+  }
+  return links;
+}
+
+interface CollectionLinkCandidate {
+  url: string;
+  text: string;
+  summary: string | null;
+  publishedAt: string | null;
+}
+
+const COLLECTION_NAV_TEXT_PATTERN =
+  /^(read more|learn more|more|next|previous|older|newer|view all|all news|all updates|contact|about|privacy|terms|careers)$/i;
+const COLLECTION_CONTEXT_NOISE_PATTERN =
+  /\b(menu_level|submenu|no_menu_link|usa-nav|breadcrumb|skip to main|main navigation)\b|<\/?[a-z][^>]*>|\b[a-z0-9_-]+__\d+\b/i;
+
+function isLikelyContentContext(value: string | null | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  return !COLLECTION_CONTEXT_NOISE_PATTERN.test(value);
+}
+
+function extractCollectionTitleHint(contextHtml: string): string | null {
+  const headingMatch = contextHtml.match(
+    /<(?:h1|h2|h3|h4)\b[^>]*>([\s\S]*?)<\/(?:h1|h2|h3|h4)>/i
+  );
+  const headingText = normalizeText(headingMatch?.[1] ?? "");
+  if (headingText.length >= 16) {
+    return headingText;
+  }
+
+  const titledFieldMatch = contextHtml.match(
+    /field--name-title[\s\S]{0,240}?>([\s\S]*?)<\/span>/i
+  );
+  const titledFieldText = normalizeText(titledFieldMatch?.[1] ?? "");
+  if (titledFieldText.length >= 16) {
+    return titledFieldText;
+  }
+
+  return null;
+}
+
+function extractPublishedAtHint(value: string): string | null {
+  const datetime = readOptionalString(value.match(/\bdatetime=["']([^"']+)["']/i)?.[1] ?? null);
+  if (datetime) {
+    const parsed = Date.parse(datetime);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  const isoDate = readOptionalString(value.match(/\b(20\d{2}-\d{2}-\d{2})(?:[tT ][0-9:.\-+Z]+)?\b/)?.[1] ?? null);
+  if (isoDate) {
+    const parsed = Date.parse(isoDate);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  const textualDate = readOptionalString(
+    value.match(
+      /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+20\d{2}\b/i
+    )?.[0] ?? null
+  );
+  if (textualDate) {
+    const parsed = Date.parse(textualDate);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return null;
+}
+
+export function extractCollectionLinkCandidates(html: string, baseUrl: string): CollectionLinkCandidate[] {
+  const links: CollectionLinkCandidate[] = [];
+  const matches = html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi);
+  for (const match of matches) {
+    const url = normalizeUrl(match[1] ?? "", baseUrl);
+    if (!url) {
+      continue;
+    }
+    const rawText = normalizeText(match[2] ?? "");
+    const index = typeof match.index === "number" ? match.index : 0;
+    const source = match[0] ?? "";
+    const contextHtml = html.slice(Math.max(0, index - 220), Math.min(html.length, index + source.length + 420));
+    const text =
+      COLLECTION_NAV_TEXT_PATTERN.test(rawText)
+        ? extractCollectionTitleHint(contextHtml) ?? rawText
+        : rawText;
+    const publishedAt = extractPublishedAtHint(contextHtml);
+    const contextText = normalizeText(contextHtml)
+      .replace(rawText, " ")
+      .replace(text, " ")
+      .replace(/\b(read more|learn more|continue reading)\b/gi, " ")
+      .trim();
+    const summaryCandidate =
+      contextText.length > Math.max(40, text.length + 16)
+        ? contextText.slice(0, 320)
+        : null;
+    const summary = isLikelyContentContext(summaryCandidate) ? summaryCandidate : null;
+    if (
+      !text ||
+      !isLikelyContentContext(text) ||
+      (COLLECTION_NAV_TEXT_PATTERN.test(text) && !publishedAt && !summary)
+    ) {
+      continue;
+    }
+    links.push({
+      url,
+      text,
+      summary,
+      publishedAt,
     });
   }
   return links;
@@ -319,6 +602,55 @@ function extractDefaultCollectionUrls(html: string, baseUrl: string): string[] {
   return Array.from(new Set(candidates)).slice(0, MAX_COLLECTION_FETCHES);
 }
 
+function isRootPath(pathname: string): boolean {
+  return pathname === "" || pathname === "/";
+}
+
+function shouldKeepDefaultCollectionSeed(channelUrl: string, seedUrl: string): boolean {
+  try {
+    const channelPath = new URL(channelUrl).pathname.toLowerCase();
+    const seedPath = new URL(seedUrl).pathname.toLowerCase();
+    if (isRootPath(channelPath)) {
+      return true;
+    }
+    if (channelPath === seedPath) {
+      return true;
+    }
+    const channelSegments = channelPath.split("/").filter(Boolean);
+    const seedSegments = seedPath.split("/").filter(Boolean);
+    if (channelSegments.length === 0 || seedSegments.length === 0) {
+      return false;
+    }
+    if (channelSegments[0] === seedSegments[0]) {
+      return true;
+    }
+    return (
+      channelPath.startsWith(`${seedPath}/`) ||
+      seedPath.startsWith(`${channelPath}/`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function selectCollectionSeedUrls(input: {
+  channelUrl: string;
+  defaultCollectionUrls: readonly string[];
+  configuredSeedUrls: readonly string[];
+}): string[] {
+  return Array.from(
+    new Set([
+      input.channelUrl,
+      ...input.defaultCollectionUrls.filter((seedUrl) =>
+        shouldKeepDefaultCollectionSeed(input.channelUrl, seedUrl)
+      ),
+      ...input.configuredSeedUrls
+        .map((url) => normalizeUrl(url, input.channelUrl))
+        .filter((url): url is string => Boolean(url)),
+    ])
+  ).slice(0, MAX_COLLECTION_FETCHES);
+}
+
 function extractDownloadUrls(
   html: string,
   baseUrl: string,
@@ -348,11 +680,58 @@ function pathContainsSegment(pathname: string, segments: readonly string[]): boo
 
 function inferResourceKindsFromPath(pathname: string): ResourceKind[] {
   const lowerPath = pathname.toLowerCase();
+  const segments = lowerPath.split("/").filter(Boolean);
+  const depth = segments.length;
+  const lastSegment = segments.at(-1) ?? "";
+  const collectionEditorialSegments = new Set([
+    "changelog",
+    "release-notes",
+    "release-note",
+    "announcements",
+    "announcement",
+    "press-releases",
+    "press-release",
+    "newsroom",
+    "updates",
+    "update"
+  ]);
+  const editorialSegments = new Set([
+    "news",
+    "blog",
+    "blogs",
+    "article",
+    "articles",
+    "story",
+    "stories",
+    "post",
+    "posts"
+  ]);
   if (DOWNLOAD_EXTENSION_PATTERN.test(lowerPath)) {
     if (/\.(csv|xlsx|xls|json|xml|zip)(?:$|\?)/i.test(lowerPath)) {
       return ["data_file"];
     }
     return ["document"];
+  }
+  if (pathContainsSegment(lowerPath, [
+    "changelog",
+    "release-notes",
+    "release-note",
+    "announcements",
+    "announcement",
+    "press-releases",
+    "press-release",
+    "newsroom",
+    "updates",
+    "update"
+  ])) {
+    if (
+      DATE_PATH_PATTERN.test(lowerPath) ||
+      (depth >= 2 && !collectionEditorialSegments.has(lastSegment)) ||
+      /-\d{4,}$/.test(lastSegment)
+    ) {
+      return ["editorial"];
+    }
+    return ["listing"];
   }
   if (pathContainsSegment(lowerPath, [
     "search",
@@ -368,6 +747,26 @@ function inferResourceKindsFromPath(pathname: string): ResourceKind[] {
     "directory",
     "directories"
   ])) {
+    return ["listing"];
+  }
+  if (pathContainsSegment(lowerPath, [
+    "news",
+    "blog",
+    "blogs",
+    "article",
+    "articles",
+    "story",
+    "stories",
+    "post",
+    "posts"
+  ])) {
+    if (
+      DATE_PATH_PATTERN.test(lowerPath) ||
+      (depth >= 2 && !editorialSegments.has(lastSegment)) ||
+      /[-_][a-z0-9]{5,}/i.test(lastSegment)
+    ) {
+      return ["editorial"];
+    }
     return ["listing"];
   }
   if (pathContainsSegment(lowerPath, [
@@ -388,17 +787,7 @@ function inferResourceKindsFromPath(pathname: string): ResourceKind[] {
   ])) {
     return ["entity"];
   }
-  if (DATE_PATH_PATTERN.test(lowerPath) || pathContainsSegment(lowerPath, [
-    "news",
-    "blog",
-    "blogs",
-    "article",
-    "articles",
-    "story",
-    "stories",
-    "post",
-    "posts"
-  ])) {
+  if (DATE_PATH_PATTERN.test(lowerPath)) {
     return ["editorial"];
   }
   return ["unknown"];
@@ -417,17 +806,39 @@ export function classifyResourceCandidate(input: {
   title?: string | null;
   summary?: string | null;
   hintedKinds?: readonly ResourceKind[];
+  overrideKinds?: readonly ResourceKind[];
   structuredTypes?: readonly string[];
   hasRepeatedCards?: boolean;
   hasPagination?: boolean;
   hasDownloads?: boolean;
+  publishedAtHint?: string | null;
+  discoverySource?: string | null;
 }): { kind: ResourceKind; confidence: number; reasons: string[] } {
   const scores = new Map<ResourceKind, number>(RESOURCE_KINDS.map((kind) => [kind, 0]));
   const reasons: string[] = [];
+  const titleText = normalizeText(input.title ?? "");
+  const summaryText = normalizeText(input.summary ?? "");
+  const combinedText = `${titleText} ${summaryText}`.trim();
   const hintedKinds = (input.hintedKinds ?? []).filter((kind) => kind !== "unknown");
+  const editorialHinted = hintedKinds.includes("editorial");
+  const listingHinted = hintedKinds.includes("listing");
+  const hasEditorialStructuredType = (input.structuredTypes ?? []).some((structuredType) =>
+    /(newsarticle|article|blogposting)/i.test(structuredType)
+  );
+  const detailLikeEditorialSignals =
+    editorialHinted &&
+    !listingHinted &&
+    (Boolean(input.publishedAtHint) ||
+      titleText.length >= 24 ||
+      summaryText.length >= 80 ||
+      hasEditorialStructuredType);
   for (const kind of hintedKinds) {
     scores.set(kind, (scores.get(kind) ?? 0) + 3);
     reasons.push(`hint:${kind}`);
+  }
+  for (const kind of (input.overrideKinds ?? []).filter((candidate) => candidate !== "unknown")) {
+    scores.set(kind, (scores.get(kind) ?? 0) + 5);
+    reasons.push(`override:${kind}`);
   }
 
   for (const structuredType of input.structuredTypes ?? []) {
@@ -447,17 +858,59 @@ export function classifyResourceCandidate(input: {
   }
 
   if (input.hasRepeatedCards) {
-    scores.set("listing", (scores.get("listing") ?? 0) + 3);
-    reasons.push("layout:repeated_cards");
+    scores.set("listing", (scores.get("listing") ?? 0) + (detailLikeEditorialSignals ? 1 : 3));
+    reasons.push(detailLikeEditorialSignals ? "layout:repeated_cards_ambient" : "layout:repeated_cards");
   }
   if (input.hasPagination) {
-    scores.set("listing", (scores.get("listing") ?? 0) + 2);
-    reasons.push("layout:pagination");
+    scores.set("listing", (scores.get("listing") ?? 0) + (detailLikeEditorialSignals ? 1 : 2));
+    reasons.push(detailLikeEditorialSignals ? "layout:pagination_ambient" : "layout:pagination");
   }
   if (input.hasDownloads) {
     scores.set("document", (scores.get("document") ?? 0) + 1);
     scores.set("data_file", (scores.get("data_file") ?? 0) + 1);
     reasons.push("layout:downloads");
+  }
+  if (editorialHinted && !listingHinted && titleText.length >= 24) {
+    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
+    reasons.push("path:editorial_detail");
+  }
+  if (input.publishedAtHint) {
+    scores.set("editorial", (scores.get("editorial") ?? 0) + 3);
+    reasons.push("signal:published_at");
+  }
+  if (titleText.length >= 24 && summaryText.length >= 80) {
+    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
+    reasons.push("signal:title_summary");
+  }
+  if (
+    input.discoverySource === "collection_page" &&
+    input.hasRepeatedCards &&
+    titleText.length >= 20 &&
+    (Boolean(input.publishedAtHint) || summaryText.length >= 80)
+  ) {
+    scores.set("editorial", (scores.get("editorial") ?? 0) + 3);
+    reasons.push("collection:article_card");
+  }
+  if (/\b(press release|announc(?:e|es|ing)|statement|policy update|launch(?:es|ed)?|introduc(?:e|es|ed)|what'?s new)\b/i.test(combinedText)) {
+    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
+    reasons.push("text:editorial");
+  }
+  if (/\b(changelog|release notes|release note|all updates|latest news|archive)\b/i.test(combinedText)) {
+    scores.set("listing", (scores.get("listing") ?? 0) + 2);
+    reasons.push("text:listing");
+  }
+  if (/\b(procurement|tender|request for proposal|rfp|invitation to bid|bid notice|call for tender)\b/i.test(combinedText)) {
+    scores.set("listing", (scores.get("listing") ?? 0) + 2);
+    scores.set("document", (scores.get("document") ?? 0) + 1);
+    reasons.push("text:procurement");
+  }
+  if (
+    detailLikeEditorialSignals &&
+    input.discoverySource !== "collection_page" &&
+    (Boolean(input.publishedAtHint) || summaryText.length >= 80)
+  ) {
+    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
+    reasons.push("detail:editorial_page");
   }
 
   const candidates = Array.from(scores.entries()).sort((left, right) => right[1] - left[1]);
@@ -490,6 +943,7 @@ function dedupeResources(resources: readonly DiscoveredWebsiteResource[]): Disco
       ...existing,
       title: existing.title ?? resource.title,
       summary: existing.summary ?? resource.summary,
+      parentUrl: existing.parentUrl ?? resource.parentUrl,
       publishedAt: chooseLatest(existing.publishedAt, resource.publishedAt),
       modifiedAt: chooseLatest(existing.modifiedAt, resource.modifiedAt),
       freshnessMarkerType:
@@ -552,7 +1006,7 @@ function parseJsonLdTypes(html: string): string[] {
           continue;
         }
         if (Array.isArray(item)) {
-          stack.push(...item);
+          appendItems(stack, item);
           continue;
         }
         const record = item as Record<string, unknown>;
@@ -640,6 +1094,51 @@ function compilePatterns(patterns: readonly string[]): RegExp[] {
     });
 }
 
+function resolveCuratedOverrideKinds(url: string, config: WebsiteChannelConfig): ResourceKind[] {
+  const kinds: ResourceKind[] = [];
+  const overridePatterns: Array<[ResourceKind, string[]]> = [
+    ["editorial", config.curated.editorialUrlPatterns],
+    ["listing", config.curated.listingUrlPatterns],
+    ["entity", config.curated.entityUrlPatterns],
+    ["document", config.curated.documentUrlPatterns],
+    ["data_file", config.curated.dataFileUrlPatterns],
+  ];
+  for (const [kind, patterns] of overridePatterns) {
+    if (compilePatterns(patterns).some((pattern) => pattern.test(url))) {
+      kinds.push(kind);
+    }
+  }
+  return Array.from(new Set(kinds));
+}
+
+function summarizeResourceKinds(resources: readonly DiscoveredWebsiteResource[]): {
+  editorialCount: number;
+  listingCount: number;
+  unknownCount: number;
+} {
+  let editorialCount = 0;
+  let listingCount = 0;
+  let unknownCount = 0;
+  for (const resource of resources) {
+    if (resource.classification.kind === "editorial") {
+      editorialCount += 1;
+      continue;
+    }
+    if (resource.classification.kind === "listing") {
+      listingCount += 1;
+      continue;
+    }
+    if (resource.classification.kind === "unknown") {
+      unknownCount += 1;
+    }
+  }
+  return {
+    editorialCount,
+    listingCount,
+    unknownCount,
+  };
+}
+
 function matchesSameDomain(url: string, baseDomain: string): boolean {
   try {
     const parsed = new URL(url);
@@ -656,7 +1155,11 @@ function applyPatternFilters(
   const allowPatterns = compilePatterns(config.allowedUrlPatterns);
   const denyPatterns = compilePatterns(config.blockedUrlPatterns);
   return resources.filter((resource) => {
+    const parentUrl = resource.parentUrl;
     if (allowPatterns.length > 0 && !allowPatterns.some((pattern) => pattern.test(resource.url))) {
+      return false;
+    }
+    if (parentUrl && denyPatterns.some((pattern) => pattern.test(parentUrl))) {
       return false;
     }
     return !denyPatterns.some((pattern) => pattern.test(resource.url));
@@ -841,13 +1344,16 @@ export function selectWebsiteDiscoveryModes(
   config: WebsiteChannelConfig
 ): WebsiteDiscoveryMode[] {
   const modes: WebsiteDiscoveryMode[] = [];
+  if (config.collectionDiscoveryEnabled && config.curated.preferCollectionDiscovery) {
+    modes.push("collection");
+  }
   if (capabilities.sitemapUrls.length > 0 && config.sitemapDiscoveryEnabled) {
     modes.push("sitemap");
   }
   if (capabilities.feedUrls.length > 0 && config.feedDiscoveryEnabled) {
     modes.push("feed");
   }
-  if (config.collectionDiscoveryEnabled) {
+  if (config.collectionDiscoveryEnabled && !modes.includes("collection")) {
     modes.push("collection");
   }
   if (capabilities.inlineDataHints) {
@@ -859,28 +1365,90 @@ export function selectWebsiteDiscoveryModes(
   return modes;
 }
 
+function evaluateBrowserAssistedDiscoveryRecommendation(input: {
+  capabilities: WebsiteCapabilities;
+  config: WebsiteChannelConfig;
+  staticResourceCount: number;
+  staticNoChangeEvidence?: boolean;
+  staticEditorialCount?: number;
+  staticListingCount?: number;
+  staticUnknownCount?: number;
+}): { recommended: boolean; reasons: string[] } {
+  if (!input.config.browserFallbackEnabled) {
+    return { recommended: false, reasons: ["browser_disabled"] };
+  }
+
+  const reasons: string[] = [];
+  if (input.capabilities.challengeKindHint) {
+    reasons.push(`challenge_hint:${input.capabilities.challengeKindHint}`);
+  }
+  if (input.config.curated.preferBrowserFallback) {
+    reasons.push("override:prefer_browser");
+  }
+  if (input.staticNoChangeEvidence && input.staticResourceCount === 0 && !input.config.curated.preferBrowserFallback) {
+    return { recommended: false, reasons: ["static_no_change_empty"] };
+  }
+  if (input.staticResourceCount === 0) {
+    reasons.push("static_empty");
+  }
+  if (input.capabilities.jsHeavyHint) {
+    reasons.push("js_heavy_hint");
+  }
+  if (input.capabilities.inlineDataHints) {
+    reasons.push("inline_data_hint");
+  }
+  const staticEditorialSufficient =
+    (input.staticEditorialCount ?? 0) >= 3 &&
+    (input.staticEditorialCount ?? 0) >= Math.max(1, input.staticListingCount ?? 0) &&
+    input.staticResourceCount >= 3;
+  if (staticEditorialSufficient) {
+    reasons.push("static_editorial_sufficient");
+  }
+  if (
+    (input.staticUnknownCount ?? 0) >= 3 &&
+    (input.staticUnknownCount ?? 0) >= (input.staticResourceCount - (input.staticListingCount ?? 0))
+  ) {
+    reasons.push("static_unknown_heavy");
+  }
+  if (
+    (input.staticListingCount ?? 0) > 0 &&
+    (input.staticEditorialCount ?? 0) === 0 &&
+    input.capabilities.jsHeavyHint
+  ) {
+    reasons.push("listing_only_static");
+  }
+
+  const recommended =
+    !staticEditorialSufficient &&
+    (input.config.curated.preferBrowserFallback ||
+      input.staticResourceCount === 0 ||
+      Boolean(input.capabilities.challengeKindHint) ||
+      (input.capabilities.jsHeavyHint &&
+        input.staticResourceCount < Math.min(2, input.config.maxResourcesPerPoll)) ||
+      ((input.capabilities.jsHeavyHint || input.capabilities.inlineDataHints) &&
+        (input.staticUnknownCount ?? 0) >= 3) ||
+      ((input.capabilities.jsHeavyHint || input.capabilities.inlineDataHints) &&
+        (input.staticListingCount ?? 0) > 0 &&
+        (input.staticEditorialCount ?? 0) === 0));
+
+  return {
+    recommended,
+    reasons: Array.from(new Set(reasons)).slice(0, recommended ? 6 : 3),
+  };
+}
+
 export function shouldAttemptBrowserAssistedDiscovery(input: {
   capabilities: WebsiteCapabilities;
   config: WebsiteChannelConfig;
   staticResourceCount: number;
+  staticNoChangeEvidence?: boolean;
 }): boolean {
-  if (!input.config.browserFallbackEnabled) {
-    return false;
-  }
-  if (input.capabilities.challengeKindHint) {
-    return true;
-  }
-  if (input.staticResourceCount === 0) {
-    return true;
-  }
-  return (
-    input.capabilities.jsHeavyHint &&
-    input.staticResourceCount < Math.min(2, input.config.maxResourcesPerPoll)
-  );
+  return evaluateBrowserAssistedDiscoveryRecommendation(input).recommended;
 }
 
 function resourceFromUrl(
   rawUrl: string,
+  config: WebsiteChannelConfig,
   options: {
     baseUrl?: string;
     title?: string | null;
@@ -895,6 +1463,7 @@ function resourceFromUrl(
     hasRepeatedCards?: boolean;
     hasPagination?: boolean;
     hasDownloads?: boolean;
+    overrideKinds?: ResourceKind[];
     rawSignals?: Record<string, unknown>;
   }
 ): DiscoveredWebsiteResource | null {
@@ -902,16 +1471,25 @@ function resourceFromUrl(
   if (!normalizedUrl) {
     return null;
   }
-  const hintedKinds = inferResourceKindsFromUrl(normalizedUrl);
+  const hintedKinds = Array.from(
+    new Set([
+      ...inferResourceKindsFromUrl(normalizedUrl),
+      ...resolveCuratedOverrideKinds(normalizedUrl, config),
+      ...(options.overrideKinds ?? [])
+    ])
+  );
   const classification = classifyResourceCandidate({
     url: normalizedUrl,
     title: options.title,
     summary: options.summary,
     hintedKinds,
+    overrideKinds: resolveCuratedOverrideKinds(normalizedUrl, config),
     structuredTypes: options.structuredTypes,
     hasRepeatedCards: options.hasRepeatedCards,
     hasPagination: options.hasPagination,
-    hasDownloads: options.hasDownloads
+    hasDownloads: options.hasDownloads,
+    publishedAtHint: options.publishedAt,
+    discoverySource: options.discoverySource
   });
   return {
     url: normalizedUrl,
@@ -978,30 +1556,112 @@ async function fetchTextWithAuth(
   url: string,
   timeoutMs: number,
   headers?: HeadersInit,
-  authContext?: WebsiteAuthContext
+  authContext?: WebsiteAuthContext,
+  conditional?: {
+    role: ConditionalFetchRole;
+    key?: string;
+    requestValidators: Record<string, WebsiteConditionalRequestState>;
+    responseCache: Record<string, WebsiteCachedTextResponseState>;
+    conditionalRequestHits?: WebsiteConditionalRequestHits;
+    cacheBody?: boolean;
+  }
 ): Promise<{
   url: string;
   status: number;
   text: string;
   contentType: string | null;
+  etag: string | null;
+  lastModified: string | null;
+  conditionalHit: boolean;
+  reusedCachedBody: boolean;
 }> {
+  const conditionalKey = conditional?.key ?? buildConditionalStateKey(conditional?.role ?? "homepage", url);
+  const priorValidator = conditional ? conditional.requestValidators[conditionalKey] : undefined;
   const response = await fetch(url, {
-    headers: authContext
-      ? buildWebsiteRequestHeaders({
-          requestUrl: url,
-          channelUrl: authContext.channelUrl,
-          authConfig: authContext.authConfig,
-          headers
-        })
-      : headers,
+    headers: (() => {
+      const requestHeaders = authContext
+        ? buildWebsiteRequestHeaders({
+            requestUrl: url,
+            channelUrl: authContext.channelUrl,
+            authConfig: authContext.authConfig,
+            headers
+          })
+        : new Headers(headers);
+      if (priorValidator?.etag) {
+        requestHeaders.set("if-none-match", priorValidator.etag);
+      }
+      if (priorValidator?.lastModified) {
+        requestHeaders.set("if-modified-since", priorValidator.lastModified);
+      }
+      return requestHeaders;
+    })(),
     signal: AbortSignal.timeout(timeoutMs),
     redirect: "follow"
   });
+  const now = new Date().toISOString();
+  const etag = response.headers.get("etag");
+  const lastModified = response.headers.get("last-modified");
+  if (response.status === 304) {
+    const cached = conditional ? conditional.responseCache[conditionalKey] : undefined;
+    if (conditional) {
+      conditional.requestValidators[conditionalKey] = {
+        etag: etag ?? priorValidator?.etag ?? null,
+        lastModified: lastModified ?? priorValidator?.lastModified ?? null,
+        finalUrl: response.url || priorValidator?.finalUrl || url,
+        contentType: cached?.contentType ?? priorValidator?.contentType ?? response.headers.get("content-type"),
+        httpStatus: cached?.status ?? priorValidator?.httpStatus ?? 304,
+        updatedAt: now,
+      };
+      if (cached) {
+        conditional.responseCache[conditionalKey] = {
+          ...cached,
+          updatedAt: now,
+        };
+      }
+      if (conditional.conditionalRequestHits) {
+        conditional.conditionalRequestHits[conditional.role] += 1;
+      }
+    }
+    return {
+      url: cached?.url ?? response.url,
+      status: response.status,
+      text: cached?.text ?? "",
+      contentType: cached?.contentType ?? response.headers.get("content-type"),
+      etag: etag ?? priorValidator?.etag ?? null,
+      lastModified: lastModified ?? priorValidator?.lastModified ?? null,
+      conditionalHit: true,
+      reusedCachedBody: Boolean(cached?.text),
+    };
+  }
+  const text = await response.text();
+  if (conditional) {
+    conditional.requestValidators[conditionalKey] = {
+      etag: etag ?? null,
+      lastModified: lastModified ?? null,
+      finalUrl: response.url,
+      contentType: response.headers.get("content-type"),
+      httpStatus: response.status,
+      updatedAt: now,
+    };
+    if (conditional.cacheBody && response.status === 200) {
+      conditional.responseCache[conditionalKey] = {
+        url: response.url,
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        text,
+        updatedAt: now,
+      };
+    }
+  }
   return {
     url: response.url,
     status: response.status,
-    text: await response.text(),
-    contentType: response.headers.get("content-type")
+    text,
+    contentType: response.headers.get("content-type"),
+    etag,
+    lastModified,
+    conditionalHit: false,
+    reusedCachedBody: false,
   };
 }
 
@@ -1016,12 +1676,18 @@ export class CrawlPolicyCacheService {
   ): Promise<RuntimeCrawlPolicy> {
     const parsedUrl = new URL(rawUrl);
     const domain = parsedUrl.hostname.toLowerCase();
+    const cached = await this.loadRow(domain);
     if (hasAuthorizationHeaderConfigured(authContext)) {
-      const liveRow = await this.fetchPolicyRow(rawUrl, userAgent, requestTimeoutMs, authContext);
+      const liveRow = await this.fetchPolicyRow(
+        rawUrl,
+        userAgent,
+        requestTimeoutMs,
+        authContext,
+        cached
+      );
       return this.buildRuntimePolicy(liveRow, userAgent);
     }
 
-    const cached = await this.loadRow(domain);
     if (cached && Date.parse(cached.expires_at) > Date.now()) {
       return this.buildRuntimePolicy(cached, userAgent);
     }
@@ -1036,7 +1702,13 @@ export class CrawlPolicyCacheService {
         return this.buildRuntimePolicy(insideTransaction, userAgent);
       }
 
-      const row = await this.fetchPolicyRow(rawUrl, userAgent, requestTimeoutMs);
+      const row = await this.fetchPolicyRow(
+        rawUrl,
+        userAgent,
+        requestTimeoutMs,
+        undefined,
+        insideTransaction ?? cached
+      );
 
       await client.query(
         `
@@ -1048,12 +1720,14 @@ export class CrawlPolicyCacheService {
             feed_urls,
             llms_txt_url,
             llms_txt_body,
+            request_validators_json,
+            response_cache_json,
             fetched_at,
             expires_at,
             fetch_error,
             http_status
           )
-          values ($1, $2, $3, $4::text[], $5::text[], $6, $7, $8, $9, $10, $11)
+          values ($1, $2, $3, $4::text[], $5::text[], $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13)
           on conflict (domain)
           do update
           set
@@ -1063,6 +1737,8 @@ export class CrawlPolicyCacheService {
             feed_urls = excluded.feed_urls,
             llms_txt_url = excluded.llms_txt_url,
             llms_txt_body = excluded.llms_txt_body,
+            request_validators_json = excluded.request_validators_json,
+            response_cache_json = excluded.response_cache_json,
             fetched_at = excluded.fetched_at,
             expires_at = excluded.expires_at,
             fetch_error = excluded.fetch_error,
@@ -1076,6 +1752,8 @@ export class CrawlPolicyCacheService {
           row.feed_urls,
           row.llms_txt_url,
           row.llms_txt_body,
+          JSON.stringify(row.request_validators_json ?? {}),
+          JSON.stringify(row.response_cache_json ?? {}),
           row.fetched_at,
           row.expires_at,
           row.fetch_error,
@@ -1096,11 +1774,15 @@ export class CrawlPolicyCacheService {
     rawUrl: string,
     userAgent: string,
     requestTimeoutMs: number,
-    authContext?: WebsiteAuthContext
+    authContext?: WebsiteAuthContext,
+    previousRow?: CrawlPolicyCacheRow | null
   ): Promise<CrawlPolicyCacheRow> {
     const parsedUrl = new URL(rawUrl);
     const domain = parsedUrl.hostname.toLowerCase();
     const baseOrigin = parsedUrl.origin;
+    const requestValidators = readConditionalRequestStates(previousRow?.request_validators_json);
+    const responseCache = readCachedTextResponses(previousRow?.response_cache_json);
+    const conditionalRequestHits = createEmptyConditionalRequestHits();
     let robotsBody: string | null = null;
     let llmsTxtBody: string | null = null;
     let httpStatus: number | null = null;
@@ -1113,10 +1795,17 @@ export class CrawlPolicyCacheService {
         `${baseOrigin}/robots.txt`,
         Math.min(requestTimeoutMs, 5000),
         { "user-agent": userAgent },
-        authContext
+        authContext,
+        {
+          role: "robots",
+          requestValidators,
+          responseCache,
+          conditionalRequestHits,
+          cacheBody: true,
+        }
       );
       httpStatus = robotsResponse.status;
-      if (robotsResponse.status === 200) {
+      if (robotsResponse.status === 200 || (robotsResponse.status === 304 && robotsResponse.reusedCachedBody)) {
         robotsBody = robotsResponse.text;
         sitemapUrls = extractSitemapUrlsFromRobots(robotsBody, baseOrigin);
       } else if (![404, 410].includes(robotsResponse.status)) {
@@ -1131,9 +1820,16 @@ export class CrawlPolicyCacheService {
         `${baseOrigin}/`,
         Math.min(requestTimeoutMs, 5000),
         { "user-agent": userAgent, accept: "text/html,application/xhtml+xml" },
-        authContext
+        authContext,
+        {
+          role: "homepage",
+          requestValidators,
+          responseCache,
+          conditionalRequestHits,
+          cacheBody: true,
+        }
       );
-      if (homepage.status === 200) {
+      if (homepage.status === 200 || (homepage.status === 304 && homepage.reusedCachedBody)) {
         feedUrls = extractLinkTagUrls(homepage.text, homepage.url, ["rss", "atom", "xml"]);
       }
     } catch {
@@ -1145,9 +1841,16 @@ export class CrawlPolicyCacheService {
         `${baseOrigin}/llms.txt`,
         Math.min(requestTimeoutMs, 3000),
         { "user-agent": userAgent, accept: "text/plain,text/markdown" },
-        authContext
+        authContext,
+        {
+          role: "llms",
+          requestValidators,
+          responseCache,
+          conditionalRequestHits,
+          cacheBody: true,
+        }
       );
-      if (llms.status === 200) {
+      if (llms.status === 200 || (llms.status === 304 && llms.reusedCachedBody)) {
         llmsTxtBody = llms.text;
       }
     } catch {
@@ -1163,10 +1866,13 @@ export class CrawlPolicyCacheService {
       feed_urls: feedUrls,
       llms_txt_url: `${baseOrigin}/llms.txt`,
       llms_txt_body: llmsTxtBody,
+      request_validators_json: requestValidators,
+      response_cache_json: responseCache,
       fetched_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + ttlMs).toISOString(),
       fetch_error: fetchError,
-      http_status: httpStatus
+      http_status: httpStatus,
+      conditional_request_hits: conditionalRequestHits
     };
   }
 
@@ -1182,6 +1888,8 @@ export class CrawlPolicyCacheService {
           feed_urls,
           llms_txt_url,
           llms_txt_body,
+          request_validators_json,
+          response_cache_json,
           fetched_at::text,
           expires_at::text,
           fetch_error,
@@ -1205,9 +1913,36 @@ export class CrawlPolicyCacheService {
       expiresAt: row.expires_at,
       fetchError: row.fetch_error,
       httpStatus: row.http_status,
+      requestValidators: readConditionalRequestStates(row.request_validators_json),
+      responseCache: readCachedTextResponses(row.response_cache_json),
+      conditionalRequestHits: cloneConditionalRequestHits(row.conditional_request_hits),
       isAllowed: (rawUrl, agent) => isAllowedByRobots(row.robots_txt_body, rawUrl, agent || userAgent),
       crawlDelaySeconds: (agent) => crawlDelayForUserAgent(row.robots_txt_body, agent || userAgent)
     };
+  }
+
+  async persistConditionalState(
+    rawUrl: string,
+    state: {
+      requestValidators: Record<string, WebsiteConditionalRequestState>;
+      responseCache: Record<string, WebsiteCachedTextResponseState>;
+    },
+    authContext?: WebsiteAuthContext
+  ): Promise<void> {
+    if (hasAuthorizationHeaderConfigured(authContext)) {
+      return;
+    }
+    const domain = new URL(rawUrl).hostname.toLowerCase();
+    await this.pool.query(
+      `
+        update crawl_policy_cache
+        set
+          request_validators_json = $2::jsonb,
+          response_cache_json = $3::jsonb
+        where domain = $1
+      `,
+      [domain, JSON.stringify(state.requestValidators), JSON.stringify(state.responseCache)]
+    );
   }
 }
 
@@ -1218,53 +1953,16 @@ export async function probeWebsiteCapabilities(
   authContext?: WebsiteAuthContext
 ): Promise<WebsiteCapabilities> {
   const contentTypes: string[] = [];
-  try {
-    const homepage = await fetchTextWithAuth(
-      channelUrl,
-      config.requestTimeoutMs,
-      {
-        "user-agent": config.userAgent,
-        accept: "text/html,application/xhtml+xml"
-      },
-      authContext
-    );
-    if (homepage.contentType) {
-      contentTypes.push(homepage.contentType);
-    }
-    if (homepage.status !== 200) {
-      return {
-        sitemapUrls: policy.sitemapUrls,
-        feedUrls: policy.feedUrls,
-        inlineDataHints: false,
-        jsHeavyHint: false,
-        challengeKindHint: null,
-        supportsDownloads: false,
-        defaultCollectionUrls: [],
-        contentTypes,
-        homepageHtml: null,
-        homepageStatus: homepage.status
-      };
-    }
-    const feedUrls = Array.from(
-      new Set([
-        ...policy.feedUrls,
-        ...extractLinkTagUrls(homepage.text, homepage.url, ["rss", "atom", "xml"])
-      ])
-    );
-    return {
-      sitemapUrls: policy.sitemapUrls,
-      feedUrls,
-      inlineDataHints: detectInlineDataHint(homepage.text),
-      jsHeavyHint: detectJsHeavyHint(homepage.text),
-      challengeKindHint: detectWebsiteChallengeKind(homepage.text),
-      supportsDownloads:
-        extractDownloadUrls(homepage.text, homepage.url, config.downloadPatterns).length > 0,
-      defaultCollectionUrls: extractDefaultCollectionUrls(homepage.text, homepage.url),
-      contentTypes,
-      homepageHtml: homepage.text,
-      homepageStatus: homepage.status
-    };
-  } catch {
+  const homepageKey = buildConditionalStateKey("homepage", channelUrl);
+  const homepage = policy.responseCache[homepageKey];
+  const homepageState = policy.requestValidators[homepageKey];
+  if (homepage?.contentType) {
+    contentTypes.push(homepage.contentType);
+  } else if (homepageState?.contentType) {
+    contentTypes.push(homepageState.contentType);
+  }
+  const homepageStatus = homepage?.status ?? homepageState?.httpStatus ?? null;
+  if (!homepage || homepage.status !== 200) {
     return {
       sitemapUrls: policy.sitemapUrls,
       feedUrls: policy.feedUrls,
@@ -1275,9 +1973,28 @@ export async function probeWebsiteCapabilities(
       defaultCollectionUrls: [],
       contentTypes,
       homepageHtml: null,
-      homepageStatus: null
+      homepageStatus
     };
   }
+  const feedUrls = Array.from(
+    new Set([
+      ...policy.feedUrls,
+      ...extractLinkTagUrls(homepage.text, homepage.url, ["rss", "atom", "xml"])
+    ])
+  );
+  return {
+    sitemapUrls: policy.sitemapUrls,
+    feedUrls,
+    inlineDataHints: detectInlineDataHint(homepage.text),
+    jsHeavyHint: detectJsHeavyHint(homepage.text),
+    challengeKindHint: detectWebsiteChallengeKind(homepage.text),
+    supportsDownloads:
+      extractDownloadUrls(homepage.text, homepage.url, config.downloadPatterns).length > 0,
+    defaultCollectionUrls: extractDefaultCollectionUrls(homepage.text, homepage.url),
+    contentTypes,
+    homepageHtml: homepage.text,
+    homepageStatus: homepage.status
+  };
 }
 
 async function discoverFromSitemaps(
@@ -1285,6 +2002,11 @@ async function discoverFromSitemaps(
   policy: RuntimeCrawlPolicy,
   config: WebsiteChannelConfig,
   baseDomain: string,
+  conditionalState: {
+    requestValidators: Record<string, WebsiteConditionalRequestState>;
+    responseCache: Record<string, WebsiteCachedTextResponseState>;
+    conditionalRequestHits: WebsiteConditionalRequestHits;
+  },
   authContext?: WebsiteAuthContext
 ): Promise<DiscoveredWebsiteResource[]> {
   const resources: DiscoveredWebsiteResource[] = [];
@@ -1309,9 +2031,20 @@ async function discoverFromSitemaps(
           "user-agent": config.userAgent,
           accept: "application/xml,text/xml"
         },
-        authContext
+        authContext,
+        {
+          role: "sitemap",
+          key: buildConditionalStateKey("sitemap", current.url),
+          requestValidators: conditionalState.requestValidators,
+          responseCache: conditionalState.responseCache,
+          conditionalRequestHits: conditionalState.conditionalRequestHits,
+          cacheBody: false,
+        }
       );
     } catch {
+      continue;
+    }
+    if (response.status === 304) {
       continue;
     }
     if (response.status !== 200) {
@@ -1335,7 +2068,7 @@ async function discoverFromSitemaps(
       if (!normalizedUrl || !matchesSameDomain(normalizedUrl, baseDomain)) {
         continue;
       }
-      const resource = resourceFromUrl(normalizedUrl, {
+      const resource = resourceFromUrl(normalizedUrl, config, {
         discoverySource: "sitemap",
         modifiedAt: entry.lastmod,
         freshnessMarkerType: entry.lastmod ? "lastmod" : null,
@@ -1357,6 +2090,11 @@ async function discoverFromFeeds(
   feedUrls: readonly string[],
   config: WebsiteChannelConfig,
   baseDomain: string,
+  conditionalState: {
+    requestValidators: Record<string, WebsiteConditionalRequestState>;
+    responseCache: Record<string, WebsiteCachedTextResponseState>;
+    conditionalRequestHits: WebsiteConditionalRequestHits;
+  },
   authContext?: WebsiteAuthContext
 ): Promise<DiscoveredWebsiteResource[]> {
   const resources: DiscoveredWebsiteResource[] = [];
@@ -1370,8 +2108,19 @@ async function discoverFromFeeds(
           accept:
             "application/feed+json, application/json;q=0.95, application/atom+xml;q=0.92, application/rss+xml;q=0.9, application/xml;q=0.85, text/xml;q=0.8"
         },
-        authContext
+        authContext,
+        {
+          role: "feed",
+          key: buildConditionalStateKey("feed", feedUrl),
+          requestValidators: conditionalState.requestValidators,
+          responseCache: conditionalState.responseCache,
+          conditionalRequestHits: conditionalState.conditionalRequestHits,
+          cacheBody: false,
+        }
       );
+      if (response.status === 304) {
+        continue;
+      }
       if (response.status !== 200) {
         continue;
       }
@@ -1387,7 +2136,7 @@ async function discoverFromFeeds(
         if (!normalizedUrl || !matchesSameDomain(normalizedUrl, baseDomain)) {
           continue;
         }
-        const resource = resourceFromUrl(normalizedUrl, {
+        const resource = resourceFromUrl(normalizedUrl, config, {
           title: entry.title,
           summary: normalizeText(entry.summaryHtml),
           publishedAt: entry.publishedAt,
@@ -1419,13 +2168,11 @@ async function discoverFromCollectionPages(
   baseDomain: string,
   authContext?: WebsiteAuthContext
 ): Promise<DiscoveredWebsiteResource[]> {
-  const seedUrls = Array.from(
-    new Set([
-      channelUrl,
-      ...capabilities.defaultCollectionUrls,
-      ...config.collectionSeedUrls.map((url) => normalizeUrl(url, channelUrl)).filter((url): url is string => Boolean(url))
-    ])
-  ).slice(0, MAX_COLLECTION_FETCHES);
+  const seedUrls = selectCollectionSeedUrls({
+    channelUrl,
+    defaultCollectionUrls: capabilities.defaultCollectionUrls,
+    configuredSeedUrls: config.collectionSeedUrls,
+  });
   const resources: DiscoveredWebsiteResource[] = [];
 
   for (const seedUrl of seedUrls) {
@@ -1445,10 +2192,14 @@ async function discoverFromCollectionPages(
       if (response.status !== 200 || !(response.contentType ?? "").includes("html")) {
         continue;
       }
-      const links = extractAnchorLinks(response.text, response.url);
+      if (detectWebsiteChallengeKind(response.text)) {
+        continue;
+      }
+      const links = extractCollectionLinkCandidates(response.text, response.url);
       const hasRepeatedCards = links.length >= 8;
       const hasPagination = /\b(page|pagination|next)\b/i.test(response.text);
       const structuredTypes = parseJsonLdTypes(response.text);
+      const seedRelatedToChannel = shouldKeepDefaultCollectionSeed(channelUrl, seedUrl);
       for (const link of links) {
         if (!matchesSameDomain(link.url, baseDomain) || link.url === seedUrl || FEED_HINT_PATTERN.test(link.url)) {
           continue;
@@ -1456,9 +2207,19 @@ async function discoverFromCollectionPages(
         if (DOWNLOAD_EXTENSION_PATTERN.test(link.url)) {
           continue;
         }
-        const resource = resourceFromUrl(link.url, {
+        const linkKinds = inferResourceKindsFromUrl(link.url);
+        const strongDetailCandidate =
+          Boolean(link.publishedAt) ||
+          ((link.summary?.length ?? 0) >= 80 && isLikelyContentContext(link.summary)) ||
+          linkKinds.includes("editorial");
+        if (!seedRelatedToChannel && !strongDetailCandidate) {
+          continue;
+        }
+        const resource = resourceFromUrl(link.url, config, {
           title: link.text || null,
+          summary: link.summary,
           parentUrl: seedUrl,
+          publishedAt: link.publishedAt,
           freshnessMarkerType: "set_diff",
           freshnessMarkerValue: null,
           discoverySource: "collection_page",
@@ -1466,7 +2227,9 @@ async function discoverFromCollectionPages(
           hasRepeatedCards,
           hasPagination,
           rawSignals: {
-            parentUrl: seedUrl
+            parentUrl: seedUrl,
+            collectionPublishedAt: link.publishedAt,
+            collectionSummary: link.summary,
           }
         });
         if (resource) {
@@ -1483,6 +2246,7 @@ async function discoverFromCollectionPages(
 function discoverFromInlineData(
   channelUrl: string,
   capabilities: WebsiteCapabilities,
+  config: WebsiteChannelConfig,
   baseDomain: string
 ): DiscoveredWebsiteResource[] {
   if (!capabilities.homepageHtml) {
@@ -1494,7 +2258,7 @@ function discoverFromInlineData(
     if (!matchesSameDomain(url, baseDomain) || FEED_HINT_PATTERN.test(url)) {
       continue;
     }
-    const resource = resourceFromUrl(url, {
+    const resource = resourceFromUrl(url, config, {
       discoverySource: "inline_data",
       freshnessMarkerType: "set_diff",
       freshnessMarkerValue: null,
@@ -1528,7 +2292,7 @@ function discoverFromDownloads(
     if (!matchesSameDomain(url, baseDomain)) {
       continue;
     }
-    const resource = resourceFromUrl(url, {
+    const resource = resourceFromUrl(url, config, {
       discoverySource: "download",
       freshnessMarkerType: "set_diff",
       freshnessMarkerValue: null,
@@ -1696,7 +2460,7 @@ async function captureBrowserSeedPage(input: {
     if (!matchesSameDomain(link.url, input.baseDomain) || link.url === finalUrl || FEED_HINT_PATTERN.test(link.url)) {
       continue;
     }
-    const resource = resourceFromUrl(link.url, {
+    const resource = resourceFromUrl(link.url, input.config, {
       title: link.text || null,
       parentUrl: finalUrl,
       freshnessMarkerType: "set_diff",
@@ -1729,7 +2493,7 @@ async function captureBrowserSeedPage(input: {
     ) {
       continue;
     }
-    const resource = resourceFromUrl(networkUrl, {
+    const resource = resourceFromUrl(networkUrl, input.config, {
       parentUrl: finalUrl,
       freshnessMarkerType: "set_diff",
       freshnessMarkerValue: null,
@@ -1795,13 +2559,11 @@ async function discoverFromBrowserAssisted(input: {
   });
   const deadlineAt = Date.now() + Math.max(input.config.requestTimeoutMs, input.config.totalPollTimeoutMs);
   const seedUrls = Array.from(
-    new Set([
-      input.channelUrl,
-      ...input.capabilities.defaultCollectionUrls,
-      ...input.config.collectionSeedUrls
-        .map((url) => normalizeUrl(url, input.channelUrl))
-        .filter((url): url is string => Boolean(url)),
-    ])
+    selectCollectionSeedUrls({
+      channelUrl: input.channelUrl,
+      defaultCollectionUrls: input.capabilities.defaultCollectionUrls,
+      configuredSeedUrls: input.config.collectionSeedUrls,
+    })
   ).slice(0, Math.max(1, input.config.maxBrowserFetchesPerPoll));
 
   const listingUrls = new Set<string>();
@@ -1837,7 +2599,7 @@ async function discoverFromBrowserAssisted(input: {
           challengeKind = capture.challengeKind;
           break;
         }
-        discovered.push(...capture.resources);
+        appendItems(discovered, capture.resources);
       } finally {
         await page.close().catch(() => undefined);
       }
@@ -1932,6 +2694,7 @@ function buildDiscoveryWebsiteProbeResult(input: {
     title: resource.title,
     kind: resource.classification.kind,
     discovery_source: resource.discoverySource,
+    reasons: resource.classification.reasons.slice(0, 4),
   }));
   const sampleArticles = sampleResources
     .filter((resource) => ["editorial", "entity"].includes(resource.kind))
@@ -1986,6 +2749,7 @@ function buildDiscoveryWebsiteProbeResult(input: {
     category_urls: [...input.listingUrls].slice(0, 10),
     sample_articles: sampleArticles,
     browser_assisted_recommended: input.browserAttempt.recommended,
+    browser_assisted_recommendation_reasons: input.browserAttempt.recommendationReasons,
     challenge_kind: input.browserAttempt.challengeKind,
   };
 }
@@ -2008,6 +2772,11 @@ export async function probeWebsitesForDiscovery(input: {
       const policy = await crawlPolicyCache.getPolicy(rawUrl, config.userAgent, config.requestTimeoutMs);
       const capabilities = await probeWebsiteCapabilities(rawUrl, policy, config);
       const baseDomain = new URL(rawUrl).hostname.toLowerCase();
+      const conditionalState = {
+        requestValidators: { ...policy.requestValidators },
+        responseCache: { ...policy.responseCache },
+        conditionalRequestHits: cloneConditionalRequestHits(policy.conditionalRequestHits),
+      };
       const staticModes = selectWebsiteDiscoveryModes(capabilities, {
         ...config,
         browserFallbackEnabled: false,
@@ -2015,23 +2784,30 @@ export async function probeWebsitesForDiscovery(input: {
       const staticDiscovered: DiscoveredWebsiteResource[] = [];
       for (const mode of staticModes) {
         if (mode === "sitemap") {
-          staticDiscovered.push(
-            ...(await discoverFromSitemaps(capabilities.sitemapUrls, policy, config, baseDomain))
+          appendItems(
+            staticDiscovered,
+            await discoverFromSitemaps(
+              capabilities.sitemapUrls,
+              policy,
+              config,
+              baseDomain,
+              conditionalState
+            )
           );
         } else if (mode === "feed") {
-          staticDiscovered.push(
-            ...(await discoverFromFeeds(capabilities.feedUrls, config, baseDomain))
+          appendItems(
+            staticDiscovered,
+            await discoverFromFeeds(capabilities.feedUrls, config, baseDomain, conditionalState)
           );
         } else if (mode === "collection") {
-          staticDiscovered.push(
-            ...(await discoverFromCollectionPages(rawUrl, capabilities, policy, config, baseDomain))
+          appendItems(
+            staticDiscovered,
+            await discoverFromCollectionPages(rawUrl, capabilities, policy, config, baseDomain)
           );
         } else if (mode === "inline_data") {
-          staticDiscovered.push(...discoverFromInlineData(rawUrl, capabilities, baseDomain));
+          appendItems(staticDiscovered, discoverFromInlineData(rawUrl, capabilities, config, baseDomain));
         } else if (mode === "download") {
-          staticDiscovered.push(
-            ...discoverFromDownloads(rawUrl, capabilities, config, baseDomain)
-          );
+          appendItems(staticDiscovered, discoverFromDownloads(rawUrl, capabilities, config, baseDomain));
         }
       }
       const dedupedStatic = dedupeResources(staticDiscovered).slice(0, config.maxResourcesPerPoll);
@@ -2047,13 +2823,19 @@ export async function probeWebsitesForDiscovery(input: {
       let finalUrl = rawUrl;
       let title = readOptionalString(extractHtmlTitle(capabilities.homepageHtml ?? "")) ?? null;
       let datePatternsFound = /\b20\d{2}-\d{2}-\d{2}\b/.test(capabilities.homepageHtml ?? "");
+      const staticSummary = summarizeResourceKinds(dedupedStatic);
+      const browserRecommendation = evaluateBrowserAssistedDiscoveryRecommendation({
+        capabilities,
+        config,
+        staticResourceCount: dedupedStatic.length,
+        staticEditorialCount: staticSummary.editorialCount,
+        staticListingCount: staticSummary.listingCount,
+        staticUnknownCount: staticSummary.unknownCount,
+      });
       const browserAttempt: WebsiteBrowserAttempt = {
         attempted: false,
-        recommended: shouldAttemptBrowserAssistedDiscovery({
-          capabilities,
-          config,
-          staticResourceCount: dedupedStatic.length,
-        }),
+        recommended: browserRecommendation.recommended,
+        recommendationReasons: browserRecommendation.reasons,
         challengeKind: capabilities.challengeKindHint,
         blockedReason: null,
       };
@@ -2161,8 +2943,18 @@ export async function discoverWebsiteResources(input: {
   modes: WebsiteDiscoveryMode[];
   browserAttempt: WebsiteBrowserAttempt;
   homepageStatus: number | null;
+  metrics: WebsiteDiscoveryMetrics;
+  policyState: {
+    requestValidators: Record<string, WebsiteConditionalRequestState>;
+    responseCache: Record<string, WebsiteCachedTextResponseState>;
+  };
 }> {
   const baseDomain = new URL(input.channelUrl).hostname.toLowerCase();
+  const conditionalState = {
+    requestValidators: { ...input.policy.requestValidators },
+    responseCache: { ...input.policy.responseCache },
+    conditionalRequestHits: cloneConditionalRequestHits(input.policy.conditionalRequestHits),
+  };
   const authContext =
     input.authConfig == null
       ? undefined
@@ -2181,43 +2973,54 @@ export async function discoverWebsiteResources(input: {
 
   for (const mode of modes) {
     if (mode === "sitemap") {
-      discovered.push(
-        ...(await discoverFromSitemaps(
+      appendItems(
+        discovered,
+        await discoverFromSitemaps(
           capabilities.sitemapUrls,
           input.policy,
           input.config,
           baseDomain,
+          conditionalState,
           authContext
-        ))
+        )
       );
       continue;
     }
     if (mode === "feed") {
-      discovered.push(
-        ...(await discoverFromFeeds(capabilities.feedUrls, input.config, baseDomain, authContext))
+      appendItems(
+        discovered,
+        await discoverFromFeeds(
+          capabilities.feedUrls,
+          input.config,
+          baseDomain,
+          conditionalState,
+          authContext
+        )
       );
       continue;
     }
     if (mode === "collection") {
-      discovered.push(
-        ...(await discoverFromCollectionPages(
+      appendItems(
+        discovered,
+        await discoverFromCollectionPages(
           input.channelUrl,
           capabilities,
           input.policy,
           input.config,
           baseDomain,
           authContext
-        ))
+        )
       );
       continue;
     }
     if (mode === "inline_data") {
-      discovered.push(...discoverFromInlineData(input.channelUrl, capabilities, baseDomain));
+      appendItems(discovered, discoverFromInlineData(input.channelUrl, capabilities, input.config, baseDomain));
       continue;
     }
     if (mode === "download") {
-      discovered.push(
-        ...discoverFromDownloads(input.channelUrl, capabilities, input.config, baseDomain)
+      appendItems(
+        discovered,
+        discoverFromDownloads(input.channelUrl, capabilities, input.config, baseDomain)
       );
     }
   }
@@ -2226,16 +3029,30 @@ export async function discoverWebsiteResources(input: {
   let filtered = applyPatternFilters(deduped, input.config)
     .filter((resource) => !matchesCursor(resource, input.cursors))
     .slice(0, input.config.maxResourcesPerPoll);
+  const staticCandidateCount = deduped.length;
+  const staticAcceptedUrls = new Set(filtered.map((resource) => resource.normalizedUrl));
   const browserAttempt: WebsiteBrowserAttempt = {
     attempted: false,
-    recommended: shouldAttemptBrowserAssistedDiscovery({
-      capabilities,
-      config: input.config,
-      staticResourceCount: filtered.length,
-    }),
-    challengeKind: capabilities.challengeKindHint,
-    blockedReason: null,
-  };
+          recommended: false,
+          recommendationReasons: [],
+          challengeKind: capabilities.challengeKindHint,
+          blockedReason: null,
+        };
+  const filteredSummary = summarizeResourceKinds(filtered);
+  const browserRecommendation = evaluateBrowserAssistedDiscoveryRecommendation({
+    capabilities,
+    config: input.config,
+    staticResourceCount: filtered.length,
+    staticNoChangeEvidence:
+      conditionalState.conditionalRequestHits.sitemap > 0 ||
+      conditionalState.conditionalRequestHits.feed > 0,
+    staticEditorialCount: filteredSummary.editorialCount,
+    staticListingCount: filteredSummary.listingCount,
+    staticUnknownCount: filteredSummary.unknownCount,
+  });
+  browserAttempt.recommended = browserRecommendation.recommended;
+  browserAttempt.recommendationReasons = browserRecommendation.reasons;
+  let browserDiscoveredCount = 0;
   if (browserAttempt.recommended) {
     browserAttempt.attempted = true;
     modes.push("browser_assisted");
@@ -2247,6 +3064,7 @@ export async function discoverWebsiteResources(input: {
         baseDomain,
         authContext,
       });
+      browserDiscoveredCount = browserDiscovery.resources.length;
       if (browserDiscovery.challengeKind) {
         browserAttempt.challengeKind = browserDiscovery.challengeKind;
         browserAttempt.blockedReason = `unsupported:${browserDiscovery.challengeKind}`;
@@ -2267,6 +3085,20 @@ export async function discoverWebsiteResources(input: {
       browserAttempt.blockedReason = error instanceof Error ? error.message : "browser_discovery_failed";
     }
   }
+  const browserAcceptedCount = filtered.filter(
+    (resource) => Boolean(resource.rawSignals.browserAssisted)
+  ).length;
+  const browserOnlyAcceptedCount = filtered.filter(
+    (resource) => Boolean(resource.rawSignals.browserAssisted) && !staticAcceptedUrls.has(resource.normalizedUrl)
+  ).length;
+  const modeCounts = filtered.reduce<Record<string, number>>((counts, resource) => {
+    counts[resource.discoverySource] = (counts[resource.discoverySource] ?? 0) + 1;
+    return counts;
+  }, {});
+  const resourceKindCounts = filtered.reduce<Record<string, number>>((counts, resource) => {
+    counts[resource.classification.kind] = (counts[resource.classification.kind] ?? 0) + 1;
+    return counts;
+  }, {});
 
   const cursorUpdates: WebsiteCursorUpdate[] = [];
   const latestTimestamp = selectLatestTimestamp(filtered, "timestamp");
@@ -2304,6 +3136,25 @@ export async function discoverWebsiteResources(input: {
     cursorUpdates,
     modes,
     browserAttempt,
-    homepageStatus: capabilities.homepageStatus
+    homepageStatus: capabilities.homepageStatus,
+    metrics: {
+      staticCandidateCount,
+      staticAcceptedCount: staticAcceptedUrls.size,
+      browserRecommended: browserAttempt.recommended,
+      browserAttempted: browserAttempt.attempted,
+      browserRecommendationReasons: browserAttempt.recommendationReasons,
+      browserChallengeKind: browserAttempt.challengeKind,
+      browserDiscoveredCount,
+      browserAcceptedCount,
+      browserOnlyAcceptedCount,
+      finalAcceptedCount: filtered.length,
+      modeCounts,
+      resourceKindCounts,
+      conditionalRequestHits: conditionalState.conditionalRequestHits,
+    },
+    policyState: {
+      requestValidators: conditionalState.requestValidators,
+      responseCache: conditionalState.responseCache,
+    },
   };
 }

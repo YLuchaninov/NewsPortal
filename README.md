@@ -237,6 +237,8 @@ infra/
 - Safe default stays unchanged: cheap/static website discovery remains first, and browser help is opt-in rather than default.
 - Enable browser assistance only for public `website` channels when static discovery misses real resources or the site is clearly JS-heavy. The relevant website config keys are `browserFallbackEnabled=true` and `maxBrowserFetchesPerPoll` (keep the current default `2` unless you have a bounded reason to change it).
 - When discovery recommends browser help for a website candidate, the registered provider must still remain `website`; hidden feeds remain hints only and must not silently convert the source into RSS.
+- For a dedicated operator-facing manual pass of `website` channels, `/admin/resources`, projected vs resource-only rows, and bounded live-site checks, use [WEBSITE_SOURCES_TESTING.md](./WEBSITE_SOURCES_TESTING.md).
+- For the expanded repo-owned real-site matrix after local website proof is green, run `node infra/scripts/test-live-website-matrix.mjs`; it validates 16 primary public sites across static editorial, document/download-heavy, public changelog, and browser-candidate shapes and writes a JSON evidence bundle under `/tmp/newsportal-live-website-matrix-<runId>.json`.
 - Operator verification for this lane should include:
   - `pnpm test:hard-sites:compose`
   - `/admin/resources` and `/admin/resources/[resourceId]` to confirm browser provenance is visible
