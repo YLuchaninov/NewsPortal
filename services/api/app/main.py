@@ -1138,7 +1138,7 @@ def editorial_content_select_sql(*, include_internal_fields: bool = False) -> st
         from (
           select
             {repr('editorial:')} || a.doc_id::text as content_item_id,
-            'editorial'::text as content_kind,
+            coalesce(a.content_kind, 'editorial')::text as content_kind,
             'editorial'::text as origin_type,
             a.doc_id::text as origin_id,
             a.url,
@@ -1179,7 +1179,6 @@ def editorial_content_select_sql(*, include_internal_fields: bool = False) -> st
           left join article_media_assets pma on pma.asset_id = a.primary_media_asset_id
           left join article_reaction_stats ars on ars.doc_id = a.doc_id
           where {feed_eligible_article_clause("a", "fsr", "sfr")}
-            and {system_interest_kind_enabled_clause("'editorial'")}
         ) ranked
         where ranked.family_rank = 1
     """
@@ -1235,14 +1234,9 @@ def resource_content_select_sql(*, include_internal_fields: bool = False) -> str
 
 
 def combined_content_items_select_sql(*, include_internal_fields: bool = False) -> str:
-    return f"""
-      select *
-      from (
-        {editorial_content_select_sql(include_internal_fields=include_internal_fields)}
-        union all
-        {resource_content_select_sql(include_internal_fields=include_internal_fields)}
-      ) content_items
-    """
+    return editorial_content_select_sql(
+        include_internal_fields=include_internal_fields
+    )
 
 
 def build_editorial_content_item_preview_from_article(
@@ -1277,7 +1271,7 @@ def build_editorial_content_item_preview_from_article(
         "content_item_id": build_content_item_id(
             "editorial", str(article.get("doc_id") or "")
         ),
-        "content_kind": "editorial",
+        "content_kind": str(article.get("content_kind") or "editorial"),
         "origin_type": "editorial",
         "origin_id": str(article.get("doc_id") or ""),
         "url": article.get("url"),
@@ -4277,8 +4271,8 @@ def get_resource_content_item(resource_id: str) -> dict[str, Any]:
           sc.channel_id::text as channel_id,
           sc.name as channel_name,
           sc.name as source_name,
-          'kind_enabled'::text as system_selection_decision,
-          true as system_selected,
+          null::text as system_selection_decision,
+          false as system_selected,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb)) > 0 as has_media,
           wr.media_json -> 0 ->> 'media_kind' as primary_media_kind,
           coalesce(wr.media_json -> 0 ->> 'thumbnail_url', wr.media_json -> 0 ->> 'source_url') as primary_media_url,
@@ -4294,7 +4288,9 @@ def get_resource_content_item(resource_id: str) -> dict[str, Any]:
           wr.child_resources_json,
           wr.raw_payload_json,
           wr.extraction_state,
-          wr.extraction_error
+          wr.extraction_error,
+          wr.projection_state,
+          wr.projection_error
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
         where wr.resource_id = %s
@@ -4321,10 +4317,7 @@ def get_content_item(content_item_id: str) -> dict[str, Any]:
         article["summary"] = article.get("summary") or article.get("lead")
         article["body_html"] = article.get("body_html") or article.get("full_content_html")
         return article
-    content_item = get_selected_content_item_preview(content_item_id)
-    resource = get_resource_content_item(origin_id)
-    resource.update(content_item)
-    return resource
+    return get_resource_content_item(origin_id)
 
 
 @app.get("/content-items/{content_item_id}/explain")
@@ -4473,13 +4466,7 @@ def list_web_resources_page(
         resource_filters.append("wr.projected_article_id is null")
 
     where_clause = f"where {' and '.join(resource_filters)}" if resource_filters else ""
-    content_item_ready_expr = f"""
-        (
-          wr.resource_kind <> 'editorial'
-          and wr.extraction_state in ('enriched', 'skipped')
-          and {system_interest_kind_enabled_clause("wr.resource_kind")}
-        )
-    """
+    content_item_ready_expr = "false"
     resource_select = f"""
         select
           wr.resource_id::text as resource_id,
@@ -4498,6 +4485,8 @@ def list_web_resources_page(
           wr.discovery_source,
           wr.extraction_state,
           wr.extraction_error,
+          wr.projection_state,
+          wr.projection_error,
           wr.projected_article_id::text as projected_article_id,
           pa.title as projected_article_title,
           case
@@ -4591,13 +4580,7 @@ def list_web_resources(
 
 @app.get("/maintenance/web-resources/{resource_id}")
 def get_web_resource(resource_id: str) -> dict[str, Any]:
-    content_item_ready_expr = f"""
-        (
-          wr.resource_kind <> 'editorial'
-          and wr.extraction_state in ('enriched', 'skipped')
-          and {system_interest_kind_enabled_clause("wr.resource_kind")}
-        )
-    """
+    content_item_ready_expr = "false"
     resource = query_one(
         f"""
         select
@@ -4619,6 +4602,8 @@ def get_web_resource(resource_id: str) -> dict[str, Any]:
           wr.discovery_source,
           wr.extraction_state,
           wr.extraction_error,
+          wr.projection_state,
+          wr.projection_error,
           wr.projected_article_id::text as projected_article_id,
           pa.title as projected_article_title,
           case
@@ -5418,7 +5403,7 @@ def list_user_matches(
     ranked_match_select = f"""
         select
           {repr('editorial:')} || a.doc_id::text as content_item_id,
-          'editorial'::text as content_kind,
+          coalesce(a.content_kind, 'editorial')::text as content_kind,
           'editorial'::text as origin_type,
           a.doc_id::text as origin_id,
           a.url,

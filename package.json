@@ -15,6 +15,8 @@
     "db:migrate": "pnpm --filter @newsportal/relay migrate",
     "db:seed:outbox-smoke": "pnpm --filter @newsportal/relay seed:outbox-smoke",
     "fetch:rss:once": "pnpm --filter @newsportal/fetchers run:once",
+    "website:projection:replay": "pnpm --filter @newsportal/fetchers replay:website-projections",
+    "website:projection:replay:compose": "docker compose -f infra/docker/compose.yml exec -T fetchers pnpm --filter @newsportal/fetchers replay:website-projections",
     "index:check:event-cluster-centroids": "PYTHONPATH=. python -m services.indexer.app.main check-event-cluster-centroids",
     "index:check:interest-centroids": "PYTHONPATH=. python -m services.indexer.app.main check-interest-centroids",
     "index:rebuild:event-cluster-centroids": "PYTHONPATH=. python -m services.indexer.app.main rebuild-event-cluster-centroids",

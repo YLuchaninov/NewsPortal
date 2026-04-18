@@ -29,6 +29,7 @@ interface WebResourceRow {
 
 interface ArticleRow {
   docId: string;
+  contentKind: string;
   sourceArticleId: string | null;
   url: string;
   title: string;
@@ -477,6 +478,7 @@ async function fetchArticleRows(pool: Pool, channelId: string): Promise<ArticleR
     `
       select
         doc_id::text as "docId",
+        content_kind as "contentKind",
         source_article_id as "sourceArticleId",
         url,
         title,
@@ -743,12 +745,12 @@ async function assertWebsiteRows(
       return (
         resources.length === 4 &&
         resources.every((resource) => resource.extractionState === "enriched") &&
-        resources.filter((resource) => resource.projectedArticleId).length === 2 &&
-        articles.length === 2 &&
+        resources.filter((resource) => resource.projectedArticleId).length === 4 &&
+        articles.length === 4 &&
         publishedResourceEvents >= 4 &&
-        publishedArticleEvents >= 2 &&
+        publishedArticleEvents >= 4 &&
         resourceSequenceRuns >= 4 &&
-        articleSequenceRuns >= 2
+        articleSequenceRuns >= 4
       );
     },
     {
@@ -849,8 +851,8 @@ async function assertWebsiteRows(
   if (!entityResource || entityResource.discoverySource !== "collection_page") {
     throw new Error("Expected the entity resource to be discovered from collection_page mode.");
   }
-  if (entityResource.resourceKind !== "entity" || entityResource.projectedArticleId) {
-    throw new Error("Expected the entity resource to enrich in-place without article projection.");
+  if (entityResource.resourceKind !== "entity" || !entityResource.projectedArticleId) {
+    throw new Error("Expected the entity resource to project into the common article pipeline.");
   }
   if (String(entityResource.attributesJson.Region ?? "") !== "Europe") {
     throw new Error("Expected entity extraction to preserve structured attributes.");
@@ -859,8 +861,8 @@ async function assertWebsiteRows(
   if (!documentResource || documentResource.discoverySource !== "download") {
     throw new Error("Expected the document resource to be discovered from download mode.");
   }
-  if (documentResource.resourceKind !== "document" || documentResource.projectedArticleId) {
-    throw new Error("Expected the document resource to stay in the resource lane without article projection.");
+  if (documentResource.resourceKind !== "document" || !documentResource.projectedArticleId) {
+    throw new Error("Expected the document resource to project into the common article pipeline.");
   }
   if (documentResource.documentsCount < 1) {
     throw new Error("Expected the document resource to persist at least one document reference.");
@@ -871,12 +873,20 @@ async function assertWebsiteRows(
   );
   const sitemapArticle = articleBySource.get(fixture.sitemapEditorialUrl);
   const feedArticle = articleBySource.get(fixture.feedEditorialUrl);
+  const entityArticle = articleBySource.get(fixture.entityUrl);
+  const documentArticle = articleBySource.get(fixture.documentUrl);
 
   if (!sitemapArticle || !sitemapArticle.body.includes(`Sitemap editorial sentinel ${runId}`)) {
     throw new Error("Expected the sitemap editorial article projection to retain the extracted body.");
   }
   if (!feedArticle || !feedArticle.body.includes(`Feed editorial sentinel ${runId}`)) {
     throw new Error("Expected the feed editorial article projection to retain the extracted body.");
+  }
+  if (!entityArticle || entityArticle.contentKind !== "entity") {
+    throw new Error("Expected the entity resource projection to persist content_kind=entity.");
+  }
+  if (!documentArticle || documentArticle.contentKind !== "document") {
+    throw new Error("Expected the document resource projection to persist content_kind=document.");
   }
 }
 

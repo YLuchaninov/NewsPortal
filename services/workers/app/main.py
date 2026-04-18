@@ -1443,6 +1443,22 @@ async def compute_lexical_score(
     return normalize_fts_score(raw_score)
 
 
+def passes_allowed_content_kind(
+    *,
+    article: Mapping[str, Any],
+    allowed_content_kinds: Sequence[str],
+) -> tuple[bool, str]:
+    article_content_kind = str(article.get("content_kind") or "editorial").strip() or "editorial"
+    normalized_allowed = {
+        str(value).strip()
+        for value in allowed_content_kinds
+        if str(value).strip()
+    }
+    if not normalized_allowed:
+        return (True, article_content_kind)
+    return (article_content_kind in normalized_allowed, article_content_kind)
+
+
 def passes_hard_filters(
     *,
     article: Mapping[str, Any],
@@ -2174,6 +2190,24 @@ async def list_compiled_criteria(
           cc.source_version,
           cc.compiled_json,
           cc.source_snapshot_json,
+          coalesce(
+            case
+              when jsonb_typeof(coalesce(it.allowed_content_kinds, '[]'::jsonb)) = 'array'
+              then coalesce(it.allowed_content_kinds, '[]'::jsonb)
+              else null
+            end,
+            case
+              when jsonb_typeof(coalesce(sp.bindings_json -> 'allowedContentKinds', '[]'::jsonb)) = 'array'
+              then coalesce(sp.bindings_json -> 'allowedContentKinds', '[]'::jsonb)
+              else null
+            end,
+            case
+              when jsonb_typeof(coalesce(sp.policy_json -> 'allowedContentKinds', '[]'::jsonb)) = 'array'
+              then coalesce(sp.policy_json -> 'allowedContentKinds', '[]'::jsonb)
+              else null
+            end,
+            '[]'::jsonb
+          ) as allowed_content_kinds,
           sp.selection_profile_id::text as selection_profile_id,
           sp.profile_family as selection_profile_family,
           sp.status as selection_profile_status,
@@ -2182,6 +2216,8 @@ async def list_compiled_criteria(
           sp.policy_json as selection_profile_policy_json
         from criteria c
         join criteria_compiled cc on cc.criterion_id = c.criterion_id
+        left join interest_templates it
+          on it.interest_template_id = c.source_interest_template_id
         left join selection_profiles sp on sp.source_criterion_id = c.criterion_id
         where c.enabled = true
           and c.compiled = true
@@ -3836,11 +3872,21 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                 for criterion in criteria_rows:
                     compiled_json = coerce_json_object(criterion.get("compiled_json"))
                     hard_constraints = coerce_json_object(compiled_json.get("hard_constraints"))
-                    pass_filters, filter_reasons, within_window = passes_hard_filters(
+                    base_pass_filters, filter_reasons, within_window = passes_hard_filters(
                         article=article,
                         article_features=article_features,
                         hard_constraints=hard_constraints,
                     )
+                    allowed_content_kinds = coerce_text_list(
+                        criterion.get("allowed_content_kinds")
+                    )
+                    content_kind_allowed, article_content_kind = passes_allowed_content_kind(
+                        article=article,
+                        allowed_content_kinds=allowed_content_kinds,
+                    )
+                    if not content_kind_allowed:
+                        filter_reasons = ["content_kind", *filter_reasons]
+                    pass_filters = base_pass_filters and content_kind_allowed
                     lexical_score = await compute_lexical_score(
                         cursor,
                         article["doc_id"],
@@ -3923,6 +3969,11 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
                     selection_profile_runtime = coerce_selection_profile_runtime(criterion)
                     explain_json = {
                         "filterReasons": filter_reasons,
+                        "contentKind": {
+                            "article": article_content_kind,
+                            "allowed": allowed_content_kinds,
+                            "matched": content_kind_allowed,
+                        },
                         "S_pos": positive_score,
                         "S_neg": negative_score,
                         "S_lex": lexical_score,

@@ -14,6 +14,524 @@
 
 ## Completed items
 
+### 2026-04-18 — PATCH-RSS-RUNTIME-FIRST-FETCH-2026-04-18 — Repaired RSS scheduler runtime so newly added feeds reach first fetch again
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the user added RSS channels into the current local configuration and reported that nothing was ingesting from them, the repo needed a bounded runtime repair in `services/fetchers` rather than more source-side tuning.
+- Что изменилось:
+  - [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts) due-channel scheduling was patched in two minimal ways:
+    - the provider-limit comparison now casts the `case` branches to `bigint`, fixing the PostgreSQL `bigint <= text` poll-loop failure;
+    - never-fetched channels are now prioritized by `created_at desc` before the historical backlog ordering, so newly added RSS rows reach first fetch promptly instead of waiting behind thousands of older never-fetched feeds.
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) now records the repaired live RSS runtime truth and removes the patch from active execution.
+- Что было доказано:
+  - static proof:
+    - `pnpm typecheck`
+  - live runtime proof after rebuilding/restarting `fetchers` with:
+    - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d fetchers`
+  - the recurring scheduler failure stopped reproducing on the rebuilt service, and representative newly added RSS channels moved from the tail of the due queue to the head:
+    - `The New Stack = provider_rank 1`
+    - `Google News — Digital Transformation Partner Search = provider_rank 2`
+    - `TechCrunch — Startups = provider_rank 6`
+    - `Reuters — Technology = provider_rank 7`
+  - those same channels then reached real first fetch execution:
+    - `VentureBeat`: `new_content`, HTTP `200`, `7` fetched, `7` new
+    - `Google News — Digital Transformation Partner Search`: `new_content`, HTTP `200`, `20` fetched, `4` new
+    - `TechCrunch — Startups`: `new_content`, HTTP `200`, `18` fetched, `18` new
+    - `The New Stack`: `new_content`, HTTP `200`, `15` fetched, `15` new
+    - `Reuters — Technology`: `hard_failure`, HTTP `404`, which still proves that the channel now reaches channel-level polling instead of scheduler starvation
+  - aggregate runtime proof after the fix:
+    - `53` RSS fetch runs in the last `2` minutes
+    - representative new channels now show non-null `last_fetch_at`, and successful ones also show non-null `last_success_at`
+- Что patch доказал:
+  - the user-visible “RSS ingress is dead” symptom had two runtime causes: a global scheduler SQL type failure and then starvation of newly added never-fetched feeds behind the legacy backlog.
+  - both issues are now repaired on the local compose stack, and newly added RSS channels again reach first fetch without requiring any admin/template/source reconfiguration.
+- Риски или gaps:
+  - this patch does not tune source quality; individual feeds can still truthfully return `404`, `502`, or `no_change` once they are actually polled.
+  - the repo still carries pre-existing user-owned edits in `services/fetchers/src/fetchers.ts`; this patch intentionally layered only the bounded scheduler fixes on top of that dirty file.
+- Follow-up:
+  - none required for the runtime fix itself; only open a new item if the user wants source-quality cleanup, different fairness policy, or throughput tuning.
+
+### 2026-04-18 — SPIKE-RSS-INGRESS-DIAGNOSE-2026-04-18 — Diagnosed why the newly added RSS channels are not ingesting on the preserved local stack
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: after the user added RSS channels into the current local configuration and reported that no RSS ingress was happening, the repo needed a read-only diagnosis tied to the live compose state rather than another guess based on configuration alone.
+- Что проверено:
+  - current provider mix in `source_channels`
+  - newest `rss` channel rows, runtime scheduling state, and channel-level fetch evidence
+  - recent `fetchers` container logs
+- Что было доказано:
+  - provider counts:
+    - `rss = 5185`
+    - `website = 29`
+  - newest RSS channels created on `2026-04-18 18:19-18:20 UTC` are present and active, including recent Google News, Reddit, TechCrunch, Reuters, VentureBeat, and The New Stack rows.
+  - those newest RSS rows already have scheduling state in `source_channel_runtime_state`, but still show:
+    - `last_fetch_at = null`
+    - `last_success_at = null`
+    - `last_result_kind = null`
+    - `consecutive_failures = 0`
+    - no recent `channel_fetch_runs`
+  - recent `fetchers` logs repeatedly emit the same top-level failure:
+    - `Fetchers poll failed.`
+    - PostgreSQL error `42883`
+    - `No operator matches the given name and argument types`
+  - a manual read-only execution of the current `loadDueChannels()` SQL path succeeds, which means the scheduler reaches a later failing DB operation during the poll loop rather than failing because the new RSS channel rows themselves are malformed.
+- Что spike доказал:
+  - the current lack of RSS ingress is not primarily a feed-content or per-channel configuration issue.
+  - the newly added RSS channels are currently blocked by a global fetchers poll-loop failure against PostgreSQL, so they never reach first fetch or first persisted fetch-run result.
+  - the huge existing RSS population (`5185` rows) also means that, even after a fix, scheduler fairness/backlog may still matter, but the immediate blocker today is the recurring runtime DB error rather than feed quality.
+- Риски или gaps:
+  - this spike intentionally stopped at diagnosis and did not identify the exact write/query statement inside the poll loop that produces `42883`.
+  - no runtime/code fix was applied, so RSS ingress remains blocked until a separate implementation item addresses the fetchers-side DB error.
+- Follow-up:
+  - if the user wants the issue fixed, the next truthful item is a bounded implementation patch in `services/fetchers` to reproduce and repair the failing PostgreSQL operation behind the recurring `Fetchers poll failed` / `42883` error.
+
+### 2026-04-18 — STAGE-TUNED-OUTSOURCE-RESET-RERUN-2026-04-18 — Reset the local compose DB and re-materialized the tuned outsourcing website cohort on a fresh baseline
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after the user explicitly asked for a destructive local DB reset plus a fresh outsourcing verification pass, the repo needed to re-materialize the tuned Example C bundle and the bounded outsourcing website source set on an empty compose baseline so the updated configuration could be validated end-to-end.
+- Что изменилось:
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) tracked the active reset/rerun stage and now records the new preserved post-reset outsourcing cohort.
+  - no product/runtime code changes were required for this stage; the execution reused the already-shipped operator harness in [`infra/scripts/run-live-website-outsourcing.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/run-live-website-outsourcing.mjs), the tuned repo-owned bundle in [`infra/scripts/lib/outsource-example-c.bundle.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/outsource-example-c.bundle.mjs), and the bounded website source list in [`docs/data_scripts/web.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/web.json).
+- Что было доказано:
+  - explicit user-approved destructive reset and baseline restart:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal:no-build`
+  - guarded-table zero-state after reset:
+    - `source_channels = 0`
+    - `interest_templates = 0`
+    - `criteria = 0`
+    - `selection_profiles = 0`
+    - `llm_prompt_templates = 0`
+    - `web_resources = 0`
+    - `articles = 0`
+    - `sequence_runs = 0`
+  - fresh tuned live rerun:
+    - `node --input-type=module -e "import('./infra/scripts/run-live-website-outsourcing.mjs')"`
+    - evidence bundles:
+      - [/tmp/newsportal-live-website-outsourcing-2026-04-18T180725966Z.json](/tmp/newsportal-live-website-outsourcing-2026-04-18T180725966Z.json)
+      - [/tmp/newsportal-live-website-outsourcing-2026-04-18T180725966Z.md](/tmp/newsportal-live-website-outsourcing-2026-04-18T180725966Z.md)
+  - post-run DB state:
+    - `source_channels = 29`
+    - `interest_templates = 5`
+    - `criteria = 5`
+    - `selection_profiles = 5`
+    - `llm_prompt_templates = 3`
+    - `web_resources = 259`
+    - `articles = 220`
+    - `final_selection_results = 220`
+    - `system_feed_results = 220`
+    - `interest_filter_results = 1100`
+    - `sequence_runs = 487`
+  - final-selection outcome:
+    - `selected = 2`
+    - `rejected = 218`
+    - selected rows:
+      - `.NET C# Backend Developer (Freelance, Per-Project Work, Ongoing Opportunities) hourly`
+      - `Custom Clock Wheel for AzuraCast`
+- Что stage доказала:
+  - the fresh empty compose baseline can now materialize the tuned post-sync outsourcing Example C bundle rather than the old stale baseline, import all `29` bounded website sources, and reach a non-zero selected outsourcing outcome on the same operator harness.
+  - the final live classification summary for this rerun was:
+    - `15` `projected_but_not_selected`
+    - `11` `external/runtime_residual`
+    - `2` `projected_and_selected`
+    - `1` `browser_fallback_residual`
+    - `1` `skipped_rejected_open_web`
+    - `0` `implementation_issue`
+- Риски или gaps:
+  - the current compose DB intentionally preserves the new post-reset outsourcing cohort and should not be wiped again unless the user explicitly asks for another reset.
+  - most imported/projected rows still do not pass final selection, so any next step here is tuning or source-quality follow-up rather than another reset.
+- Follow-up:
+  - none required for the reset/rerun stage itself; open a new bounded item only if the user wants deeper analysis of why the remaining `218` rows were rejected or wants to tune sources/interests further.
+
+### 2026-04-18 — PATCH-OUTSOURCE-EXAMPLE-BUNDLE-SYNC-2026-04-18 — Re-synced the repo-owned outsourcing Example C import bundle with the tuned documentation
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the user pointed out that `EXAMPLES.md` had been updated with the admin-tuned outsourcing configuration, but fresh reruns still materialized the stale baseline because the live import path reads `infra/scripts/lib/outsource-example-c.bundle.mjs`, not the markdown document.
+- Что изменилось:
+  - [`infra/scripts/lib/outsource-example-c.bundle.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/outsource-example-c.bundle.mjs) now mirrors the tuned Example C bundle rather than the old uniform-`balanced` baseline. The repo-owned import source now carries:
+    - tuned `interests`, `criteria`, and `global` LLM prompts;
+    - tuned `must_not_have_terms` and candidate signal groups for all `5` outsourcing system interests;
+    - mixed per-template `selection_profile_policy.strictness` (`broad` for buyer build, staff augmentation, and implementation-partner search; `balanced` for procurement and legacy-rescue interests).
+  - [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md) generic guidance was tightened so the document no longer tells operators to apply a stale one-size-fits-all `Strictness = balanced` policy or to treat Example C `interests` as merely optional/future-ready.
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) now records the truthful state: docs and import bundle are re-synced, but the currently preserved local DB cohort is still the older reset-backed baseline until a new rerun is requested.
+- Что было доказано:
+  - syntax proof:
+    - `node --check infra/scripts/lib/outsource-example-c.bundle.mjs`
+  - runtime import proof:
+    - `node --input-type=module -e "import { OUTSOURCE_EXAMPLE_C_BUNDLE } from './infra/scripts/lib/outsource-example-c.bundle.mjs'; console.log(JSON.stringify({ llmScopes: OUTSOURCE_EXAMPLE_C_BUNDLE.llm_templates.map((t) => t.scope), policies: OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates.map((t) => ({ name: t.name, strictness: t.selection_profile_policy.strictness })) }, null, 2));"`
+    - verified the exported scopes are `interests`, `criteria`, `global`, and the interest strictness mix is now `broad/broad/balanced/broad/balanced`.
+  - formatting proof:
+    - `git diff --check -- EXAMPLES.md infra/scripts/lib/outsource-example-c.bundle.mjs`
+- Что patch доказал:
+  - future fresh imports and bounded outsourcing reruns can now materialize the same tuned Example C configuration that is documented in `EXAMPLES.md`, instead of silently falling back to the stale repo-owned baseline bundle.
+  - repeatability is now repo-owned rather than chat-dependent: the operator-facing doc and the machine-readable import bundle describe the same outsourcing prompts, interest definitions, and profile policy.
+- Риски или gaps:
+  - no fresh rerun was executed as part of this patch, so the currently preserved local DB still reflects the earlier baseline rerun and not the newly synced bundle.
+  - if the user wants empirical proof on a live stack, the next bounded item is a fresh rerun using the updated repo-owned bundle.
+
+### 2026-04-18 — STAGE-LIVE-WEBSITE-OUTSOURCING-EMPTY-STACK-2026-04-18 — Reset the local compose DB and executed a fresh bounded outsourcing website live run
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after the earlier empty-stack attempt was blocked by deterministic compose-proof residue, the user explicitly approved a full local DB cleanup/reset and asked to load the website sources from `docs/data_scripts/web.json`, materialize the outsourcing Example C bundle from `EXAMPLES.md`, and run the real outsourcing website ingestion flow on a fresh compose baseline.
+- Что изменилось:
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) tracked the stage through the blocked proof-residue state, the explicit user-approved reset reframe, and the successful fresh live rerun.
+  - no product/runtime code changes were needed; the rerun reused the shipped operator harness in [`infra/scripts/run-live-website-outsourcing.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/run-live-website-outsourcing.mjs), the Example C mirror in [`infra/scripts/lib/outsource-example-c.bundle.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/outsource-example-c.bundle.mjs), repo-owned `docs/data_scripts/web.json`, and Example C parity from [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md).
+- Что было доказано:
+  - previously completed deterministic proof contour remained green before the reset-backed rerun:
+    - `pnpm typecheck`
+    - `pnpm unit_tests`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:channel-auth:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+  - explicit user-approved reset and fresh baseline restoration:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal:no-build`
+    - guarded-table recheck after reset showed:
+      - `source_channels=0`
+      - `interest_templates=0`
+      - `criteria=0`
+      - `selection_profiles=0`
+      - `llm_prompt_templates=0`
+      - `web_resources=0`
+      - `articles=0`
+      - `sequence_runs=0`
+  - fresh live bounded run:
+    - `node --input-type=module -e "import('./infra/scripts/run-live-website-outsourcing.mjs')"`
+    - evidence bundles:
+      - [/tmp/newsportal-live-website-outsourcing-2026-04-18T173718290Z.json](/tmp/newsportal-live-website-outsourcing-2026-04-18T173718290Z.json)
+      - [/tmp/newsportal-live-website-outsourcing-2026-04-18T173718290Z.md](/tmp/newsportal-live-website-outsourcing-2026-04-18T173718290Z.md)
+  - post-run DB state:
+    - `source_channels = 29`
+    - `interest_templates = 5`
+    - `criteria = 5`
+    - `selection_profiles = 5`
+    - `llm_prompt_templates = 3`
+    - `web_resources = 250`
+    - `articles = 219`
+    - `final_selection_results = 219`
+    - `system_feed_results = 219`
+    - `interest_filter_results = 1095`
+    - `sequence_runs = 475`
+  - post-run product/read-model checks:
+    - `/collections/system-selected?page=1&pageSize=20` returned `total = 0`
+    - `/dashboard/summary` returned `active_news = 0`
+    - direct DB checks showed `selected = 0` and `eligible = 0`
+- Что stage доказала:
+  - the fresh empty compose baseline can again materialize the full Example C outsourcing configuration into runtime truth, import all `29` bounded open-web website sources from `docs/data_scripts/web.json`, and execute the real `website -> web_resources -> projected articles -> downstream selection` path without implementation-issue classifications.
+  - the final live classification summary for the rerun was:
+    - `18` `projected_but_not_selected`
+    - `10` `external/runtime_residual`
+    - `1` `browser_fallback_residual`
+    - `1` `skipped_rejected_open_web`
+  - the rerun produced substantial acquired/projected content but still no selected outsourcing feed outcome:
+    - `250` persisted `web_resources`
+    - `219` projected `articles`
+    - `0` selected rows
+    - `0` eligible compatibility feed rows
+  - representative projected-but-not-selected sources in this rerun included `TED`, `Find a Tender`, `SAM.gov`, `UNGM`, `Freelancer.com`, `Guru`, `PeoplePerHour`, `Workana`, and `Mercell`.
+- Риски или gaps:
+  - the resulting database now contains the intentionally preserved fresh outsourcing live cohort and should not be treated as disposable residue unless the user explicitly asks for another reset.
+  - user-facing system-selected surfaces remain empty because the outsourcing bundle still selected `0` rows from this rerun, even though raw website resources and projected articles were ingested successfully.
+  - residual sites remain truthful external/runtime outcomes rather than implementation defects, including `403`, `robots.txt`, unsupported `cloudflare_js_challenge`, unsupported login gating, and the single browser-fallback residual.
+- Follow-up:
+  - if the user wants to see more than raw ingested/projected website content, the next bounded item is outsourcing-yield tuning or a targeted operator walkthrough of `/admin/resources` and related diagnostics rather than another implementation rerun.
+
+### 2026-04-18 — C-LIVE-OUTSOURCING-WEBSITE-VALIDATION-2026-04-18 — Finalized the outsourcing live-run harness and executed the bounded real-site website validation
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user wanted a real-site `website` ingestion validation for the outsourcing case on the empty local compose stack, driven by `docs/data_scripts/web.json` and Example C from `EXAMPLES.md`, with truthful proof and no silent DB reset.
+- Что изменилось:
+  - [`infra/scripts/run-live-website-outsourcing.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/run-live-website-outsourcing.mjs) was finalized into the bounded operator harness for this capability. It now:
+    - verifies compose health and the empty guarded-table baseline before mutation;
+    - imports `29` open-web sites from `docs/data_scripts/web.json` (`26 ready`, `3 needs_browser_fallback`);
+    - records the single `rejected_open_web` row as `skipped_rejected_open_web`;
+    - classifies results as `projected_and_selected`, `projected_but_not_selected`, `resource_only_expected`, `browser_fallback_residual`, `external/runtime_residual`, `implementation_issue`, and `skipped_rejected_open_web`;
+    - runs under plain `node` via `tsx/esm/api` instead of requiring `node --import tsx`.
+  - [`infra/scripts/lib/outsource-example-c.bundle.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/outsource-example-c.bundle.mjs) was added as the repo-owned machine-readable Example C mirror for the `3` outsourcing LLM templates and `5` system-interest templates, replacing the legacy JSON reference asset as live-run input.
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) was reopened for the bounded execution item and then compressed back to a no-active-work snapshot after archive sync.
+- Что было доказано:
+  - harness sanity:
+    - `node --check infra/scripts/run-live-website-outsourcing.mjs`
+    - `node --check infra/scripts/lib/outsource-example-c.bundle.mjs`
+    - `node --input-type=module -e "import { OUTSOURCE_EXAMPLE_C_PARITY } from './infra/scripts/lib/outsource-example-c.bundle.mjs'; console.log(JSON.stringify(OUTSOURCE_EXAMPLE_C_PARITY));"`
+    - `node --input-type=module -e "import { tsImport } from 'tsx/esm/api'; const m = await tsImport('./apps/admin/src/lib/server/db.ts', import.meta.url); console.log(typeof m.getPool);"`
+  - static and deterministic proof:
+    - `pnpm typecheck`
+    - `pnpm unit_tests`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:channel-auth:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:enrichment:compose`
+  - truthful empty-baseline preservation:
+    - post-proof DB inspection showed deterministic residue from the website-admin/API/email-imap/enrichment fixtures only;
+    - that residue was cleaned with targeted deletion of the known fixture `channel_id` / `doc_id` / `resource_id` / `sequence_runs` rows rather than a broad reset, and the guarded tables were re-verified empty before the live run.
+  - live bounded run:
+    - `node --input-type=module -e "import('./infra/scripts/run-live-website-outsourcing.mjs')"`
+    - evidence bundles:
+      - [/tmp/newsportal-live-website-outsourcing-2026-04-18T155147751Z.json](/tmp/newsportal-live-website-outsourcing-2026-04-18T155147751Z.json)
+      - [/tmp/newsportal-live-website-outsourcing-2026-04-18T155147751Z.md](/tmp/newsportal-live-website-outsourcing-2026-04-18T155147751Z.md)
+  - post-run DB state:
+    - `source_channels = 29`
+    - `interest_templates = 5`
+    - `criteria = 5`
+    - `selection_profiles = 5`
+    - `llm_prompt_templates = 3`
+    - `web_resources = 279`
+    - `articles = 240`
+    - `final_selection_results = 240`
+    - `system_feed_results = 240`
+    - `interest_filter_results = 1200`
+    - `sequence_runs = 525`
+- Что capability доказала:
+  - the empty local compose baseline can materialize the full Example C outsourcing bundle into runtime truth, compile the `5` criteria, rebuild `interest_centroids`, import all `29` open-web website sources, and execute the real `website -> web_resources -> optional article handoff -> downstream selection` path without implementation defects.
+  - the final classification summary was:
+    - `18` `projected_but_not_selected`
+    - `10` `external/runtime_residual`
+    - `1` `browser_fallback_residual`
+    - `1` `skipped_rejected_open_web`
+    - `0` `implementation_issue`
+  - the single skipped source is now explicit and policy-driven:
+    - `Moonlight` stayed out of the run as `skipped_rejected_open_web` with its open-web unsuitability captured in the evidence bundle.
+  - the bounded live cohort produced substantial downstream activity but no positive outsourcing outcome:
+    - `279` persisted `web_resources`
+    - `240` projected `articles`
+    - `240` `final_selection_results`
+    - `240` `system_feed_results`
+    - `0` selected rows
+    - `0` eligible rows
+    - so this capability closes runtime validation, not business-yield tuning.
+- Риски или gaps:
+  - the residual sites are truthful live-site/runtime-content outcomes rather than local implementation failures, including `403`, `robots.txt`, unsupported login/challenge flows, and one browser-fallback residual (`oeffentlichevergabe.de`).
+  - the preserved cohort still has `0` selected/eligible outsourcing leads, so any next step here is about yield tuning or source-set refinement, not about the harness/runtime being unproven.
+  - the completed live run now intentionally lives in the local compose DB; cleanup/reset remains a separate explicit item.
+- Follow-up:
+  - none required for the capability itself; open a new bounded item only for outsourcing-yield tuning, browser-fallback expansion, or explicit DB cleanup/reset.
+
+### 2026-04-18 — PATCH-UNIFIED-INGRESS-HANDOFF-DOC-TRUTH — Elevated the website/RSS handoff rule into a repo-wide ingress invariant
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to make the newly shipped website/RSS convergence rule explicit not only for those two providers, but as durable truth for every current and future inbound content channel.
+- Что изменилось:
+  - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md) now states a provider-agnostic ingress invariant: provider-specific acquisition/adaptation may differ before handoff, but all ingestable content must converge into the shared downstream path at `article.ingest.requested`.
+  - [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md) now forbids future provider work from forking clustering/filtering/selection/read-model truth into provider-owned downstream pipelines.
+  - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md) now requires any future inbound-provider capability to prove that provider-specific logic ends before the shared handoff and does not create provider-native product truth.
+  - [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml) now carries machine-canonical `unified_ingress` facts for the common downstream trigger, allowed pre-handoff trigger pattern, and shared downstream truth owners.
+- Что было доказано:
+  - targeted consistency search:
+    - `rg -n "Universal ingress convergence truth|provider-specific logic заканчивается до общего handoff|unified_ingress:|provider_native_product_read_models_allowed|PATCH-UNIFIED-INGRESS-HANDOFF-DOC-TRUTH" docs/blueprint.md docs/engineering.md docs/verification.md .aidp/os.yaml docs/work.md`
+  - formatting check:
+    - `git diff --check -- docs/work.md docs/blueprint.md docs/engineering.md docs/verification.md .aidp/os.yaml`
+- Follow-up:
+  - none; future provider work should reuse this invariant instead of redefining downstream ownership ad hoc.
+
+### 2026-04-18 — C-WEBSITE-RSS-UNIFIED-DOWNSTREAM — Unified website ingress with the RSS downstream pipeline and closed the legacy compatibility gap
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to finish the architectural cutover so `website` and `rss` differ only at acquisition time, while filtering, clustering, selection, and product/read-model truth become common after handoff.
+- Что изменилось:
+  - schema/runtime handoff truth:
+    - [`database/migrations/0035_unified_website_article_handoff.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0035_unified_website_article_handoff.sql)
+    - [`database/ddl/phase2_ingest_foundation.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/ddl/phase2_ingest_foundation.sql)
+  - website acquisition and common-pipeline handoff:
+    - [`services/fetchers/src/resource-enrichment.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts)
+    - [`services/fetchers/src/fetchers.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts)
+    - [`services/fetchers/src/config.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/config.ts)
+    - [`services/fetchers/src/cli/replay-website-projections.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/cli/replay-website-projections.ts)
+    - [`services/fetchers/package.json`](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/package.json)
+    - [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json)
+  - downstream/common truth and operator surfaces:
+    - [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py)
+    - [`services/workers/app/canonical_documents.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/canonical_documents.py)
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py)
+    - [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro)
+    - [`apps/admin/src/pages/resources/[resourceId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources/[resourceId].astro)
+    - [`apps/admin/src/components/LiveDashboardKpiGrid.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LiveDashboardKpiGrid.tsx)
+    - [`infra/scripts/test-website-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-website-admin-flow.mjs)
+  - contracts/tests/runtime docs:
+    - [`packages/contracts/src/source.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/contracts/src/source.ts)
+    - [`tests/unit/python/test_api_web_resources.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_web_resources.py)
+    - [`tests/unit/ts/admin-website-channels.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-website-channels.test.ts)
+    - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+    - [`docs/engineering.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml)
+- Что capability зафиксировала:
+  - `article.ingest.requested` is now the shared downstream entry for both `rss` and `website`; `resource.ingest.requested` remains acquisition-only pre-ingest truth for the website lane.
+  - accepted website resources no longer stop as product-visible `web_resources`; they must either:
+    - project into `articles` with persisted `content_kind` and enqueue `article.ingest.requested`; or
+    - persist an explicit diagnostic rejection in `projection_state/projection_error`.
+  - the shared downstream now sees `articles.content_kind` for website-derived rows, so common normalization/filtering/selection logic can gate on the same content-kind truth regardless of provider.
+  - user/admin selected-content reads no longer union raw `web_resources`; `web_resources` remain acquisition/evidence/operator diagnostics only.
+  - fetchers runtime now carries provider-aware fairness controls (`FETCHERS_RSS_CONCURRENCY`, `FETCHERS_WEBSITE_CONCURRENCY`) so website polling does not silently monopolize the acquisition scheduler.
+  - a bounded legacy compatibility replay path now exists:
+    - `pnpm website:projection:replay`
+    - `pnpm website:projection:replay:compose`
+    - it replays only persisted website rows with `projection_error = legacy_resource_only_without_common_handoff` and does not recrawl live sites.
+- Что было доказано:
+  - local proof:
+    - `python -m py_compile services/api/app/main.py services/workers/app/main.py services/workers/app/canonical_documents.py`
+    - `pnpm typecheck`
+    - `pnpm unit_tests`
+    - `git diff --check`
+  - compose/runtime proof:
+    - `pnpm test:migrations:smoke`
+    - `pnpm test:ingest:compose`
+    - `pnpm test:website:compose`
+    - `pnpm test:hard-sites:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm website:projection:replay:compose`
+    - `pnpm website:projection:replay:compose -- --dry-run --limit=5`
+  - live local DB closeout:
+    - legacy compatibility replay processed `375` candidates with `375` projections, `0` skips, `0` failures;
+    - the final replay dry-run reported `candidateCount = 0`;
+    - the final compose DB state at closeout was:
+      - `444` `web_resources`
+      - `385` `projected_to_common_pipeline`
+      - `59` `explicitly_rejected_before_pipeline`
+      - `385` website-backed `articles`
+      - `0` pending `sequence_runs`
+- Риски или gaps:
+  - the preserved outsourcing cohort still produced `0` selected/eligible outsourcing leads; this capability closes architectural/runtime truth, not business-yield tuning.
+  - the `3` `needs_browser_fallback` sites from `docs/data_scripts/web.json` remain follow-up scope only; browser-fallback expansion was intentionally not folded into this closeout.
+  - the local compose DB still intentionally contains preserved inspection state and replayed website rows; cleanup/reset remains a separate explicit item rather than part of this archive.
+- Follow-up:
+  - none required for the capability itself; open a new bounded item only for browser-fallback expansion or for explicit DB cleanup/reset.
+
+### 2026-04-18 — SPIKE-UI-COUNT-RECONCILE-2026-04-18 — Reconciled the visible feed pagination and dashboard KPIs against the preserved local DB state
+
+- Тип записи: spike archive
+- Финальный статус: archived
+- Зачем понадобилось: after the live outsourcing website run, the user reported that the web feed showed roughly `11` pages with `20` cards each while the admin dashboard still showed `System Feed News = 0` and other seemingly inconsistent counters.
+- Что проверено:
+  - read-model code paths:
+    - [`apps/web/src/pages/index.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/pages/index.astro)
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py)
+    - [`apps/admin/src/pages/index.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/index.astro)
+    - [`apps/admin/src/components/LiveDashboardKpiGrid.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LiveDashboardKpiGrid.tsx)
+    - [`apps/admin/src/components/LiveObservabilitySummary.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LiveObservabilitySummary.tsx)
+    - [`apps/web/src/lib/server/user-content-state.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/web/src/lib/server/user-content-state.ts)
+  - live API/DB evidence:
+    - `curl -sS 'http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=20'`
+    - `curl -sS 'http://127.0.0.1:8000/dashboard/summary'`
+    - read-only `psql` queries against `docker-postgres-1`
+- Что spike доказал:
+  - the user-visible `/` feed is not semantically the same thing as the admin `System Feed News` KPI.
+  - the feed query currently unions two layers:
+    - deduped selected editorial article families via `final_selection_results` / compatibility fallback `system_feed_results`;
+    - non-editorial `web_resources` whose `resource_kind` is enabled by any active `interest_templates.allowed_content_kinds`.
+  - the dashboard KPI `System Feed News` counts only deduped selected editorial families and does not include non-editorial `web_resources`.
+  - the preserved local DB state therefore truthfully explains the screenshots:
+    - `/collections/system-selected?pageSize=20` returned `total = 207` and `totalPages = 11`;
+    - those `207` visible feed items were all non-editorial `listing` resources;
+    - `/dashboard/summary` returned `active_news = 0` because the only `2` projected `articles` both had `final_selection_results.is_selected = false` and `system_feed_results.eligible_for_feed = false`.
+  - the other dashboard counters also map cleanly to different tables/semantics:
+    - `Processed 24h = 2` comes from `articles` that reached processed state in the last 24 hours;
+    - `New Content 24h = 24` comes from `24` `channel_fetch_runs` rows with `outcome_kind = 'new_content'`, not from `24` content items;
+    - `Fetch Failures 24h = 15` comes from `15` `channel_fetch_runs` rows with failure outcomes;
+    - `Needs Attention = 9` comes from `source_channel_runtime_state` rows with `last_result_kind = 'hard_failure'` or `consecutive_failures >= 2`;
+    - observability `Reviews/Tokens/Cost = 0` comes from `llm_review_log`, which is empty for this run because nothing entered live LLM review.
+- Риски или gaps:
+  - this is currently an operator/UX semantics gap, not a proven data-integrity bug.
+  - the naming still invites confusion because the web feed behaves like a broader system-selected collection while the dashboard card still says `System Feed News`.
+- Follow-up:
+  - if the user wants alignment, open a follow-up stage to either relabel the feed/dashboard surfaces more truthfully or narrow the feed query so it matches the editorial-only KPI semantics.
+
+### 2026-04-18 — STAGE-LIVE-WEBSITE-OUTSOURCING-READY-SITES-2026-04-18 — Imported the Example C outsourcing bundle plus `26` ready website sources and executed a full live runtime pass
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked for a one-off stateful operator run on the already-running local compose stack to prove real-site `website` ingestion for the outsourcing case, using repo-owned `docs/data_scripts/web.json` and Example C in `EXAMPLES.md`.
+- Что изменилось:
+  - [`infra/scripts/run-live-website-outsourcing.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/run-live-website-outsourcing.mjs) was added as a one-off orchestration script that:
+    - loads `.env.dev` and verifies the compose baseline plus empty targeted DB state;
+    - verifies the outsourcing bundle parity (`3` LLM templates, `5` interest templates);
+    - imports LLM templates and interest templates through the existing server-side write paths (`save*`, criterion sync, selection-profile sync, compile-event enqueue);
+    - queues `interest_centroids` rebuild through the existing reindex/outbox path;
+    - upserts `26` `validationStatus = ready` website sources through the existing website-channel write path;
+    - triggers manual first polls via `docker-fetchers-1`, waits for downstream settle, and writes JSON/Markdown evidence bundles under `/tmp`.
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) was reopened for the active stage and then resynced back to no-active state after archive sync.
+- Что проверено:
+  - full stage run:
+    - `node --import tsx infra/scripts/run-live-website-outsourcing.mjs`
+  - evidence bundles:
+    - [/tmp/newsportal-live-website-outsourcing-2026-04-18T113924981Z.json](/tmp/newsportal-live-website-outsourcing-2026-04-18T113924981Z.json)
+    - [/tmp/newsportal-live-website-outsourcing-2026-04-18T113924981Z.md](/tmp/newsportal-live-website-outsourcing-2026-04-18T113924981Z.md)
+  - post-run DB counts:
+    - `llm_prompt_templates = 3`
+    - `interest_templates = 5`
+    - `criteria = 5`
+    - `criteria_compiled = 5`
+    - `selection_profiles = 5`
+    - `source_channels = 26`
+    - `web_resources = 345`
+    - `articles = 2`
+    - `interest_filter_results = 10`
+    - `final_selection_results = 2`
+    - `system_feed_results = 2`
+- Что stage доказала:
+  - the local compose baseline started empty for the targeted stage tables and successfully materialized the full Example C outsourcing configuration into runtime truth.
+  - criterion compile plus `interest_centroids` rebuild completed before the live website pass, so the downstream match lane ran against the intended outsourcing configuration instead of stale defaults.
+  - the `26` ready websites did execute through the real `website` runtime:
+    - the settle snapshot closed with `fetchRunCount = 51`, `pendingResourceCount = 0`, `pendingArticleCount = 0`, `unpublishedOutboxCount = 0`, and `openSequenceCount = 0`;
+    - the stage produced `345` persisted `web_resources` and `2` projected `articles`;
+    - the classification summary was `15 observed_resource_only`, `1 observed`, `10 live_site_content_residual`, and `0 implementation_issue`.
+  - the only site that projected articles in this bounded run was `Guru`, and those `2` projected rows truthfully entered the outsourcing match lane:
+    - every one of the `5` system criteria produced `2` `interest_filter_results` rows;
+    - all `10` criterion rows stayed `compat_decision = irrelevant` / `semantic_decision = not_evaluated`;
+    - both final-selection rows ended `final_decision = rejected`, `is_selected = false`, `compat_system_feed_decision = filtered_out`;
+    - therefore the run proved the full website-to-match-to-selection path, but not a positive outsourcing lead outcome on this cohort.
+  - resource-only outcomes were common and truthful for procurement/job-marketplace sources in this bounded website lane; lack of article projection on those sites was not treated as a regression.
+- Риски или gaps:
+  - the stage intentionally excluded the `3 needs_browser_fallback` candidates and the `1 rejected_open_web` candidate from `web.json`; those remain follow-up scope only.
+  - `10` live sites remained residuals for truthful external/runtime-content reasons rather than implementation defects, including `robots.txt` blocks, unsupported login/challenge flows, `403 Forbidden`, and several no-resource/no-change outcomes on public procurement surfaces.
+  - no selected or feed-eligible outsourcing leads were produced in this cohort, so the stage proves pipeline execution rather than business-yield success.
+- Follow-up:
+  - optional next work is either a browser-fallback follow-up for the excluded candidates or a separate cleanup/reset item if the user wants the imported local DB state removed after inspection.
+
+### 2026-04-16 — USER-DIRECTED CLOSEOUT OF REMAINING LIVE ITEMS — Archived the last active/ready/blocked work state without opening further follow-up
+
+- Тип записи: closeout archive
+- Финальный статус: archived by user direction
+- Зачем понадобилось: after the website regression/livematrix work was closed and the repo worktree was clean, the user explicitly asked to "закрывай окончательно" all remaining live work in `docs/work.md` instead of leaving any active, ready, or blocked items hanging.
+- Что изменилось:
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) was compressed into a clean no-active-work snapshot: active capabilities were cleared, live next actions were removed, and the handoff now states explicitly that any future work must start as a new bounded item.
+  - the remaining live references were intentionally removed from active execution state:
+    - `C-WEBSITE-INGESTION-LIVE-QUALITY-HARDENING`
+    - `C-WEBSITE-NEWSROOM-AND-BROWSER-ROI-TUNING`
+    - `C-PIPELINE-CANONICAL-REUSE-AND-SELECTION-QUALITY-HARDENING`
+    - `C-PIPELINE-RESILIENCE-AND-GRAY-ZONE-LLM-RECOVERY`
+    - `C-GENERIC-CANDIDATE-RECALL-AND-NOISE-TOLERANT-SELECTION`
+    - `C-POSITIVE-SIGNAL-RECOVERY-AND-ENRICHMENT-SANITIZATION`
+    - `STAGE-4-RUNTIME-EFFICIENCY-AND-DOCS-CLOSEOUT`
+    - `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`
+    - `SPIKE-LIVE-CANDIDATE-MATERIALIZATION-MEASUREMENT`
+    - `PATCH-WEBSITE-DOJ-LIKE-NEWSROOM-DETAIL-PRECISION-2026-04-16`
+- Что проверено:
+  - `git status`
+  - `git diff --check -- docs/work.md docs/history.md`
+- Что closeout зафиксировал:
+  - the website lane is now fully closed at the process level: deterministic website/channel/shared-user-result proof is green, broader live-matrix evidence is archived, and both `DOJ` and `Grafbase` residuals were reduced to site-specific/live classifications rather than broad product regressions.
+  - the pipeline/runtime lanes are also closed at the process level, but not because every last measurement stage was exhausted:
+    - canonical-review reuse, gray-zone resilience, candidate-signal routing, and enrichment date sanitization remain archived as shipped/proven implementation layers;
+    - the remaining runtime-only measurement slices (`STAGE-4-RUNTIME-EFFICIENCY-AND-DOCS-CLOSEOUT`, `STAGE-3-FRESH-BASELINE-PROOF-AND-TUNING`, `SPIKE-LIVE-CANDIDATE-MATERIALIZATION-MEASUREMENT`) were intentionally not pursued further and should be treated as user-closed residuals, not as silently completed proof.
+  - the repo now has no active work item in `docs/work.md`, and future continuation of any archived lane must start as a fresh bounded item instead of implicitly resuming old state.
+- Риски или gaps:
+  - this archive does not claim that every historical residual was solved; it claims that no residual remains live-tracked after the user's explicit closeout request.
+  - any future attempt to continue duplicate-efficiency measurement, fresh-baseline tuning, DOJ-specific newsroom support, or Grafbase-specific support must reopen as new work with fresh scope/proof rather than relying on the old active states.
+- Follow-up:
+  - none required; open a new item only on a new explicit user request.
+
 ### 2026-04-16 — SPIKE-WEBSITE-GRAFBASE-CHANGELOG-ANALOGS-LIVE-VALIDATION-2026-04-16 — Benchmarked Grafbase against comparable public changelog sites and closed the generic-fix question
 
 - Тип записи: spike archive
@@ -3382,3 +3900,178 @@
   - `DOJ Press Releases` provides a new non-blocked but weak editorial case, so if the user wants the next small live-quality uplift, newsroom/listing differentiation should now be tested against both EU-style and U.S. government press pages rather than only the original EU newsroom cohort.
 - Follow-up:
   - no code follow-up is required by default; open a new bounded item only if the user wants to chase either the new `DOJ` listing-only partial shape or the broader browser-candidate truthfulness/coverage gap.
+
+### 2026-04-18 — C-OUTSOURCING-YIELD-ADMIN-TUNING-2026-04-18 / STAGE-ADMIN-ONLY-OUTSOURCING-TUNING-2026-04-18
+
+- Тип записи: capability stage archive
+- Финальный статус: done
+- Зачем понадобилось: после live outsourcing validation preserved cohort дал `0 selected / 240 rejected`, и пользователь потребовал улучшать capture только тем, что реально настраивается через админку, без изменений ядра, worker logic, API behavior или repo code.
+- Что изменилось:
+  - активные outsourcing `System interests` были обновлены только через штатный local admin BFF save flow (`/templates/interests`), без прямых code edits:
+    - buyer-build, implementation-partner, legacy-rescue, and staff-augmentation semantics were retuned toward buyer-authored marketplace project cards and away from portal/category/search noise;
+    - candidate uplift cues were strengthened for concrete software project requests and tightened against procurement/index/category shells;
+    - hard `must_not_have` filters were corrected after the first replay so they stop killing real project cards via marketplace site chrome while still suppressing obvious `freelance jobs` / `remote jobs` / `contract opportunities` surfaces.
+  - активные outsourcing `LLM templates` были обновлены только через штатный local admin BFF save flow (`/templates/llm`), again without repo code changes:
+    - `criteria`, `interests`, and `global` prompts now explicitly allow buyer-authored marketplace software project cards and explicitly reject procurement/opportunities landing pages, portal wrappers, category pages, directories, and seller/self-promotional pages.
+  - каждая admin save операция использовала уже существующий compile/profile sync path:
+    - `criteria` were recompiled via the normal queued compile flow;
+    - `selection_profiles` were resynced from the admin-owned interest payloads;
+    - the preserved cohort was replayed only through the normal admin `Reindex + repair existing content` path.
+  - no worker/API/admin source files were edited for this capability; only process docs (`docs/work.md`, `docs/history.md`) changed in-repo.
+- Что проверено:
+  - baseline before tuning:
+    - `final_selection_results`: `0 selected / 0 gray_zone / 240 rejected`
+    - `interest_filter_results`: `0 match / 0 gray_zone / 914 no_match / 286 technical_filtered`
+    - `llm_review_log`: `0`
+  - admin-only mutation proof:
+    - local admin sign-in via `/bff/auth/sign-in`
+    - template saves via `/bff/admin/templates`
+    - version bumps observed in PostgreSQL after save:
+      - first pass: `criteria` and `selection_profiles` advanced to `version=2`, `llm_prompt_templates` to `version=2`
+      - corrective pass: buyer-build / implementation / legacy / staff-augmentation `criteria` and `selection_profiles` advanced to `version=3`; `llm_prompt_templates` advanced to `version=3`
+  - replay proof:
+    - first admin-triggered reindex/backfill job: `b451821d-eeed-4ef5-878f-770f46b53424` completed
+    - corrective admin-triggered reindex/backfill job: `ce8a556f-bfcf-4e7a-9188-2774c68f799b` completed
+  - final after-state:
+    - `final_selection_results`: `2 selected / 0 gray_zone / 238 rejected`
+    - `interest_filter_results`: `2 match / 0 gray_zone / 587 no_match / 611 technical_filtered`
+    - `llm_review_log`: `3` total rows across both replay passes
+    - selected rows:
+      - `https://hubstafftalent.net/jobs/net-c-backend-developer-freelance-per-project-work-ongoing-opportunities`
+      - `https://www.freelancer.com/projects/docker/custom-clock-wheel-for-azuracast`
+    - representative noisy rows still rejected:
+      - `https://sam.gov/opportunities` now hard-filtered by `must_not:contract opportunities`
+      - `https://www.peopleperhour.com/freelance-jobs/technology-programming` remains filtered by `must_not:remote jobs` / `must_not:freelance jobs`
+      - `https://www.guru.com/d/jobs/l/united-states` remains filtered by `must_not:freelance jobs`
+- Live-result summary:
+  - the first replay proved the admin-only path was effective but over-broad: it surfaced `1 selected`, but that row was a false-positive `SAM.gov Contract Opportunities` landing page caused by overly generic buyer cues plus insufficient portal-shell rejection;
+  - the corrective second replay fixed that false positive without touching engine code and produced a cleaner final state: `SAM.gov` dropped back to reject, while two buyer-side-ish marketplace rows moved into `selected`;
+  - one selected row (`Hubstaff .NET C# Backend Developer`) was accepted under `Staff augmentation and dedicated team demand` after the criterion LLM review approved it as external capacity demand;
+  - one selected row (`Custom Clock Wheel for AzuraCast`) was accepted under `Buyer requests for outsourced product build` through the candidate-signal uplift + criterion review path.
+- Риски или gaps:
+  - the improvement is real but bounded: only `2/240` rows now survive, there are still no lasting `gray_zone` survivors, and most of the preserved cohort remains low-signal/noisy for the outsourcing use case;
+  - one selected row is still a freelance backend staffing post rather than a clean agency/vendor procurement notice, so further precision work may still be warranted if the user wants a narrower definition of outsourcing demand;
+  - `llm_review_log` now contains residual approval evidence from the first, corrected-away false-positive pass because the log is append-only; the final selected set is clean, but the audit trail includes both replays.
+- Follow-up:
+  - none by default; if the user wants higher outsourcing yield from this cohort, the next truthful item is a new bounded tuning or source-quality stage, not a reopen of this archived admin-only pass.
+
+### 2026-04-18 — PATCH-EXAMPLES-OUTSOURCING-BUNDLE-SYNC-2026-04-18
+
+- Тип записи: patch archive
+- Финальный статус: done
+- Зачем понадобилось: после admin-only tuning для outsourcing bundle пользователь попросил перенести финальные изменения из живой БД в `EXAMPLES.md`, чтобы Example C не отставал от реально работающих `System interests` и `LLM templates`.
+- Что изменилось:
+  - outsourcing Example C в `EXAMPLES.md` теперь отражает финальный admin-tuned runtime bundle вместо прежнего pre-tuning baseline;
+  - секция LLM templates теперь использует текущие live prompt texts для `interests`, `criteria`, и `global`, включая `Extra context: {explain_json}` и более жесткое подавление portal/opportunities/category noise;
+  - секция system interests теперь использует текущие live descriptions, positive/negative prototypes, `must_not_have_terms`, candidate uplift cue groups, и per-template `strictness` values;
+  - для outsourcing scenario убраны устаревшие формулировки про `interests` как purely optional future-ready template и про единообразный `balanced / hold / always`, потому что после tuning у Example C strictness смешанный (`broad`/`balanced`) и все 3 prompt scopes уже являются operator-facing baseline truth.
+- Что проверено:
+  - DB-to-doc parity check against the current local compose `interest_templates`, `selection_profiles.policy_json`, `selection_profiles.definition_json->candidateSignals`, and `llm_prompt_templates`
+  - `git diff --check -- EXAMPLES.md docs/work.md docs/history.md`
+- Риски или gaps:
+  - в других example sections файла могут оставаться собственные historical baselines и wording вроде `optional future-ready`; этот patch синхронизировал только outsourcing Example C, как и просил пользователь
+- Follow-up:
+  - none
+
+### 2026-04-18 — SPIKE-OUTSOURCING-SELECTION-TRACE-2026-04-18
+
+- Тип записи: spike archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь попросил проверить на текущем preserved outsourcing cohort, проходит ли вообще хоть одна статья под outsourcing bundle, и если не проходит, то где именно она теряется.
+- Что изменилось:
+  - code or DB mutations were not applied;
+  - проведён read-only trace по `articles`, `criterion_match_results`, `interest_filter_results`, `final_selection_results`, и `llm_review_log` на current reset-backed cohort.
+- Что проверено:
+  - `final_selection_results`: `0 selected / 0 gray_zone / 219 rejected`
+  - `interest_filter_results`: `0 match / 0 gray_zone / 809 no_match / 286 technical_filtered`
+  - `llm_review_log`: `0`
+  - representative near-threshold rows:
+    - `https://www.freelancer.com/projects/web-development/node-web-app-guidance`
+    - `https://hubstafftalent.net/jobs/net-c-backend-developer-freelance-per-project-work-ongoing-opportunities`
+    - `https://sam.gov/opportunities`
+    - `https://www.peopleperhour.com/freelance-jobs/technology-programming`
+    - `https://weworkremotely.com/categories/remote-product-jobs`
+  - those rows all end with `selectionReason = no_system_match`; none reaches `match`, `gray_zone`, or LLM review
+  - top-score rows in this rerun peak only around `0.39-0.417`, i.e. below the current criterion `gray_zone` threshold, and the current candidate-signal explains usually show either no positive groups or only one weak group such as `request_search`
+  - current content mix is source-noisy: `160 listing`, `57 entity`, `2 editorial`; top hosts are `ted.europa.eu`, `join.titans.eu`, `freelancer.com`, `arc.dev`, `peopleperhour.com`, `guru.com`, `app.mercell.com`, `workana.com`, and `weworkremotely.com`
+- Live-result summary:
+  - on the current fresh rerun there are no passing outsourcing articles at all;
+  - the failure is not “a passing article got dropped later”; the failure happens earlier, because every article ends with five system-interest checks resolving to either `no_match` or `technical_filtered_out`;
+  - optional LLM review never fires on this cohort because nothing reaches `gray_zone`.
+- Риски или gaps:
+  - this spike explains the current failure mode but does not itself fix yield;
+  - the current rerun cohort is different from the earlier admin-tuned pass that temporarily surfaced a small number of selected rows, so any follow-up tuning must be evaluated against this reset-backed, more source-noisy cohort rather than the older preserved state.
+- Follow-up:
+  - if the user wants a fix, open a new bounded tuning/source-quality item against the current reset-backed cohort.
+
+### 2026-04-18 — PATCH-ADMIN-WEBSITE-BULK-IMPORT
+
+- Тип записи: patch archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь попросил добавить в shared admin bulk-import flow поддержку массового импорта `website` channels без отдельного website-only route, но с website-aware validation, overwrite preview, and fetchUrl-based existing-channel matching.
+- Что изменилось:
+  - shared admin import page `/channels/import` now supports both `rss` and `website` presets through one screen, with provider-aware copy, examples, field reference, and deep-linkable `?providerType=website`;
+  - `BulkChannelImport` became provider-aware and now uses server-backed preflight instead of client-only overwrite guessing, including website update preview for rows matched by existing `fetchUrl`;
+  - `/bff/admin/channels/bulk` now branches by provider type while keeping legacy bare-array JSON support for RSS callers;
+  - `/bff/admin/channels/bulk/preflight` was added as a provider-aware admin BFF route for validation plus overwrite preview;
+  - RSS bulk planning now has server-side overwrite summaries by `channelId`, while website bulk planning now supports:
+    - explicit `channelId` updates;
+    - implicit updates when an existing `website` row matches the normalized `fetchUrl`;
+    - rejection of ambiguous `channelId` + `fetchUrl` conflicts;
+    - preservation of stored website `Authorization header` when a fetchUrl-matched row omits auth fields.
+  - website admin compose acceptance now proves the new live path by:
+    - creating a website channel manually;
+    - preflighting a bulk website payload that matches it by `fetchUrl`;
+    - applying the bulk update through the admin BFF;
+    - confirming the updated website channel still flows into the normal resource/projection/operator acceptance path.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/admin-rss-channels.test.ts tests/unit/ts/admin-website-channels.test.ts`
+  - `pnpm typecheck`
+  - `pnpm test:website:admin:compose`
+  - `git diff --check -- apps/admin/src/components/BulkChannelImport.tsx apps/admin/src/pages/channels/import.astro apps/admin/src/pages/channels.astro apps/admin/src/pages/help.astro apps/admin/src/pages/bff/admin/channels/bulk.ts apps/admin/src/pages/bff/admin/channels/bulk/preflight.ts apps/admin/src/pages/bff/admin/channels/bulk/shared.ts apps/admin/src/lib/server/rss-channels.ts apps/admin/src/lib/server/website-channels.ts infra/scripts/test-website-admin-flow.mjs tests/unit/ts/admin-rss-channels.test.ts tests/unit/ts/admin-website-channels.test.ts docs/work.md`
+- Риски или gaps:
+  - bulk onboarding still remains intentionally limited to `rss` and `website`; `api` and `email_imap` keep manual create/edit flows;
+  - website bulk matching is exact-by-normalized-`fetchUrl` only; there is still no fuzzy hostname/homepage upsert semantics.
+- Follow-up:
+  - none by default; open a new bounded item only if the user wants bulk onboarding for `api` / `email_imap` or a wider website bulk schema.
+
+### 2026-04-18 — PATCH-WEB-BULK-PREP-FILE
+
+- Тип записи: patch archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь попросил подготовить `web.json` в формате, который можно сразу вставить в admin bulk import для `website` sources, но без поломки существующего harness-а, который уже зависит от текущей canonical schema.
+- Что изменилось:
+  - исходный `docs/data_scripts/web.json` оставлен без изменений, потому что он остается canonical bounded live source list для `infra/scripts/run-live-website-outsourcing.mjs`;
+  - рядом добавлен derived файл `docs/data_scripts/web.bulk-import.json` с уже готовым JSON array для shared admin bulk import;
+  - derived payload включает только importable rows (`validationStatus in [ready, needs_browser_fallback]`) и выбрасывает `rejected_open_web`;
+  - каждая запись приведена к website bulk schema:
+    - `name`
+    - `fetchUrl`
+    - `language`
+    - `isActive`
+    - `pollIntervalSeconds`
+    - `adaptiveEnabled`
+    - `maxPollIntervalSeconds`
+    - `requestTimeoutMs`
+    - `totalPollTimeoutMs`
+    - `userAgent`
+    - `maxResourcesPerPoll`
+    - `crawlDelayMs`
+    - `sitemapDiscoveryEnabled`
+    - `feedDiscoveryEnabled`
+    - `collectionDiscoveryEnabled`
+    - `downloadDiscoveryEnabled`
+    - `browserFallbackEnabled`
+    - `collectionSeedUrls`
+    - `allowedUrlPatterns`
+    - `blockedUrlPatterns`
+  - пустой `authorizationHeader` deliberately не materialize-ится в derived payload, чтобы вставка в bulk import не таскала пустые secret-like fields.
+- Что проверено:
+  - derived count check against current `docs/data_scripts/web.json`: `29 expected`, `29 actual`
+  - shape spot-check on the first derived object keys against the website bulk contract
+  - `git diff --check -- docs/data_scripts/web.bulk-import.json docs/work.md`
+- Риски или gaps:
+  - derived file is a snapshot and does not auto-sync if `docs/data_scripts/web.json` changes later;
+  - no runtime or live-site revalidation was part of this patch.
+- Follow-up:
+  - if the user wants this to stay self-updating, the next bounded item would be a tiny repo-owned export script rather than manual file prep.

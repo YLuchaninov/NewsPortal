@@ -77,6 +77,36 @@ interface FetcherState {
   duplicateArticleCount: number;
 }
 
+class AsyncSemaphore {
+  private readonly waiting: Array<() => void> = [];
+  private available: number;
+
+  constructor(initialCapacity: number) {
+    this.available = Math.max(1, Math.floor(initialCapacity) || 1);
+  }
+
+  async acquire(): Promise<() => void> {
+    if (this.available > 0) {
+      this.available -= 1;
+      return () => this.release();
+    }
+
+    await new Promise<void>((resolve) => {
+      this.waiting.push(resolve);
+    });
+    this.available -= 1;
+    return () => this.release();
+  }
+
+  private release(): void {
+    this.available += 1;
+    const next = this.waiting.shift();
+    if (next) {
+      next();
+    }
+  }
+}
+
 interface PersistArticleInput {
   channel: SourceChannelRow;
   externalArticleId: string;
@@ -395,12 +425,22 @@ class FetcherService {
 
     try {
       const channels = await this.loadDueChannels();
+      const providerLimiters = new Map<string, AsyncSemaphore>([
+        ["rss", new AsyncSemaphore(this.config.fetchersRssConcurrency)],
+        ["website", new AsyncSemaphore(this.config.fetchersWebsiteConcurrency)]
+      ]);
       const results = await runWithConcurrency(
         channels,
         this.config.fetchersConcurrency,
         async (channel) => {
+          const releaseProviderSlot = await (providerLimiters.get(channel.providerType)?.acquire() ??
+            Promise.resolve(() => undefined));
           this.state.lastChannelId = channel.channelId;
-          await this.pollLoadedChannelSafely(channel);
+          try {
+            await this.pollLoadedChannelSafely(channel);
+          } finally {
+            releaseProviderSlot();
+          }
         }
       );
       const failedChannels = results.filter(
@@ -1119,57 +1159,115 @@ class FetcherService {
   private async loadDueChannels(): Promise<SourceChannelRow[]> {
     const result = await this.pool.query<SourceChannelRow>(
       `
-        select
-          source_channels.channel_id::text as "channelId",
-          source_channels.provider_type as "providerType",
-          source_channels.name,
-          source_channels.fetch_url as "fetchUrl",
-          source_channels.config_json as "configJson",
-          source_channels.auth_config_json as "authConfigJson",
-          source_channels.language,
-          source_channels.poll_interval_seconds as "pollIntervalSeconds",
-          source_channels.last_fetch_at as "lastFetchAt",
-          runtime.adaptive_enabled as "adaptiveEnabled",
-          runtime.effective_poll_interval_seconds as "effectivePollIntervalSeconds",
-          runtime.max_poll_interval_seconds as "maxPollIntervalSeconds",
-          runtime.next_due_at as "nextDueAt",
-          runtime.adaptive_step as "adaptiveStep",
-          runtime.last_result_kind as "lastResultKind",
-          runtime.consecutive_no_change_polls as "consecutiveNoChangePolls",
-          runtime.consecutive_failures as "consecutiveFailures",
-          runtime.adaptive_reason as "adaptiveReason"
-        from source_channels
-        left join source_channel_runtime_state runtime
-          on runtime.channel_id = source_channels.channel_id
-        where
-          source_channels.is_active = true
-          and source_channels.provider_type in ('rss', 'website', 'api', 'email_imap')
-          and (
-            source_channels.provider_type = 'email_imap'
-            or source_channels.fetch_url is not null
-          )
-          and (
+        with due_channels as (
+          select
+            source_channels.channel_id::text as "channelId",
+            source_channels.provider_type as "providerType",
+            source_channels.name,
+            source_channels.fetch_url as "fetchUrl",
+            source_channels.config_json as "configJson",
+            source_channels.auth_config_json as "authConfigJson",
+            source_channels.language,
+            source_channels.poll_interval_seconds as "pollIntervalSeconds",
+            source_channels.last_fetch_at as "lastFetchAt",
+            runtime.adaptive_enabled as "adaptiveEnabled",
+            runtime.effective_poll_interval_seconds as "effectivePollIntervalSeconds",
+            runtime.max_poll_interval_seconds as "maxPollIntervalSeconds",
+            runtime.next_due_at as "nextDueAt",
+            runtime.adaptive_step as "adaptiveStep",
+            runtime.last_result_kind as "lastResultKind",
+            runtime.consecutive_no_change_polls as "consecutiveNoChangePolls",
+            runtime.consecutive_failures as "consecutiveFailures",
+            runtime.adaptive_reason as "adaptiveReason",
             coalesce(
               runtime.next_due_at,
               case
                 when source_channels.last_fetch_at is null then now()
                 else source_channels.last_fetch_at + make_interval(secs => source_channels.poll_interval_seconds)
               end
-            ) <= now()
-          )
+            ) as due_at,
+            row_number() over (
+              partition by source_channels.provider_type
+              order by
+                case
+                  when source_channels.last_fetch_at is null then 0
+                  else 1
+                end,
+                case
+                  when source_channels.last_fetch_at is null then source_channels.created_at
+                  else null
+                end desc,
+                coalesce(
+                  runtime.next_due_at,
+                  case
+                    when source_channels.last_fetch_at is null then to_timestamp(0)
+                    else source_channels.last_fetch_at + make_interval(secs => source_channels.poll_interval_seconds)
+                  end
+                ),
+                coalesce(source_channels.last_fetch_at, to_timestamp(0)),
+                source_channels.created_at
+            ) as provider_rank
+          from source_channels
+          left join source_channel_runtime_state runtime
+            on runtime.channel_id = source_channels.channel_id
+          where
+            source_channels.is_active = true
+            and source_channels.provider_type in ('rss', 'website', 'api', 'email_imap')
+            and (
+              source_channels.provider_type = 'email_imap'
+              or source_channels.fetch_url is not null
+            )
+            and (
+              coalesce(
+                runtime.next_due_at,
+                case
+                  when source_channels.last_fetch_at is null then now()
+                  else source_channels.last_fetch_at + make_interval(secs => source_channels.poll_interval_seconds)
+                end
+              ) <= now()
+            )
+        )
+        select
+          "channelId",
+          "providerType",
+          name,
+          "fetchUrl",
+          "configJson",
+          "authConfigJson",
+          language,
+          "pollIntervalSeconds",
+          "lastFetchAt",
+          "adaptiveEnabled",
+          "effectivePollIntervalSeconds",
+          "maxPollIntervalSeconds",
+          "nextDueAt",
+          "adaptiveStep",
+          "lastResultKind",
+          "consecutiveNoChangePolls",
+          "consecutiveFailures",
+          "adaptiveReason"
+        from due_channels
+        where provider_rank <= case
+          when "providerType" = 'rss' then $2::bigint
+          when "providerType" = 'website' then $3::bigint
+          else $4::bigint
+        end
         order by
-          coalesce(
-            runtime.next_due_at,
-            case
-              when source_channels.last_fetch_at is null then to_timestamp(0)
-              else source_channels.last_fetch_at + make_interval(secs => source_channels.poll_interval_seconds)
-            end
-          ),
-          coalesce(source_channels.last_fetch_at, to_timestamp(0)),
-          source_channels.created_at
+          provider_rank,
+          due_at,
+          coalesce("lastFetchAt", to_timestamp(0)),
+          "channelId"
         limit $1
       `,
-      [this.config.fetchersBatchSize]
+      [
+        this.config.fetchersBatchSize,
+        Math.max(this.config.fetchersRssConcurrency, Math.ceil(this.config.fetchersBatchSize / 2)),
+        Math.max(
+          this.config.fetchersWebsiteConcurrency,
+          Math.ceil(this.config.fetchersBatchSize / 2)
+        ),
+        this.config.fetchersBatchSize,
+      ]
     );
     return result.rows;
   }
@@ -1530,6 +1628,7 @@ class FetcherService {
             channel_id,
             source_article_id,
             url,
+            content_kind,
             content_format,
             published_at,
             title,
@@ -1543,6 +1642,7 @@ class FetcherService {
             $1,
             $2,
             $3,
+            'editorial',
             'article',
             $4,
             $5,
@@ -1649,6 +1749,9 @@ class FetcherService {
               raw_payload_json = $12::jsonb,
               extraction_state = 'pending',
               extraction_error = null,
+              projection_state = 'pending',
+              projection_error = null,
+              projected_article_id = null,
               updated_at = now()
             where resource_id = $1 and channel_id = $2
           `,
@@ -1691,7 +1794,9 @@ class FetcherService {
             title,
             summary,
             classification_json,
-            raw_payload_json
+            raw_payload_json,
+            projection_state,
+            projection_error
           )
           values (
             $1,
@@ -1707,7 +1812,9 @@ class FetcherService {
             $11,
             $12,
             $13::jsonb,
-            $14::jsonb
+            $14::jsonb,
+            'pending',
+            null
           )
           on conflict do nothing
           returning resource_id::text as "resourceId"

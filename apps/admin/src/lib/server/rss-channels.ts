@@ -51,6 +51,26 @@ export interface UpsertRssChannelsResult {
   authClearedChannelIds: string[];
 }
 
+export interface RssBulkImportPlanItem {
+  index: number;
+  name: string;
+  fetchUrl: string;
+  action: "create" | "update";
+  matchType: "create" | "channelId";
+  channelId: string | null;
+  existingName: string | null;
+  existingFetchUrl: string | null;
+}
+
+export interface RssBulkImportPlan {
+  channels: NormalizedRssAdminChannelInput[];
+  wouldCreate: number;
+  wouldUpdate: number;
+  matchedByChannelId: number;
+  matchedByFetchUrl: 0;
+  items: RssBulkImportPlanItem[];
+}
+
 export type RssChannelDeleteMode = "delete" | "archive";
 
 export interface DeleteOrArchiveRssChannelResult {
@@ -279,6 +299,10 @@ export function parseBulkRssAdminChannelInputs(payload: unknown): NormalizedRssA
     throw new Error('Bulk RSS payload must contain a "channels" array.');
   }
 
+  if (payload.length === 0) {
+    throw new Error("Bulk RSS payload must include at least one channel.");
+  }
+
   return payload.map((entry, index) => {
     if (entry == null || typeof entry !== "object" || Array.isArray(entry)) {
       throw new Error(`Bulk RSS channel at index ${index} must be an object.`);
@@ -303,6 +327,83 @@ export function countRssChannelsRequiringOverwriteConfirmation(
   channels: NormalizedRssAdminChannelInput[]
 ): number {
   return channels.filter((channel) => Boolean(channel.channelId)).length;
+}
+
+export async function planRssBulkImport(
+  pool: Pool,
+  channels: NormalizedRssAdminChannelInput[]
+): Promise<RssBulkImportPlan> {
+  const explicitChannelIds = Array.from(
+    new Set(
+      channels
+        .map((channel) => channel.channelId)
+        .filter((channelId): channelId is string => Boolean(channelId))
+    )
+  );
+  const existingRows =
+    explicitChannelIds.length > 0
+      ? await pool.query<{
+          channel_id: string;
+          name: string;
+          fetch_url: string;
+        }>(
+          `
+            select
+              channel_id::text as channel_id,
+              name,
+              fetch_url
+            from source_channels
+            where
+              provider_type = 'rss'
+              and channel_id::text = any($1::text[])
+          `,
+          [explicitChannelIds]
+        )
+      : { rows: [] };
+
+  const existingByChannelId = new Map(
+    existingRows.rows.map((row) => [row.channel_id, row])
+  );
+
+  const items = channels.map((channel, index): RssBulkImportPlanItem => {
+    if (!channel.channelId) {
+      return {
+        index,
+        name: channel.name,
+        fetchUrl: channel.fetchUrl,
+        action: "create",
+        matchType: "create",
+        channelId: null,
+        existingName: null,
+        existingFetchUrl: null
+      };
+    }
+
+    const existing = existingByChannelId.get(channel.channelId);
+    if (!existing) {
+      throw new Error(`RSS channel ${channel.channelId} was not found.`);
+    }
+
+    return {
+      index,
+      name: channel.name,
+      fetchUrl: channel.fetchUrl,
+      action: "update",
+      matchType: "channelId",
+      channelId: existing.channel_id,
+      existingName: existing.name,
+      existingFetchUrl: existing.fetch_url
+    };
+  });
+
+  return {
+    channels,
+    wouldCreate: items.filter((item) => item.action === "create").length,
+    wouldUpdate: items.filter((item) => item.action === "update").length,
+    matchedByChannelId: items.filter((item) => item.matchType === "channelId").length,
+    matchedByFetchUrl: 0,
+    items
+  };
 }
 
 export async function upsertRssChannels(

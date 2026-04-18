@@ -134,6 +134,8 @@ const selectionGuidance = toRecord(resource.selection_guidance);
 const selectionDiagnostics = toRecord(resource.selection_diagnostics);
 const selectionMode = String(resource.selection_mode ?? "pending").trim() || "pending";
 const selectionDecision = String(resource.selection_decision ?? "").trim();
+const projectionState = String(resource.projection_state ?? "pending").trim() || "pending";
+const projectionError = String(resource.projection_error ?? "").trim();
 const selectionSummary =
   String(resource.selection_summary ?? "").trim() || "Selection not materialized yet.";
 const selectionGuidanceTone = String(selectionGuidance.tone ?? "neutral").trim() || "neutral";
@@ -185,6 +187,9 @@ const selectionGuidanceSummary =
         <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
           {String(resource.discovery_source ?? "manual")}
         </span>
+        <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${selectionBadgeClass(projectionState)}`}>
+          projection:{projectionState}
+        </span>
         <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${selectionBadgeClass(selectionMode)}`}>
           mode:{selectionMode}
         </span>
@@ -217,14 +222,12 @@ const selectionGuidanceSummary =
         <div class="rounded-2xl border border-border bg-background p-4">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Projection</p>
           <p class="mt-2 font-medium">
-            {resource.projected_article_id ? "Projected into article" : "Resource-only"}
+            {resource.projected_article_id ? "Projected into article" : "Diagnostics only"}
           </p>
           <p class="mt-1 text-sm text-muted-foreground">
             {resource.projected_article_title
               ? String(resource.projected_article_title)
-              : resource.content_item_ready
-                ? "Eligible for non-editorial content surfaces"
-                : "No downstream article projection"}
+              : projectionError || "No downstream article projection"}
           </p>
         </div>
         <div class="rounded-2xl border border-border bg-background p-4">

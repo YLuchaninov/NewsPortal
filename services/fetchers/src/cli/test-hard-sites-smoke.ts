@@ -618,11 +618,11 @@ async function assertBrowserIngest(
       return (
         rows.length >= 2 &&
         rows.every((row) => row.extractionState === "enriched") &&
-        rows.some((row) => row.projectedArticleId) &&
+        rows.every((row) => row.projectedArticleId) &&
         publishedResourceEvents >= 2 &&
-        publishedArticleEvents >= 1 &&
+        publishedArticleEvents >= 2 &&
         resourceSequenceRuns >= 2 &&
-        articleSequenceRuns >= 1
+        articleSequenceRuns >= 2
       );
     },
     {
@@ -645,8 +645,8 @@ async function assertBrowserIngest(
   if (storySignals.browserAssisted !== true) {
     throw new Error("Expected raw discovery signals to retain browserAssisted=true for the editorial story.");
   }
-  if (!entity || entity.projectedArticleId) {
-    throw new Error("Expected the browser-discovered entity to remain resource-only.");
+  if (!entity || !entity.projectedArticleId) {
+    throw new Error("Expected the browser-discovered entity to project into the common article pipeline.");
   }
   if (!entity.discoverySource.startsWith("browser_assisted")) {
     throw new Error("Expected the browser-discovered entity to retain browser-assisted provenance.");

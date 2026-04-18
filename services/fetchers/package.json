@@ -6,6 +6,7 @@
     "article-yield:diagnostics": "node --import tsx src/cli/article-yield-diagnostics.ts",
     "article-yield:remediate": "node --import tsx src/cli/article-yield-remediate.ts",
     "build": "tsc -p tsconfig.json --noEmit",
+    "replay:website-projections": "node --import tsx src/cli/replay-website-projections.ts",
     "test:channel-auth-smoke": "node --import tsx src/cli/test-channel-auth-smoke.ts",
     "test:feed-ingress-adapters-smoke": "node --import tsx src/cli/test-feed-ingress-adapters-smoke.ts",
     "test:hard-sites-smoke": "node --import tsx src/cli/test-hard-sites-smoke.ts",

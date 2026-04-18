@@ -212,6 +212,28 @@ async function postForm(url, payload, { cookie } = {}) {
   };
 }
 
+async function postJson(url, payload, { cookie } = {}) {
+  const target = new URL(url);
+  const body = JSON.stringify(payload);
+  const response = await sendRequest(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Origin: target.origin,
+      Referer: `${target.origin}/`,
+      ...(cookie ? { Cookie: cookie } : {}),
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body).toString(),
+    },
+    body,
+  });
+
+  return {
+    cookie: response.headers["set-cookie"] ? extractCookie(response.headers["set-cookie"]) : null,
+    json: parseJsonResponse(response.text, response),
+  };
+}
+
 async function fetchJson(url, { cookie, timeoutMs } = {}) {
   const response = await sendRequest(url, {
     headers: cookie ? { Cookie: cookie } : {},
@@ -822,6 +844,94 @@ async function main() {
       throw new Error("Admin website channel creation did not return a channelId.");
     }
 
+    const bulkUpdatedChannelName = `${channelName} bulk updated`;
+    log("Preflighting a website bulk update matched by fetchUrl.");
+    const bulkWebsitePreflight = await postJson(
+      "http://127.0.0.1:4322/bff/admin/channels/bulk/preflight",
+      {
+        providerType: "website",
+        channels: [
+          {
+            name: bulkUpdatedChannelName,
+            fetchUrl: `http://127.0.0.1:${fixtureServer.port}/`,
+            language: "en",
+            isActive: true,
+            pollIntervalSeconds: 1200,
+            adaptiveEnabled: false,
+            maxPollIntervalSeconds: 4800,
+            requestTimeoutMs: 5000,
+            totalPollTimeoutMs: 20000,
+            userAgent: "NewsPortalFetchers/admin-website-bulk",
+            maxResourcesPerPoll: 14,
+            crawlDelayMs: 250,
+            sitemapDiscoveryEnabled: true,
+            feedDiscoveryEnabled: true,
+            collectionDiscoveryEnabled: true,
+            downloadDiscoveryEnabled: true,
+            browserFallbackEnabled: true,
+            collectionSeedUrls: [`http://127.0.0.1:${fixtureServer.port}/`],
+          },
+        ],
+      },
+      {
+        cookie: adminCookie,
+      }
+    );
+    if (Number(bulkWebsitePreflight.json?.wouldUpdate ?? 0) !== 1) {
+      throw new Error("Website bulk preflight did not detect the expected update target.");
+    }
+    if (Number(bulkWebsitePreflight.json?.matchedByFetchUrl ?? 0) !== 1) {
+      throw new Error("Website bulk preflight did not report the expected fetchUrl match.");
+    }
+
+    log("Applying the website bulk update through the admin surface.");
+    const bulkWebsiteImport = await postJson(
+      "http://127.0.0.1:4322/bff/admin/channels/bulk",
+      {
+        providerType: "website",
+        confirmOverwrite: true,
+        channels: [
+          {
+            name: bulkUpdatedChannelName,
+            fetchUrl: `http://127.0.0.1:${fixtureServer.port}/`,
+            language: "en",
+            isActive: true,
+            pollIntervalSeconds: 1200,
+            adaptiveEnabled: false,
+            maxPollIntervalSeconds: 4800,
+            requestTimeoutMs: 5000,
+            totalPollTimeoutMs: 20000,
+            userAgent: "NewsPortalFetchers/admin-website-bulk",
+            maxResourcesPerPoll: 14,
+            crawlDelayMs: 250,
+            sitemapDiscoveryEnabled: true,
+            feedDiscoveryEnabled: true,
+            collectionDiscoveryEnabled: true,
+            downloadDiscoveryEnabled: true,
+            browserFallbackEnabled: true,
+            collectionSeedUrls: [`http://127.0.0.1:${fixtureServer.port}/`],
+          },
+        ],
+      },
+      {
+        cookie: adminCookie,
+      }
+    );
+    if (String(bulkWebsiteImport.json?.updatedChannelIds?.[0] ?? "") !== channelId) {
+      throw new Error("Website bulk import did not update the expected existing channel.");
+    }
+
+    await waitFor(
+      "website bulk update reflection",
+      async () =>
+        fetchJson(`http://127.0.0.1:8000/channels/${encodeURIComponent(channelId)}`),
+      (payload) =>
+        String(payload?.name ?? "") === bulkUpdatedChannelName &&
+        Number(payload?.poll_interval_seconds ?? 0) === 1200 &&
+        Number(payload?.config_json?.maxResourcesPerPoll ?? 0) === 14 &&
+        payload?.config_json?.browserFallbackEnabled === true
+    );
+
     log("Clearing crawl policy cache for 127.0.0.1.");
     clearCrawlPolicyCache("127.0.0.1");
 
@@ -837,7 +947,7 @@ async function main() {
       channelId
     );
 
-    log("Waiting for projected and resource-only web resources.");
+    log("Waiting for projected website resources and operator diagnostics.");
     const resourcesPayload = await waitFor(
       "website resources in maintenance API",
       async () =>
@@ -850,14 +960,14 @@ async function main() {
         payload.items.some(
           (item) =>
             String(item.resource_kind ?? "") === "entity" &&
-            !item.projected_article_id &&
+            item.projected_article_id &&
             String(item.extraction_state ?? "") === "enriched" &&
             String(item.title ?? "").trim().length > 0
         ) &&
         payload.items.some(
           (item) =>
             String(item.resource_kind ?? "") === "document" &&
-            !item.projected_article_id &&
+            item.projected_article_id &&
             String(item.extraction_state ?? "") === "enriched" &&
             String(item.title ?? "").trim().length > 0
         ) &&
@@ -894,7 +1004,7 @@ async function main() {
         String(entityResource.title ?? ""),
         String(documentResource.title ?? ""),
         String(projectedEditorial.title ?? ""),
-        "Resource-only",
+        "projection:projected_to_common_pipeline",
       ],
       { cookie: adminCookie }
     );
@@ -903,8 +1013,8 @@ async function main() {
       `http://127.0.0.1:4322/resources/${encodeURIComponent(String(entityResource.resource_id ?? ""))}`,
       [
         String(entityResource.title ?? ""),
-        "Structured extraction",
-        "Resource-only",
+        "Projected into article",
+        `/articles/${encodeURIComponent(String(entityResource.projected_article_id ?? ""))}`,
       ],
       { cookie: adminCookie }
     );

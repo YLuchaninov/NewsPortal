@@ -34,7 +34,7 @@ function buildCards(summary: AdminDashboardSummarySnapshot) {
   };
   return [
     {
-      label: "System Feed News",
+      label: "System-selected content",
       value: String(summary.activeNews),
       color: "text-emerald-500",
     },

@@ -54,6 +54,26 @@ export interface UpsertWebsiteChannelsResult {
   authClearedChannelIds: string[];
 }
 
+export interface WebsiteBulkImportPlanItem {
+  index: number;
+  name: string;
+  fetchUrl: string;
+  action: "create" | "update";
+  matchType: "create" | "channelId" | "fetchUrl";
+  channelId: string | null;
+  existingName: string | null;
+  existingFetchUrl: string | null;
+}
+
+export interface WebsiteBulkImportPlan {
+  channels: NormalizedWebsiteAdminChannelInput[];
+  wouldCreate: number;
+  wouldUpdate: number;
+  matchedByChannelId: number;
+  matchedByFetchUrl: number;
+  items: WebsiteBulkImportPlanItem[];
+}
+
 function readOptionalString(value: unknown): string | null {
   if (value == null) {
     return null;
@@ -270,6 +290,19 @@ function resolveNextAuthorizationHeader(
   return parseSourceChannelAuthConfig(existingAuthConfigJson).authorizationHeader;
 }
 
+function normalizeMatchedWebsiteAuthorizationHeaderUpdate(
+  update: AuthorizationHeaderUpdate
+): AuthorizationHeaderUpdate {
+  if (update.mode !== "disabled") {
+    return update;
+  }
+
+  return {
+    mode: "preserve",
+    authorizationHeader: null
+  };
+}
+
 export function parseWebsiteAdminChannelInput(
   payload: Record<string, unknown>
 ): NormalizedWebsiteAdminChannelInput {
@@ -317,6 +350,178 @@ export function parseWebsiteAdminChannelInput(
       payload,
       Boolean(readOptionalString(payload.channelId))
     )
+  };
+}
+
+export function parseBulkWebsiteAdminChannelInputs(
+  payload: unknown
+): NormalizedWebsiteAdminChannelInput[] {
+  if (!Array.isArray(payload)) {
+    throw new Error('Bulk website payload must contain a "channels" array.');
+  }
+
+  if (payload.length === 0) {
+    throw new Error("Bulk website payload must include at least one channel.");
+  }
+
+  return payload.map((entry, index) => {
+    if (entry == null || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`Bulk website channel at index ${index} must be an object.`);
+    }
+
+    try {
+      return parseWebsiteAdminChannelInput(entry as Record<string, unknown>);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown bulk website validation failure";
+      throw new Error(`Bulk website channel at index ${index} is invalid: ${message}`, {
+        cause: error
+      });
+    }
+  });
+}
+
+export async function planWebsiteBulkImport(
+  pool: Pool,
+  channels: NormalizedWebsiteAdminChannelInput[]
+): Promise<WebsiteBulkImportPlan> {
+  const explicitChannelIds = Array.from(
+    new Set(
+      channels
+        .map((channel) => channel.channelId)
+        .filter((channelId): channelId is string => Boolean(channelId))
+    )
+  );
+  const fetchUrls = Array.from(new Set(channels.map((channel) => channel.fetchUrl)));
+  const existingRows =
+    explicitChannelIds.length > 0 || fetchUrls.length > 0
+      ? await pool.query<{
+          channel_id: string;
+          name: string;
+          fetch_url: string;
+        }>(
+          `
+            select
+              channel_id::text as channel_id,
+              name,
+              fetch_url
+            from source_channels
+            where
+              provider_type = 'website'
+              and (
+                channel_id::text = any($1::text[])
+                or fetch_url = any($2::text[])
+              )
+          `,
+          [explicitChannelIds, fetchUrls]
+        )
+      : { rows: [] };
+
+  const existingByChannelId = new Map(
+    existingRows.rows.map((row) => [row.channel_id, row])
+  );
+  const existingByFetchUrl = new Map<string, (typeof existingRows.rows)[number]>();
+
+  for (const row of existingRows.rows) {
+    const existing = existingByFetchUrl.get(row.fetch_url);
+    if (existing && existing.channel_id !== row.channel_id) {
+      throw new Error(
+        `Bulk website import is ambiguous because fetchUrl ${row.fetch_url} matches multiple existing website channels.`
+      );
+    }
+    existingByFetchUrl.set(row.fetch_url, row);
+  }
+
+  const plannedChannels: NormalizedWebsiteAdminChannelInput[] = [];
+  const items: WebsiteBulkImportPlanItem[] = [];
+  let wouldCreate = 0;
+  let wouldUpdate = 0;
+  let matchedByChannelId = 0;
+  let matchedByFetchUrl = 0;
+
+  channels.forEach((channel, index) => {
+    const explicitMatch = channel.channelId
+      ? existingByChannelId.get(channel.channelId) ?? null
+      : null;
+    const fetchUrlMatch = existingByFetchUrl.get(channel.fetchUrl) ?? null;
+
+    if (channel.channelId && !explicitMatch) {
+      throw new Error(`Website channel ${channel.channelId} was not found.`);
+    }
+
+    if (
+      explicitMatch &&
+      fetchUrlMatch &&
+      explicitMatch.channel_id !== fetchUrlMatch.channel_id
+    ) {
+      throw new Error(
+        `Bulk website channel at index ${index} is ambiguous: channelId ${channel.channelId} does not match the existing website channel for fetchUrl ${channel.fetchUrl}.`
+      );
+    }
+
+    if (explicitMatch) {
+      wouldUpdate += 1;
+      matchedByChannelId += 1;
+      plannedChannels.push(channel);
+      items.push({
+        index,
+        name: channel.name,
+        fetchUrl: channel.fetchUrl,
+        action: "update",
+        matchType: "channelId",
+        channelId: explicitMatch.channel_id,
+        existingName: explicitMatch.name,
+        existingFetchUrl: explicitMatch.fetch_url
+      });
+      return;
+    }
+
+    if (fetchUrlMatch) {
+      wouldUpdate += 1;
+      matchedByFetchUrl += 1;
+      plannedChannels.push({
+        ...channel,
+        channelId: fetchUrlMatch.channel_id,
+        authorizationHeaderUpdate: normalizeMatchedWebsiteAuthorizationHeaderUpdate(
+          channel.authorizationHeaderUpdate
+        )
+      });
+      items.push({
+        index,
+        name: channel.name,
+        fetchUrl: channel.fetchUrl,
+        action: "update",
+        matchType: "fetchUrl",
+        channelId: fetchUrlMatch.channel_id,
+        existingName: fetchUrlMatch.name,
+        existingFetchUrl: fetchUrlMatch.fetch_url
+      });
+      return;
+    }
+
+    wouldCreate += 1;
+    plannedChannels.push(channel);
+    items.push({
+      index,
+      name: channel.name,
+      fetchUrl: channel.fetchUrl,
+      action: "create",
+      matchType: "create",
+      channelId: null,
+      existingName: null,
+      existingFetchUrl: null
+    });
+  });
+
+  return {
+    channels: plannedChannels,
+    wouldCreate,
+    wouldUpdate,
+    matchedByChannelId,
+    matchedByFetchUrl,
+    items
   };
 }
 

@@ -143,6 +143,7 @@ create table if not exists articles (
   channel_id uuid not null references source_channels (channel_id) on delete restrict,
   source_article_id text,
   url text not null,
+  content_kind text not null default 'editorial',
   content_format text not null default 'article',
   published_at timestamptz not null,
   ingested_at timestamptz not null default now(),
@@ -169,6 +170,17 @@ create table if not exists articles (
   updated_at timestamptz not null default now(),
   constraint articles_content_format_check
     check (content_format in ('article', 'video_news', 'gallery', 'mixed')),
+  constraint articles_content_kind_check
+    check (
+      content_kind in (
+        'editorial',
+        'listing',
+        'entity',
+        'document',
+        'data_file',
+        'api_payload'
+      )
+    ),
   constraint articles_visibility_state_check
     check (visibility_state in ('visible', 'blocked')),
   constraint articles_processing_state_check
@@ -241,7 +253,16 @@ create table if not exists canonical_documents (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint canonical_documents_content_kind_check
-    check (content_kind in ('editorial')),
+    check (
+      content_kind in (
+        'editorial',
+        'listing',
+        'entity',
+        'document',
+        'data_file',
+        'api_payload'
+      )
+    ),
   constraint canonical_documents_content_format_check
     check (content_format in ('article', 'video_news', 'gallery', 'mixed')),
   constraint canonical_documents_observation_count_check

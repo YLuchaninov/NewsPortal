@@ -1,0 +1,965 @@
+[
+  {
+    "name": "TED — business opportunities",
+    "fetchUrl": "https://ted.europa.eu/en/browse-by-business-opportunity",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://ted.europa.eu/en/search/result?search-scope=LATEST",
+      "https://ted.europa.eu/en/advanced-search"
+    ],
+    "allowedUrlPatterns": [
+      "/en/browse-by-business-opportunity",
+      "/en/search/result",
+      "/en/notice/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/help",
+      "/legal",
+      "/cookies",
+      "/developer"
+    ]
+  },
+  {
+    "name": "Find a Tender UK — public notices",
+    "fetchUrl": "https://www.find-tender.service.gov.uk/Search",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.find-tender.service.gov.uk/Search"
+    ],
+    "allowedUrlPatterns": [
+      "/Search",
+      "/Notice/"
+    ],
+    "blockedUrlPatterns": [
+      "/sign-in",
+      "/cookies",
+      "/contact",
+      "/supplier-information"
+    ]
+  },
+  {
+    "name": "SAM.gov — contract opportunities",
+    "fetchUrl": "https://sam.gov/opportunities",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://sam.gov/opportunities",
+      "https://sam.gov/contracting"
+    ],
+    "allowedUrlPatterns": [
+      "/opportunities",
+      "/opp/",
+      "/workspace/contract/opp/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/help",
+      "/entity-registration",
+      "/workspace/entity"
+    ]
+  },
+  {
+    "name": "UNGM — public procurement notices",
+    "fetchUrl": "https://www.ungm.org/Public/Notice",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.ungm.org/Public/Notice"
+    ],
+    "allowedUrlPatterns": [
+      "/Public/Notice",
+      "/Public/ContractAward"
+    ],
+    "blockedUrlPatterns": [
+      "/Account",
+      "/Register",
+      "/Login",
+      "/UNGMPro"
+    ]
+  },
+  {
+    "name": "RFPDB — public RFP search",
+    "fetchUrl": "https://www.rfpdb.com/search/search/identifier/d41d8cd98f00",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.rfpdb.com/search/search/identifier/d41d8cd98f00",
+      "https://www.rfpdb.com/view/category/name/professional-services"
+    ],
+    "allowedUrlPatterns": [
+      "/search/search/",
+      "/view/document/",
+      "/view/category/",
+      "/process/download/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/register",
+      "/contact",
+      "/about"
+    ]
+  },
+  {
+    "name": "Upwork — freelance development jobs",
+    "fetchUrl": "https://www.upwork.com/freelance-jobs/website-development/",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.upwork.com/freelance-jobs/website-development/",
+      "https://www.upwork.com/freelance-jobs/software-development/"
+    ],
+    "allowedUrlPatterns": [
+      "/freelance-jobs/",
+      "/freelance-jobs/apply/"
+    ],
+    "blockedUrlPatterns": [
+      "/ab/",
+      "/signup",
+      "/login",
+      "/hire/"
+    ]
+  },
+  {
+    "name": "Freelancer.com — software development jobs",
+    "fetchUrl": "https://www.freelancer.com/jobs/software-development",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.freelancer.com/jobs/software-development",
+      "https://www.freelancer.com/projects/software-development/"
+    ],
+    "allowedUrlPatterns": [
+      "/jobs/",
+      "/projects/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/signup",
+      "/post-project",
+      "/enterprise/"
+    ]
+  },
+  {
+    "name": "Guru — freelance jobs",
+    "fetchUrl": "https://www.guru.com/d/jobs/",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.guru.com/d/jobs/"
+    ],
+    "allowedUrlPatterns": [
+      "/d/jobs/",
+      "/jobs/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/sign-up",
+      "/post-a-job",
+      "/pricing"
+    ]
+  },
+  {
+    "name": "PeoplePerHour — software development jobs",
+    "fetchUrl": "https://www.peopleperhour.com/freelance-software-development-jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.peopleperhour.com/freelance-software-development-jobs",
+      "https://www.peopleperhour.com/freelance-jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/freelance-jobs",
+      "/freelance-software-development-jobs"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/sign-up",
+      "/post-project",
+      "/offers/"
+    ]
+  },
+  {
+    "name": "Workana — development jobs",
+    "fetchUrl": "https://www.workana.com/en/jobs?subcategory=web-development",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 12000,
+    "totalPollTimeoutMs": 70000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": true,
+    "collectionSeedUrls": [
+      "https://www.workana.com/en/jobs?subcategory=web-development",
+      "https://www.workana.com/en/jobs?query=software"
+    ],
+    "allowedUrlPatterns": [
+      "/en/jobs",
+      "/en/job/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/register",
+      "/hire",
+      "/freelancers"
+    ]
+  },
+  {
+    "name": "Contracts Finder — England public contracts",
+    "fetchUrl": "https://www.contractsfinder.service.gov.uk/Search",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.contractsfinder.service.gov.uk/Search"
+    ],
+    "allowedUrlPatterns": [
+      "/Search"
+    ],
+    "blockedUrlPatterns": [
+      "/signin",
+      "/register",
+      "/cookies",
+      "/contact"
+    ]
+  },
+  {
+    "name": "Public Contracts Scotland — current notices",
+    "fetchUrl": "https://www.publiccontractsscotland.gov.uk/search/search_7daysResultsList.aspx",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.publiccontractsscotland.gov.uk/search/search_7daysResultsList.aspx",
+      "https://www.publiccontractsscotland.gov.uk/"
+    ],
+    "allowedUrlPatterns": [
+      "/search/search_7daysResultsList.aspx",
+      "/Search/Search_Switch.aspx",
+      "/search/show/search_view.aspx",
+      "/NoticeDownload/Download.aspx"
+    ],
+    "blockedUrlPatterns": [
+      "/Login",
+      "/Register",
+      "/SuppliersArea",
+      "/Help"
+    ]
+  },
+  {
+    "name": "eTenders Ireland — latest CfTs",
+    "fetchUrl": "https://www.etenders.gov.ie/epps/quickSearchAction.do?searchType=cftFTS&latest=true",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.etenders.gov.ie/epps/quickSearchAction.do?searchType=cftFTS&latest=true",
+      "https://www.etenders.gov.ie/epps/home.do"
+    ],
+    "allowedUrlPatterns": [
+      "/epps/quickSearchAction.do",
+      "/epps/cft/prepareViewCfTWS.do",
+      "/epps/cft/listContractDocuments.do",
+      "/epps/home.do"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/listMyCFT.do",
+      "/register",
+      "/downloadInfoItem.do?documentId="
+    ]
+  },
+  {
+    "name": "Portal BASE — Portugal public procurement",
+    "fetchUrl": "https://www.base.gov.pt/Base4/en/",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.base.gov.pt/Base4/en/",
+      "https://www.base.gov.pt/Base4/en/the-portal/base/"
+    ],
+    "allowedUrlPatterns": [
+      "/Base4/en/detail/",
+      "/Base4/en/",
+      "/Base4/pt/pesquisa/"
+    ],
+    "blockedUrlPatterns": [
+      "/faq",
+      "/perguntas-frequentes",
+      "/orientacoes-tecnicas",
+      "/noticias/"
+    ]
+  },
+  {
+    "name": "PLACE — France public consultations",
+    "fetchUrl": "https://www.marches-publics.gouv.fr/?AllCons=&page=Entreprise.EntrepriseAdvancedSearch",
+    "language": "fr",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.marches-publics.gouv.fr/?AllCons=&page=Entreprise.EntrepriseAdvancedSearch",
+      "https://www.marches-publics.gouv.fr/"
+    ],
+    "allowedUrlPatterns": [
+      "/app.php/entreprise/consultation/",
+      "?AllCons=",
+      "page=Entreprise.EntrepriseAdvancedSearch"
+    ],
+    "blockedUrlPatterns": [
+      "/app.php/entreprise/identification",
+      "/app.php/entreprise/inscription",
+      "/contact"
+    ]
+  },
+  {
+    "name": "PCSP Spain — tender search",
+    "fetchUrl": "https://contrataciondelestado.es/wps/portal/plataforma/buscadores",
+    "language": "es",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://contrataciondelestado.es/wps/portal/plataforma/buscadores",
+      "https://contrataciondelestado.es/wps/portal/plataforma"
+    ],
+    "allowedUrlPatterns": [
+      "/wps/portal/plataforma/buscadores",
+      "/wps/portal/plataforma/buscadores/detalle/",
+      "/wps/poc?uri=deeplink:detalle_licitacion"
+    ],
+    "blockedUrlPatterns": [
+      "/contacto",
+      "/acceso",
+      "/perfilContratante",
+      "/estadisticas"
+    ]
+  },
+  {
+    "name": "oeffentlichevergabe.de — public notices",
+    "fetchUrl": "https://oeffentlichevergabe.de/ui/en/erweiterte-suche",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 12000,
+    "totalPollTimeoutMs": 70000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": true,
+    "collectionSeedUrls": [
+      "https://oeffentlichevergabe.de/ui/en/erweiterte-suche",
+      "https://oeffentlichevergabe.de/ui/en"
+    ],
+    "allowedUrlPatterns": [
+      "/ui/en/erweiterte-suche",
+      "/ui/en/search/details",
+      "/ui/notices/"
+    ],
+    "blockedUrlPatterns": [
+      "/ui/en/faq",
+      "/ui/en/about",
+      "/ui/en/termsOfUse"
+    ]
+  },
+  {
+    "name": "e-Zamówienia BZP — public notices",
+    "fetchUrl": "https://ezamowienia.gov.pl/mo-client-board/bzp/list",
+    "language": "pl",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://ezamowienia.gov.pl/mo-client-board/bzp/list",
+      "https://ezamowienia.gov.pl/"
+    ],
+    "allowedUrlPatterns": [
+      "/mo-client-board/bzp/list",
+      "/mo-client-board/bzp/notice-details/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/register",
+      "/pomoc",
+      "/faq"
+    ]
+  },
+  {
+    "name": "Mercell — public tender search",
+    "fetchUrl": "https://app.mercell.com/search",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 12000,
+    "totalPollTimeoutMs": 70000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": true,
+    "collectionSeedUrls": [
+      "https://app.mercell.com/search",
+      "https://app.mercell.com/"
+    ],
+    "allowedUrlPatterns": [
+      "/search",
+      "/tender/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/sign-in",
+      "/pricing",
+      "/support"
+    ]
+  },
+  {
+    "name": "EU-Supply — ongoing public tenders",
+    "fetchUrl": "https://eu.eu-supply.com/ctm/supplier/publictenders",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 1800,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 28800,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 30,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": true,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://eu.eu-supply.com/ctm/supplier/publictenders",
+      "https://eu.eu-supply.com/"
+    ],
+    "allowedUrlPatterns": [
+      "/ctm/supplier/publictenders",
+      "/app/rfq/rwlentrance_s.asp"
+    ],
+    "blockedUrlPatterns": [
+      "/ctm/supplier/login",
+      "/ctm/company/companyinformation",
+      "/terms"
+    ]
+  },
+  {
+    "name": "Twine — developer freelance jobs",
+    "fetchUrl": "https://www.twine.net/jobs/developers",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.twine.net/jobs/developers",
+      "https://www.twine.net/jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/jobs",
+      "/jobs/developers"
+    ],
+    "blockedUrlPatterns": [
+      "/sign-in",
+      "/sign-up",
+      "/hire",
+      "/experts"
+    ]
+  },
+  {
+    "name": "Truelancer — freelance jobs",
+    "fetchUrl": "https://www.truelancer.com/freelance-jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://www.truelancer.com/freelance-jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/freelance-jobs",
+      "/freelance-project/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/signup",
+      "/post-project",
+      "/services/"
+    ]
+  },
+  {
+    "name": "Useme — coding and IT jobs",
+    "fetchUrl": "https://useme.com/en/jobs/category/coding-and-it%2C35/software%2C100/",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://useme.com/en/jobs/category/coding-and-it%2C35/software%2C100/",
+      "https://useme.com/en/jobs/"
+    ],
+    "allowedUrlPatterns": [
+      "/en/jobs/category/",
+      "/en/jobs/"
+    ],
+    "blockedUrlPatterns": [
+      "/blog",
+      "/pricing",
+      "/help",
+      "/login",
+      "/register"
+    ]
+  },
+  {
+    "name": "TITANS — freelance IT jobs",
+    "fetchUrl": "https://join.titans.eu/en/web-developer-jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://join.titans.eu/en",
+      "https://join.titans.eu/en/web-developer-jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/en/",
+      "/cs/",
+      "/sk/"
+    ],
+    "blockedUrlPatterns": [
+      "/blog",
+      "/kontakt",
+      "/privacy-policy",
+      "/cookies"
+    ]
+  },
+  {
+    "name": "Flexiple — remote software engineer jobs",
+    "fetchUrl": "https://flexiple.com/jobs/remote-software-engineer-jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://flexiple.com/jobs/remote-software-engineer-jobs",
+      "https://flexiple.com/jobs/"
+    ],
+    "allowedUrlPatterns": [
+      "/jobs/remote-software-engineer-jobs",
+      "/jobs/"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/hire",
+      "/developers/"
+    ]
+  },
+  {
+    "name": "Hubstaff Talent — remote jobs",
+    "fetchUrl": "https://hubstafftalent.net/search/jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://hubstafftalent.net/search/jobs",
+      "https://hubstafftalent.net/work"
+    ],
+    "allowedUrlPatterns": [
+      "/search/jobs",
+      "/jobs/",
+      "/work"
+    ],
+    "blockedUrlPatterns": [
+      "/jobs/new",
+      "/sign-in",
+      "/products",
+      "/search/profiles"
+    ]
+  },
+  {
+    "name": "Contra — featured freelance jobs",
+    "fetchUrl": "https://contra.com/featured-jobs/remote-software-engineer-jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://contra.com/featured-jobs/remote-software-engineer-jobs",
+      "https://contra.com/features/find-freelance-jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/featured-jobs/",
+      "/features/find-freelance-jobs"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/signup",
+      "/pro"
+    ]
+  },
+  {
+    "name": "Arc — remote software jobs",
+    "fetchUrl": "https://arc.dev/remote-jobs/software-development",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://arc.dev/remote-jobs/software-development",
+      "https://arc.dev/remote-jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/remote-jobs",
+      "/remote-jobs/software-development"
+    ],
+    "blockedUrlPatterns": [
+      "/login",
+      "/hire",
+      "/resume",
+      "/blog"
+    ]
+  },
+  {
+    "name": "We Work Remotely — programming jobs",
+    "fetchUrl": "https://weworkremotely.com/remote-software-developer-jobs",
+    "language": "en",
+    "isActive": true,
+    "pollIntervalSeconds": 900,
+    "adaptiveEnabled": true,
+    "maxPollIntervalSeconds": 14400,
+    "requestTimeoutMs": 10000,
+    "totalPollTimeoutMs": 60000,
+    "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+    "maxResourcesPerPoll": 20,
+    "crawlDelayMs": 1000,
+    "sitemapDiscoveryEnabled": true,
+    "feedDiscoveryEnabled": false,
+    "collectionDiscoveryEnabled": true,
+    "downloadDiscoveryEnabled": false,
+    "browserFallbackEnabled": false,
+    "collectionSeedUrls": [
+      "https://weworkremotely.com/remote-software-developer-jobs",
+      "https://weworkremotely.com/categories/remote-full-stack-programming-jobs"
+    ],
+    "allowedUrlPatterns": [
+      "/remote-software-developer-jobs",
+      "/categories/remote-",
+      "/remote-jobs/"
+    ],
+    "blockedUrlPatterns": [
+      "/sign-in",
+      "/community",
+      "/podcast",
+      "/resources"
+    ]
+  }
+]

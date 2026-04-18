@@ -1,0 +1,1620 @@
+[
+  {
+    "id": "ted_eu",
+    "siteName": "TED (Tenders Electronic Daily)",
+    "group": "official_tenders_global",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public business-opportunity listings and notice pages are visible without login.",
+    "evidenceUrls": [
+      "https://ted.europa.eu/en/browse-by-business-opportunity",
+      "https://ted.europa.eu/en/search/result?search-scope=LATEST"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "TED — business opportunities",
+      "websiteEntryUrl": "https://ted.europa.eu/en/browse-by-business-opportunity",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://ted.europa.eu/en/search/result?search-scope=LATEST",
+        "https://ted.europa.eu/en/advanced-search"
+      ],
+      "allowedUrlPatterns": [
+        "/en/browse-by-business-opportunity",
+        "/en/search/result",
+        "/en/notice/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/help",
+        "/legal",
+        "/cookies",
+        "/developer"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "find_a_tender_uk",
+    "siteName": "Find a Tender (UK)",
+    "group": "official_tenders_global",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public search and notice pages are accessible without login; sign-in is only for extra functions.",
+    "evidenceUrls": [
+      "https://www.find-tender.service.gov.uk/Search",
+      "https://www.find-tender.service.gov.uk/Notice/017928-2026"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "Find a Tender UK — public notices",
+      "websiteEntryUrl": "https://www.find-tender.service.gov.uk/Search",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.find-tender.service.gov.uk/Search"
+      ],
+      "allowedUrlPatterns": [
+        "/Search",
+        "/Notice/"
+      ],
+      "blockedUrlPatterns": [
+        "/sign-in",
+        "/cookies",
+        "/contact",
+        "/supplier-information"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "sam_gov_opportunities",
+    "siteName": "SAM.gov Contract Opportunities",
+    "group": "official_tenders_global",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public opportunity search and notice detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://sam.gov/opportunities",
+      "https://sam.gov/opp/f00c43abba62400b969963c285f42cb7/view"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "SAM.gov — contract opportunities",
+      "websiteEntryUrl": "https://sam.gov/opportunities",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://sam.gov/opportunities",
+        "https://sam.gov/contracting"
+      ],
+      "allowedUrlPatterns": [
+        "/opportunities",
+        "/opp/",
+        "/workspace/contract/opp/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/help",
+        "/entity-registration",
+        "/workspace/entity"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "ungm_public_notice",
+    "siteName": "UNGM (United Nations Global Marketplace)",
+    "group": "official_tenders_global",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public procurement opportunity pages are visible under the Public/Notice section.",
+    "evidenceUrls": [
+      "https://www.ungm.org/Public/Notice"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "UNGM — public procurement notices",
+      "websiteEntryUrl": "https://www.ungm.org/Public/Notice",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.ungm.org/Public/Notice"
+      ],
+      "allowedUrlPatterns": [
+        "/Public/Notice",
+        "/Public/ContractAward"
+      ],
+      "blockedUrlPatterns": [
+        "/Account",
+        "/Register",
+        "/Login",
+        "/UNGMPro"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "rfpdb",
+    "siteName": "The RFP Database (RFPDB)",
+    "group": "official_tenders_global",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "medium",
+    "validationNotes": "Use the public search-results page as entry; public detail and download URLs are indexed and visible.",
+    "evidenceUrls": [
+      "https://www.rfpdb.com/search/search/identifier/d41d8cd98f00",
+      "https://www.rfpdb.com/view/document/name/Request-for-Proposals-%28RFP%29%3A-Feasibility-Study-%26-Consulting-Services-for-an-Interactive-Document-Education-Solution---"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "RFPDB — public RFP search",
+      "websiteEntryUrl": "https://www.rfpdb.com/search/search/identifier/d41d8cd98f00",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.rfpdb.com/search/search/identifier/d41d8cd98f00",
+        "https://www.rfpdb.com/view/category/name/professional-services"
+      ],
+      "allowedUrlPatterns": [
+        "/search/search/",
+        "/view/document/",
+        "/view/category/",
+        "/process/download/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/register",
+        "/contact",
+        "/about"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "upwork_freelance_jobs",
+    "siteName": "Upwork",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public category and individual job pages are visible without login; login is for applying.",
+    "evidenceUrls": [
+      "https://www.upwork.com/freelance-jobs/website-development/",
+      "https://www.upwork.com/freelance-jobs/apply/"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Upwork — freelance development jobs",
+      "websiteEntryUrl": "https://www.upwork.com/freelance-jobs/website-development/",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.upwork.com/freelance-jobs/website-development/",
+        "https://www.upwork.com/freelance-jobs/software-development/"
+      ],
+      "allowedUrlPatterns": [
+        "/freelance-jobs/",
+        "/freelance-jobs/apply/"
+      ],
+      "blockedUrlPatterns": [
+        "/ab/",
+        "/signup",
+        "/login",
+        "/hire/"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "freelancer_com",
+    "siteName": "Freelancer.com",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public jobs index and public project-detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.freelancer.com/jobs/software-development",
+      "https://www.freelancer.com/projects/software-development/software-engineer-for-business"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Freelancer.com — software development jobs",
+      "websiteEntryUrl": "https://www.freelancer.com/jobs/software-development",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.freelancer.com/jobs/software-development",
+        "https://www.freelancer.com/projects/software-development/"
+      ],
+      "allowedUrlPatterns": [
+        "/jobs/",
+        "/projects/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/signup",
+        "/post-project",
+        "/enterprise/"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "guru_jobs",
+    "siteName": "Guru",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public job listing and detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.guru.com/d/jobs/",
+      "https://www.guru.com/jobs/experienced-youtube-video-editor-needed/2117599%26SearchUrl%3Dsearch.aspx"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Guru — freelance jobs",
+      "websiteEntryUrl": "https://www.guru.com/d/jobs/",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.guru.com/d/jobs/"
+      ],
+      "allowedUrlPatterns": [
+        "/d/jobs/",
+        "/jobs/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/sign-up",
+        "/post-a-job",
+        "/pricing"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "peopleperhour_jobs",
+    "siteName": "PeoplePerHour",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public freelance jobs pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.peopleperhour.com/freelance-software-development-jobs",
+      "https://www.peopleperhour.com/freelance-jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "PeoplePerHour — software development jobs",
+      "websiteEntryUrl": "https://www.peopleperhour.com/freelance-software-development-jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.peopleperhour.com/freelance-software-development-jobs",
+        "https://www.peopleperhour.com/freelance-jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/freelance-jobs",
+        "/freelance-software-development-jobs"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/sign-up",
+        "/post-project",
+        "/offers/"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "workana",
+    "siteName": "Workana",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board_js_heavy",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "needs_browser_fallback",
+    "validationConfidence": "high",
+    "validationNotes": "Public job detail pages are visible, but listing/search HTML is sparse enough that browser fallback is safer from the listing entrypoint.",
+    "evidenceUrls": [
+      "https://www.workana.com/en/jobs?subcategory=web-development",
+      "https://www.workana.com/en/job/experienced-full-stack-developer-for-web-application-development"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 12000,
+      "totalPollTimeoutMs": 70000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": true,
+      "name": "Workana — development jobs",
+      "websiteEntryUrl": "https://www.workana.com/en/jobs?subcategory=web-development",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.workana.com/en/jobs?subcategory=web-development",
+        "https://www.workana.com/en/jobs?query=software"
+      ],
+      "allowedUrlPatterns": [
+        "/en/jobs",
+        "/en/job/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/register",
+        "/hire",
+        "/freelancers"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "contracts_finder_uk",
+    "siteName": "Contracts Finder (England)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public contract search is accessible without login.",
+    "evidenceUrls": [
+      "https://www.contractsfinder.service.gov.uk/Search"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "Contracts Finder — England public contracts",
+      "websiteEntryUrl": "https://www.contractsfinder.service.gov.uk/Search",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.contractsfinder.service.gov.uk/Search"
+      ],
+      "allowedUrlPatterns": [
+        "/Search"
+      ],
+      "blockedUrlPatterns": [
+        "/signin",
+        "/register",
+        "/cookies",
+        "/contact"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "public_contracts_scotland",
+    "siteName": "Public Contracts Scotland",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public search and notice detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.publiccontractsscotland.gov.uk/search/search_7daysResultsList.aspx",
+      "https://www.publiccontractsscotland.gov.uk/search/show/search_view.aspx?ID=APR538674"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "Public Contracts Scotland — current notices",
+      "websiteEntryUrl": "https://www.publiccontractsscotland.gov.uk/search/search_7daysResultsList.aspx",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.publiccontractsscotland.gov.uk/search/search_7daysResultsList.aspx",
+        "https://www.publiccontractsscotland.gov.uk/"
+      ],
+      "allowedUrlPatterns": [
+        "/search/search_7daysResultsList.aspx",
+        "/Search/Search_Switch.aspx",
+        "/search/show/search_view.aspx",
+        "/NoticeDownload/Download.aspx"
+      ],
+      "blockedUrlPatterns": [
+        "/Login",
+        "/Register",
+        "/SuppliersArea",
+        "/Help"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "etenders_ireland",
+    "siteName": "eTenders (Ireland)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public latest-CfT, CfT workspace and tender-document pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.etenders.gov.ie/epps/quickSearchAction.do?searchType=cftFTS&latest=true",
+      "https://www.etenders.gov.ie/epps/cft/prepareViewCfTWS.do?resourceId=2782052"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "eTenders Ireland — latest CfTs",
+      "websiteEntryUrl": "https://www.etenders.gov.ie/epps/quickSearchAction.do?searchType=cftFTS&latest=true",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.etenders.gov.ie/epps/quickSearchAction.do?searchType=cftFTS&latest=true",
+        "https://www.etenders.gov.ie/epps/home.do"
+      ],
+      "allowedUrlPatterns": [
+        "/epps/quickSearchAction.do",
+        "/epps/cft/prepareViewCfTWS.do",
+        "/epps/cft/listContractDocuments.do",
+        "/epps/home.do"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/listMyCFT.do",
+        "/register",
+        "/downloadInfoItem.do?documentId="
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "portal_base_portugal",
+    "siteName": "Portal BASE (Portugal)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "medium",
+    "validationNotes": "Public search and detail pages are visible; use the BASE search/detail paths rather than relying on the generic homepage alone.",
+    "evidenceUrls": [
+      "https://www.base.gov.pt/Base4/en/",
+      "https://www.base.gov.pt/Base4/en/detail/?id=430636&type=anuncios"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "Portal BASE — Portugal public procurement",
+      "websiteEntryUrl": "https://www.base.gov.pt/Base4/en/",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.base.gov.pt/Base4/en/",
+        "https://www.base.gov.pt/Base4/en/the-portal/base/"
+      ],
+      "allowedUrlPatterns": [
+        "/Base4/en/detail/",
+        "/Base4/en/",
+        "/Base4/pt/pesquisa/"
+      ],
+      "blockedUrlPatterns": [
+        "/faq",
+        "/perguntas-frequentes",
+        "/orientacoes-tecnicas",
+        "/noticias/"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "place_france",
+    "siteName": "PLACE / Marchés-Publics.gouv.fr (France)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public consultation listings and detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.marches-publics.gouv.fr/?AllCons=&page=Entreprise.EntrepriseAdvancedSearch",
+      "https://www.marches-publics.gouv.fr/app.php/entreprise/consultation/2940332?orgAcronyme=x7c"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "PLACE — France public consultations",
+      "websiteEntryUrl": "https://www.marches-publics.gouv.fr/?AllCons=&page=Entreprise.EntrepriseAdvancedSearch",
+      "language": "fr",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.marches-publics.gouv.fr/?AllCons=&page=Entreprise.EntrepriseAdvancedSearch",
+        "https://www.marches-publics.gouv.fr/"
+      ],
+      "allowedUrlPatterns": [
+        "/app.php/entreprise/consultation/",
+        "?AllCons=",
+        "page=Entreprise.EntrepriseAdvancedSearch"
+      ],
+      "blockedUrlPatterns": [
+        "/app.php/entreprise/identification",
+        "/app.php/entreprise/inscription",
+        "/contact"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "spain_pcspp",
+    "siteName": "Plataforma de Contratación del Sector Público (Spain)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "medium",
+    "validationNotes": "Public search and detail pages are visible, but URLs are highly parameterized; keep patterns focused on the plataforma/buscadores paths.",
+    "evidenceUrls": [
+      "https://contrataciondelestado.es/wps/portal/plataforma/buscadores",
+      "https://contrataciondelestado.es/wps/portal/plataforma/buscadores/detalle/"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "PCSP Spain — tender search",
+      "websiteEntryUrl": "https://contrataciondelestado.es/wps/portal/plataforma/buscadores",
+      "language": "es",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://contrataciondelestado.es/wps/portal/plataforma/buscadores",
+        "https://contrataciondelestado.es/wps/portal/plataforma"
+      ],
+      "allowedUrlPatterns": [
+        "/wps/portal/plataforma/buscadores",
+        "/wps/portal/plataforma/buscadores/detalle/",
+        "/wps/poc?uri=deeplink:detalle_licitacion"
+      ],
+      "blockedUrlPatterns": [
+        "/contacto",
+        "/acceso",
+        "/perfilContratante",
+        "/estadisticas"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "oeffentlichevergabe_de",
+    "siteName": "oeffentlichevergabe.de (Germany)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders_js_heavy",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "needs_browser_fallback",
+    "validationConfidence": "high",
+    "validationNotes": "Public detail pages exist, but the site explicitly fails without JavaScript on notice detail pages; browser fallback is recommended.",
+    "evidenceUrls": [
+      "https://oeffentlichevergabe.de/ui/en/erweiterte-suche",
+      "https://oeffentlichevergabe.de/ui/en/search/details?noticeId=1950e8e2-b906-4ac7-bc97-271cecb5cd75"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 12000,
+      "totalPollTimeoutMs": 70000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": true,
+      "name": "oeffentlichevergabe.de — public notices",
+      "websiteEntryUrl": "https://oeffentlichevergabe.de/ui/en/erweiterte-suche",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://oeffentlichevergabe.de/ui/en/erweiterte-suche",
+        "https://oeffentlichevergabe.de/ui/en"
+      ],
+      "allowedUrlPatterns": [
+        "/ui/en/erweiterte-suche",
+        "/ui/en/search/details",
+        "/ui/notices/"
+      ],
+      "blockedUrlPatterns": [
+        "/ui/en/faq",
+        "/ui/en/about",
+        "/ui/en/termsOfUse"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "ezamowienia_bzp_poland",
+    "siteName": "e-Zamówienia / BZP (Poland)",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public BZP list and notice-details pages are visible without login.",
+    "evidenceUrls": [
+      "https://ezamowienia.gov.pl/mo-client-board/bzp/list",
+      "https://ezamowienia.gov.pl/mo-client-board/bzp/notice-details/id/08dc1b35-bf28-57f4-9d4f-e1c9376d67e7"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "e-Zamówienia BZP — public notices",
+      "websiteEntryUrl": "https://ezamowienia.gov.pl/mo-client-board/bzp/list",
+      "language": "pl",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://ezamowienia.gov.pl/mo-client-board/bzp/list",
+        "https://ezamowienia.gov.pl/"
+      ],
+      "allowedUrlPatterns": [
+        "/mo-client-board/bzp/list",
+        "/mo-client-board/bzp/notice-details/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/register",
+        "/pomoc",
+        "/faq"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "mercell",
+    "siteName": "Mercell",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders_js_heavy",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "needs_browser_fallback",
+    "validationConfidence": "high",
+    "validationNotes": "Public search and tender URLs are indexed, but direct detail-page HTML is too sparse in static mode; browser fallback is safer.",
+    "evidenceUrls": [
+      "https://app.mercell.com/search",
+      "https://app.mercell.com/tender/57161527"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 12000,
+      "totalPollTimeoutMs": 70000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": true,
+      "name": "Mercell — public tender search",
+      "websiteEntryUrl": "https://app.mercell.com/search",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://app.mercell.com/search",
+        "https://app.mercell.com/"
+      ],
+      "allowedUrlPatterns": [
+        "/search",
+        "/tender/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/sign-in",
+        "/pricing",
+        "/support"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "eu_supply",
+    "siteName": "EU-Supply",
+    "group": "official_tenders_europe",
+    "profile": "documents_tenders",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "medium",
+    "validationNotes": "The public tenders list is visible without login; detail pages route through public RFQ entrance pages.",
+    "evidenceUrls": [
+      "https://eu.eu-supply.com/ctm/supplier/publictenders",
+      "https://eu.eu-supply.com/app/rfq/rwlentrance_s.asp?PID=428247&B=BLUELIGHT"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 1800,
+      "maxPollIntervalSeconds": 28800,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 30,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": true,
+      "browserFallbackEnabled": false,
+      "name": "EU-Supply — ongoing public tenders",
+      "websiteEntryUrl": "https://eu.eu-supply.com/ctm/supplier/publictenders",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://eu.eu-supply.com/ctm/supplier/publictenders",
+        "https://eu.eu-supply.com/"
+      ],
+      "allowedUrlPatterns": [
+        "/ctm/supplier/publictenders",
+        "/app/rfq/rwlentrance_s.asp"
+      ],
+      "blockedUrlPatterns": [
+        "/ctm/supplier/login",
+        "/ctm/company/companyinformation",
+        "/terms"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "document",
+      "data_file",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "twine",
+    "siteName": "Twine",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public jobs pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.twine.net/jobs/developers",
+      "https://www.twine.net/jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Twine — developer freelance jobs",
+      "websiteEntryUrl": "https://www.twine.net/jobs/developers",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.twine.net/jobs/developers",
+        "https://www.twine.net/jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/jobs",
+        "/jobs/developers"
+      ],
+      "blockedUrlPatterns": [
+        "/sign-in",
+        "/sign-up",
+        "/hire",
+        "/experts"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "truelancer",
+    "siteName": "Truelancer",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public job-list and freelance-project detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://www.truelancer.com/freelance-jobs",
+      "https://www.truelancer.com/freelance-project/full-stack-developer-for-email-finder-tool-639321"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Truelancer — freelance jobs",
+      "websiteEntryUrl": "https://www.truelancer.com/freelance-jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://www.truelancer.com/freelance-jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/freelance-jobs",
+        "/freelance-project/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/signup",
+        "/post-project",
+        "/services/"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "useme",
+    "siteName": "Useme",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public category and job-detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://useme.com/en/jobs/category/coding-and-it%2C35/software%2C100/",
+      "https://useme.com/en/jobs/vuejs-front-end-dev-with-css-experience%2C47008/"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Useme — coding and IT jobs",
+      "websiteEntryUrl": "https://useme.com/en/jobs/category/coding-and-it%2C35/software%2C100/",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://useme.com/en/jobs/category/coding-and-it%2C35/software%2C100/",
+        "https://useme.com/en/jobs/"
+      ],
+      "allowedUrlPatterns": [
+        "/en/jobs/category/",
+        "/en/jobs/"
+      ],
+      "blockedUrlPatterns": [
+        "/blog",
+        "/pricing",
+        "/help",
+        "/login",
+        "/register"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "titans",
+    "siteName": "TITANS",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public category pages and public project-detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://join.titans.eu/en/web-developer-jobs",
+      "https://join.titans.eu/cs/platform-engineer-kubernetes-ai-gpu-cloud-260414ESK"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "TITANS — freelance IT jobs",
+      "websiteEntryUrl": "https://join.titans.eu/en/web-developer-jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://join.titans.eu/en",
+        "https://join.titans.eu/en/web-developer-jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/en/",
+        "/cs/",
+        "/sk/"
+      ],
+      "blockedUrlPatterns": [
+        "/blog",
+        "/kontakt",
+        "/privacy-policy",
+        "/cookies"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "moonlight",
+    "siteName": "Moonlight",
+    "group": "private_sector_marketplaces",
+    "profile": "not_open_web_jobs",
+    "openWebPublicationsVisible": false,
+    "validationStatus": "rejected_open_web",
+    "validationConfidence": "medium",
+    "validationNotes": "The marketing site is public, but the help documentation says developers review matched jobs from email links or after logging in. Treat as not suitable for open-web job monitoring.",
+    "evidenceUrls": [
+      "https://www.moonlightwork.com/",
+      "https://help.moonlightwork.com/en/articles/8986723-applying-for-jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Moonlight — disabled (jobs depend on login/matching)",
+      "websiteEntryUrl": "https://www.moonlightwork.com/",
+      "language": "en",
+      "active": false,
+      "collectionSeedUrls": [
+        "https://www.moonlightwork.com/"
+      ],
+      "allowedUrlPatterns": [
+        "/",
+        "/blog/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/app",
+        "/dashboard"
+      ]
+    },
+    "expectedResourceKinds": [],
+    "projectionExpectation": "do_not_enable"
+  },
+  {
+    "id": "flexiple",
+    "siteName": "Flexiple",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public remote software engineer jobs pages are visible without login.",
+    "evidenceUrls": [
+      "https://flexiple.com/jobs/remote-software-engineer-jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Flexiple — remote software engineer jobs",
+      "websiteEntryUrl": "https://flexiple.com/jobs/remote-software-engineer-jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://flexiple.com/jobs/remote-software-engineer-jobs",
+        "https://flexiple.com/jobs/"
+      ],
+      "allowedUrlPatterns": [
+        "/jobs/remote-software-engineer-jobs",
+        "/jobs/"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/hire",
+        "/developers/"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "hubstaff_talent",
+    "siteName": "Hubstaff Talent",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public search/jobs listing and public job-detail pages are visible without login.",
+    "evidenceUrls": [
+      "https://hubstafftalent.net/search/jobs",
+      "https://hubstafftalent.net/jobs/net-c-backend-developer-freelance-per-project-work-ongoing-opportunities"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Hubstaff Talent — remote jobs",
+      "websiteEntryUrl": "https://hubstafftalent.net/search/jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://hubstafftalent.net/search/jobs",
+        "https://hubstafftalent.net/work"
+      ],
+      "allowedUrlPatterns": [
+        "/search/jobs",
+        "/jobs/",
+        "/work"
+      ],
+      "blockedUrlPatterns": [
+        "/jobs/new",
+        "/sign-in",
+        "/products",
+        "/search/profiles"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "contra",
+    "siteName": "Contra",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public featured jobs pages are visible without login.",
+    "evidenceUrls": [
+      "https://contra.com/featured-jobs/remote-software-engineer-jobs",
+      "https://contra.com/features/find-freelance-jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Contra — featured freelance jobs",
+      "websiteEntryUrl": "https://contra.com/featured-jobs/remote-software-engineer-jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://contra.com/featured-jobs/remote-software-engineer-jobs",
+        "https://contra.com/features/find-freelance-jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/featured-jobs/",
+        "/features/find-freelance-jobs"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/signup",
+        "/pro"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "arc",
+    "siteName": "Arc",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public remote jobs pages are visible without login.",
+    "evidenceUrls": [
+      "https://arc.dev/remote-jobs/software-development",
+      "https://arc.dev/remote-jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "Arc — remote software jobs",
+      "websiteEntryUrl": "https://arc.dev/remote-jobs/software-development",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://arc.dev/remote-jobs/software-development",
+        "https://arc.dev/remote-jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/remote-jobs",
+        "/remote-jobs/software-development"
+      ],
+      "blockedUrlPatterns": [
+        "/login",
+        "/hire",
+        "/resume",
+        "/blog"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  },
+  {
+    "id": "we_work_remotely",
+    "siteName": "We Work Remotely",
+    "group": "private_sector_marketplaces",
+    "profile": "job_board",
+    "openWebPublicationsVisible": true,
+    "validationStatus": "ready",
+    "validationConfidence": "high",
+    "validationNotes": "Public remote programming jobs pages are visible without login.",
+    "evidenceUrls": [
+      "https://weworkremotely.com/remote-software-developer-jobs",
+      "https://weworkremotely.com/categories/remote-full-stack-programming-jobs"
+    ],
+    "recommendedConfig": {
+      "adaptive": true,
+      "crawlDelayMs": 1000,
+      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "authorizationHeader": "",
+      "pollIntervalSeconds": 900,
+      "maxPollIntervalSeconds": 14400,
+      "requestTimeoutMs": 10000,
+      "totalPollTimeoutMs": 60000,
+      "maxResourcesPerPoll": 20,
+      "sitemapDiscoveryEnabled": true,
+      "feedDiscoveryEnabled": false,
+      "collectionDiscoveryEnabled": true,
+      "downloadDiscoveryEnabled": false,
+      "browserFallbackEnabled": false,
+      "name": "We Work Remotely — programming jobs",
+      "websiteEntryUrl": "https://weworkremotely.com/remote-software-developer-jobs",
+      "language": "en",
+      "active": true,
+      "collectionSeedUrls": [
+        "https://weworkremotely.com/remote-software-developer-jobs",
+        "https://weworkremotely.com/categories/remote-full-stack-programming-jobs"
+      ],
+      "allowedUrlPatterns": [
+        "/remote-software-developer-jobs",
+        "/categories/remote-",
+        "/remote-jobs/"
+      ],
+      "blockedUrlPatterns": [
+        "/sign-in",
+        "/community",
+        "/podcast",
+        "/resources"
+      ]
+    },
+    "expectedResourceKinds": [
+      "listing",
+      "entity"
+    ],
+    "projectionExpectation": "resource_only_is_normal"
+  }
+]

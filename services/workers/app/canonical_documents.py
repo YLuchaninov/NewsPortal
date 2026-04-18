@@ -96,7 +96,7 @@ async def upsert_canonical_document(
         )
         values (
           %s,
-          'editorial',
+          %s,
           %s,
           %s,
           %s,
@@ -134,6 +134,7 @@ async def upsert_canonical_document(
         """,
         (
             canonical_article["doc_id"],
+            canonical_article.get("content_kind") or "editorial",
             canonical_article["content_format"],
             canonical_article["url"],
             derive_canonical_domain(canonical_article.get("url")),

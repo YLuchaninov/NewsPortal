@@ -46,7 +46,7 @@
 Каждый пример содержит **полный content-набор настроек** для одного тематического сценария, готовый к вводу в панель администратора после базового setup:
 
 1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels
-2. **LLM-шаблоны** — два active baseline промпта (scope: `criteria`, `global`) и один optional future-ready промпт (`interests`) для возможной opt-in / premium персонализации
+2. **LLM-шаблоны** — active baseline промпты, состав которых зависит от сценария; ориентируйтесь на конкретный пример ниже. Для Example C все 3 scope (`interests`, `criteria`, `global`) являются active baseline.
 3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке и синхронизируются в live `criteria`
 4. **Profile policy, hard filters и candidate cues** — для каждого system interest теперь важно заполнить прототипы, profile policy (`Strictness`, `Unresolved outcome`, `LLM review mode`), `must_not_have_terms`, `allowed_content_kinds`, `priority` и `candidate uplift positive/negative cues`; `must_have_terms` и `time_window_hours` остаются опциональными hard filters и для recall-first baseline обычно оставляются пустыми
 
@@ -64,7 +64,7 @@
 1. Импортировать каналы (Channels → Bulk Import)
 2. Создать LLM-шаблоны (Templates → левая колонка)
 3. Создать шаблоны интересов (Templates → правая колонка)
-4. Для каждого system interest проверить `Strictness = balanced`, `Unresolved outcome = hold`, `LLM review mode = always`, а `must_have_terms` и `time_window_hours` заполнять только если без них смысл interest действительно распадается
+4. Для каждого system interest выставить runtime policy ровно так, как она указана в текущем примере: `Strictness` может различаться по шаблонам, а `Unresolved outcome = hold` и `LLM review mode = always` остаются baseline, если ниже не указано иное
 5. Запустить переиндексацию (Reindex → interest_centroids)
 6. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
 7. Если нужен полный MVP/manual verification pass, вернуться к `docs/manual-mvp-runbook.md`, а не останавливаться на этом документе
@@ -137,7 +137,7 @@
 - `Candidate uplift positive cues`
 - `Candidate uplift negative cues`
 - runtime policy в additive `selection_profiles`:
-  - `Strictness = balanced`
+  - `Strictness` должна совпадать со значением, указанным в таблице конкретного шаблона или сценария
   - `Unresolved outcome = hold`
   - `LLM review mode = always`
 
@@ -1985,9 +1985,11 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/data_scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/data_scripts/outsource_balanced_templates.json` — reference asset для ручного сравнения/переноса, но не отдельный competing handbook.
 
-Перейдите в **Templates** и создайте в левой колонке два active baseline шаблона: `criteria` и `global`. Ниже также приведён `interests` как optional future-ready template, если позже будет включена расширенная персонализация.
+Перейдите в **Templates** и создайте в левой колонке все 3 active baseline шаблона: `interests`, `criteria` и `global`.
 
-#### LLM-шаблон 1: interests (optional future-ready)
+Ниже приведены значения, которые теперь должны считаться primary operator-facing truth для outsourcing Example C. Они синхронизированы с live admin-tuned bundle и больше не должны отставать от текущих `interest_templates`, `selection_profiles` и `llm_prompt_templates`.
+
+#### LLM-шаблон 1: interests
 
 | Поле | Значение |
 |---|---|
@@ -1996,49 +1998,45 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 **Prompt template:**
 ```text
-You are a strict relevance reviewer for outsourcing demand signals. The user interest is "{interest_name}", and that interest is authoritative.
+You review whether an article matches the stated outsourcing-related system interest.
 
-Decide whether the article is a useful lead that materially matches this interest because it shows a real buyer-side or procurement-side need for outside software delivery help.
+Interest name: {interest_name}
+Interest description: {interest_description}
 
 Article title: {title}
 Article lead: {lead}
 Article body: {body}
-Context: {context}
+Extra context: {explain_json}
 
-Respond with a JSON object:
+Respond with JSON:
 {
   "decision": "approve" or "reject" or "uncertain",
   "score": 0.0 to 1.0,
   "reason": "brief explanation"
 }
 
-Approve when the article clearly shows one or more of these:
-- a founder, product owner, manager, procurement team, or company is actively looking for an agency, software house, dev team, contractor, implementation partner, rescue/takeover team, or staff-augmentation partner
-- a real organization is running procurement, RFP, RFQ, tender, bid, vendor selection, supplier shortlist, or implementation contracting for software work
-- a company has a live migration, replacement, rescue, support takeover, backlog, or rollout problem and explicitly wants outside help or outside capacity
-- a Reddit, forum, or community post appears to be written by the buyer and describes an active sourcing need
+Approve when the article clearly reflects buyer-side outsourcing demand, such as:
+- buyer-authored marketplace project cards for software build, integration, migration, rescue, support, or dedicated-team work
+- formal software procurement, vendor selection, bids, proposals, RFP/RFQ/tender, or implementation contracting
+- an organization explicitly looking for an external delivery team, agency, contractor, partner, or vendor to execute software work
 
-Use "uncertain" when the article appears buyer-side and plausibly matches the interest, but authorship, externalization, or sourcing intent is still incomplete, indirect, or truncated.
+Use "uncertain" when the item looks like a real buyer-side software request but the text is brief, truncated, or only partially confirms the sourcing pattern.
 
-Reject when the article is mainly about:
-- agency, vendor, consultant, or freelancer self-promotion
-- case studies, awards, rankings, landing pages, benches, or thought leadership
-- internal hiring, recruiter content, employment vacancies, career pages, or job listings
-- employer-side role descriptions such as job details, required profile, contract type, or reports-to structure
-- generic startup, product, AI, market, modernization, or transformation news with no sourcing signal
-- community discussion, advice, or commentary where nobody is actively sourcing delivery help
-- tutorials, release notes, playbooks, or best-practice articles
+Reject when the page is mainly:
+- a procurement portal shell, index, news page, FAQ, help page, or generic opportunities page
+- a category page, browse page, marketplace search page, directory, or talent network
+- a freelancer profile, agency page, vendor landing page, seller listing, case study, ranking, or award article
+- an internal hiring post, recruiter listing, employment ad, or career page
+- generic commentary or news with no active sourcing need
 
 Important:
-- follow the stated interest more than broad topic similarity
-- do not require the exact words "outsourcing" or "agency" if the sourcing pattern is otherwise clear
-- words like partner, migration, MVP, modernization, or transformation are not enough on their own
-- seller-authored marketplace or [FOR HIRE] posts should be rejected even if wording overlaps with buyer language
-- hiring an employee, analyst, engineer, manager, or consultant into the organization's own team is not outsourcing demand unless the text explicitly shows third-party vendor sourcing or procurement
-- if evidence is weak and not plausibly buyer-side, return "reject"
+- do not require the exact words "outsourcing" or "agency" if buyer-side software sourcing is otherwise explicit
+- prefer concrete delivery evidence such as budget, bids, proposals, deliverables, scope, timelines, existing codebase takeover, or backlog pressure
+- generic "opportunities" homepages or procurement navigation pages are out of scope even if they are vendor-facing
+- reject seller-authored surfaces even if they mention similar software terms
 ```
 
-#### LLM-шаблон 2: criteria (active baseline)
+#### LLM-шаблон 2: criteria
 
 | Поле | Значение |
 |---|---|
@@ -2047,53 +2045,46 @@ Important:
 
 **Prompt template:**
 ```text
-You are a strict reviewer for a specific outsourcing-related system criterion.
+You are a strict reviewer for one outsourcing-related system criterion.
 
-The system criterion is authoritative: "{criterion_name}".
+The criterion is authoritative: "{criterion_name}".
 
-Decide whether the article materially matches this criterion because it shows a real buyer-side, procurement-side, or explicitly externalized delivery need related to that criterion.
+Decide whether the article materially matches this criterion because it shows a real buyer-side need for outside software delivery, implementation, migration, takeover, procurement, or staff augmentation.
 
 Article title: {title}
 Article lead: {lead}
 Article body: {body}
 Extra context: {explain_json}
 
-Respond with a JSON object:
+Respond with JSON:
 {
   "decision": "approve" or "reject" or "uncertain",
   "score": 0.0 to 1.0,
   "reason": "brief explanation"
 }
 
-Approve when the article clearly matches the criterion through one or more of these:
-1. Formal sourcing or procurement
-- RFP, RFQ, tender, bid, procurement notice, vendor shortlist, statement of work, implementation contract
+Approve when the article clearly shows one or more of these:
+- a founder, manager, product owner, procurement team, or company is actively sourcing an external team, agency, vendor, implementation partner, contractor, rescue/takeover team, or staff-augmentation partner
+- a buyer-authored marketplace project card or tender notice describes a concrete software build, integration, migration, replacement, support takeover, or dedicated-team request
+- the text includes scoped delivery evidence such as budget, bids, proposals, quote request, deliverables, timeline, or statement of work
+- a real organization is running software procurement, vendor selection, RFQ/RFP/tender, or implementation contracting
 
-2. Direct buyer request
-- a founder, owner, manager, product team, procurement team, or company explicitly looking for an agency, software house, contractor, staff augmentation partner, systems integrator, implementation vendor, rescue team, or takeover partner
-
-3. Delivery pressure with explicit externalization
-- migration, ERP or CRM rollout, legacy replacement, rescue, support takeover, backlog pressure, platform rebuild, data migration, or remediation work
-- and the text clearly says they need outside help, contractors, vendor evaluation, partner search, or an external delivery team
-
-Use "uncertain" when the article plausibly matches the criterion, but buyer identity, vendor search, or externalization is still incomplete, indirect, or truncated.
+Use "uncertain" when the article looks buyer-side and delivery-scoped but the authorship or outsourcing intent is still truncated or implicit.
 
 Reject when the article is mainly about:
-- agency, vendor, consultancy, recruiter, or freelancer self-promotion
-- [FOR HIRE] or seller-authored marketplace listings
-- case studies, awards, rankings, service pages, bench availability, or thought leadership
-- internal hiring, recruiter content, employment vacancies, career pages, or job-detail postings
-- employer-side role descriptions such as contract type, required profile, reports-to hierarchy, or candidate requirements
-- generic transformation, modernization, or migration news with no sourcing signal tied to the criterion
-- community or HN or Reddit discussion where commenters debate tools or outsourcing but no buyer is actively asking for help
-- product launches, funding, market commentary, policy news, or technical content unrelated to the criterion's sourcing pattern
+- portal shells, procurement indexes, opportunities homepages, help pages, FAQs, news pages, or advisory pages
+- category pages, search pages, browse pages, directories, talent networks, or generic marketplace indexes
+- agency, vendor, consultant, or freelancer self-promotion
+- case studies, awards, rankings, portfolios, or service landing pages
+- internal hiring, recruiter content, employment vacancies, career pages, or role descriptions for the buyer's own team
+- generic startup, AI, product, modernization, or transformation content with no active sourcing signal
 
-Decision policy:
-- anchor your decision to the criterion, not to one universal build-only definition
-- prefer precision, but do not require the exact word "outsourcing" if procurement, vendor search, implementation partnering, takeover, or augmentation intent is otherwise clear
-- use the extra context as supporting evidence, not as the sole reason to approve
-- a company hiring employees, permanent staff, or internal role owners is not vendor demand unless third-party procurement or outside delivery sourcing is explicit
-- words like agency, partner, migration, modernization, or transformation are not enough by themselves
+Important:
+- buyer-authored marketplace project cards can be valid even if they do not use the exact word "outsourcing"
+- phrases like "contract opportunities", "search opportunities", "find opportunities", or vendor-facing government-contracting navigation are not buyer requests and should be rejected unless the page itself is a concrete software solicitation
+- a single contractor/project post can still qualify if it clearly externalizes software delivery to a third party
+- words like partner, migration, MVP, modernization, or transformation are not enough on their own
+- seller-authored marketplace listings, freelancer profiles, and "available for hire" pages should be rejected
 - if evidence is weak and not plausibly buyer-side, return "reject"
 ```
 
@@ -2106,73 +2097,69 @@ Decision policy:
 
 **Prompt template:**
 ```text
-You are a conservative reviewer deciding whether an article should enter a lead feed for software outsourcing companies.
+You are the final global reviewer for outsourcing-related buyer-intent.
+
+Decide whether the article belongs in the system-selected collection because it represents a real buyer-side need for external software delivery, implementation, procurement, migration, support takeover, or dedicated-team capacity.
 
 Article title: {title}
 Article lead: {lead}
 Article body: {body}
-Context: {context}
+Extra context: {explain_json}
 
-Respond with a JSON object:
+Respond with JSON:
 {
   "decision": "approve" or "reject" or "uncertain",
   "score": 0.0 to 1.0,
   "reason": "brief explanation"
 }
 
-Approve when there is strong evidence of at least one of these:
-- formal procurement or sourcing for software delivery, implementation, support, migration, rescue, or integration
-- direct buyer requests for an agency, software house, dedicated team, contractor, rescue/takeover team, or staff augmentation partner
-- explicit search for an implementation partner, systems integrator, replacement vendor, or takeover supplier
-- community posts where the original poster appears to be the buyer and is clearly trying to source outside delivery help
+Approve when the article clearly shows one or more of these:
+- a founder, product owner, manager, procurement team, or organization is actively sourcing an outside software team or vendor
+- a buyer-authored marketplace project card requests software build, implementation, integration, migration, rescue, support, or contract engineering work
+- a formal procurement or vendor-selection flow exists for software delivery or managed application services
+- the text contains concrete outsourcing evidence such as proposals, bids, quotes, budget, timeline, deliverables, statement of work, or replacing a current vendor
 
-Use "uncertain" when there is plausible buyer-side or procurement-side intent, but the source is truncated, indirect, or does not fully confirm externalization.
+Use "uncertain" when buyer-side intent is plausible but the article is truncated or still missing explicit delivery context.
 
 Reject when the article is mainly about:
-- agency or vendor marketing, rankings, awards, portfolios, service pages, case studies, or freelancer self-promotion
-- internal hiring, recruiting, employment vacancies, career pages, or seller-authored marketplace listings
-- job-detail pages that describe roles, responsibilities, candidate profiles, contract types, or reporting lines
-- generic digital transformation, cloud migration, modernization, or AI commentary without a buyer sourcing signal
-- advisory or best-practice content from consultancies or vendors
-- technical chatter, tutorials, product releases, funding news, opinion pieces, or community discussion without active sourcing
+- a portal shell, index, browse page, search page, help page, FAQ, or procurement news wrapper
+- a category page, directory, talent network, or generic marketplace/jobs listing page
+- a seller-authored freelancer profile, agency page, service pitch, case study, ranking, or award article
+- internal hiring, recruiter content, employment vacancies, or career pages
+- general commentary, news, or analysis without an active sourcing event
 
 Important:
-- approve only when an external delivery need is genuinely present
-- terms like partner, agency, migration, modernization, or MVP are not sufficient on their own
-- do not require exact outsourcing vocabulary if procurement or vendor-search intent is otherwise clear
-- employment hiring into the organization's own team is not outsourcing demand unless third-party vendor sourcing is explicit
-- if the article is advisory, promotional, or seller-authored, reject
+- real buyer-side marketplace project cards are in scope even when the wording is short
+- exact keyword matching is not required if the sourcing pattern is concrete
+- generic government-contracting or opportunities landing pages should be rejected unless the page itself is a concrete software procurement notice
+- do not approve pages whose main function is navigation, aggregation, self-promotion, or recruiting
 ```
 
 ---
 
 ### C.3. Шаблоны интересов
 
-Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
+Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы и cue-группы **по одному на строке**.
 
-Текущий built-in outsourcing baseline intentionally уже и строже старого широкого 8-template варианта. Для рабочего default используйте именно эти 5 шаблонов: они соответствуют текущему `outsource_balanced_templates.json`, outsourcing companion doc и admin-managed/runtime-backed semantics.
+Текущий built-in outsourcing baseline intentionally уже и строже старого широкого варианта. Для рабочего default используйте именно эти 5 шаблонов: ниже зафиксирован уже admin-tuned bundle, синхронизированный с live runtime.
 
-#### Общие runtime-настройки для всех outsourcing шаблонов
+#### Общие runtime-настройки для outsourcing шаблонов
 
-Во всех 5 шаблонах примера C используйте одинаковую profile policy:
+Во всех 5 шаблонах примера C используйте одинаковые поля:
 
 | Поле | Значение |
 |---|---|
-| **Strictness** | `balanced` |
 | **Unresolved outcome** | `hold` |
 | **LLM review mode** | `always` |
 | **Candidate cue source** | `selection_profile_definition` |
 | **Final selection mode** | `compatibility_system_selected` |
 
-Общие принципы для outsourcing buyer-intent discovery:
+`Strictness` теперь различается по шаблонам и должен совпадать с таблицами ниже. Общие принципы по-прежнему такие:
 
-- `Allowed content kinds` выбирайте по реальному типу сигнала: чаще всего это `editorial`, `listing`, `document`; для формализованного procurement добавляйте `data_file` и `api_payload`
-- baseline для этого сценария лучше запускать с пустыми `must_have_terms` и пустым `time_window_hours`: buyer-intent формулировки слишком разнообразны, и ранний hard filter легко убивает recall ещё до LLM review
-- если позже нужен hard filter, `must_have_terms` должны содержать только очень сильные buyer/procurement markers, а не broad topic words
-- `must_not_have_terms` режут noisy seller/advisory/hiring paths, которые иначе легко выглядят похожими на buyer intent
-- candidate uplift должен поднимать только procurement, explicit vendor search, implementation pressure, takeover и external delivery demand
-- employment/career wording, agency self-promo, rankings, case studies, thought leadership и generic transformation news нужно гасить отдельными negative cues, а не пытаться лечить только LLM review
-- ниже в каждом шаблоне baseline-поля `Must-have terms` и `Time window hours` намеренно оставлены пустыми; рядом сохранены рекомендованные tighten-up варианты на случай, если после первого прогона понадобится более жёсткая precision-настройка
+- `must_have_terms` оставляйте пустым, если нет действительно обязательного buyer/procurement marker
+- `time_window_hours` для baseline оставляйте пустым
+- `must_not_have_terms` используйте для явного подавления portal/category/search/seller/hiring noise
+- candidate cues должны усиливать только конкретный buyer-side outsourcing pattern, а не broad topical similarity
 
 ---
 
@@ -2181,73 +2168,67 @@ Important:
 | Поле | Значение |
 |---|---|
 | **Name** | `Buyer requests for outsourced product build` |
-| **Description** | `Direct buyer-authored signals that a founder, business owner, product team, or company wants an external agency, software house, or development team to build, launch, or take over a product, app, portal, MVP, or codebase.` |
+| **Description** | `Signals that a buyer-side founder, product owner, manager, or company is actively sourcing an outside team, agency, vendor, or marketplace project delivery partner to build, ship, extend, or take over a software product, app, portal, platform, or integration.` |
+| **Strictness** | `broad` |
 
 **Positive prototypes:**
 ```text
-Founder looking for software agency to build SaaS MVP
-Business owner needs external team to launch mobile app
-Company wants development partner to take over existing codebase
-Startup requests agency proposals for web app build
-Product team searching for software house to deliver customer portal
-CEO looking for reliable dev shop for marketplace platform
-Need outsourced team to ship product without in-house hiring
-Company seeks vendor to build platform from design to release
+Founder posts a fixed-price project for an external team to build a SaaS MVP.
+Company requests bids or proposals for a mobile app, web portal, or software platform build.
+Marketplace project card shows a buyer looking for developers to deliver an app, dashboard, or API integration.
+Product owner seeks outside team to take over an existing codebase and ship the next release.
+Business requests an agency or freelance delivery team for a scoped software implementation with budget and timeline.
+Company needs an external vendor to build customer portal, marketplace platform, or internal workflow system.
+Buyer asks for a software house or contractor team to deliver a web application from design to release.
+Organization seeks external developers for MVP, rebuild, redesign, or platform delivery without in-house hiring.
 ```
 
 **Negative prototypes:**
 ```text
-Agency publishes case study about fintech MVP delivery
-We are a software house available for hire worldwide
-Freelance developer available to build your MVP
-Startup hires first in-house engineer for product build
-Ranking of top MVP development agencies
-Vendor promotes fixed-price MVP package
-New no-code builder helps founders launch faster
-Consultancy landing page for custom software services
+Agency landing page offering MVP development services.
+Freelancer profile advertising app development availability.
+Category page listing freelance software jobs or projects.
+Marketplace search page for finding freelancers or agencies.
+Ranking of top software development agencies.
+Case study about a past product build for another client.
+Job-board listing recruiting an in-house engineer or product developer.
+Generic startup article about MVPs or software trends with no active sourcing request.
 ```
 
-**Must-have terms (baseline):** оставить пустым
-
-**Suggested optional terms for later tighten-up:**
-```text
-looking for an agency
-looking for a developer
-looking for a development team
-need an agency
-need a developer
-development partner
-software house
-dev shop
-external team
-outsourced team
-take over our codebase
-```
+**Must-have terms:** оставить пустым
 
 **Must-not-have terms:**
 ```text
 available for hire
+remote jobs
+freelance jobs
+top freelancers
 case study
-fixed-price mvp
 our services
+agency profile
+contract opportunities
+search opportunities
 ```
 
 **Allowed content kinds:** `editorial`, `listing`
-**Time window hours (baseline):** оставить пустым
+**Time window hours:** оставить пустым
 **Priority:** `1.00`
 
 **Candidate uplift positive cues:**
 ```text
-request_search: looking for | need help | seeking | request for
-external_delivery: development partner | external team | outsourced team | take over our codebase
-delivery_change: build mvp | launch mobile app | customer portal | take over existing codebase
+buyer_request: looking for developers | looking for development team | looking for agency | looking for software house | need help | need a developer | need a team | want to hire | seeking developer | seeking team
+scoped_project: fixed price | budget | timeline | deliverables | proposals | bids | quote
+software_build: mobile app | web app | saas | mvp | portal | platform | dashboard | api integration
+external_delivery: agency | software house | external team | development partner | delivery partner | contractor | freelance team
+takeover_extension: take over | continue development | existing codebase | maintain and enhance | support and development
 ```
 
 **Candidate uplift negative cues:**
 ```text
-hiring_noise: career page | job details | required profile | reports to
-seller_noise: available for hire | case study | our services | fixed-price mvp
-marketplace_noise: freelance developer | for hire | per hour | proposals
+category_noise: freelance jobs | remote jobs | browse jobs | technology & programming projects | jobs online
+directory_noise: talent network | top freelancers | available freelancers | search opportunities | contract opportunities
+seller_noise: available for hire | our services | case study | portfolio | agency profile
+hiring_noise: full-time | career page | join our team | recruiter | employment
 ```
 
 ---
@@ -2257,47 +2238,34 @@ marketplace_noise: freelance developer | for hire | per hour | proposals
 | Поле | Значение |
 |---|---|
 | **Name** | `Staff augmentation and dedicated team demand` |
-| **Description** | `Signals that an organization wants outside engineering capacity such as staff augmentation, contract developers, a dedicated team, nearshore delivery, or managed software capacity to accelerate an active roadmap or delivery backlog.` |
+| **Description** | `Signals that a buyer-side organization is actively sourcing outside engineering capacity such as staff augmentation, dedicated delivery team, external squad, or contract developers to accelerate a software backlog, rollout, or roadmap.` |
+| **Strictness** | `broad` |
 
 **Positive prototypes:**
 ```text
-Engineering manager seeks staff augmentation partner for backend and QA
-Company needs contract developers to hit delivery deadline
-Product team wants dedicated nearshore engineers for 6-month backlog
-Business looks for external squad to accelerate roadmap
-Enterprise adds contractors to support ERP rollout
-Company needs managed engineering capacity instead of full-time hiring
-CTO seeks outside team for sprint delivery and support
-Organization requests vendor for team augmentation across product and QA
+Engineering manager seeks staff augmentation partner for backend, frontend, QA, or DevOps delivery.
+Company needs external developers or dedicated team to hit delivery deadline.
+Buyer requests nearshore or offshore squad to accelerate product roadmap.
+Organization looks for contract developers to support an active software backlog or implementation.
+Product team wants outside engineering capacity instead of full-time hiring.
+Marketplace project or sourcing post asks for dedicated team, external squad, or ongoing contractor support.
+Company needs external QA and engineering support for release delivery and ongoing sprint work.
+Business requests vendor-managed engineering capacity across multiple software roles.
 ```
 
 **Negative prototypes:**
 ```text
-Company opens hiring for full-time engineers and recruiters
-Staff augmentation firm advertises available bench
-Recruiter posts contract vacancies for one employer
-Engineering team expands internal headcount
-Outsourcing provider publishes article about delivery velocity
-Agency offers dedicated team services on landing page
-Hiring marketplace launches new feature for recruiters
-Blog post compares staff augmentation versus outsourcing
+Company opens in-house hiring for engineers or recruiters.
+Career page listing permanent engineering roles.
+Staff augmentation firm advertises available bench or dedicated team services.
+Marketplace category page of remote jobs or freelance jobs.
+Recruiter post for one employer contract vacancy.
+Vendor landing page promoting outsourcing packages.
+Blog article comparing staff augmentation versus outsourcing.
+Directory page for finding freelancers or contractors.
 ```
 
-**Must-have terms (baseline):** оставить пустым
-
-**Suggested optional terms for later tighten-up:**
-```text
-staff augmentation
-team augmentation
-dedicated team
-contract developers
-contract engineers
-managed capacity
-nearshore team
-offshore team
-external squad
-engineering capacity
-```
+**Must-have terms:** оставить пустым
 
 **Must-not-have terms:**
 ```text
@@ -2305,24 +2273,30 @@ job opening
 career page
 available bench
 our dedicated team services
+remote jobs
+freelance jobs
+case study
+contract opportunities
 ```
 
 **Allowed content kinds:** `editorial`, `listing`
-**Time window hours (baseline):** оставить пустым
+**Time window hours:** оставить пустым
 **Priority:** `0.95`
 
 **Candidate uplift positive cues:**
 ```text
-augmentation_need: staff augmentation | team augmentation | dedicated team | managed capacity
-external_capacity: contract developers | contract engineers | external squad | engineering capacity
-delivery_pressure: delivery deadline | accelerate roadmap | support erp rollout | outside team
+capacity_gap: backlog | delivery deadline | accelerate roadmap | extra capacity | sprint support | ongoing support
+team_request: dedicated team | staff augmentation | external squad | contract developers | nearshore team | offshore team
+software_roles: backend | frontend | qa | devops | mobile | full stack
+commercial_terms: hourly | monthly rate | 3 months | 6 months | ongoing opportunities
 ```
 
 **Candidate uplift negative cues:**
 ```text
-internal_hiring: job opening | career page | full-time engineers | recruiters
-seller_noise: available bench | our dedicated team services | advertises | landing page
-marketplace_noise: contract vacancies | marketplace | for hire | proposals
+hiring_noise: full-time | career page | join our team | recruiter | employment
+seller_noise: available bench | our dedicated team services | available for hire | vendor landing page | case study
+category_noise: remote jobs | freelance jobs | browse jobs | jobs online | contract opportunities
+marketplace_directory: talent network | recruiter | top freelancers
 ```
 
 ---
@@ -2332,74 +2306,67 @@ marketplace_noise: contract vacancies | marketplace | for hire | proposals
 | Поле | Значение |
 |---|---|
 | **Name** | `Software procurement and vendor selection` |
-| **Description** | `Explicit procurement signals that a company, public body, or institution is sourcing an outside software vendor, implementation partner, integrator, managed services provider, or development contractor through a formal buying process.` |
+| **Description** | `Signals that a buyer-side organization is running real software procurement, RFP/RFQ/tender, vendor selection, or implementation contracting for software delivery, integration, modernization, migration, or managed application services, while excluding portal shells and procurement news/help wrappers.` |
+| **Strictness** | `balanced` |
 
 **Positive prototypes:**
 ```text
-City issues RFP for application modernization vendor
-Enterprise launches vendor selection for ERP implementation partner
-Bank publishes RFQ for data migration contractor
-Government tender seeks software delivery supplier
-University requests proposals for external app development vendor
-Company shortlists vendors for CRM rollout and integration
-Healthcare group invites bids for managed application services
-Buyer prepares implementation contract for outside software partner
+City issues RFP for software delivery, application modernization, or implementation vendor.
+Enterprise launches vendor selection for ERP, CRM, or software rollout partner.
+Bank publishes RFQ for data migration, integration, or development contractor.
+Government tender seeks software supplier for application build, modernization, or managed services.
+University requests proposals for external app development or platform implementation vendor.
+Company shortlists vendors for CRM rollout, migration, or systems integration work.
+Healthcare group invites bids for managed application services or support takeover.
+Buyer prepares implementation contract or statement of work for outside software partner.
 ```
 
 **Negative prototypes:**
 ```text
-Software vendor releases new procurement product
-Consulting firm wins award for delivery excellence
-Guide on how to write an RFP response
-Ranking of top systems integrators
-Procurement team hires internally after budget approval
-Agency announces contract win elsewhere
-Market report on public-sector tenders
-Vendor marketing page for procurement automation
+Procurement portal index or generic opportunities landing page.
+Procurement news, awards, or market-report article.
+Help center, FAQ, advisory page, or guide about how to write an RFP.
+Vendor marketing page for procurement automation software.
+Ranking of top systems integrators or award winners.
+Career-page or hiring announcement unrelated to vendor sourcing.
+Marketplace category page or directory of contractors.
+Portal shell where no concrete software delivery notice or buyer request is visible.
 ```
 
-**Must-have terms (baseline):** оставить пустым
-
-**Suggested optional terms for later tighten-up:**
-```text
-rfp
-rfq
-request for proposal
-request for quotation
-tender
-invites bids
-requests proposals
-vendor selection
-supplier shortlist
-statement of work
-implementation contract
-```
+**Must-have terms:** оставить пустым
 
 **Must-not-have terms:**
 ```text
 how to write an rfp
-rfp response
+procurement automation
 award winner
-magic quadrant
-ranked among
+ranking of
+help center
+faq
+latest news
+contract opportunities
+career page
+vendor marketing
 ```
 
 **Allowed content kinds:** `editorial`, `listing`, `document`, `data_file`, `api_payload`
-**Time window hours (baseline):** оставить пустым
+**Time window hours:** оставить пустым
 **Priority:** `1.00`
 
 **Candidate uplift positive cues:**
 ```text
-formal_procurement: rfp | rfq | request for proposal | tender
-vendor_selection: vendor selection | supplier shortlist | invites bids | requests proposals
-contracting: statement of work | implementation contract | outside software partner | managed application services
+formal_procurement: rfp | rfq | request for proposal | request for quotation | tender | invites bids
+vendor_process: vendor selection | supplier shortlist | requests proposals | implementation contract | statement of work | outside software partner
+software_scope: software development | application modernization | app development | implementation services | managed application services | system integration
+delivery_need: migration | rollout | replacement | support takeover | modernization
 ```
 
 **Candidate uplift negative cues:**
 ```text
-advisory_noise: how to write an rfp | rfp response | market report | procurement automation
-seller_noise: award winner | ranking | consulting firm wins award | vendor marketing page
-internal_hiring: hires internally | career page | job details | required profile
+portal_shell: contract opportunities | search opportunities | browse notices | latest news | sign in to view
+advisory_noise: how to write an rfp | procurement guide | help center | faq | market report
+seller_noise: award winner | ranking | vendor marketing | case study | procurement automation
+directory_noise: find freelancers | hire freelancers | remote jobs | freelance jobs | directory
 ```
 
 ---
@@ -2409,72 +2376,67 @@ internal_hiring: hires internally | career page | job details | required profile
 | Поле | Значение |
 |---|---|
 | **Name** | `Implementation partner search for migration or replacement` |
-| **Description** | `Company-side delivery programs that are only relevant when the text explicitly points to an outside implementation partner, systems integrator, migration vendor, or external delivery team for rollout, replacement, modernization, or remediation work.` |
+| **Description** | `Signals that a buyer-side organization is actively sourcing an outside implementation partner, migration vendor, systems integrator, or replacement delivery team for a software rollout, replatforming, system replacement, data migration, or integration program.` |
+| **Strictness** | `broad` |
 
 **Positive prototypes:**
 ```text
-Company seeks implementation partner for ERP rollout
-Organization evaluates systems integrator for CRM replacement
-Business needs outside team for legacy platform replacement
-Enterprise requests vendor for cloud migration delivery
-Data migration program brings in external specialists under deadline
-Retailer searches for partner to execute replatforming project
-Bank needs managed delivery partner for core system modernization
-Company seeks contractor to take over delayed transformation program
+Company seeks implementation partner for ERP, CRM, or platform migration.
+Organization requests proposals from outside vendors for software replacement or replatforming delivery.
+Buyer searches for systems integrator to execute rollout, cutover, or data migration project.
+Marketplace or procurement post shows a company sourcing an external team for migration, integration, or replacement work.
+Enterprise needs outside specialists to move from legacy platform to a new software stack.
+Business invites vendors to quote on implementation, integration, or migration services under deadline.
+Company looks for contractor team to replace current vendor on a transformation or rollout program.
+Organization wants external delivery help for system integration, modernization, or platform switch.
 ```
 
 **Negative prototypes:**
 ```text
-Company announces digital transformation strategy
-Government accelerates digital transformation tasks
-CIO discusses modernization roadmap with no vendor search
-Vendor publishes cloud migration best practices
-Internal team handles ERP rollout internally
-Consultancy explains internal controls for cloud migration
-Product launch for migration tooling
-Generic partnership press release
+Vendor blog about cloud migration best practices.
+Thought-leadership article on digital transformation strategy.
+Internal modernization roadmap with no partner search.
+Category page of migration jobs, implementation jobs, or contractor listings.
+Marketplace search page for consultants or freelancers.
+Press release about a tooling launch or strategic partnership.
+Career-page opening for implementation manager or migration engineer.
+General portal shell or procurement news page with no concrete software delivery request.
 ```
 
-**Must-have terms (baseline):** оставить пустым
-
-**Suggested optional terms for later tighten-up:**
-```text
-implementation partner
-system integrator
-integration partner
-delivery partner
-migration partner
-external engineering support
-outside specialists
-delivery vendor
-managed delivery partner
-external delivery team
-```
+**Must-have terms:** оставить пустым
 
 **Must-not-have terms:**
 ```text
 best practices
-internal controls
 thought leadership
 modernization roadmap
+career page
+remote jobs
+freelance jobs
+tooling launch
+vendor blog
+contract opportunities
+search opportunities
 ```
 
 **Allowed content kinds:** `editorial`, `listing`, `document`
-**Time window hours (baseline):** оставить пустым
+**Time window hours:** оставить пустым
 **Priority:** `0.90`
 
 **Candidate uplift positive cues:**
 ```text
-implementation_partner: implementation partner | systems integrator | integration partner | delivery partner
-migration_delivery: migration partner | delivery vendor | external delivery team | outside specialists
-replacement_pressure: legacy platform replacement | cloud migration delivery | replatforming project | take over delayed transformation program
+migration_need: migration | replatform | replacement | move from | switch platform | modernization
+implementation_scope: erp | crm | data migration | system integration | api integration | cutover | rollout
+sourcing_request: implementation partner | looking for partner | external team | systems integrator | migration partner | quote | proposals | bids
+program_pressure: deadline | legacy system | current vendor | outside specialists | take over
 ```
 
 **Candidate uplift negative cues:**
 ```text
-generic_transformation_noise: digital transformation strategy | modernization roadmap | best practices | thought leadership
-internal_delivery: handled internally | internal team | internal controls | product launch
-seller_noise: vendor publishes | consultancy explains | press release | landing page
+advisory_noise: best practices | thought leadership | roadmap | playbook | guide
+category_noise: remote jobs | freelance jobs | browse jobs | jobs online | talent network | contract opportunities
+seller_noise: our services | available for hire | consulting pitch | vendor blog | case study
+portal_shell: latest news | help center | faq | search opportunities | contract opportunities
 ```
 
 ---
@@ -2484,72 +2446,68 @@ seller_noise: vendor publishes | consultancy explains | press release | landing 
 | Поле | Значение |
 |---|---|
 | **Name** | `Legacy system rescue and support takeover` |
-| **Description** | `Signals that an organization needs a new outside vendor to rescue, stabilize, maintain, or take over an inherited software project, legacy system, delayed implementation, or abandoned codebase.` |
+| **Description** | `Signals that a buyer-side organization needs an outside vendor, contractor team, or support partner to rescue, stabilize, maintain, continue, or take over an inherited software product, legacy system, abandoned implementation, or existing codebase.` |
+| **Strictness** | `balanced` |
 
 **Positive prototypes:**
 ```text
-Company needs new vendor to take over abandoned software project
-Business wants support partner for inherited legacy platform
-Product owner seeks external team to rescue delayed implementation
-Organization replaces previous contractor and needs takeover team
-Enterprise needs maintenance vendor for critical legacy application
-Buyer seeks outside team for code audit and stabilization before handover
-Need partner to continue development after internal team exit
-Company wants legacy application support plus modernization handoff
+Company needs new vendor to take over an abandoned software project.
+Business seeks support partner for inherited legacy platform and existing codebase.
+Organization replaces previous contractor and needs rescue or stabilization team.
+Buyer requests outside team to continue development after earlier vendor failure.
+Company needs maintenance vendor for critical application support plus improvements.
+Marketplace project card asks for help taking over, fixing, or modernizing an existing system.
+Enterprise wants code audit, stabilization, and handover support from an external team.
+Product owner seeks outside rescue team for delayed implementation or broken platform.
 ```
 
 **Negative prototypes:**
 ```text
-Agency advertises rescue project services
-Postmortem on how we rescued a codebase internally
-Internal incident report about delayed project
-Vendor blog about legacy modernization trends
-Hiring maintenance engineer in house
-Consulting pitch for application support services
-Community discussion about bad outsourcing experiences
-Thought piece on technical debt reduction
+Agency promotes legacy modernization services on a landing page.
+Vendor blog about support services or technical debt trends.
+Internal incident report or engineering retrospective.
+Career-page opening for support engineer or maintenance developer.
+Community discussion about bad outsourcing experiences.
+Case study about rescuing a client codebase in the past.
+Category page of support jobs, maintenance jobs, or freelance services.
+General article about technical debt or modernization with no active vendor search.
 ```
 
-**Must-have terms (baseline):** оставить пустым
-
-**Suggested optional terms for later tighten-up:**
-```text
-take over
-takeover team
-rescue project
-replace current vendor
-stabilize codebase
-maintain legacy system
-support partner
-continue development
-handover
-legacy application support
-```
+**Must-have terms:** оставить пустым
 
 **Must-not-have terms:**
 ```text
-case study
-thought leadership
 our support services
+vendor blog
 technical debt article
+community discussion
+postmortem
+career page
+remote jobs
+freelance jobs
+case study
+available for hire
+contract opportunities
 ```
 
 **Allowed content kinds:** `editorial`, `listing`
-**Time window hours (baseline):** оставить пустым
+**Time window hours:** оставить пустым
 **Priority:** `0.85`
 
 **Candidate uplift positive cues:**
 ```text
-takeover_need: take over | takeover team | replace current vendor | continue development
-rescue_support: rescue project | stabilize codebase | support partner | legacy application support
-handover_pressure: inherited legacy platform | delayed implementation | handover | maintenance vendor
+takeover_need: take over | takeover | replace current vendor | continue development | handover | previous developer
+rescue_work: rescue | stabilize | bug fixing | support existing | maintain existing | code audit
+legacy_context: legacy system | existing codebase | abandoned project | delayed implementation | inherited platform
+external_support: outside team | support partner | maintenance vendor | contractor | managed support
 ```
 
 **Candidate uplift negative cues:**
 ```text
-seller_noise: our support services | agency advertises | consulting pitch | vendor blog
-internal_noise: internally | incident report | hiring maintenance engineer | technical debt article
-community_noise: community discussion | thought leadership | bad outsourcing experiences | postmortem
+seller_noise: our support services | agency advertises | consulting pitch | vendor blog | available for hire
+internal_noise: incident report | postmortem | hiring support engineer | career page | technical debt article
+category_noise: remote jobs | freelance jobs | browse jobs | services | contract opportunities
+community_noise: community discussion | forum thread | reddit | thought leadership | case study
 ```
 
 ---
@@ -2577,7 +2535,7 @@ community_noise: community discussion | thought leadership | bad outsourcing exp
 | **Интервал опроса (типичный)** | 15–30 мин (вакансии обновляются реже) | 5–10 мин (новости появляются часто) | 10–30 мин (сигналы появляются неравномерно, но важны быстро) |
 | **Количество шаблонов интересов** | 8 | 8 | 5 |
 | **Фокус LLM-промптов** | «Есть ли конкретная вакансия?» | «Полезно ли это разработчику?» | «Есть ли здесь правдоподобный внешний спрос на услуги?» |
-| **Runtime profile policy** | `balanced` / `hold` / `always` | `balanced` / `hold` / `always` | `balanced` / `hold` / `always` |
+| **Runtime profile policy** | `balanced` / `hold` / `always` | `balanced` / `hold` / `always` | mixed `broad`/`balanced` + `hold` / `always` |
 | **Типичные content kinds** | `listing`, `editorial` | `editorial`, `document`, иногда `api_payload` | `editorial`, `listing`, `document`, иногда `api_payload` / `data_file` |
 | **Стратегия hard filters** | baseline обычно без `must_have_terms` и без `time_window`; включать позже, если шум уже понятен | baseline обычно без `must_have_terms` и без `time_window`; акцент на prototypes и negative cues | baseline без `must_have_terms` и без `time_window`; precision добирается через negative cues, candidate uplift и LLM |
 | **Главный тип positive candidate cues** | hiring + role + job-detail signals | release + technical-impact + platform-change signals | buyer-request + procurement + implementation-pressure signals |

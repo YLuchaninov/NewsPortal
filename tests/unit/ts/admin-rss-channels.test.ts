@@ -5,6 +5,7 @@ import {
   countRssChannelsRequiringOverwriteConfirmation,
   parseBulkRssAdminChannelInputs,
   parseRssAdminChannelInput,
+  planRssBulkImport,
   resolveRssChannelDeleteMode,
   upsertRssChannels
 } from "../../../apps/admin/src/lib/server/rss-channels.ts";
@@ -148,6 +149,13 @@ test("parseBulkRssAdminChannelInputs rejects partially invalid payloads", () => 
   );
 });
 
+test("parseBulkRssAdminChannelInputs rejects empty payloads", () => {
+  assert.throws(
+    () => parseBulkRssAdminChannelInputs([]),
+    /must include at least one channel/
+  );
+});
+
 test("resolveRssChannelDeleteMode archives channels with historical articles", () => {
   assert.equal(resolveRssChannelDeleteMode(0), "delete");
   assert.equal(resolveRssChannelDeleteMode(1), "archive");
@@ -168,6 +176,64 @@ test("countRssChannelsRequiringOverwriteConfirmation flags updates in bulk paylo
   ]);
 
   assert.equal(countRssChannelsRequiringOverwriteConfirmation(channels), 1);
+});
+
+test("planRssBulkImport reports create and channelId update targets", async () => {
+  const channels = parseBulkRssAdminChannelInputs([
+    {
+      name: "Create me",
+      fetchUrl: "https://example.com/create.xml"
+    },
+    {
+      channelId: "channel-123",
+      name: "Update me",
+      fetchUrl: "https://example.com/update.xml"
+    }
+  ]);
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      assert.match(sql, /provider_type = 'rss'/);
+      assert.deepEqual(params, [["channel-123"]]);
+      return {
+        rows: [
+          {
+            channel_id: "channel-123",
+            name: "Existing RSS",
+            fetch_url: "https://example.com/update.xml"
+          }
+        ]
+      };
+    }
+  };
+
+  const plan = await planRssBulkImport(fakePool as never, channels);
+
+  assert.equal(plan.wouldCreate, 1);
+  assert.equal(plan.wouldUpdate, 1);
+  assert.equal(plan.matchedByChannelId, 1);
+  assert.equal(plan.matchedByFetchUrl, 0);
+  assert.deepEqual(plan.items, [
+    {
+      index: 0,
+      name: "Create me",
+      fetchUrl: "https://example.com/create.xml",
+      action: "create",
+      matchType: "create",
+      channelId: null,
+      existingName: null,
+      existingFetchUrl: null
+    },
+    {
+      index: 1,
+      name: "Update me",
+      fetchUrl: "https://example.com/update.xml",
+      action: "update",
+      matchType: "channelId",
+      channelId: "channel-123",
+      existingName: "Existing RSS",
+      existingFetchUrl: "https://example.com/update.xml"
+    }
+  ]);
 });
 
 test("upsertRssChannels preserves existing auth headers on update until explicitly cleared", async () => {

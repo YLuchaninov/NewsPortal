@@ -4,6 +4,8 @@ export interface FetchersConfig {
   fetchersPollIntervalMs: number;
   fetchersBatchSize: number;
   fetchersConcurrency: number;
+  fetchersRssConcurrency: number;
+  fetchersWebsiteConcurrency: number;
   defaultRequestTimeoutMs: number;
   defaultUserAgent: string;
   enrichmentEnabled: boolean;
@@ -61,13 +63,27 @@ export function loadFetchersConfig(): FetchersConfig {
   const defaultUserAgent =
     process.env.FETCHERS_USER_AGENT ??
     "NewsPortalFetchers/0.1 (+https://newsportal.local)";
+  const fetchersConcurrency = Math.max(1, Math.floor(readNumber("FETCHERS_CONCURRENCY", 4)));
+  const rssConcurrencyFallback = Math.max(1, Math.ceil(fetchersConcurrency / 2));
+  const websiteConcurrencyFallback = Math.max(
+    1,
+    fetchersConcurrency - rssConcurrencyFallback
+  );
 
   return {
     databaseUrl: buildPostgresUrl(),
     fetchersPort: readNumber("FETCHERS_PORT", 4100),
     fetchersPollIntervalMs: readNumber("FETCHERS_POLL_INTERVAL_MS", 5000),
     fetchersBatchSize: readNumber("FETCHERS_BATCH_SIZE", 100),
-    fetchersConcurrency: Math.max(1, Math.floor(readNumber("FETCHERS_CONCURRENCY", 4))),
+    fetchersConcurrency,
+    fetchersRssConcurrency: Math.max(
+      1,
+      Math.floor(readNumber("FETCHERS_RSS_CONCURRENCY", rssConcurrencyFallback))
+    ),
+    fetchersWebsiteConcurrency: Math.max(
+      1,
+      Math.floor(readNumber("FETCHERS_WEBSITE_CONCURRENCY", websiteConcurrencyFallback))
+    ),
     defaultRequestTimeoutMs: readNumber("FETCHERS_REQUEST_TIMEOUT_MS", 10000),
     defaultUserAgent,
     enrichmentEnabled: readBoolean("ENRICHMENT_ENABLED", true),

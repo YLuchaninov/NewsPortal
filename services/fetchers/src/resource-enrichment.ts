@@ -19,6 +19,10 @@ import {
 import { canonicalizeUrl, collapseWhitespace, decodeHtmlEntities, stripHtmlTags } from "./rss";
 
 type ExtractionState = "pending" | "skipped" | "enriched" | "failed";
+type ProjectionState =
+  | "pending"
+  | "projected_to_common_pipeline"
+  | "explicitly_rejected_before_pipeline";
 
 interface EnrichmentLogger {
   info(payload: unknown, message?: string): void;
@@ -46,8 +50,11 @@ interface WebResourceRow {
   attributesJson: Record<string, unknown>;
   documentsJson: unknown[];
   mediaJson: unknown[];
+  childResourcesJson: unknown[];
+  linksOutJson: unknown[];
   rawPayloadJson: Record<string, unknown>;
   extractionState: string;
+  extractionError: string | null;
   projectedArticleId: string | null;
   channelName: string;
   userAgent: string;
@@ -68,6 +75,10 @@ export interface ResourceEnrichmentResult {
   documents_count: number;
   media_count: number;
   error?: string | null;
+}
+
+export interface ReplayStoredProjectionOptions {
+  force?: boolean;
 }
 
 class AsyncSemaphore {
@@ -279,6 +290,122 @@ function summarizeBody(body: string, maxLength = 320): string {
 
 function computeContentHash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function isProjectableResourceKind(kind: ResourceKind): boolean {
+  return kind !== "unknown";
+}
+
+function buildProjectableBody(extraction: ExtractionPersistShape): string {
+  return readOptionalString(extraction.body) ??
+    readOptionalString(extraction.summary) ??
+    readOptionalString(extraction.title) ??
+    "";
+}
+
+interface ProjectionDecision {
+  shouldProject: boolean;
+  projectionState: ProjectionState;
+  projectionError: string | null;
+  body: string;
+}
+
+function resolveProjectionDecision(
+  extraction: ExtractionPersistShape,
+): ProjectionDecision {
+  if (extraction.status === "failed") {
+    return {
+      shouldProject: false,
+      projectionState: "explicitly_rejected_before_pipeline",
+      projectionError: extraction.errorText ?? "resource_enrichment_failed",
+      body: "",
+    };
+  }
+
+  if (extraction.status === "skipped") {
+    return {
+      shouldProject: false,
+      projectionState: "explicitly_rejected_before_pipeline",
+      projectionError: extraction.errorText ?? "resource_extraction_skipped",
+      body: "",
+    };
+  }
+
+  if (!isProjectableResourceKind(extraction.resourceKind)) {
+    return {
+      shouldProject: false,
+      projectionState: "explicitly_rejected_before_pipeline",
+      projectionError: "unsupported_resource_kind",
+      body: "",
+    };
+  }
+
+  if (!readOptionalString(extraction.finalUrl)) {
+    return {
+      shouldProject: false,
+      projectionState: "explicitly_rejected_before_pipeline",
+      projectionError: "missing_final_url",
+      body: "",
+    };
+  }
+
+  const body = buildProjectableBody(extraction);
+  if (!body) {
+    return {
+      shouldProject: false,
+      projectionState: "explicitly_rejected_before_pipeline",
+      projectionError: "missing_projectable_content",
+      body,
+    };
+  }
+
+  return {
+    shouldProject: true,
+    projectionState: "projected_to_common_pipeline",
+    projectionError: null,
+    body,
+  };
+}
+
+function buildPersistedExtraction(resource: WebResourceRow): ExtractionPersistShape {
+  return {
+    status:
+      resource.extractionState === "failed"
+        ? "failed"
+        : resource.extractionState === "skipped"
+          ? "skipped"
+          : "enriched",
+    resourceKind:
+      ([
+        "editorial",
+        "listing",
+        "entity",
+        "document",
+        "data_file",
+        "api_payload",
+        "unknown",
+      ] as const).includes(resource.resourceKind as ResourceKind)
+        ? (resource.resourceKind as ResourceKind)
+        : "unknown",
+    finalUrl: resource.finalUrl ?? resource.url,
+    title: resource.title,
+    summary: resource.summary,
+    body: resource.body,
+    bodyHtml: resource.bodyHtml,
+    lang: resource.lang,
+    langConfidence: resource.langConfidence,
+    publishedAt: resource.publishedAt,
+    modifiedAt: resource.modifiedAt,
+    classificationJson: resource.classificationJson,
+    attributesJson: resource.attributesJson,
+    documentsJson: asArray(resource.documentsJson),
+    mediaJson: asArray(resource.mediaJson),
+    childResourcesJson: asArray(resource.childResourcesJson),
+    linksOutJson: asArray(resource.linksOutJson),
+    contentHash: resource.body ? computeContentHash(resource.body) : null,
+    errorText: resource.extractionError,
+    projectedDocId: resource.projectedArticleId,
+  };
 }
 
 function buildArticleParserOptions() {
@@ -565,8 +692,11 @@ export class ResourceEnrichmentService {
           wr.attributes_json as "attributesJson",
           wr.documents_json as "documentsJson",
           wr.media_json as "mediaJson",
+          wr.child_resources_json as "childResourcesJson",
+          wr.links_out_json as "linksOutJson",
           wr.raw_payload_json as "rawPayloadJson",
           wr.extraction_state as "extractionState",
+          wr.extraction_error as "extractionError",
           wr.projected_article_id::text as "projectedArticleId",
           sc.name as "channelName",
           coalesce(sc.config_json ->> 'userAgent', $2) as "userAgent",
@@ -581,6 +711,51 @@ export class ResourceEnrichmentService {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async replayStoredProjection(
+    resourceId: string,
+    options: ReplayStoredProjectionOptions = {},
+  ): Promise<ResourceEnrichmentResult> {
+    const resource = await this.loadResource(resourceId);
+    if (!resource) {
+      throw new Error(`Resource ${resourceId} was not found for projection replay.`);
+    }
+
+    const extractionState =
+      resource.extractionState === "failed"
+        ? "failed"
+        : resource.extractionState === "skipped"
+          ? "skipped"
+          : "enriched";
+
+    if (resource.projectedArticleId && options.force !== true) {
+      return {
+        status: "skipped",
+        resource_id: resource.resourceId,
+        resource_kind: this.resolveResourceKind(resource.resourceKind),
+        extraction_state: extractionState,
+        projected_doc_id: resource.projectedArticleId,
+        documents_count: asArray(resource.documentsJson).length,
+        media_count: asArray(resource.mediaJson).length,
+        error: "already_projected",
+      };
+    }
+
+    if (resource.extractionState !== "enriched") {
+      return {
+        status: "skipped",
+        resource_id: resource.resourceId,
+        resource_kind: this.resolveResourceKind(resource.resourceKind),
+        extraction_state: extractionState,
+        projected_doc_id: resource.projectedArticleId,
+        documents_count: asArray(resource.documentsJson).length,
+        media_count: asArray(resource.mediaJson).length,
+        error: "resource_not_enriched",
+      };
+    }
+
+    return await this.persistExtraction(resource, buildPersistedExtraction(resource));
   }
 
   private resolveResourceKind(rawKind: string): ResourceKind {
@@ -978,9 +1153,27 @@ export class ResourceEnrichmentService {
     try {
       await client.query("begin");
       let projectedDocId = extraction.projectedDocId;
-      if (extraction.status === "enriched" && extraction.resourceKind === "editorial" && extraction.body) {
-        projectedDocId = await this.ensureEditorialProjection(client, resource, extraction);
+      const projectionDecision = resolveProjectionDecision(extraction);
+      if (projectionDecision.shouldProject) {
+        projectedDocId = await this.ensureProjectedArticle(
+          client,
+          resource,
+          extraction,
+          projectionDecision.body,
+        );
       }
+      const projectionState =
+        projectionDecision.shouldProject && projectedDocId
+          ? "projected_to_common_pipeline"
+          : projectionDecision.shouldProject
+          ? "explicitly_rejected_before_pipeline"
+          : projectionDecision.projectionState;
+      const projectionError =
+        projectionDecision.shouldProject && projectedDocId
+          ? null
+          : projectionDecision.shouldProject
+          ? "projection_insert_failed"
+          : projectionDecision.projectionError;
 
       await client.query(
         `
@@ -1006,6 +1199,8 @@ export class ResourceEnrichmentService {
             extraction_state = $19,
             extraction_error = $20,
             projected_article_id = $21,
+            projection_state = $22,
+            projection_error = $23,
             enriched_at = case when $19 = 'enriched' then now() else enriched_at end,
             updated_at = now()
           where resource_id = $1
@@ -1032,6 +1227,8 @@ export class ResourceEnrichmentService {
           extraction.status,
           extraction.errorText,
           projectedDocId,
+          projectionState,
+          projectionError,
         ],
       );
 
@@ -1044,7 +1241,7 @@ export class ResourceEnrichmentService {
         projected_doc_id: projectedDocId,
         documents_count: extraction.documentsJson.length,
         media_count: extraction.mediaJson.length,
-        error: extraction.errorText,
+        error: extraction.errorText ?? projectionError,
       };
     } catch (error) {
       await client.query("rollback");
@@ -1054,19 +1251,39 @@ export class ResourceEnrichmentService {
     }
   }
 
-  private async ensureEditorialProjection(
+  private async ensureProjectedArticle(
     client: PoolClient,
     resource: WebResourceRow,
     extraction: ExtractionPersistShape,
+    projectedBody: string,
   ): Promise<string | null> {
     const sourceArticleId = resource.externalResourceId ?? resource.normalizedUrl;
     const publishedAt = extraction.publishedAt ?? resource.publishedAt ?? new Date().toISOString();
+    const articlePayload = JSON.stringify({
+      fetcher: "resource_projection",
+      websiteAcquisition: {
+        resourceId: resource.resourceId,
+        normalizedUrl: resource.normalizedUrl,
+        finalUrl: extraction.finalUrl,
+        discoverySource:
+          asRecord(resource.rawPayloadJson.discovery).discoverySource ??
+          resource.rawPayloadJson.discoverySource ??
+          null,
+        resourceKind: extraction.resourceKind,
+      },
+      resource: {
+        resourceId: resource.resourceId,
+        normalizedUrl: resource.normalizedUrl,
+        resourceKind: extraction.resourceKind,
+      },
+    });
     const insertResult = await client.query<{ docId: string }>(
       `
         insert into articles (
           channel_id,
           source_article_id,
           url,
+          content_kind,
           content_format,
           published_at,
           title,
@@ -1080,14 +1297,15 @@ export class ResourceEnrichmentService {
           $1,
           $2,
           $3,
-          'article',
           $4,
+          'article',
           $5,
           $6,
           $7,
           $8,
           $9,
-          $10::jsonb
+          $10,
+          $11::jsonb
         )
         on conflict do nothing
         returning doc_id::text as "docId"
@@ -1096,32 +1314,67 @@ export class ResourceEnrichmentService {
         resource.channelId,
         sourceArticleId,
         extraction.finalUrl,
+        extraction.resourceKind,
         publishedAt,
         extraction.title,
         extraction.summary,
-        extraction.body,
+        projectedBody,
         extraction.lang,
         extraction.langConfidence,
-        JSON.stringify({
-          fetcher: "resource_projection",
-          resource: {
-            resourceId: resource.resourceId,
-            normalizedUrl: resource.normalizedUrl,
-            resourceKind: extraction.resourceKind,
-          },
-        }),
+        articlePayload,
       ],
     );
     let docId = insertResult.rows[0]?.docId ?? null;
     if (!docId) {
       const existing = await client.query<{ docId: string }>(
         `
+          update articles
+          set
+            content_kind = $4,
+            published_at = $5,
+            title = $6,
+            lead = $7,
+            body = $8,
+            lang = $9,
+            lang_confidence = $10,
+            raw_payload_json = raw_payload_json || $11::jsonb,
+            updated_at = now()
+          where channel_id = $1
+            and (
+              source_article_id = $2
+              or url = $3
+            )
+          returning doc_id::text as "docId"
+        `,
+        [
+          resource.channelId,
+          sourceArticleId,
+          extraction.finalUrl,
+          extraction.resourceKind,
+          publishedAt,
+          extraction.title,
+          extraction.summary,
+          projectedBody,
+          extraction.lang,
+          extraction.langConfidence,
+          articlePayload,
+        ],
+      );
+      docId = existing.rows[0]?.docId ?? null;
+    }
+    if (!docId) {
+      const existing = await client.query<{ docId: string }>(
+        `
           select doc_id::text as "docId"
           from articles
-          where channel_id = $1 and url = $2
+          where channel_id = $1
+            and (
+              source_article_id = $2
+              or url = $3
+            )
           limit 1
         `,
-        [resource.channelId, extraction.finalUrl],
+        [resource.channelId, sourceArticleId, extraction.finalUrl],
       );
       docId = existing.rows[0]?.docId ?? null;
     }

@@ -36,7 +36,7 @@ class ApiWebResourcesTests(unittest.TestCase):
             {
                 "resource_id": "resource-1",
                 "resource_kind": "entity",
-                "content_item_ready": True,
+                "content_item_ready": False,
                 "projected_article_id": None,
             }
         ]
@@ -58,8 +58,8 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertEqual(result["page"], 2)
         self.assertEqual(result["pageSize"], 3)
         self.assertEqual(result["items"][0]["resource_id"], "resource-1")
-        self.assertEqual(result["items"][0]["selection_mode"], "selected")
-        self.assertEqual(result["items"][0]["selection_guidance"]["tone"], "positive")
+        self.assertEqual(result["items"][0]["selection_mode"], "pending")
+        self.assertEqual(result["items"][0]["selection_guidance"]["tone"], "neutral")
 
         count_sql, count_params = query_count.call_args.args
         self.assertIn("from web_resources wr", count_sql)
@@ -76,9 +76,7 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id", items_sql)
         self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id", items_sql)
         self.assertIn("sfr.eligible_for_feed as system_feed_eligible", items_sql)
-        self.assertIn("then 'resource:' || wr.resource_id::text", items_sql)
-        self.assertIn("wr.resource_kind <> 'editorial'", items_sql)
-        self.assertIn("from interest_templates it", items_sql)
+        self.assertIn("when false", items_sql)
         self.assertIn(
             "order by coalesce(wr.published_at, wr.discovered_at) desc nulls last, wr.updated_at desc, wr.resource_id",
             items_sql,
@@ -135,23 +133,23 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id", sql)
         self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id", sql)
 
-    def test_get_web_resource_marks_content_kind_selected_resource_without_article_projection(self) -> None:
+    def test_get_web_resource_keeps_unprojected_resource_pending_without_content_collection_truth(self) -> None:
         with patch.object(
             api_main,
             "query_one",
             return_value={
                 "resource_id": "resource-2",
                 "projected_article_id": None,
-                "content_item_ready": True,
-                "system_selection_decision": "kind_enabled",
+                "content_item_ready": False,
+                "system_selection_decision": None,
             },
         ):
             resource = api_main.get_web_resource("resource-2")
 
-        self.assertEqual(resource["selection_mode"], "selected")
-        self.assertEqual(resource["selection_source"], "system_interest_content_kind")
-        self.assertEqual(resource["selection_summary"], "Selected by content-kind eligibility")
-        self.assertEqual(resource["selection_guidance"]["tone"], "positive")
+        self.assertEqual(resource["selection_mode"], "pending")
+        self.assertEqual(resource["selection_source"], "pending")
+        self.assertEqual(resource["selection_summary"], "Selection not materialized yet")
+        self.assertEqual(resource["selection_guidance"]["tone"], "neutral")
 
 
 if __name__ == "__main__":

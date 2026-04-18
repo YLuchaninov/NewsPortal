@@ -15,112 +15,303 @@ import {
   FormField,
   Textarea,
 } from "@newsportal/ui";
+
+export type BulkChannelImportProviderType = "rss" | "website";
+
 interface BulkChannelImportProps {
   action: string;
+  preflightAction: string;
   redirectTo?: string;
+  providerType?: BulkChannelImportProviderType;
 }
-const REQUIRED_FIELDS = ["name", "fetchUrl"] as const;
-const FIELD_SCHEMA: Record<string, { type: string; description: string }> = {
-  name: { type: "string", description: "Channel display name" },
-  fetchUrl: { type: "string (URL)", description: "RSS feed URL" },
-  language: { type: "string", description: "ISO language code (default: en)" },
-  pollIntervalSeconds: { type: "number", description: "Base poll interval in seconds (default: 300)" },
-  adaptiveEnabled: { type: "boolean", description: "Enable adaptive polling (default: true)" },
-  maxPollIntervalSeconds: { type: "number", description: "Max interval when adaptive (default: pollInterval * 16)" },
-  maxItemsPerPoll: { type: "number", description: "Max items per fetch (default: 20)" },
-  requestTimeoutMs: { type: "number", description: "Request timeout in ms (default: 10000)" },
-  enrichmentEnabled: { type: "boolean", description: "Enable pre-normalize article enrichment (default: true)" },
-  enrichmentMinBodyLength: { type: "number", description: "Skip enrichment when body length already exceeds this threshold (default: 500)" },
-  isActive: { type: "boolean", description: "Start fetching immediately (default: true)" },
-};
-const EXAMPLE_JSON = JSON.stringify([
-  {
-    name: "Reuters World News",
-    fetchUrl: "https://feeds.reuters.com/reuters/worldNews",
-    language: "en",
-    pollIntervalSeconds: 300,
-    adaptiveEnabled: true,
-    maxPollIntervalSeconds: 3600,
-    maxItemsPerPoll: 25,
-    enrichmentEnabled: true,
-    enrichmentMinBodyLength: 500,
-    isActive: true,
-  },
-  {
-    name: "BBC News Top Stories",
-    fetchUrl: "https://feeds.bbci.co.uk/news/rss.xml",
-    language: "en",
-    pollIntervalSeconds: 600,
-    adaptiveEnabled: true,
-    isActive: true,
-  },
-], null, 2);
-interface ValidationError {
+
+interface BulkImportPreflightItem {
   index: number;
-  field: string;
-  message: string;
+  name: string;
+  fetchUrl: string;
+  action: "create" | "update";
+  matchType: "create" | "channelId" | "fetchUrl";
+  channelId: string | null;
+  existingName: string | null;
+  existingFetchUrl: string | null;
 }
 
-function countOverwriteRows(raw: string): number {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return 0;
-    }
-    return parsed.filter((item) => {
-      if (item == null || typeof item !== "object" || Array.isArray(item)) {
-        return false;
-      }
-      const channelId = (item as { channelId?: unknown }).channelId;
-      return typeof channelId === "string" && channelId.trim().length > 0;
-    }).length;
-  } catch {
-    return 0;
-  }
+interface BulkImportPreflightResult {
+  ok: boolean;
+  providerType: BulkChannelImportProviderType;
+  wouldCreate: number;
+  wouldUpdate: number;
+  matchedByChannelId: number;
+  matchedByFetchUrl: number;
+  items: BulkImportPreflightItem[];
 }
 
-function validateChannels(raw: string): { valid: boolean; errors: ValidationError[] } {
-  const errors: ValidationError[] = [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    return { valid: false, errors: [{ index: -1, field: "json", message: "Invalid JSON: " + (e as Error).message }] };
-  }
-  if (!Array.isArray(parsed)) {
-    return { valid: false, errors: [{ index: -1, field: "json", message: "Root must be a JSON array of channel objects." }] };
-  }
-  if (parsed.length === 0) {
-    return { valid: false, errors: [{ index: -1, field: "json", message: "Array is empty. Add at least one channel." }] };
-  }
-  parsed.forEach((item, idx) => {
-    if (typeof item !== "object" || item === null || Array.isArray(item)) {
-      errors.push({ index: idx, field: "item", message: "Item " + (idx + 1) + " is not an object." });
-      return;
-    }
-    const obj = item as Record<string, unknown>;
-    for (const req of REQUIRED_FIELDS) {
-      if (!obj[req] || String(obj[req]).trim() === "") {
-        errors.push({ index: idx, field: req, message: "Item " + (idx + 1) + ': missing required field "' + req + '".' });
-      }
-    }
-    if (obj.fetchUrl && typeof obj.fetchUrl === "string") {
-      try { new URL(obj.fetchUrl); } catch { errors.push({ index: idx, field: "fetchUrl", message: "Item " + (idx + 1) + ': "' + obj.fetchUrl + '" is not a valid URL.' }); }
-    }
-    if (obj.pollIntervalSeconds !== undefined && (typeof obj.pollIntervalSeconds !== "number" || obj.pollIntervalSeconds < 30)) {
-      errors.push({ index: idx, field: "pollIntervalSeconds", message: "Item " + (idx + 1) + ": pollIntervalSeconds must be >= 30." });
-    }
-  });
-  return { valid: errors.length === 0, errors };
+interface BulkImportViewModel {
+  title: string;
+  description: string;
+  helpText: string;
+  exampleJson: string;
+  requiredFields: readonly string[];
+  fieldSchema: Record<string, { type: string; description: string }>;
 }
-export function BulkChannelImport({ action, redirectTo }: BulkChannelImportProps) {
+
+const BULK_IMPORT_VIEW_MODELS: Record<
+  BulkChannelImportProviderType,
+  BulkImportViewModel
+> = {
+  rss: {
+    title: "Bulk Import",
+    description:
+      "Paste a JSON array of RSS channel objects to import multiple feeds at once.",
+    helpText:
+      'Required: "name" and "fetchUrl". Include "channelId" only when you want to update an existing RSS channel.',
+    exampleJson: JSON.stringify(
+      [
+        {
+          name: "Reuters World News",
+          fetchUrl: "https://feeds.reuters.com/reuters/worldNews",
+          language: "en",
+          pollIntervalSeconds: 300,
+          adaptiveEnabled: true,
+          maxPollIntervalSeconds: 3600,
+          maxItemsPerPoll: 25,
+          enrichmentEnabled: true,
+          enrichmentMinBodyLength: 500,
+          isActive: true,
+        },
+        {
+          name: "BBC News Top Stories",
+          fetchUrl: "https://feeds.bbci.co.uk/news/rss.xml",
+          language: "en",
+          pollIntervalSeconds: 600,
+          adaptiveEnabled: true,
+          isActive: true,
+        },
+      ],
+      null,
+      2
+    ),
+    requiredFields: ["name", "fetchUrl"],
+    fieldSchema: {
+      name: { type: "string", description: "Channel display name" },
+      fetchUrl: { type: "string (URL)", description: "RSS feed URL" },
+      channelId: {
+        type: "string",
+        description: "Optional stable channel ID when updating an existing RSS channel",
+      },
+      language: { type: "string", description: "ISO language code (default: en)" },
+      pollIntervalSeconds: {
+        type: "number",
+        description: "Base poll interval in seconds (default: 300)",
+      },
+      adaptiveEnabled: {
+        type: "boolean",
+        description: "Enable adaptive polling (default: true)",
+      },
+      maxPollIntervalSeconds: {
+        type: "number",
+        description: "Max interval when adaptive (default: pollInterval * 16)",
+      },
+      maxItemsPerPoll: {
+        type: "number",
+        description: "Max items per fetch (default: 20)",
+      },
+      requestTimeoutMs: {
+        type: "number",
+        description: "Request timeout in ms (default: 10000)",
+      },
+      userAgent: {
+        type: "string",
+        description: "Custom request identity for upstream fetches",
+      },
+      preferContentEncoded: {
+        type: "boolean",
+        description: "Prefer content:encoded when the feed provides it",
+      },
+      adapterStrategy: {
+        type: "string",
+        description: "Optional feed-ingress adapter override",
+      },
+      maxEntryAgeHours: {
+        type: "number",
+        description: "Optional stale-entry cutoff in hours",
+      },
+      enrichmentEnabled: {
+        type: "boolean",
+        description: "Enable pre-normalize article enrichment (default: true)",
+      },
+      enrichmentMinBodyLength: {
+        type: "number",
+        description:
+          "Skip enrichment when body length already exceeds this threshold (default: 500)",
+      },
+      authorizationHeader: {
+        type: "string",
+        description: "Optional raw Authorization header value",
+      },
+      clearAuthorizationHeader: {
+        type: "boolean",
+        description: "Clear the stored Authorization header on update",
+      },
+      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" },
+    },
+  },
+  website: {
+    title: "Bulk Import",
+    description:
+      "Paste a JSON array of website channel objects to bulk create or update site-entry onboarding with the same operator-safe discovery contract used by the manual form.",
+    helpText:
+      'Required: "name" and "fetchUrl". Existing website channels update by explicit "channelId" or by exact normalized "fetchUrl" match.',
+    exampleJson: JSON.stringify(
+      [
+        {
+          name: "EU Data Portal",
+          fetchUrl: "https://example.com/",
+          language: "en",
+          pollIntervalSeconds: 900,
+          adaptiveEnabled: true,
+          maxPollIntervalSeconds: 14400,
+          requestTimeoutMs: 10000,
+          totalPollTimeoutMs: 60000,
+          userAgent: "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+          maxResourcesPerPoll: 20,
+          crawlDelayMs: 1000,
+          sitemapDiscoveryEnabled: true,
+          feedDiscoveryEnabled: true,
+          collectionDiscoveryEnabled: true,
+          downloadDiscoveryEnabled: true,
+          browserFallbackEnabled: false,
+          collectionSeedUrls: [
+            "https://example.com/datasets",
+            "https://example.com/archive"
+          ],
+          allowedUrlPatterns: ["/datasets/", "/news/"],
+          blockedUrlPatterns: ["/login", "/privacy"],
+          isActive: true
+        },
+        {
+          name: "Protected Startup Directory",
+          fetchUrl: "https://partners.example.com/",
+          pollIntervalSeconds: 1800,
+          maxResourcesPerPoll: 12,
+          browserFallbackEnabled: true,
+          authorizationHeader: "Bearer website-token",
+          isActive: true
+        }
+      ],
+      null,
+      2
+    ),
+    requiredFields: ["name", "fetchUrl"],
+    fieldSchema: {
+      name: { type: "string", description: "Channel display name" },
+      fetchUrl: { type: "string (URL)", description: "Website entry URL" },
+      channelId: {
+        type: "string",
+        description: "Optional stable channel ID when updating a known website channel",
+      },
+      language: { type: "string", description: "ISO language code (default: en)" },
+      pollIntervalSeconds: {
+        type: "number",
+        description: "Base poll interval in seconds (default: 900)",
+      },
+      adaptiveEnabled: {
+        type: "boolean",
+        description: "Enable adaptive polling (default: true)",
+      },
+      maxPollIntervalSeconds: {
+        type: "number",
+        description: "Max interval when adaptive (default: pollInterval * 16)",
+      },
+      requestTimeoutMs: {
+        type: "number",
+        description: "Per-request timeout in ms (default: 10000)",
+      },
+      totalPollTimeoutMs: {
+        type: "number",
+        description: "Whole-poll timeout ceiling in ms (default: 60000)",
+      },
+      userAgent: {
+        type: "string",
+        description: "Custom request identity for website probing",
+      },
+      maxResourcesPerPoll: {
+        type: "number",
+        description: "Max discovered resources persisted from one poll (default: 20)",
+      },
+      crawlDelayMs: {
+        type: "number",
+        description: "Minimum same-site delay between requests in ms (default: 1000)",
+      },
+      sitemapDiscoveryEnabled: {
+        type: "boolean",
+        description: "Probe declared sitemaps first",
+      },
+      feedDiscoveryEnabled: {
+        type: "boolean",
+        description: "Treat discovered feeds as website hints only",
+      },
+      collectionDiscoveryEnabled: {
+        type: "boolean",
+        description: "Scan listing and directory pages",
+      },
+      downloadDiscoveryEnabled: {
+        type: "boolean",
+        description: "Capture linked documents and data files",
+      },
+      browserFallbackEnabled: {
+        type: "boolean",
+        description: "Opt in to browser assistance for hard JS sites",
+      },
+      collectionSeedUrls: {
+        type: "string[] | newline-separated string",
+        description: "Optional seed URLs for listing or archive pages",
+      },
+      allowedUrlPatterns: {
+        type: "string[] | newline-separated string",
+        description: "Optional regex allowlist for persisted URLs",
+      },
+      blockedUrlPatterns: {
+        type: "string[] | newline-separated string",
+        description: "Optional regex blocklist for low-value URLs",
+      },
+      authorizationHeader: {
+        type: "string",
+        description: "Optional raw Authorization header value",
+      },
+      clearAuthorizationHeader: {
+        type: "boolean",
+        description:
+          "Clear the stored Authorization header on update; omit both auth fields to preserve a matched website channel's existing header",
+      },
+      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" },
+    },
+  },
+};
+
+export function getBulkChannelImportViewModel(
+  providerType: BulkChannelImportProviderType
+): BulkImportViewModel {
+  return BULK_IMPORT_VIEW_MODELS[providerType];
+}
+
+export function BulkChannelImport({
+  action,
+  preflightAction,
+  redirectTo,
+  providerType = "rss",
+}: BulkChannelImportProps) {
   const [json, setJson] = useState("");
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [preflightResult, setPreflightResult] =
+    useState<BulkImportPreflightResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isPreflighting, setIsPreflighting] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const confirmOverwriteRef = useRef<HTMLInputElement | null>(null);
-  const overwriteCount = countOverwriteRows(json);
-  const requiresOverwriteConfirmation = overwriteCount > 0;
+  const viewModel = getBulkChannelImportViewModel(providerType);
+  const updateItems =
+    preflightResult?.items.filter((item) => item.action === "update") ?? [];
 
   function resetOverwriteConfirmation() {
     if (confirmOverwriteRef.current) {
@@ -128,34 +319,97 @@ export function BulkChannelImport({ action, redirectTo }: BulkChannelImportProps
     }
   }
 
-  function validateCurrentJson(): boolean {
-    const { valid, errors } = validateChannels(json);
-    setValidationErrors(errors);
-    return valid;
+  function clearPreviewState() {
+    setValidationErrors([]);
+    setPreflightResult(null);
+    resetOverwriteConfirmation();
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    const valid = validateCurrentJson();
-    if (!valid) {
+  async function runPreflight(): Promise<BulkImportPreflightResult | null> {
+    const rawJson = json.trim();
+    if (!rawJson) {
+      setPreflightResult(null);
+      setValidationErrors(["Paste a JSON array of channel objects before validating."]);
       resetOverwriteConfirmation();
-      e.preventDefault();
+      return null;
+    }
+
+    let parsedPayload: unknown;
+    try {
+      parsedPayload = JSON.parse(rawJson) as unknown;
+    } catch (error) {
+      setPreflightResult(null);
+      setValidationErrors([
+        `Invalid JSON: ${error instanceof Error ? error.message : "Unable to parse payload."}`,
+      ]);
+      resetOverwriteConfirmation();
+      return null;
+    }
+
+    setIsPreflighting(true);
+    try {
+      const response = await fetch(preflightAction, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          providerType,
+          channels: parsedPayload,
+          redirectTo,
+        }),
+      });
+      const payload = (await response.json()) as
+        | BulkImportPreflightResult
+        | { error?: string };
+
+      if (!response.ok) {
+        setPreflightResult(null);
+        setValidationErrors([
+          String(payload && "error" in payload ? payload.error ?? "Bulk preflight failed." : "Bulk preflight failed."),
+        ]);
+        resetOverwriteConfirmation();
+        return null;
+      }
+
+      setValidationErrors([]);
+      setPreflightResult(payload as BulkImportPreflightResult);
+      resetOverwriteConfirmation();
+      return payload as BulkImportPreflightResult;
+    } catch (error) {
+      setPreflightResult(null);
+      setValidationErrors([
+        error instanceof Error ? error.message : "Bulk preflight failed.",
+      ]);
+      resetOverwriteConfirmation();
+      return null;
+    } finally {
+      setIsPreflighting(false);
+    }
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    if (confirmOverwriteRef.current?.value === "true") {
       return;
     }
 
-    if (
-      requiresOverwriteConfirmation &&
-      confirmOverwriteRef.current?.value !== "true"
-    ) {
-      e.preventDefault();
-      setConfirmOpen(true);
+    event.preventDefault();
+    const result = await runPreflight();
+    if (!result) {
+      return;
     }
+
+    if (result.wouldUpdate > 0) {
+      setConfirmOpen(true);
+      return;
+    }
+
+    formRef.current?.submit();
   }
 
-  function handleReviewUpdates() {
-    resetOverwriteConfirmation();
-    if (validateCurrentJson()) {
-      setConfirmOpen(true);
-    }
+  async function handleValidate() {
+    await runPreflight();
   }
 
   function handleConfirmOverwrite() {
@@ -163,31 +417,36 @@ export function BulkChannelImport({ action, redirectTo }: BulkChannelImportProps
       confirmOverwriteRef.current.value = "true";
     }
     setConfirmOpen(false);
-    formRef.current?.requestSubmit();
+    formRef.current?.submit();
   }
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <h2 className="font-semibold text-sm mb-1">Bulk Import</h2>
-      <p className="text-[11px] text-muted-foreground mb-3">
-        Paste a JSON array of channel objects to import multiple RSS feeds at once.
-        Required: <code className="rounded bg-muted px-1 py-0.5">name</code>,{" "}
-        <code className="rounded bg-muted px-1 py-0.5">fetchUrl</code>.
-      </p>
+      <h2 className="mb-1 text-sm font-semibold">{viewModel.title}</h2>
+      <p className="mb-1 text-[11px] text-muted-foreground">{viewModel.description}</p>
+      <p className="mb-3 text-[11px] text-muted-foreground">{viewModel.helpText}</p>
       <form
         ref={formRef}
         method="post"
         action={action}
-        onSubmit={handleSubmit}
-        className="grid gap-2 h-[calc(100%-2rem)]"
+        onSubmit={(event) => {
+          void handleSubmit(event);
+        }}
+        className="grid h-[calc(100%-2rem)] gap-2"
       >
         {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
-        <input ref={confirmOverwriteRef} type="hidden" name="confirmOverwrite" defaultValue="false" />
+        <input type="hidden" name="providerType" value={providerType} />
+        <input
+          ref={confirmOverwriteRef}
+          type="hidden"
+          name="confirmOverwrite"
+          defaultValue="false"
+        />
         <FormField
           label="Channels JSON"
           name="bulk-channel-json"
           required
-          helpText="Paste a JSON array of RSS channel objects. Each item needs at least name and fetchUrl."
+          helpText={viewModel.helpText}
           helpWide
         >
           <Textarea
@@ -195,63 +454,125 @@ export function BulkChannelImport({ action, redirectTo }: BulkChannelImportProps
             name="channelsJson"
             rows={12}
             value={json}
-            onChange={(e) => {
-              setJson(e.target.value);
-              setValidationErrors([]);
-              resetOverwriteConfirmation();
+            onChange={(event) => {
+              setJson(event.target.value);
+              clearPreviewState();
             }}
-            placeholder={EXAMPLE_JSON}
-            className="h-full min-h-[14rem] flex-1 text-xs font-mono"
+            placeholder={viewModel.exampleJson}
+            className="h-full min-h-[14rem] flex-1 font-mono text-xs"
           />
         </FormField>
-        {requiresOverwriteConfirmation && (
-          <div className="rounded-md border border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20 p-2.5">
-            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Overwrite confirmation required</p>
-            <p className="mt-1 text-[11px] text-amber-700/90 dark:text-amber-300/90">
-              This payload includes {overwriteCount} channel{overwriteCount === 1 ? "" : "s"} with a
-              <code className="mx-1 rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">channelId</code>
-              field, so the import will update existing records instead of creating new ones.
+        {preflightResult && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              Preflight ready
+            </p>
+            <p className="mt-1 text-[11px] text-emerald-700/90 dark:text-emerald-300/90">
+              {preflightResult.wouldCreate} create
+              {preflightResult.wouldCreate === 1 ? "" : "s"} and{" "}
+              {preflightResult.wouldUpdate} update
+              {preflightResult.wouldUpdate === 1 ? "" : "s"}.
+              {preflightResult.matchedByChannelId > 0 && (
+                <> {preflightResult.matchedByChannelId} matched by channel ID.</>
+              )}
+              {preflightResult.matchedByFetchUrl > 0 && (
+                <> {preflightResult.matchedByFetchUrl} matched by fetch URL.</>
+              )}
             </p>
           </div>
         )}
         {validationErrors.length > 0 && (
-          <div className="rounded-md border border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/20 p-2.5">
-            <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Validation errors:</p>
-            <ul className="list-disc list-inside space-y-0.5">
-              {validationErrors.map((err, i) => (
-                <li key={i} className="text-[11px] text-red-600 dark:text-red-400">{err.message}</li>
+          <div className="rounded-md border border-red-200 bg-red-50/50 p-2.5 dark:border-red-900/40 dark:bg-red-950/20">
+            <p className="mb-1 text-xs font-medium text-red-600 dark:text-red-400">
+              Validation errors:
+            </p>
+            <ul className="list-inside list-disc space-y-0.5">
+              {validationErrors.map((message, index) => (
+                <li key={index} className="text-[11px] text-red-600 dark:text-red-400">
+                  {message}
+                </li>
               ))}
             </ul>
           </div>
         )}
-        <div className="flex items-center gap-2 flex-wrap">
-          {requiresOverwriteConfirmation ? (
-            <button
-              type="button"
-              onClick={handleReviewUpdates}
-              className="h-8 px-4 rounded-md bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors"
-            >
-              Review updates
-            </button>
-          ) : (
-            <button type="submit" className="h-8 px-4 rounded-md bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition-colors">Import JSON</button>
-          )}
-          <button type="button" onClick={() => { const { errors } = validateChannels(json); setValidationErrors(errors); }} className="h-8 px-3 rounded-md border border-input text-xs hover:bg-accent transition-colors">Validate</button>
-          <button type="button" onClick={() => { setJson(EXAMPLE_JSON); setValidationErrors([]); resetOverwriteConfirmation(); }} className="h-8 px-3 rounded-md border border-input text-xs hover:bg-accent transition-colors">Load example</button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={isPreflighting}
+            className="h-8 rounded-md bg-secondary px-4 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPreflighting ? "Checking..." : "Import JSON"}
+          </button>
+          <button
+            type="button"
+            disabled={isPreflighting}
+            onClick={() => {
+              void handleValidate();
+            }}
+            className="h-8 rounded-md border border-input px-3 text-xs transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Validate
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setJson(viewModel.exampleJson);
+              clearPreviewState();
+            }}
+            className="h-8 rounded-md border border-input px-3 text-xs transition-colors hover:bg-accent"
+          >
+            Load example
+          </button>
         </div>
       </form>
+      {updateItems.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+            Pending overwrite review
+          </p>
+          <ul className="mt-2 space-y-1 text-[11px] text-amber-700/90 dark:text-amber-300/90">
+            {updateItems.slice(0, 5).map((item) => (
+              <li key={`${item.index}-${item.fetchUrl}`}>
+                Row {item.index + 1}: {item.name} via{" "}
+                {item.matchType === "fetchUrl" ? "fetchUrl match" : "channelId"} to{" "}
+                <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">
+                  {item.channelId ?? "unknown"}
+                </code>
+                {item.existingName ? ` (${item.existingName})` : ""}
+              </li>
+            ))}
+          </ul>
+          {updateItems.length > 5 && (
+            <p className="mt-2 text-[11px] text-amber-700/90 dark:text-amber-300/90">
+              And {updateItems.length - 5} more update target
+              {updateItems.length - 5 === 1 ? "" : "s"} in this payload.
+            </p>
+          )}
+        </div>
+      )}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm bulk channel updates</AlertDialogTitle>
             <AlertDialogDescription>
-              This import will overwrite {overwriteCount} existing channel{overwriteCount === 1 ? "" : "s"} because the JSON payload includes stable channel IDs. Review the payload carefully before continuing.
+              This import will update {preflightResult?.wouldUpdate ?? 0} existing channel
+              {(preflightResult?.wouldUpdate ?? 0) === 1 ? "" : "s"}.
+              {(preflightResult?.matchedByFetchUrl ?? 0) > 0 && (
+                <>
+                  {" "}
+                  {(preflightResult?.matchedByFetchUrl ?? 0)} match
+                  {(preflightResult?.matchedByFetchUrl ?? 0) === 1 ? "" : "es"} came from
+                  existing fetch URLs, so omitted website authorization headers will be preserved
+                  unless you explicitly replace or clear them.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
             <AlertDialogAction type="button" onClick={handleConfirmOverwrite}>
-              Overwrite {overwriteCount} channel{overwriteCount === 1 ? "" : "s"}
+              Overwrite {preflightResult?.wouldUpdate ?? 0} channel
+              {(preflightResult?.wouldUpdate ?? 0) === 1 ? "" : "s"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -263,11 +584,22 @@ export function BulkChannelImport({ action, redirectTo }: BulkChannelImportProps
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2 rounded-md border border-border bg-muted/30 p-3">
             <table className="w-full text-[11px]">
-              <thead><tr className="border-b border-border"><th className="text-left py-1 font-medium">Field</th><th className="text-left py-1 font-medium">Type</th><th className="text-left py-1 font-medium">Description</th></tr></thead>
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="py-1 text-left font-medium">Field</th>
+                  <th className="py-1 text-left font-medium">Type</th>
+                  <th className="py-1 text-left font-medium">Description</th>
+                </tr>
+              </thead>
               <tbody>
-                {Object.entries(FIELD_SCHEMA).map(([field, info]) => (
+                {Object.entries(viewModel.fieldSchema).map(([field, info]) => (
                   <tr key={field} className="border-b border-border last:border-0">
-                    <td className="py-1 font-mono">{field}{(REQUIRED_FIELDS as readonly string[]).includes(field) && <span className="text-red-500 ml-0.5">*</span>}</td>
+                    <td className="py-1 font-mono">
+                      {field}
+                      {viewModel.requiredFields.includes(field) && (
+                        <span className="ml-0.5 text-red-500">*</span>
+                      )}
+                    </td>
                     <td className="py-1 text-muted-foreground">{info.type}</td>
                     <td className="py-1 text-muted-foreground">{info.description}</td>
                   </tr>

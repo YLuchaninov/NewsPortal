@@ -358,6 +358,8 @@ const pagePaths = {
                 const selectionDecision = String(resource.selection_decision ?? "").trim();
                 const selectionSummary = String(resource.selection_summary ?? "").trim() || "Selection not materialized yet.";
                 const selectionGuidance = readSelectionGuidance(resource);
+                const projectionState = String(resource.projection_state ?? "pending").trim() || "pending";
+                const projectionError = String(resource.projection_error ?? "").trim();
                 return (
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
@@ -403,13 +405,16 @@ const pagePaths = {
                         </>
                       ) : (
                         <>
-                          <p class="font-medium text-foreground">Resource-only</p>
+                          <p class="font-medium text-foreground">Not projected</p>
                           <p class="mt-1 text-xs text-muted-foreground">
-                            {resource.content_item_ready ? "Eligible for non-editorial content surfaces." : "Not projected into articles."}
+                            {projectionError || "Kept as acquisition/projection diagnostics only."}
                           </p>
                         </>
                       )}
                       <div class="mt-3 flex flex-wrap gap-2">
+                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(projectionState)}`}>
+                          projection:{projectionState}
+                        </span>
                         <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${selectionBadgeClass(selectionMode)}`}>
                           mode:{selectionMode}
                         </span>

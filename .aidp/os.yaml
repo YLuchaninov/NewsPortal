@@ -92,6 +92,8 @@ commands:
   unit_tests: "pnpm unit_tests"
   article_yield_diagnostics: "pnpm article:yield:diagnostics"
   article_yield_remediate: "pnpm article:yield:remediate -- --apply"
+  website_projection_replay: "pnpm website:projection:replay"
+  website_projection_replay_compose: "pnpm website:projection:replay:compose"
   migrations_smoke: "pnpm test:migrations:smoke"
   integration_tests: "pnpm integration_tests"
   smoke: "pnpm integration_tests"
@@ -448,6 +450,20 @@ runtime_facts:
     per_channel_default_enabled: true
     per_channel_default_min_body_length: 500
     api_manual_retry_requires_redis: true
+  unified_ingress:
+    common_downstream_trigger: article.ingest.requested
+    provider_specific_logic_must_end_before: article.ingest.requested
+    allowed_pre_handoff_triggers:
+      - resource.ingest.requested
+    provider_native_product_read_models_allowed: false
+    shared_downstream_truth_owners:
+      - articles
+      - canonical_documents
+      - document_observations
+      - story_clusters
+      - verification_results
+      - interest_filter_results
+      - final_selection_results
   rss_ingress:
     provider_type_remains: rss
     deep_contract: docs/contracts/feed-ingress-adapters.md
@@ -482,6 +498,14 @@ runtime_facts:
     browser_fallback_enabled_default: false
     browser_header_injection: same_origin_route_interception_only
     browser_assistance_scope: public_js_heavy_and_soft_anti_bot_only
+    accepted_resource_handoff_owner: services/fetchers/src/resource-enrichment.ts::ensureProjectedArticle
+    accepted_resource_handoff_target: articles_plus_article.ingest.requested
+    legacy_projection_replay_owner: services/fetchers/src/cli/replay-website-projections.ts
+    legacy_projection_replay_selector: projection_error_equals_legacy_resource_only_without_common_handoff
+    resource_only_product_read_models: false
+    acquisition_fairness_controls:
+      - FETCHERS_RSS_CONCURRENCY
+      - FETCHERS_WEBSITE_CONCURRENCY
     unsupported_browser_challenges:
       - login
       - captcha

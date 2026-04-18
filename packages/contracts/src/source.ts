@@ -17,6 +17,10 @@ export const RESOURCE_KINDS = [
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 export type FeedIngressAdapterStrategy = (typeof FEED_INGRESS_ADAPTER_STRATEGIES)[number];
 export type WebResourceExtractionState = "pending" | "enriched" | "skipped" | "failed";
+export type WebResourceProjectionState =
+  | "pending"
+  | "projected_to_common_pipeline"
+  | "explicitly_rejected_before_pipeline";
 export type NormalizedFetchOutcome =
   | "new_content"
   | "no_change"
@@ -65,6 +69,8 @@ export interface WebResourcePreview {
   discovery_source?: string | null;
   extraction_state?: WebResourceExtractionState | string;
   extraction_error?: string | null;
+  projection_state?: WebResourceProjectionState | string;
+  projection_error?: string | null;
   projected_article_id?: string | null;
   projected_article_title?: string | null;
   content_item_id?: string | null;
