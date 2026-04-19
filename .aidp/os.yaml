@@ -104,6 +104,8 @@ commands:
   website_admin_compose_smoke: "pnpm test:website:admin:compose"
   automation_admin_smoke: "node infra/scripts/test-automation-admin-flow.mjs"
   discovery_admin_compose_smoke: "pnpm test:discovery:admin:compose"
+  discovery_nonregression_compose_proof: "pnpm test:discovery:nonregression:compose"
+  discovery_yield_compose_proof: "pnpm test:discovery:yield:compose"
   hard_sites_compose_smoke: "pnpm test:hard-sites:compose"
   feed_ingress_adapter_smoke: "pnpm test:feed-ingress-adapters:smoke"
   enrichment_compose_smoke: "pnpm test:enrichment:compose"
@@ -364,6 +366,7 @@ runtime_facts:
     enabled_default: false
     schema_drift_prerepair_migration: 0026a_discovery_schema_drift_prerepair.sql
     schema_drift_repair_migration: 0030_discovery_schema_drift_repair.sql
+    schema_drift_residual_repair_migration: 0036_discovery_schema_residual_repair.sql
     migrations_smoke_scope: discovery_core_tables_indexes_columns_constraints
     source_quality_signal_source: generic_channel_quality
     downstream_selection_dependency: removed

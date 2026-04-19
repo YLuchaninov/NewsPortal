@@ -232,6 +232,8 @@ infra/
    - worker logs for discovery planning/execution errors
 6. Roll back by setting `DISCOVERY_ENABLED=0` or switching `DISCOVERY_SEARCH_PROVIDER=stub`, then restart the affected runtime.
 
+For a dedicated operator-facing testing handbook for this subsystem, including bounded enable smoke, graph-first mission testing, and independent recall/promotion checks, use [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md).
+
 ### Browser-assisted website and hard-site notes
 
 - Safe default stays unchanged: cheap/static website discovery remains first, and browser help is opt-in rather than default.

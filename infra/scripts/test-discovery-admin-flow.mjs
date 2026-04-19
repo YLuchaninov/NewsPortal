@@ -838,8 +838,13 @@ async function main() {
     );
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=classes`,
-      [`Acceptance class ${runId}`, "Save class", "Delete"],
+      ["Save class", "Delete"],
       { cookie: adminCookie }
+    );
+    await waitFor(
+      "discovery class through maintenance API",
+      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`),
+      (payload) => String(payload?.display_name ?? "") === `Acceptance class ${runId}`
     );
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=candidates`,

@@ -462,8 +462,15 @@ class DiscoveryCoordinatorRepository:
     async def get_recall_mission(self, recall_mission_id: str) -> dict[str, Any] | None:
         return await asyncio.to_thread(self._get_recall_mission, recall_mission_id)
 
-    async def list_active_hypothesis_classes(self) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(self._list_active_hypothesis_classes)
+    async def list_active_hypothesis_classes(
+        self,
+        *,
+        class_keys: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(
+            self._list_active_hypothesis_classes,
+            class_keys,
+        )
 
     async def list_strategy_stats(self, mission_id: str) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_strategy_stats, mission_id)
@@ -956,30 +963,58 @@ class DiscoveryCoordinatorRepository:
                 row = cursor.fetchone()
         return dict(row) if row is not None else None
 
-    def _list_active_hypothesis_classes(self) -> list[dict[str, Any]]:
+    def _list_active_hypothesis_classes(
+        self,
+        class_keys: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select
-                      class_key,
-                      display_name,
-                      description,
-                      status,
-                      generation_backend,
-                      default_provider_types,
-                      prompt_instructions,
-                      seed_rules_json,
-                      max_per_mission,
-                      sort_order,
-                      config_json,
-                      created_at,
-                      updated_at
-                    from discovery_hypothesis_classes
-                    where status = 'active'
-                    order by sort_order asc, class_key asc
-                    """
-                )
+                if class_keys:
+                    cursor.execute(
+                        """
+                        select
+                          class_key,
+                          display_name,
+                          description,
+                          status,
+                          generation_backend,
+                          default_provider_types,
+                          prompt_instructions,
+                          seed_rules_json,
+                          max_per_mission,
+                          sort_order,
+                          config_json,
+                          created_at,
+                          updated_at
+                        from discovery_hypothesis_classes
+                        where status = 'active'
+                          and class_key = any(%s::text[])
+                        order by sort_order asc, class_key asc
+                        """,
+                        (class_keys,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        select
+                          class_key,
+                          display_name,
+                          description,
+                          status,
+                          generation_backend,
+                          default_provider_types,
+                          prompt_instructions,
+                          seed_rules_json,
+                          max_per_mission,
+                          sort_order,
+                          config_json,
+                          created_at,
+                          updated_at
+                        from discovery_hypothesis_classes
+                        where status = 'active'
+                        order by sort_order asc, class_key asc
+                        """
+                    )
                 return [dict(row) for row in cursor.fetchall()]
 
     def _list_strategy_stats(self, mission_id: str) -> list[dict[str, Any]]:
@@ -2669,6 +2704,7 @@ async def plan_hypotheses(
     mission_id: str | None,
     settings: DiscoverySettings,
     repository: DiscoveryCoordinatorRepository,
+    class_keys: list[str] | None = None,
 ) -> dict[str, Any]:
     await repository.ensure_interest_template_missions(settings=settings)
     existing_source_urls = await repository.list_existing_source_urls()
@@ -2676,7 +2712,7 @@ async def plan_hypotheses(
     month_to_date_cost_usd = await repository.get_month_to_date_cost_usd(
         discovery_month_start_utc()
     )
-    class_rows = await repository.list_active_hypothesis_classes()
+    class_rows = await repository.list_active_hypothesis_classes(class_keys=class_keys)
     planned_hypothesis_ids: list[str] = []
     planned_mission_ids: list[str] = []
 

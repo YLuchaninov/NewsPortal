@@ -3247,6 +3247,7 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                                 mission_id=adaptive_fixture.mission_id,
                                 settings=adaptive_settings,
                                 repository=repository,
+                                class_keys=[adaptive_fixture.class_key],
                             )
                             if planned["discovery_planned_count"] != 1:
                                 raise RuntimeError(

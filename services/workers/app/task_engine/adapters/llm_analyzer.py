@@ -397,7 +397,7 @@ class GeminiLlmAnalyzerAdapter:
         return (
             "Return valid JSON only.\n"
             f"Task: {task or 'generic'}\n"
-            f"Payload:\n{json.dumps(payload, ensure_ascii=True)}"
+            f"Payload:\n{json.dumps(payload, ensure_ascii=True, default=str)}"
         )
 
     def _call_gemini_json(

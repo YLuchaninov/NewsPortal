@@ -3,6 +3,7 @@ import os
 import sys
 import types
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 if "psycopg" not in sys.modules:
@@ -137,6 +138,21 @@ class DiscoveryLlmAdapterTests(unittest.TestCase):
             "https://example.test/v1beta/models/gemini-discovery:generateContent?key=discovery-key",
             captured_urls[0],
         )
+
+    def test_generic_prompt_serializes_datetime_payload_values(self) -> None:
+        adapter = GeminiLlmAnalyzerAdapter()
+
+        prompt = adapter._build_generic_prompt(
+            task="discovery_plan_hypotheses",
+            payload={
+                "mission": {
+                    "created_at": datetime(2026, 4, 19, 13, 59, 48, tzinfo=timezone.utc),
+                }
+            },
+        )
+
+        self.assertIn("2026-04-19 13:59:48+00:00", prompt)
+        self.assertIn("discovery_plan_hypotheses", prompt)
 
 
 if __name__ == "__main__":

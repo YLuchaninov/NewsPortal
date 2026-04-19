@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .adapters import discovery_enabled
 from .plugins import TASK_REGISTRY, TaskPlugin, TaskPluginRegistry
 
 
@@ -27,6 +28,16 @@ def _load_orchestrator_dependencies() -> tuple[Any, Any, Any, Any, Any, Any, Any
     )
 
 
+def _disabled_runtime_result(phase: str) -> dict[str, Any]:
+    return {
+        "discovery_runtime_enabled": False,
+        "discovery_runtime_skipped": True,
+        "discovery_runtime_phase": phase,
+        "discovery_runtime_reason": "DISCOVERY_ENABLED is false on this worker runtime.",
+        "_stop": True,
+    }
+
+
 class PlanHypothesesPlugin(TaskPlugin):
     name = "discovery.plan_hypotheses"
     description = "Plan discovery hypotheses from missions and strategy memory."
@@ -37,6 +48,8 @@ class PlanHypothesesPlugin(TaskPlugin):
         options: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
+        if not discovery_enabled():
+            return _disabled_runtime_result("plan_hypotheses")
         (
             DiscoveryCoordinatorRepository,
             _evaluate_hypotheses,
@@ -64,6 +77,8 @@ class ExecuteHypothesesPlugin(TaskPlugin):
         options: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
+        if not discovery_enabled():
+            return _disabled_runtime_result("execute_hypotheses")
         (
             DiscoveryCoordinatorRepository,
             _evaluate_hypotheses,
@@ -92,6 +107,8 @@ class EvaluateResultsPlugin(TaskPlugin):
         options: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
+        if not discovery_enabled():
+            return _disabled_runtime_result("evaluate_results")
         (
             DiscoveryCoordinatorRepository,
             evaluate_hypotheses,
@@ -121,6 +138,8 @@ class ReEvaluateSourcesPlugin(TaskPlugin):
         options: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
+        if not discovery_enabled():
+            return _disabled_runtime_result("re_evaluate_sources")
         (
             DiscoveryCoordinatorRepository,
             _evaluate_hypotheses,
@@ -152,3 +171,6 @@ def register_orchestrator_plugins(
     for plugin_class in ORCHESTRATOR_PLUGIN_CLASSES:
         target_registry.register(plugin_class)
     return target_registry
+
+
+register_orchestrator_plugins(TASK_REGISTRY)

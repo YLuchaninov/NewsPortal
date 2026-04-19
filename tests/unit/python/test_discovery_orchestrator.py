@@ -348,8 +348,16 @@ class _FakeDiscoveryRepository:
             return None
         return dict(self.recall_mission)
 
-    async def list_active_hypothesis_classes(self) -> list[dict[str, Any]]:
-        return [dict(item) for item in self.class_rows if item["status"] == "active"]
+    async def list_active_hypothesis_classes(
+        self,
+        *,
+        class_keys: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        allowed = set(class_keys or [])
+        rows = [dict(item) for item in self.class_rows if item["status"] == "active"]
+        if not allowed:
+            return rows
+        return [item for item in rows if str(item.get("class_key") or "") in allowed]
 
     async def list_strategy_stats(self, mission_id: str) -> list[dict[str, Any]]:
         del mission_id
@@ -935,6 +943,50 @@ class DiscoveryOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.hypotheses[0]["tactic_key"], "local_watch")
         self.assertEqual(repository.hypotheses[0]["target_provider_type"], "website")
         self.assertEqual(repository.hypotheses[0]["search_query"], "EU AI local_watch")
+
+    async def test_plan_hypotheses_can_be_restricted_to_specific_registry_classes(self) -> None:
+        repository = _FakeDiscoveryRepository()
+        repository.class_rows = [
+            {
+                "class_key": "live_example_b_website",
+                "display_name": "Live Example Website",
+                "status": "active",
+                "generation_backend": "graph_seed_only",
+                "default_provider_types": ["website"],
+                "seed_rules_json": {"tactics": ["live_watch"]},
+                "max_per_mission": 1,
+                "sort_order": -100,
+                "config_json": {},
+            },
+            {
+                "class_key": "adaptive_smoke_fixture",
+                "display_name": "Adaptive Smoke",
+                "status": "active",
+                "generation_backend": "graph_seed_only",
+                "default_provider_types": ["website"],
+                "seed_rules_json": {"tactics": ["signal"]},
+                "max_per_mission": 1,
+                "sort_order": 1,
+                "config_json": {},
+            },
+        ]
+        runtime = _FakeRuntime({"discovery_plan_hypotheses": {"result": [], "meta": {"request_count": 0}}})
+
+        with patch(
+            "services.workers.app.discovery_orchestrator.get_discovery_runtime",
+            return_value=runtime,
+        ):
+            result = await plan_hypotheses(
+                mission_id="mission-1",
+                settings=DiscoverySettings(max_hypotheses_per_run=5),
+                repository=repository,
+                class_keys=["adaptive_smoke_fixture"],
+            )
+
+        self.assertEqual(result["discovery_planned_count"], 1)
+        self.assertEqual(repository.hypotheses[0]["class_key"], "adaptive_smoke_fixture")
+        self.assertEqual(repository.hypotheses[0]["tactic_key"], "signal")
+        self.assertEqual(repository.hypotheses[0]["target_provider_type"], "website")
 
     async def test_execute_hypotheses_dispatches_child_run_auto_approves_and_logs_precise_costs(self) -> None:
         repository = _FakeDiscoveryRepository()

@@ -14,6 +14,352 @@
 
 ## Completed items
 
+### 2026-04-19 — STAGE-DISCOVERY-CASE-AGNOSTIC-PROOF-2026-04-19 — Generalized discovery proof into case packs and added downstream non-regression proof
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to keep discovery case-agnostic rather than Example B/C-shaped, and to prove that discovery can keep searching without drifting the existing downstream filtering and selection pipelines.
+- Что изменилось:
+  - expanded [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs) so the config layer now exports:
+    - `DISCOVERY_RUNTIME_CASE_PACKS`
+    - `DISCOVERY_VALIDATION_CASE_PACKS`
+    - `DISCOVERY_LIVE_CASE_PACKS`
+    - explicit `packClass` and `executionMode`
+    - a synthetic validation-only `generic_long_tail_exploratory` pack for generalized calibration beyond Example B/C
+  - updated [`infra/scripts/lib/discovery-live-yield-policy.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-yield-policy.mjs) so the core policy now reports:
+    - reusable weak-yield root causes
+    - per-case evidence funnel metrics
+    - aggregate root-cause diagnostics across enabled runtime packs
+  - updated [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) so the runtime harness now:
+    - runs only runtime-enabled case packs
+    - calibrates against the full validation-pack set
+    - emits `packClass`, `rootCauseClassification`, and aggregate yield diagnostics
+    - keeps Example B/C as proof cohorts rather than architectural assumptions
+  - updated [`infra/scripts/test-live-discovery-yield-proof.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-yield-proof.mjs) so the bounded multi-run proof continues to aggregate only runtime-enabled packs while preserving the generalized case-pack surface
+  - added [`infra/scripts/test-discovery-pipeline-nonregression.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-pipeline-nonregression.mjs) as the new repo-owned safety proof for discovery vs pre-existing downstream corpus stability
+  - synced commands and proof/docs in:
+    - [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`docs/contracts/test-access-and-fixtures.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/test-access-and-fixtures.md)
+    - [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml)
+- Что было доказано:
+  - static/helper proof:
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `node --check infra/scripts/lib/discovery-live-yield-policy.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --check infra/scripts/test-live-discovery-yield-proof.mjs`
+    - `node --check infra/scripts/test-discovery-pipeline-nonregression.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
+  - fresh generalized live harness proof:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-b7b86b83.json`
+      - `/tmp/newsportal-live-discovery-examples-b7b86b83.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = yield_weak`
+  - fresh discovery non-regression proof:
+    - `node infra/scripts/test-discovery-pipeline-nonregression.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-discovery-nonregression-0c105e1b.json`
+      - `/tmp/newsportal-discovery-nonregression-0c105e1b.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `nonRegressionVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = pass_with_residuals`
+      - frozen-corpus drift counts stayed `0` for:
+        - `interest_filter_results`
+        - `final_selection_results`
+        - `system_feed_results`
+        - `llm_review_log`
+        - `notification_log`
+- Что stage доказал:
+  - discovery proof/tuning no longer has to be architecturally centered on Example B/C; those packs are now validation cohorts inside a more general case-pack surface
+  - the repo now has an explicit safety proof that discovery runs do not drift the pre-existing downstream corpus while remaining on the current DDGS-only live baseline
+  - the current truthful product state is now split cleanly into:
+    - `runtime = pass`
+    - `nonRegression = pass`
+    - `yield = weak`
+- Риски или gaps:
+  - this stage intentionally did not improve actual DDGS-only live yield; it only generalized the proof stack and proved the downstream safety contour
+  - the new non-regression script currently proves the declared downstream tables and static discovery/runtime decoupling guard, but not every possible future side-effect table by default
+  - good yield is still not proven; Example B/C remain weak live cohorts on the current provider scope and thresholds
+- Follow-up:
+  - open a separate bounded tuning item only if the user wants to improve discovery yield while preserving the now-proven `runtime/pass + nonRegression/pass` safety contour.
+
+### 2026-04-19 — STAGE-DISCOVERY-YIELD-PROOF-CONTRACT-2026-04-19 — Added a separate good-yield proof contract and ran the bounded multi-run DDGS-only yield proof
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the runtime-only live discovery lane had already been hardened to non-fail passage, but it still mixed weak live-content yield with runtime health. The user asked for a separate proof contract that could distinguish runtime completion from actual discovery yield for Example B developer news and Example C outsourcing.
+- Что изменилось:
+  - added [`infra/scripts/lib/discovery-live-yield-policy.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-yield-policy.mjs) as the pure repo-owned yield policy layer for:
+    - graph and recall candidate classification
+    - benchmark-like candidate detection
+    - per-case runtime/yield verdict splits
+    - calibration agreement checks
+    - bounded multi-run yield aggregation
+  - expanded [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs) with:
+    - case-specific graph/recall thresholds
+    - positive and negative policy patterns
+    - benchmark cohorts
+    - bounded human-truth calibration fixtures
+  - updated [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) so the single-run harness now emits:
+    - `runtimeVerdict`
+    - `yieldVerdict`
+    - `finalVerdict`
+    - `calibrationPassed`
+    - per-case weak-yield reason counts
+    - top rejected domains/tactics
+    - benchmark-like candidate summaries
+  - added [`infra/scripts/test-live-discovery-yield-proof.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-yield-proof.mjs) plus root command `pnpm test:discovery:yield:compose` for the bounded `3`-run proof contour
+  - synced the durable proof surface in:
+    - [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`docs/contracts/test-access-and-fixtures.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/test-access-and-fixtures.md)
+    - [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml)
+- Что было доказано:
+  - helper/policy proof:
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `node --check infra/scripts/lib/discovery-live-yield-policy.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --check infra/scripts/test-live-discovery-yield-proof.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
+    - direct calibration spot-check via `node --input-type=module ... evaluateCalibration(...)` now returns `14/14` agreement for both Example B and Example C
+  - formatting / sync proof:
+    - `git diff --check -- docs/work.md docs/history.md docs/verification.md docs/contracts/test-access-and-fixtures.md .aidp/os.yaml package.json infra/scripts/test-live-discovery-examples.mjs infra/scripts/test-live-discovery-yield-proof.mjs infra/scripts/lib/discovery-live-example-cases.mjs infra/scripts/lib/discovery-live-yield-policy.mjs tests/unit/ts/discovery-live-yield-policy.test.ts`
+  - fresh single-run non-regression proof:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-22232424.json`
+      - `/tmp/newsportal-live-discovery-examples-22232424.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = yield_weak`
+      - `calibrationPassed = true`
+  - fresh bounded multi-run yield proof:
+    - `pnpm test:discovery:yield:compose`
+    - authoritative aggregate artifact:
+      - `/tmp/newsportal-live-discovery-yield-proof-d0eb2887.json`
+      - `/tmp/newsportal-live-discovery-yield-proof-d0eb2887.md`
+    - backing runs:
+      - `/tmp/newsportal-live-discovery-examples-3e265fd2.json|md`
+      - `/tmp/newsportal-live-discovery-examples-5b117936.json|md`
+      - `/tmp/newsportal-live-discovery-examples-e87dd8c5.json|md`
+    - result:
+      - aggregate `runtimeVerdict = pass`
+      - aggregate `yieldVerdict = weak`
+      - aggregate `finalVerdict = yield_weak`
+      - Example B passed `0/3` required yield runs
+      - Example C passed `0/3` required yield runs
+- Что stage доказал:
+  - the repo now has a truthful good-yield proof contour that separates runtime health from discovery usefulness instead of hiding both behind one mixed verdict
+  - calibration truth is now repo-owned and regression-testable rather than implicit in chat or operator judgment
+  - the current DDGS-only discovery lane is runtime-stable but still weak on onboarding/downstream usefulness for both requested cases
+- Риски или gaps:
+  - this stage intentionally did not improve actual live discovery yield; it only made the proof contour, policy, and residual reporting truthful and repeatable
+  - the current live DDGS baseline still produces no passing yield runs for either case under the shipped thresholds and provider scope
+  - `pnpm test:discovery:yield:compose` now exits non-zero on `yield_weak`, which is intentional for proof but should not be confused with a runtime stack regression
+- Follow-up:
+  - open a separate bounded tuning item only if the user wants to improve Example B/C discovery yield beyond the now-proven `yield_weak` DDGS-only baseline.
+
+### 2026-04-19 — STAGE-DDGS-LIVE-DISCOVERY-AUTOMATION-2026-04-19 — Added an agent-runnable DDGS-only live discovery harness for Example B and Example C
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked for a real live discovery test plan that the agent could run automatically, not a human operator checklist, and explicitly required the automation to stay on the shipped DDGS-only discovery baseline without Brave or Serper keys.
+- Что изменилось:
+  - added [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) as the main repo-owned live discovery harness
+  - added [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs) as the shared Example B / Example C configuration and threshold module
+  - updated [`docs/contracts/test-access-and-fixtures.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/test-access-and-fixtures.md) so the new harness is part of the declared deterministic stateful test-access surface for the local compose baseline
+  - the harness now:
+    - loads `.env.dev` and fails fast unless discovery stays DDGS-only
+    - requires `DISCOVERY_ENABLED=1`
+    - requires `DISCOVERY_SEARCH_PROVIDER=ddgs`
+    - requires empty `DISCOVERY_BRAVE_API_KEY`
+    - requires empty `DISCOVERY_SERPER_API_KEY`
+    - starts/verifies the local compose baseline
+    - runs `pnpm test:discovery-enabled:compose`
+    - runs `pnpm test:discovery:admin:compose`
+    - snapshots `/maintenance/discovery/summary` and `/maintenance/discovery/costs/summary`
+    - verifies Example B / Example C runtime preconditions directly from PostgreSQL instead of parsing `EXAMPLES.md`
+    - creates and runs one graph-first mission plus one recall-first mission per case
+    - auto-reviews graph candidates and auto-promotes recall candidates through deterministic thresholds
+    - triggers `fetchers run:once` on onboarded channels to accelerate downstream evidence collection
+    - writes machine-readable and human-readable evidence bundles to `/tmp/newsportal-live-discovery-examples-<runId>.json|md`
+- Что было доказано:
+  - the automation uses only currently shipped discovery/public surfaces:
+    - `pnpm test:discovery-enabled:compose`
+    - `pnpm test:discovery:admin:compose`
+    - `/maintenance/discovery/summary`
+    - `/maintenance/discovery/costs/summary`
+    - maintenance discovery mission/candidate/feedback/re-evaluate APIs
+    - maintenance recall mission/candidate/acquire/promote APIs
+  - the script uses direct PostgreSQL evidence instead of reconstructing Example runtime state from Markdown
+  - the script stays inside the current live scope:
+    - only `rss` and `website`
+    - browser-assisted candidates remain `website`
+    - duplicate-linked promotions are treated as valid onboarding evidence
+  - implementation proof:
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `git diff --check -- infra/scripts/test-live-discovery-examples.mjs infra/scripts/lib/discovery-live-example-cases.mjs docs/work.md docs/history.md`
+- Что stage доказал:
+  - the repo now has an agent-runnable live discovery harness for the two requested built-in cases, rather than only manual operator guidance and bounded compose smokes
+  - the current discovery runtime can now be exercised through one automation that combines preflight proof, live DDGS discovery, deterministic review/promotion, and downstream evidence collection
+- Риски или gaps:
+  - the harness depends on the current local DB already containing the Example B / Example C interests, criteria, selection profiles, and baseline source channels
+  - the live run itself remains dependent on real DDGS/public-web behavior, so `pass_with_residuals` is an expected honest outcome when live candidates are noisy or unsupported
+  - this stage intentionally did not add Brave/Serper fallback, non-`rss`/`website` discovery coverage, or a new package command wrapper
+- Follow-up:
+  - none required unless the user wants a root `package.json` wrapper, broader live-provider support, or a different deterministic review policy.
+
+### 2026-04-19 — PATCH-DISCOVERY-TESTING-HANDBOOK-2026-04-19 — Added a standalone operator-facing discovery testing guide and linked it from the main operator docs
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the repo already had discovery runtime truth, proofs, and admin/operator surfaces, but it did not yet have a standalone operator-facing handbook similar to the website testing docs. The user asked for a dedicated discovery testing guide grounded in the shipped dual-path discovery flow.
+- Что изменилось:
+  - added [`DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md) as a standalone operator-facing handbook for discovery runtime enable, graph-first mission testing, and independent recall testing
+  - the new handbook documents the canonical proof surfaces:
+    - `pnpm test:discovery-enabled:compose`
+    - `pnpm test:discovery:admin:compose`
+    - `/admin/discovery`
+    - `/maintenance/discovery/summary`
+    - `/maintenance/discovery/costs/summary`
+  - the guide now states the current shipped dual-path discovery meaning explicitly:
+    - graph mission fit
+    - generic source quality
+    - neutral recall backlog
+    - recall promotion state
+  - the handbook also records current scope boundaries:
+    - browser-assisted website candidates stay `website`
+    - `api`, `email_imap`, and `youtube` remain outside the bounded operator-ready discovery-testing scope for this guide
+  - cross-links were added from:
+    - [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md)
+    - [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md)
+    - [`docs/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/manual-mvp-runbook.md)
+- Что было доказано:
+  - command names documented in the handbook match the current root scripts in [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json)
+  - operator-flow wording for graph-first and recall lanes matches the current shipped harnesses and UI/runtime surfaces:
+    - [`infra/scripts/test-discovery-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-admin-flow.mjs)
+    - [`services/workers/app/smoke.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/smoke.py)
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+  - formatting / link proof:
+    - `git diff --check -- DISCOVERY_MODE_TESTING.md README.md EXAMPLES.md docs/manual-mvp-runbook.md docs/work.md docs/history.md`
+- Что patch доказал:
+  - the repo no longer relies on discovery instructions being fragmented between `README.md`, the `EXAMPLES.md` appendix, and the optional runbook note
+  - operators now have a single discovery-specific handbook that stays aligned with the shipped proof lanes and current dual-path discovery terminology
+- Риски или gaps:
+  - this patch intentionally did not change runtime behavior or reframe durable discovery contracts
+  - the handbook is operator-facing and bounded to the currently shipped `rss` / `website` discovery-testing scope
+- Follow-up:
+  - none required unless the user wants screenshots, extra live examples, or a broader combined handbook that merges website and discovery operator testing.
+
+### 2026-04-19 — PATCH-DISCOVERY-REPAIR-POSTCHECK-2026-04-19 — Closed the residual worker/runtime gaps after the compose discovery schema repair
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the compose discovery schema repair was green, the user asked to verify that nothing skipped was still blocking or breaking. A non-destructive rebuild/restart check exposed two residual worker-side issues that the earlier schema repair had not touched.
+- Что изменилось:
+  - [`services/workers/app/task_engine/orchestrator_plugins.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/orchestrator_plugins.py) now auto-registers the discovery orchestrator task plugins into the shipped UTE registry, matching the existing auto-registration pattern used by the other task-plugin modules.
+  - the same worker file now short-circuits graph-first discovery sequence execution with explicit skipped runtime state when `DISCOVERY_ENABLED=0`, instead of letting admin-triggered runs fail on unavailable live adapters.
+  - [`tests/unit/python/test_task_engine_discovery_plugins.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_task_engine_discovery_plugins.py) now covers both residual regressions:
+    - built-in registry population for `discovery.plan_hypotheses`, `discovery.execute_hypotheses`, `discovery.evaluate_results`, and `discovery.re_evaluate_sources`;
+    - executor behavior that completes the orchestrator run with `_stop` / skipped-task semantics when discovery runtime is disabled.
+  - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md) and [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md) now make the disabled-runtime contract explicit: admin/operator acceptance may request a mission run on the default baseline, but provider-backed execution proof belongs only to `pnpm test:discovery-enabled:compose`.
+- Что было доказано:
+  - post-repair durability proof:
+    - non-destructive compose rebuild/restart of the affected services completed successfully
+    - direct table checks still showed `discovery_hypothesis_classes`, `discovery_source_profiles`, `discovery_portfolio_snapshots`, and `discovery_feedback_events` present after the rebuild
+    - `curl -sS http://127.0.0.1:8000/maintenance/discovery/summary` stayed `200`
+  - residual regression discovery before the fix:
+    - default worker logs showed `KeyError('Unknown task plugin module discovery.plan_hypotheses.')` after the rebuilt admin/operator run path hit the sequence queue
+    - direct runtime inspection inside the live worker confirmed `discovery.plan_hypotheses` was absent from `TASK_REGISTRY`
+    - after auto-registration was fixed, the next rebuilt worker no longer showed the unknown-plugin failure, but still failed the queued admin-triggered run with `RuntimeError('LLM analyzer adapter is not configured for the Universal Task Engine runtime.')`
+  - code-level proof after the fix:
+    - `python -m unittest tests.unit.python.test_task_engine_discovery_plugins`
+    - `pnpm unit_tests`
+    - `git diff --check`
+  - live compose proof after the fix:
+    - rebuild/restart of `worker`
+    - `pnpm test:discovery-enabled:compose`
+    - `pnpm test:discovery:admin:compose`
+    - direct DB proof for the latest admin-created onboarding rows:
+      - latest `discovery_candidates.candidate_id = 0f2a7dd9-8472-4808-a1d5-74b0fc07eca1` had a real `registered_channel_id`, matching `source_channels` row, and `outbox_events.event_type = 'source.channel.sync.requested'`
+      - latest `discovery_recall_candidates.recall_candidate_id = a331e4fd-0bdb-40d7-8cc7-82f7b9e2b5d0` had a real `registered_channel_id`, matching `source_channels` row, and `outbox_events.event_type = 'source.channel.sync.requested'`
+    - direct `sequence_runs` / `sequence_task_runs` proof for the latest admin-triggered run:
+      - `run_id = 180769a1-dfe9-4fce-a5f9-9096fc095042` finished as `completed`, not `failed`
+      - `plan_hypotheses` persisted `discovery_runtime_enabled = false`, `discovery_runtime_skipped = true`, and `_stop = true`
+      - downstream orchestrator tasks were marked `skipped` with `reason = sequence_stopped`
+    - worker logs after the final rebuild/run no longer showed either the unknown-plugin error or the unavailable-adapter failure.
+- Что patch доказал:
+  - the earlier green repair was incomplete: the schema drift was fixed, but a normal compose rebuild exposed residual worker/runtime breakage that still affected admin-triggered discovery run requests.
+  - the current canonical baseline is now genuinely unblocked:
+    - repaired discovery schema survives a normal rebuild/restart;
+    - orchestrator plugins are present in the shipped task registry;
+    - default disabled discovery runtime no longer produces hidden failed jobs when operator control-plane run requests are made;
+    - discovery-enabled runtime proof and admin/operator proof both still pass afterward.
+- Риски или gaps:
+  - the patch intentionally preserved the bounded contract that `DISCOVERY_ENABLED=0` does not perform provider-backed discovery execution on the default worker baseline; it only converts that path into an explicit completed short-circuit instead of a worker failure.
+  - the earlier historical question remains open: why a previous live DB state recorded `0030_discovery_schema_drift_repair.sql` before still needing the residual replay from `0036`.
+- Follow-up:
+  - no immediate follow-up is required unless the user wants a deeper archaeological/debug pass on the historical `0030`/`0036` mismatch.
+
+### 2026-04-19 — PATCH-DISCOVERY-COMPOSE-RESIDUAL-REPAIR-2026-04-19 — Repaired the live compose discovery residual and revalidated the full discovery proof contour
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the discovery verification spike showed that the local compose baseline still lacked `public.discovery_hypothesis_classes` and the dependent discovery core tables even though `schema_migrations` already recorded `0030_discovery_schema_drift_repair.sql`, the user asked for a full repair/debug pass and a complete rerun of discovery readiness/runtime/admin proof.
+- Что изменилось:
+  - [`database/migrations/0036_discovery_schema_residual_repair.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0036_discovery_schema_residual_repair.sql) now replays the missing 0016-core discovery repair idempotently for databases where `0030` is already recorded but `discovery_hypothesis_classes` or the dependent profile/portfolio tables are still absent.
+  - [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json) now points `pnpm test:discovery-enabled:compose` at the canonical local compose baseline (`.env.dev` plus `infra/docker/compose.dev.yml`) instead of the compose-only stack, so the bounded runtime smoke exercises the same environment as the rest of the repo-owned local verification lane.
+  - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md), [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md), [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md), and [.aidp/os.yaml](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml) now treat `0036_discovery_schema_residual_repair.sql` as the residual replay step after `0026a` and `0030` for already-marked drifted compose/local databases.
+  - the current live compose PostgreSQL baseline was repaired in place by replaying `0036_discovery_schema_residual_repair.sql` directly into the running `docker-postgres-1` database after drift confirmation, because the active DB already carried the broken “`0030` recorded, class-registry tables absent” state.
+- Что было доказано:
+  - prerequisite and static proof:
+    - `pnpm test:migrations:smoke`
+    - `pnpm unit_tests`
+    - `pnpm typecheck`
+  - live compose discovery repair evidence before the fix:
+    - direct DB reads showed `discovery_missions` and `discovery_recall_candidates` present while `discovery_hypothesis_classes`, `discovery_source_profiles`, `discovery_source_interest_scores`, `discovery_portfolio_snapshots`, `discovery_feedback_events`, and `discovery_strategy_stats` were absent;
+    - `GET http://127.0.0.1:8000/maintenance/discovery/summary` returned `500`;
+    - both `pnpm test:discovery-enabled:compose` and `pnpm test:discovery:admin:compose` failed on the missing `discovery_hypothesis_classes` relation.
+  - live repair proof:
+    - direct replay into the running compose DB:
+      - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T postgres psql -U newsportal -d newsportal < database/migrations/0036_discovery_schema_residual_repair.sql`
+    - immediate post-repair verification:
+      - direct `psql` reads showed the missing core discovery tables restored in `public`
+      - worker-side and api-side `to_regclass('public.discovery_hypothesis_classes')` checks both returned the restored table name
+      - `curl -sS http://127.0.0.1:8000/maintenance/discovery/summary` returned `200`
+  - full discovery proof after the repair:
+    - `pnpm test:discovery-enabled:compose`
+      - returned `status = "discovery-enabled-ok"`
+      - bounded walkthrough proved graph compile -> plan -> execute -> evaluate -> candidate/profile/score/portfolio persistence -> registration into `source_channels` -> `source.channel.sync.requested` outbox write -> feedback -> re-evaluation
+    - `pnpm test:discovery:admin:compose`
+      - returned `status = "discovery-admin-ok"`
+      - proved admin sign-in, `/discovery` render, class and mission create/update/archive/reactivate/delete, graph compile, mission run request, candidate approval, feedback submit, re-evaluation, recall mission/candidate create, recall promotion, and operator surface rendering
+    - direct onboarding evidence after the admin/runtime walkthrough:
+      - `discovery_candidates.registered_channel_id` present with matching `source_channels` row and `outbox_events.event_type = 'source.channel.sync.requested'`
+      - `discovery_recall_candidates.registered_channel_id` present with matching `source_channels` row and `outbox_events.event_type = 'source.channel.sync.requested'`
+      - `/maintenance/discovery/summary` returned persisted counts including `active_class_count = 7`, `approved_candidate_count = 1`, `promoted_recall_candidate_count = 1`, `source_profile_count = 1`, `source_interest_score_count = 1`, `portfolio_snapshot_count = 1`, and `feedback_event_count = 1`
+- Что patch доказал:
+  - the compose/local discovery residual was real and not a discovery-runtime false positive: the shipped runtime and admin surfaces were blocked specifically by a missing class registry plus dependent discovery-core tables on the live compose DB.
+  - after restoring that missing core and correcting the compose smoke command to target the canonical `.env.dev + compose.dev.yml` stack, discovery is again test-ready and operational end-to-end on the local baseline.
+  - discovery is now proven as substantially integrated with the system rather than isolated:
+    - worker task-engine runtime lane works;
+    - maintenance API/admin BFF lane works;
+    - both graph-first and recall-first onboarding paths register real `source_channels`;
+    - both paths emit `source.channel.sync.requested`.
+- Риски или gaps:
+  - the patch fixed the live compose residual and added a durable replay migration, but it did not fully explain why the earlier live DB had already recorded `0030_discovery_schema_drift_repair.sql` before still requiring a direct residual replay.
+  - the successful admin acceptance run intentionally left bounded discovery proof residue in the current local compose DB: `1` mission, `1` recall mission, `1` approved discovery candidate, `1` promoted recall candidate, `1` source profile, `1` source-interest score, `1` portfolio snapshot, `1` feedback event, and `2` source-quality snapshots.
+- Follow-up:
+  - no immediate repair follow-up is required unless the user wants a deeper root-cause investigation into the earlier “`0030` recorded but core tables absent” live DB state.
+
 ### 2026-04-19 — PATCH-ADMIN-SYSTEM-INTEREST-PRIORITY-PRECISION — Allowed fine-grained decimal priority values in admin system-interest editing
 
 - Тип записи: patch archive
@@ -4159,3 +4505,50 @@
   - this was a doc/example sync only; importer behavior and local DB state were unchanged.
 - Follow-up:
   - none
+
+### 2026-04-19 — STAGE-DISCOVERY-LIVE-PROOF-HARDENING
+
+- Тип записи: stage archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь попросил не просто написать automation для live discovery, а доказать её полное живое прохождение на реальном residue-heavy DDGS-only compose baseline, найти реальные blockers и исправить их до terminal non-fail результата.
+- Что изменилось:
+  - bounded adaptive smoke proof in `services/workers/app/smoke.py` now isolates planning to its own `adaptive_smoke_*` class instead of competing with active `live_example_*` residue;
+  - `services/workers/app/discovery_orchestrator.py` now supports filtered active-class reads for bounded planning callers, and regression coverage in `tests/unit/python/test_discovery_orchestrator.py` now keeps that path honest;
+  - `database/migrations/0039_discovery_orchestrator_timeout_tuning.sql` now raises orchestrator task budgets for:
+    - `plan_hypotheses` -> `300000ms`
+    - `evaluate_results` -> `180000ms`
+    - `re_evaluate_sources` -> `180000ms`
+    fixing the real live Example C timeout that previously left the sequence run stuck at task 0;
+  - `infra/scripts/test-live-discovery-examples.mjs` now reads latest `sequence_task_runs` while polling mission progress, so stale run-level `running` state no longer forces a long false-negative wait after a task-level timeout/failure;
+  - the same harness now distinguishes genuine runtime failure from honest weak live yield:
+    - runtime/preflight breakage still returns `fail`;
+    - completed graph+recall lanes with no onboarded useful channels now return `completed_with_residuals` per case and roll up to `pass_with_residuals`.
+- Что проверено:
+  - `python -m unittest tests.unit.python.test_discovery_orchestrator`
+  - `python -m py_compile services/workers/app/discovery_orchestrator.py services/workers/app/smoke.py`
+  - `node --check infra/scripts/test-live-discovery-examples.mjs`
+  - `pnpm db:migrate` with `Applied migrations: 0039_discovery_orchestrator_timeout_tuning.sql`
+  - `pnpm test:discovery-enabled:compose`
+  - `pnpm test:discovery:admin:compose`
+  - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+- Финальные proof artifacts:
+  - blocker-demonstration run before final verdict-policy closeout:
+    - `/tmp/newsportal-live-discovery-examples-b780e589.json`
+    - `/tmp/newsportal-live-discovery-examples-b780e589.md`
+  - authoritative final non-fail run:
+    - `/tmp/newsportal-live-discovery-examples-bbc3fdad.json`
+    - `/tmp/newsportal-live-discovery-examples-bbc3fdad.md`
+- Итог proof:
+  - `pnpm test:discovery-enabled:compose` passed on the residue-heavy DB;
+  - `pnpm test:discovery:admin:compose` passed on the same baseline;
+  - fresh full live run `bbc3fdad` exited `0` with `finalVerdict = pass_with_residuals`;
+  - both Example B and Example C completed graph + recall lanes without runtime/infrastructure stop conditions;
+  - final artifacts honestly record that both cases remained `completed_with_residuals` because DDGS-only live results produced candidates but no onboarded/downstream-useful channels under the current bounded deterministic review policy.
+- Риски или gaps:
+  - the proof lane is now runtime-proven, but it is not a product-quality/yield pass:
+    - Example B remained `candidate_found_not_onboarded` for every system interest;
+    - Example C remained `candidate_found_not_onboarded` for every system interest;
+    - no approved/promoted channels were produced in the final `bbc3fdad` run;
+    - weak live yield is currently treated as an honest residual, not as a runtime defect.
+- Follow-up:
+  - open a new bounded item only if the user wants to improve discovery candidate quality/onboarding policy for Example B/C, rather than just preserve the proved non-fail runtime lane.

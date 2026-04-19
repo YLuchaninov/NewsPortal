@@ -70,6 +70,9 @@
   - `infra/scripts/test-web-viewports.mjs`
   - `infra/scripts/test-website-admin-flow.mjs`
   - `infra/scripts/test-live-website-matrix.mjs` for bounded repo-owned real-site validation after local compose proof; it is intentionally supplemental rather than deterministic acceptance
+  - `infra/scripts/test-live-discovery-examples.mjs`
+  - `infra/scripts/test-discovery-pipeline-nonregression.mjs`
+  - `infra/scripts/test-live-discovery-yield-proof.mjs`
   - `infra/scripts/test-automation-admin-flow.mjs`
   - `infra/scripts/test-discovery-admin-flow.mjs`
   - `infra/scripts/test-rss-multi-flow.mjs`
@@ -96,6 +99,14 @@
   - `Internal MVP RSS <runId>`
   - `Viewport RSS <runId>`
   - `RSS multi <runId> ...`
+
+## Discovery Proof Notes
+
+- Discovery proof remains `DDGS-first`; Brave/Serper-backed discovery is not part of the default local proof contour.
+- `infra/scripts/test-live-discovery-examples.mjs` is the canonical runtime/yield harness for live discovery case packs.
+- `infra/scripts/test-discovery-pipeline-nonregression.mjs` is the canonical safety proof for discovery vs pre-existing downstream corpus stability.
+- `infra/scripts/test-live-discovery-yield-proof.mjs` is the canonical bounded `3`-run aggregate yield proof.
+- `Example B` and `Example C` remain required runtime proof cohorts today, but they are validation packs rather than architecture; synthetic or future case packs may participate in calibration without becoming mandatory local DB preconditions.
 
 ## Persistent Artifacts That Must Be Tracked
 

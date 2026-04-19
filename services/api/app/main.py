@@ -29,10 +29,15 @@ from services.workers.app.task_engine.adapters.source_registrar import (
     PostgresSourceRegistrarAdapter,
 )
 from services.workers.app.task_engine import (
+    configure_discovery_runtime,
     enqueue_sequence_run_job as dispatch_sequence_run_job,
     parse_cron_expression,
     SequenceQueueDispatchError,
     TASK_REGISTRY,
+)
+from services.workers.app.task_engine.adapters import (
+    build_live_discovery_runtime,
+    discovery_enabled,
 )
 from services.workers.app.task_engine.context import RESERVED_CONTEXT_KEYS
 
@@ -63,6 +68,9 @@ WEB_RESOURCE_KINDS = {
 WEB_RESOURCE_PROJECTION_FILTERS = {"all", "projected", "resource_only"}
 _ZERO_USD = Decimal("0")
 _USD_TO_CENTS = Decimal("100")
+
+if discovery_enabled():
+    configure_discovery_runtime(build_live_discovery_runtime())
 
 
 def build_database_url() -> str:

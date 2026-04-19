@@ -2590,6 +2590,8 @@ community_noise: community discussion | forum thread | reddit | thought leadersh
 
 Discovery в NewsPortal не заменяет готовые bundles из этого файла. Он нужен для того, чтобы после импорта стартовых RSS-каналов и шаблонов система могла искать дополнительные источники под те же темы.
 
+Если вам нужен отдельный operator-facing handbook именно по discovery testing, а не короткая привязка discovery к bundles A/B/C, используйте [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md). Этот раздел остается discovery tie-in для example bundles, а не полным end-to-end guide по `/admin/discovery`.
+
 ### 7.1. Что discovery добавляет, а что не заменяет
 
 Discovery добавляет:
@@ -2712,6 +2714,8 @@ pnpm test:discovery-enabled:compose
    - `/admin/discovery` показывает активный provider, model и месячный quota state;
    - при исчерпании месячного лимита UI/API должны честно показать quota reached вместо тихой деградации.
 6. Только после этого начинайте реальные mission runs в `/admin/discovery`.
+
+Для полного operator-testing walkthrough после этого bounded enable шага переходите в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md): там отдельно разобраны graph-first mission flow, independent recall flow, promoted-vs-duplicate outcomes и canonical proof contour для этой зоны.
 
 ### 7.5. Как связать discovery с примерами A, B и C
 
