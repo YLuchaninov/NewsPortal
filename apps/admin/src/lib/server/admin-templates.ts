@@ -155,7 +155,15 @@ function readPositiveNumber(value: unknown, fallback: number, fieldName: string)
   }
 
   const parsed =
-    typeof value === "number" ? value : Number.parseFloat(String(value).trim());
+    typeof value === "number"
+      ? value
+      : (() => {
+          const normalized = String(value).trim().replace(",", ".");
+          if (!/^(?:\d+|\d*\.\d+)$/.test(normalized)) {
+            return Number.NaN;
+          }
+          return Number.parseFloat(normalized);
+        })();
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`Template field "${fieldName}" must be a positive number.`);
   }

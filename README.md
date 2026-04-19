@@ -283,7 +283,7 @@ infra/
 Минимальный manual checklist:
 
 1. Поднимите stack через `pnpm dev:mvp:internal`.
-2. Для repeatable local run либо импортируйте deterministic local fixture feeds из runbook (`http://web:4321/internal-mvp-feed.xml?...`), либо используйте real RSS URLs через шаблон [infra/scripts/manual-rss-bundle.template.json](infra/scripts/manual-rss-bundle.template.json).
+2. Для repeatable local run либо импортируйте deterministic local fixture feeds из runbook (`http://web:4321/internal-mvp-feed.xml?...`), либо используйте real RSS URLs через шаблон [infra/scripts/manual-rss-bundle.template.json](infra/scripts/manual-rss-bundle.template.json). Для shared bulk import теперь обязателен row-level `providerType` на каждой JSON row; RSS bundles должны явно нести `"providerType": "rss"`.
 3. Назначьте часть каналов на `fast`, часть на `daily` и часть на `three_day`, затем проверьте `next due`, `overdue`, `recent failures` и fetch history в admin.
 4. В `web` создайте anonymous session, убедитесь, что system-selected collection на `/` заполняется и без персонализации, затем откройте `/matches`, подключите `web_push`, включите нужные `notification_preferences`, создайте или отредактируйте interest и дождитесь compile/update path plus background historical sync.
 5. Если вы тестируете website source, откройте `/admin/resources` и проверьте, что projected editorial rows и resource-only entity/document rows видны одновременно; для JS-heavy/public hard-site path дополнительно включите browser fallback только при необходимости и убедитесь, что browser provenance отрисовывается truthfully.

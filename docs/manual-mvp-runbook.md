@@ -200,7 +200,7 @@ Recommended import payload shape:
 
 ### Option B: Real external RSS feeds
 
-Use [infra/scripts/manual-rss-bundle.template.json](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/manual-rss-bundle.template.json) and replace the placeholder URLs with real feeds.
+Use [infra/scripts/manual-rss-bundle.template.json](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/manual-rss-bundle.template.json) and replace the placeholder URLs with real feeds. Keep `"providerType": "rss"` on every row; the shared bulk importer now requires row-level `providerType` instead of guessing from the screen mode.
 
 If you want to pre-clean a large candidate list, the repo ships a validator helper in [docs/data_scripts/script.js](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/script.js). It is useful for your own feed bundle, but the repo still does not ship a canonical real-feed list.
 
@@ -214,7 +214,7 @@ If you want to pre-clean a large candidate list, the repo ships a validator help
    - create one website channel manually, or
    - create one API channel manually, or
    - create one Email IMAP channel manually, or
-   - bulk import the deterministic local fixture bundle / your real RSS bundle.
+   - bulk import the deterministic local fixture bundle / your real RSS bundle, making sure every JSON row includes the correct `providerType`.
 5. For a protected RSS or website source, use the `Authorization header` field only when static fetcher auth is enough:
    - enter the full raw header value such as `Bearer ...` or `Basic ...`
    - edit screens must show only `Configured` / `Not configured`, not the secret itself

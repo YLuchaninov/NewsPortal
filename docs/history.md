@@ -14,6 +14,30 @@
 
 ## Completed items
 
+### 2026-04-19 — PATCH-ADMIN-SYSTEM-INTEREST-PRIORITY-PRECISION — Allowed fine-grained decimal priority values in admin system-interest editing
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the user reported that admin system-interest priority could only be set in tenths like `0.9`, while operators needed finer values such as `0.95`, `0,95`, and `0.84`.
+- Что изменилось:
+  - [`apps/admin/src/components/InterestTemplateEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/InterestTemplateEditorForm.tsx) now exposes the system-interest priority field with `step={0.001}` and updated operator help text so the admin UI no longer constrains edits to tenths only.
+  - [`apps/admin/src/lib/server/admin-templates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/admin-templates.ts) now normalizes comma decimals before parsing positive priority values, so server-side validation accepts both `0.95` and `0,95` without truncating or misreading the value.
+  - [`tests/unit/ts/admin-template-sync.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-template-sync.test.ts) now covers both a fine-grained dot-decimal value (`0.845`) and a comma-decimal value (`0,95`) to keep the parser contract from regressing.
+- Что было доказано:
+  - targeted parser proof:
+    - `node --import tsx --test tests/unit/ts/admin-template-sync.test.ts`
+  - static proof:
+    - `pnpm typecheck`
+  - formatting proof:
+    - `git diff --check -- docs/work.md apps/admin/src/components/InterestTemplateEditorForm.tsx apps/admin/src/lib/server/admin-templates.ts tests/unit/ts/admin-template-sync.test.ts`
+- Что patch доказал:
+  - the real limiter was the admin form step plus locale-sensitive parsing, not database precision: `interest_templates.priority` and synced `criteria.priority` already store `double precision`.
+  - operators can now save system-interest priority values with finer precision than tenths, and the backend reads both common decimal separator variants truthfully.
+- Риски или gaps:
+  - this patch intentionally stayed bounded to system interests; the per-user-interest admin forms still keep their separate `0.1` step UX.
+- Follow-up:
+  - none required unless the user wants the same precision/localized-decimal handling aligned for admin-managed user interests.
+
 ### 2026-04-18 — PATCH-RSS-RUNTIME-FIRST-FETCH-2026-04-18 — Repaired RSS scheduler runtime so newly added feeds reach first fetch again
 
 - Тип записи: patch archive
@@ -4104,3 +4128,34 @@
   - future provider types will still need explicit parser/plan/upsert wiring before they can participate in the mixed shared importer, even though the row-level contract is now ready for extension.
 - Follow-up:
   - if the user wants cleanup of the already misclassified local rows, open a separate bounded patch for targeted DB cleanup and reimport without resetting the whole environment.
+
+### 2026-04-19 — PATCH-BULK-IMPORT-DOCS-PROVIDERTYPE
+
+- Тип записи: patch archive
+- Финальный статус: done
+- Зачем понадобилось: после shipped mixed bulk-import contract пользователь попросил отдельно досинхронизировать repo docs и operator-facing examples, чтобы везде было явно сказано, что для bulk JSON `providerType` обязателен на каждой строке.
+- Что изменилось:
+  - `README.md` now explicitly says that shared bulk import requires row-level `providerType` and that RSS bundles must carry `"providerType": "rss"` on each row;
+  - `docs/manual-mvp-runbook.md` now states the same requirement both for the real RSS template flow and for the admin bulk-import checklist;
+  - `docs/data_scripts/README.md` now includes `web.bulk-import.json` in the asset index and explains that shared admin bulk import no longer infers provider mode, so every example bundle should keep `providerType` explicit on each row.
+- Что проверено:
+  - `git diff --check -- README.md docs/manual-mvp-runbook.md docs/data_scripts/README.md docs/work.md`
+- Риски или gaps:
+  - this patch intentionally touched wording/examples only; no importer logic or local DB state changed here.
+- Follow-up:
+  - none
+
+### 2026-04-19 — PATCH-EXAMPLES-BULK-PROVIDERTYPE
+
+- Тип записи: patch archive
+- Финальный статус: done
+- Зачем понадобилось: после общего doc sweep пользователь заметил, что built-in bulk JSON examples в `EXAMPLES.md` всё ещё были показаны без явного `providerType`, хотя shared bulk import уже требует row-level `providerType` на каждой строке.
+- Что изменилось:
+  - в `EXAMPLES.md` top-level usage guidance for bulk channel JSON now explicitly mentions the row-level `providerType` requirement;
+  - все RSS bulk-import rows в built-in Examples A, B, and C now include explicit `"providerType": "rss"`.
+- Что проверено:
+  - `git diff --check -- EXAMPLES.md docs/work.md`
+- Риски или gaps:
+  - this was a doc/example sync only; importer behavior and local DB state were unchanged.
+- Follow-up:
+  - none

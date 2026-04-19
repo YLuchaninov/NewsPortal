@@ -10,6 +10,8 @@
   Большой source bundle для outsourcing-oriented corpus discovery/import.
 - [`outsource_cleaned_balanced_tenders_and_company_signals.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_cleaned_balanced_tenders_and_company_signals.json)
   Более узкий и очищенный source bundle для tenders/company-signal monitoring.
+- [`web.bulk-import.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/web.bulk-import.json)
+  Derived website-only shared bulk-import bundle with explicit `providerType: "website"` on every row.
 - [`outsource_balanced_templates.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_balanced_templates.md)
   Focused outsourcing-only companion к Example C в [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md), если нужен короткий one-scenario cheat sheet без остальных built-in examples.
 - [`outsource_balanced_templates.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_balanced_templates.json)
@@ -36,7 +38,9 @@
 
 ## Channel bundle schema
 
-Файлы [`it_news.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/it_news.json), [`outsource.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource.json) и [`outsource_cleaned_balanced_tenders_and_company_signals.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_cleaned_balanced_tenders_and_company_signals.json) содержат массивы channel-import rows.
+Файлы [`it_news.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/it_news.json), [`outsource.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource.json), [`outsource_cleaned_balanced_tenders_and_company_signals.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/outsource_cleaned_balanced_tenders_and_company_signals.json) и [`web.bulk-import.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/web.bulk-import.json) содержат массивы channel-import rows.
+
+Shared admin bulk import now requires row-level `providerType` on every JSON row. The importer no longer infers provider mode from the screen or from a top-level bulk setting, so example bundles in this directory should keep `providerType` explicit even when every row belongs to the same provider family.
 
 Обязательный минимум для таких rows:
 

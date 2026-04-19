@@ -449,7 +449,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Priority"
             name="interest-template-priority"
-            helpText="Relative weighting applied when multiple system interests compete for the same content cluster."
+            helpText="Relative weighting applied when multiple system interests compete for the same content cluster. Supports fine-grained decimals such as 0.95 or 0,95."
             helpWide
           >
             <Input
@@ -457,7 +457,7 @@ export function InterestTemplateEditorForm({
               name="priority"
               type="number"
               min={0.1}
-              step={0.1}
+              step={0.001}
               defaultValue={value.priority}
               className={inputClassName}
             />

@@ -477,6 +477,23 @@ test("parseInterestTemplateInput accepts blank time_window_hours as any-time and
   assert.equal(parsed.selectionProfileLlmReviewMode, "always");
 });
 
+test("parseInterestTemplateInput preserves fine-grained priority decimals and accepts comma decimals", () => {
+  const dotParsed = parseInterestTemplateInput({
+    name: "Outsourcing demand",
+    positive_texts: "Looking for an agency\nRFP for MVP build",
+    priority: "0.845",
+  });
+
+  const commaParsed = parseInterestTemplateInput({
+    name: "Outsourcing demand",
+    positive_texts: "Looking for an agency\nRFP for MVP build",
+    priority: "0,95",
+  });
+
+  assert.equal(dotParsed.priority, 0.845);
+  assert.equal(commaParsed.priority, 0.95);
+});
+
 test("parseInterestTemplateInput accepts grouped candidate signal cues", () => {
   const parsed = parseInterestTemplateInput({
     name: "Outsourcing demand",

@@ -96,7 +96,7 @@ Durable completed detail переносится в `docs/history.md`.
 
 ## Next recommended action
 
-- if the user wants the local DB cleaned up after the previous misclassified website import attempts, open a follow-up patch for targeted channel cleanup/reimport; otherwise no immediate coding action remains.
+- no immediate follow-up is required for the bulk-import docs/examples sync.
 
 ## Archive sync status
 
@@ -133,10 +133,10 @@ Durable completed detail переносится в `docs/history.md`.
 ## Handoff
 
 - Current active item and status:
-  no active item; `STAGE-MIXED-BULK-CHANNEL-IMPORT` is implemented, proven, and archived in `docs/history.md`.
+  no active item; `PATCH-EXAMPLES-BULK-PROVIDERTYPE` is implemented, diff-checked, and archived in `docs/history.md`.
 - What is already proven:
-  shared admin bulk import now requires explicit row-level `providerType`, supports mixed `rss` / `website` / `api` / `email_imap` batches through one preflight/import pipeline, and `docs/data_scripts/web.bulk-import.json` now matches that contract with explicit `providerType: "website"` on each row.
+  built-in bulk-import JSON examples in `EXAMPLES.md` now align with the shared importer contract and include explicit row-level `"providerType": "rss"` in Examples A, B, and C.
 - What is still unproven or intentionally left open:
-  no additional code proof remains for this stage; any cleanup of already mis-imported local rows is intentionally left as a separate follow-up because it mutates preserved local state.
+  no additional proof remains for this doc sync patch.
 - Scope or coordination warning for the next agent:
-  do not reset or clean the local compose DB unless the user explicitly asks; the remaining possible follow-up is a bounded DB cleanup/reimport patch, not more bulk-import contract work.
+  bulk-import docs/examples are now aligned across the repo; do not reopen this unless the user asks for a new example sweep.

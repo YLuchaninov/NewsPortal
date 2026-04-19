@@ -45,7 +45,7 @@
 
 Каждый пример содержит **полный content-набор настроек** для одного тематического сценария, готовый к вводу в панель администратора после базового setup:
 
-1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels
+1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels; для shared bulk import каждая row должна явно нести `providerType`
 2. **LLM-шаблоны** — active baseline промпты, состав которых зависит от сценария; ориентируйтесь на конкретный пример ниже. Для Example C все 3 scope (`interests`, `criteria`, `global`) являются active baseline.
 3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке и синхронизируются в live `criteria`
 4. **Profile policy, hard filters и candidate cues** — для каждого system interest теперь важно заполнить прототипы, profile policy (`Strictness`, `Unresolved outcome`, `LLM review mode`), `must_not_have_terms`, `allowed_content_kinds`, `priority` и `candidate uplift positive/negative cues`; `must_have_terms` и `time_window_hours` остаются опциональными hard filters и для recall-first baseline обычно оставляются пустыми
@@ -162,11 +162,12 @@
 
 ### A.1. RSS-каналы
 
-Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**:
+Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
 
 ```json
 [
   {
+    "providerType": "rss",
     "name": "Hacker News — Ask HN: Who is hiring?",
     "fetchUrl": "https://hnrss.org/show?q=hiring",
     "language": "en",
@@ -177,6 +178,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "We Work Remotely — Programming",
     "fetchUrl": "https://weworkremotely.com/categories/remote-programming-jobs.rss",
     "language": "en",
@@ -187,6 +189,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "We Work Remotely — DevOps & Sysadmin",
     "fetchUrl": "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
     "language": "en",
@@ -197,6 +200,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "We Work Remotely — Management & Finance",
     "fetchUrl": "https://weworkremotely.com/categories/remote-business-management-finance.rss",
     "language": "en",
@@ -207,6 +211,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "We Work Remotely — Design",
     "fetchUrl": "https://weworkremotely.com/categories/remote-design-jobs.rss",
     "language": "en",
@@ -217,6 +222,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "RemoteOK — Remote Jobs Feed",
     "fetchUrl": "https://remoteok.com/remote-jobs.rss",
     "language": "en",
@@ -227,6 +233,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Stack Overflow Jobs — Blog",
     "fetchUrl": "https://stackoverflow.blog/feed/",
     "language": "en",
@@ -237,6 +244,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "GitHub Blog — Engineering",
     "fetchUrl": "https://github.blog/feed/",
     "language": "en",
@@ -247,6 +255,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "LinkedIn News — Tech Industry",
     "fetchUrl": "https://news.google.com/rss/search?q=tech+hiring+jobs&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -257,6 +266,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "TechCrunch — Startups",
     "fetchUrl": "https://techcrunch.com/category/startups/feed/",
     "language": "en",
@@ -267,6 +277,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "VentureBeat",
     "fetchUrl": "https://venturebeat.com/feed/",
     "language": "en",
@@ -277,6 +288,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "dev.to — Career Tag",
     "fetchUrl": "https://dev.to/feed/tag/career",
     "language": "en",
@@ -287,6 +299,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "dev.to — Hiring Tag",
     "fetchUrl": "https://dev.to/feed/tag/hiring",
     "language": "en",
@@ -297,6 +310,7 @@
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Indeed — Software Engineer RSS",
     "fetchUrl": "https://www.indeed.com/rss?q=software+engineer&l=remote",
     "language": "en",
@@ -985,11 +999,12 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
 
 ### B.1. RSS-каналы
 
-Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**:
+Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
 
 ```json
 [
   {
+    "providerType": "rss",
     "name": "Hacker News — Best Stories",
     "fetchUrl": "https://hnrss.org/best",
     "language": "en",
@@ -1000,6 +1015,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Hacker News — Newest",
     "fetchUrl": "https://hnrss.org/newest",
     "language": "en",
@@ -1010,6 +1026,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "TechCrunch — All",
     "fetchUrl": "https://techcrunch.com/feed/",
     "language": "en",
@@ -1020,6 +1037,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Ars Technica — Technology",
     "fetchUrl": "https://feeds.arstechnica.com/arstechnica/technology-lab",
     "language": "en",
@@ -1030,6 +1048,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "The Verge — Tech",
     "fetchUrl": "https://www.theverge.com/rss/tech/index.xml",
     "language": "en",
@@ -1040,6 +1059,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "dev.to — Top Articles",
     "fetchUrl": "https://dev.to/feed",
     "language": "en",
@@ -1050,6 +1070,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Lobsters",
     "fetchUrl": "https://lobste.rs/rss",
     "language": "en",
@@ -1060,6 +1081,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "InfoQ — All",
     "fetchUrl": "https://feed.infoq.com/",
     "language": "en",
@@ -1070,6 +1092,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "GitHub Blog",
     "fetchUrl": "https://github.blog/feed/",
     "language": "en",
@@ -1080,6 +1103,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "The New Stack",
     "fetchUrl": "https://thenewstack.io/feed/",
     "language": "en",
@@ -1090,6 +1114,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "MIT Technology Review — AI",
     "fetchUrl": "https://www.technologyreview.com/feed/",
     "language": "en",
@@ -1100,6 +1125,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "VentureBeat — AI",
     "fetchUrl": "https://venturebeat.com/category/ai/feed/",
     "language": "en",
@@ -1110,6 +1136,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Wired — AI & Security",
     "fetchUrl": "https://www.wired.com/feed/rss",
     "language": "en",
@@ -1120,6 +1147,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Changelog — Podcast & News",
     "fetchUrl": "https://changelog.com/feed",
     "language": "en",
@@ -1130,6 +1158,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Reuters — Technology",
     "fetchUrl": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best&best-sectors=tech",
     "language": "en",
@@ -1140,6 +1169,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "BBC — Technology",
     "fetchUrl": "https://feeds.bbci.co.uk/news/technology/rss.xml",
     "language": "en",
@@ -1846,11 +1876,12 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 ### C.1. RSS-каналы
 
-Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**:
+Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
 
 ```json
 [
   {
+    "providerType": "rss",
     "name": "Google News — Software Development Outsourcing",
     "fetchUrl": "https://news.google.com/rss/search?q=%22software+development+outsourcing%22+OR+%22outsourced+software+development%22&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1861,6 +1892,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — IT Outsourcing & Engineering Partner",
     "fetchUrl": "https://news.google.com/rss/search?q=%22IT+outsourcing%22+OR+%22engineering+partner%22+OR+%22technology+partner%22&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1871,6 +1903,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — Software Development RFP / Tender",
     "fetchUrl": "https://news.google.com/rss/search?q=%22request+for+proposal%22+%22software+development%22+OR+%22software+development+tender%22&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1881,6 +1914,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — Mobile App Development RFP",
     "fetchUrl": "https://news.google.com/rss/search?q=%22mobile+app+development%22+(RFP+OR+tender+OR+vendor)&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1891,6 +1925,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — Digital Transformation Partner Search",
     "fetchUrl": "https://news.google.com/rss/search?q=%22digital+transformation%22+(partner+OR+vendor+OR+implementation)&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1901,6 +1936,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — ERP / CRM Implementation Partner",
     "fetchUrl": "https://news.google.com/rss/search?q=(ERP+OR+CRM)+implementation+partner+OR+system+integrator&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1911,6 +1947,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — Cloud Migration & Data Platform Vendors",
     "fetchUrl": "https://news.google.com/rss/search?q=(%22cloud+migration%22+OR+%22data+platform%22)+(vendor+OR+partner+OR+RFP)&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1921,6 +1958,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Google News — Startup Funding & Product Build Signals",
     "fetchUrl": "https://news.google.com/rss/search?q=(startup+raises+OR+series+A+OR+seed+funding)+(product+development+OR+engineering+team)&hl=en-US&gl=US&ceid=US:en",
     "language": "en",
@@ -1931,6 +1969,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "TechCrunch — Startups",
     "fetchUrl": "https://techcrunch.com/category/startups/feed/",
     "language": "en",
@@ -1941,6 +1980,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "VentureBeat",
     "fetchUrl": "https://venturebeat.com/feed/",
     "language": "en",
@@ -1951,6 +1991,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "Reuters — Technology",
     "fetchUrl": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best&best-sectors=tech",
     "language": "en",
@@ -1961,6 +2002,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
     "isActive": true
   },
   {
+    "providerType": "rss",
     "name": "The New Stack",
     "fetchUrl": "https://thenewstack.io/feed/",
     "language": "en",
