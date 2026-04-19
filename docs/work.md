@@ -82,6 +82,7 @@ Durable completed detail переносится в `docs/history.md`.
       - `Reuters — Technology`: `hard_failure`, `404`, which still proves the channel now reaches real fetch execution instead of scheduler starvation
     - recent runtime DB proof shows `53` RSS fetch runs in the last `2` minutes after the fix.
 - `C-WEBSITE-RSS-UNIFIED-DOWNSTREAM` is fully implemented and archived in `docs/history.md`; provider-specific acquisition may differ before handoff, but downstream product/filtering/selection/read-model truth must converge at `article.ingest.requested`.
+- Shared admin bulk import now accepts mixed `rss`, `website`, `api`, and `email_imap` batches through one JSON array with explicit row-level `providerType`; shared preflight/import no longer guesses provider mode, website rows can still upsert by exact normalized `fetchUrl`, and `docs/data_scripts/web.bulk-import.json` now carries explicit `providerType: "website"` on every row.
 
 ## Capability planning
 
@@ -95,7 +96,7 @@ Durable completed detail переносится в `docs/history.md`.
 
 ## Next recommended action
 
-- none
+- if the user wants the local DB cleaned up after the previous misclassified website import attempts, open a follow-up patch for targeted channel cleanup/reimport; otherwise no immediate coding action remains.
 
 ## Archive sync status
 
@@ -132,10 +133,10 @@ Durable completed detail переносится в `docs/history.md`.
 ## Handoff
 
 - Current active item and status:
-  no active item; `PATCH-WEB-BULK-PREP-FILE` is implemented, proven, and archived in `docs/history.md`.
+  no active item; `STAGE-MIXED-BULK-CHANNEL-IMPORT` is implemented, proven, and archived in `docs/history.md`.
 - What is already proven:
-  `docs/data_scripts/web.bulk-import.json` now contains `29` importable website rows derived from `docs/data_scripts/web.json`, already shaped for shared admin bulk import, while the canonical `docs/data_scripts/web.json` remained unchanged for the live outsourcing harness.
+  shared admin bulk import now requires explicit row-level `providerType`, supports mixed `rss` / `website` / `api` / `email_imap` batches through one preflight/import pipeline, and `docs/data_scripts/web.bulk-import.json` now matches that contract with explicit `providerType: "website"` on each row.
 - What is still unproven or intentionally left open:
-  no open proof remains for this patch; any future work would be automation to regenerate the derived bulk file after canonical source-list changes.
+  no additional code proof remains for this stage; any cleanup of already mis-imported local rows is intentionally left as a separate follow-up because it mutates preserved local state.
 - Scope or coordination warning for the next agent:
-  the worktree remains mixed with unrelated user-owned website/runtime edits; do not revert or normalize those changes blindly, and keep the canonical `docs/data_scripts/web.json` stable unless the user explicitly asks to change the harness-owned source list itself.
+  do not reset or clean the local compose DB unless the user explicitly asks; the remaining possible follow-up is a bounded DB cleanup/reimport patch, not more bulk-import contract work.

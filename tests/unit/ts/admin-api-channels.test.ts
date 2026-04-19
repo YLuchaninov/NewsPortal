@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  parseBulkApiAdminChannelInputs,
   parseApiAdminChannelInput,
+  planApiBulkImport,
   upsertApiChannels,
 } from "../../../apps/admin/src/lib/server/api-channels.ts";
 
@@ -112,6 +114,123 @@ test("parseApiAdminChannelInput rejects non-API providers and invalid fetch URLs
       }),
     /must be a valid absolute URL/
   );
+});
+
+test("parseBulkApiAdminChannelInputs rejects empty and invalid payloads", () => {
+  assert.throws(
+    () => parseBulkApiAdminChannelInputs([]),
+    /must include at least one channel/
+  );
+
+  assert.throws(
+    () =>
+      parseBulkApiAdminChannelInputs([
+        {
+          providerType: "api",
+          name: "Valid API",
+          fetchUrl: "https://example.com/api/items",
+          itemsPath: "data.records",
+          titleField: "headline",
+          leadField: "summary",
+          bodyField: "body",
+          urlField: "url",
+          publishedAtField: "published_at",
+          externalIdField: "external_id",
+          languageField: "lang"
+        },
+        {
+          providerType: "api",
+          name: "Broken API",
+          fetchUrl: "https://example.com/api/items",
+          itemsPath: "data.records",
+          titleField: "headline",
+          leadField: "summary",
+          bodyField: "body",
+          urlField: "url",
+          publishedAtField: "published_at",
+          externalIdField: "external_id",
+          languageField: "lang",
+          pollIntervalSeconds: "0"
+        }
+      ]),
+    /index 1 is invalid/
+  );
+});
+
+test("planApiBulkImport reports create and channelId update targets", async () => {
+  const channels = parseBulkApiAdminChannelInputs([
+    {
+      providerType: "api",
+      name: "Create me",
+      fetchUrl: "https://example.com/api/create",
+      itemsPath: "data.records",
+      titleField: "headline",
+      leadField: "summary",
+      bodyField: "body",
+      urlField: "url",
+      publishedAtField: "published_at",
+      externalIdField: "external_id",
+      languageField: "lang"
+    },
+    {
+      providerType: "api",
+      channelId: "channel-123",
+      name: "Update me",
+      fetchUrl: "https://example.com/api/update",
+      itemsPath: "data.records",
+      titleField: "headline",
+      leadField: "summary",
+      bodyField: "body",
+      urlField: "url",
+      publishedAtField: "published_at",
+      externalIdField: "external_id",
+      languageField: "lang"
+    }
+  ]);
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      assert.match(sql, /provider_type = 'api'/);
+      assert.deepEqual(params, [["channel-123"]]);
+      return {
+        rows: [
+          {
+            channel_id: "channel-123",
+            name: "Existing API",
+            fetch_url: "https://example.com/api/update"
+          }
+        ]
+      };
+    }
+  };
+
+  const plan = await planApiBulkImport(fakePool as never, channels);
+
+  assert.equal(plan.wouldCreate, 1);
+  assert.equal(plan.wouldUpdate, 1);
+  assert.equal(plan.matchedByChannelId, 1);
+  assert.equal(plan.matchedByFetchUrl, 0);
+  assert.deepEqual(plan.items, [
+    {
+      index: 0,
+      name: "Create me",
+      fetchUrl: "https://example.com/api/create",
+      action: "create",
+      matchType: "create",
+      channelId: null,
+      existingName: null,
+      existingFetchUrl: null
+    },
+    {
+      index: 1,
+      name: "Update me",
+      fetchUrl: "https://example.com/api/update",
+      action: "update",
+      matchType: "channelId",
+      channelId: "channel-123",
+      existingName: "Existing API",
+      existingFetchUrl: "https://example.com/api/update"
+    }
+  ]);
 });
 
 test("upsertApiChannels preserves existing auth headers on update until explicitly cleared", async () => {

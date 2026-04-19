@@ -173,9 +173,10 @@ const pagePaths = {
       </div>
       <div class="rounded-xl border border-border bg-card p-4 space-y-3">
         <p class="text-xs font-semibold">Bulk import example</p>
-        <p class="text-xs text-muted-foreground">Bulk import now supports both RSS and website onboarding on the shared import screen. RSS stays the simplest batch path, while website bulk import keeps the same operator-visible discovery controls and safe overwrite preview used by manual website setup.</p>
+        <p class="text-xs text-muted-foreground">Bulk import now supports mixed RSS, website, API, and Email IMAP onboarding on the shared import screen. Every row must declare its own <code>providerType</code>, so provider-specific validation stays explicit and mixed batches do not rely on hidden mode switches.</p>
         <pre class="text-[11px] font-mono bg-muted/30 rounded-md p-3 overflow-x-auto">{JSON.stringify([
   {
+    "providerType": "rss",
     "name": "Reuters World News",
     "fetchUrl": "https://feeds.reuters.com/reuters/worldNews",
     "language": "en",
@@ -184,11 +185,11 @@ const pagePaths = {
     "isActive": true
   },
   {
-    "name": "BBC Technology",
-    "fetchUrl": "https://feeds.bbci.co.uk/news/technology/rss.xml",
-    "language": "en",
-    "pollIntervalSeconds": 600,
-    "adaptiveEnabled": true,
+    "providerType": "website",
+    "name": "EU Data Portal",
+    "fetchUrl": "https://example.com/",
+    "pollIntervalSeconds": 900,
+    "maxResourcesPerPoll": 20,
     "isActive": true
   }
 ], null, 2)}</pre>

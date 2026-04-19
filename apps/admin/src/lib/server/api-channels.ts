@@ -54,6 +54,26 @@ export interface UpsertApiChannelsResult {
   authClearedChannelIds: string[];
 }
 
+export interface ApiBulkImportPlanItem {
+  index: number;
+  name: string;
+  fetchUrl: string;
+  action: "create" | "update";
+  matchType: "create" | "channelId";
+  channelId: string | null;
+  existingName: string | null;
+  existingFetchUrl: string | null;
+}
+
+export interface ApiBulkImportPlan {
+  channels: NormalizedApiAdminChannelInput[];
+  wouldCreate: number;
+  wouldUpdate: number;
+  matchedByChannelId: number;
+  matchedByFetchUrl: 0;
+  items: ApiBulkImportPlanItem[];
+}
+
 function readOptionalString(value: unknown): string | null {
   if (value == null) {
     return null;
@@ -263,6 +283,113 @@ export function parseApiAdminChannelInput(payload: Record<string, unknown>): Nor
       payload,
       Boolean(readOptionalString(payload.channelId))
     ),
+  };
+}
+
+export function parseBulkApiAdminChannelInputs(
+  payload: unknown
+): NormalizedApiAdminChannelInput[] {
+  if (!Array.isArray(payload)) {
+    throw new Error('Bulk API payload must contain a "channels" array.');
+  }
+
+  if (payload.length === 0) {
+    throw new Error("Bulk API payload must include at least one channel.");
+  }
+
+  return payload.map((channel, index) => {
+    if (channel == null || typeof channel !== "object" || Array.isArray(channel)) {
+      throw new Error(`Bulk API channel at index ${index} must be an object.`);
+    }
+
+    try {
+      return parseApiAdminChannelInput(channel as Record<string, unknown>);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown bulk API validation failure";
+      throw new Error(`Bulk API channel at index ${index} is invalid: ${message}`, {
+        cause: error
+      });
+    }
+  });
+}
+
+export async function planApiBulkImport(
+  pool: Pool,
+  channels: NormalizedApiAdminChannelInput[]
+): Promise<ApiBulkImportPlan> {
+  const explicitChannelIds = Array.from(
+    new Set(
+      channels
+        .map((channel) => channel.channelId)
+        .filter((channelId): channelId is string => Boolean(channelId))
+    )
+  );
+  const existingRows =
+    explicitChannelIds.length > 0
+      ? await pool.query<{
+          channel_id: string;
+          name: string;
+          fetch_url: string;
+        }>(
+          `
+            select
+              channel_id::text as channel_id,
+              name,
+              fetch_url
+            from source_channels
+            where
+              provider_type = 'api'
+              and channel_id::text = any($1::text[])
+          `,
+          [explicitChannelIds]
+        )
+      : { rows: [] };
+
+  const existingByChannelId = new Map(
+    existingRows.rows.map((row) => [row.channel_id, row])
+  );
+
+  const items = channels.map((channel, index): ApiBulkImportPlanItem => {
+    if (!channel.channelId) {
+      return {
+        index,
+        name: channel.name,
+        fetchUrl: channel.fetchUrl,
+        action: "create",
+        matchType: "create",
+        channelId: null,
+        existingName: null,
+        existingFetchUrl: null
+      };
+    }
+
+    const existing = existingByChannelId.get(channel.channelId);
+    if (!existing) {
+      throw new Error(`API channel ${channel.channelId} was not found.`);
+    }
+
+    return {
+      index,
+      name: channel.name,
+      fetchUrl: channel.fetchUrl,
+      action: "update",
+      matchType: "channelId",
+      channelId: existing.channel_id,
+      existingName: existing.name,
+      existingFetchUrl: existing.fetch_url
+    };
+  });
+
+  return {
+    channels,
+    wouldCreate: items.filter((item) => item.action === "create").length,
+    wouldUpdate: items.filter((item) => item.action === "update").length,
+    matchedByChannelId: items.filter((item) => item.matchType === "channelId").length,
+    matchedByFetchUrl: 0,
+    items
   };
 }
 

@@ -36,23 +36,17 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const bulkPayload = await readBulkPayload(request);
-    const channels = parseBulkChannels(
-      bulkPayload.providerType,
-      bulkPayload.channelsPayload
-    );
-    const importPlan = await planBulkImport(
-      bulkPayload.providerType,
-      channels
-    );
+    const channels = parseBulkChannels(bulkPayload.channelsPayload);
+    const importPlan = await planBulkImport(channels);
 
     return Response.json({
       ok: true,
-      providerType: bulkPayload.providerType,
       wouldCreate: importPlan.wouldCreate,
       wouldUpdate: importPlan.wouldUpdate,
       matchedByChannelId: importPlan.matchedByChannelId,
       matchedByFetchUrl: importPlan.matchedByFetchUrl,
-      items: importPlan.items
+      items: importPlan.items,
+      providerBreakdown: importPlan.providerBreakdown
     });
   } catch (error) {
     return Response.json(

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  parseBulkEmailImapAdminChannelInputs,
   parseEmailImapAdminChannelInput,
+  planEmailImapBulkImport,
   upsertEmailImapChannels,
 } from "../../../apps/admin/src/lib/server/email-imap-channels.ts";
 
@@ -99,6 +101,105 @@ test("parseEmailImapAdminChannelInput rejects non-mailbox providers and missing 
       }),
     /must not contain whitespace/
   );
+});
+
+test("parseBulkEmailImapAdminChannelInputs rejects empty and invalid payloads", () => {
+  assert.throws(
+    () => parseBulkEmailImapAdminChannelInputs([]),
+    /must include at least one channel/
+  );
+
+  assert.throws(
+    () =>
+      parseBulkEmailImapAdminChannelInputs([
+        {
+          providerType: "email_imap",
+          name: "Press inbox",
+          host: "imap.example.com",
+          username: "alerts@example.com",
+          password: "MailboxSecret!",
+          mailbox: "INBOX"
+        },
+        {
+          providerType: "email_imap",
+          name: "Broken inbox",
+          host: "imap example.com",
+          username: "alerts@example.com",
+          password: "MailboxSecret!",
+          mailbox: "INBOX"
+        }
+      ]),
+    /index 1 is invalid/
+  );
+});
+
+test("planEmailImapBulkImport reports create and channelId update targets", async () => {
+  const channels = parseBulkEmailImapAdminChannelInputs([
+    {
+      providerType: "email_imap",
+      name: "Create me",
+      host: "imap.example.com",
+      port: 993,
+      secure: true,
+      username: "create@example.com",
+      password: "MailboxSecret!",
+      mailbox: "INBOX"
+    },
+    {
+      providerType: "email_imap",
+      channelId: "channel-123",
+      name: "Update me",
+      host: "imap.example.com",
+      port: 993,
+      secure: true,
+      username: "update@example.com",
+      mailbox: "PRESS"
+    }
+  ]);
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      assert.match(sql, /provider_type = 'email_imap'/);
+      assert.deepEqual(params, [["channel-123"]]);
+      return {
+        rows: [
+          {
+            channel_id: "channel-123",
+            name: "Existing Email IMAP",
+            fetch_url: "imaps://imap.example.com:993/PRESS"
+          }
+        ]
+      };
+    }
+  };
+
+  const plan = await planEmailImapBulkImport(fakePool as never, channels);
+
+  assert.equal(plan.wouldCreate, 1);
+  assert.equal(plan.wouldUpdate, 1);
+  assert.equal(plan.matchedByChannelId, 1);
+  assert.equal(plan.matchedByFetchUrl, 0);
+  assert.deepEqual(plan.items, [
+    {
+      index: 0,
+      name: "Create me",
+      fetchUrl: "imaps://imap.example.com:993/INBOX",
+      action: "create",
+      matchType: "create",
+      channelId: null,
+      existingName: null,
+      existingFetchUrl: null
+    },
+    {
+      index: 1,
+      name: "Update me",
+      fetchUrl: "imaps://imap.example.com:993/PRESS",
+      action: "update",
+      matchType: "channelId",
+      channelId: "channel-123",
+      existingName: "Existing Email IMAP",
+      existingFetchUrl: "imaps://imap.example.com:993/PRESS"
+    }
+  ]);
 });
 
 test("upsertEmailImapChannels preserves stored password and rewrites derived fetch_url on update", async () => {

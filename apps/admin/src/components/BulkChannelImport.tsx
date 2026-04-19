@@ -1,5 +1,10 @@
 import { useRef, useState } from "react";
 import type React from "react";
+
+import {
+  formatAdminChannelProviderLabel,
+  type AdminChannelProviderType
+} from "../lib/channel-providers";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,20 +18,23 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   FormField,
-  Textarea,
+  Textarea
 } from "@newsportal/ui";
 
-export type BulkChannelImportProviderType = "rss" | "website";
+export type BulkChannelImportExampleMode =
+  | "mixed"
+  | AdminChannelProviderType;
 
 interface BulkChannelImportProps {
   action: string;
   preflightAction: string;
   redirectTo?: string;
-  providerType?: BulkChannelImportProviderType;
+  exampleMode?: BulkChannelImportExampleMode;
 }
 
 interface BulkImportPreflightItem {
   index: number;
+  providerType: AdminChannelProviderType;
   name: string;
   fetchUrl: string;
   action: "create" | "update";
@@ -36,14 +44,21 @@ interface BulkImportPreflightItem {
   existingFetchUrl: string | null;
 }
 
+interface BulkImportProviderBreakdown {
+  providerType: AdminChannelProviderType;
+  total: number;
+  wouldCreate: number;
+  wouldUpdate: number;
+}
+
 interface BulkImportPreflightResult {
   ok: boolean;
-  providerType: BulkChannelImportProviderType;
   wouldCreate: number;
   wouldUpdate: number;
   matchedByChannelId: number;
   matchedByFetchUrl: number;
   items: BulkImportPreflightItem[];
+  providerBreakdown: BulkImportProviderBreakdown[];
 }
 
 interface BulkImportViewModel {
@@ -56,18 +71,136 @@ interface BulkImportViewModel {
 }
 
 const BULK_IMPORT_VIEW_MODELS: Record<
-  BulkChannelImportProviderType,
+  BulkChannelImportExampleMode,
   BulkImportViewModel
 > = {
-  rss: {
+  mixed: {
     title: "Bulk Import",
     description:
-      "Paste a JSON array of RSS channel objects to import multiple feeds at once.",
+      "Paste one JSON array of channel objects and include `providerType` on every row to create or update RSS, website, API, and Email IMAP channels in one pass.",
     helpText:
-      'Required: "name" and "fetchUrl". Include "channelId" only when you want to update an existing RSS channel.',
+      'Required on every row: "providerType" plus the provider-specific required fields. Use "channelId" only when you want to update an existing row explicitly; website rows may also update by exact normalized "fetchUrl" match.',
     exampleJson: JSON.stringify(
       [
         {
+          providerType: "rss",
+          name: "Reuters World News",
+          fetchUrl: "https://feeds.reuters.com/reuters/worldNews",
+          language: "en",
+          pollIntervalSeconds: 300,
+          adaptiveEnabled: true,
+          isActive: true
+        },
+        {
+          providerType: "website",
+          name: "EU Data Portal",
+          fetchUrl: "https://example.com/",
+          pollIntervalSeconds: 900,
+          maxResourcesPerPoll: 20,
+          browserFallbackEnabled: false,
+          isActive: true
+        },
+        {
+          providerType: "api",
+          name: "Transparency API",
+          fetchUrl: "https://example.com/api/items",
+          itemsPath: "data.records",
+          titleField: "headline",
+          urlField: "canonical_url",
+          publishedAtField: "published_at",
+          externalIdField: "external_id",
+          languageField: "lang",
+          isActive: true
+        },
+        {
+          providerType: "email_imap",
+          name: "Press inbox",
+          host: "imap.example.com",
+          port: 993,
+          secure: true,
+          username: "alerts@example.com",
+          password: "MailboxSecret!",
+          mailbox: "INBOX",
+          isActive: true
+        }
+      ],
+      null,
+      2
+    ),
+    requiredFields: ["providerType"],
+    fieldSchema: {
+      providerType: {
+        type: '"rss" | "website" | "api" | "email_imap"',
+        description: "Required on every row. The shared bulk importer routes validation and writes from this value."
+      },
+      channelId: {
+        type: "string",
+        description: "Optional stable channel ID when updating a known channel explicitly."
+      },
+      name: {
+        type: "string",
+        description: "Required for every provider."
+      },
+      fetchUrl: {
+        type: "string (URL)",
+        description: "Required for `rss`, `website`, and `api` rows."
+      },
+      host: {
+        type: "string",
+        description: "Required for `email_imap` rows."
+      },
+      username: {
+        type: "string",
+        description: "Required for `email_imap` rows."
+      },
+      password: {
+        type: "string",
+        description: "Required for new `email_imap` rows; omit on update to preserve the stored password."
+      },
+      authorizationHeader: {
+        type: "string",
+        description: "Optional raw Authorization header for `rss`, `website`, or `api` rows."
+      },
+      clearAuthorizationHeader: {
+        type: "boolean",
+        description: "Clear the stored Authorization header on `rss`, `website`, or `api` updates."
+      },
+      pollIntervalSeconds: {
+        type: "number",
+        description: "Optional base interval. Defaults remain provider-specific."
+      },
+      adaptiveEnabled: {
+        type: "boolean",
+        description: "Optional adaptive scheduling toggle. Defaults remain provider-specific."
+      },
+      maxResourcesPerPoll: {
+        type: "number",
+        description: "Website-only resource cap per poll."
+      },
+      itemsPath: {
+        type: "string",
+        description: "API-only JSON path to the source records array."
+      },
+      mailbox: {
+        type: "string",
+        description: "Email IMAP mailbox name."
+      },
+      isActive: {
+        type: "boolean",
+        description: "Start the channel active immediately."
+      }
+    }
+  },
+  rss: {
+    title: "Bulk Import",
+    description:
+      "Paste a JSON array of RSS channel objects with explicit `providerType: \"rss\"` to import multiple feeds at once.",
+    helpText:
+      'Required: "providerType", "name", and "fetchUrl". Include "channelId" only when you want to update an existing RSS channel.',
+    exampleJson: JSON.stringify(
+      [
+        {
+          providerType: "rss",
           name: "Reuters World News",
           fetchUrl: "https://feeds.reuters.com/reuters/worldNews",
           language: "en",
@@ -77,94 +210,87 @@ const BULK_IMPORT_VIEW_MODELS: Record<
           maxItemsPerPoll: 25,
           enrichmentEnabled: true,
           enrichmentMinBodyLength: 500,
-          isActive: true,
-        },
-        {
-          name: "BBC News Top Stories",
-          fetchUrl: "https://feeds.bbci.co.uk/news/rss.xml",
-          language: "en",
-          pollIntervalSeconds: 600,
-          adaptiveEnabled: true,
-          isActive: true,
-        },
+          isActive: true
+        }
       ],
       null,
       2
     ),
-    requiredFields: ["name", "fetchUrl"],
+    requiredFields: ["providerType", "name", "fetchUrl"],
     fieldSchema: {
+      providerType: { type: '"rss"', description: "Required row-level provider type." },
       name: { type: "string", description: "Channel display name" },
       fetchUrl: { type: "string (URL)", description: "RSS feed URL" },
       channelId: {
         type: "string",
-        description: "Optional stable channel ID when updating an existing RSS channel",
+        description: "Optional stable channel ID when updating an existing RSS channel"
       },
       language: { type: "string", description: "ISO language code (default: en)" },
       pollIntervalSeconds: {
         type: "number",
-        description: "Base poll interval in seconds (default: 300)",
+        description: "Base poll interval in seconds (default: 300)"
       },
       adaptiveEnabled: {
         type: "boolean",
-        description: "Enable adaptive polling (default: true)",
+        description: "Enable adaptive polling (default: true)"
       },
       maxPollIntervalSeconds: {
         type: "number",
-        description: "Max interval when adaptive (default: pollInterval * 16)",
+        description: "Max interval when adaptive (default: pollInterval * 16)"
       },
       maxItemsPerPoll: {
         type: "number",
-        description: "Max items per fetch (default: 20)",
+        description: "Max items per fetch (default: 20)"
       },
       requestTimeoutMs: {
         type: "number",
-        description: "Request timeout in ms (default: 10000)",
+        description: "Request timeout in ms (default: 10000)"
       },
       userAgent: {
         type: "string",
-        description: "Custom request identity for upstream fetches",
+        description: "Custom request identity for upstream fetches"
       },
       preferContentEncoded: {
         type: "boolean",
-        description: "Prefer content:encoded when the feed provides it",
+        description: "Prefer content:encoded when the feed provides it"
       },
       adapterStrategy: {
         type: "string",
-        description: "Optional feed-ingress adapter override",
+        description: "Optional feed-ingress adapter override"
       },
       maxEntryAgeHours: {
         type: "number",
-        description: "Optional stale-entry cutoff in hours",
+        description: "Optional stale-entry cutoff in hours"
       },
       enrichmentEnabled: {
         type: "boolean",
-        description: "Enable pre-normalize article enrichment (default: true)",
+        description: "Enable pre-normalize article enrichment (default: true)"
       },
       enrichmentMinBodyLength: {
         type: "number",
-        description:
-          "Skip enrichment when body length already exceeds this threshold (default: 500)",
+        description: "Skip enrichment when body length already exceeds this threshold (default: 500)"
       },
       authorizationHeader: {
         type: "string",
-        description: "Optional raw Authorization header value",
+        description: "Optional raw Authorization header value"
       },
       clearAuthorizationHeader: {
         type: "boolean",
-        description: "Clear the stored Authorization header on update",
+        description: "Clear the stored Authorization header on update"
       },
-      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" },
-    },
+      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" }
+    }
   },
   website: {
     title: "Bulk Import",
     description:
-      "Paste a JSON array of website channel objects to bulk create or update site-entry onboarding with the same operator-safe discovery contract used by the manual form.",
+      "Paste a JSON array of website channel objects with explicit `providerType: \"website\"` to bulk create or update site-entry onboarding with the same operator-safe discovery contract used by the manual form.",
     helpText:
-      'Required: "name" and "fetchUrl". Existing website channels update by explicit "channelId" or by exact normalized "fetchUrl" match.',
+      'Required: "providerType", "name", and "fetchUrl". Existing website channels update by explicit "channelId" or by exact normalized "fetchUrl" match.',
     exampleJson: JSON.stringify(
       [
         {
+          providerType: "website",
           name: "EU Data Portal",
           fetchUrl: "https://example.com/",
           language: "en",
@@ -188,118 +314,252 @@ const BULK_IMPORT_VIEW_MODELS: Record<
           allowedUrlPatterns: ["/datasets/", "/news/"],
           blockedUrlPatterns: ["/login", "/privacy"],
           isActive: true
-        },
+        }
+      ],
+      null,
+      2
+    ),
+    requiredFields: ["providerType", "name", "fetchUrl"],
+    fieldSchema: {
+      providerType: { type: '"website"', description: "Required row-level provider type." },
+      name: { type: "string", description: "Channel display name" },
+      fetchUrl: { type: "string (URL)", description: "Website entry URL" },
+      channelId: {
+        type: "string",
+        description: "Optional stable channel ID when updating a known website channel"
+      },
+      language: { type: "string", description: "ISO language code (default: en)" },
+      pollIntervalSeconds: {
+        type: "number",
+        description: "Base poll interval in seconds (default: 900)"
+      },
+      adaptiveEnabled: {
+        type: "boolean",
+        description: "Enable adaptive polling (default: true)"
+      },
+      maxPollIntervalSeconds: {
+        type: "number",
+        description: "Max interval when adaptive (default: pollInterval * 16)"
+      },
+      requestTimeoutMs: {
+        type: "number",
+        description: "Per-request timeout in ms (default: 10000)"
+      },
+      totalPollTimeoutMs: {
+        type: "number",
+        description: "Whole-poll timeout ceiling in ms (default: 60000)"
+      },
+      userAgent: {
+        type: "string",
+        description: "Custom request identity for website probing"
+      },
+      maxResourcesPerPoll: {
+        type: "number",
+        description: "Max discovered resources persisted from one poll (default: 20)"
+      },
+      crawlDelayMs: {
+        type: "number",
+        description: "Minimum same-site delay between requests in ms (default: 1000)"
+      },
+      sitemapDiscoveryEnabled: {
+        type: "boolean",
+        description: "Probe declared sitemaps first"
+      },
+      feedDiscoveryEnabled: {
+        type: "boolean",
+        description: "Treat discovered feeds as website hints only"
+      },
+      collectionDiscoveryEnabled: {
+        type: "boolean",
+        description: "Scan listing and directory pages"
+      },
+      downloadDiscoveryEnabled: {
+        type: "boolean",
+        description: "Capture linked documents and data files"
+      },
+      browserFallbackEnabled: {
+        type: "boolean",
+        description: "Opt in to browser assistance for hard JS sites"
+      },
+      collectionSeedUrls: {
+        type: "string[] | newline-separated string",
+        description: "Optional seed URLs for listing or archive pages"
+      },
+      allowedUrlPatterns: {
+        type: "string[] | newline-separated string",
+        description: "Optional regex allowlist for persisted URLs"
+      },
+      blockedUrlPatterns: {
+        type: "string[] | newline-separated string",
+        description: "Optional regex blocklist for low-value URLs"
+      },
+      authorizationHeader: {
+        type: "string",
+        description: "Optional raw Authorization header value"
+      },
+      clearAuthorizationHeader: {
+        type: "boolean",
+        description: "Clear the stored Authorization header on update; omit both auth fields to preserve a matched website channel's existing header"
+      },
+      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" }
+    }
+  },
+  api: {
+    title: "Bulk Import",
+    description:
+      "Paste a JSON array of API channel objects with explicit `providerType: \"api\"` to bulk create or update structured JSON ingest channels.",
+    helpText:
+      'Required: "providerType", "name", "fetchUrl", and the API field-mapping contract such as "itemsPath", "urlField", and "publishedAtField".',
+    exampleJson: JSON.stringify(
+      [
         {
-          name: "Protected Startup Directory",
-          fetchUrl: "https://partners.example.com/",
-          pollIntervalSeconds: 1800,
-          maxResourcesPerPoll: 12,
-          browserFallbackEnabled: true,
-          authorizationHeader: "Bearer website-token",
+          providerType: "api",
+          name: "Transparency API",
+          fetchUrl: "https://example.com/api/items",
+          language: "en",
+          pollIntervalSeconds: 600,
+          adaptiveEnabled: true,
+          maxItemsPerPoll: 15,
+          itemsPath: "data.records",
+          titleField: "headline",
+          leadField: "summary",
+          bodyField: "body_html",
+          urlField: "canonical_url",
+          publishedAtField: "published_at",
+          externalIdField: "external_id",
+          languageField: "lang",
           isActive: true
         }
       ],
       null,
       2
     ),
-    requiredFields: ["name", "fetchUrl"],
+    requiredFields: [
+      "providerType",
+      "name",
+      "fetchUrl",
+      "itemsPath",
+      "titleField",
+      "leadField",
+      "bodyField",
+      "urlField",
+      "publishedAtField",
+      "externalIdField",
+      "languageField"
+    ],
     fieldSchema: {
+      providerType: { type: '"api"', description: "Required row-level provider type." },
       name: { type: "string", description: "Channel display name" },
-      fetchUrl: { type: "string (URL)", description: "Website entry URL" },
+      fetchUrl: { type: "string (URL)", description: "API endpoint URL" },
       channelId: {
         type: "string",
-        description: "Optional stable channel ID when updating a known website channel",
+        description: "Optional stable channel ID when updating an existing API channel"
       },
-      language: { type: "string", description: "ISO language code (default: en)" },
-      pollIntervalSeconds: {
-        type: "number",
-        description: "Base poll interval in seconds (default: 900)",
-      },
-      adaptiveEnabled: {
-        type: "boolean",
-        description: "Enable adaptive polling (default: true)",
-      },
-      maxPollIntervalSeconds: {
-        type: "number",
-        description: "Max interval when adaptive (default: pollInterval * 16)",
-      },
-      requestTimeoutMs: {
-        type: "number",
-        description: "Per-request timeout in ms (default: 10000)",
-      },
-      totalPollTimeoutMs: {
-        type: "number",
-        description: "Whole-poll timeout ceiling in ms (default: 60000)",
-      },
-      userAgent: {
+      itemsPath: { type: "string", description: "JSON path to the records array" },
+      titleField: { type: "string", description: "Field containing the item title" },
+      leadField: { type: "string", description: "Field containing the lead/summary" },
+      bodyField: { type: "string", description: "Field containing the item body" },
+      urlField: { type: "string", description: "Field containing the canonical URL" },
+      publishedAtField: {
         type: "string",
-        description: "Custom request identity for website probing",
+        description: "Field containing the published timestamp"
       },
-      maxResourcesPerPoll: {
-        type: "number",
-        description: "Max discovered resources persisted from one poll (default: 20)",
+      externalIdField: {
+        type: "string",
+        description: "Field containing the stable external ID"
       },
-      crawlDelayMs: {
-        type: "number",
-        description: "Minimum same-site delay between requests in ms (default: 1000)",
-      },
-      sitemapDiscoveryEnabled: {
-        type: "boolean",
-        description: "Probe declared sitemaps first",
-      },
-      feedDiscoveryEnabled: {
-        type: "boolean",
-        description: "Treat discovered feeds as website hints only",
-      },
-      collectionDiscoveryEnabled: {
-        type: "boolean",
-        description: "Scan listing and directory pages",
-      },
-      downloadDiscoveryEnabled: {
-        type: "boolean",
-        description: "Capture linked documents and data files",
-      },
-      browserFallbackEnabled: {
-        type: "boolean",
-        description: "Opt in to browser assistance for hard JS sites",
-      },
-      collectionSeedUrls: {
-        type: "string[] | newline-separated string",
-        description: "Optional seed URLs for listing or archive pages",
-      },
-      allowedUrlPatterns: {
-        type: "string[] | newline-separated string",
-        description: "Optional regex allowlist for persisted URLs",
-      },
-      blockedUrlPatterns: {
-        type: "string[] | newline-separated string",
-        description: "Optional regex blocklist for low-value URLs",
+      languageField: {
+        type: "string",
+        description: "Field containing the source language"
       },
       authorizationHeader: {
         type: "string",
-        description: "Optional raw Authorization header value",
+        description: "Optional raw Authorization header value"
       },
       clearAuthorizationHeader: {
         type: "boolean",
-        description:
-          "Clear the stored Authorization header on update; omit both auth fields to preserve a matched website channel's existing header",
+        description: "Clear the stored Authorization header on update"
       },
-      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" },
-    },
+      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" }
+    }
   },
+  email_imap: {
+    title: "Bulk Import",
+    description:
+      "Paste a JSON array of Email IMAP channel objects with explicit `providerType: \"email_imap\"` to bulk create or update mailbox ingest channels.",
+    helpText:
+      'Required: "providerType", "name", "host", "username", and "mailbox". New rows also require "password". Updates preserve the stored password when you omit it.',
+    exampleJson: JSON.stringify(
+      [
+        {
+          providerType: "email_imap",
+          name: "Press inbox",
+          host: "imap.example.com",
+          port: 993,
+          secure: true,
+          username: "alerts@example.com",
+          password: "MailboxSecret!",
+          mailbox: "INBOX",
+          searchFrom: "press@example.com",
+          maxItemsPerPoll: 12,
+          isActive: true
+        }
+      ],
+      null,
+      2
+    ),
+    requiredFields: ["providerType", "name", "host", "username", "mailbox"],
+    fieldSchema: {
+      providerType: { type: '"email_imap"', description: "Required row-level provider type." },
+      channelId: {
+        type: "string",
+        description: "Optional stable channel ID when updating an existing Email IMAP channel"
+      },
+      name: { type: "string", description: "Channel display name" },
+      host: { type: "string", description: "IMAP host name" },
+      port: { type: "number", description: "IMAP port (default: 993)" },
+      secure: { type: "boolean", description: "Use TLS/SSL (default: true)" },
+      username: { type: "string", description: "Mailbox username" },
+      password: {
+        type: "string",
+        description: "Required for new rows; omit on update to preserve the stored password"
+      },
+      mailbox: { type: "string", description: "Mailbox/folder name" },
+      searchFrom: {
+        type: "string",
+        description: "Optional sender filter"
+      },
+      maxItemsPerPoll: {
+        type: "number",
+        description: "Max messages per poll (default: 20)"
+      },
+      isActive: { type: "boolean", description: "Start fetching immediately (default: true)" }
+    }
+  }
 };
 
 export function getBulkChannelImportViewModel(
-  providerType: BulkChannelImportProviderType
+  mode: BulkChannelImportExampleMode
 ): BulkImportViewModel {
-  return BULK_IMPORT_VIEW_MODELS[providerType];
+  return BULK_IMPORT_VIEW_MODELS[mode];
+}
+
+function formatProviderBreakdown(
+  providerBreakdown: BulkImportProviderBreakdown[]
+): string {
+  return providerBreakdown
+    .map((item) => {
+      const providerLabel = formatAdminChannelProviderLabel(item.providerType);
+      return `${providerLabel} ${item.total}`;
+    })
+    .join(", ");
 }
 
 export function BulkChannelImport({
   action,
   preflightAction,
   redirectTo,
-  providerType = "rss",
+  exampleMode = "mixed"
 }: BulkChannelImportProps) {
   const [json, setJson] = useState("");
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -309,7 +569,7 @@ export function BulkChannelImport({
   const [isPreflighting, setIsPreflighting] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const confirmOverwriteRef = useRef<HTMLInputElement | null>(null);
-  const viewModel = getBulkChannelImportViewModel(providerType);
+  const viewModel = getBulkChannelImportViewModel(exampleMode);
   const updateItems =
     preflightResult?.items.filter((item) => item.action === "update") ?? [];
 
@@ -340,7 +600,7 @@ export function BulkChannelImport({
     } catch (error) {
       setPreflightResult(null);
       setValidationErrors([
-        `Invalid JSON: ${error instanceof Error ? error.message : "Unable to parse payload."}`,
+        `Invalid JSON: ${error instanceof Error ? error.message : "Unable to parse payload."}`
       ]);
       resetOverwriteConfirmation();
       return null;
@@ -352,13 +612,12 @@ export function BulkChannelImport({
         method: "POST",
         headers: {
           Accept: "application/json",
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          providerType,
           channels: parsedPayload,
-          redirectTo,
-        }),
+          redirectTo
+        })
       });
       const payload = (await response.json()) as
         | BulkImportPreflightResult
@@ -367,7 +626,7 @@ export function BulkChannelImport({
       if (!response.ok) {
         setPreflightResult(null);
         setValidationErrors([
-          String(payload && "error" in payload ? payload.error ?? "Bulk preflight failed." : "Bulk preflight failed."),
+          String(payload && "error" in payload ? payload.error ?? "Bulk preflight failed." : "Bulk preflight failed.")
         ]);
         resetOverwriteConfirmation();
         return null;
@@ -380,7 +639,7 @@ export function BulkChannelImport({
     } catch (error) {
       setPreflightResult(null);
       setValidationErrors([
-        error instanceof Error ? error.message : "Bulk preflight failed.",
+        error instanceof Error ? error.message : "Bulk preflight failed."
       ]);
       resetOverwriteConfirmation();
       return null;
@@ -435,7 +694,6 @@ export function BulkChannelImport({
         className="grid h-[calc(100%-2rem)] gap-2"
       >
         {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
-        <input type="hidden" name="providerType" value={providerType} />
         <input
           ref={confirmOverwriteRef}
           type="hidden"
@@ -472,6 +730,9 @@ export function BulkChannelImport({
               {preflightResult.wouldCreate === 1 ? "" : "s"} and{" "}
               {preflightResult.wouldUpdate} update
               {preflightResult.wouldUpdate === 1 ? "" : "s"}.
+              {preflightResult.providerBreakdown.length > 0 && (
+                <> {formatProviderBreakdown(preflightResult.providerBreakdown)}.</>
+              )}
               {preflightResult.matchedByChannelId > 0 && (
                 <> {preflightResult.matchedByChannelId} matched by channel ID.</>
               )}
@@ -532,8 +793,9 @@ export function BulkChannelImport({
           </p>
           <ul className="mt-2 space-y-1 text-[11px] text-amber-700/90 dark:text-amber-300/90">
             {updateItems.slice(0, 5).map((item) => (
-              <li key={`${item.index}-${item.fetchUrl}`}>
-                Row {item.index + 1}: {item.name} via{" "}
+              <li key={`${item.index}-${item.providerType}-${item.fetchUrl}`}>
+                Row {item.index + 1}: {formatAdminChannelProviderLabel(item.providerType)}{" "}
+                {item.name} via{" "}
                 {item.matchType === "fetchUrl" ? "fetchUrl match" : "channelId"} to{" "}
                 <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">
                   {item.channelId ?? "unknown"}
@@ -556,11 +818,13 @@ export function BulkChannelImport({
             <AlertDialogTitle>Confirm bulk channel updates</AlertDialogTitle>
             <AlertDialogDescription>
               This import will update {preflightResult?.wouldUpdate ?? 0} existing channel
-              {(preflightResult?.wouldUpdate ?? 0) === 1 ? "" : "s"}.
+              {(preflightResult?.wouldUpdate ?? 0) === 1 ? "" : "s"} across{" "}
+              {preflightResult?.providerBreakdown.length ?? 0} provider
+              {(preflightResult?.providerBreakdown.length ?? 0) === 1 ? "" : "s"}.
               {(preflightResult?.matchedByFetchUrl ?? 0) > 0 && (
                 <>
                   {" "}
-                  {(preflightResult?.matchedByFetchUrl ?? 0)} match
+                  {(preflightResult?.matchedByFetchUrl ?? 0)} website match
                   {(preflightResult?.matchedByFetchUrl ?? 0) === 1 ? "" : "es"} came from
                   existing fetch URLs, so omitted website authorization headers will be preserved
                   unless you explicitly replace or clear them.

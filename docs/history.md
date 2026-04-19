@@ -4075,3 +4075,32 @@
   - no runtime or live-site revalidation was part of this patch.
 - Follow-up:
   - if the user wants this to stay self-updating, the next bounded item would be a tiny repo-owned export script rather than manual file prep.
+
+### 2026-04-19 — STAGE-MIXED-BULK-CHANNEL-IMPORT
+
+- Тип записи: stage archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь сообщил, что `web.bulk-import.json` с website rows импортируется через shared admin bulk import как `rss`, а затем расширил запрос до полного shared mixed-batch contract с обязательным row-level `providerType`, поддержкой текущих operator-ready provider types и explicit `providerType` внутри `docs/data_scripts/web.bulk-import.json`.
+- Что изменилось:
+  - shared admin bulk import больше не опирается на top-level mode switch или неявное угадывание provider type; теперь каждая строка обязана иметь explicit `providerType`;
+  - shared preflight/import pipeline теперь группирует mixed batches по provider и truthfully поддерживает все текущие operator-ready channel types:
+    - `rss`
+    - `website`
+    - `api`
+    - `email_imap`
+  - `api` and `email_imap` получили собственные bulk parse/plan helpers, so shared preflight can now surface create/update targets for those providers instead of being limited to `rss` / `website`;
+  - website rows сохраняют existing website-specific bulk semantics:
+    - exact normalized `fetchUrl` matching for implicit updates;
+    - preservation of stored authorization header when a fetchUrl-matched row omits auth fields;
+    - explicit ambiguity/not-found failures instead of silent coercion;
+  - admin bulk-import UI and copy were rewritten around one mixed JSON-array contract, including mixed example payloads, provider-aware overwrite review, and operator-facing wording on `/channels/import`, `/channels`, and `/help`;
+  - derived file `docs/data_scripts/web.bulk-import.json` now includes explicit `providerType: "website"` on every row so it matches the shipped shared contract directly.
+- Что проверено:
+  - `node --import tsx --test tests/unit/ts/admin-rss-channels.test.ts tests/unit/ts/admin-website-channels.test.ts tests/unit/ts/admin-api-channels.test.ts tests/unit/ts/admin-email-imap-channels.test.ts tests/unit/ts/admin-bulk-channel-import.test.ts`
+  - `pnpm typecheck`
+  - `git diff --check -- apps/admin/src/components/BulkChannelImport.tsx apps/admin/src/lib/server/api-channels.ts apps/admin/src/lib/server/email-imap-channels.ts apps/admin/src/pages/bff/admin/channels/bulk/shared.ts apps/admin/src/pages/bff/admin/channels/bulk.ts apps/admin/src/pages/bff/admin/channels/bulk/preflight.ts apps/admin/src/pages/channels/import.astro apps/admin/src/pages/channels.astro apps/admin/src/pages/help.astro tests/unit/ts/admin-api-channels.test.ts tests/unit/ts/admin-email-imap-channels.test.ts tests/unit/ts/admin-bulk-channel-import.test.ts docs/data_scripts/web.bulk-import.json docs/work.md`
+- Риски или gaps:
+  - stage intentionally does not mutate the preserved local compose DB, so any already mis-imported channels from the earlier buggy flow still require a separate user-approved cleanup/reimport pass if the user wants that state corrected;
+  - future provider types will still need explicit parser/plan/upsert wiring before they can participate in the mixed shared importer, even though the row-level contract is now ready for extension.
+- Follow-up:
+  - if the user wants cleanup of the already misclassified local rows, open a separate bounded patch for targeted DB cleanup and reimport without resetting the whole environment.

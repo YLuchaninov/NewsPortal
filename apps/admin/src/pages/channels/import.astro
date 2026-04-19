@@ -21,19 +21,6 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const pagePath = `${Astro.url.pathname}${Astro.url.search}`;
-const providerType =
-  Astro.url.searchParams.get("providerType") === "website" ? "website" : "rss";
-const providerLabel = providerType === "website" ? "website" : "RSS";
-const title =
-  providerType === "website"
-    ? "Import website channels from JSON"
-    : "Import RSS channels from JSON";
-const description =
-  providerType === "website"
-    ? "Use the shared bulk screen when you want to onboard or update multiple website ingestion channels with consistent discovery defaults and one operator review step."
-    : "Keep the list page focused on monitoring and use this screen when you need validation, examples, and batch creation in one place.";
-const rssImportPath = appPath("/channels/import");
-const websiteImportPath = appPath("/channels/import?providerType=website");
 ---
 
 <AdminShell title="Bulk Import Channels — Admin" session={session} flash={flash} activeNav="channels">
@@ -50,32 +37,12 @@ const websiteImportPath = appPath("/channels/import?providerType=website");
   <div class="space-y-6">
     <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Bulk onboarding</p>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <a
-          href={rssImportPath}
-          class:list={[
-            "inline-flex h-9 items-center justify-center rounded-full border px-4 text-sm font-medium transition-colors",
-            providerType === "rss"
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-input hover:bg-accent"
-          ]}
-        >
-          RSS import
-        </a>
-        <a
-          href={websiteImportPath}
-          class:list={[
-            "inline-flex h-9 items-center justify-center rounded-full border px-4 text-sm font-medium transition-colors",
-            providerType === "website"
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-input hover:bg-accent"
-          ]}
-        >
-          Website import
-        </a>
-      </div>
-      <h1 class="mt-4 text-2xl font-semibold tracking-tight">{title}</h1>
-      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight">Import channels from JSON</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        Use one shared batch screen for RSS, website, API, and Email IMAP channels. Every row must
+        declare its own <code>providerType</code>, so mixed batches stay explicit and the importer
+        can validate each provider against its real contract instead of guessing.
+      </p>
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -83,7 +50,7 @@ const websiteImportPath = appPath("/channels/import?providerType=website");
         action={appPath("/bff/admin/channels/bulk")}
         preflightAction={appPath("/bff/admin/channels/bulk/preflight")}
         redirectTo={pagePath}
-        providerType={providerType}
+        exampleMode="mixed"
         client:load
       />
 
@@ -92,19 +59,15 @@ const websiteImportPath = appPath("/channels/import?providerType=website");
         <div class="mt-4 space-y-4 text-sm text-muted-foreground">
           <div class="rounded-2xl border border-border bg-background p-4">
             <p class="font-medium text-foreground">Validate before importing</p>
-            <p class="mt-2">Use the built-in server-backed preflight to catch missing names, invalid URLs, bad scheduling values, and unexpected overwrite targets before the batch is submitted.</p>
+            <p class="mt-2">Use the built-in server-backed preflight to catch missing provider types, invalid URLs or mailbox settings, bad scheduling values, and unexpected overwrite targets before the batch is submitted.</p>
           </div>
           <div class="rounded-2xl border border-border bg-background p-4">
             <p class="font-medium text-foreground">Keep naming consistent</p>
-            <p class="mt-2">Channel names show up in fetch-run logs and admin health tables, so use source names that operators can recognize quickly across {providerLabel} operations.</p>
+            <p class="mt-2">Channel names show up in fetch-run logs and admin health tables, so use source names that operators can recognize quickly across RSS, website, API, and mailbox operations.</p>
           </div>
           <div class="rounded-2xl border border-border bg-background p-4">
-            <p class="font-medium text-foreground">{providerType === "website" ? "Review discovery settings" : "Return to monitoring"}</p>
-            <p class="mt-2">
-              {providerType === "website"
-                ? "For website batches, keep browser fallback disabled unless you already proved the site needs it, and review any fetchUrl-matched updates carefully before you confirm the overwrite."
-                : "After a successful import, go back to the channels list to review health badges, schedule state, and first fetch outcomes."}
-            </p>
+            <p class="font-medium text-foreground">Keep secrets and provider-specific fields explicit</p>
+            <p class="mt-2">Website rows may update by fetch URL and preserve their stored authorization header when you omit auth fields, while Email IMAP rows preserve the stored password on update if you omit <code>password</code>. Review these rows carefully before confirming an overwrite.</p>
           </div>
         </div>
         <div class="mt-5">

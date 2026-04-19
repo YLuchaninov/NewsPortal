@@ -48,14 +48,8 @@ export const POST: APIRoute = async ({ request }) => {
       String(bulkPayload.redirectTo ?? request.headers.get("referer") ?? ""),
       "/channels/import"
     );
-    const channels = parseBulkChannels(
-      bulkPayload.providerType,
-      bulkPayload.channelsPayload
-    );
-    const importPlan = await planBulkImport(
-      bulkPayload.providerType,
-      channels
-    );
+    const channels = parseBulkChannels(bulkPayload.channelsPayload);
+    const importPlan = await planBulkImport(channels);
     const overwriteCount = importPlan.wouldUpdate;
     const overwriteConfirmed = bulkPayload.confirmOverwrite;
 
@@ -65,37 +59,30 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const result = await executeBulkImport(
-      bulkPayload.providerType,
-      importPlan.channels
-    );
+    const result = await executeBulkImport(importPlan.channels);
 
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "channels",
         status: "success",
-        message: formatBulkImportSuccessMessage(
-          bulkPayload.providerType,
-          result.createdChannelIds.length,
-          result.updatedChannelIds.length
-        ),
+        message: formatBulkImportSuccessMessage(result),
         redirectTo
       });
     }
 
     return Response.json({
-      providerType: bulkPayload.providerType,
       createdChannelIds: result.createdChannelIds,
       updatedChannelIds: result.updatedChannelIds,
       createdCount: result.createdChannelIds.length,
       updatedCount: result.updatedChannelIds.length,
       overwriteCount,
       matchedByChannelId: importPlan.matchedByChannelId,
-      matchedByFetchUrl: importPlan.matchedByFetchUrl
+      matchedByFetchUrl: importPlan.matchedByFetchUrl,
+      providerBreakdown: result.providerBreakdown
     });
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "Failed to import RSS channels.";
+      error instanceof Error ? error.message : "Failed to import channels.";
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "channels",
