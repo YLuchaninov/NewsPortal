@@ -7,6 +7,7 @@ import {
   DISCOVERY_LIVE_DEFAULTS,
 } from "../../../infra/scripts/lib/discovery-live-example-cases.mjs";
 import {
+  buildCaseYieldSummary,
   classifyCaseRootCause,
   classifyGraphCandidate,
   classifyRecallCandidate,
@@ -15,6 +16,7 @@ import {
   determineRunVerdicts,
   evaluateCalibration,
   isBenchmarkLikeCandidate,
+  NORMALIZED_YIELD_REASON_BUCKETS,
   summarizeAggregateRootCauses,
 } from "../../../infra/scripts/lib/discovery-live-yield-policy.mjs";
 
@@ -320,5 +322,120 @@ test("root-cause classification stays generic across case packs", () => {
   assert.deepEqual(aggregate.counts, {
     review_policy_problem: 2,
     downstream_usefulness_problem: 1,
+  });
+});
+
+test("yield summary exposes normalized buckets including registration failures", () => {
+  assert.ok(exampleB);
+
+  const summary = buildCaseYieldSummary(
+    exampleB!,
+    {
+      graphLane: {
+        mission: { mission_id: "m1" },
+        candidates: [
+          {
+            decision: "approved",
+            benchmarkLike: true,
+            registeredChannelId: null,
+            registrationFailed: true,
+            domain: "infoq.com",
+            tacticKey: "developer news rss",
+          },
+          {
+            decision: "rejected",
+            benchmarkLike: true,
+            rejectionReason: "below_auto_approval_threshold",
+            domain: "feedspot.com",
+            tacticKey: "developer news rss",
+          },
+        ],
+      },
+      recallLane: {
+        mission: { recall_mission_id: "r1" },
+        candidates: [
+          {
+            decision: "rejected",
+            benchmarkLike: false,
+            rejectionReason: "unsupported_challenge",
+            domain: "example.com",
+            tacticKey: "developer community",
+          },
+        ],
+      },
+      downstreamEvidence: [],
+      coverageMatrix: exampleB!.interestNames.map((interestName, index) => ({
+        interestName,
+        status: index === 0 ? "candidate_found_not_onboarded" : "no_viable_live_source_found",
+      })),
+    },
+    DISCOVERY_LIVE_DEFAULTS
+  );
+
+  for (const bucket of NORMALIZED_YIELD_REASON_BUCKETS) {
+    assert.ok(bucket in summary.normalizedReasonBuckets);
+  }
+  assert.equal(summary.normalizedReasonBuckets.registration_failed, 1);
+  assert.equal(summary.normalizedReasonBuckets.below_auto_approval_threshold, 1);
+  assert.equal(summary.normalizedReasonBuckets.unsupported_challenge, 1);
+  assert.equal(summary.normalizedReasonBuckets.candidate_found_not_onboarded, 1);
+});
+
+test("multi-run proof keeps per-pack root-cause drift counts", () => {
+  const multiRun = determineMultiRunYieldProof(
+    [
+      {
+        runtimeVerdict: "pass",
+        caseRuns: [
+          {
+            key: "example_b_dev_news",
+            label: "Example B",
+            yieldVerdict: "weak",
+            rootCauseClassification: "review_policy_problem",
+          },
+        ],
+      },
+      {
+        runtimeVerdict: "pass",
+        caseRuns: [
+          {
+            key: "example_b_dev_news",
+            label: "Example B",
+            yieldVerdict: "pass",
+            rootCauseClassification: "yield_pass",
+          },
+        ],
+      },
+      {
+        runtimeVerdict: "pass",
+        caseRuns: [
+          {
+            key: "example_b_dev_news",
+            label: "Example B",
+            yieldVerdict: "weak",
+            rootCauseClassification: "review_policy_problem",
+          },
+        ],
+      },
+    ],
+    DISCOVERY_LIVE_DEFAULTS
+  );
+
+  assert.deepEqual(multiRun.perCase, [
+    {
+      key: "example_b_dev_news",
+      label: "Example B",
+      passingRuns: 1,
+      totalRuns: 3,
+      yieldVerdicts: ["weak", "pass", "weak"],
+      rootCauseCounts: {
+        review_policy_problem: 2,
+        yield_pass: 1,
+      },
+    },
+  ]);
+  assert.deepEqual(multiRun.aggregateRootCauses, {
+    review_policy_problem: 2,
+    yield_pass: 1,
   });
 });

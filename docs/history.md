@@ -14,6 +14,218 @@
 
 ## Completed items
 
+### 2026-04-19 — STAGE-4-REVIEW-AND-PROMOTION-POLICY-TUNING — Lifted Example C to yield-pass and hardened recall status handling without drifting downstream truth
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after Stage 3 removed the main graph-lane false negatives, live DDGS discovery was still failing on `below_auto_promotion_threshold` across recall candidates. The user asked to keep pushing toward `good yield`, so the next truthful step was bounded policy tuning rather than provider expansion or broad engine rewrites.
+- Что изменилось:
+  - tuned case-pack recall policy in [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs):
+    - Example B now carries lower bounded `minPromotionScore`, stronger preferred-domain bonuses for known engineering-blog domains, and explicit negative domains/keywords for feed generators, Wikipedia-style noise, EIN/feed-directory families, and architecture-feed junk;
+    - Example C now carries lower bounded `minPromotionScore`, stronger procurement-domain bonuses, explicit negative domains for feed/tender directory families and YouTube-like junk, plus slightly stronger positive procurement keywords;
+  - hardened [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) so recall automation no longer crashes when the maintenance API already materialized a candidate as `rejected`/`duplicate`/`shortlisted`:
+    - status-aware recall handling now records pre-rejected candidates instead of trying to re-promote them;
+    - `invalid_feed` and `probe_failed` now surface truthfully as `candidate_not_valid` in the yield artifact instead of hiding behind a generic harness crash.
+- Что было доказано:
+  - static / calibration proof:
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
+  - fresh single-run live proof:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-85142a9e.json`
+      - `/tmp/newsportal-live-discovery-examples-85142a9e.md`
+    - result:
+      - top-level `runtimeVerdict = pass`
+      - top-level `yieldVerdict = weak`
+      - Example B remained `yield weak`
+      - Example C reached `yield pass`
+      - Example C onboarded `2` channels and both showed downstream fetch evidence via `fetchers run:once`
+  - fresh non-regression proof:
+    - `pnpm test:discovery:nonregression:compose`
+    - authoritative artifact:
+      - `/tmp/newsportal-discovery-nonregression-3a7f0438.json`
+      - `/tmp/newsportal-discovery-nonregression-3a7f0438.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `nonRegressionVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = pass_with_residuals`
+      - frozen-corpus drift stayed `0` for:
+        - `interest_filter_results`
+        - `final_selection_results`
+        - `system_feed_results`
+        - `llm_review_log`
+        - `notification_log`
+- Что stage доказал:
+  - bounded policy tuning can improve live yield without drifting the existing downstream pipeline;
+  - Example C is no longer blocked only by review thresholds and now has a truthful single-run `yield pass`;
+  - the recall harness needed status-aware handling once tuning started surfacing promotable rows, and that boundary is now explicit and non-flaky.
+- Риски или gaps:
+  - `good yield` is still not proven overall because Example B remains weak;
+  - the latest Example B blocker is no longer `below_auto_promotion_threshold`, but recall `candidate_not_valid` / `invalid_feed` noise, which points back to recall acquisition/validity rather than more policy loosening.
+- Follow-up:
+  - open `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR` next; repair or reframe Example B recall validity before attempting Stage-5 downstream closeout.
+
+### 2026-04-19 — STAGE-3-GENERALIZED-CANDIDATE-MIX-TUNING — Isolated graph classes and removed the main gap-fill/noise path before policy tuning
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after Stage 2 reduced RSS technical loss, the live DDGS harness still mixed in broad registry classes and noisy graph tactics. The user asked to keep moving toward `good yield`, so the next truthful slice was candidate-mix cleanup before any review/promotion threshold tuning.
+- Что изменилось:
+  - retuned runtime case-pack graph config in [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs):
+    - Example B and Example C graph lanes became website-first and stopped owning extra graph RSS classes;
+    - the graph tactics were tightened around bounded editorial developer-news and buyer-signal procurement website families.
+  - updated [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) so each runtime case now temporarily isolates its own graph classes:
+    - active generic registry classes like `lexical`, `facet`, `actor`, `source_type`, `evidence_chain`, and `contrarian` are archived before the case mission runs;
+    - those classes are restored immediately after the mission;
+    - disposable case-specific graph classes are archived after each run.
+- Что было доказано:
+  - static/helper proof:
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
+  - fresh live proof:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-ac199047.json`
+      - `/tmp/newsportal-live-discovery-examples-ac199047.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = yield_weak`
+      - both runtime packs reached `candidate_not_valid = 0`
+      - the dominant blocker shifted from graph false negatives to recall review/promotion policy
+- Что stage доказал:
+  - graph-lane noise from shared registry classes was a real proof-surface problem, and class isolation now keeps runtime packs truthful;
+  - after isolation, the main blocker moved from graph candidate validity to recall thresholding, which made policy tuning the next honest stage.
+- Риски или gaps:
+  - Stage 3 did not itself improve overall yield; it only cleaned the graph candidate surface enough to expose the next blocker clearly.
+- Follow-up:
+  - open `STAGE-4-REVIEW-AND-PROMOTION-POLICY-TUNING` next; with graph false negatives cleared, the next truthful move is bounded threshold/domain policy work.
+
+### 2026-04-19 — STAGE-2-TECHNICAL-FALSE-NEGATIVE-REPAIR — Repaired bounded RSS feed-discovery false negatives before candidate-mix tuning
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: after Stage 1, the fresh diagnostics still showed a large `candidate_not_valid` cohort. The user asked to keep moving toward `good yield`, and the stage ladder required checking technical false negatives before any broader candidate-mix or threshold tuning.
+- Что изменилось:
+  - updated [`services/workers/app/task_engine/adapters/rss_probe.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/adapters/rss_probe.py) so the RSS probe now:
+    - first tries the direct target as a feed,
+    - then performs bounded alternate-feed recovery from HTML `<link rel="alternate" type="application/rss+xml|atom+xml">` hints,
+    - re-probes the recovered feed URL when found,
+    - persists the result through `feed_url`, `final_url`, and `discovered_feed_urls`
+  - updated [`services/workers/app/task_engine/discovery_plugins.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/discovery_plugins.py) so `discovery.rss_probe` no longer drops the feed-discovery fields that the orchestrator needs:
+    - `feed_url`
+    - `final_url`
+    - `discovered_feed_urls`
+    - `error_text`
+  - synced durable runtime truth in [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md): supported HTML origins may now recover concrete RSS/Atom feeds while still staying inside the `rss` provider boundary
+  - added targeted unit coverage in:
+    - [`tests/unit/python/test_task_engine_discovery_plugins.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_task_engine_discovery_plugins.py)
+    - [`tests/unit/python/test_discovery_rss_probe_adapter.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_rss_probe_adapter.py)
+- Что было доказано:
+  - targeted static / unit proof:
+    - `python -m py_compile services/workers/app/task_engine/adapters/rss_probe.py services/workers/app/task_engine/discovery_plugins.py tests/unit/python/test_discovery_rss_probe_adapter.py tests/unit/python/test_task_engine_discovery_plugins.py`
+    - `python -m unittest tests.unit.python.test_task_engine_discovery_plugins tests.unit.python.test_discovery_rss_probe_adapter`
+    - `git diff --check -- docs/work.md docs/history.md docs/contracts/discovery-agent.md services/workers/app/task_engine/adapters/rss_probe.py services/workers/app/task_engine/discovery_plugins.py tests/unit/python/test_task_engine_discovery_plugins.py tests/unit/python/test_discovery_rss_probe_adapter.py`
+  - fresh live discovery proof:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-94fbc963.json`
+      - `/tmp/newsportal-live-discovery-examples-94fbc963.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = yield_weak`
+    - compared with the latest Stage-1 single-run artifact `/tmp/newsportal-live-discovery-examples-bcb081e3.json|md`:
+      - Example C `candidate_not_valid` dropped from `20` to `7`
+      - Example C benchmark-like rejects moved entirely out of `candidate_not_valid` and into policy-threshold buckets
+      - Example B stayed `yield_weak`, but its benchmark-like invalidation remained bounded rather than becoming the dominant blocker
+- Что stage доказал:
+  - the discovery runtime was carrying a real technical-loss layer on supported RSS sources, not only policy weakness
+  - bounded alternate-feed recovery is now part of shipped discovery truth and reaches the live harness path rather than living only in isolated helper code
+  - after the repair, the remaining dominant blocker is still `review_policy_problem`, which means the next truthful stage is candidate-mix tuning rather than blind provider expansion or threshold loosening
+- Риски или gaps:
+  - the repair did not make `good yield` pass; it only reduced one technical-loss class
+  - Example B still produces many non-benchmark `candidate_not_valid` RSS rows, which now look more like noisy candidate mix than silent loss of obviously good feed-backed sources
+  - no provider fallback was introduced; the baseline remains DDGS-first and bounded
+- Follow-up:
+  - open `STAGE-3-GENERALIZED-CANDIDATE-MIX-TUNING` next; use the latest artifact to improve candidate mix across packs before touching review/promotion thresholds.
+
+### 2026-04-19 — STAGE-1-YIELD-CONTRACT-AND-DIAGNOSTICS — Expanded generalized discovery good-yield diagnostics before tuning
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to implement the first stage of a new `C-DISCOVERY-GOOD-YIELD` capability so discovery yield could be improved through evidence instead of intuition. The repo already had `runtime=pass` and `nonRegression=pass`, but the good-yield proof still needed richer diagnostics before any false-negative repair or policy tuning.
+- Что изменилось:
+  - updated [`infra/scripts/lib/discovery-live-yield-policy.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-yield-policy.mjs) so the generalized policy/proof layer now:
+    - exports canonical `NORMALIZED_YIELD_REASON_BUCKETS`
+    - emits `normalizedReasonBuckets` alongside the existing free-form `weakYieldReasons`
+    - counts explicit `registration_failed` evidence when approved/promoted/duplicate outcomes do not resolve to a linked `registeredChannelId`
+  - updated [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) so the single-run harness now:
+    - marks graph and recall candidate outcomes with `registrationFailed` when onboarding does not truthfully complete
+    - records `registration_failed` residuals explicitly
+    - renders normalized yield buckets in the Markdown artifact next to the legacy weak-yield reason list
+  - updated [`infra/scripts/test-live-discovery-yield-proof.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-yield-proof.mjs) so the bounded multi-run proof now:
+    - records each run’s dominant root cause
+    - writes per-pack `rootCauseCounts`
+    - writes explicit aggregate root-cause drift over runs
+  - updated [`tests/unit/ts/discovery-live-yield-policy.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-live-yield-policy.test.ts) with regression coverage for normalized buckets, explicit registration-failure accounting, and multi-run root-cause drift
+  - synced proof wording in [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md) and live execution state in [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - static / unit proof:
+    - `node --check infra/scripts/lib/discovery-live-yield-policy.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --check infra/scripts/test-live-discovery-yield-proof.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
+    - `git diff --check -- docs/work.md docs/verification.md infra/scripts/lib/discovery-live-yield-policy.mjs infra/scripts/test-live-discovery-examples.mjs infra/scripts/test-live-discovery-yield-proof.mjs tests/unit/ts/discovery-live-yield-policy.test.ts`
+  - fresh single-run live diagnostics proof:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-bcb081e3.json`
+      - `/tmp/newsportal-live-discovery-examples-bcb081e3.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = yield_weak`
+      - aggregate dominant root cause remained `review_policy_problem`
+      - both runtime-enabled packs now expose canonical normalized buckets; in this fresh run both Example B and Example C showed:
+        - `candidate_not_valid = 20`
+        - `below_auto_promotion_threshold = 8`
+        - `registration_failed = 0`
+  - fresh multi-run yield-proof diagnostics:
+    - `pnpm test:discovery:yield:compose`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-yield-proof-e064e243.json`
+      - `/tmp/newsportal-live-discovery-yield-proof-e064e243.md`
+    - backing runs:
+      - `/tmp/newsportal-live-discovery-examples-0da5f38f.json|md`
+      - `/tmp/newsportal-live-discovery-examples-bc376f12.json|md`
+      - `/tmp/newsportal-live-discovery-examples-0cfb10dc.json|md`
+    - result:
+      - aggregate `runtimeVerdict = pass`
+      - aggregate `yieldVerdict = weak`
+      - aggregate `finalVerdict = yield_weak`
+      - per-pack root-cause drift is now explicit:
+        - Example B: `review_policy_problem = 3`
+        - Example C: `review_policy_problem = 3`
+- Что stage доказал:
+  - the repo now has a richer generalized good-yield diagnostics layer before any tuning:
+    - canonical normalized reason buckets
+    - explicit registration-failure accounting
+    - aggregate root-cause drift across the bounded multi-run proof
+  - the current DDGS-only bottleneck remains honest rather than hidden:
+    - the aggregate root cause still points to `review_policy_problem`
+    - but the latest single-run evidence also shows a large technical-loss share via `candidate_not_valid = 20` per runtime pack
+- Риски или gaps:
+  - this stage intentionally did not improve actual yield; it only made the bottleneck evidence sharper
+  - `pnpm test:discovery:yield:compose` still exits non-zero because good yield is not yet proven, which is expected and should not be confused with runtime failure
+  - the next truthful stage still needs to prove whether the high `candidate_not_valid` volume is a real live-web limit or a technical false-negative class worth repairing before policy loosening
+- Follow-up:
+  - open `STAGE-2-TECHNICAL-FALSE-NEGATIVE-REPAIR` next; inspect the `candidate_not_valid` cohort first, then only proceed to candidate-mix or review-policy tuning if those invalidations are shown to be truthful rather than technical drift.
+
 ### 2026-04-19 — STAGE-DISCOVERY-CASE-AGNOSTIC-PROOF-2026-04-19 — Generalized discovery proof into case packs and added downstream non-regression proof
 
 - Тип записи: stage archive

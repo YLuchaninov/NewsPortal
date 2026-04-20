@@ -26,6 +26,7 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
 
 - Discovery remains under `/maintenance/discovery/*` and Astro admin BFF writes.
 - PostgreSQL remains the only source of truth for discovery state; Redis/BullMQ stay transport only through UTE.
+- Discovery RSS probing now performs bounded alternate-feed recovery for supported HTML origins: if an `rss` probe target is not itself a parseable feed but exposes alternate RSS/Atom links, the probe may recover a concrete feed URL, persist it through `feed_url` / `discovered_feed_urls`, and still keep the candidate inside the `rss` provider boundary instead of silently converting it into a `website` candidate.
 - Discovery uses the existing UTE orchestrator boundary:
   - `discovery.plan_hypotheses`
   - `discovery.execute_hypotheses`

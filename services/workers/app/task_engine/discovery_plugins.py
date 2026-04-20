@@ -771,12 +771,25 @@ class RssProbePlugin(ContextTaskPlugin):
             normalized_results.append(
                 {
                     "url": str(item.get("url") or item.get("feed_url") or ""),
+                    "feed_url": str(item.get("feed_url") or item.get("final_url") or item.get("url") or ""),
+                    "final_url": str(item.get("final_url") or item.get("feed_url") or item.get("url") or ""),
                     "is_valid_rss": bool(item.get("is_valid_rss", item.get("isValidRss"))),
                     "feed_title": str(item.get("feed_title") or item.get("feedTitle") or ""),
                     "sample_entries": _coerce_mapping_list(
                         item.get("sample_entries") or item.get("sampleEntries") or [],
                         field_name="sample_entries",
                     ),
+                    "discovered_feed_urls": self._resolve_string_list(
+                        options={
+                            "discovered_feed_urls": item.get("discovered_feed_urls")
+                            or item.get("hidden_rss_urls")
+                            or []
+                        },
+                        context={},
+                        key="discovered_feed_urls",
+                        default=[],
+                    ),
+                    "error_text": str(item.get("error_text") or item.get("errorText") or "").strip() or None,
                 }
             )
 

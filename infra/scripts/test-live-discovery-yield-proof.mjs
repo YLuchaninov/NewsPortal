@@ -62,14 +62,18 @@ function formatProofMarkdown(report) {
     "",
     ...report.runs.map(
       (item, index) =>
-        `- Run ${index + 1}: path=\`${item.jsonPath || "missing"}\`, final=\`${item.finalVerdict}\`, runtime=\`${item.runtimeVerdict}\`, yield=\`${item.yieldVerdict}\`, calibration=\`${item.calibrationPassed ? "passed" : "failed"}\``
+        `- Run ${index + 1}: path=\`${item.jsonPath || "missing"}\`, final=\`${item.finalVerdict}\`, runtime=\`${item.runtimeVerdict}\`, yield=\`${item.yieldVerdict}\`, calibration=\`${item.calibrationPassed ? "passed" : "failed"}\`, dominant_root_cause=\`${item.aggregateYieldDiagnostics?.dominantRootCause || "n/a"}\``
     ),
     "",
     "## Per-case yield counts",
     "",
     ...report.multiRun.perCase.map(
-      (item) =>
-        `- ${item.label}: ${item.passingRuns}/${item.totalRuns} passing runs (required ${report.multiRun.requiredPassingRuns})`
+      (item) => {
+        const rootCauseSummary = Object.entries(item.rootCauseCounts ?? {})
+          .map(([key, count]) => `${key}:${count}`)
+          .join(", ");
+        return `- ${item.label}: ${item.passingRuns}/${item.totalRuns} passing runs (required ${report.multiRun.requiredPassingRuns}); root_causes=[${rootCauseSummary || "none"}]`;
+      }
     ),
     "",
     "## Aggregate Root Causes",
@@ -114,6 +118,7 @@ async function main() {
         finalVerdict: parsed.finalVerdict,
         runtimeVerdict: parsed.runtimeVerdict,
         yieldVerdict: parsed.yieldVerdict,
+        aggregateYieldDiagnostics: parsed.aggregateYieldDiagnostics ?? null,
         calibrationPassed: Array.isArray(parsed.calibration)
           ? parsed.calibration.every((item) => item.passed === true)
           : false,
@@ -141,6 +146,7 @@ async function main() {
       }
     }
     report.multiRun.perCase.sort((left, right) => left.label.localeCompare(right.label));
+    report.multiRun.aggregateRootCauseDrift = report.multiRun.aggregateRootCauses;
     const calibrationPassed = report.runs.every((item) => item.calibrationPassed === true);
     report.runtimeVerdict = report.multiRun.runtimeVerdict;
     report.yieldVerdict =

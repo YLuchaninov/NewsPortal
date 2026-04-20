@@ -35,6 +35,7 @@ from services.workers.app.task_engine.adapters.web_search import DdgsWebSearchAd
 from services.workers.app.task_engine.discovery_plugins import (
     LlmAnalyzerPlugin,
     RelevanceScorerPlugin,
+    RssProbePlugin,
     UrlValidatorPlugin,
     WebSearchPlugin,
     WebsiteProbePlugin,
@@ -224,12 +225,16 @@ class FakeRssProbeAdapter:
         return [
             {
                 "url": url,
+                "feed_url": f"{url.rstrip('/')}/feed.xml" if not url.endswith(".xml") else url,
+                "final_url": f"{url.rstrip('/')}/feed.xml" if not url.endswith(".xml") else url,
                 "is_valid_rss": True,
                 "feed_title": "Ukraine Tech Daily",
                 "sample_entries": [
                     {"title": "Ukraine startup funding", "snippet": "Tech investment"},
                     {"title": "AI chips in Europe", "snippet": "Semiconductor update"},
                 ][:sample_count],
+                "discovered_feed_urls": [f"{url.rstrip('/')}/feed.xml"] if not url.endswith(".xml") else [],
+                "error_text": None,
             }
             for url in urls
         ]
@@ -641,6 +646,38 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(result["validated_urls"][0]["is_rss_candidate"])
         self.assertEqual(result["validated_urls"][0]["source_type_hint"], "rss")
+
+    async def test_rss_probe_keeps_feed_discovery_fields_for_supported_html_origins(self) -> None:
+        plugin = RssProbePlugin()
+        runtime = FakeDiscoveryRuntime()
+
+        with patch(
+            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            return_value=runtime,
+        ):
+            result = await plugin.execute(
+                options={"sample_count": 1, "only_rss_candidates": False},
+                context={
+                    "validated_urls": [
+                        {
+                            "url": "https://news.example.com",
+                            "is_rss_candidate": False,
+                            "source_type_hint": "website",
+                        }
+                    ]
+                },
+            )
+
+        self.assertEqual(len(result["probed_feeds"]), 1)
+        self.assertEqual(result["probed_feeds"][0]["url"], "https://news.example.com")
+        self.assertEqual(result["probed_feeds"][0]["feed_url"], "https://news.example.com/feed.xml")
+        self.assertEqual(result["probed_feeds"][0]["final_url"], "https://news.example.com/feed.xml")
+        self.assertEqual(
+            result["probed_feeds"][0]["discovered_feed_urls"],
+            ["https://news.example.com/feed.xml"],
+        )
+        self.assertIsNone(result["probed_feeds"][0]["error_text"])
+        self.assertTrue(result["probed_feeds"][0]["is_valid_rss"])
 
     async def test_website_probe_uses_validated_website_candidates(self) -> None:
         plugin = WebsiteProbePlugin()

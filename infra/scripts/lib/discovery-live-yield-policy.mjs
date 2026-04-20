@@ -2,6 +2,18 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
+export const NORMALIZED_YIELD_REASON_BUCKETS = [
+  "candidate_not_valid",
+  "unsupported_provider_type",
+  "unsupported_challenge",
+  "browser_assisted_residual",
+  "below_auto_approval_threshold",
+  "below_auto_promotion_threshold",
+  "registration_failed",
+  "source_onboarded_no_match_yet",
+  "candidate_found_not_onboarded",
+];
+
 function asNumber(value, fallback = 0) {
   const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -426,6 +438,34 @@ function hasFinalSelectionEvidence(row) {
   return asNumber(asObject(row.finalSelection).total, 0) > 0;
 }
 
+function buildNormalizedReasonBuckets(rejectedCandidates, allCandidates, coverageMatrix) {
+  const counts = new Map(
+    NORMALIZED_YIELD_REASON_BUCKETS.map((key) => [key, 0])
+  );
+
+  for (const candidate of rejectedCandidates) {
+    const key = normalizeText(candidate.rejectionReason || "unknown");
+    if (counts.has(key)) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  for (const candidate of allCandidates) {
+    if (candidate.registrationFailed === true) {
+      counts.set("registration_failed", (counts.get("registration_failed") ?? 0) + 1);
+    }
+  }
+
+  for (const row of coverageMatrix) {
+    const key = normalizeText(row.status);
+    if (counts.has(key)) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  return Object.fromEntries(counts.entries());
+}
+
 export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
   const graphCandidates = asArray(caseRun.graphLane?.candidates);
   const recallCandidates = asArray(caseRun.recallLane?.candidates);
@@ -459,6 +499,11 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
 
   const benchmarkCandidates = allCandidates.filter((candidate) => candidate.benchmarkLike === true);
   const benchmarkRejected = benchmarkCandidates.filter((candidate) => candidate.decision === "rejected");
+  const normalizedReasonBuckets = buildNormalizedReasonBuckets(
+    rejectedCandidates,
+    allCandidates,
+    coverageMatrix
+  );
   const caseAcceptance = asObject(caseDefinition.yieldAcceptance);
   const minimumChannels = Math.max(
     1,
@@ -490,6 +535,7 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
       (row) => normalizeText(row.status) === "covered_downstream"
     ).length,
     minimumChannelsWithDownstreamEvidence: minimumChannels,
+    normalizedReasonBuckets,
     weakYieldReasons: Object.fromEntries(
       [...rejectionCounts.entries()].sort((left, right) => left[0].localeCompare(right[0]))
     ),

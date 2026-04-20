@@ -674,6 +674,57 @@ async function archiveCaseGraphClasses(caseDefinition) {
   return archived;
 }
 
+async function isolateGraphClassesForCase(caseDefinition) {
+  const classes = await listDiscoveryClasses();
+  const allowedClassKeys = new Set(
+    asArray(caseDefinition.graphClasses)
+      .map((item) => normalizeText(item.classKey))
+      .filter(Boolean)
+  );
+  const isolated = [];
+  for (const item of classes) {
+    const classKey = normalizeText(item.class_key);
+    const status = normalizeText(item.status).toLowerCase();
+    if (!classKey || status !== "active" || allowedClassKeys.has(classKey) || isDisposableDiscoveryClass(item)) {
+      continue;
+    }
+    const updated = await patchJson(
+      `${API_BASE_URL}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`,
+      {
+        status: "archived",
+      }
+    );
+    isolated.push({
+      classKey,
+      previousStatus: status,
+      currentStatus: normalizeText(updated.status).toLowerCase() || "archived",
+    });
+  }
+  return isolated;
+}
+
+async function restoreIsolatedGraphClasses(isolatedRows) {
+  const restored = [];
+  for (const row of asArray(isolatedRows)) {
+    const classKey = normalizeText(row.classKey);
+    const previousStatus = normalizeText(row.previousStatus).toLowerCase();
+    if (!classKey || !previousStatus || previousStatus === "archived") {
+      continue;
+    }
+    const updated = await patchJson(
+      `${API_BASE_URL}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`,
+      {
+        status: previousStatus,
+      }
+    );
+    restored.push({
+      classKey,
+      restoredStatus: normalizeText(updated.status).toLowerCase() || previousStatus,
+    });
+  }
+  return restored;
+}
+
 function isDisposableDiscoveryClass(item) {
   const classKey = normalizeText(item.class_key);
   return (
@@ -1041,6 +1092,8 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
   const lane = {
     mission: null,
     preparedClasses: [],
+    isolatedClasses: [],
+    restoredIsolatedClasses: [],
     archivedClasses: [],
     runRequests: [],
     progress: [],
@@ -1053,6 +1106,7 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
 
   try {
     lane.preparedClasses = await ensureCaseGraphClasses(caseDefinition);
+    lane.isolatedClasses = await isolateGraphClassesForCase(caseDefinition);
 
     const mission = await postJson(
       `${API_BASE_URL}/maintenance/discovery/missions`,
@@ -1112,6 +1166,15 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
           lane.approvedChannelIds.push(registeredChannelId);
         }
         const reviewedStatus = normalizeText(reviewed.status).toLowerCase();
+        const registrationFailed = !registeredChannelId;
+        if (registrationFailed) {
+          lane.residuals.push({
+            candidateId,
+            providerType: item.candidate.provider_type,
+            url: item.candidate.url,
+            reason: "registration_failed",
+          });
+        }
         lane.candidates.push({
           candidateId,
           providerType: item.candidate.provider_type,
@@ -1125,6 +1188,7 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
           reviewScore: item.plan.reviewScore,
           decision: reviewedStatus === "duplicate" ? "duplicate" : "approved",
           registeredChannelId,
+          registrationFailed,
         });
         continue;
       }
@@ -1184,6 +1248,7 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
 
     return lane;
   } finally {
+    lane.restoredIsolatedClasses = await restoreIsolatedGraphClasses(lane.isolatedClasses);
     lane.archivedClasses = await archiveCaseGraphClasses(caseDefinition);
   }
 }
@@ -1229,6 +1294,71 @@ async function runRecallLane(caseDefinition, startedAtIso) {
   let promotionsLeft = DISCOVERY_LIVE_DEFAULTS.maxRecallPromotionsPerCase;
   for (const item of candidatePlans) {
     const candidateId = String(item.candidate.recall_candidate_id ?? "");
+    const currentStatus = normalizeText(item.candidate.status).toLowerCase();
+    const currentRejectionReason = normalizeText(
+      item.candidate.rejection_reason ?? item.candidate.rejectionReason
+    ).toLowerCase();
+    const normalizedCurrentRejectionReason =
+      currentRejectionReason === "invalid_feed" || currentRejectionReason === "probe_failed"
+        ? "candidate_not_valid"
+        : currentRejectionReason;
+    const currentRegisteredChannelId = normalizeOptionalText(
+      item.candidate.registered_channel_id ?? item.candidate.registeredChannelId
+    );
+
+    if (
+      currentStatus === "duplicate"
+      || (currentStatus === "shortlisted" && currentRegisteredChannelId)
+    ) {
+      if (currentRegisteredChannelId) {
+        lane.promotedChannelIds.push(currentRegisteredChannelId);
+      }
+      lane.candidates.push({
+        recallCandidateId: candidateId,
+        providerType: item.candidate.provider_type,
+        title: item.candidate.title,
+        url: item.candidate.url,
+        domain: item.plan.context?.domain || null,
+        tacticKey: normalizeOptionalText(item.candidate.quality_signal_source),
+        benchmarkLike: item.plan.benchmarkLike === true,
+        policySignals: item.plan.policySignals ?? {},
+        recallScore: item.plan.reviewScore,
+        decision: "duplicate",
+        registeredChannelId: currentRegisteredChannelId,
+        registrationFailed: !currentRegisteredChannelId,
+      });
+      continue;
+    }
+
+    if (currentStatus === "rejected" && normalizedCurrentRejectionReason !== "already_registered") {
+      lane.candidates.push({
+        recallCandidateId: candidateId,
+        providerType: item.candidate.provider_type,
+        title: item.candidate.title,
+        url: item.candidate.url,
+        domain: item.plan.context?.domain || null,
+        tacticKey: normalizeOptionalText(item.candidate.quality_signal_source),
+        benchmarkLike: item.plan.benchmarkLike === true,
+        policySignals: item.plan.policySignals ?? {},
+        recallScore: item.plan.reviewScore,
+        decision: "rejected",
+        rejectionReason: normalizedCurrentRejectionReason || "not_selected",
+      });
+      if (
+        normalizedCurrentRejectionReason
+        && normalizedCurrentRejectionReason !== "below_auto_promotion_threshold"
+        && normalizedCurrentRejectionReason !== "candidate_not_valid"
+      ) {
+        lane.residuals.push({
+          recallCandidateId: candidateId,
+          providerType: item.candidate.provider_type,
+          url: item.candidate.url,
+          reason: normalizedCurrentRejectionReason,
+        });
+      }
+      continue;
+    }
+
     if (item.plan.decision === "promotable" && promotionsLeft > 0) {
       const promoted = await postJson(
         `${API_BASE_URL}/maintenance/discovery/recall-candidates/${encodeURIComponent(candidateId)}/promote`,
@@ -1245,6 +1375,16 @@ async function runRecallLane(caseDefinition, startedAtIso) {
       if (channelId) {
         lane.promotedChannelIds.push(channelId);
       }
+      const promotedStatus = normalizeText(promoted.status).toLowerCase();
+      const registrationFailed = !channelId;
+      if (registrationFailed) {
+        lane.residuals.push({
+          recallCandidateId: candidateId,
+          providerType: item.candidate.provider_type,
+          url: item.candidate.url,
+          reason: "registration_failed",
+        });
+      }
       lane.candidates.push({
         recallCandidateId: candidateId,
         providerType: item.candidate.provider_type,
@@ -1255,8 +1395,9 @@ async function runRecallLane(caseDefinition, startedAtIso) {
         benchmarkLike: item.plan.benchmarkLike === true,
         policySignals: item.plan.policySignals ?? {},
         recallScore: item.plan.reviewScore,
-        decision: normalizeText(promoted.status).toLowerCase() === "duplicate" ? "duplicate" : "promoted",
+        decision: promotedStatus === "duplicate" ? "duplicate" : "promoted",
         registeredChannelId: channelId,
+        registrationFailed,
       });
       continue;
     }
@@ -1456,6 +1597,12 @@ function formatCaseMarkdown(caseRun) {
           .map(([key, count]) => `- ${key}: ${count}`)
           .join("\n")
       : "- none",
+    ``,
+    `Normalized reason buckets`,
+    ``,
+    Object.entries(caseRun.yieldSummary.normalizedReasonBuckets ?? {})
+      .map(([key, count]) => `- ${key}: ${count}`)
+      .join("\n"),
     ``,
     `Top rejected domains`,
     ``,
