@@ -30,6 +30,7 @@
     "test:channel-auth:compose": "docker compose -f infra/docker/compose.yml exec -T fetchers pnpm --filter @newsportal/fetchers test:channel-auth-smoke",
     "test:cluster-match-notify:compose": "docker compose -f infra/docker/compose.yml exec -T worker python -m app.smoke cluster-match-notify",
     "test:discovery:admin:compose": "node infra/scripts/test-discovery-admin-flow.mjs",
+    "test:discovery:examples:compose": "DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs",
     "test:discovery:nonregression:compose": "node infra/scripts/test-discovery-pipeline-nonregression.mjs",
     "test:discovery:yield:compose": "node infra/scripts/test-live-discovery-yield-proof.mjs",
     "test:cluster-match-notify:smoke": "PYTHONPATH=. python -m services.workers.app.smoke cluster-match-notify",

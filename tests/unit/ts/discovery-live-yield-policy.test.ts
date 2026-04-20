@@ -148,6 +148,38 @@ test("recall policy distinguishes promotable, rejected, and residual candidates"
   assert.equal(residual.rejectionReason, "browser_assisted_residual");
 });
 
+test("case policy can allow non-editorial website kinds for procurement portals", () => {
+  assert.ok(exampleC);
+
+  const promotablePortal = classifyRecallCandidate(
+    {
+      provider_type: "website",
+      source_quality_recall_score: 0.71,
+      url: "https://sam.gov",
+      title: "Home | SAM.gov",
+      quality_signal_source: "procurement notice",
+      evaluation_json: { classification: { kind: "procurement_portal" } },
+    },
+    exampleC!,
+    DISCOVERY_LIVE_DEFAULTS
+  );
+  assert.equal(promotablePortal.decision, "promotable");
+
+  const promotableListing = classifyRecallCandidate(
+    {
+      provider_type: "website",
+      source_quality_recall_score: 0.71,
+      url: "https://contractsfinder.service.gov.uk",
+      title: "Contracts Finder",
+      quality_signal_source: "procurement notice",
+      evaluation_json: { classification: { kind: "listing" } },
+    },
+    exampleC!,
+    DISCOVERY_LIVE_DEFAULTS
+  );
+  assert.equal(promotableListing.decision, "promotable");
+});
+
 test("calibration fixtures meet the default agreement threshold", () => {
   assert.ok(exampleB);
   assert.ok(exampleC);

@@ -104,6 +104,7 @@ commands:
   website_admin_compose_smoke: "pnpm test:website:admin:compose"
   automation_admin_smoke: "node infra/scripts/test-automation-admin-flow.mjs"
   discovery_admin_compose_smoke: "pnpm test:discovery:admin:compose"
+  discovery_examples_compose_proof: "pnpm test:discovery:examples:compose"
   discovery_nonregression_compose_proof: "pnpm test:discovery:nonregression:compose"
   discovery_yield_compose_proof: "pnpm test:discovery:yield:compose"
   hard_sites_compose_smoke: "pnpm test:hard-sites:compose"
@@ -372,9 +373,17 @@ runtime_facts:
     downstream_selection_dependency: removed
     search_provider_default: ddgs
     search_stub_supported: true
+    profile_policy_table: discovery_policy_profiles
+    mission_profile_snapshot_columns:
+      - discovery_missions.profile_id
+      - discovery_missions.applied_profile_version
+      - discovery_missions.applied_policy_json
+      - discovery_recall_missions.profile_id
+      - discovery_recall_missions.applied_profile_version
+      - discovery_recall_missions.applied_policy_json
     class_registry_table: discovery_hypothesis_classes
     mission_planning_state: discovery_missions.interest_graph
-    operator_surfaces: dual_path_mission_fit_generic_quality_recall_backlog_promotion
+    operator_surfaces: dual_path_mission_fit_generic_quality_recall_backlog_promotion_profile_explainability
     candidate_review_default: manual
     feedback_re_evaluation_loop: true
     source_registration_path: postgresql_plus_outbox_source_channel_sync

@@ -9,6 +9,7 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
 ## In scope
 
 - `discovery_missions`, `discovery_hypothesis_classes`, `discovery_hypotheses`, `discovery_candidates`;
+- `discovery_policy_profiles` as reusable operator-managed discovery tuning truth for graph and recall lanes;
 - `discovery_source_profiles`, `discovery_source_interest_scores`, `discovery_portfolio_snapshots`;
 - `discovery_source_quality_snapshots` as additive generic source-quality truth that coexists with graph-first mission scoring;
 - `discovery_feedback_events`, `discovery_strategy_stats`, `discovery_cost_log`;
@@ -26,6 +27,25 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
 
 - Discovery remains under `/maintenance/discovery/*` and Astro admin BFF writes.
 - PostgreSQL remains the only source of truth for discovery state; Redis/BullMQ stay transport only through UTE.
+- Discovery now also ships reusable `discovery_policy_profiles` for operator-managed tuning. Profiles own structured discovery policy only:
+  - graph/recall preferred and blocked domains;
+  - positive and negative keywords;
+  - preferred tactics;
+  - optional structured provider-kind constraints such as `supportedWebsiteKinds`;
+  - bounded graph/recall score thresholds;
+  - additive benchmark cohort hints;
+  - optional advanced prompt instructions.
+- Mission and recall mission ownership stays separate from profile ownership:
+  - missions and recall missions still own title/description, seed topics or queries, languages/regions, budgets, priorities, status, and run lifecycle;
+  - profiles do not own downstream truth and must not read `final_selection_results` or `system_feed_results` as tuning input.
+- `discovery_missions` and `discovery_recall_missions` may now reference nullable `profile_id` and persist `applied_profile_version` plus `applied_policy_json`.
+  - If a profile is attached, compile/run/acquire must snapshot the active profile version and effective policy into the mission row before the lane executes.
+  - If no profile is attached, discovery must remain backward compatible with the existing mission-local/default policy behavior.
+  - Historical interpretability depends on `applied_profile_version` and `applied_policy_json`, not on mutating historical missions when the live profile later changes.
+- The shipped Example B/C live proof now runs profile-backed by default:
+  - the harness materializes stable reusable profiles before graph/recall execution;
+  - graph missions and recall missions attach those profiles instead of using a parallel ad hoc config format;
+  - single-run artifacts must now include `manualReplaySettings` with profile key/display name, graph policy, recall policy, benchmark cohort, exact mission seeds/recall queries, and the applied profile version/policy snapshots needed for manual operator replay through `/admin/discovery`.
 - Discovery RSS probing now performs bounded alternate-feed recovery for supported HTML origins: if an `rss` probe target is not itself a parseable feed but exposes alternate RSS/Atom links, the probe may recover a concrete feed URL, persist it through `feed_url` / `discovered_feed_urls`, and still keep the candidate inside the `rss` provider boundary instead of silently converting it into a `website` candidate.
 - Discovery uses the existing UTE orchestrator boundary:
   - `discovery.plan_hypotheses`
@@ -41,6 +61,7 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
 - Independent-recall stage-3 now also ships bounded recall-first acquisition loops for `rss` and `website`; neutral recall missions can actively search/probe and persist recall candidates plus generic quality snapshots through `acquire_recall_missions(...)` and `/maintenance/discovery/recall-missions/{recall_mission_id}/acquire` without requiring `interest_graph`, but promotion into `source_channels` still remains outside this stage.
 - Independent-recall stage-4 now also ships bounded recall-candidate promotion through `POST /maintenance/discovery/recall-candidates/{recall_candidate_id}/promote`; this path reuses `PostgresSourceRegistrarAdapter`, persists `registered_channel_id` on the recall candidate, links shared source profiles to the promoted channel when possible, and emits the same PostgreSQL + outbox onboarding contract as graph-first discovery.
 - Independent-recall stage-5 now also ships operator/read-model closeout: discovery summary counts promoted vs duplicate recall candidates, source-profile reads surface the latest generic source-quality snapshot, and admin/help surfaces present mission fit, generic quality, neutral recall backlog, and promotion state separately.
+- Graph and recall candidate materialization must preserve known duplicate-link truth: if a candidate URL already resolves to an existing `source_channel`, the candidate may be inserted as `duplicate` with `registered_channel_id` already filled instead of waiting for a later manual approve/promote flow.
 - Graph-first missions/hypotheses remain the primary planning owner for discovery, but they are no longer the only acquisition/promotion owner because the bounded recall path can now acquire and promote sources too.
 - The current compose/dev migration baseline also includes explicit discovery drift repair: `0026a_discovery_schema_drift_prerepair.sql` must heal historical 0016-drifted databases before `0027_*` additive recall migrations run, `0030_discovery_schema_drift_repair.sql` must restore the remaining 0016 discovery-core tables/constraints idempotently after those later migrations, and `0036_discovery_schema_residual_repair.sql` must replay that same core repair for compose/local databases where `0030` was already recorded as applied while `discovery_hypothesis_classes` or the dependent profile/portfolio tables were still absent. Discovery migration smoke is expected to assert the full discovery core so this drift fails fast instead of surviving as a hybrid partially-upgraded schema.
 - New classes may be added data-only when they reuse an existing `generation_backend` and existing provider/channel execution capabilities.
@@ -82,6 +103,12 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
 - Source-interest score is mission-scoped contextual scoring.
 - `yield_score`, `lead_time_score`, and `duplication_score` inside `discovery_source_interest_scores` now derive from generic channel-intake quality metrics such as unique-article ratio, fetch health, freshness, lead-time, and duplication pressure; these signals must not read downstream `system_feed_results`, `final_selection_results`, or other selected-content outcomes.
 - operator/admin discovery surfaces must label mission-scoped contextual fit separately from generic channel-quality evidence and recall-promotion state, and must not present `yield_score` as downstream selected-content yield.
+- operator/admin discovery surfaces now also expose structured profile explainability for graph and recall candidates:
+  - normalized reason bucket;
+  - score vs threshold;
+  - preferred-domain / blocked-domain / positive-keyword / negative-keyword matches;
+  - benchmark-like status;
+  - linked profile name/version when a profile-backed snapshot exists.
 - Portfolio snapshots are persisted, not ephemeral UI-only calculations.
 - Gap filling may create additional hypotheses, but only through the same class-registry-driven planning path.
 
@@ -105,6 +132,10 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
 - `pnpm test:ingest:compose`
 - `pnpm test:discovery-enabled:compose`
 - `pnpm integration_tests`
+- any additive operator-tuning layer such as `discovery_policy_profiles` also requires:
+  - `pnpm test:discovery:admin:compose`
+  - one fresh `pnpm test:discovery:examples:compose` run
+  - `pnpm test:discovery:nonregression:compose`
 
 Separate schema-repair follow-up proof for drifted compose baselines also requires:
 

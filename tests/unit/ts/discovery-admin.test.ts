@@ -4,12 +4,16 @@ import test from "node:test";
 import { readRuntimeConfig } from "../../../packages/config/src/index.ts";
 import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
 import {
+  buildDiscoveryProfileCreateApiPayload,
+  buildDiscoveryProfileUpdateApiPayload,
   buildDiscoveryAuditPayload,
   buildDiscoveryCandidateReviewApiPayload,
   buildDiscoveryFeedbackApiPayload,
   buildDiscoveryHypothesisClassCreateApiPayload,
   buildDiscoveryMissionCreateApiPayload,
   buildDiscoveryMissionUpdateApiPayload,
+  buildDiscoveryRecallMissionCreateApiPayload,
+  buildDiscoveryRecallMissionUpdateApiPayload,
   normalizeAuditEntityId,
   parseProviderTypes,
   parseTextList,
@@ -60,6 +64,8 @@ test("BFF discovery helpers normalize graph-first form inputs and registry inten
   assert.equal(resolveDiscoveryIntent({ intent: "compile_graph" }), "compile_graph");
   assert.equal(resolveDiscoveryIntent({ intent: "archive_mission" }), "archive_mission");
   assert.equal(resolveDiscoveryIntent({ intent: "delete_class" }), "delete_class");
+  assert.equal(resolveDiscoveryIntent({ intent: "create_profile" }), "create_profile");
+  assert.equal(resolveDiscoveryIntent({ intent: "update_recall_mission" }), "update_recall_mission");
   assert.equal(resolveDiscoveryIntent({ intent: "unexpected" }), "create_mission");
   assert.equal(normalizeAuditEntityId("acceptance_class"), null);
   assert.equal(
@@ -155,6 +161,7 @@ test("buildDiscoveryMissionCreateApiPayload converts form state into graph-first
     maxSources: 12,
     budgetCents: 450,
     priority: 3,
+    profileId: null,
     createdBy: "admin-1",
   });
 });
@@ -167,6 +174,7 @@ test("buildDiscoveryMissionUpdateApiPayload, class payload and feedback payload 
       budgetCents: "",
       seedTopics: "",
       targetProviderTypes: "",
+      profileId: "",
     }),
     {
       title: undefined,
@@ -181,6 +189,7 @@ test("buildDiscoveryMissionUpdateApiPayload, class payload and feedback payload 
       seedRegions: undefined,
       targetProviderTypes: undefined,
       interestGraph: undefined,
+      profileId: null,
     }
   );
 
@@ -247,17 +256,173 @@ test("buildDiscoveryMissionUpdateApiPayload, class payload and feedback payload 
   );
 });
 
+test("profile and recall mission builders normalize structured policy and linkage fields", () => {
+  assert.deepEqual(
+    buildDiscoveryProfileCreateApiPayload(
+      {
+        profileKey: "editorial_news_default",
+        displayName: "Editorial news",
+        description: "Structured profile",
+        status: "active",
+        graphProviderTypes: "rss,website,api",
+        graphPreferredDomains: "example.com\nnews.test",
+        graphBlockedDomains: "spam.test",
+        graphPositiveKeywords: "analysis\npolicy",
+        graphNegativeKeywords: "sponsored",
+        graphPreferredTactics: "editorial\nofficial",
+        graphMinRssReviewScore: "0.71",
+        graphMinWebsiteReviewScore: "0.83",
+        graphAdvancedPromptInstructions: "Prefer newsroom voice",
+        recallProviderTypes: "website,rss,email_imap",
+        recallPreferredDomains: "procurement.test",
+        recallBlockedDomains: "agency.test",
+        recallPositiveKeywords: "rfp",
+        recallNegativeKeywords: "for hire",
+        recallPreferredTactics: "buyer_signal",
+        recallMinPromotionScore: "0.66",
+        recallAdvancedPromptInstructions: "Prefer buyer-side notices",
+        benchmarkDomains: "benchmark.test",
+        benchmarkTitleKeywords: "release notes",
+        benchmarkTacticKeywords: "editorial",
+      },
+      "admin-4"
+    ),
+    {
+      profileKey: "editorial_news_default",
+      displayName: "Editorial news",
+      description: "Structured profile",
+      status: "active",
+      graphPolicyJson: {
+        providerTypes: ["rss", "website"],
+        preferredDomains: ["example.com", "news.test"],
+        blockedDomains: ["spam.test"],
+        positiveKeywords: ["analysis", "policy"],
+        negativeKeywords: ["sponsored"],
+        preferredTactics: ["editorial", "official"],
+        minRssReviewScore: 0.71,
+        minWebsiteReviewScore: 0.83,
+        advancedPromptInstructions: "Prefer newsroom voice",
+      },
+      recallPolicyJson: {
+        providerTypes: ["website", "rss"],
+        preferredDomains: ["procurement.test"],
+        blockedDomains: ["agency.test"],
+        positiveKeywords: ["rfp"],
+        negativeKeywords: ["for hire"],
+        preferredTactics: ["buyer_signal"],
+        minPromotionScore: 0.66,
+        advancedPromptInstructions: "Prefer buyer-side notices",
+      },
+      yieldBenchmarkJson: {
+        domains: ["benchmark.test"],
+        titleKeywords: ["release notes"],
+        tacticKeywords: ["editorial"],
+      },
+      createdBy: "admin-4",
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryProfileUpdateApiPayload({
+      displayName: "Updated profile",
+      status: "archived",
+      graphProviderTypes: "rss,website",
+      recallProviderTypes: "rss",
+    }),
+    {
+      displayName: "Updated profile",
+      description: undefined,
+      status: "archived",
+      graphPolicyJson: {
+        providerTypes: ["rss", "website"],
+      },
+      recallPolicyJson: {
+        providerTypes: ["rss"],
+      },
+      yieldBenchmarkJson: undefined,
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryRecallMissionCreateApiPayload(
+      {
+        title: "Recall",
+        description: "Recall mission",
+        missionKind: "query_seed",
+        seedDomains: "example.test",
+        seedUrls: "https://example.test/feed.xml",
+        seedQueries: "developer tools",
+        targetProviderTypes: "rss,website",
+        scopeJson: '{"regions":["EU"]}',
+        maxCandidates: "7",
+        profileId: "profile-1",
+      },
+      "admin-5"
+    ),
+    {
+      title: "Recall",
+      description: "Recall mission",
+      missionKind: "query_seed",
+      seedDomains: ["example.test"],
+      seedUrls: ["https://example.test/feed.xml"],
+      seedQueries: ["developer tools"],
+      targetProviderTypes: ["rss", "website"],
+      scopeJson: { regions: ["EU"] },
+      maxCandidates: 7,
+      profileId: "profile-1",
+      createdBy: "admin-5",
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryRecallMissionUpdateApiPayload({
+      status: "paused",
+      profileId: "",
+      maxCandidates: "3",
+    }),
+    {
+      title: undefined,
+      description: undefined,
+      missionKind: undefined,
+      seedDomains: undefined,
+      seedUrls: undefined,
+      seedQueries: undefined,
+      targetProviderTypes: undefined,
+      scopeJson: undefined,
+      maxCandidates: 3,
+      status: "paused",
+      profileId: null,
+    }
+  );
+});
+
 test("buildDiscoveryAuditPayload captures per-intent adaptive details", () => {
   assert.deepEqual(
     buildDiscoveryAuditPayload(
       "create_mission",
-      { title: "Discovery mission", seedTopics: "AI\npolicy" },
+      { title: "Discovery mission", seedTopics: "AI\npolicy", profileId: "profile-1" },
       { mission_id: "mission-9" }
     ),
     {
       title: "Discovery mission",
       missionId: "mission-9",
       seedTopics: ["AI", "policy"],
+      profileId: "profile-1",
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryAuditPayload(
+      "create_profile",
+      { profileKey: "editorial_default", displayName: "Editorial default" },
+      { profile_id: "profile-9", status: "active", version: 3 }
+    ),
+    {
+      profileId: "profile-9",
+      profileKey: "editorial_default",
+      displayName: "Editorial default",
+      status: "active",
+      version: 3,
     }
   );
 
@@ -272,6 +437,7 @@ test("buildDiscoveryAuditPayload captures per-intent adaptive details", () => {
       status: "archived",
       priority: undefined,
       budgetCents: undefined,
+      profileId: null,
     }
   );
 

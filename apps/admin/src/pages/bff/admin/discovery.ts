@@ -29,6 +29,11 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type DiscoveryIntent =
+  | "create_profile"
+  | "update_profile"
+  | "archive_profile"
+  | "activate_profile"
+  | "delete_profile"
   | "create_mission"
   | "update_mission"
   | "archive_mission"
@@ -41,6 +46,8 @@ type DiscoveryIntent =
   | "archive_class"
   | "activate_class"
   | "delete_class"
+  | "create_recall_mission"
+  | "update_recall_mission"
   | "review_candidate"
   | "submit_feedback"
   | "re_evaluate";
@@ -48,6 +55,11 @@ type DiscoveryIntent =
 export function resolveDiscoveryIntent(payload: Record<string, unknown>): DiscoveryIntent {
   const value = String(payload.intent ?? "").trim();
   if (
+    value === "create_profile" ||
+    value === "update_profile" ||
+    value === "archive_profile" ||
+    value === "activate_profile" ||
+    value === "delete_profile" ||
     value === "update_mission" ||
     value === "archive_mission" ||
     value === "activate_mission" ||
@@ -59,6 +71,8 @@ export function resolveDiscoveryIntent(payload: Record<string, unknown>): Discov
     value === "archive_class" ||
     value === "activate_class" ||
     value === "delete_class" ||
+    value === "create_recall_mission" ||
+    value === "update_recall_mission" ||
     value === "review_candidate" ||
     value === "submit_feedback" ||
     value === "re_evaluate"
@@ -102,6 +116,20 @@ function parseOptionalProviderTypes(value: unknown): string[] | undefined {
   return parseProviderTypes(raw);
 }
 
+function parseProfileProviderTypes(value: unknown): string[] {
+  return parseProviderTypes(value).filter((providerType) =>
+    ["rss", "website"].includes(providerType)
+  );
+}
+
+function parseOptionalProfileProviderTypes(value: unknown): string[] | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return undefined;
+  }
+  return parseProfileProviderTypes(raw);
+}
+
 export function parseOptionalNumber(value: unknown): number | undefined {
   const raw = String(value ?? "").trim();
   if (!raw) {
@@ -121,6 +149,140 @@ function parseOptionalJsonRecord(value: unknown): Record<string, unknown> | unde
     return parsed as Record<string, unknown>;
   }
   throw new Error("Expected a JSON object.");
+}
+
+function buildProfilePolicyPayload(
+  payload: Record<string, unknown>,
+  lane: "graph" | "recall"
+): Record<string, unknown> {
+  const prefix = lane === "graph" ? "graph" : "recall";
+  const providerTypes =
+    parseOptionalProfileProviderTypes(payload[`${prefix}ProviderTypes`]) ??
+    ["rss", "website"];
+  const policy: Record<string, unknown> = {
+    providerTypes,
+    preferredDomains: parseTextList(payload[`${prefix}PreferredDomains`]),
+    blockedDomains: parseTextList(payload[`${prefix}BlockedDomains`]),
+    positiveKeywords: parseTextList(payload[`${prefix}PositiveKeywords`]),
+    negativeKeywords: parseTextList(payload[`${prefix}NegativeKeywords`]),
+    preferredTactics: parseTextList(payload[`${prefix}PreferredTactics`]),
+    advancedPromptInstructions:
+      String(payload[`${prefix}AdvancedPromptInstructions`] ?? "").trim() || null,
+  };
+  if (lane === "graph") {
+    policy.minRssReviewScore = parseOptionalNumber(payload.graphMinRssReviewScore);
+    policy.minWebsiteReviewScore = parseOptionalNumber(payload.graphMinWebsiteReviewScore);
+  } else {
+    policy.minPromotionScore = parseOptionalNumber(payload.recallMinPromotionScore);
+  }
+  return policy;
+}
+
+function buildPartialProfilePolicyPayload(
+  payload: Record<string, unknown>,
+  lane: "graph" | "recall"
+): Record<string, unknown> | undefined {
+  if (!hasAnyProfilePolicyField(payload, lane)) {
+    return undefined;
+  }
+  const policy: Record<string, unknown> = {};
+  const prefix = lane === "graph" ? "graph" : "recall";
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}ProviderTypes`)) {
+    policy.providerTypes = parseProfileProviderTypes(payload[`${prefix}ProviderTypes`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}PreferredDomains`)) {
+    policy.preferredDomains = parseTextList(payload[`${prefix}PreferredDomains`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}BlockedDomains`)) {
+    policy.blockedDomains = parseTextList(payload[`${prefix}BlockedDomains`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}PositiveKeywords`)) {
+    policy.positiveKeywords = parseTextList(payload[`${prefix}PositiveKeywords`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}NegativeKeywords`)) {
+    policy.negativeKeywords = parseTextList(payload[`${prefix}NegativeKeywords`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}PreferredTactics`)) {
+    policy.preferredTactics = parseTextList(payload[`${prefix}PreferredTactics`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}AdvancedPromptInstructions`)) {
+    policy.advancedPromptInstructions =
+      String(payload[`${prefix}AdvancedPromptInstructions`] ?? "").trim() || null;
+  }
+  if (lane === "graph") {
+    if (Object.prototype.hasOwnProperty.call(payload, "graphMinRssReviewScore")) {
+      policy.minRssReviewScore = parseOptionalNumber(payload.graphMinRssReviewScore);
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "graphMinWebsiteReviewScore")) {
+      policy.minWebsiteReviewScore = parseOptionalNumber(payload.graphMinWebsiteReviewScore);
+    }
+  } else if (Object.prototype.hasOwnProperty.call(payload, "recallMinPromotionScore")) {
+    policy.minPromotionScore = parseOptionalNumber(payload.recallMinPromotionScore);
+  }
+  return policy;
+}
+
+function buildYieldBenchmarkPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return {
+    domains: parseTextList(payload.benchmarkDomains),
+    titleKeywords: parseTextList(payload.benchmarkTitleKeywords),
+    tacticKeywords: parseTextList(payload.benchmarkTacticKeywords),
+  };
+}
+
+function buildPartialYieldBenchmarkPayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  if (!hasAnyYieldBenchmarkField(payload)) {
+    return undefined;
+  }
+  const result: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(payload, "benchmarkDomains")) {
+    result.domains = parseTextList(payload.benchmarkDomains);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "benchmarkTitleKeywords")) {
+    result.titleKeywords = parseTextList(payload.benchmarkTitleKeywords);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "benchmarkTacticKeywords")) {
+    result.tacticKeywords = parseTextList(payload.benchmarkTacticKeywords);
+  }
+  return result;
+}
+
+function hasAnyProfilePolicyField(
+  payload: Record<string, unknown>,
+  lane: "graph" | "recall"
+): boolean {
+  const fields =
+    lane === "graph"
+      ? [
+          "graphProviderTypes",
+          "graphPreferredDomains",
+          "graphBlockedDomains",
+          "graphPositiveKeywords",
+          "graphNegativeKeywords",
+          "graphPreferredTactics",
+          "graphMinRssReviewScore",
+          "graphMinWebsiteReviewScore",
+          "graphAdvancedPromptInstructions",
+        ]
+      : [
+          "recallProviderTypes",
+          "recallPreferredDomains",
+          "recallBlockedDomains",
+          "recallPositiveKeywords",
+          "recallNegativeKeywords",
+          "recallPreferredTactics",
+          "recallMinPromotionScore",
+          "recallAdvancedPromptInstructions",
+        ];
+  return fields.some((field) => Object.prototype.hasOwnProperty.call(payload, field));
+}
+
+function hasAnyYieldBenchmarkField(payload: Record<string, unknown>): boolean {
+  return ["benchmarkDomains", "benchmarkTitleKeywords", "benchmarkTacticKeywords"].some((field) =>
+    Object.prototype.hasOwnProperty.call(payload, field)
+  );
 }
 
 export function normalizeAuditEntityId(value: unknown): string | null {
@@ -146,6 +308,7 @@ export function buildDiscoveryMissionCreateApiPayload(
     maxSources: parseOptionalNumber(payload.maxSources),
     budgetCents: parseOptionalNumber(payload.budgetCents),
     priority: parseOptionalNumber(payload.priority) ?? 0,
+    profileId: String(payload.profileId ?? "").trim() || null,
     createdBy,
   };
 }
@@ -153,6 +316,7 @@ export function buildDiscoveryMissionCreateApiPayload(
 export function buildDiscoveryMissionUpdateApiPayload(
   payload: Record<string, unknown>
 ): Record<string, unknown> {
+  const hasProfileId = Object.prototype.hasOwnProperty.call(payload, "profileId");
   return {
     title: String(payload.title ?? "").trim() || undefined,
     description: String(payload.description ?? "").trim() || undefined,
@@ -166,6 +330,74 @@ export function buildDiscoveryMissionUpdateApiPayload(
     seedRegions: parseOptionalTextList(payload.seedRegions ?? payload.regions),
     targetProviderTypes: parseOptionalProviderTypes(payload.targetProviderTypes),
     interestGraph: parseOptionalJsonRecord(payload.interestGraph),
+    profileId: hasProfileId ? String(payload.profileId ?? "").trim() || null : undefined,
+  };
+}
+
+export function buildDiscoveryRecallMissionCreateApiPayload(
+  payload: Record<string, unknown>,
+  createdBy: string
+): Record<string, unknown> {
+  return {
+    title: String(payload.title ?? "").trim(),
+    description: String(payload.description ?? "").trim() || null,
+    missionKind: String(payload.missionKind ?? "").trim() || "manual",
+    seedDomains: parseTextList(payload.seedDomains),
+    seedUrls: parseTextList(payload.seedUrls),
+    seedQueries: parseTextList(payload.seedQueries),
+    targetProviderTypes: parseProviderTypes(payload.targetProviderTypes || "rss,website"),
+    scopeJson: parseOptionalJsonRecord(payload.scopeJson) ?? {},
+    maxCandidates: parseOptionalNumber(payload.maxCandidates) ?? 50,
+    profileId: String(payload.profileId ?? "").trim() || null,
+    createdBy,
+  };
+}
+
+export function buildDiscoveryRecallMissionUpdateApiPayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const hasProfileId = Object.prototype.hasOwnProperty.call(payload, "profileId");
+  return {
+    title: String(payload.title ?? "").trim() || undefined,
+    description: String(payload.description ?? "").trim() || undefined,
+    missionKind: String(payload.missionKind ?? "").trim() || undefined,
+    seedDomains: parseOptionalTextList(payload.seedDomains),
+    seedUrls: parseOptionalTextList(payload.seedUrls),
+    seedQueries: parseOptionalTextList(payload.seedQueries),
+    targetProviderTypes: parseOptionalProviderTypes(payload.targetProviderTypes),
+    scopeJson: parseOptionalJsonRecord(payload.scopeJson),
+    maxCandidates: parseOptionalNumber(payload.maxCandidates),
+    status: String(payload.status ?? "").trim() || undefined,
+    profileId: hasProfileId ? String(payload.profileId ?? "").trim() || null : undefined,
+  };
+}
+
+export function buildDiscoveryProfileCreateApiPayload(
+  payload: Record<string, unknown>,
+  createdBy: string
+): Record<string, unknown> {
+  return {
+    profileKey: String(payload.profileKey ?? "").trim(),
+    displayName: String(payload.displayName ?? "").trim(),
+    description: String(payload.description ?? "").trim() || null,
+    status: String(payload.status ?? "").trim() || "draft",
+    graphPolicyJson: buildProfilePolicyPayload(payload, "graph"),
+    recallPolicyJson: buildProfilePolicyPayload(payload, "recall"),
+    yieldBenchmarkJson: buildYieldBenchmarkPayload(payload),
+    createdBy,
+  };
+}
+
+export function buildDiscoveryProfileUpdateApiPayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    displayName: String(payload.displayName ?? "").trim() || undefined,
+    description: String(payload.description ?? "").trim() || undefined,
+    status: String(payload.status ?? "").trim() || undefined,
+    graphPolicyJson: buildPartialProfilePolicyPayload(payload, "graph"),
+    recallPolicyJson: buildPartialProfilePolicyPayload(payload, "recall"),
+    yieldBenchmarkJson: buildPartialYieldBenchmarkPayload(payload),
   };
 }
 
@@ -242,11 +474,38 @@ export function buildDiscoveryAuditPayload(
   payload: Record<string, unknown>,
   apiResult: Record<string, unknown> = {}
 ): Record<string, unknown> {
+  if (
+    intent === "create_profile" ||
+    intent === "update_profile" ||
+    intent === "archive_profile" ||
+    intent === "activate_profile"
+  ) {
+    return {
+      profileId: String(apiResult.profile_id ?? payload.profileId ?? "").trim() || null,
+      profileKey: String(apiResult.profile_key ?? payload.profileKey ?? "").trim() || null,
+      displayName:
+        String(apiResult.display_name ?? payload.displayName ?? "").trim() || null,
+      status:
+        intent === "archive_profile"
+          ? "archived"
+          : intent === "activate_profile"
+            ? "active"
+            : String(apiResult.status ?? payload.status ?? "").trim() || null,
+      version: apiResult.version ?? null,
+    };
+  }
+  if (intent === "delete_profile") {
+    return {
+      profileId: String(payload.profileId ?? "").trim() || null,
+      deleted: apiResult.deleted === true,
+    };
+  }
   if (intent === "create_mission") {
     return {
       title: String(payload.title ?? "").trim(),
       missionId: apiResult.mission_id ?? null,
       seedTopics: parseTextList(payload.seedTopics ?? payload.topics),
+      profileId: String(payload.profileId ?? "").trim() || null,
     };
   }
   if (
@@ -264,6 +523,7 @@ export function buildDiscoveryAuditPayload(
             : String(payload.status ?? "").trim() || null,
       priority: parseOptionalNumber(payload.priority),
       budgetCents: parseOptionalNumber(payload.budgetCents),
+      profileId: String(payload.profileId ?? "").trim() || null,
     };
   }
   if (intent === "delete_mission") {
@@ -303,6 +563,18 @@ export function buildDiscoveryAuditPayload(
             ? "active"
             : String(payload.status ?? "").trim() || null,
       generationBackend: String(payload.generationBackend ?? "").trim() || null,
+    };
+  }
+  if (intent === "create_recall_mission" || intent === "update_recall_mission") {
+    return {
+      recallMissionId:
+        String(apiResult.recall_mission_id ?? payload.recallMissionId ?? "").trim() || null,
+      title: String(payload.title ?? "").trim() || null,
+      missionKind: String(payload.missionKind ?? "").trim() || null,
+      status: String(apiResult.status ?? payload.status ?? "").trim() || null,
+      profileId: String(payload.profileId ?? "").trim() || null,
+      seedDomains: parseTextList(payload.seedDomains),
+      seedQueries: parseTextList(payload.seedQueries),
     };
   }
   if (intent === "delete_class") {
@@ -423,6 +695,119 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const intent = resolveDiscoveryIntent(payload);
+
+    if (intent === "create_profile") {
+      const result = await callDiscoveryApi<Record<string, unknown>>("/maintenance/discovery/profiles", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(buildDiscoveryProfileCreateApiPayload(payload, session.userId)),
+      });
+      await writeAuditLog(
+        session.userId,
+        "discovery_profile_created",
+        "discovery_policy_profile",
+        String(result.profile_id ?? "") || null,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Discovery profile created",
+        result,
+        201
+      );
+    }
+
+    if (intent === "update_profile") {
+      const profileId = String(payload.profileId ?? "").trim();
+      if (!profileId) {
+        throw new Error("Profile ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/profiles/${profileId}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(buildDiscoveryProfileUpdateApiPayload(payload)),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_profile_updated",
+        "discovery_policy_profile",
+        profileId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Discovery profile updated",
+        result
+      );
+    }
+
+    if (intent === "archive_profile" || intent === "activate_profile") {
+      const profileId = String(payload.profileId ?? "").trim();
+      if (!profileId) {
+        throw new Error("Profile ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/profiles/${profileId}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            status: intent === "archive_profile" ? "archived" : "active",
+          }),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        intent === "archive_profile"
+          ? "discovery_profile_archived"
+          : "discovery_profile_activated",
+        "discovery_policy_profile",
+        profileId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        intent === "archive_profile" ? "Discovery profile archived" : "Discovery profile activated",
+        result
+      );
+    }
+
+    if (intent === "delete_profile") {
+      const profileId = String(payload.profileId ?? "").trim();
+      if (!profileId) {
+        throw new Error("Profile ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/profiles/${profileId}`,
+        {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_profile_deleted",
+        "discovery_policy_profile",
+        profileId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        resolveAdminAppPath(request, "/discovery?tab=profiles"),
+        "Discovery profile deleted",
+        result
+      );
+    }
 
     if (intent === "create_mission") {
       const result = await callDiscoveryApi<{ mission_id: string }>("/maintenance/discovery/missions", {
@@ -705,6 +1090,61 @@ export const POST: APIRoute = async ({ request }) => {
         browserRequest,
         resolveAdminAppPath(request, "/discovery?tab=classes"),
         "Hypothesis class deleted",
+        result
+      );
+    }
+
+    if (intent === "create_recall_mission") {
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        "/maintenance/discovery/recall-missions",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(buildDiscoveryRecallMissionCreateApiPayload(payload, session.userId)),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_recall_mission_created",
+        "discovery_recall_mission",
+        String(result.recall_mission_id ?? "") || null,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Recall mission created",
+        result,
+        201
+      );
+    }
+
+    if (intent === "update_recall_mission") {
+      const recallMissionId = String(payload.recallMissionId ?? "").trim();
+      if (!recallMissionId) {
+        throw new Error("Recall mission ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/recall-missions/${recallMissionId}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(buildDiscoveryRecallMissionUpdateApiPayload(payload)),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_recall_mission_updated",
+        "discovery_recall_mission",
+        recallMissionId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Recall mission updated",
         result
       );
     }

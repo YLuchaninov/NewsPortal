@@ -107,6 +107,7 @@
 - `infra/scripts/test-discovery-pipeline-nonregression.mjs` is the canonical safety proof for discovery vs pre-existing downstream corpus stability.
 - `infra/scripts/test-live-discovery-yield-proof.mjs` is the canonical bounded `3`-run aggregate yield proof.
 - `Example B` and `Example C` remain required runtime proof cohorts today, but they are validation packs rather than architecture; synthetic or future case packs may participate in calibration without becoming mandatory local DB preconditions.
+- `pnpm test:discovery:examples:compose` is the canonical profile-backed single-run entrypoint and may upsert persistent reusable `discovery_policy_profiles` for stable Example B/C proof keys.
 
 ## Persistent Artifacts That Must Be Tracked
 
@@ -118,6 +119,7 @@
 - webhook endpoints;
 - seeded messages или rows;
 - source channels, созданные proof harness-ом;
+- `discovery_policy_profiles`, materialized or updated by proof harnesses;
 - notification channel rows;
 - external registrations;
 - imported fixture datasets.

@@ -162,6 +162,14 @@ function buildPolicySignals(caseDefinition, laneType, context) {
   };
 }
 
+function resolveSupportedWebsiteKinds(caseDefinition, laneType, defaults) {
+  const policy = asObject(caseDefinition[`${laneType}Policy`]);
+  const policyKinds = normalizeKeywordList(policy.supportedWebsiteKinds);
+  return policyKinds.length > 0
+    ? policyKinds
+    : normalizeKeywordList(defaults.supportedWebsiteKinds);
+}
+
 function classifyResidual(context, defaults) {
   if (
     context.challengeKind
@@ -266,6 +274,7 @@ export function scoreRecallCandidate(candidate, caseDefinition) {
 export function classifyGraphCandidate(candidate, caseDefinition, defaults) {
   const { reviewScore, signals, context } = scoreGraphCandidate(candidate, caseDefinition, defaults);
   const policy = asObject(caseDefinition.graphPolicy);
+  const supportedWebsiteKinds = resolveSupportedWebsiteKinds(caseDefinition, "graph", defaults);
   const isValid = candidate.is_valid === true;
 
   if (!asArray(defaults.supportedProviderTypes).includes(context.providerType)) {
@@ -302,7 +311,7 @@ export function classifyGraphCandidate(candidate, caseDefinition, defaults) {
   if (
     context.providerType === "website"
     && context.classificationKind
-    && !asArray(defaults.supportedWebsiteKinds).includes(context.classificationKind)
+    && !supportedWebsiteKinds.includes(context.classificationKind)
   ) {
     return {
       decision: "rejected",
@@ -348,6 +357,7 @@ export function classifyGraphCandidate(candidate, caseDefinition, defaults) {
 export function classifyRecallCandidate(candidate, caseDefinition, defaults) {
   const { reviewScore, signals, context } = scoreRecallCandidate(candidate, caseDefinition);
   const policy = asObject(caseDefinition.recallPolicy);
+  const supportedWebsiteKinds = resolveSupportedWebsiteKinds(caseDefinition, "recall", defaults);
 
   if (!asArray(defaults.supportedProviderTypes).includes(context.providerType)) {
     return {
@@ -373,7 +383,7 @@ export function classifyRecallCandidate(candidate, caseDefinition, defaults) {
   if (
     context.providerType === "website"
     && context.classificationKind
-    && !asArray(defaults.supportedWebsiteKinds).includes(context.classificationKind)
+    && !supportedWebsiteKinds.includes(context.classificationKind)
   ) {
     return {
       decision: "rejected",

@@ -17,11 +17,22 @@ type WebResourceListQuery = PaginationQuery & {
   resourceKind?: string;
 };
 type DiscoveryClassListQuery = PaginationQuery & { status?: string };
+type DiscoveryProfileListQuery = PaginationQuery & { status?: string };
 type DiscoveryMissionListQuery = PaginationQuery & { status?: string };
+type DiscoveryRecallMissionListQuery = PaginationQuery & {
+  status?: string;
+  missionKind?: string;
+};
 type DiscoveryCandidateListQuery = PaginationQuery & {
   missionId?: string;
   status?: string;
   providerType?: string;
+};
+type DiscoveryRecallCandidateListQuery = PaginationQuery & {
+  recallMissionId?: string;
+  status?: string;
+  providerType?: string;
+  canonicalDomain?: string;
 };
 type DiscoveryHypothesisListQuery = PaginationQuery & {
   missionId?: string;
@@ -235,6 +246,20 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         pageSize: params?.pageSize,
       }),
     getDiscoverySummary: <T>() => getJson<T>("/maintenance/discovery/summary"),
+    listDiscoveryProfiles: <T>(params?: DiscoveryProfileListQuery) =>
+      getPaginated<T>("/maintenance/discovery/profiles", {
+        status: params?.status,
+        page: params?.page,
+        pageSize: params?.pageSize,
+      }),
+    createDiscoveryProfile: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/profiles", payload),
+    getDiscoveryProfile: <T>(profileId: string) =>
+      getJson<T>(`/maintenance/discovery/profiles/${profileId}`),
+    updateDiscoveryProfile: <T>(profileId: string, payload: unknown) =>
+      patchJson<T>(`/maintenance/discovery/profiles/${profileId}`, payload),
+    deleteDiscoveryProfile: <T>(profileId: string) =>
+      deleteJson<T>(`/maintenance/discovery/profiles/${profileId}`),
     listDiscoveryClasses: <T>(params?: DiscoveryClassListQuery) =>
       getPaginated<T>("/maintenance/discovery/classes", {
         status: params?.status,
@@ -259,6 +284,21 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       getJson<T>(`/maintenance/discovery/missions/${missionId}`),
     updateDiscoveryMission: <T>(missionId: string, payload: unknown) =>
       patchJson<T>(`/maintenance/discovery/missions/${missionId}`, payload),
+    listDiscoveryRecallMissions: <T>(params?: DiscoveryRecallMissionListQuery) =>
+      getPaginated<T>("/maintenance/discovery/recall-missions", {
+        status: params?.status,
+        missionKind: params?.missionKind,
+        page: params?.page,
+        pageSize: params?.pageSize,
+      }),
+    createDiscoveryRecallMission: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/recall-missions", payload),
+    getDiscoveryRecallMission: <T>(recallMissionId: string) =>
+      getJson<T>(`/maintenance/discovery/recall-missions/${recallMissionId}`),
+    updateDiscoveryRecallMission: <T>(recallMissionId: string, payload: unknown) =>
+      patchJson<T>(`/maintenance/discovery/recall-missions/${recallMissionId}`, payload),
+    requestDiscoveryRecallMissionAcquire: <T>(recallMissionId: string) =>
+      postJson<T>(`/maintenance/discovery/recall-missions/${recallMissionId}/acquire`, {}),
     compileDiscoveryMissionGraph: <T>(missionId: string, payload?: unknown) =>
       postJson<T>(`/maintenance/discovery/missions/${missionId}/compile-graph`, payload ?? {}),
     runDiscoveryMission: <T>(missionId: string, payload?: unknown) =>
@@ -275,6 +315,26 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       getJson<T>(`/maintenance/discovery/candidates/${candidateId}`),
     updateDiscoveryCandidate: <T>(candidateId: string, payload: unknown) =>
       patchJson<T>(`/maintenance/discovery/candidates/${candidateId}`, payload),
+    listDiscoveryRecallCandidates: <T>(params?: DiscoveryRecallCandidateListQuery) =>
+      getPaginated<T>("/maintenance/discovery/recall-candidates", {
+        recallMissionId: params?.recallMissionId,
+        status: params?.status,
+        providerType: params?.providerType,
+        canonicalDomain: params?.canonicalDomain,
+        page: params?.page,
+        pageSize: params?.pageSize,
+      }),
+    createDiscoveryRecallCandidate: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/recall-candidates", payload),
+    getDiscoveryRecallCandidate: <T>(recallCandidateId: string) =>
+      getJson<T>(`/maintenance/discovery/recall-candidates/${recallCandidateId}`),
+    updateDiscoveryRecallCandidate: <T>(recallCandidateId: string, payload: unknown) =>
+      patchJson<T>(`/maintenance/discovery/recall-candidates/${recallCandidateId}`, payload),
+    promoteDiscoveryRecallCandidate: <T>(recallCandidateId: string, payload?: unknown) =>
+      postJson<T>(
+        `/maintenance/discovery/recall-candidates/${recallCandidateId}/promote`,
+        payload ?? {}
+      ),
     listDiscoveryHypotheses: <T>(params?: DiscoveryHypothesisListQuery) =>
       getPaginated<T>("/maintenance/discovery/hypotheses", {
         missionId: params?.missionId,

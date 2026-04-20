@@ -14,6 +14,12 @@ import {
   DISCOVERY_LIVE_DEFAULTS,
 } from "./lib/discovery-live-example-cases.mjs";
 import {
+  buildDiscoveryProfilePayload,
+  buildManualReplaySettings,
+  buildProfileBackedGraphMissionPayload,
+  buildProfileBackedRecallMissionPayload,
+} from "./lib/discovery-live-proof-profiles.mjs";
+import {
   classifyGraphCandidate,
   classifyRecallCandidate,
   determineCaseVerdicts,
@@ -197,16 +203,42 @@ async function sendRequest(url, { method = "GET", headers = {}, body = "", timeo
 }
 
 function parseJsonResponse(text, responseMeta) {
-  const json = text ? JSON.parse(text) : null;
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch (error) {
+      if (responseMeta.status >= 200 && responseMeta.status < 300) {
+        throw error;
+      }
+    }
+  }
   if (responseMeta.status < 200 || responseMeta.status >= 300) {
+    const detailMessage = Array.isArray(json?.detail)
+      ? json.detail
+          .map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+            if (item && typeof item === "object") {
+              const location = Array.isArray(item.loc) ? item.loc.join(".") : "detail";
+              const message = typeof item.msg === "string" ? item.msg : JSON.stringify(item);
+              return `${location}: ${message}`;
+            }
+            return String(item);
+          })
+          .join("; ")
+      : null;
     const message =
       typeof json?.error === "string"
         ? json.error
         : typeof json?.detail === "string"
           ? json.detail
-          : Array.isArray(json?.detail)
-            ? json.detail.join("; ")
-            : `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
+          : detailMessage
+            ? detailMessage
+            : text && text.trim()
+              ? `${text.trim()} (HTTP ${responseMeta.status} ${responseMeta.statusText})`
+              : `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
     throw new Error(message);
   }
   return json;
@@ -332,7 +364,8 @@ function assertComposeDiscoveryEnv(serviceName) {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is running.");
-  runCommand("docker", [...composeArgs, "up", "-d", "--force-recreate", ...STACK_SERVICES]);
+  runCommand("docker", [...composeArgs, "down", "--remove-orphans"]);
+  runCommand("docker", [...composeArgs, "up", "--build", "-d", "--force-recreate", ...STACK_SERVICES]);
   await Promise.all([
     waitForHttpHealth("api", `${API_BASE_URL}/health`),
     waitForHttpHealth("admin", `${ADMIN_BASE_URL}/api/health`),
@@ -535,37 +568,48 @@ function evaluateCasePreconditions(caseDefinition, preconditionState) {
   };
 }
 
-function buildGraphMissionPayload(caseDefinition, runLabel) {
-  return {
-    title: `${caseDefinition.graphMission.title} ${runLabel}`,
-    description: caseDefinition.graphMission.description,
-    sourceKind: "manual",
-    seedTopics: [...caseDefinition.graphMission.seedTopics],
-    seedLanguages: [...caseDefinition.graphMission.seedLanguages],
-    seedRegions: [...caseDefinition.graphMission.seedRegions],
-    targetProviderTypes: [...caseDefinition.graphMission.targetProviderTypes],
-    maxHypotheses: caseDefinition.graphMission.maxHypotheses,
-    maxSources: caseDefinition.graphMission.maxSources,
-    budgetCents: caseDefinition.graphMission.budgetCents,
-    priority: caseDefinition.graphMission.priority,
-    createdBy: "infra:test-live-discovery-examples",
-  };
+async function listDiscoveryProfiles() {
+  const payload = await fetchJson(
+    `${API_BASE_URL}/maintenance/discovery/profiles?page=1&pageSize=100`,
+    { timeoutMs: 15000 }
+  );
+  return asArray(payload.items);
 }
 
-function buildRecallMissionPayload(caseDefinition, runLabel) {
-  return {
-    title: `${caseDefinition.recallMission.title} ${runLabel}`,
-    description: caseDefinition.recallMission.description,
-    missionKind: caseDefinition.recallMission.missionKind,
-    seedQueries: [...caseDefinition.recallMission.seedQueries],
-    targetProviderTypes: [...caseDefinition.recallMission.targetProviderTypes],
-    scopeJson: {
-      source: "infra:test-live-discovery-examples",
-      caseKey: caseDefinition.key,
-    },
-    maxCandidates: caseDefinition.recallMission.maxCandidates,
-    createdBy: "infra:test-live-discovery-examples",
-  };
+async function upsertDiscoveryProfile(caseDefinition) {
+  const profilePayload = buildDiscoveryProfilePayload(caseDefinition);
+  const profiles = await listDiscoveryProfiles();
+  const existing = profiles.find(
+    (item) => normalizeText(item.profile_key) === normalizeText(profilePayload.profileKey)
+  );
+  if (!existing) {
+    return postJson(`${API_BASE_URL}/maintenance/discovery/profiles`, profilePayload);
+  }
+  return patchJson(
+    `${API_BASE_URL}/maintenance/discovery/profiles/${encodeURIComponent(String(existing.profile_id))}`,
+    {
+      displayName: profilePayload.displayName,
+      description: profilePayload.description,
+      status: "active",
+      graphPolicyJson: profilePayload.graphPolicyJson,
+      recallPolicyJson: profilePayload.recallPolicyJson,
+      yieldBenchmarkJson: profilePayload.yieldBenchmarkJson,
+    }
+  );
+}
+
+async function getDiscoveryMission(missionId) {
+  return fetchJson(
+    `${API_BASE_URL}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`,
+    { timeoutMs: 15000 }
+  );
+}
+
+async function getDiscoveryRecallMission(recallMissionId) {
+  return fetchJson(
+    `${API_BASE_URL}/maintenance/discovery/recall-missions/${encodeURIComponent(recallMissionId)}`,
+    { timeoutMs: 15000 }
+  );
 }
 
 async function listMissionCandidates(missionId) {
@@ -1088,9 +1132,10 @@ async function waitForChannelEvidence(pool, channelId, startedAtIso, interestNam
   );
 }
 
-async function runGraphLane(pool, caseDefinition, startedAtIso) {
+async function runGraphLane(pool, caseDefinition, startedAtIso, materializedProfile) {
   const lane = {
     mission: null,
+    materializedProfile: materializedProfile ?? null,
     preparedClasses: [],
     isolatedClasses: [],
     restoredIsolatedClasses: [],
@@ -1110,7 +1155,11 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
 
     const mission = await postJson(
       `${API_BASE_URL}/maintenance/discovery/missions`,
-      buildGraphMissionPayload(caseDefinition, startedAtIso)
+      buildProfileBackedGraphMissionPayload(
+        caseDefinition,
+        startedAtIso,
+        normalizeOptionalText(materializedProfile?.profile_id)
+      )
     );
     lane.mission = mission;
     const missionId = String(mission?.mission_id ?? "");
@@ -1246,6 +1295,8 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
       });
     }
 
+    lane.mission = await getDiscoveryMission(missionId);
+
     return lane;
   } finally {
     lane.restoredIsolatedClasses = await restoreIsolatedGraphClasses(lane.isolatedClasses);
@@ -1253,9 +1304,10 @@ async function runGraphLane(pool, caseDefinition, startedAtIso) {
   }
 }
 
-async function runRecallLane(caseDefinition, startedAtIso) {
+async function runRecallLane(caseDefinition, startedAtIso, materializedProfile) {
   const lane = {
     mission: null,
+    materializedProfile: materializedProfile ?? null,
     acquisition: null,
     candidates: [],
     promotedChannelIds: [],
@@ -1264,15 +1316,21 @@ async function runRecallLane(caseDefinition, startedAtIso) {
 
   const recallMission = await postJson(
     `${API_BASE_URL}/maintenance/discovery/recall-missions`,
-    buildRecallMissionPayload(caseDefinition, startedAtIso)
+    buildProfileBackedRecallMissionPayload(
+      caseDefinition,
+      startedAtIso,
+      normalizeOptionalText(materializedProfile?.profile_id)
+    )
   );
   lane.mission = recallMission;
   const recallMissionId = String(recallMission?.recall_mission_id ?? "");
 
   lane.acquisition = await postJson(
     `${API_BASE_URL}/maintenance/discovery/recall-missions/${encodeURIComponent(recallMissionId)}/acquire`,
-    {}
+    {},
+    { timeoutMs: DISCOVERY_LIVE_DEFAULTS.recallAcquireTimeoutMs }
   );
+  lane.mission = await getDiscoveryRecallMission(recallMissionId);
 
   const rawCandidates = await waitFor(
     `recall candidates for ${caseDefinition.key}`,
@@ -1469,8 +1527,9 @@ function buildCoverageMatrix(caseDefinition, downstreamRows, graphLane, recallLa
 
 async function runCase(pool, caseDefinition, startedAtIso) {
   log(`Running live discovery case ${caseDefinition.shortLabel}.`);
-  const graphLane = await runGraphLane(pool, caseDefinition, startedAtIso);
-  const recallLane = await runRecallLane(caseDefinition, startedAtIso);
+  const materializedProfile = await upsertDiscoveryProfile(caseDefinition);
+  const graphLane = await runGraphLane(pool, caseDefinition, startedAtIso, materializedProfile);
+  const recallLane = await runRecallLane(caseDefinition, startedAtIso, materializedProfile);
   const channelIds = [
     ...new Set([...graphLane.approvedChannelIds, ...recallLane.promotedChannelIds].filter(Boolean)),
   ];
@@ -1522,6 +1581,12 @@ async function runCase(pool, caseDefinition, startedAtIso) {
     key: caseDefinition.key,
     label: caseDefinition.label,
     packClass: caseDefinition.packClass || "unknown",
+    materializedProfile,
+    manualReplaySettings: buildManualReplaySettings(caseDefinition, {
+      materializedProfile,
+      graphMission: graphLane.mission,
+      recallMission: recallLane.mission,
+    }),
     graphLane,
     recallLane,
     triggerPolls,
@@ -1571,6 +1636,8 @@ function formatCaseMarkdown(caseRun) {
     `Yield verdict: \`${caseRun.yieldVerdict}\``,
     `Pack class: \`${caseRun.packClass}\``,
     `Root cause: \`${caseRun.rootCauseClassification}\``,
+    ``,
+    `Manual replay profile: \`${caseRun.manualReplaySettings?.profile?.profileKey || "n/a"}\` · ${caseRun.manualReplaySettings?.profile?.displayName || "n/a"} · applied graph v${caseRun.manualReplaySettings?.graphMission?.appliedProfileVersion ?? "—"} · applied recall v${caseRun.manualReplaySettings?.recallMission?.appliedProfileVersion ?? "—"}`,
     ``,
     `Approved/promoted channels: ${approvedOrPromoted.length}`,
     `Yield summary: reviewed=${caseRun.yieldSummary.candidatesReviewed}, benchmark_like=${caseRun.yieldSummary.benchmarkLikeCandidatesFound}, approved_or_promoted=${caseRun.yieldSummary.candidatesApprovedOrPromoted}, onboarded=${caseRun.yieldSummary.channelsOnboarded}, downstream=${caseRun.yieldSummary.channelsWithDownstreamEvidence}, covered_interests=${caseRun.yieldSummary.interestsCoveredDownstream}`,
@@ -1627,6 +1694,18 @@ function formatCaseMarkdown(caseRun) {
     ...Object.entries(caseRun.yieldSummary.benchmarkLikeRejectedReasons).map(
       ([key, count]) => `- ${key}: ${count}`
     ),
+    ``,
+    `Manual replay settings`,
+    ``,
+    `- profile key: ${caseRun.manualReplaySettings?.profile?.profileKey || "n/a"}`,
+    `- profile display name: ${caseRun.manualReplaySettings?.profile?.displayName || "n/a"}`,
+    `- graph preferred domains: ${(caseRun.manualReplaySettings?.graphPolicy?.preferredDomains ?? []).join(", ") || "—"}`,
+    `- graph blocked domains: ${(caseRun.manualReplaySettings?.graphPolicy?.blockedDomains ?? []).join(", ") || "—"}`,
+    `- recall preferred domains: ${(caseRun.manualReplaySettings?.recallPolicy?.preferredDomains ?? []).join(", ") || "—"}`,
+    `- recall blocked domains: ${(caseRun.manualReplaySettings?.recallPolicy?.blockedDomains ?? []).join(", ") || "—"}`,
+    `- benchmark domains: ${(caseRun.manualReplaySettings?.yieldBenchmark?.domains ?? []).join(", ") || "—"}`,
+    `- graph seed topics: ${(caseRun.manualReplaySettings?.graphMission?.seedTopics ?? []).join(" | ") || "—"}`,
+    `- recall seed queries: ${(caseRun.manualReplaySettings?.recallMission?.seedQueries ?? []).join(" | ") || "—"}`,
     ``,
   ].join("\n");
 }

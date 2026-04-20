@@ -8,6 +8,7 @@ import { resolveAdminSession } from "../lib/server/auth";
 import {
   resolveDiscoveryChannelMetrics,
   resolveDiscoveryOperatorSummary,
+  resolveDiscoveryPolicyExplainability,
   resolveDiscoveryRecallCandidateState,
   resolveDiscoverySourceQuality,
 } from "../lib/server/operator-surfaces";
@@ -172,6 +173,7 @@ function resolveMissionScopedHref(missionId: string): string {
 }
 
 const requestedMissionPage = Number.parseInt(Astro.url.searchParams.get("missionPage") ?? "1", 10);
+const requestedProfilePage = Number.parseInt(Astro.url.searchParams.get("profilePage") ?? "1", 10);
 const requestedClassPage = Number.parseInt(Astro.url.searchParams.get("classPage") ?? "1", 10);
 const requestedCandidatePage = Number.parseInt(Astro.url.searchParams.get("candidatePage") ?? "1", 10);
 const requestedHypothesisPage = Number.parseInt(Astro.url.searchParams.get("hypothesisPage") ?? "1", 10);
@@ -180,6 +182,7 @@ const requestedFeedbackPage = Number.parseInt(Astro.url.searchParams.get("feedba
 const requestedRecallMissionPage = Number.parseInt(Astro.url.searchParams.get("recallMissionPage") ?? "1", 10);
 const requestedRecallCandidatePage = Number.parseInt(Astro.url.searchParams.get("recallCandidatePage") ?? "1", 10);
 const missionPage = Number.isFinite(requestedMissionPage) && requestedMissionPage > 0 ? requestedMissionPage : 1;
+const profilePage = Number.isFinite(requestedProfilePage) && requestedProfilePage > 0 ? requestedProfilePage : 1;
 const classPage = Number.isFinite(requestedClassPage) && requestedClassPage > 0 ? requestedClassPage : 1;
 const candidatePage = Number.isFinite(requestedCandidatePage) && requestedCandidatePage > 0 ? requestedCandidatePage : 1;
 const hypothesisPage = Number.isFinite(requestedHypothesisPage) && requestedHypothesisPage > 0 ? requestedHypothesisPage : 1;
@@ -196,6 +199,7 @@ const recallCandidatePage =
 
 const summary = asRecord(await sdk.getDiscoverySummary<R>());
 const costs = asRecord(await sdk.getDiscoveryCostSummary<R>());
+const profiles = asPaged(await sdk.listDiscoveryProfiles<R>({ page: profilePage, pageSize: 8 }));
 const missions = asPaged(await sdk.listDiscoveryMissions<R>({ page: missionPage, pageSize: 10 }));
 const classes = asPaged(await sdk.listDiscoveryClasses<R>({ page: classPage, pageSize: 10 }));
 const candidates = asPaged(await sdk.listDiscoveryCandidates<R>({ page: candidatePage, pageSize: 12 }));
@@ -216,6 +220,7 @@ const recallCandidates = asPaged(
 );
 
 const missionItems = missions.items.map((item) => asRecord(item));
+const profileItems = profiles.items.map((item) => asRecord(item));
 const classItems = classes.items.map((item) => asRecord(item));
 const candidateItems = candidates.items.map((item) => asRecord(item));
 const hypothesisItems = hypotheses.items.map((item) => asRecord(item));
@@ -224,6 +229,9 @@ const feedbackItems = feedback.items.map((item) => asRecord(item));
 const recallMissionItems = recallMissions.items.map((item) => asRecord(item));
 const recallCandidateItems = recallCandidates.items.map((item) => asRecord(item));
 const operatorSummary = resolveDiscoveryOperatorSummary(summary);
+const attachableProfiles = profileItems.filter(
+  (item) => String(item.status ?? "") === "active"
+);
 const selectedMissionIdRaw = String(Astro.url.searchParams.get("portfolioMissionId") ?? "").trim();
 const selectedMissionId =
   missionItems.find((item) => String(item.mission_id ?? "") === selectedMissionIdRaw) != null
@@ -255,6 +263,7 @@ const costItems = asArray(costs.items);
 
 const tabs = [
   { key: "dashboard", label: "Dashboard" },
+  { key: "profiles", label: "Profiles" },
   { key: "missions", label: "Missions" },
   { key: "recall", label: "Recall" },
   { key: "classes", label: "Classes" },
@@ -501,6 +510,330 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
       </div>
     )}
 
+    {tab === "profiles" && (
+      <div class="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold">Create reusable profile</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Profiles own structured discovery tuning for graph and recall lanes. Missions still own seeds, budget, and run state.
+          </p>
+          <form method="post" action={bffPath} class="mt-4 grid gap-3">
+            <input type="hidden" name="intent" value="create_profile" />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Profile key</span>
+                <input name="profileKey" required placeholder="editorial_news_default" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Display name</span>
+                <input name="displayName" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Description</span>
+              <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Status</span>
+              <select name="status" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                {["draft", "active", "archived"].map((option) => (
+                  <option value={option} selected={option === "draft"}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <div class="grid gap-3 lg:grid-cols-2">
+              <div class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+                <div>
+                  <h3 class="text-sm font-semibold">Graph policy</h3>
+                  <p class="mt-1 text-xs text-muted-foreground">Used during graph mission review and explainability.</p>
+                </div>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Provider types</span>
+                  <input name="graphProviderTypes" value="rss,website" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Min RSS review score</span>
+                    <input name="graphMinRssReviewScore" type="number" min="0" max="1" step="0.01" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Min website review score</span>
+                    <input name="graphMinWebsiteReviewScore" type="number" min="0" max="1" step="0.01" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                </div>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Preferred domains</span>
+                  <textarea name="graphPreferredDomains" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Blocked domains</span>
+                  <textarea name="graphBlockedDomains" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Positive keywords</span>
+                  <textarea name="graphPositiveKeywords" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Negative keywords</span>
+                  <textarea name="graphNegativeKeywords" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Preferred tactics</span>
+                  <textarea name="graphPreferredTactics" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <details class="rounded-xl border border-dashed border-border px-3 py-2">
+                  <summary class="cursor-pointer text-sm font-medium">Expert-mode prompt override</summary>
+                  <label class="mt-3 grid gap-1.5">
+                    <span class="text-xs font-medium">Graph prompt instructions</span>
+                    <textarea name="graphAdvancedPromptInstructions" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                  </label>
+                </details>
+              </div>
+              <div class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+                <div>
+                  <h3 class="text-sm font-semibold">Recall policy</h3>
+                  <p class="mt-1 text-xs text-muted-foreground">Used during neutral recall shortlist/promotion review.</p>
+                </div>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Provider types</span>
+                  <input name="recallProviderTypes" value="rss,website" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Min promotion score</span>
+                  <input name="recallMinPromotionScore" type="number" min="0" max="1" step="0.01" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Preferred domains</span>
+                  <textarea name="recallPreferredDomains" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Blocked domains</span>
+                  <textarea name="recallBlockedDomains" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Positive keywords</span>
+                  <textarea name="recallPositiveKeywords" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Negative keywords</span>
+                  <textarea name="recallNegativeKeywords" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Preferred tactics</span>
+                  <textarea name="recallPreferredTactics" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <details class="rounded-xl border border-dashed border-border px-3 py-2">
+                  <summary class="cursor-pointer text-sm font-medium">Expert-mode prompt override</summary>
+                  <label class="mt-3 grid gap-1.5">
+                    <span class="text-xs font-medium">Recall prompt instructions</span>
+                    <textarea name="recallAdvancedPromptInstructions" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                  </label>
+                </details>
+              </div>
+            </div>
+            <div class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+              <div>
+                <h3 class="text-sm font-semibold">Yield benchmark</h3>
+                <p class="mt-1 text-xs text-muted-foreground">Used only for operator tuning and explainability, not as downstream truth input.</p>
+              </div>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Benchmark domains</span>
+                  <textarea name="benchmarkDomains" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Title keywords</span>
+                  <textarea name="benchmarkTitleKeywords" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Tactic keywords</span>
+                  <textarea name="benchmarkTacticKeywords" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+              </div>
+            </div>
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Create profile
+            </button>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div class="border-b border-border px-5 py-4">
+            <h2 class="text-base font-semibold">Profiles</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              {profiles.total} profile{profiles.total === 1 ? "" : "s"} total · {String(operatorSummary.activeProfileCount)} active
+            </p>
+          </div>
+          <div class="divide-y divide-border">
+            {profileItems.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery profiles yet.</p>
+            ) : profileItems.map((profile) => {
+              const profileId = String(profile.profile_id ?? "");
+              const profileStatus = String(profile.status ?? "draft");
+              const latestMissionTitles = missionItems
+                .filter((item) => String(item.profile_id ?? "") === profileId)
+                .slice(0, 2)
+                .map((item) => String(item.title ?? item.mission_id ?? "Mission"));
+              const latestRecallTitles = recallMissionItems
+                .filter((item) => String(item.profile_id ?? "") === profileId)
+                .slice(0, 2)
+                .map((item) => String(item.title ?? item.recall_mission_id ?? "Recall mission"));
+              const rejectedDomains = candidateItems
+                .filter(
+                  (item) =>
+                    String(item.profile_id ?? "") === profileId &&
+                    String(item.status ?? "") === "rejected"
+                )
+                .map((item) => String(item.canonical_domain ?? item.url ?? "—"));
+              const reasonBuckets = candidateItems
+                .filter((item) => String(item.profile_id ?? "") === profileId)
+                .map((item) =>
+                  resolveDiscoveryPolicyExplainability(item, "graph").reasonBucket ?? "—"
+                );
+              const isArchived = profileStatus === "archived";
+              return (
+                <div class="px-5 py-4">
+                  <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div class="space-y-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-sm font-semibold">{String(profile.display_name ?? profile.profile_key ?? "Profile")}</h3>
+                        <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {String(profile.profile_key ?? "—")}
+                        </span>
+                        <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {profileStatus}
+                        </span>
+                        <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          v{String(profile.version ?? 1)}
+                        </span>
+                      </div>
+                      <p class="text-sm text-muted-foreground">{String(profile.description ?? "No description")}</p>
+                      <p class="text-xs text-muted-foreground">
+                        Lane coverage: {String(profile.mission_count ?? 0)} graph mission{String(profile.mission_count ?? 0) === "1" ? "" : "s"} · {String(profile.recall_mission_count ?? 0)} recall mission{String(profile.recall_mission_count ?? 0) === "1" ? "" : "s"}
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <AdminConfirmAction
+                        action={bffPath}
+                        title={isArchived ? "Activate profile" : "Archive profile"}
+                        description={isArchived
+                          ? "Activating the profile makes it attachable to new discovery missions and recall missions."
+                          : "Archiving keeps the profile readable historically but prevents new mission attachment."}
+                        triggerLabel={isArchived ? "Activate" : "Archive"}
+                        confirmLabel={isArchived ? "Activate profile" : "Archive profile"}
+                        fields={[
+                          { name: "intent", value: isArchived ? "activate_profile" : "archive_profile" },
+                          { name: "profileId", value: profileId },
+                          { name: "redirectTo", value: currentPath },
+                        ]}
+                        triggerClassName={isArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
+                        confirmClassName={isArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
+                        client:load
+                      />
+                      <AdminConfirmAction
+                        action={bffPath}
+                        title="Delete profile"
+                        description="Delete permanently only when the profile is not attached anywhere. Attached profiles must be archived instead."
+                        triggerLabel="Delete"
+                        confirmLabel="Delete profile"
+                        fields={[
+                          { name: "intent", value: "delete_profile" },
+                          { name: "profileId", value: profileId },
+                          { name: "redirectTo", value: currentPath },
+                        ]}
+                        triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                        client:load
+                      />
+                    </div>
+                  </div>
+                  <div class="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+                    <form method="post" action={bffPath} class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+                      <input type="hidden" name="intent" value="update_profile" />
+                      <input type="hidden" name="profileId" value={profileId} />
+                      <input type="hidden" name="redirectTo" value={currentPath} />
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Display name</span>
+                          <input name="displayName" value={String(profile.display_name ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+                          <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                            {["draft", "active", "archived"].map((option) => (
+                              <option value={option} selected={profileStatus === option}>{option}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <label class="grid gap-1">
+                        <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Description</span>
+                        <textarea name="description" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{String(profile.description ?? "")}</textarea>
+                      </label>
+                      <div class="grid gap-3 md:grid-cols-2">
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph providers</span>
+                          <input name="graphProviderTypes" value={asStringList(asRecord(profile.graph_policy_json).providerTypes).join(",")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall providers</span>
+                          <input name="recallProviderTypes" value={asStringList(asRecord(profile.recall_policy_json).providerTypes).join(",")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph min RSS</span>
+                          <input name="graphMinRssReviewScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.graph_policy_json).minRssReviewScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph min website</span>
+                          <input name="graphMinWebsiteReviewScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.graph_policy_json).minWebsiteReviewScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall min promotion</span>
+                          <input name="recallMinPromotionScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.recall_policy_json).minPromotionScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <div class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Update</span>
+                          <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                            Save profile
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                    <div class="grid gap-3 rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+                      <div>
+                        <p class="text-sm font-medium text-foreground">Diagnostics</p>
+                        <p class="mt-1 text-xs">Latest graph missions: {latestMissionTitles.join(", ") || "—"}</p>
+                        <p class="mt-1 text-xs">Latest recall missions: {latestRecallTitles.join(", ") || "—"}</p>
+                        <p class="mt-1 text-xs">Top rejected domains: {rejectedDomains.slice(0, 3).join(", ") || "—"}</p>
+                        <p class="mt-1 text-xs">Top reason buckets: {reasonBuckets.slice(0, 3).join(", ") || "—"}</p>
+                        <p class="mt-1 text-xs">Calibration agreement: —</p>
+                      </div>
+                      <div class="rounded-xl border border-dashed border-border px-3 py-3 text-xs">
+                        <p>Graph preferred domains: {asStringList(asRecord(profile.graph_policy_json).preferredDomains).join(", ") || "—"}</p>
+                        <p class="mt-1">Recall preferred domains: {asStringList(asRecord(profile.recall_policy_json).preferredDomains).join(", ") || "—"}</p>
+                        <p class="mt-1">Benchmark domains: {asStringList(asRecord(profile.yield_benchmark_json).domains).join(", ") || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {(profiles.hasPrev || profiles.hasNext) && (
+            <PaginationNav
+              className="rounded-none border-x-0 border-b-0"
+              page={profiles.page}
+              totalPages={profiles.totalPages}
+              hasPrev={profiles.hasPrev}
+              hasNext={profiles.hasNext}
+              prevHref={resolvePageHref("profilePage", profiles.page - 1)}
+              nextHref={resolvePageHref("profilePage", profiles.page + 1)}
+            />
+          )}
+        </section>
+      </div>
+    )}
+
     {tab === "missions" && (
       <div class="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -515,6 +848,20 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
             <label class="grid gap-1.5">
               <span class="text-xs font-medium">Description</span>
               <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Discovery profile</span>
+              <select name="profileId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <option value="">No reusable profile</option>
+                {attachableProfiles.map((profile) => (
+                  <option value={String(profile.profile_id ?? "")}>
+                    {String(profile.display_name ?? profile.profile_key ?? "Profile")} · v{String(profile.version ?? 1)} · {String(profile.status ?? "draft")}
+                  </option>
+                ))}
+              </select>
+              <span class="text-[11px] text-muted-foreground">
+                Profiles own structured discovery tuning. Seeds, budget, and run status stay mission-owned.
+              </span>
             </label>
             <label class="grid gap-1.5">
               <span class="text-xs font-medium">Seed topics (one per line)</span>
@@ -597,6 +944,9 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                     </p>
                     <p class="text-xs text-muted-foreground">
                       Budget: {fmtBudget(mission.budget_cents)} · Spend: {fmtMoney(mission.spent_cents ?? 0)} · Latest portfolio: {String(mission.latest_portfolio_snapshot_id ?? "—")}
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                      Profile: {String(mission.profile_display_name ?? mission.profile_key ?? "—")} · Applied version: {String(mission.applied_profile_version ?? "—")}
                     </p>
                   </div>
                   <div class="flex flex-wrap gap-2">
@@ -690,6 +1040,20 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                     <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Budget</span>
                     <input name="budgetCents" type="number" min="0" value={String(mission.budget_cents ?? 0)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                   </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Profile</span>
+                    <select name="profileId" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      <option value="">No reusable profile</option>
+                      {attachableProfiles.map((profile) => (
+                        <option
+                          value={String(profile.profile_id ?? "")}
+                          selected={String(mission.profile_id ?? "") === String(profile.profile_id ?? "")}
+                        >
+                          {String(profile.display_name ?? profile.profile_key ?? "Profile")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div class="grid gap-1">
                     <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Interest graph</span>
                     <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
@@ -723,6 +1087,64 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <p class="mt-1 text-sm text-muted-foreground">
             These missions seed neutral acquisition without requiring `interest_graph`. Acquire and promote remain bounded maintenance API flows; this screen is the operator read surface for that backlog.
           </p>
+          <form method="post" action={bffPath} class="mt-4 grid gap-3 rounded-2xl border border-border bg-background p-4">
+            <input type="hidden" name="intent" value="create_recall_mission" />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Title</span>
+              <input name="title" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Description</span>
+              <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Mission kind</span>
+                <select name="missionKind" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  {["manual", "domain_seed", "query_seed"].map((option) => (
+                    <option value={option} selected={option === "domain_seed"}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Discovery profile</span>
+                <select name="profileId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <option value="">No reusable profile</option>
+                  {attachableProfiles.map((profile) => (
+                    <option value={String(profile.profile_id ?? "")}>
+                      {String(profile.display_name ?? profile.profile_key ?? "Profile")} · v{String(profile.version ?? 1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Seed domains</span>
+              <textarea name="seedDomains" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Seed queries</span>
+              <textarea name="seedQueries" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Target provider types</span>
+                <input name="targetProviderTypes" value="rss,website" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1.5">
+                <span class="text-xs font-medium">Max candidates</span>
+                <input name="maxCandidates" type="number" min="1" value="12" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+            <label class="grid gap-1.5">
+              <span class="text-xs font-medium">Optional scope JSON</span>
+              <textarea name="scopeJson" rows="5" placeholder='{"regions":["EU"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+            </label>
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Create recall mission
+            </button>
+          </form>
           <div class="mt-4 space-y-3">
             {recallMissionItems.length === 0 ? (
               <p class="rounded-2xl border border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
@@ -749,7 +1171,47 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 <p class="mt-1 text-xs text-muted-foreground">
                   Providers: {asStringList(mission.target_provider_types).join(", ") || "rss, website"} · Max candidates: {String(mission.max_candidates ?? "—")}
                 </p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Profile: {String(mission.profile_display_name ?? mission.profile_key ?? "—")} · Applied version: {String(mission.applied_profile_version ?? "—")}
+                </p>
                 <p class="mt-1 text-xs text-muted-foreground">Updated {fmtDate(mission.updated_at)}</p>
+                <form method="post" action={bffPath} class="mt-3 grid gap-3 md:grid-cols-4">
+                  <input type="hidden" name="intent" value="update_recall_mission" />
+                  <input type="hidden" name="recallMissionId" value={String(mission.recall_mission_id ?? "")} />
+                  <input type="hidden" name="redirectTo" value={currentPath} />
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+                    <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      {["planned", "active", "paused", "completed", "failed"].map((option) => (
+                        <option value={option} selected={String(mission.status ?? "planned") === option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Profile</span>
+                    <select name="profileId" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      <option value="">No reusable profile</option>
+                      {attachableProfiles.map((profile) => (
+                        <option
+                          value={String(profile.profile_id ?? "")}
+                          selected={String(mission.profile_id ?? "") === String(profile.profile_id ?? "")}
+                        >
+                          {String(profile.display_name ?? profile.profile_key ?? "Profile")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Max candidates</span>
+                    <input name="maxCandidates" type="number" min="1" value={String(mission.max_candidates ?? 12)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <div class="grid gap-1">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Update</span>
+                    <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                      Save recall mission
+                    </button>
+                  </div>
+                </form>
               </div>
             ))}
           </div>
@@ -779,6 +1241,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
             ) : recallCandidateItems.map((candidate) => {
               const quality = resolveDiscoverySourceQuality(candidate);
               const recallState = resolveDiscoveryRecallCandidateState(candidate);
+              const explainability = resolveDiscoveryPolicyExplainability(candidate, "recall");
               return (
                 <div class="px-5 py-4">
                   <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
@@ -805,12 +1268,21 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <p class="text-xs text-muted-foreground">
                         Snapshot: {quality.snapshotReason ?? "—"} · Scored {fmtDate(quality.scoredAt)}
                       </p>
+                      <p class="text-xs text-muted-foreground">
+                        Profile: {explainability.profileName ?? "—"} · Version: {String(explainability.profileVersion ?? "—")} · Reason bucket: {explainability.reasonBucket ?? "—"}
+                      </p>
                     </div>
                     <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
                       <div>Generic recall {quality.recallScore == null ? "—" : fmtPercent(quality.recallScore)}</div>
                       <div class="mt-1">Yield {fmtPercent(quality.yieldScore ?? 0)} · Lead {fmtPercent(quality.leadTimeScore ?? 0)} · Dupes {fmtPercent(quality.duplicationScore ?? 0)}</div>
                       <div class="mt-1">Metric source {metricSourceLabel(quality.metricSource)}</div>
                       <div class="mt-1">Channel link {recallState.channelId ?? "not linked yet"}</div>
+                      <div class="mt-2 border-t border-border pt-2">
+                        <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
+                        <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
+                        <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
+                        <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1015,60 +1487,74 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <h2 class="text-base font-semibold">Candidates</h2>
           <p class="mt-1 text-sm text-muted-foreground">{candidates.total} candidate{candidates.total === 1 ? "" : "s"} total</p>
         </div>
-        <div class="divide-y divide-border">
-          {candidateItems.length === 0 ? (
-            <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet.</p>
-          ) : candidateItems.map((candidate) => (
-            <div class="px-5 py-4">
-              <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-                <div class="space-y-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <h3 class="text-sm font-semibold">{String(candidate.title ?? candidate.url ?? "Candidate")}</h3>
-                    <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      {String(candidate.status ?? "pending")}
-                    </span>
-                    <span class="inline-flex items-center rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground border border-border">
-                      {String(candidate.provider_type ?? "rss")}
-                    </span>
+          <div class="divide-y divide-border">
+            {candidateItems.length === 0 ? (
+              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet.</p>
+            ) : candidateItems.map((candidate) => {
+              const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
+              return (
+                <div class="px-5 py-4">
+                  <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+                    <div class="space-y-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-sm font-semibold">{String(candidate.title ?? candidate.url ?? "Candidate")}</h3>
+                        <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {String(candidate.status ?? "pending")}
+                        </span>
+                        <span class="inline-flex items-center rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground border border-border">
+                          {String(candidate.provider_type ?? "rss")}
+                        </span>
+                      </div>
+                      <a href={String(candidate.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
+                        {String(candidate.url ?? "—")}
+                      </a>
+                      <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
+                      <p class="text-xs text-muted-foreground">
+                        Mission: {String(candidate.mission_title ?? "—")} · Class: {String(candidate.class_key ?? "—")} · Tactic: {String(candidate.tactic_key ?? "—")} · Score: {asFloat(candidate.relevance_score, 0).toFixed(2)}
+                      </p>
+                      <p class="text-xs text-muted-foreground">
+                        Profile: {explainability.profileName ?? "—"} · Version: {String(explainability.profileVersion ?? "—")} · Reason bucket: {explainability.reasonBucket ?? "—"}
+                      </p>
+                    </div>
+                    <div class="grid gap-2 xl:w-[26rem]">
+                      <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                        <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
+                        <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
+                        <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
+                        <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>
+                      </div>
+                      {String(candidate.status ?? "pending") === "pending" ? (
+                        <div class="grid gap-2 sm:grid-cols-2">
+                          <form method="post" action={bffPath} class="flex gap-2">
+                            <input type="hidden" name="intent" value="review_candidate" />
+                            <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                            <input type="hidden" name="status" value="approved" />
+                            <input type="hidden" name="redirectTo" value={currentPath} />
+                            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                              Approve
+                            </button>
+                          </form>
+                          <form method="post" action={bffPath} class="grid gap-2">
+                            <input type="hidden" name="intent" value="review_candidate" />
+                            <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                            <input type="hidden" name="status" value="rejected" />
+                            <input type="hidden" name="redirectTo" value={currentPath} />
+                            <input name="rejectionReason" placeholder="reason" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                              Reject
+                            </button>
+                          </form>
+                        </div>
+                      ) : (
+                        <div class="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                          Reviewed {fmtDate(candidate.reviewed_at)} by {String(candidate.reviewed_by ?? "system")}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <a href={String(candidate.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
-                    {String(candidate.url ?? "—")}
-                  </a>
-                  <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
-                  <p class="text-xs text-muted-foreground">
-                    Mission: {String(candidate.mission_title ?? "—")} · Class: {String(candidate.class_key ?? "—")} · Tactic: {String(candidate.tactic_key ?? "—")} · Score: {asFloat(candidate.relevance_score, 0).toFixed(2)}
-                  </p>
                 </div>
-                {String(candidate.status ?? "pending") === "pending" ? (
-                  <div class="grid gap-2 sm:grid-cols-2">
-                    <form method="post" action={bffPath} class="flex gap-2">
-                      <input type="hidden" name="intent" value="review_candidate" />
-                      <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
-                      <input type="hidden" name="status" value="approved" />
-                      <input type="hidden" name="redirectTo" value={currentPath} />
-                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-                        Approve
-                      </button>
-                    </form>
-                    <form method="post" action={bffPath} class="grid gap-2">
-                      <input type="hidden" name="intent" value="review_candidate" />
-                      <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
-                      <input type="hidden" name="status" value="rejected" />
-                      <input type="hidden" name="redirectTo" value={currentPath} />
-                      <input name="rejectionReason" placeholder="reason" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-                        Reject
-                      </button>
-                    </form>
-                  </div>
-                ) : (
-                  <div class="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                    Reviewed {fmtDate(candidate.reviewed_at)} by {String(candidate.reviewed_by ?? "system")}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+              );
+            })}
         </div>
         {(candidates.hasPrev || candidates.hasNext) && (
           <PaginationNav

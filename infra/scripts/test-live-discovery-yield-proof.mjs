@@ -26,7 +26,7 @@ function parseJsonArtifactPath(output) {
 
 function runSingleHarness(iteration) {
   log(`Starting live discovery harness run ${iteration}.`);
-  const result = spawnSync("node", ["infra/scripts/test-live-discovery-examples.mjs"], {
+  const result = spawnSync("pnpm", ["test:discovery:examples:compose"], {
     cwd: repoRoot,
     encoding: "utf8",
     env: {

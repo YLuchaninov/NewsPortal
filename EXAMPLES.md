@@ -2592,6 +2592,22 @@ Discovery в NewsPortal не заменяет готовые bundles из это
 
 Если вам нужен отдельный operator-facing handbook именно по discovery testing, а не короткая привязка discovery к bundles A/B/C, используйте [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md). Этот раздел остается discovery tie-in для example bundles, а не полным end-to-end guide по `/admin/discovery`.
 
+Для `Example B` и `Example C` proof-backed reusable discovery settings теперь intentionally живут только в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md):
+
+- `Example B — Proof-backed Discovery Profile`
+- `Example C — Proof-backed Discovery Profile`
+
+Именно там теперь находятся:
+
+- stable `Discovery Profile` keys/names;
+- exact graph/recall policy values;
+- benchmark cohorts;
+- exact mission seeds и recall queries;
+- manual replay steps через `/admin/discovery`;
+- canonical proof command `pnpm test:discovery:examples:compose`.
+
+Этот файл оставляет только high-level tie-in между example bundles и discovery, чтобы не дублировать длинные profile settings в двух местах.
+
 ### 7.1. Что discovery добавляет, а что не заменяет
 
 Discovery добавляет:
@@ -2716,6 +2732,14 @@ pnpm test:discovery-enabled:compose
 6. Только после этого начинайте реальные mission runs в `/admin/discovery`.
 
 Для полного operator-testing walkthrough после этого bounded enable шага переходите в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md): там отдельно разобраны graph-first mission flow, independent recall flow, promoted-vs-duplicate outcomes и canonical proof contour для этой зоны.
+
+Если нужен exact manual replay для proof-backed Example B/C discovery, используйте в первую очередь:
+
+```sh
+pnpm test:discovery:examples:compose
+```
+
+После этого откройте `DISCOVERY_MODE_TESTING.md` и повторите те же `Discovery Profiles` руками через `/admin/discovery`.
 
 ### 7.5. Как связать discovery с примерами A, B и C
 

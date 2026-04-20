@@ -27,6 +27,7 @@ from services.workers.app.discovery_orchestrator import (
     DISCOVERY_RSS_PIPELINE_SEQUENCE_ID,
     DISCOVERY_WEBSITE_PIPELINE_SEQUENCE_ID,
     DiscoverySettings,
+    _recall_candidate_rows_from_probe_results,
     acquire_recall_missions,
     compile_interest_graph_for_mission,
     evaluate_hypotheses,
@@ -363,8 +364,11 @@ class _FakeDiscoveryRepository:
         del mission_id
         return [dict(item) for item in self.strategy_rows]
 
+    async def list_existing_source_channels(self) -> dict[str, str]:
+        return {"https://known.example.com/feed.xml": "channel-known"}
+
     async def list_existing_source_urls(self) -> set[str]:
-        return {"https://known.example.com/feed.xml"}
+        return set((await self.list_existing_source_channels()).keys())
 
     async def list_recent_hypotheses(self, mission_id: str) -> list[dict[str, Any]]:
         del mission_id
@@ -1102,6 +1106,7 @@ class DiscoveryOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fresh_candidate["status"], "auto_approved")
         self.assertEqual(fresh_candidate["registered_channel_id"], "channel-1")
         self.assertEqual(known_candidate["status"], "duplicate")
+        self.assertEqual(known_candidate["registered_channel_id"], "channel-known")
         self.assertEqual(len(repository.source_profiles), 2)
         self.assertEqual(len(repository.source_quality_snapshots), 2)
         self.assertEqual(len(repository.source_interest_scores), 2)
@@ -1467,6 +1472,221 @@ class DiscoveryOrchestratorTests(unittest.IsolatedAsyncioTestCase):
             repository.recall_candidates[0]["quality_signal_source"],
             "seed_query_search",
         )
+
+    async def test_acquire_recall_missions_skips_non_feed_urls_in_rss_lane(self) -> None:
+        repository = _FakeDiscoveryRepository()
+        repository.recall_mission = {
+            "recall_mission_id": "recall-mission-1",
+            "title": "Procurement recall",
+            "description": "Avoid probing HTML procurement pages as rss candidates.",
+            "mission_kind": "query_seed",
+            "seed_domains": [],
+            "seed_urls": [],
+            "seed_queries": ["site:sam.gov software procurement"],
+            "target_provider_types": ["rss", "website"],
+            "scope_json": {},
+            "status": "active",
+            "max_candidates": 4,
+            "created_by": "test",
+        }
+        runtime = _FakeRuntime(
+            {
+                "web_search": {
+                    "site:sam.gov software procurement rss": {
+                        "results": [
+                            {
+                                "url": "https://sam.gov/opp/123/view",
+                                "title": "Procurement page",
+                                "snippet": "HTML notice page",
+                            },
+                            {
+                                "url": "https://sam.gov/notices/feed.xml",
+                                "title": "Feed page",
+                                "snippet": "RSS notice feed",
+                            },
+                        ],
+                        "meta": {"provider": "stub", "request_count": 1},
+                    },
+                    "site:sam.gov software procurement": {
+                        "results": [
+                            {
+                                "url": "https://sam.gov/opp/123/view",
+                                "title": "Procurement page",
+                                "snippet": "HTML notice page",
+                            }
+                        ],
+                        "meta": {"provider": "stub", "request_count": 1},
+                    },
+                },
+                "rss_probe": {
+                    "https://sam.gov/notices/feed.xml": {
+                        "url": "https://sam.gov/notices/feed.xml",
+                        "feed_url": "https://sam.gov/notices/feed.xml",
+                        "is_valid_rss": True,
+                        "feed_title": "SAM feed",
+                        "sample_entries": [{"title": "SAM story"}],
+                        "error_text": None,
+                    }
+                },
+                "website_probe": {
+                    "https://sam.gov": {
+                        "url": "https://sam.gov",
+                        "final_url": "https://sam.gov/opp/123/view",
+                        "title": "SAM.gov",
+                        "classification": {"kind": "procurement_portal", "confidence": 0.92},
+                        "capabilities": {"supports_collection_discovery": True},
+                        "sample_resources": [{"title": "Opp 123"}],
+                        "error_text": None,
+                    }
+                },
+            }
+        )
+
+        with patch(
+            "services.workers.app.discovery_orchestrator.get_discovery_runtime",
+            return_value=runtime,
+        ):
+            result = await acquire_recall_missions(
+                recall_mission_id="recall-mission-1",
+                settings=DiscoverySettings(default_max_sources=5),
+                repository=repository,  # type: ignore[arg-type]
+            )
+
+        self.assertEqual(result["discovery_recall_candidate_count"], 2)
+        self.assertEqual(
+            runtime.rss_probe.calls,
+            [{"urls": ["https://sam.gov/notices/feed.xml"], "sample_count": 3}],
+        )
+        self.assertEqual(
+            runtime.website_probe.calls,
+            [{"urls": ["https://sam.gov"], "sample_count": 3}],
+        )
+        self.assertEqual(
+            sorted(candidate["provider_type"] for candidate in repository.recall_candidates),
+            ["rss", "website"],
+        )
+
+    async def test_acquire_recall_missions_treats_search_no_results_as_empty_batch(self) -> None:
+        repository = _FakeDiscoveryRepository()
+        repository.recall_mission = {
+            "recall_mission_id": "recall-mission-1",
+            "title": "Recall no-results",
+            "description": "Search no-results should not fail acquisition.",
+            "mission_kind": "query_seed",
+            "seed_domains": [],
+            "seed_urls": [],
+            "seed_queries": ["missing procurement"],
+            "target_provider_types": ["website"],
+            "scope_json": {},
+            "status": "active",
+            "max_candidates": 4,
+            "created_by": "test",
+        }
+        runtime = _FakeRuntime({})
+
+        def _raise_no_results(**_: Any) -> dict[str, Any]:
+            raise RuntimeError("No results found.")
+
+        with (
+            patch(
+                "services.workers.app.discovery_orchestrator.get_discovery_runtime",
+                return_value=runtime,
+            ),
+            patch.object(runtime.web_search, "search", side_effect=_raise_no_results),
+        ):
+            result = await acquire_recall_missions(
+                recall_mission_id="recall-mission-1",
+                settings=DiscoverySettings(default_max_sources=5),
+                repository=repository,  # type: ignore[arg-type]
+            )
+
+        self.assertEqual(result["discovery_recall_executed_count"], 1)
+        self.assertEqual(result["discovery_recall_candidate_count"], 0)
+        self.assertEqual(repository.recall_candidates, [])
+
+    def test_recall_duplicate_candidates_keep_existing_channel_id(self) -> None:
+        rows = _recall_candidate_rows_from_probe_results(
+            recall_mission_id="recall-mission-1",
+            provider_type="website",
+            probe_rows=[
+                {
+                    "url": "https://known.example.com/feed.xml",
+                    "final_url": "https://known.example.com/feed.xml",
+                    "title": "Known source",
+                }
+            ],
+            probe_targets={
+                "https://known.example.com/feed.xml": {
+                    "probe_url": "https://known.example.com/feed.xml",
+                    "quality_signal_source": "seed_query_search",
+                    "seed_type": "seed_query",
+                    "seed_value": "known source",
+                    "search_query": "known source",
+                }
+            },
+            existing_source_channels={"https://known.example.com/": "channel-known"},
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "duplicate")
+        self.assertEqual(rows[0]["registered_channel_id"], "channel-known")
+        self.assertEqual(rows[0]["rejection_reason"], "already_known_source")
+
+    async def test_acquire_recall_missions_treats_probe_timeout_as_rejected_candidate(self) -> None:
+        repository = _FakeDiscoveryRepository()
+        repository.recall_mission = {
+            "recall_mission_id": "recall-mission-1",
+            "title": "Recall probe timeout",
+            "description": "Website probe timeouts should not fail acquisition.",
+            "mission_kind": "query_seed",
+            "seed_domains": [],
+            "seed_urls": [],
+            "seed_queries": ["procurement portal"],
+            "target_provider_types": ["website"],
+            "scope_json": {},
+            "status": "active",
+            "max_candidates": 4,
+            "created_by": "test",
+        }
+        runtime = _FakeRuntime(
+            {
+                "web_search": {
+                    "procurement portal": {
+                        "results": [
+                            {
+                                "url": "https://portal.example.com/notices/1",
+                                "title": "Procurement portal",
+                                "snippet": "Software procurement notices",
+                            }
+                        ],
+                        "meta": {"provider": "stub", "request_count": 1},
+                    }
+                }
+            }
+        )
+
+        with (
+            patch(
+                "services.workers.app.discovery_orchestrator.get_discovery_runtime",
+                return_value=runtime,
+            ),
+            patch.object(runtime.website_probe, "probe_websites", side_effect=TimeoutError("Internal Server Error")),
+        ):
+            result = await acquire_recall_missions(
+                recall_mission_id="recall-mission-1",
+                settings=DiscoverySettings(default_max_sources=5),
+                repository=repository,  # type: ignore[arg-type]
+            )
+
+        self.assertEqual(result["discovery_recall_executed_count"], 1)
+        self.assertEqual(result["discovery_recall_candidate_count"], 1)
+        self.assertEqual(result["discovery_recall_probe_count"], 1)
+        self.assertEqual(len(repository.recall_candidates), 1)
+        candidate = repository.recall_candidates[0]
+        self.assertEqual(candidate["status"], "rejected")
+        self.assertEqual(candidate["rejection_reason"], "probe_failed")
+        self.assertEqual(candidate["evaluation_json"]["error_text"], "Internal Server Error")
+        self.assertEqual(candidate["url"], "https://portal.example.com")
 
     async def test_execute_hypotheses_skips_when_mission_budget_is_exhausted_from_precise_spend(self) -> None:
         repository = _FakeDiscoveryRepository()

@@ -39,6 +39,36 @@ function asString(value: unknown): string | null {
   return normalized ? normalized : null;
 }
 
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+}
+
+function extractDomain(candidateLike: LooseRecord): string | null {
+  const direct =
+    asString(candidateLike.canonical_domain) ??
+    asString(candidateLike.domain) ??
+    asString(candidateLike.final_domain);
+  if (direct) {
+    return direct.toLowerCase();
+  }
+  const rawUrl = asString(candidateLike.final_url) ?? asString(candidateLike.url);
+  if (!rawUrl) {
+    return null;
+  }
+  try {
+    return new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function includesKeyword(text: string, keywords: string[]): boolean {
+  const haystack = text.toLowerCase();
+  return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()));
+}
+
 export interface DiscoveryChannelMetricsSummary {
   metricSource: string;
   yieldScore: number | null;
@@ -86,6 +116,8 @@ export function resolveDiscoveryChannelMetrics(
 
 export interface DiscoveryOperatorSummary {
   operatingModel: "dual_path" | "graph_first_only";
+  profileCount: number;
+  activeProfileCount: number;
   graphMissionCount: number;
   activeGraphMissionCount: number;
   compiledGraphCount: number;
@@ -114,6 +146,8 @@ export function resolveDiscoveryOperatorSummary(
 
   return {
     operatingModel: hasRecallSurface ? "dual_path" : "graph_first_only",
+    profileCount: asInteger(summary.profile_count) ?? 0,
+    activeProfileCount: asInteger(summary.active_profile_count) ?? 0,
     graphMissionCount: asInteger(summary.mission_count) ?? 0,
     activeGraphMissionCount: asInteger(summary.active_mission_count) ?? 0,
     compiledGraphCount: asInteger(summary.compiled_graph_count) ?? 0,
@@ -215,6 +249,20 @@ export interface DiscoveryRecallCandidateState {
   channelId: string | null;
 }
 
+export interface DiscoveryPolicyExplainability {
+  lane: "graph" | "recall";
+  reasonBucket: string | null;
+  score: number | null;
+  threshold: number | null;
+  preferredDomainMatch: boolean;
+  negativeDomainMatch: boolean;
+  positiveKeywordMatch: boolean;
+  negativeKeywordMatch: boolean;
+  benchmarkLike: boolean;
+  profileName: string | null;
+  profileVersion: number | null;
+}
+
 export function resolveDiscoveryRecallCandidateState(
   candidateLike: unknown
 ): DiscoveryRecallCandidateState {
@@ -240,6 +288,81 @@ export function resolveDiscoveryRecallCandidateState(
     qualitySignalSource: asString(candidate.quality_signal_source),
     registeredChannelId,
     channelId,
+  };
+}
+
+export function resolveDiscoveryPolicyExplainability(
+  candidateLike: unknown,
+  lane: "graph" | "recall"
+): DiscoveryPolicyExplainability {
+  const candidate = asRecord(candidateLike);
+  const applied = asRecord(candidate.applied_policy_json);
+  const policy = asRecord(
+    lane === "graph" ? applied.graphPolicy : applied.recallPolicy
+  );
+  const benchmark = asRecord(applied.yieldBenchmark);
+  const evaluation = asRecord(candidate.evaluation_json);
+  const textParts = [
+    asString(candidate.title),
+    asString(candidate.description),
+    asString(candidate.tactic_key),
+    asString(candidate.search_query),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const domain = extractDomain(candidate) ?? "";
+  const preferredDomains = asStringList(policy.preferredDomains);
+  const blockedDomains = asStringList(policy.blockedDomains);
+  const positiveKeywords = asStringList(policy.positiveKeywords);
+  const negativeKeywords = asStringList(policy.negativeKeywords);
+  const benchmarkDomains = asStringList(benchmark.domains);
+  const benchmarkTitleKeywords = asStringList(benchmark.titleKeywords);
+  const benchmarkTacticKeywords = asStringList(benchmark.tacticKeywords);
+  const providerType = asString(candidate.provider_type) ?? "rss";
+  const threshold =
+    lane === "graph"
+      ? providerType === "website"
+        ? asNumber(policy.minWebsiteReviewScore)
+        : asNumber(policy.minRssReviewScore)
+      : asNumber(policy.minPromotionScore);
+  const score =
+    lane === "graph"
+      ? asNumber(candidate.review_score ?? evaluation.reviewScore ?? candidate.relevance_score)
+      : asNumber(
+          candidate.recall_score ??
+            evaluation.recallScore ??
+            candidate.source_quality_recall_score
+        );
+  const reasonBucket =
+    asString(evaluation.normalizedReasonBucket) ??
+    asString(evaluation.reasonBucket) ??
+    asString(candidate.reason_bucket) ??
+    (asString(candidate.rejection_reason) ? "rejected" : null);
+
+  return {
+    lane,
+    reasonBucket,
+    score,
+    threshold,
+    preferredDomainMatch:
+      !!domain && preferredDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`)),
+    negativeDomainMatch:
+      !!domain && blockedDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`)),
+    positiveKeywordMatch: includesKeyword(textParts, positiveKeywords),
+    negativeKeywordMatch: includesKeyword(textParts, negativeKeywords),
+    benchmarkLike:
+      (!!domain &&
+        benchmarkDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`))) ||
+      includesKeyword(textParts, benchmarkTitleKeywords) ||
+      includesKeyword(textParts, benchmarkTacticKeywords),
+    profileName:
+      asString(candidate.profile_display_name) ??
+      asString(applied.profileDisplayName) ??
+      asString(candidate.profile_name),
+    profileVersion:
+      asInteger(candidate.applied_profile_version) ??
+      asInteger(applied.profileVersion),
   };
 }
 

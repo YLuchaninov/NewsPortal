@@ -14,6 +14,291 @@
 
 ## Completed items
 
+### 2026-04-20 — STAGE-4D-GENERALIZED-PROFILE-BACKED-RECALL-VALIDITY-AND-YIELD-RETUNE and C-DISCOVERY-GOOD-YIELD — Closed the DDGS-first good-yield capability with profile-backed Example B/C proof, non-regression still green
+
+- Тип записи: stage + capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after the profile-backed Example B/C discovery harness shipped, the parent capability still remained open because the final multi-run gate was stuck at `yield_weak`. The next truthful slice was not more broad rewrites, but a bounded repair of two real proof/runtime losses: profile-backed policy snapshots were silently dropping `supportedWebsiteKinds`, and duplicate-linked candidates were not preserving `registered_channel_id`, which made real duplicate onboarding evidence look like registration failure.
+- Что изменилось:
+  - repaired profile-backed policy snapshot truth:
+    - [`infra/scripts/lib/discovery-live-proof-profiles.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-proof-profiles.mjs) now preserves `supportedWebsiteKinds` when cloning graph/recall policy into reusable `discovery_policy_profiles`;
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now preserves the same field in profile normalization for both graph and recall policies, so `applied_policy_json` no longer drops procurement/listing website-kind constraints.
+  - repaired duplicate-link onboarding truth in discovery runtime:
+    - [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py) now loads an existing normalized-URL -> `channel_id` map, not just a URL set;
+    - graph candidates and recall candidates now materialize as `duplicate` with `registered_channel_id` already filled when the normalized source URL already maps to an existing `source_channel`;
+    - duplicate-linked candidates therefore count as real onboarding evidence without waiting for a later manual approve/promote path.
+  - extended regression coverage:
+    - [`tests/unit/ts/discovery-live-proof-profiles.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-live-proof-profiles.test.ts)
+    - [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py)
+    - [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py)
+  - synced durable docs:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+    - [`docs/history.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/history.md)
+    - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+    - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md)
+    - [`DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md)
+- Что было доказано:
+  - targeted static/unit proof:
+    - `node --check infra/scripts/lib/discovery-live-proof-profiles.mjs`
+    - `python -m py_compile services/api/app/main.py`
+    - `python -m py_compile services/workers/app/discovery_orchestrator.py`
+    - `node --import tsx --test tests/unit/ts/discovery-live-proof-profiles.test.ts tests/unit/ts/discovery-live-yield-policy.test.ts`
+    - `python -m unittest tests.unit.python.test_api_discovery_management tests.unit.python.test_discovery_orchestrator`
+  - compose/runtime proof:
+    - `pnpm test:discovery:examples:compose`
+      - authoritative single-run artifacts:
+        - `/tmp/newsportal-live-discovery-examples-ca3049b7.json|md`
+        - `/tmp/newsportal-live-discovery-examples-b41de125.json|md`
+      - closing result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+        - Example B and Example C both produced onboarded or duplicate-linked channels with downstream evidence
+        - latest manual replay baseline moved to `appliedProfileVersion = 22`
+    - `pnpm test:discovery:nonregression:compose`
+      - authoritative artifact:
+        - `/tmp/newsportal-discovery-nonregression-f499bb13.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `nonRegressionVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+    - `pnpm test:discovery:yield:compose`
+      - authoritative aggregate artifact:
+        - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+        - `requiredRuns = 3`
+        - `requiredPassingRuns = 2`
+        - `Example B — IT-новости для разработчиков = 3/3`
+        - `Example C — Поиск клиентов для аутсорс-компании = 3/3`
+        - aggregate root-cause drift collapsed to `yield_pass = 6`
+- Что stage и capability доказали:
+  - the DDGS-first discovery subsystem now truthfully satisfies all declared completion layers for `C-DISCOVERY-GOOD-YIELD`:
+    - `runtime = pass`
+    - `nonRegression = pass`
+    - `yield = pass`
+  - Example B/C profile-backed proof is no longer only a manual replay baseline; it is now also a closed good-yield contour on the current shipped compose baseline.
+  - The reusable operator handbook at [`DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md) is now aligned with the latest proof-backed settings and the current authoritative `appliedProfileVersion = 22` replay baseline.
+- Риски или gaps:
+  - this closeout proves good yield only on the current declared DDGS-first runtime-enabled proof packs and current shipped compose baseline; it does not automatically prove future packs, provider expansion, or broader operator UX ambitions.
+  - Future discovery work must open a new capability instead of silently extending this closed one.
+
+### 2026-04-20 — PATCH-PROFILE-BACKED-EXAMPLE-PROOF-HARDENING — Hardened recall acquire failure handling and refreshed the profile-backed Example B/C proof baseline
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the profile-backed Example B/C harness shipped, fresh reruns uncovered two runtime-proof issues that were not safe to leave hidden in operator docs: recall acquire could still fail with plain-text HTTP 500 / timeout behavior when underlying probes timed out, and the handbook/live-state docs still pointed at an older `Example C yield pass` artifact that no longer matched the freshest synced proof.
+- Что изменилось:
+  - hardened [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py) so recall acquire no longer aborts the whole mission when a `website_probe` or `rss_probe` times out:
+    - probe failures now materialize rejected candidates through bounded `probe_failed` / `invalid_feed` style rows instead of surfacing as API `500`;
+    - the existing recall acquisition path therefore stays truthful about weak candidate validity without crashing the profile-backed harness.
+  - extended [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py) with regression coverage for probe-timeout-to-rejected-candidate behavior.
+  - hardened [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs) and [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs):
+    - the harness now uses a bounded longer recall acquire timeout (`180000ms`) instead of treating slower maintenance acquire calls as client-side failure;
+    - plain-text non-JSON API failures are now rendered truthfully in the harness instead of being double-reported as JSON parsing crashes.
+  - resynced operator/live docs so the profile-backed replay handbook no longer claims that the latest fresh Example C run is still `yield pass`.
+- Что было доказано:
+  - static / unit proof:
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `python -m unittest tests.unit.python.test_discovery_orchestrator`
+    - `python -m py_compile services/workers/app/discovery_orchestrator.py`
+  - compose/runtime proof:
+    - `pnpm test:discovery-enabled:compose`
+      - result: passed
+    - `pnpm test:discovery:admin:compose`
+      - result: initially exposed a flaky `tab=sources` HTML assertion during multi-run proof, then passed again after the assertion was moved onto structured source-profile API truth plus stable page-shell snippets
+    - `pnpm test:discovery:examples:compose`
+      - freshest synced single-run artifact:
+        - `/tmp/newsportal-live-discovery-examples-d9517b92.json`
+        - `/tmp/newsportal-live-discovery-examples-d9517b92.md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = weak`
+        - `Example C` reached `yield pass`
+        - `Example B` remained `yield weak`
+        - `manualReplaySettings` remained present for both runtime packs, now at applied profile version `14`
+    - `pnpm test:discovery:nonregression:compose`
+      - freshest synced non-regression artifact:
+        - `/tmp/newsportal-discovery-nonregression-3f16fb99.json`
+        - `/tmp/newsportal-discovery-nonregression-3f16fb99.md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `nonRegressionVerdict = pass`
+        - `yieldVerdict = weak`
+        - `finalVerdict = pass_with_residuals`
+        - frozen-corpus drift stayed `0`
+    - `pnpm test:discovery:yield:compose`
+      - final aggregate artifact:
+        - `/tmp/newsportal-live-discovery-yield-proof-dd2a10e7.json`
+        - `/tmp/newsportal-live-discovery-yield-proof-dd2a10e7.md`
+      - backing runs:
+        - `/tmp/newsportal-live-discovery-examples-5670128e.json|md`
+        - `/tmp/newsportal-live-discovery-examples-4e79aae8.json|md`
+        - `/tmp/newsportal-live-discovery-examples-d9517b92.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = weak`
+        - `finalVerdict = yield_weak`
+        - `Example B` passed `0/3`
+        - `Example C` passed `1/3`
+- Что patch доказал:
+  - the profile-backed Example B/C proof lane is now more honest and resilient under slow/failed probe conditions;
+  - the reusable manual replay contour stays intact even when individual fresh single-run reruns vary between `Example C yield pass` and `yield weak`;
+  - the final truthful state of this contour is now: `runtime pass / nonRegression pass / final multi-run yield weak`;
+  - the admin compose proof no longer flakes on `tab=sources` ordering/pagination because the domain-specific assertion now rides on source-profile API truth rather than brittle page contents.
+- Риски или gaps:
+  - this patch still does not close `C-DISCOVERY-GOOD-YIELD`; the final aggregate proof keeps `Example B` at `0/3` and `Example C` at `1/3`;
+  - the next truthful tuning slice is still generalized rather than Example-B-only, because the final multi-run proof leaves both packs below the required `2/3` bar even though Example C can now pass bounded single runs.
+- Follow-up:
+  - create and execute a generalized profile-backed recall validity/yield retune stage instead of continuing to frame the next slice as Example-B-only.
+
+### 2026-04-20 — STAGE-4C-PROFILE-BACKED-EXAMPLE-PROOF-AND-HANDBOOK-SYNC — Made Example B/C discovery proof profile-backed, operator-replayable, and documented
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to finish the discovery proof contour for `Example B` and `Example C` so the automation and manual `/admin/discovery` replay would use the same shipped `Discovery Profiles`, emit exact operator-facing settings from live proof, and then sync every truth/doc layer that depends on that workflow.
+- Что изменилось:
+  - added explicit profile-backed harness helpers in [`infra/scripts/lib/discovery-live-proof-profiles.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-proof-profiles.mjs):
+    - stable proof profile metadata per case pack;
+    - profile CRUD payload builders for maintenance API truth (`graphPolicyJson`, `recallPolicyJson`, `yieldBenchmarkJson`);
+    - profile-backed graph/recall mission payload builders;
+    - canonical `manualReplaySettings` snapshots for profile identity, policy, benchmark cohort, exact mission seeds/queries, and applied profile snapshots.
+  - updated [`infra/scripts/lib/discovery-live-example-cases.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-example-cases.mjs) so Example B/C now expose stable proof profile keys and display names:
+    - `example_b_dev_news_proof`
+    - `example_c_outsourcing_proof`
+    and Example C case-pack truth was further tuned toward procurement/buyer-signal sources with the currently shipped profile-backed seed/query set.
+  - updated [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) so the live harness now:
+    - upserts reusable `discovery_policy_profiles` before graph/recall execution;
+    - attaches `profileId` to graph missions and recall missions;
+    - refreshes mission/recall rows after compile/run/acquire to capture `applied_profile_version` plus `applied_policy_json`;
+    - writes `manualReplaySettings` into the JSON and Markdown artifacts;
+    - renders the linked profile and replay settings in the Markdown proof output.
+  - updated [`infra/scripts/test-live-discovery-yield-proof.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-yield-proof.mjs) to use the new root single-run command `pnpm test:discovery:examples:compose`.
+  - updated [`package.json`](/Users/user/Documents/workspace/my/NewsPortal/package.json) with the canonical single-run alias:
+    - `pnpm test:discovery:examples:compose`
+  - updated admin acceptance in [`infra/scripts/test-discovery-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-admin-flow.mjs) so recall candidates now get seeded quality/profile rows and stay visible on the recall tab during compose proof.
+  - hardened worker runtime in [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py):
+    - recall RSS acquisition now skips clearly non-feed URLs instead of probing arbitrary HTML pages as `rss`;
+    - DDGS “no results found” is now treated as an empty batch with search meta instead of crashing recall acquisition with HTTP 500.
+  - added regression coverage:
+    - [`tests/unit/ts/discovery-live-proof-profiles.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-live-proof-profiles.test.ts)
+    - [`tests/unit/python/test_discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_orchestrator.py)
+  - synced operator/runtime docs:
+    - [`DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md)
+    - [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md)
+    - [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md)
+    - [`docs/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/manual-mvp-runbook.md)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+    - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md)
+    - [`docs/contracts/test-access-and-fixtures.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/test-access-and-fixtures.md)
+    - [`.aidp/os.yaml`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml)
+- Что было доказано:
+  - static / unit proof:
+    - `node --check infra/scripts/lib/discovery-live-proof-profiles.mjs`
+    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --check infra/scripts/test-live-discovery-yield-proof.mjs`
+    - `node --check infra/scripts/test-discovery-admin-flow.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-live-proof-profiles.test.ts`
+    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
+    - `pnpm typecheck`
+    - `python -m unittest tests.unit.python.test_discovery_orchestrator`
+    - `python -m py_compile services/workers/app/discovery_orchestrator.py`
+  - compose/admin/runtime proof:
+    - `pnpm test:discovery:admin:compose`
+      - result: passed, including visible recall candidate/profile state and profile-backed admin flow
+    - `pnpm test:discovery:examples:compose`
+      - freshest authoritative artifact:
+        - `/tmp/newsportal-live-discovery-examples-f53aca32.json`
+        - `/tmp/newsportal-live-discovery-examples-f53aca32.md`
+      - result:
+        - overall `runtimeVerdict = pass`
+        - overall `yieldVerdict = weak`
+        - `Example C` reached `yield pass`
+        - `Example B` remained `yield weak`
+        - artifacts now include `manualReplaySettings` for both runtime packs
+- Что stage доказал:
+  - Example B/C live proof now truthfully runs through the same reusable `Discovery Profiles` that operators can replay manually in `/admin/discovery`;
+  - there is no longer a parallel “automation-only” config shape for these proof cohorts;
+  - the operator handbook now preserves exact profile settings, benchmark cohorts, and mission seeds/queries directly from the same runtime truth as the harness;
+  - the discovery proof stack can now prove runtime health and produce repeatable manual replay settings even while the parent `good yield` capability remains open.
+- Риски или gaps:
+  - this stage did not close `C-DISCOVERY-GOOD-YIELD`; the latest fresh proof still leaves `Example B` at `yield weak`;
+  - reusable proof profiles now remain as intentional persistent local fixtures and must be treated as tracked discovery proof residue rather than accidental DB drift.
+- Follow-up:
+  - continue with `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`.
+
+### 2026-04-20 — C-DISCOVERY-PROFILES-ADMIN — Shipped reusable operator-managed Discovery Profiles across schema, maintenance API, admin UI, and compose proof
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to turn discovery tuning into a reusable operator-managed layer instead of leaving it split between repo config and mission-local fields. The capability had to stay case-agnostic, keep mission seeds and budgets mission-owned, preserve backward compatibility for existing missions, and avoid changing downstream truth ownership.
+- Что изменилось:
+  - additive schema/runtime truth now includes reusable `discovery_policy_profiles` plus nullable mission/recall linkage:
+    - [`database/migrations/0040_discovery_policy_profiles.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0040_discovery_policy_profiles.sql) now creates `discovery_policy_profiles`, adds mission/recall `profile_id`, `applied_profile_version`, `applied_policy_json`, and also repairs the compose-local residual discovery-core drift that was still present while `0030` was already recorded as applied;
+    - [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts) now asserts the new profile table, mission/recall columns, indexes, and FKs in migration smoke.
+  - maintenance/runtime/API truth now supports reusable profiles and applied snapshots:
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now exposes profile CRUD at `/maintenance/discovery/profiles*`, extends graph mission and recall mission create/update payloads with `profileId`, snapshots `applied_profile_version` plus `applied_policy_json` at compile/run/acquire boundaries, and exposes profile counts in discovery summary;
+    - [`packages/sdk/src/index.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/sdk/src/index.ts) now exposes discovery profile CRUD plus recall mission/candidate SDK helpers needed by admin/operator flows.
+  - Astro admin BFF/UI now ship reusable profile management and explainability-first rendering:
+    - [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts) now supports profile CRUD intents, recall mission create/update, and mission/recall `profileId` wiring;
+    - [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts) now resolves structured discovery policy explainability (`reasonBucket`, score vs threshold, matched policy signals, benchmarkLike, linked profile/version);
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro) now ships a `Profiles` tab, mission/recall profile selectors, profile lifecycle forms, applied profile version visibility, and explainability-first candidate/recall cards.
+  - compose/runtime proof runners were hardened to use the current workspace build rather than stale images:
+    - [`infra/scripts/test-discovery-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-admin-flow.mjs) now brings the compose stack up with `--build`;
+    - [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) and [`infra/scripts/test-discovery-pipeline-nonregression.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-pipeline-nonregression.mjs) now reset/recreate the compose stack more defensively so the new proof lane stays reproducible on this desktop baseline.
+  - regression coverage now exists for payload building and explainability mapping:
+    - [`tests/unit/ts/discovery-admin.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-admin.test.ts)
+    - [`tests/unit/ts/admin-operator-surfaces.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-operator-surfaces.test.ts)
+- Что было доказано:
+  - static / unit / migration proof:
+    - `node --check apps/admin/src/pages/bff/admin/discovery.ts`
+    - `node --check packages/sdk/src/index.ts`
+    - `node --check infra/scripts/test-discovery-admin-flow.mjs`
+    - `node --check infra/scripts/test-live-discovery-examples.mjs`
+    - `node --check infra/scripts/test-discovery-pipeline-nonregression.mjs`
+    - `python -m py_compile services/api/app/main.py`
+    - `node --import tsx --test tests/unit/ts/discovery-admin.test.ts tests/unit/ts/admin-operator-surfaces.test.ts`
+    - `pnpm typecheck`
+    - `pnpm test:migrations:smoke`
+  - admin/operator compose proof:
+    - `pnpm test:discovery:admin:compose`
+    - result: passed with reusable profile CRUD, profile archive/reactivate/delete, mission profile attach, recall profile attach, recall update/promote flow, and visible profile/version/explainability fields in `/admin/discovery`
+  - live runtime and safety proof on the same baseline:
+    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-discovery-examples-682e955a.json`
+      - `/tmp/newsportal-live-discovery-examples-682e955a.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = yield_weak`
+    - `pnpm test:discovery:nonregression:compose`
+    - authoritative artifact:
+      - `/tmp/newsportal-discovery-nonregression-9c663b86.json`
+      - `/tmp/newsportal-discovery-nonregression-9c663b86.md`
+    - result:
+      - `runtimeVerdict = pass`
+      - `nonRegressionVerdict = pass`
+      - `yieldVerdict = weak`
+      - `finalVerdict = pass_with_residuals`
+- Что capability доказала:
+  - discovery operator tuning now has a reusable profile layer instead of case-specific or mission-local-only hidden config;
+  - graph missions and recall missions can both bind to the same reusable profile while keeping seeds, budgets, and lifecycle state mission-owned;
+  - applied profile snapshots make historical mission/recall runs interpretable without copying the full live profile row into every mission update;
+  - discovery UI can now explain policy-driven candidate decisions through structured fields rather than opaque status-only output;
+  - this operator-tuning expansion did not regress the already-proven downstream non-regression boundary.
+- Риски или gaps:
+  - v1 intentionally does not include mission-local overrides, profile inheritance, dry-run execution endpoints, provider fallback controls, or downstream-selected-content-driven tuning;
+  - discovery good-yield is still an open capability; profiles improve operator control, but they do not by themselves prove `yieldVerdict = pass`.
+- Follow-up:
+  - return active implementation focus to `C-DISCOVERY-GOOD-YIELD`, specifically `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`.
+
 ### 2026-04-19 — STAGE-4-REVIEW-AND-PROMOTION-POLICY-TUNING — Lifted Example C to yield-pass and hardened recall status handling without drifting downstream truth
 
 - Тип записи: stage archive

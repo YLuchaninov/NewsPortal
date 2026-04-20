@@ -221,18 +221,19 @@ infra/
    - `DISCOVERY_SEARCH_PROVIDER=ddgs`
 2. Start the local compose stack with `pnpm dev:mvp:internal`.
 3. Prove the bounded enabled-runtime path with `pnpm test:discovery-enabled:compose`.
-4. For a real local enable, restart the relevant containers with `DISCOVERY_ENABLED=1` in the runtime env, then verify:
+4. Prove the profile-backed Example B/C discovery harness with `pnpm test:discovery:examples:compose` if you want a repo-owned live run that materializes reusable `Discovery Profiles` and emits canonical `manualReplaySettings` for later manual replay.
+5. For a real local enable, restart the relevant containers with `DISCOVERY_ENABLED=1` in the runtime env, then verify:
    - `GET /maintenance/discovery/summary` shows `enabled=true`, the expected discovery LLM model, and the monthly quota fields;
    - `/admin/discovery` shows the active provider/model plus the monthly quota state;
    - manual mission runs succeed before quota exhaustion and return `409` after the hard cap is reached.
-5. Monitor discovery live via:
+6. Monitor discovery live via:
    - `/maintenance/discovery/summary`
    - `/maintenance/discovery/costs/summary`
    - `/admin/discovery`
    - worker logs for discovery planning/execution errors
-6. Roll back by setting `DISCOVERY_ENABLED=0` or switching `DISCOVERY_SEARCH_PROVIDER=stub`, then restart the affected runtime.
+7. Roll back by setting `DISCOVERY_ENABLED=0` or switching `DISCOVERY_SEARCH_PROVIDER=stub`, then restart the affected runtime.
 
-For a dedicated operator-facing testing handbook for this subsystem, including bounded enable smoke, graph-first mission testing, and independent recall/promotion checks, use [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md).
+For a dedicated operator-facing testing handbook for this subsystem, including bounded enable smoke, profile-backed Example B/C replay, graph-first mission testing, and independent recall/promotion checks, use [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md).
 
 ### Browser-assisted website and hard-site notes
 

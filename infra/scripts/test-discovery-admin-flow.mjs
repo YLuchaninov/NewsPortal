@@ -294,7 +294,7 @@ async function waitForHttpHealth(label, url) {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for discovery-admin acceptance.");
-  runCompose("up", "-d", ...STACK_SERVICES);
+  runCompose("up", "--build", "-d", ...STACK_SERVICES);
   await Promise.all([
     waitForHttpHealth("api", "http://127.0.0.1:8000/health"),
     waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health"),
@@ -434,6 +434,8 @@ async function main() {
   let sourceProfileId = "";
   let recallCandidateId = "";
   let recallMissionId = "";
+  let profileId = "";
+  let deletableProfileId = "";
   let deletableMissionId = "";
   let deletableClassKey = "";
   let adminCreated = false;
@@ -465,11 +467,53 @@ async function main() {
         "Adaptive Discovery Agent",
         "Dual-path discovery control plane",
         "Dashboard",
+        "Profiles",
         "Missions",
         "Recall",
       ],
       { cookie: adminCookie }
     );
+
+    const createProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "create_profile",
+      redirectTo: `${discoveryPath}?tab=profiles`,
+      profileKey: `acceptance_profile_${runId}`,
+      displayName: `Acceptance profile ${runId}`,
+      description: "Admin acceptance profile",
+      status: "active",
+      graphProviderTypes: "rss,website",
+      graphPreferredDomains: `discovery-${runId}.example.test`,
+      graphPositiveKeywords: "discovery\ncandidate",
+      graphPreferredTactics: "acceptance_review",
+      graphMinRssReviewScore: "0.70",
+      graphMinWebsiteReviewScore: "0.80",
+      recallProviderTypes: "rss,website",
+      recallPreferredDomains: `recall-${runId}.example.test`,
+      recallPositiveKeywords: "recall\ncandidate",
+      recallPreferredTactics: "acceptance_manual",
+      recallMinPromotionScore: "0.60",
+      benchmarkDomains: `discovery-${runId}.example.test\nrecall-${runId}.example.test`,
+      benchmarkTitleKeywords: "acceptance",
+      benchmarkTacticKeywords: "acceptance_review",
+    }, { cookie: adminCookie });
+    profileId = String(createProfile.json?.profile_id ?? "");
+    if (!profileId) {
+      throw new Error("Discovery profile creation did not return a profile_id.");
+    }
+    const deleteProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "create_profile",
+      redirectTo: `${discoveryPath}?tab=profiles`,
+      profileKey: `delete_profile_${runId}`,
+      displayName: `Disposable profile ${runId}`,
+      description: "Delete-path profile",
+      status: "draft",
+      graphProviderTypes: "rss,website",
+      recallProviderTypes: "rss,website",
+    }, { cookie: adminCookie });
+    deletableProfileId = String(deleteProfile.json?.profile_id ?? "");
+    if (!deletableProfileId) {
+      throw new Error("Disposable discovery profile creation did not return a profile_id.");
+    }
 
     const missionTitle = `Discovery mission ${runId}`;
     const createMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
@@ -485,6 +529,7 @@ async function main() {
       maxSources: "6",
       budgetCents: "400",
       priority: "2",
+      profileId,
       interestGraph: '{"core_topic":"EU AI oversight","subtopics":["policy","regulation"]}',
     }, { cookie: adminCookie });
     const missionId = String(createMission.json?.mission_id ?? "");
@@ -634,7 +679,7 @@ async function main() {
       throw new Error("Failed to seed a discovery hypothesis for admin review.");
     }
 
-    candidateId = queryPostgres(
+      candidateId = queryPostgres(
       env,
       `
         insert into discovery_candidates (
@@ -663,7 +708,7 @@ async function main() {
           'rss',
           true,
           0.91,
-          '{"quality_signal_source":"acceptance"}'::jsonb,
+          '{"quality_signal_source":"acceptance","normalizedReasonBucket":"below_auto_approval_threshold","reviewScore":0.91}'::jsonb,
           '{}'::jsonb,
           '[]'::jsonb,
           'pending',
@@ -832,8 +877,13 @@ async function main() {
     );
 
     await assertHtmlContains(
+      `${adminBaseUrl}/discovery?tab=profiles`,
+      [`Acceptance profile ${runId}`, "Save profile", "Diagnostics"],
+      { cookie: adminCookie }
+    );
+    await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=missions`,
-      [missionTitle, "Run mission", "Compile graph"],
+      [missionTitle, "Run mission", "Compile graph", `Acceptance profile ${runId}`],
       { cookie: adminCookie }
     );
     await assertHtmlContains(
@@ -848,7 +898,7 @@ async function main() {
     );
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=candidates`,
-      [`Discovery candidate ${runId}`, "Approve"],
+      [`Discovery candidate ${runId}`, "Approve", "Reason bucket"],
       { cookie: adminCookie }
     );
 
@@ -921,28 +971,144 @@ async function main() {
     );
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=sources&portfolioMissionId=${encodeURIComponent(missionId)}`,
-      [`discovery-${runId}.example.test`, "Generic source quality", "Mission fit"],
+      ["Generic source quality", "Mission fit"],
       { cookie: adminCookie }
     );
+    const sourceProfilePayload = await fetchJson(
+      `${apiBaseUrl}/maintenance/discovery/source-profiles/${encodeURIComponent(sourceProfileId)}`,
+      { cookie: adminCookie }
+    );
+    if (String(sourceProfilePayload?.canonical_domain ?? "") !== `discovery-${runId}.example.test`) {
+      throw new Error("Source profile detail did not preserve the seeded discovery canonical_domain.");
+    }
+    if (String(sourceProfilePayload?.latest_source_quality_snapshot_id ?? "").trim().length === 0) {
+      throw new Error("Source profile detail did not expose the latest source-quality snapshot.");
+    }
 
-    log("Seeding recall mission/candidate state through the maintenance API.");
-    const recallMission = await postJson(`${apiBaseUrl}/maintenance/discovery/recall-missions`, {
+    log("Creating a recall mission through the admin surface.");
+    const recallMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "create_recall_mission",
+      redirectTo: `${discoveryPath}?tab=recall`,
       title: `Recall mission ${runId}`,
       description: "Admin acceptance recall mission",
       missionKind: "domain_seed",
-      seedDomains: [`recall-${runId}.example.test`],
-      seedQueries: [`recall ${runId}`],
-      targetProviderTypes: ["rss"],
-      scopeJson: { acceptance: true },
-      maxCandidates: 4,
-      createdBy: adminEmail,
-    });
-    recallMissionId = String(recallMission?.recall_mission_id ?? "");
+      seedDomains: `recall-${runId}.example.test`,
+      seedQueries: `recall ${runId}`,
+      targetProviderTypes: "rss",
+      scopeJson: '{"acceptance":true}',
+      maxCandidates: "4",
+      profileId,
+    }, { cookie: adminCookie });
+    recallMissionId = String(recallMission.json?.recall_mission_id ?? "");
     if (!recallMissionId) {
       throw new Error("Recall mission creation did not return a recall_mission_id.");
     }
+    const updatedRecallMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "update_recall_mission",
+      redirectTo: `${discoveryPath}?tab=recall`,
+      recallMissionId,
+      status: "active",
+      maxCandidates: "5",
+      profileId,
+    }, { cookie: adminCookie });
+    if (String(updatedRecallMission.json?.status ?? "") !== "active") {
+      throw new Error("Recall mission update did not persist the active status.");
+    }
+    const recallSourceProfileId = queryPostgres(
+      env,
+      `
+        insert into discovery_source_profiles (
+          candidate_id,
+          canonical_domain,
+          source_type,
+          org_name,
+          country,
+          languages,
+          ownership_transparency,
+          author_accountability,
+          source_linking_quality,
+          historical_stability,
+          technical_quality,
+          spam_signals,
+          trust_score,
+          extraction_data
+        )
+        values (
+          null,
+          ${sqlLiteral(`recall-${runId}.example.test`)},
+          'procurement_portal',
+          ${sqlLiteral(`Recall Org ${runId}`)},
+          'PL',
+          array['en']::text[],
+          0.78,
+          0.74,
+          0.72,
+          0.8,
+          0.81,
+          0.05,
+          0.82,
+          '{"acceptance":true,"lane":"recall"}'::jsonb
+        )
+        returning source_profile_id::text;
+      `
+    );
+    if (!recallSourceProfileId) {
+      throw new Error("Failed to seed a discovery source profile for recall acceptance.");
+    }
+    queryPostgres(
+      env,
+      `
+        insert into discovery_source_quality_snapshots (
+          source_profile_id,
+          channel_id,
+          snapshot_reason,
+          trust_score,
+          extraction_quality_score,
+          stability_score,
+          independence_score,
+          freshness_score,
+          lead_time_score,
+          yield_score,
+          duplication_score,
+          recall_score,
+          scoring_breakdown
+        )
+        values (
+          ${sqlLiteral(recallSourceProfileId)},
+          null,
+          'acceptance_recall_seed',
+          0.82,
+          0.81,
+          0.8,
+          0.78,
+          0.76,
+          0.73,
+          0.71,
+          0.08,
+          0.93,
+          '{"metricSource":"acceptance_recall_seed"}'::jsonb
+        )
+        on conflict (source_profile_id)
+        do update
+        set
+          snapshot_reason = excluded.snapshot_reason,
+          trust_score = excluded.trust_score,
+          extraction_quality_score = excluded.extraction_quality_score,
+          stability_score = excluded.stability_score,
+          independence_score = excluded.independence_score,
+          freshness_score = excluded.freshness_score,
+          lead_time_score = excluded.lead_time_score,
+          yield_score = excluded.yield_score,
+          duplication_score = excluded.duplication_score,
+          recall_score = excluded.recall_score,
+          scoring_breakdown = excluded.scoring_breakdown,
+          scored_at = now(),
+          updated_at = now();
+      `
+    );
     const recallCandidate = await postJson(`${apiBaseUrl}/maintenance/discovery/recall-candidates`, {
       recallMissionId,
+      sourceProfileId: recallSourceProfileId,
       url: `https://recall-${runId}.example.test/feed.xml`,
       finalUrl: `https://recall-${runId}.example.test/feed.xml`,
       title: `Recall candidate ${runId}`,
@@ -950,7 +1116,7 @@ async function main() {
       providerType: "rss",
       status: "pending",
       qualitySignalSource: "acceptance_manual",
-      evaluationJson: { classification: "rss" },
+      evaluationJson: { classification: "rss", normalizedReasonBucket: "below_auto_promotion_threshold", recallScore: 0.73 },
       createdBy: adminEmail,
     });
     recallCandidateId = String(recallCandidate?.recall_candidate_id ?? "");
@@ -969,11 +1135,27 @@ async function main() {
       String(promotedRecallCandidate?.status ?? "") === "duplicate" ? "linked_duplicate" : "promoted";
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=recall`,
-      [`Recall mission ${runId}`, `Recall candidate ${runId}`, recallPromotionState],
+      [`Recall mission ${runId}`, `Recall candidate ${runId}`, recallPromotionState, `Acceptance profile ${runId}`],
       { cookie: adminCookie }
     );
 
-    log("Archiving and reactivating discovery mission and class through the admin surface.");
+    log("Archiving and reactivating discovery mission, class, and profile through the admin surface.");
+    const archivedProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "archive_profile",
+      redirectTo: `${discoveryPath}?tab=profiles`,
+      profileId,
+    }, { cookie: adminCookie });
+    if (String(archivedProfile.json?.status ?? "") !== "archived") {
+      throw new Error("Discovery profile archive did not persist the archived status.");
+    }
+    const activatedProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "activate_profile",
+      redirectTo: `${discoveryPath}?tab=profiles`,
+      profileId,
+    }, { cookie: adminCookie });
+    if (String(activatedProfile.json?.status ?? "") !== "active") {
+      throw new Error("Discovery profile activation did not persist the active status.");
+    }
     const archivedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
       intent: "archive_mission",
       redirectTo: `${discoveryPath}?tab=missions`,
@@ -1028,7 +1210,7 @@ async function main() {
       (payload) => String(payload?.status ?? "") === "active"
     );
 
-    log("Deleting disposable discovery mission and class through the admin surface.");
+    log("Deleting disposable discovery mission, class, and profile through the admin surface.");
     const deletedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
       intent: "delete_mission",
       redirectTo: `${discoveryPath}?tab=missions`,
@@ -1059,6 +1241,21 @@ async function main() {
       (response) => response.status === 404
     );
 
+    const deletedProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "delete_profile",
+      redirectTo: `${discoveryPath}?tab=profiles`,
+      profileId: deletableProfileId,
+    }, { cookie: adminCookie });
+    if (deletedProfile.json?.deleted !== true) {
+      throw new Error("Discovery profile delete did not report deleted=true.");
+    }
+    await waitFor(
+      "deleted discovery profile",
+      async () =>
+        sendRequest(`${apiBaseUrl}/maintenance/discovery/profiles/${encodeURIComponent(deletableProfileId)}`),
+      (response) => response.status === 404
+    );
+
     console.log(
       JSON.stringify(
         {
@@ -1074,6 +1271,8 @@ async function main() {
           recallMissionId,
           recallCandidateId,
           recallPromotionState,
+          profileId,
+          deletableProfileId,
         },
         null,
         2

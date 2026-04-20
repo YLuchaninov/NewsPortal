@@ -22,7 +22,42 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current memory
 
 - Runtime core инициализирован; ordinary implementation work разрешен.
-- `C-DISCOVERY-GOOD-YIELD` now exists as the active capability over the already-proven discovery baseline (`runtime=pass`, `nonRegression=pass`, `yield=weak`).
+- On 2026-04-20 `STAGE-4D-GENERALIZED-PROFILE-BACKED-RECALL-VALIDITY-AND-YIELD-RETUNE` closed and the parent capability `C-DISCOVERY-GOOD-YIELD` reached full completion:
+  - the reusable profile-backed Example B/C harness still materializes stable `discovery_policy_profiles` before graph/recall execution and reuses the same profile truth for automation plus manual replay;
+  - `pnpm test:discovery:examples:compose` remains the canonical single-run entrypoint for the profile-backed Example B/C harness;
+  - single-run artifacts still include `manualReplaySettings` per case with profile identity, graph/recall policy, benchmark cohort, exact mission seeds/queries, and applied profile version/policy snapshots;
+  - `DISCOVERY_MODE_TESTING.md` remains the primary operator handbook for manual replay of those proof-backed profiles, while `README.md`, `EXAMPLES.md`, and `docs/manual-mvp-runbook.md` only point into that handbook;
+  - latest authoritative proof artifacts now are:
+    - `/tmp/newsportal-live-discovery-examples-b41de125.json`
+    - `/tmp/newsportal-live-discovery-examples-b41de125.md`
+    - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json`
+    - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.md`
+    - `/tmp/newsportal-discovery-nonregression-f499bb13.json`
+    - `/tmp/newsportal-discovery-nonregression-f499bb13.md`
+  - latest authoritative result:
+    - latest single-run `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`
+    - final multi-run gate `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`
+    - multi-run per-pack counts are now:
+      - `Example B = 3/3`
+      - `Example C = 3/3`
+    - non-regression `nonRegressionVerdict=pass`
+    - the latest synced manual replay baseline used applied profile version `22`; operators should still trust the `manualReplaySettings` from their own fresh artifact if later reruns advance that version again.
+- The profile-backed proof fixes that unlocked the closeout are now part of shipped discovery truth:
+  - profile materialization and API normalization preserve `supportedWebsiteKinds` instead of dropping them from `discovery_policy_profiles`;
+  - graph and recall candidate materialization now persist `registered_channel_id` immediately for truthfully duplicate-linked sources, so duplicate outcomes count as real onboarding evidence without waiting for a later manual promote/approve step.
+- On 2026-04-20 `C-DISCOVERY-PROFILES-ADMIN` was implemented and proven end to end:
+  - additive schema/runtime truth now includes reusable `discovery_policy_profiles` plus nullable mission/recall `profile_id`, `applied_profile_version`, and `applied_policy_json`;
+  - maintenance API and admin BFF/UI now support reusable profile CRUD, mission/recall profile attachment, and explainability-first structured policy rendering on `/admin/discovery`;
+  - authoritative proof:
+    - `pnpm test:discovery:admin:compose`
+    - `/tmp/newsportal-live-discovery-examples-682e955a.json|md`
+    - `/tmp/newsportal-discovery-nonregression-9c663b86.json|md`
+  - result:
+    - discovery admin/operator acceptance passed with reusable profile CRUD plus graph/recall attach flows;
+    - live discovery runtime stayed `runtimeVerdict=pass`;
+    - discovery downstream safety stayed `nonRegressionVerdict=pass`;
+    - overall discovery yield remains `weak`, which is unchanged capability residue rather than a regression from profiles.
+- `C-DISCOVERY-GOOD-YIELD` is now completed and archived in `docs/history.md`; discovery keeps the already-proven `runtime=pass` and `nonRegression=pass` baseline and now also has proof-backed `yield=pass` on the required multi-pack contour.
 - `STAGE-3-GENERALIZED-CANDIDATE-MIX-TUNING` is now archived:
   - authoritative artifact: `/tmp/newsportal-live-discovery-examples-ac199047.json|md`
   - result: `runtimeVerdict=pass`, `yieldVerdict=weak`, but both runtime packs reached `candidate_not_valid=0` after case-owned graph-class isolation, which moved the bottleneck away from graph false negatives and into recall policy.
@@ -204,74 +239,19 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Active capabilities
 
-- `C-DISCOVERY-GOOD-YIELD`
-  - Status: active
-  - Goal: prove and then reach truthful `good yield` for the DDGS-first discovery subsystem while preserving the already-proven downstream non-regression boundary.
-  - Outcome: discovery keeps `runtime=pass` and `nonRegression=pass`, and also reaches `yield=pass` on the required multi-pack proof contour without turning Example B/C into core-policy special cases.
-  - Safety completion condition:
-    - `runtimeVerdict = pass`
-    - `nonRegressionVerdict = pass`
-    - existing `ingest -> canonicalize -> verify -> interest_filter_results -> final_selection_results` truth remains stable for the frozen pre-existing corpus
-  - Yield completion condition:
-    - `yieldVerdict = pass`
-    - `pnpm test:discovery:yield:compose` reaches the required `2/3` passing runs for every required runtime-enabled case pack
-    - calibration agreement stays `>= 0.80` for every validation pack
-  - Stage breakdown:
-    - `STAGE-1-YIELD-CONTRACT-AND-DIAGNOSTICS`
-    - `STAGE-2-TECHNICAL-FALSE-NEGATIVE-REPAIR`
-    - `STAGE-3-GENERALIZED-CANDIDATE-MIX-TUNING`
-    - `STAGE-4-REVIEW-AND-PROMOTION-POLICY-TUNING`
-    - `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`
-    - `STAGE-5-ONBOARDING-TO-DOWNSTREAM-YIELD-CLOSEOUT`
-    - `STAGE-6-FREE-ONLY-FALLBACK-CONTINGENCY` only if DDGS-only ceiling is proven
-  - Immediate next stage:
-    - `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`
+- none
 
 ### Active work items
-
-- `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`
-  - Kind: Stage
-  - Status: ready
-  - Goal: eliminate the newly isolated Example B recall `candidate_not_valid` wall by repairing recall acquisition/validity for editorial developer-news sources without regressing the now-proven Example C yield gain or downstream non-regression contour.
-  - In scope:
-    - `docs/work.md`
-    - `docs/history.md`
-    - `infra/scripts/lib/discovery-live-example-cases.mjs`
-    - `infra/scripts/test-live-discovery-examples.mjs`
-    - `services/workers/app/discovery_orchestrator.py` only if the root cause proves to be acquisition/runtime-side instead of case-pack seed drift
-    - `tests/unit/ts/discovery-live-yield-policy.test.ts` if calibration/fixture truth needs updates
-  - Out of scope:
-    - provider expansion/fallback
-    - Example C threshold loosening
-    - broad core discovery rewrites
-    - browser-assisted widening
-    - downstream pipeline ownership
-    - changing the already-proven non-regression contract
-  - Allowed paths:
-    - `docs/work.md`
-    - `docs/history.md`
-    - `infra/scripts/lib/discovery-live-example-cases.mjs`
-    - `infra/scripts/test-live-discovery-examples.mjs`
-    - `services/workers/app/discovery_orchestrator.py`
-    - `tests/unit/ts/discovery-live-yield-policy.test.ts`
-  - Required proof:
-    - `node --check infra/scripts/lib/discovery-live-example-cases.mjs`
-    - `node --check infra/scripts/test-live-discovery-examples.mjs`
-    - `node --import tsx --test tests/unit/ts/discovery-live-yield-policy.test.ts`
-    - `env DISCOVERY_ENABLED=1 node infra/scripts/test-live-discovery-examples.mjs`
-    - `pnpm test:discovery:nonregression:compose`
-    - `git diff --check -- docs/work.md docs/history.md infra/scripts/lib/discovery-live-example-cases.mjs infra/scripts/test-live-discovery-examples.mjs services/workers/app/discovery_orchestrator.py tests/unit/ts/discovery-live-yield-policy.test.ts`
-  - Risk:
-    - medium; the next stage touches the line between recall query mix and runtime candidate validity, so the main risk is masking a real live-content limit as if it were a fixable technical false negative.
+- none
 
 ## Next recommended action
 
-- execute `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`. The latest single-run artifact `/tmp/newsportal-live-discovery-examples-85142a9e.json|md` and non-regression proof `/tmp/newsportal-discovery-nonregression-3a7f0438.json|md` show a real Stage-4 win for Example C (`yield pass`, two onboarded channels, downstream fetch evidence, zero downstream drift), while Example B is no longer threshold-blocked and now clearly fails on recall `candidate_not_valid` / `invalid_feed` noise. The next truthful move is to repair or reframe Example B recall validity, not to keep loosening policy.
+- none; the current discovery good-yield capability is closed. If the user wants follow-up work, open a new item for operator polish, broader case-pack expansion, or provider-scope experimentation.
 
 ## Archive sync status
 
 - Completed item or capability awaiting archive sync:
-  none
+  none after syncing `STAGE-4D-GENERALIZED-PROFILE-BACKED-RECALL-VALIDITY-AND-YIELD-RETUNE` and `C-DISCOVERY-GOOD-YIELD` into `docs/history.md`
 - Why it is still live, if applicable:
   n/a
 - Archive action required next:
@@ -301,37 +281,49 @@ Durable completed detail переносится в `docs/history.md`.
     - `487` `sequence_runs`
   - no post-run cleanup/reset was performed; this cohort is intentionally preserved for inspection and tuning follow-up
   - discovery verification cleanup status:
-    - the repaired compose baseline now intentionally contains additional live-discovery proof residue from repeated proof hardening reruns:
-      - fresh discovery missions and recall missions for Example B/C from runs `b780e589` and `bbc3fdad`;
-      - fresh rejected/not-onboarded graph and recall candidates for both cases;
+    - the repaired compose baseline now intentionally contains additional live-discovery proof residue from repeated proof hardening and closeout reruns:
+      - fresh discovery missions and recall missions for Example B/C from runs including `ca3049b7`, `b41de125`, and the aggregate yield gate `a59832ca`;
+      - fresh graph and recall candidates for both cases, including duplicate-linked candidates that now persist `registered_channel_id` during materialization;
       - fresh sequence runs, sequence task runs, feedback rows, portfolio snapshots, source profiles, and source-quality snapshots tied to those proof runs;
-      - no new approved/promoted channels were produced by the final `bbc3fdad` run because both cases completed with honest weak-yield residuals instead of downstream onboarding.
+      - fresh onboarded or duplicate-linked channels were produced by the closing proof contour, including multi-run passing evidence for both Example B and Example C.
     - direct proof artifacts for the hardened lane now live at:
-      - `/tmp/newsportal-live-discovery-examples-b780e589.json`
-      - `/tmp/newsportal-live-discovery-examples-b780e589.md`
-      - `/tmp/newsportal-live-discovery-examples-bbc3fdad.json`
-      - `/tmp/newsportal-live-discovery-examples-bbc3fdad.md`
-      - `/tmp/newsportal-live-discovery-examples-22232424.json`
-      - `/tmp/newsportal-live-discovery-examples-22232424.md`
-      - `/tmp/newsportal-live-discovery-examples-3e265fd2.json`
-      - `/tmp/newsportal-live-discovery-examples-3e265fd2.md`
-      - `/tmp/newsportal-live-discovery-examples-5b117936.json`
-      - `/tmp/newsportal-live-discovery-examples-5b117936.md`
-      - `/tmp/newsportal-live-discovery-examples-e87dd8c5.json`
-      - `/tmp/newsportal-live-discovery-examples-e87dd8c5.md`
-      - `/tmp/newsportal-live-discovery-yield-proof-d0eb2887.json`
-      - `/tmp/newsportal-live-discovery-yield-proof-d0eb2887.md`
-      - `/tmp/newsportal-live-discovery-examples-b7b86b83.json`
-      - `/tmp/newsportal-live-discovery-examples-b7b86b83.md`
-      - `/tmp/newsportal-discovery-nonregression-0c105e1b.json`
-      - `/tmp/newsportal-discovery-nonregression-0c105e1b.md`
+      - `/tmp/newsportal-live-discovery-examples-ca3049b7.json`
+      - `/tmp/newsportal-live-discovery-examples-ca3049b7.md`
+      - `/tmp/newsportal-live-discovery-examples-b41de125.json`
+      - `/tmp/newsportal-live-discovery-examples-b41de125.md`
+      - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json`
+      - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.md`
+      - `/tmp/newsportal-discovery-nonregression-f499bb13.json`
+      - `/tmp/newsportal-discovery-nonregression-f499bb13.md`
     - Firebase admin aliases are created and cleaned by the shipped admin acceptance harness; no separate residual Firebase cleanup task is currently known
+    - the profile-backed Example B/C harness now also leaves reusable stable-key `discovery_policy_profiles` for:
+      - `example_b_dev_news_proof`
+      - `example_c_outsourcing_proof`
+      those profiles are intentional reusable proof fixtures rather than accidental residue and are now documented in `DISCOVERY_MODE_TESTING.md`
 
 ## Handoff
 
 - Current active item and status:
-  no active implementation item remains for this turn; `C-DISCOVERY-GOOD-YIELD` stays active, and the truthful next stage is `STAGE-4B-EXAMPLE-B-RECALL-CANDIDATE-VALIDITY-REPAIR`.
+  no active implementation item remains; `C-DISCOVERY-GOOD-YIELD` is complete and archived.
 - What is already proven:
+  `C-DISCOVERY-GOOD-YIELD` is now complete:
+  - `pnpm test:discovery:examples:compose` remains the canonical single-run Example B/C proof entrypoint and now finishes `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass` on the latest authoritative run `/tmp/newsportal-live-discovery-examples-b41de125.json|md`;
+  - `pnpm test:discovery:yield:compose` now finishes `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass` on `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json|md`;
+  - the required runtime packs both reached `3/3` passing runs in the final bounded multi-run gate:
+    - `Example B — IT-новости для разработчиков`
+    - `Example C — Поиск клиентов для аутсорс-компании`
+  - `pnpm test:discovery:nonregression:compose` stayed green on `/tmp/newsportal-discovery-nonregression-f499bb13.json|md`;
+  - the harness still materializes reusable profiles `example_b_dev_news_proof` and `example_c_outsourcing_proof` before graph/recall execution;
+  - single-run artifacts still include `manualReplaySettings` that exactly capture profile key/display name, graph policy, recall policy, benchmark cohort, exact mission seeds/queries, and applied profile version/policy snapshots;
+  - the latest synced manual replay baseline used applied profile version `22`, but operators should still treat the `manualReplaySettings` from their own fresh artifact as the canonical replay source if profile versions advance again.
+  `C-DISCOVERY-PROFILES-ADMIN` is now fully proven and archived at the code/proof layer:
+  - reusable `discovery_policy_profiles` exist as additive operator-managed tuning truth for graph and recall lanes;
+  - `discovery_missions` and `discovery_recall_missions` can now reference `profile_id` and persist `applied_profile_version` plus `applied_policy_json` snapshots for historical reproducibility;
+  - `/admin/discovery` now ships a `Profiles` tab, mission/recall profile selectors, and explainability-first candidate/recall policy signals;
+  - `pnpm test:discovery:admin:compose` passed with reusable profile CRUD, mission attach, recall attach, profile archive/reactivate/delete, and visible explainability/profile version fields;
+  - live runtime and downstream safety remained green on the same baseline through:
+    - `/tmp/newsportal-live-discovery-examples-682e955a.json|md`
+    - `/tmp/newsportal-discovery-nonregression-9c663b86.json|md`
   the live discovery automation is wired to the currently shipped discovery/runtime surfaces and now also has a case-agnostic safety proof:
   - it enforces the DDGS-only guard (`DISCOVERY_ENABLED=1`, `DISCOVERY_SEARCH_PROVIDER=ddgs`, Brave/Serper keys empty)
   - it treats `pnpm test:discovery-enabled:compose` and `pnpm test:discovery:admin:compose` as mandatory preflight proof before live execution
@@ -353,8 +345,6 @@ Durable completed detail переносится в `docs/history.md`.
     - browser-assisted website candidates remain `website`
     - duplicate-linked recall promotions count as valid onboarding evidence
 - What is still unproven or intentionally left open:
-  the proof lane is now case-agnostic at the policy/proof layer and has an explicit non-regression contour, but `good yield` is still not proven across the required runtime packs:
-  - Example C now has a fresh single-run `yield pass` in `/tmp/newsportal-live-discovery-examples-85142a9e.json|md`, plus Stage-4 non-regression stayed green in `/tmp/newsportal-discovery-nonregression-3a7f0438.json|md`;
-  - Example B still does not onboard sources because recall acquisition is surfacing mostly `invalid_feed` editorial noise that now lands truthfully as `candidate_not_valid`, so the next blocker is not threshold policy anymore.
+  nothing remains open for `C-DISCOVERY-GOOD-YIELD`; any further work should be framed as a new capability such as operator UX polish, new case-pack expansion, or provider-scope experimentation.
 - Scope or coordination warning for the next agent:
-  do not collapse future discovery work into “tune Example B/C more.” The architectural requirement remains stronger: discovery core policy must stay reusable for future case packs, Example B/C are only current validation cohorts, and any tuning change must preserve the downstream non-regression boundary from `docs/contracts/article-pipeline-core.md`, `docs/contracts/discovery-agent.md`, and `docs/contracts/zero-shot-interest-filtering.md`.
+  do not reopen `C-DISCOVERY-GOOD-YIELD` just to continue general discovery evolution. Open a new item instead, and keep the stronger architectural requirement intact: discovery core policy must stay reusable for future case packs, Example B/C are proof cohorts rather than architectural owners, and any new tuning change must preserve the downstream non-regression boundary from `docs/contracts/article-pipeline-core.md`, `docs/contracts/discovery-agent.md`, and `docs/contracts/zero-shot-interest-filtering.md`.

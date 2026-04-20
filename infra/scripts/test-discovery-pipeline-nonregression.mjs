@@ -233,7 +233,8 @@ function assertComposeDiscoveryEnv(serviceName) {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is running before baseline snapshot.");
-  runCommand("docker", [...composeArgs, "up", "-d", "--force-recreate", ...stackServices]);
+  runCommand("docker", [...composeArgs, "down", "--remove-orphans"]);
+  runCommand("docker", [...composeArgs, "up", "--build", "-d", "--force-recreate", ...stackServices]);
   await Promise.all([
     waitForHttpHealth("api", "http://127.0.0.1:8000/health"),
     waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health"),

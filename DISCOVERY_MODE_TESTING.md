@@ -35,7 +35,11 @@
 6. [Как читать dual-path discovery без путаницы](#6-как-читать-dual-path-discovery-без-путаницы)
 7. [Troubleshooting и честные non-regressions](#7-troubleshooting-и-честные-non-regressions)
 8. [Канонический proof для этой зоны](#8-канонический-proof-для-этой-зоны)
-9. [FAQ по discovery mode](#9-faq-по-discovery-mode)
+9. [Proof-backed Discovery Profiles для Example B и Example C](#9-proof-backed-discovery-profiles-для-example-b-и-example-c)
+   - [9.1. Как использовать proof-backed profiles](#91-как-использовать-proof-backed-profiles)
+   - [9.2. Example B — Proof-backed Discovery Profile](#92-example-b--proof-backed-discovery-profile)
+   - [9.3. Example C — Proof-backed Discovery Profile](#93-example-c--proof-backed-discovery-profile)
+10. [FAQ по discovery mode](#10-faq-по-discovery-mode)
 
 ---
 
@@ -578,7 +582,9 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-candidates/<
    Доказывает bounded provider-backed enabled runtime.
 2. `pnpm test:discovery:admin:compose`
    Доказывает operator/admin graph-first flow плюс bounded recall seeding/promotion acceptance.
-3. Manual read checks:
+3. `pnpm test:discovery:examples:compose`
+   Доказывает profile-backed Example B/C single-run flow, materialize-ит reusable `discovery_policy_profiles` и пишет canonical `manualReplaySettings` в artifact.
+4. Manual read checks:
    - `/maintenance/discovery/summary`
    - `/maintenance/discovery/costs/summary`
    - `/admin/discovery`
@@ -589,12 +595,545 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-candidates/<
   это runtime smoke про enabled discovery adapters, LLM/search path и bounded adaptive walkthrough
 - `pnpm test:discovery:admin:compose`
   это operator acceptance про admin/control-plane lifecycle, candidate review, feedback, re-evaluation и recall promotion shape
+- `pnpm test:discovery:examples:compose`
+  это profile-backed Example B/C proof и source of truth для operator-replayable discovery settings из этого handbook
 
 Они дополняют друг друга, а не заменяют.
 
 ---
 
-## 9. FAQ по discovery mode
+## 9. Proof-backed Discovery Profiles для Example B и Example C
+
+Эта секция фиксирует exact operator-facing settings для двух shipped proof cohorts.
+
+Source of truth для этих настроек остается в runtime case-pack layer:
+
+- [`infra/scripts/lib/discovery-live-example-cases.mjs`](./infra/scripts/lib/discovery-live-example-cases.mjs)
+- [`infra/scripts/lib/discovery-live-proof-profiles.mjs`](./infra/scripts/lib/discovery-live-proof-profiles.mjs)
+
+Canonical single-run proof command:
+
+```sh
+pnpm test:discovery:examples:compose
+```
+
+Harness materialize-ит reusable `discovery_policy_profiles`, привязывает их к graph mission и recall mission и пишет `/tmp/newsportal-live-discovery-examples-<runId>.json|md`.
+
+Current freshest synced profile-backed proof artifacts:
+
+- single-run replay baseline:
+  - `/tmp/newsportal-live-discovery-examples-b41de125.json`
+  - `/tmp/newsportal-live-discovery-examples-b41de125.md`
+- final bounded multi-run gate:
+  - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json`
+  - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.md`
+- non-regression wrapper on the same contour:
+  - `/tmp/newsportal-discovery-nonregression-f499bb13.json`
+  - `/tmp/newsportal-discovery-nonregression-f499bb13.md`
+
+Его truthful outcome сейчас такой:
+
+- общий `runtimeVerdict = pass`
+- общий `yieldVerdict = pass`
+- `nonRegressionVerdict = pass` на свежем wrapper-proof
+- latest single-run `b41de125` дал `yield pass` для обоих required packs
+- final multi-run gate `a59832ca` тоже завершился `pass`:
+  - `Example B` прошел `3/3`
+  - `Example C` прошел `3/3`
+
+Это значит, что настройки ниже уже являются canonical manual replay baseline и одновременно закрытым `good yield` proof contour для обоих required packs на текущем DDGS-first baseline.
+
+### 9.1. Как использовать proof-backed profiles
+
+Используйте эти profiles, если вам нужно:
+
+- повторить exactly тот же operator tuning, который использует automation;
+- сравнить ручной `/admin/discovery` run с repo-owned proof;
+- не придумывать отдельную “ручную” конфигурацию, расходящуюся с harness truth.
+
+Manual replay pattern:
+
+1. Запустите `pnpm test:discovery:examples:compose` хотя бы один раз, чтобы materialize-ить reusable profiles и получить свежий artifact.
+2. Откройте `/admin/discovery?tab=profiles`.
+3. Найдите profile по стабильному `profileKey`.
+4. Для graph lane создайте mission и выберите этот profile в selector-е `Discovery profile`.
+5. Для recall lane создайте recall mission и выберите тот же profile.
+6. Сверьте `Applied profile version` на mission/recall row с artifact `manualReplaySettings`.
+7. После run смотрите:
+   - `/admin/discovery`
+   - `/maintenance/discovery/summary`
+   - `/maintenance/discovery/costs/summary`
+   - artifact `manualReplaySettings`
+
+### 9.2. Example B — Proof-backed Discovery Profile
+
+Когда использовать:
+
+- если вы расширяете `Example B — IT-новости для разработчиков`;
+- если вам нужен dev-news/editorial-first discovery baseline;
+- если вы хотите проверить graph + recall lanes на developer-news interest pack.
+
+Stable profile identity:
+
+- `profileKey = example_b_dev_news_proof`
+- `displayName = Example B — Dev News Proof`
+- latest synced single-run used `appliedProfileVersion = 22`
+- for manual replay always trust the `manualReplaySettings` from your own fresh artifact if the version has moved again
+
+Graph profile settings:
+
+```json
+{
+  "providerTypes": ["rss", "website"],
+  "supportedWebsiteKinds": [],
+  "preferredDomains": [
+    "infoq.com",
+    "thenewstack.io",
+    "github.blog",
+    "blog.cloudflare.com",
+    "techcrunch.com",
+    "venturebeat.com"
+  ],
+  "blockedDomains": [
+    "feedspot.com",
+    "rssing.com",
+    "rssowl.org",
+    "alltop.com"
+  ],
+  "positiveKeywords": [
+    "developer",
+    "engineering",
+    "open source",
+    "security advisory",
+    "cloud native",
+    "platform engineering",
+    "programming language",
+    "framework",
+    "ai",
+    "llm"
+  ],
+  "negativeKeywords": [
+    "top 10",
+    "top 50",
+    "best blogs",
+    "best developer blogs",
+    "blogs to follow",
+    "directory",
+    "feed directory",
+    "release notes only",
+    "changelog archive",
+    "rss aggregator",
+    "listicle",
+    "seo",
+    "contact us",
+    "advanced search",
+    "web store",
+    "newsletter",
+    "profile"
+  ],
+  "preferredTactics": [
+    "editorial dev news",
+    "official engineering updates"
+  ],
+  "minRssReviewScore": 0.78,
+  "minWebsiteReviewScore": 0.81
+}
+```
+
+Recall profile settings:
+
+```json
+{
+  "providerTypes": ["rss", "website"],
+  "preferredDomains": [
+    "engineering.fb.com",
+    "blog.jetbrains.com",
+    "github.blog",
+    "blog.cloudflare.com",
+    "thenewstack.io",
+    "infoq.com",
+    "lineageos.org",
+    "underthehood.meltwater.com"
+  ],
+  "blockedDomains": [
+    "feedspot.com",
+    "rssing.com",
+    "alltop.com",
+    "rss.app",
+    "wikipedia.org",
+    "einnews.com",
+    "archdaily.com",
+    "opensourcefeed.org",
+    "expertinsights.com",
+    "tedt.org",
+    "manofmany.com",
+    "morningstar.com",
+    "msn.com"
+  ],
+  "positiveKeywords": [
+    "engineering",
+    "developer",
+    "open source",
+    "security advisory",
+    "architecture",
+    "platform"
+  ],
+  "negativeKeywords": [
+    "top blogs",
+    "directory",
+    "rss aggregator",
+    "listicle",
+    "changelog archive",
+    "rssfeed generator",
+    "widgets & bots",
+    "wikipedia",
+    "architecture blogs",
+    "telemetry feeds",
+    "contact us",
+    "advanced search",
+    "newsletter",
+    "profile"
+  ],
+  "preferredTactics": [
+    "official engineering blog",
+    "engineering blog rss",
+    "developer security advisory feed",
+    "developer platform blog"
+  ],
+  "minPromotionScore": 0.2,
+  "supportedWebsiteKinds": []
+}
+```
+
+Benchmark cohort:
+
+```json
+{
+  "domains": [
+    "infoq.com",
+    "thenewstack.io",
+    "techcrunch.com",
+    "arstechnica.com",
+    "github.blog",
+    "blog.jetbrains.com",
+    "blog.cloudflare.com",
+    "netflixtechblog.com",
+    "engineering.fb.com",
+    "underthehood.meltwater.com",
+    "venturebeat.com",
+    "mittechnologyreview.com"
+  ],
+  "titleKeywords": [
+    "engineering",
+    "developer",
+    "open source",
+    "cloud native",
+    "security advisory",
+    "programming language",
+    "ai",
+    "llm"
+  ],
+  "tacticKeywords": [
+    "engineering blog",
+    "official engineering updates",
+    "security advisory"
+  ]
+}
+```
+
+Exact graph mission seeds:
+
+```json
+{
+  "seedTopics": [
+    "official engineering blog updates",
+    "programming language release engineering",
+    "cloud native engineering editorial",
+    "developer security advisory",
+    "ai for developers editorial",
+    "open source foundation releases",
+    "engineering architecture blog",
+    "big tech engineering blog updates"
+  ],
+  "seedLanguages": ["en"],
+  "seedRegions": ["us", "eu"],
+  "targetProviderTypes": ["rss", "website"],
+  "maxHypotheses": 4,
+  "maxSources": 12,
+  "budgetCents": 250
+}
+```
+
+Exact recall queries:
+
+```json
+{
+  "seedQueries": [
+    "site:blog.jetbrains.com company blog feed",
+    "site:engineering.fb.com engineering blog",
+    "site:github.blog engineering feed",
+    "site:blog.cloudflare.com developers rss",
+    "site:underthehood.meltwater.com atom"
+  ],
+  "targetProviderTypes": ["rss", "website"],
+  "maxCandidates": 8
+}
+```
+
+What counts as success:
+
+- profile exists in `/admin/discovery?tab=profiles` with the correct key and version;
+- graph and recall missions both show the attached profile and applied version;
+- artifact contains `manualReplaySettings.profile.profileKey = example_b_dev_news_proof`;
+- at least one passing run produces onboarded source plus downstream evidence;
+- candidates show structured policy explainability in UI.
+
+Current truthful note:
+
+- this profile is proof-backed and operator-replayable today;
+- latest authoritative single-run and multi-run proofs both ended `yield pass` for Example B, so this profile is now both a canonical manual replay baseline and a closed good-yield profile on the current DDGS-first contour.
+
+### 9.3. Example C — Proof-backed Discovery Profile
+
+Когда использовать:
+
+- если вы расширяете `Example C — Поиск клиентов для аутсорс-компании`;
+- если вам нужен buyer-signal / procurement-oriented discovery baseline;
+- если вы хотите повторить current proof-backed buyer-signal baseline через reusable profile.
+
+Stable profile identity:
+
+- `profileKey = example_c_outsourcing_proof`
+- `displayName = Example C — Outsourcing Proof`
+- latest synced single-run used `appliedProfileVersion = 22`
+- for manual replay always trust the `manualReplaySettings` from your own fresh artifact if the version has moved again
+
+Graph profile settings:
+
+```json
+{
+  "providerTypes": ["rss", "website"],
+  "supportedWebsiteKinds": [
+    "editorial",
+    "procurement_portal",
+    "listing"
+  ],
+  "preferredDomains": [
+    "sam.gov",
+    "ted.europa.eu",
+    "contractsfinder.service.gov.uk",
+    "merx.com",
+    "bonfirehub.com"
+  ],
+  "blockedDomains": [
+    "clutch.co",
+    "goodfirms.co",
+    "upwork.com",
+    "agency.example.com",
+    "statetechmagazine.com",
+    "smdp.com"
+  ],
+  "positiveKeywords": [
+    "request for proposal",
+    "rfp",
+    "tender",
+    "procurement",
+    "vendor selection",
+    "implementation partner",
+    "migration partner",
+    "dedicated team",
+    "staff augmentation",
+    "legacy system support"
+  ],
+  "negativeKeywords": [
+    "how to outsource",
+    "outsourcing services",
+    "outsourcing trends",
+    "top outsourcing companies",
+    "best outsourcing companies",
+    "agency",
+    "marketing",
+    "case study",
+    "market report",
+    "nearshoring trends",
+    "blog",
+    "best practices",
+    "procurement process",
+    "guide",
+    "pdf",
+    "contact us",
+    "advanced search",
+    "magazine",
+    "news and trends",
+    "local news"
+  ],
+  "preferredTactics": [
+    "procurement notice",
+    "rfp notice",
+    "vendor selection notice",
+    "tender notice rss"
+  ],
+  "minRssReviewScore": 0.74,
+  "minWebsiteReviewScore": 0.8
+}
+```
+
+Recall profile settings:
+
+```json
+{
+  "providerTypes": ["rss", "website"],
+  "supportedWebsiteKinds": [
+    "editorial",
+    "procurement_portal",
+    "listing"
+  ],
+  "preferredDomains": [
+    "sam.gov",
+    "ted.europa.eu",
+    "contractsfinder.service.gov.uk",
+    "merx.com",
+    "bonfirehub.com",
+    "bidsandtenders.ca",
+    "ifad.org",
+    "ec.europa.eu"
+  ],
+  "blockedDomains": [
+    "feedspot.com",
+    "clutch.co",
+    "goodfirms.co",
+    "upwork.com",
+    "vendor.example.com",
+    "globaltenders.com",
+    "tendernews.com",
+    "tendersgo.com",
+    "tendersontime.com",
+    "youtube.com"
+  ],
+  "positiveKeywords": [
+    "request for proposal",
+    "rfp",
+    "tender",
+    "procurement",
+    "vendor selection",
+    "implementation partner",
+    "migration",
+    "support takeover",
+    "opportunities"
+  ],
+  "negativeKeywords": [
+    "how to outsource",
+    "outsourcing services",
+    "agency",
+    "marketing",
+    "case study",
+    "nearshoring",
+    "best practices",
+    "procurement process",
+    "guide",
+    "pdf",
+    "contact us",
+    "for beginners",
+    "magazine",
+    "news and trends"
+  ],
+  "preferredTactics": [
+    "procurement notice",
+    "tender notice rss",
+    "vendor selection",
+    "implementation partner",
+    "buyer procurement feed",
+    "tender portal feed"
+  ],
+  "minPromotionScore": 0.18
+}
+```
+
+Benchmark cohort:
+
+```json
+{
+  "domains": [
+    "sam.gov",
+    "ted.europa.eu",
+    "contractsfinder.service.gov.uk",
+    "merx.com",
+    "bonfirehub.com",
+    "bidsandtenders.ca"
+  ],
+  "titleKeywords": [
+    "request for proposal",
+    "rfp",
+    "tender notice",
+    "procurement",
+    "vendor selection",
+    "implementation partner",
+    "migration partner",
+    "support takeover"
+  ],
+  "tacticKeywords": [
+    "procurement notice",
+    "rfp notice",
+    "vendor selection notice",
+    "tender notice rss"
+  ]
+}
+```
+
+Exact graph mission seeds:
+
+```json
+{
+  "seedTopics": [
+    "digital services procurement portal",
+    "software development buyer request for proposal",
+    "implementation partner contract notice",
+    "engineering staff augmentation procurement notice",
+    "public sector software vendor selection notice",
+    "application modernization procurement portal",
+    "legacy system support contract notice"
+  ],
+  "seedLanguages": ["en"],
+  "seedRegions": ["us", "eu", "apac"],
+  "targetProviderTypes": ["rss", "website"],
+  "maxHypotheses": 4,
+  "maxSources": 12,
+  "budgetCents": 250
+}
+```
+
+Exact recall queries:
+
+```json
+{
+  "seedQueries": [
+    "site:sam.gov software development services procurement",
+    "site:contractsfinder.service.gov.uk digital transformation procurement",
+    "site:ted.europa.eu software implementation contract notice",
+    "site:bonfirehub.com software modernization procurement",
+    "site:bidsandtenders.ca legacy system support services"
+  ],
+  "targetProviderTypes": ["rss", "website"],
+  "maxCandidates": 8
+}
+```
+
+What counts as success:
+
+- profile exists in `/admin/discovery?tab=profiles` with the correct key and version;
+- graph and recall missions both show the attached profile and applied version;
+- artifact contains `manualReplaySettings.profile.profileKey = example_c_outsourcing_proof`;
+- at least one passing run produces onboarded source plus downstream evidence;
+- structured policy explainability is visible on candidate cards.
+
+Current truthful note:
+
+- this profile-backed baseline remains canonical and operator-replayable;
+- the latest authoritative single-run and multi-run proofs both ended `yield pass` for Example C, so this profile is now both a canonical manual replay baseline and a closed good-yield profile on the current DDGS-first contour.
+
+---
+
+## 10. FAQ по discovery mode
 
 **В: Нужно ли discovery для обычного MVP run?**
 > Нет. Canonical safe-by-default MVP baseline остается без discovery. Для общего продукта используйте `docs/manual-mvp-runbook.md`.

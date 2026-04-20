@@ -64,6 +64,36 @@ class _FakeConnection:
 
 
 class ApiDiscoveryManagementTests(unittest.TestCase):
+    def test_profile_policy_normalization_preserves_supported_website_kinds(self) -> None:
+        graph_policy = api_main.normalize_discovery_graph_policy(
+            {
+                "providerTypes": ["rss", "website", "youtube"],
+                "supportedWebsiteKinds": [
+                    "editorial",
+                    "procurement_portal",
+                    "listing",
+                    "listing",
+                ],
+            }
+        )
+        recall_policy = api_main.normalize_discovery_recall_policy(
+            {
+                "providerTypes": ["website"],
+                "supportedWebsiteKinds": ["editorial", "procurement_portal"],
+            }
+        )
+
+        self.assertEqual(graph_policy["providerTypes"], ["rss", "website"])
+        self.assertEqual(
+            graph_policy["supportedWebsiteKinds"],
+            ["editorial", "procurement_portal", "listing"],
+        )
+        self.assertEqual(recall_policy["providerTypes"], ["website"])
+        self.assertEqual(
+            recall_policy["supportedWebsiteKinds"],
+            ["editorial", "procurement_portal"],
+        )
+
     def test_discovery_routes_are_registered(self) -> None:
         paths = {route.path for route in api_main.app.routes}
 
@@ -492,10 +522,16 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
                 "acquire_recall_missions",
                 new=AsyncMock(return_value=expected),
             ) as acquire_recall_missions,
+            patch.object(
+                api_main,
+                "snapshot_discovery_recall_mission_profile_policy",
+                return_value=None,
+            ) as snapshot_profile_policy,
         ):
             result = asyncio.run(api_main.request_discovery_recall_mission_acquisition("recall-1"))
 
         self.assertEqual(result, expected)
+        snapshot_profile_policy.assert_called_once_with("recall-1")
         acquire_recall_missions.assert_awaited_once_with(
             recall_mission_id="recall-1",
             settings=settings,

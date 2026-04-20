@@ -54,10 +54,22 @@ async function main(): Promise<void> {
               'extracted_source_name'
             ))
             or
+            (table_name = 'discovery_policy_profiles' and column_name in (
+              'profile_key',
+              'status',
+              'graph_policy_json',
+              'recall_policy_json',
+              'yield_benchmark_json',
+              'version'
+            ))
+            or
             (table_name = 'discovery_missions' and column_name in (
               'seed_topics',
               'interest_graph',
-              'latest_portfolio_snapshot_id'
+              'latest_portfolio_snapshot_id',
+              'profile_id',
+              'applied_profile_version',
+              'applied_policy_json'
             ))
             or
             (table_name = 'discovery_hypothesis_classes' and column_name in (
@@ -168,7 +180,10 @@ async function main(): Promise<void> {
               'mission_kind',
               'seed_domains',
               'seed_queries',
-              'scope_json'
+              'scope_json',
+              'profile_id',
+              'applied_profile_version',
+              'applied_policy_json'
             ))
             or
             (table_name = 'discovery_recall_candidates' and column_name in (
@@ -231,13 +246,15 @@ async function main(): Promise<void> {
           and c.conname in (
             'fetch_cursors_cursor_type_check',
             'discovery_hypotheses_class_key_fkey',
+            'discovery_missions_profile_id_fkey',
             'discovery_candidates_source_profile_id_fkey',
             'discovery_source_profiles_candidate_fk',
             'discovery_missions_latest_portfolio_snapshot_fk',
             'discovery_source_interest_scores_source_profile_id_fkey',
             'discovery_source_interest_scores_mission_id_fkey',
             'discovery_feedback_events_source_profile_id_fkey',
-            'discovery_strategy_stats_class_key_fkey'
+            'discovery_strategy_stats_class_key_fkey',
+            'discovery_recall_missions_profile_id_fkey'
           )
       `,
       [schemaName]
@@ -278,6 +295,7 @@ async function main(): Promise<void> {
       "fetch_cursors",
       "crawl_policy_cache",
       "articles",
+      "discovery_policy_profiles",
       "discovery_missions",
       "discovery_hypothesis_classes",
       "discovery_hypotheses",
@@ -309,9 +327,11 @@ async function main(): Promise<void> {
       "crawl_policy_cache_expires_idx",
       "articles_channel_source_article_id_unique",
       "articles_processing_state_idx",
+      "discovery_policy_profiles_status_idx",
       "discovery_missions_status_idx",
       "discovery_missions_source_ref_idx",
       "discovery_missions_interest_graph_status_idx",
+      "discovery_missions_profile_id_idx",
       "discovery_hypothesis_classes_status_idx",
       "discovery_hypotheses_mission_idx",
       "discovery_hypotheses_status_idx",
@@ -351,6 +371,7 @@ async function main(): Promise<void> {
       "final_selection_results_story_cluster_id_idx",
       "discovery_recall_missions_status_idx",
       "discovery_recall_missions_kind_idx",
+      "discovery_recall_missions_profile_id_idx",
       "discovery_recall_candidates_url_mission_unique",
       "discovery_recall_candidates_mission_status_idx",
       "discovery_recall_candidates_canonical_domain_idx",
@@ -378,9 +399,18 @@ async function main(): Promise<void> {
       "articles.extracted_favicon_url",
       "articles.extracted_published_at",
       "articles.extracted_source_name",
+      "discovery_policy_profiles.profile_key",
+      "discovery_policy_profiles.status",
+      "discovery_policy_profiles.graph_policy_json",
+      "discovery_policy_profiles.recall_policy_json",
+      "discovery_policy_profiles.yield_benchmark_json",
+      "discovery_policy_profiles.version",
       "discovery_missions.seed_topics",
       "discovery_missions.interest_graph",
       "discovery_missions.latest_portfolio_snapshot_id",
+      "discovery_missions.profile_id",
+      "discovery_missions.applied_profile_version",
+      "discovery_missions.applied_policy_json",
       "discovery_hypothesis_classes.generation_backend",
       "discovery_hypothesis_classes.default_provider_types",
       "discovery_hypothesis_classes.max_per_mission",
@@ -441,6 +471,9 @@ async function main(): Promise<void> {
       "discovery_recall_missions.seed_domains",
       "discovery_recall_missions.seed_queries",
       "discovery_recall_missions.scope_json",
+      "discovery_recall_missions.profile_id",
+      "discovery_recall_missions.applied_profile_version",
+      "discovery_recall_missions.applied_policy_json",
       "discovery_recall_candidates.source_profile_id",
       "discovery_recall_candidates.canonical_domain",
       "discovery_recall_candidates.quality_signal_source",
@@ -501,13 +534,15 @@ async function main(): Promise<void> {
 
     const requiredDiscoveryConstraints = [
       "discovery_hypotheses_class_key_fkey",
+      "discovery_missions_profile_id_fkey",
       "discovery_candidates_source_profile_id_fkey",
       "discovery_source_profiles_candidate_fk",
       "discovery_missions_latest_portfolio_snapshot_fk",
       "discovery_source_interest_scores_source_profile_id_fkey",
       "discovery_source_interest_scores_mission_id_fkey",
       "discovery_feedback_events_source_profile_id_fkey",
-      "discovery_strategy_stats_class_key_fkey"
+      "discovery_strategy_stats_class_key_fkey",
+      "discovery_recall_missions_profile_id_fkey"
     ];
     for (const constraintName of requiredDiscoveryConstraints) {
       if (!constraintByName.has(constraintName)) {

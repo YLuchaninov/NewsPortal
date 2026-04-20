@@ -7,6 +7,7 @@ import {
   resolveArticleSelectionDiagnostics,
   resolveDiscoveryChannelMetrics,
   resolveDiscoveryOperatorSummary,
+  resolveDiscoveryPolicyExplainability,
   resolveDiscoveryRecallCandidateState,
   resolveDiscoverySourceQuality,
 } from "../../../apps/admin/src/lib/server/operator-surfaces.ts";
@@ -83,6 +84,8 @@ test("resolveDiscoveryOperatorSummary exposes dual-path discovery counters", () 
 
   assert.deepEqual(summary, {
     operatingModel: "dual_path",
+    profileCount: 0,
+    activeProfileCount: 0,
     graphMissionCount: 3,
     activeGraphMissionCount: 1,
     compiledGraphCount: 2,
@@ -99,6 +102,16 @@ test("resolveDiscoveryOperatorSummary exposes dual-path discovery counters", () 
     sourceProfileCount: 9,
     sourceQualitySnapshotCount: 11,
   });
+});
+
+test("resolveDiscoveryOperatorSummary exposes profile counters when present", () => {
+  const summary = resolveDiscoveryOperatorSummary({
+    profile_count: 4,
+    active_profile_count: 2,
+  });
+
+  assert.equal(summary.profileCount, 4);
+  assert.equal(summary.activeProfileCount, 2);
 });
 
 test("resolveDiscoverySourceQuality reads latest source-profile snapshot fields", () => {
@@ -142,6 +155,83 @@ test("resolveDiscoveryRecallCandidateState distinguishes promoted duplicates", (
     registeredChannelId: "channel-9",
     channelId: "channel-9",
   });
+});
+
+test("resolveDiscoveryPolicyExplainability maps graph policy signals and thresholds", () => {
+  const explainability = resolveDiscoveryPolicyExplainability(
+    {
+      provider_type: "website",
+      canonical_domain: "news.example.test",
+      title: "Official policy analysis",
+      description: "Editorial report",
+      relevance_score: 0.84,
+      profile_display_name: "Editorial profile",
+      applied_profile_version: 3,
+      applied_policy_json: {
+        graphPolicy: {
+          preferredDomains: ["example.test"],
+          blockedDomains: ["spam.test"],
+          positiveKeywords: ["policy"],
+          negativeKeywords: ["sponsored"],
+          minWebsiteReviewScore: 0.8,
+        },
+        yieldBenchmark: {
+          domains: ["example.test"],
+        },
+      },
+      evaluation_json: {
+        normalizedReasonBucket: "below_auto_approval_threshold",
+      },
+    },
+    "graph"
+  );
+
+  assert.deepEqual(explainability, {
+    lane: "graph",
+    reasonBucket: "below_auto_approval_threshold",
+    score: 0.84,
+    threshold: 0.8,
+    preferredDomainMatch: true,
+    negativeDomainMatch: false,
+    positiveKeywordMatch: true,
+    negativeKeywordMatch: false,
+    benchmarkLike: true,
+    profileName: "Editorial profile",
+    profileVersion: 3,
+  });
+});
+
+test("resolveDiscoveryPolicyExplainability maps recall threshold from applied policy snapshot", () => {
+  const explainability = resolveDiscoveryPolicyExplainability(
+    {
+      provider_type: "rss",
+      canonical_domain: "procurement.example.test",
+      title: "Vendor selection notice",
+      source_quality_recall_score: 0.69,
+      applied_policy_json: {
+        profileDisplayName: "Procurement profile",
+        profileVersion: 2,
+        recallPolicy: {
+          preferredDomains: ["procurement.example.test"],
+          positiveKeywords: ["vendor selection"],
+          minPromotionScore: 0.65,
+        },
+        yieldBenchmark: {
+          titleKeywords: ["vendor selection"],
+        },
+      },
+    },
+    "recall"
+  );
+
+  assert.equal(explainability.lane, "recall");
+  assert.equal(explainability.threshold, 0.65);
+  assert.equal(explainability.score, 0.69);
+  assert.equal(explainability.preferredDomainMatch, true);
+  assert.equal(explainability.positiveKeywordMatch, true);
+  assert.equal(explainability.benchmarkLike, true);
+  assert.equal(explainability.profileName, "Procurement profile");
+  assert.equal(explainability.profileVersion, 2);
 });
 
 test("resolveArticleOperatorState prefers final-selection truth over compatibility badges", () => {

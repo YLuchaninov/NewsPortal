@@ -475,6 +475,9 @@ class DiscoveryCoordinatorRepository:
     async def list_strategy_stats(self, mission_id: str) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_strategy_stats, mission_id)
 
+    async def list_existing_source_channels(self) -> dict[str, str]:
+        return await asyncio.to_thread(self._list_existing_source_channels)
+
     async def list_existing_source_urls(self) -> set[str]:
         return await asyncio.to_thread(self._list_existing_source_urls)
 
@@ -1041,22 +1044,28 @@ class DiscoveryCoordinatorRepository:
                 )
                 return [dict(row) for row in cursor.fetchall()]
 
-    def _list_existing_source_urls(self) -> set[str]:
-        urls: set[str] = set()
+    def _list_existing_source_channels(self) -> dict[str, str]:
+        channels: dict[str, str] = {}
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    select fetch_url, homepage_url
+                    select channel_id::text as channel_id, fetch_url, homepage_url
                     from source_channels
                     where fetch_url is not null or homepage_url is not null
                     """
                 )
                 for row in cursor.fetchall():
+                    channel_id = str(row.get("channel_id") or "").strip()
+                    if not channel_id:
+                        continue
                     for candidate in (row["fetch_url"], row["homepage_url"]):
                         if isinstance(candidate, str) and candidate.strip():
-                            urls.add(normalize_url(candidate))
-        return urls
+                            channels.setdefault(normalize_url(candidate), channel_id)
+        return channels
+
+    def _list_existing_source_urls(self) -> set[str]:
+        return set(self._list_existing_source_channels().keys())
 
     def _list_recent_hypotheses(self, mission_id: str) -> list[dict[str, Any]]:
         with self._connect() as connection:
@@ -1292,6 +1301,7 @@ class DiscoveryCoordinatorRepository:
                               llm_assessment,
                               sample_data,
                               status,
+                              registered_channel_id,
                               rejection_reason
                             )
                             values (
@@ -1307,6 +1317,7 @@ class DiscoveryCoordinatorRepository:
                               %s::jsonb,
                               %s::jsonb,
                               %s::jsonb,
+                              %s,
                               %s,
                               %s
                             )
@@ -1324,6 +1335,7 @@ class DiscoveryCoordinatorRepository:
                               llm_assessment = excluded.llm_assessment,
                               sample_data = excluded.sample_data,
                               status = excluded.status,
+                              registered_channel_id = coalesce(discovery_candidates.registered_channel_id, excluded.registered_channel_id),
                               rejection_reason = excluded.rejection_reason
                             returning
                               candidate_id::text as candidate_id,
@@ -1357,6 +1369,7 @@ class DiscoveryCoordinatorRepository:
                                 Json(candidate.get("llm_assessment") or {}),
                                 Json(candidate.get("sample_data") or []),
                                 candidate.get("status") or "pending",
+                                candidate.get("registered_channel_id"),
                                 candidate.get("rejection_reason"),
                             ),
                         )
@@ -1385,12 +1398,14 @@ class DiscoveryCoordinatorRepository:
                               description,
                               provider_type,
                               status,
+                              registered_channel_id,
                               quality_signal_source,
                               evaluation_json,
                               rejection_reason,
                               created_by
                             )
                             values (
+                              %s,
                               %s,
                               %s,
                               %s,
@@ -1415,6 +1430,7 @@ class DiscoveryCoordinatorRepository:
                               description = excluded.description,
                               provider_type = excluded.provider_type,
                               status = excluded.status,
+                              registered_channel_id = coalesce(discovery_recall_candidates.registered_channel_id, excluded.registered_channel_id),
                               quality_signal_source = excluded.quality_signal_source,
                               evaluation_json = excluded.evaluation_json,
                               rejection_reason = excluded.rejection_reason,
@@ -1423,6 +1439,7 @@ class DiscoveryCoordinatorRepository:
                               recall_candidate_id::text as recall_candidate_id,
                               recall_mission_id::text as recall_mission_id,
                               source_profile_id::text as source_profile_id,
+                              registered_channel_id::text as registered_channel_id,
                               canonical_domain,
                               url,
                               final_url,
@@ -1449,6 +1466,7 @@ class DiscoveryCoordinatorRepository:
                                 candidate.get("description"),
                                 candidate.get("provider_type") or "rss",
                                 candidate.get("status") or "pending",
+                                candidate.get("registered_channel_id"),
                                 candidate.get("quality_signal_source") or "recall_acquisition",
                                 Json(candidate.get("evaluation_json") or {}),
                                 candidate.get("rejection_reason"),
@@ -2415,7 +2433,7 @@ def _candidate_rows_from_context(
     hypothesis_id: str,
     provider_type: str,
     context: dict[str, Any],
-    existing_source_urls: set[str],
+    existing_source_channels: dict[str, str],
 ) -> list[dict[str, Any]]:
     scored_sources = {
         str(item.get("source_url") or ""): dict(item)
@@ -2452,7 +2470,8 @@ def _candidate_rows_from_context(
         effective_url = source_url
         effective_provider = provider_type
         normalized = normalize_url(effective_url)
-        status = "duplicate" if normalized in existing_source_urls else "pending"
+        existing_channel_id = existing_source_channels.get(normalized)
+        status = "duplicate" if existing_channel_id else "pending"
         candidates.append(
             {
                 "mission_id": mission_id,
@@ -2493,6 +2512,7 @@ def _candidate_rows_from_context(
                     or []
                 ),
                 "status": status,
+                "registered_channel_id": existing_channel_id,
                 "rejection_reason": "already_known_source" if status == "duplicate" else None,
             }
         )
@@ -2508,6 +2528,26 @@ def _canonical_origin_url(url: str) -> str:
     if not hostname:
         return ""
     return f"{parsed.scheme or 'https'}://{hostname}"
+
+
+def _looks_like_feed_candidate_url(url: str) -> bool:
+    raw = str(url or "").strip()
+    if not raw:
+        return False
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    hostname = (parsed.netloc or parsed.path or "").lower()
+    path = (parsed.path or "").lower()
+    query = (parsed.query or "").lower()
+    candidate = " ".join(part for part in (hostname, path, query) if part)
+    feed_hints = (
+        "feed",
+        "feeds",
+        "rss",
+        "atom",
+        ".xml",
+        "feedburner",
+    )
+    return any(hint in candidate for hint in feed_hints)
 
 
 def _normalize_domain_seed(value: Any) -> str:
@@ -2610,7 +2650,7 @@ def _recall_candidate_rows_from_probe_results(
     provider_type: str,
     probe_rows: list[dict[str, Any]],
     probe_targets: dict[str, dict[str, Any]],
-    existing_source_urls: set[str],
+    existing_source_channels: dict[str, str],
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for row in probe_rows:
@@ -2647,7 +2687,8 @@ def _recall_candidate_rows_from_probe_results(
             if provider_type == "rss"
             else not row.get("error_text")
         )
-        status = "duplicate" if normalize_url(candidate_url) in existing_source_urls else (
+        existing_channel_id = existing_source_channels.get(normalize_url(candidate_url))
+        status = "duplicate" if existing_channel_id else (
             "pending" if is_valid else "rejected"
         )
         rejection_reason = None
@@ -2690,6 +2731,7 @@ def _recall_candidate_rows_from_probe_results(
                 "description": description,
                 "provider_type": provider_type,
                 "status": status,
+                "registered_channel_id": existing_channel_id,
                 "quality_signal_source": target_meta.get("quality_signal_source") or "recall_acquisition",
                 "evaluation_json": evaluation_json,
                 "rejection_reason": rejection_reason,
@@ -2697,6 +2739,32 @@ def _recall_candidate_rows_from_probe_results(
             }
         )
     return candidates
+
+
+def _probe_failure_rows(
+    *,
+    provider_type: str,
+    probe_urls: list[str],
+    error_text: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    normalized_error_text = str(error_text or "").strip() or "probe_failed"
+    for probe_url in probe_urls:
+        if not isinstance(probe_url, str) or not probe_url.strip():
+            continue
+        row: dict[str, Any] = {
+            "url": probe_url,
+            "error_text": normalized_error_text,
+        }
+        if provider_type == "rss":
+            row["feed_url"] = probe_url
+            row["is_valid_rss"] = False
+            row["sample_entries"] = []
+        else:
+            row["final_url"] = probe_url
+            row["sample_resources"] = []
+        rows.append(row)
+    return rows
 
 
 async def plan_hypotheses(
@@ -2707,7 +2775,8 @@ async def plan_hypotheses(
     class_keys: list[str] | None = None,
 ) -> dict[str, Any]:
     await repository.ensure_interest_template_missions(settings=settings)
-    existing_source_urls = await repository.list_existing_source_urls()
+    existing_source_channels = await repository.list_existing_source_channels()
+    existing_source_urls = set(existing_source_channels.keys())
     runtime = get_discovery_runtime()
     month_to_date_cost_usd = await repository.get_month_to_date_cost_usd(
         discovery_month_start_utc()
@@ -2801,7 +2870,7 @@ async def execute_hypotheses(
         mission_id=mission_id,
         limit=settings.max_hypotheses_per_run,
     )
-    existing_source_urls = await repository.list_existing_source_urls()
+    existing_source_channels = await repository.list_existing_source_channels()
     runtime = get_discovery_runtime()
     executor = SequenceExecutor(repository=sequence_repository, registry=TASK_REGISTRY)
     month_to_date_cost_usd = await repository.get_month_to_date_cost_usd(
@@ -2888,7 +2957,7 @@ async def execute_hypotheses(
             hypothesis_id=hypothesis_id_text,
             provider_type=str(hypothesis.get("target_provider_type") or "rss"),
             context=context,
-            existing_source_urls=existing_source_urls,
+            existing_source_channels=existing_source_channels,
         )
         stored_candidates = await repository.upsert_candidates(candidates)
         approved_count = 0
@@ -2986,6 +3055,9 @@ async def execute_hypotheses(
                     approved_count += 1
             elif stored_candidate.get("status") in {"approved", "auto_approved"}:
                 approved_count += 1
+            channel_id = str(stored_candidate.get("registered_channel_id") or "").strip()
+            if channel_id:
+                existing_source_channels[normalize_url(str(stored_candidate.get("url") or ""))] = channel_id
 
         portfolio = build_portfolio_snapshot(
             mission_graph=graph,
@@ -3068,7 +3140,7 @@ async def acquire_recall_missions(
     repository: DiscoveryCoordinatorRepository,
 ) -> dict[str, Any]:
     runtime = get_discovery_runtime()
-    existing_source_urls = await repository.list_existing_source_urls()
+    existing_source_channels = await repository.list_existing_source_channels()
     executed_mission_ids: list[str] = []
     candidate_count = 0
     source_profile_count = 0
@@ -3107,19 +3179,29 @@ async def acquire_recall_missions(
             for search_plan in search_plans:
                 if len(probe_targets) >= max_candidates:
                     break
-                raw_results = await resolve_runtime_call(
-                    runtime.web_search.search(
-                        query=str(search_plan["query"]),
-                        count=min(remaining_capacity, 5),
-                        result_type="text",
-                        time_range="month",
+                try:
+                    raw_results = await resolve_runtime_call(
+                        runtime.web_search.search(
+                            query=str(search_plan["query"]),
+                            count=min(remaining_capacity, 5),
+                            result_type="text",
+                            time_range="month",
+                        )
                     )
-                )
-                search_results, search_meta = unwrap_web_search_output(raw_results)
+                    search_results, search_meta = unwrap_web_search_output(raw_results)
+                except Exception as error:
+                    search_results = []
+                    search_meta = {
+                        "provider": settings.search_provider,
+                        "request_count": 1,
+                        "error_text": str(error),
+                    }
                 search_request_count += max(1, _meta_request_count(search_meta))
                 for result in search_results:
                     result_url = str(result.get("url") or "").strip()
                     if not result_url:
+                        continue
+                    if provider_type == "rss" and not _looks_like_feed_candidate_url(result_url):
                         continue
                     probe_url = (
                         _canonical_origin_url(result_url)
@@ -3152,13 +3234,20 @@ async def acquire_recall_missions(
             if not probe_urls:
                 continue
 
-            if provider_type == "rss":
-                raw_probe_rows = await resolve_runtime_call(
-                    runtime.rss_probe.probe_feeds(urls=probe_urls, sample_count=3)
-                )
-            else:
-                raw_probe_rows = await resolve_runtime_call(
-                    runtime.website_probe.probe_websites(urls=probe_urls, sample_count=3)
+            try:
+                if provider_type == "rss":
+                    raw_probe_rows = await resolve_runtime_call(
+                        runtime.rss_probe.probe_feeds(urls=probe_urls, sample_count=3)
+                    )
+                else:
+                    raw_probe_rows = await resolve_runtime_call(
+                        runtime.website_probe.probe_websites(urls=probe_urls, sample_count=3)
+                    )
+            except Exception as error:
+                raw_probe_rows = _probe_failure_rows(
+                    provider_type=provider_type,
+                    probe_urls=probe_urls,
+                    error_text=str(error),
                 )
             probe_rows = _coerce_mapping_list(raw_probe_rows)
             probe_count += len(probe_urls)
@@ -3171,7 +3260,7 @@ async def acquire_recall_missions(
                     provider_type=provider_type,
                     probe_rows=probe_rows,
                     probe_targets=probe_targets,
-                    existing_source_urls=existing_source_urls,
+                    existing_source_channels=existing_source_channels,
                 )
             )
 
@@ -3226,7 +3315,9 @@ async def acquire_recall_missions(
                 source_profile_count += 1
                 quality_snapshot_count += 1
             if str(stored_candidate.get("url") or "").strip():
-                existing_source_urls.add(normalize_url(str(stored_candidate["url"])))
+                channel_id = str(stored_candidate.get("registered_channel_id") or "").strip()
+                if channel_id:
+                    existing_source_channels[normalize_url(str(stored_candidate["url"]))] = channel_id
 
         await repository.refresh_recall_mission_stats([recall_mission_id_text])
         executed_mission_ids.append(recall_mission_id_text)

@@ -48,11 +48,13 @@ DISCOVERY_MISSION_STATUSES = {"planned", "active", "completed", "paused", "faile
 DISCOVERY_RECALL_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed"}
 DISCOVERY_RECALL_MISSION_KINDS = {"manual", "domain_seed", "query_seed"}
 DISCOVERY_CLASS_STATUSES = {"draft", "active", "archived"}
+DISCOVERY_PROFILE_STATUSES = {"draft", "active", "archived"}
 DISCOVERY_GRAPH_STATUSES = {"pending", "compiled", "failed"}
 DISCOVERY_CANDIDATE_STATUSES = {"pending", "approved", "rejected", "auto_approved", "duplicate"}
 DISCOVERY_RECALL_CANDIDATE_STATUSES = {"pending", "shortlisted", "rejected", "duplicate"}
 DISCOVERY_HYPOTHESIS_STATUSES = {"pending", "running", "completed", "failed", "skipped"}
 DISCOVERY_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
+DISCOVERY_PROFILE_PROVIDER_TYPES = {"rss", "website"}
 CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
 WEB_RESOURCE_EXTRACTION_STATES = {"pending", "enriched", "skipped", "failed"}
 WEB_CONTENT_LIST_SORTS = {"latest", "oldest", "title_asc", "title_desc"}
@@ -143,6 +145,108 @@ def query_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
 def query_one(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
     rows = query_all(sql, params)
     return rows[0] if rows else None
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for entry in value:
+        item = str(entry or "").strip()
+        if not item or item in seen:
+            continue
+        normalized.append(item)
+        seen.add(item)
+    return normalized
+
+
+def _normalize_optional_text(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
+def _normalize_optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def normalize_discovery_graph_policy(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    source = value if isinstance(value, Mapping) else {}
+    provider_types = [
+        provider
+        for provider in _normalize_string_list(source.get("providerTypes"))
+        if provider in DISCOVERY_PROFILE_PROVIDER_TYPES
+    ]
+    return {
+        "providerTypes": provider_types or ["rss", "website"],
+        "supportedWebsiteKinds": _normalize_string_list(source.get("supportedWebsiteKinds")),
+        "preferredDomains": _normalize_string_list(source.get("preferredDomains")),
+        "blockedDomains": _normalize_string_list(source.get("blockedDomains")),
+        "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
+        "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
+        "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
+        "minRssReviewScore": _normalize_optional_float(source.get("minRssReviewScore")),
+        "minWebsiteReviewScore": _normalize_optional_float(source.get("minWebsiteReviewScore")),
+        "advancedPromptInstructions": _normalize_optional_text(
+            source.get("advancedPromptInstructions")
+        ),
+    }
+
+
+def normalize_discovery_recall_policy(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    source = value if isinstance(value, Mapping) else {}
+    provider_types = [
+        provider
+        for provider in _normalize_string_list(source.get("providerTypes"))
+        if provider in DISCOVERY_PROFILE_PROVIDER_TYPES
+    ]
+    return {
+        "providerTypes": provider_types or ["rss", "website"],
+        "supportedWebsiteKinds": _normalize_string_list(source.get("supportedWebsiteKinds")),
+        "preferredDomains": _normalize_string_list(source.get("preferredDomains")),
+        "blockedDomains": _normalize_string_list(source.get("blockedDomains")),
+        "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
+        "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
+        "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
+        "minPromotionScore": _normalize_optional_float(source.get("minPromotionScore")),
+        "advancedPromptInstructions": _normalize_optional_text(
+            source.get("advancedPromptInstructions")
+        ),
+    }
+
+
+def normalize_discovery_yield_benchmark(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    source = value if isinstance(value, Mapping) else {}
+    return {
+        "domains": _normalize_string_list(source.get("domains")),
+        "titleKeywords": _normalize_string_list(source.get("titleKeywords")),
+        "tacticKeywords": _normalize_string_list(source.get("tacticKeywords")),
+    }
+
+
+def build_discovery_profile_payload(
+    *,
+    graph_policy_json: Mapping[str, Any] | None,
+    recall_policy_json: Mapping[str, Any] | None,
+    yield_benchmark_json: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    return (
+        normalize_discovery_graph_policy(graph_policy_json),
+        normalize_discovery_recall_policy(recall_policy_json),
+        normalize_discovery_yield_benchmark(yield_benchmark_json),
+    )
+
+
+def parse_discovery_profile_json(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
 
 
 def normalize_system_interest_selection_profile_payload(
@@ -1427,6 +1531,7 @@ class DiscoveryMissionCreatePayload(BaseModel):
     max_sources: int | None = Field(default=None, ge=1, alias="maxSources")
     budget_cents: int | None = Field(default=None, ge=0, alias="budgetCents")
     priority: int = 0
+    profile_id: str | None = Field(default=None, alias="profileId")
     created_by: str | None = Field(default=None, alias="createdBy")
 
 
@@ -1450,6 +1555,7 @@ class DiscoveryMissionUpdatePayload(BaseModel):
     budget_cents: int | None = Field(default=None, ge=0, alias="budgetCents")
     priority: int | None = None
     status: Literal["planned", "active", "completed", "paused", "failed", "archived"] | None = None
+    profile_id: str | None = Field(default=None, alias="profileId")
 
 
 class DiscoveryMissionRunPayload(BaseModel):
@@ -1478,6 +1584,7 @@ class DiscoveryRecallMissionCreatePayload(BaseModel):
     )
     scope_json: dict[str, Any] = Field(default_factory=dict, alias="scopeJson")
     max_candidates: int = Field(default=50, ge=1, alias="maxCandidates")
+    profile_id: str | None = Field(default=None, alias="profileId")
     created_by: str | None = Field(default=None, alias="createdBy")
 
 
@@ -1502,6 +1609,37 @@ class DiscoveryRecallMissionUpdatePayload(BaseModel):
     scope_json: dict[str, Any] | None = Field(default=None, alias="scopeJson")
     max_candidates: int | None = Field(default=None, ge=1, alias="maxCandidates")
     status: Literal["planned", "active", "completed", "paused", "failed"] | None = None
+    profile_id: str | None = Field(default=None, alias="profileId")
+
+
+class DiscoveryPolicyProfileCreatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_key: str = Field(alias="profileKey")
+    display_name: str = Field(alias="displayName")
+    description: str | None = None
+    status: Literal["draft", "active", "archived"] = "draft"
+    graph_policy_json: dict[str, Any] = Field(default_factory=dict, alias="graphPolicyJson")
+    recall_policy_json: dict[str, Any] = Field(default_factory=dict, alias="recallPolicyJson")
+    yield_benchmark_json: dict[str, Any] = Field(
+        default_factory=dict,
+        alias="yieldBenchmarkJson",
+    )
+    created_by: str | None = Field(default=None, alias="createdBy")
+
+
+class DiscoveryPolicyProfileUpdatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, alias="displayName")
+    description: str | None = None
+    status: Literal["draft", "active", "archived"] | None = None
+    graph_policy_json: dict[str, Any] | None = Field(default=None, alias="graphPolicyJson")
+    recall_policy_json: dict[str, Any] | None = Field(default=None, alias="recallPolicyJson")
+    yield_benchmark_json: dict[str, Any] | None = Field(
+        default=None,
+        alias="yieldBenchmarkJson",
+    )
 
 
 class DiscoveryRecallCandidateCreatePayload(BaseModel):
@@ -2319,6 +2457,13 @@ def discovery_mission_select_sql() -> str:
           m.priority,
           m.run_count,
           m.last_run_at,
+          m.profile_id::text as profile_id,
+          m.applied_profile_version,
+          m.applied_policy_json,
+          p.profile_key,
+          p.display_name as profile_display_name,
+          p.status as profile_status,
+          p.version as profile_current_version,
           m.latest_portfolio_snapshot_id::text as latest_portfolio_snapshot_id,
           (
             select summary_json
@@ -2329,6 +2474,7 @@ def discovery_mission_select_sql() -> str:
           m.created_at,
           m.updated_at
         from discovery_missions m
+        left join discovery_policy_profiles p on p.profile_id = m.profile_id
     """
 
 
@@ -2346,10 +2492,47 @@ def discovery_recall_mission_select_sql() -> str:
           rm.scope_json,
           rm.status,
           rm.max_candidates,
+          rm.profile_id::text as profile_id,
+          rm.applied_profile_version,
+          rm.applied_policy_json,
+          p.profile_key,
+          p.display_name as profile_display_name,
+          p.status as profile_status,
+          p.version as profile_current_version,
           rm.created_by,
           rm.created_at,
           rm.updated_at
         from discovery_recall_missions rm
+        left join discovery_policy_profiles p on p.profile_id = rm.profile_id
+    """
+
+
+def discovery_policy_profile_select_sql() -> str:
+    return """
+        select
+          p.profile_id::text as profile_id,
+          p.profile_key,
+          p.display_name,
+          p.description,
+          p.status,
+          p.graph_policy_json,
+          p.recall_policy_json,
+          p.yield_benchmark_json,
+          p.version,
+          p.created_by,
+          p.created_at,
+          p.updated_at,
+          (
+            select count(*)::int
+            from discovery_missions m
+            where m.profile_id = p.profile_id
+          ) as mission_count,
+          (
+            select count(*)::int
+            from discovery_recall_missions rm
+            where rm.profile_id = p.profile_id
+          ) as recall_mission_count
+        from discovery_policy_profiles p
     """
 
 
@@ -2397,6 +2580,11 @@ def discovery_candidate_select_sql() -> str:
           c.reviewed_at,
           c.created_at,
           m.title as mission_title,
+          m.profile_id::text as profile_id,
+          m.applied_profile_version,
+          m.applied_policy_json,
+          p.profile_key,
+          p.display_name as profile_display_name,
           h.class_key,
           h.tactic_key,
           h.search_query,
@@ -2406,6 +2594,7 @@ def discovery_candidate_select_sql() -> str:
         from discovery_candidates c
         join discovery_missions m on m.mission_id = c.mission_id
         join discovery_hypotheses h on h.hypothesis_id = c.hypothesis_id
+        left join discovery_policy_profiles p on p.profile_id = m.profile_id
         left join discovery_source_profiles sp on sp.source_profile_id = c.source_profile_id
     """
 
@@ -2434,6 +2623,11 @@ def discovery_recall_candidate_select_sql() -> str:
           rc.updated_at,
           rm.title as recall_mission_title,
           rm.mission_kind,
+          rm.profile_id::text as profile_id,
+          rm.applied_profile_version,
+          rm.applied_policy_json,
+          p.profile_key,
+          p.display_name as profile_display_name,
           coalesce(sp.channel_id, rc.registered_channel_id)::text as channel_id,
           sp.source_type,
           sp.trust_score,
@@ -2444,6 +2638,7 @@ def discovery_recall_candidate_select_sql() -> str:
           sqs.scored_at as source_quality_scored_at
         from discovery_recall_candidates rc
         join discovery_recall_missions rm on rm.recall_mission_id = rc.recall_mission_id
+        left join discovery_policy_profiles p on p.profile_id = rm.profile_id
         left join discovery_source_profiles sp on sp.source_profile_id = rc.source_profile_id
         left join lateral (
           select
@@ -2708,9 +2903,329 @@ def get_discovery_recall_mission(recall_mission_id: str) -> dict[str, Any]:
     return mission
 
 
+def list_discovery_policy_profiles_page(
+    *,
+    limit: int,
+    page: int | None,
+    page_size: int | None,
+    status: str | None,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if status:
+        filters.append("p.status = %s")
+        params.append(status)
+
+    base_sql = discovery_policy_profile_select_sql()
+    if filters:
+        base_sql = f"{base_sql}\nwhere {' and '.join(filters)}"
+    base_sql = f"{base_sql}\norder by p.updated_at desc, p.created_at desc"
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, limit
+    )
+    if not paginate:
+        return query_all(f"{base_sql}\nlimit %s", tuple([*params, limit]))
+
+    count_sql = "select count(*)::int as total from discovery_policy_profiles p"
+    if filters:
+        count_sql = f"{count_sql}\nwhere {' and '.join(filters)}"
+    total = query_count(count_sql, tuple(params))
+    items = query_all(
+        f"{base_sql}\nlimit %s\noffset %s",
+        tuple([*params, resolved_page_size, offset]),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+def get_discovery_policy_profile(profile_id: str) -> dict[str, Any]:
+    profile = query_one(
+        f"{discovery_policy_profile_select_sql()}\nwhere p.profile_id = %s",
+        (profile_id,),
+    )
+    if profile is None:
+        raise SequenceNotFoundError(f"Discovery policy profile {profile_id} was not found.")
+    return profile
+
+
+def require_attachable_discovery_policy_profile(profile_id: str) -> dict[str, Any]:
+    profile = get_discovery_policy_profile(profile_id)
+    if str(profile.get("status") or "") != "active":
+        raise SequenceConflictError(
+            "Only active discovery profiles can be attached to missions or recall missions."
+        )
+    return profile
+
+
+def create_discovery_policy_profile(
+    payload: DiscoveryPolicyProfileCreatePayload,
+) -> dict[str, Any]:
+    graph_policy_json, recall_policy_json, yield_benchmark_json = build_discovery_profile_payload(
+        graph_policy_json=payload.graph_policy_json,
+        recall_policy_json=payload.recall_policy_json,
+        yield_benchmark_json=payload.yield_benchmark_json,
+    )
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into discovery_policy_profiles (
+                  profile_key,
+                  display_name,
+                  description,
+                  status,
+                  graph_policy_json,
+                  recall_policy_json,
+                  yield_benchmark_json,
+                  created_by
+                )
+                values (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+                returning profile_id::text as profile_id
+                """,
+                (
+                    payload.profile_key.strip(),
+                    payload.display_name.strip(),
+                    payload.description,
+                    payload.status,
+                    json.dumps(graph_policy_json),
+                    json.dumps(recall_policy_json),
+                    json.dumps(yield_benchmark_json),
+                    payload.created_by or "maintenance_api",
+                ),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        raise SequenceConflictError("Discovery policy profile creation did not return a row.")
+    return get_discovery_policy_profile(str(row["profile_id"]))
+
+
+def update_discovery_policy_profile(
+    profile_id: str,
+    payload: DiscoveryPolicyProfileUpdatePayload,
+) -> dict[str, Any]:
+    values = payload.model_dump(exclude_unset=True)
+    if not values:
+        raise SequenceValidationError(["At least one field must be provided for update."])
+    existing = get_discovery_policy_profile(profile_id)
+
+    assignments: list[str] = []
+    params: list[Any] = []
+    if "display_name" in values:
+        assignments.append("display_name = %s")
+        params.append(values["display_name"])
+    if "description" in values:
+        assignments.append("description = %s")
+        params.append(values["description"])
+    if "status" in values:
+        assignments.append("status = %s")
+        params.append(values["status"])
+    if "graph_policy_json" in values:
+        merged_graph_policy = {
+            **parse_discovery_profile_json(existing.get("graph_policy_json")),
+            **(values["graph_policy_json"] or {}),
+        }
+        assignments.append("graph_policy_json = %s::jsonb")
+        params.append(json.dumps(normalize_discovery_graph_policy(merged_graph_policy)))
+    if "recall_policy_json" in values:
+        merged_recall_policy = {
+            **parse_discovery_profile_json(existing.get("recall_policy_json")),
+            **(values["recall_policy_json"] or {}),
+        }
+        assignments.append("recall_policy_json = %s::jsonb")
+        params.append(json.dumps(normalize_discovery_recall_policy(merged_recall_policy)))
+    if "yield_benchmark_json" in values:
+        merged_yield_benchmark = {
+            **parse_discovery_profile_json(existing.get("yield_benchmark_json")),
+            **(values["yield_benchmark_json"] or {}),
+        }
+        assignments.append("yield_benchmark_json = %s::jsonb")
+        params.append(json.dumps(normalize_discovery_yield_benchmark(merged_yield_benchmark)))
+
+    assignments.extend(["version = version + 1", "updated_at = now()"])
+    params.append(profile_id)
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                update discovery_policy_profiles
+                set {', '.join(assignments)}
+                where profile_id = %s
+                returning profile_id::text as profile_id
+                """,
+                tuple(params),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        raise SequenceNotFoundError(f"Discovery policy profile {profile_id} was not found.")
+    return get_discovery_policy_profile(profile_id)
+
+
+def delete_discovery_policy_profile(profile_id: str) -> dict[str, Any]:
+    get_discovery_policy_profile(profile_id)
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  (select count(*)::int from discovery_missions where profile_id = %s) as mission_count,
+                  (select count(*)::int from discovery_recall_missions where profile_id = %s) as recall_mission_count
+                """,
+                (profile_id, profile_id),
+            )
+            usage = cursor.fetchone() or {}
+            if int(usage.get("mission_count") or 0) > 0 or int(
+                usage.get("recall_mission_count") or 0
+            ) > 0:
+                raise SequenceConflictError(
+                    "Discovery profile is already attached to missions or recall missions. Archive it instead of deleting it."
+                )
+            cursor.execute(
+                """
+                delete from discovery_policy_profiles
+                where profile_id = %s
+                returning profile_id::text as profile_id
+                """,
+                (profile_id,),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        raise SequenceNotFoundError(f"Discovery policy profile {profile_id} was not found.")
+    return {"profile_id": str(row["profile_id"]), "deleted": True}
+
+
+def build_applied_discovery_policy_snapshot(
+    *,
+    lane: Literal["graph", "recall"],
+    mission_like: Mapping[str, Any],
+    profile: Mapping[str, Any],
+) -> dict[str, Any]:
+    if lane == "graph":
+        return {
+            "lane": "graph",
+            "profileId": str(profile.get("profile_id") or ""),
+            "profileKey": str(profile.get("profile_key") or ""),
+            "profileDisplayName": str(profile.get("display_name") or ""),
+            "profileVersion": int(profile.get("version") or 1),
+            "graphPolicy": normalize_discovery_graph_policy(
+                parse_discovery_profile_json(profile.get("graph_policy_json"))
+            ),
+            "yieldBenchmark": normalize_discovery_yield_benchmark(
+                parse_discovery_profile_json(profile.get("yield_benchmark_json"))
+            ),
+            "missionOwned": {
+                "targetProviderTypes": list(mission_like.get("target_provider_types") or []),
+                "seedTopics": list(mission_like.get("seed_topics") or []),
+                "seedLanguages": list(mission_like.get("seed_languages") or []),
+                "seedRegions": list(mission_like.get("seed_regions") or []),
+            },
+        }
+
+    return {
+        "lane": "recall",
+        "profileId": str(profile.get("profile_id") or ""),
+        "profileKey": str(profile.get("profile_key") or ""),
+        "profileDisplayName": str(profile.get("display_name") or ""),
+        "profileVersion": int(profile.get("version") or 1),
+        "recallPolicy": normalize_discovery_recall_policy(
+            parse_discovery_profile_json(profile.get("recall_policy_json"))
+        ),
+        "yieldBenchmark": normalize_discovery_yield_benchmark(
+            parse_discovery_profile_json(profile.get("yield_benchmark_json"))
+        ),
+        "missionOwned": {
+            "targetProviderTypes": list(mission_like.get("target_provider_types") or []),
+            "seedDomains": list(mission_like.get("seed_domains") or []),
+            "seedUrls": list(mission_like.get("seed_urls") or []),
+            "seedQueries": list(mission_like.get("seed_queries") or []),
+        },
+    }
+
+
+def snapshot_discovery_mission_profile_policy(mission_id: str) -> None:
+    mission = get_discovery_mission(mission_id)
+    profile_id = str(mission.get("profile_id") or "").strip()
+    if not profile_id:
+        with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update discovery_missions
+                    set applied_profile_version = null, applied_policy_json = null, updated_at = now()
+                    where mission_id = %s
+                    """,
+                    (mission_id,),
+                )
+        return
+    profile = require_attachable_discovery_policy_profile(profile_id)
+    applied_policy_json = build_applied_discovery_policy_snapshot(
+        lane="graph",
+        mission_like=mission,
+        profile=profile,
+    )
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update discovery_missions
+                set
+                  applied_profile_version = %s,
+                  applied_policy_json = %s::jsonb,
+                  updated_at = now()
+                where mission_id = %s
+                """,
+                (
+                    int(profile.get("version") or 1),
+                    json.dumps(applied_policy_json),
+                    mission_id,
+                ),
+            )
+
+
+def snapshot_discovery_recall_mission_profile_policy(recall_mission_id: str) -> None:
+    mission = get_discovery_recall_mission(recall_mission_id)
+    profile_id = str(mission.get("profile_id") or "").strip()
+    if not profile_id:
+        with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update discovery_recall_missions
+                    set applied_profile_version = null, applied_policy_json = null, updated_at = now()
+                    where recall_mission_id = %s
+                    """,
+                    (recall_mission_id,),
+                )
+        return
+    profile = require_attachable_discovery_policy_profile(profile_id)
+    applied_policy_json = build_applied_discovery_policy_snapshot(
+        lane="recall",
+        mission_like=mission,
+        profile=profile,
+    )
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update discovery_recall_missions
+                set
+                  applied_profile_version = %s,
+                  applied_policy_json = %s::jsonb,
+                  updated_at = now()
+                where recall_mission_id = %s
+                """,
+                (
+                    int(profile.get("version") or 1),
+                    json.dumps(applied_policy_json),
+                    recall_mission_id,
+                ),
+            )
+
+
 def create_discovery_recall_mission(
     payload: DiscoveryRecallMissionCreatePayload,
 ) -> dict[str, Any]:
+    profile_id = payload.profile_id.strip() if payload.profile_id else None
+    if profile_id:
+        require_attachable_discovery_policy_profile(profile_id)
     with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -2726,6 +3241,9 @@ def create_discovery_recall_mission(
                   scope_json,
                   status,
                   max_candidates,
+                  profile_id,
+                  applied_profile_version,
+                  applied_policy_json,
                   created_by
                 )
                 values (
@@ -2739,6 +3257,9 @@ def create_discovery_recall_mission(
                   %s::jsonb,
                   'planned',
                   %s,
+                  %s,
+                  null,
+                  null,
                   %s
                 )
                 returning recall_mission_id::text as recall_mission_id
@@ -2753,6 +3274,7 @@ def create_discovery_recall_mission(
                     payload.target_provider_types,
                     json.dumps(payload.scope_json),
                     payload.max_candidates,
+                    profile_id,
                     payload.created_by or "maintenance_api",
                 ),
             )
@@ -2783,8 +3305,18 @@ def update_discovery_recall_mission(
         ("scope_json", "scope_json", "::jsonb", True),
         ("status", "status", "", False),
         ("max_candidates", "max_candidates", "", False),
+        ("profile_id", "profile_id", "", False),
     ):
         if field_name in values:
+            if field_name == "profile_id":
+                normalized_profile_id = str(values[field_name] or "").strip() or None
+                if normalized_profile_id is not None:
+                    require_attachable_discovery_policy_profile(normalized_profile_id)
+                assignments.append("profile_id = %s")
+                params.append(normalized_profile_id)
+                assignments.append("applied_profile_version = null")
+                assignments.append("applied_policy_json = null")
+                continue
             assignments.append(f"{column_name} = %s{cast_suffix}")
             params.append(json.dumps(values[field_name]) if as_json else values[field_name])
     assignments.append("updated_at = now()")
@@ -2813,6 +3345,7 @@ async def request_discovery_recall_mission_acquisition(
     recall_mission_id: str,
 ) -> dict[str, Any]:
     get_discovery_recall_mission(recall_mission_id)
+    snapshot_discovery_recall_mission_profile_policy(recall_mission_id)
     repository = DiscoveryCoordinatorRepository()
     return await acquire_recall_missions(
         recall_mission_id=recall_mission_id,
@@ -2826,6 +3359,9 @@ def create_discovery_mission(payload: DiscoveryMissionCreatePayload) -> dict[str
     interest_graph = payload.interest_graph if isinstance(payload.interest_graph, dict) else None
     graph_status = "compiled" if interest_graph else "pending"
     graph_version = 1 if interest_graph else 0
+    profile_id = payload.profile_id.strip() if payload.profile_id else None
+    if profile_id:
+        require_attachable_discovery_policy_profile(profile_id)
     with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -2848,6 +3384,9 @@ def create_discovery_mission(payload: DiscoveryMissionCreatePayload) -> dict[str
                   max_sources,
                   budget_cents,
                   priority,
+                  profile_id,
+                  applied_profile_version,
+                  applied_policy_json,
                   status,
                   created_by
                 )
@@ -2869,6 +3408,9 @@ def create_discovery_mission(payload: DiscoveryMissionCreatePayload) -> dict[str
                   %s,
                   %s,
                   %s,
+                  %s,
+                  null,
+                  null,
                   'planned',
                   %s
                 )
@@ -2893,6 +3435,7 @@ def create_discovery_mission(payload: DiscoveryMissionCreatePayload) -> dict[str
                     if payload.budget_cents is not None
                     else settings.default_budget_cents,
                     payload.priority,
+                    profile_id,
                     payload.created_by or "maintenance_api",
                 ),
             )
@@ -2924,8 +3467,18 @@ def update_discovery_mission(
         ("seed_languages", "seed_languages", "::text[]"),
         ("seed_regions", "seed_regions", "::text[]"),
         ("target_provider_types", "target_provider_types", "::text[]"),
+        ("profile_id", "profile_id", ""),
     ):
         if field_name in values:
+            if field_name == "profile_id":
+                normalized_profile_id = str(values[field_name] or "").strip() or None
+                if normalized_profile_id is not None:
+                    require_attachable_discovery_policy_profile(normalized_profile_id)
+                assignments.append("profile_id = %s")
+                params.append(normalized_profile_id)
+                assignments.append("applied_profile_version = null")
+                assignments.append("applied_policy_json = null")
+                continue
             assignments.append(f"{column_name} = %s{cast_suffix}")
             params.append(values[field_name])
     if "interest_graph" in values:
@@ -3026,6 +3579,10 @@ async def compile_discovery_mission_graph(mission_id: str) -> dict[str, Any]:
         raise SequenceConflictError(
             "Archived discovery missions must be reactivated before compiling the interest graph."
         )
+    snapshot_discovery_mission_profile_policy(mission_id)
+    mission = await repository.get_mission(mission_id)
+    if mission is None:
+        raise SequenceNotFoundError(f"Discovery mission {mission_id} was not found.")
     await compile_interest_graph_for_mission(mission=mission, repository=repository)
     return get_discovery_mission(mission_id)
 
@@ -3044,6 +3601,7 @@ def request_discovery_mission_run(
         raise SequenceConflictError(
             "Monthly discovery quota is exhausted; increase DISCOVERY_MONTHLY_BUDGET_CENTS or wait for the next UTC month."
         )
+    snapshot_discovery_mission_profile_policy(mission_id)
     with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -4007,6 +4565,8 @@ def get_discovery_summary() -> dict[str, Any]:
           (select count(*)::int from discovery_recall_candidates where status = 'pending') as pending_recall_candidate_count,
           (select count(*)::int from discovery_recall_candidates where status = 'duplicate') as duplicate_recall_candidate_count,
           (select count(*)::int from discovery_recall_candidates where registered_channel_id is not null) as promoted_recall_candidate_count,
+          (select count(*)::int from discovery_policy_profiles) as profile_count,
+          (select count(*)::int from discovery_policy_profiles where status = 'active') as active_profile_count,
           (select count(*)::int from discovery_source_profiles) as source_profile_count,
           (select count(*)::int from discovery_source_quality_snapshots) as source_quality_snapshot_count,
           (select count(*)::int from discovery_source_interest_scores) as source_interest_score_count,
@@ -5928,6 +6488,63 @@ def list_discovery_missions(
     if status is not None and status not in DISCOVERY_MISSION_STATUSES:
         raise HTTPException(status_code=422, detail=f"Unsupported discovery mission status {status!r}.")
     return list_discovery_missions_page(limit=limit, page=page, page_size=page_size, status=status)
+
+
+@app.get("/maintenance/discovery/profiles")
+def list_discovery_policy_profiles(
+    limit: int = Query(default=20, ge=1, le=100),
+    status: str | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
+) -> dict[str, Any] | list[dict[str, Any]]:
+    if status is not None and status not in DISCOVERY_PROFILE_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported discovery profile status {status!r}.",
+        )
+    return list_discovery_policy_profiles_page(
+        limit=limit,
+        page=page,
+        page_size=page_size,
+        status=status,
+    )
+
+
+@app.post("/maintenance/discovery/profiles", status_code=201)
+def create_discovery_policy_profile_route(
+    payload: DiscoveryPolicyProfileCreatePayload,
+) -> dict[str, Any]:
+    try:
+        return create_discovery_policy_profile(payload)
+    except (SequenceConflictError, SequenceValidationError) as error:
+        raise_sequence_http_exception(error)
+
+
+@app.get("/maintenance/discovery/profiles/{profile_id}")
+def get_discovery_policy_profile_route(profile_id: str) -> dict[str, Any]:
+    try:
+        return get_discovery_policy_profile(profile_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
+
+
+@app.patch("/maintenance/discovery/profiles/{profile_id}")
+def update_discovery_policy_profile_route(
+    profile_id: str,
+    payload: DiscoveryPolicyProfileUpdatePayload,
+) -> dict[str, Any]:
+    try:
+        return update_discovery_policy_profile(profile_id, payload)
+    except (SequenceConflictError, SequenceNotFoundError, SequenceValidationError) as error:
+        raise_sequence_http_exception(error)
+
+
+@app.delete("/maintenance/discovery/profiles/{profile_id}")
+def delete_discovery_policy_profile_route(profile_id: str) -> dict[str, Any]:
+    try:
+        return delete_discovery_policy_profile(profile_id)
+    except (SequenceConflictError, SequenceNotFoundError) as error:
+        raise_sequence_http_exception(error)
 
 
 @app.post("/maintenance/discovery/missions", status_code=201)
