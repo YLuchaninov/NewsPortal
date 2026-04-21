@@ -74,6 +74,11 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
                     "listing",
                     "listing",
                 ],
+                "expectedSourceShapes": ["editorial_stream", "editorial_stream"],
+                "allowedSourceFamilies": ["official_updates"],
+                "disfavoredSourceFamilies": ["aggregator_directory"],
+                "usefulnessHints": ["resource_only_expected"],
+                "diversityCaps": {"maxPerSourceFamily": 2, "maxPerDomain": 1},
             }
         )
         recall_policy = api_main.normalize_discovery_recall_policy(
@@ -87,6 +92,14 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         self.assertEqual(
             graph_policy["supportedWebsiteKinds"],
             ["editorial", "procurement_portal", "listing"],
+        )
+        self.assertEqual(graph_policy["expectedSourceShapes"], ["editorial_stream"])
+        self.assertEqual(graph_policy["allowedSourceFamilies"], ["official_updates"])
+        self.assertEqual(graph_policy["disfavoredSourceFamilies"], ["aggregator_directory"])
+        self.assertEqual(graph_policy["usefulnessHints"], ["resource_only_expected"])
+        self.assertEqual(
+            graph_policy["diversityCaps"],
+            {"maxPerSourceFamily": 2, "maxPerDomain": 1},
         )
         self.assertEqual(recall_policy["providerTypes"], ["website"])
         self.assertEqual(

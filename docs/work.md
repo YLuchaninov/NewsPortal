@@ -17,11 +17,109 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current mode
 
 - Operating mode: normal
-- Why now: on 2026-04-21 the user asked to open and implement a new discovery capability that improves approve/promote-boundary precision and decouples discovery from a hard DDGS-only search-provider assumption without reopening downstream truth ownership or collapsing the shipped dual-path discovery control plane.
+- Why now: on 2026-04-21 the user asked to close the separate downstream capability for Example C outsourcing usefulness and prove it on a clean baseline without reopening discovery runtime/domain hardcoding.
 
 ## Current memory
 
 - Runtime core инициализирован; ordinary implementation work разрешен.
+- On 2026-04-21 `C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT` reached proof-complete state and was archived:
+  - downstream/runtime/admin explain surfaces now expose normalized product diagnostics through `final_selection_results.explain_json`, API/admin operator payloads, and the clean outsourcing proof artifact:
+    - `downstreamLossBucket`
+    - `selectionBlockerStage`
+    - `selectionBlockerReason`
+    - `holdReason`
+    - `semanticSignalSummary`
+    - `verificationSignalSummary`
+  - bounded generic hardening now rejects wrapper/category/job-board pages as technical noise before semantic usefulness is judged, without hardcoding domains:
+    - `services/workers/app/main.py`
+    - `tests/unit/python/test_worker_hard_filters.py`
+    - the shipped generic technical filter now emits `wrapper_directory_noise` when a page looks like search/category/job-board wrapper content without a direct buyer request in title/lead.
+  - the Example C admin-owned outsourcing bundle was retuned further through repo-owned prompt truth:
+    - `infra/scripts/lib/outsource-example-c.bundle.mjs`
+    - prompts now explicitly treat formal tender / contract-notice / competition pages with procurement-body evidence as valid buyer intent even when the title is bland.
+  - clean-baseline product proof is now materially better than the zero-yield baseline:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal`
+    - `node infra/scripts/run-live-website-outsourcing.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-website-outsourcing-2026-04-21T164917178Z.json|md`
+    - result:
+      - `totalSelected = 2`
+      - `totalEligible = 2`
+      - `selected_useful_evidence_present = 1`
+      - `articles_produced_but_zero_selected_outputs = 15`
+      - `resources_extracted_but_no_stable_articles = 3`
+      - baseline improvement vs the earlier clean run:
+        - from `articles_produced_but_zero_selected_outputs = 17`
+        - to `articles_produced_but_zero_selected_outputs = 15`
+  - supporting non-regression proof is green after the downstream hardening:
+    - `pnpm unit_tests`
+    - `pnpm typecheck`
+    - `pnpm test:discovery:examples:compose`
+      - `/tmp/newsportal-live-discovery-examples-881b1ff5.json|md`
+      - later rerun after the final clean outsourcing proof:
+        - `/tmp/newsportal-live-discovery-examples-989efe9d.json|md`
+      - both: `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`
+    - `pnpm test:discovery:yield:compose`
+      - transient live residual artifact:
+        - `/tmp/newsportal-live-discovery-yield-proof-6992dfa4.json|md`
+        - one run timed out waiting for Example C recall candidates
+      - authoritative rerun artifact:
+        - `/tmp/newsportal-live-discovery-yield-proof-36e07737.json|md`
+      - result: `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`
+    - `git diff --check --`
+- On 2026-04-21 `C-DISCOVERY-PRODUCT-SELECTION-QUALITY-CLOSEOUT` advanced through its balanced discovery-quality slice:
+  - discovery policy/runtime now supports generic admin-managed usefulness tuning in addition to existing graph/recall policy:
+    - `expectedSourceShapes`
+    - `allowedSourceFamilies`
+    - `disfavoredSourceFamilies`
+    - `usefulnessHints`
+    - `diversityCaps.maxPerSourceFamily`
+    - `diversityCaps.maxPerDomain`
+  - runtime `policyReview` is now additive rather than score-collapsing:
+    - validity/fit gates still own approve/promote boundary truth;
+    - additive usefulness diagnostics now persist `onboardingVerdict`, `productivityRisk`, `usefulnessDiagnostic`, `stageLossBucket`, `sourceFamily`, and `sourceShape`.
+  - graph shortlist formation now applies generic diversity pressure by source family/domain instead of case-specific domain heuristics.
+  - `/admin/discovery` and operator surfaces now expose the new usefulness diagnostics and admin-managed tuning fields instead of hiding them in raw JSON.
+  - discovery proof artifacts now emit normalized stage-loss and productivity buckets, and the clean Example C outsourcing bundle now emits normalized usefulness buckets:
+    - `source_onboarded_but_no_extracted_resources`
+    - `resources_extracted_but_no_stable_articles`
+    - `articles_produced_but_zero_selected_outputs`
+    - `selected_useful_evidence_present`
+  - focused implementation proof is green:
+    - `python -m unittest tests.unit.python.test_discovery_policy tests.unit.python.test_api_discovery_management`
+    - `pnpm unit_tests`
+    - `pnpm typecheck`
+  - fresh compose/runtime proof is green for the discovery contour:
+    - `pnpm test:discovery:admin:compose`
+    - `pnpm test:discovery:examples:compose`
+      - `/tmp/newsportal-live-discovery-examples-dafb6241.json|md`
+      - result: `runtimeVerdict=pass`, `yieldVerdict=weak`, `finalVerdict=yield_weak`
+      - aggregate root-cause mix: `yield_pass=1`, `review_policy_problem=1`
+    - `pnpm test:discovery:nonregression:compose`
+      - `/tmp/newsportal-discovery-nonregression-ed418130.json|md`
+      - result: `runtimeVerdict=pass`, `nonRegressionVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`
+    - `pnpm test:discovery:yield:compose`
+      - `/tmp/newsportal-live-discovery-yield-proof-a5fb0ebf.json|md`
+      - result: `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`
+      - multi-run gate: Example B `2/3`, Example C `3/3`
+  - fresh clean-baseline Example C outsourcing product proof completed:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal`
+    - `node infra/scripts/run-live-website-outsourcing.mjs`
+    - `/tmp/newsportal-live-website-outsourcing-2026-04-21T123045997Z.json|md`
+    - classification summary:
+      - `projected_but_not_selected=17`
+      - `external/runtime_residual=11`
+      - `browser_fallback_residual=1`
+      - `skipped_rejected_open_web=1`
+    - normalized usefulness summary:
+      - `articles_produced_but_zero_selected_outputs=17`
+      - `source_onboarded_but_no_extracted_resources=12`
+      - `totalResources=339`
+      - `totalArticles=304`
+      - `totalSelected=0`
+  - current evidence says the main remaining product blocker is now downstream usefulness / final selection on the outsourcing bundle, not discovery runtime correctness or admin-owned discovery tuning.
 - On 2026-04-21 `C-DISCOVERY-APPROVE-BOUNDARY-PRECISION-AND-PROVIDER-DECOUPLING` advanced through its implementation-heavy slices:
   - worker runtime now owns discovery policy normalization and approve/promote-boundary review semantics in `services/workers/app/discovery_policy.py`, including `negativeDomains -> blockedDomains` alias handling, `procurement_portal` compatibility matching, runtime `policyReview`, and manual-review routing for browser/challenge residuals;
   - discovery search adapters are now provider-pluggable (`stub`, `ddgs`, `brave`, `serper`) through the shared adapter factory instead of assuming DDGS-only semantics outside the selected provider;
@@ -289,61 +387,20 @@ Durable completed detail переносится в `docs/history.md`.
 
 ### Active capabilities
 
-- `C-DISCOVERY-ADMIN-PROOF-RESET-RERUN`
-  - goal:
-    repair the current discovery/admin proof residuals, then rerun the Example B/C discovery path and the clean-baseline outsourcing bundle in a truthful order on a reset local compose DB
-  - outcome:
-    discovery admin acceptance is stable on the current compose baseline, Example B/C discovery proof is rerun from a clean DB, and the Example C outsourcing live bundle is rerun from its required empty-baseline state
-  - full completion condition:
-    the current admin timeout cause is either fixed or truthfully classified, the user-approved destructive reset is executed and recorded, and the requested reruns complete with fresh evidence bundles plus honest residue notes
-  - stage breakdown:
-    - `STAGE-1-DISCOVERY-ADMIN-TIMEOUT-REPAIR`
-    - `STAGE-2-CLEAN-BASELINE-DISCOVERY-RERUN`
-    - `STAGE-3-CLEAN-BASELINE-OUTSOURCING-RERUN`
-  - immediate next stage:
-    none; proof is complete and only archive sync remains if no follow-up request arrives
+- none
 
 ### Active work items
 
-- `STAGE-3-CLEAN-BASELINE-OUTSOURCING-RERUN`
-  - Kind: `Stage`
-  - Status: `done`
-  - Goal:
-    rerun the clean-baseline Example C outsourcing website bundle after the discovery/admin blockers are fixed
-  - In scope:
-    - fresh empty-baseline rerun of the shipped Example C outsourcing website bundle
-    - honest residual classification from the resulting evidence bundle
-    - live work-state sync for the reset/rerun request
-  - Out of scope:
-    - new website/discovery semantics
-    - retuning the outsourcing bundle to force selected winners
-    - unrelated feature work
-  - Allowed paths:
-    - `infra/scripts/test-discovery-admin-flow.mjs`
-    - `services/workers/app/task_engine/repository.py`
-    - `services/workers/app/task_engine/executor.py`
-    - `services/workers/app/main.py`
-    - `.env.example`
-    - `.aidp/os.yaml`
-    - `docs/contracts/universal-task-engine.md`
-    - `docs/work.md`
-    - narrowly required supporting test files only
-  - Required proof:
-    - `pnpm test:discovery-enabled:compose`
-    - `pnpm test:discovery:admin:compose`
-    - `pnpm test:discovery:examples:compose`
-    - `node infra/scripts/run-live-website-outsourcing.mjs`
-  - Risk:
-    medium; stateful destructive reset plus long-running website/article sequence drain can leave honest residual usefulness gaps even when runtime is healthy
+- none
 
 ## Next recommended action
 
-- archive `C-DISCOVERY-ADMIN-PROOF-RESET-RERUN` into `docs/history.md` if the user does not request a follow-up on the outsourcing residual classifications.
+- no active implementation item; if the user wants to push the outsourcing bundle beyond the current `articles_produced_but_zero_selected_outputs = 15`, open a follow-up capability specifically for tender-portal semantic lift or website projection tightening rather than reopening the closed downstream diagnostics slice.
 
 ## Archive sync status
 
 - Completed item or capability awaiting archive sync:
-  none after syncing `STAGE-4-ADMIN-PROOF-DOC-CLOSEOUT` and `C-DISCOVERY-APPROVE-BOUNDARY-PRECISION-AND-PROVIDER-DECOUPLING` into `docs/history.md`
+  none after syncing `C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT` into `docs/history.md`
 - Why it is still live, if applicable:
   n/a
 - Archive action required next:
@@ -352,8 +409,11 @@ Durable completed detail переносится в `docs/history.md`.
 ## Test artifacts and cleanup state
 
 - Current stage precondition:
-  - the current compose DB intentionally preserves the fresh reset-backed outsourcing live cohort
-  - active discovery verification will reuse the same local compose baseline and may temporarily create discovery-scoped Firebase admin aliases, missions/classes/candidates, recall entities, and source-channel registrations through shipped proof harnesses
+  - no active stage; the latest authoritative clean outsourcing evidence is preserved only in `/tmp` artifacts because later discovery proof reruns reused the compose stack after that clean run
+  - the latest authoritative clean outsourcing artifact is:
+    - `/tmp/newsportal-live-website-outsourcing-2026-04-21T164917178Z.json`
+    - `/tmp/newsportal-live-website-outsourcing-2026-04-21T164917178Z.md`
+  - the current compose DB now reflects later discovery-proof residue rather than the exact clean outsourcing baseline
 - Pre-existing local operator residue still present outside the guarded tables:
   - prior live evidence bundles:
     - `/tmp/newsportal-live-website-outsourcing-2026-04-18T155147751Z.json`
@@ -362,32 +422,27 @@ Durable completed detail переносится в `docs/history.md`.
     - `/tmp/admin_outsourcing_tune_20260418.mjs`
     - `/tmp/admin-outsourcing-tune-session.json`
 - Cleanup status:
-  - the user explicitly approved a destructive DB cleanup and ordered reruns from a clean baseline on 2026-04-21; the currently preserved discovery/outsourcing inspection residue may now be removed as part of this active stage
-  - the user-approved reset was executed multiple times via `pnpm dev:mvp:internal:down:volumes` followed by `pnpm dev:mvp:internal`
-  - the fresh rerun cohort remains intentionally present after success:
-    - `29` `source_channels`
-    - `396` `web_resources`
-    - `362` `articles`
-    - `339` `final_selection_results`
-    - `220` `system_feed_results`
-    - `1100` `interest_filter_results`
-    - `487` `sequence_runs`
-  - no post-run cleanup/reset was performed; this cohort is intentionally preserved for inspection and tuning follow-up
+  - the user explicitly approved destructive DB cleanup/reruns on 2026-04-21; the latest clean-baseline rerun was executed via:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal`
+    - `node infra/scripts/run-live-website-outsourcing.mjs`
+  - the fresh rerun cohort remains intentionally present after success for inspection/tuning follow-up
+  - no post-run cleanup/reset was performed
   - discovery verification cleanup status:
     - the repaired compose baseline now intentionally contains additional live-discovery proof residue from repeated proof hardening and closeout reruns:
       - fresh discovery missions and recall missions for Example B/C from runs including `34290302`, `46e6e464`, and the aggregate yield gate `5c20aaa9`;
       - fresh graph and recall candidates for both cases, including duplicate-linked candidates that now persist `registered_channel_id` during materialization;
       - fresh sequence runs, sequence task runs, feedback rows, portfolio snapshots, source profiles, and source-quality snapshots tied to those proof runs;
       - fresh onboarded or duplicate-linked channels were produced by the closing proof contour, including multi-run passing evidence for both Example B and Example C.
-    - direct proof artifacts for the hardened lane now live at:
-      - `/tmp/newsportal-live-discovery-examples-ca3049b7.json`
-      - `/tmp/newsportal-live-discovery-examples-ca3049b7.md`
-      - `/tmp/newsportal-live-discovery-examples-b41de125.json`
-      - `/tmp/newsportal-live-discovery-examples-b41de125.md`
-      - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json`
-      - `/tmp/newsportal-live-discovery-yield-proof-a59832ca.md`
-      - `/tmp/newsportal-discovery-nonregression-f499bb13.json`
-      - `/tmp/newsportal-discovery-nonregression-f499bb13.md`
+    - fresh direct proof artifacts for the product-diagnostics slice now live at:
+      - `/tmp/newsportal-live-discovery-examples-dafb6241.json`
+      - `/tmp/newsportal-live-discovery-examples-dafb6241.md`
+      - `/tmp/newsportal-live-discovery-yield-proof-a5fb0ebf.json`
+      - `/tmp/newsportal-live-discovery-yield-proof-a5fb0ebf.md`
+      - `/tmp/newsportal-discovery-nonregression-ed418130.json`
+      - `/tmp/newsportal-discovery-nonregression-ed418130.md`
+      - `/tmp/newsportal-live-website-outsourcing-2026-04-21T123045997Z.json`
+      - `/tmp/newsportal-live-website-outsourcing-2026-04-21T123045997Z.md`
     - 2026-04-20 manual operator-admin Example C setup on the fresh Example-C-only server also left intentional inspection residue because the user asked to review it in `/admin/discovery`:
       - reusable profile fixture:
         - `profile_key = example_c_outsourcing_proof`
@@ -420,48 +475,27 @@ Durable completed detail переносится в `docs/history.md`.
 ## Handoff
 
 - Current active item and status:
-  `STAGE-4-ADMIN-PROOF-DOC-CLOSEOUT` remains active for `C-DISCOVERY-APPROVE-BOUNDARY-PRECISION-AND-PROVIDER-DECOUPLING`; code/unit/type work is landed, but compose proof is not green yet.
+  no active implementation item; `C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT` is complete and archived.
 - What is already proven:
-  focused implementation proof is green:
-  - `pnpm unit_tests`
-  - `pnpm typecheck`
-  - the new runtime-owned policy layer, provider-decoupled search adapters, layered scoring/explainability, and admin/operator discovery path all have targeted unit coverage and the admin compose acceptance `pnpm test:discovery:admin:compose` still passes.
-  website runtime boundaries are partly green after the full compose rerun:
-  - `pnpm test:website:compose` passed;
-  - `pnpm test:hard-sites:compose` passed, so browser/hard-site smoke still behaves honestly on the shipped website lane.
-  discovery runtime/provider baseline is partly green after the full compose rerun:
-  - `pnpm test:discovery-enabled:compose` passed on the current local compose baseline and still reports provider truth `ddgs` with discovery enabled and budget/quota state intact.
+  - clean Example C outsourcing proof now clears the zero-yield blocker:
+    - `/tmp/newsportal-live-website-outsourcing-2026-04-21T164917178Z.json|md`
+    - `totalSelected = 2`
+    - `totalEligible = 2`
+    - `selected_useful_evidence_present = 1`
+    - `articles_produced_but_zero_selected_outputs = 15`
+  - discovery non-regression after the downstream changes is green:
+    - `/tmp/newsportal-live-discovery-examples-989efe9d.json|md`
+    - `/tmp/newsportal-live-discovery-yield-proof-36e07737.json|md`
 - What is not yet proven or is currently failing:
-  - `pnpm test:discovery:examples:compose` currently fails in the live worker runtime because `discovery_orchestrator.py` writes `updated_at` into `discovery_candidates`, but the current compose DB schema does not have that column;
-  - the same artifact also reports unmet Example B/C preconditions in the preserved compose dataset (`interest_templates` and baseline discovery channels), so even after the schema fix the harness may still need either fixture refresh or residue cleanup before Example B/C can execute cleanly;
-  - `pnpm test:discovery:nonregression:compose` currently fails only because the harness inherits the `precondition_failed` runtime state from `examples`;
-  - `pnpm test:discovery:yield:compose` currently fails for the same reason across all three required runs;
-  - `pnpm test:website:admin:compose` currently fails because the shared bulk update response returns a website row without required `providerType`.
+  - no active deterministic failure remains inside the closed capability
+  - one transient live residual was observed during an earlier `pnpm test:discovery:yield:compose` attempt:
+    - `/tmp/newsportal-live-discovery-yield-proof-6992dfa4.json|md`
+    - Run 3 timed out waiting for Example C recall candidates
+    - a clean rerun passed and is the authoritative proof artifact
 - Recommended next action:
-  - repair the discovery compose schema/runtime mismatch first, then rerun the three red discovery contours;
-  - repair the website admin bulk-response shape next, then rerun `pnpm test:website:admin:compose`;
-  - once those are green, resync `docs/work.md` and archive the capability if no further drift remains.
-  the shipped discovery admin surface now covers the missing operator loop:
-  - reusable discovery profiles persist `supportedWebsiteKinds` for graph and recall policies through `/admin/discovery`;
-  - recall acquisition and recall promotion now run through the admin BFF/UI instead of requiring maintenance-only fallback;
-  - `pnpm test:discovery:admin:compose` passed on the updated operator path.
-  `C-DISCOVERY-GOOD-YIELD` is now complete:
-  - `pnpm test:discovery:examples:compose` remains the canonical single-run Example B/C proof entrypoint and now finishes `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass` on the latest authoritative run `/tmp/newsportal-live-discovery-examples-b41de125.json|md`;
-  - `pnpm test:discovery:yield:compose` now finishes `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass` on `/tmp/newsportal-live-discovery-yield-proof-a59832ca.json|md`;
-  - the required runtime packs both reached `3/3` passing runs in the final bounded multi-run gate:
-    - `Example B — IT-новости для разработчиков`
-    - `Example C — Поиск клиентов для аутсорс-компании`
-  - `pnpm test:discovery:nonregression:compose` stayed green on `/tmp/newsportal-discovery-nonregression-f499bb13.json|md`;
-  - the harness still materializes reusable profiles `example_b_dev_news_proof` and `example_c_outsourcing_proof` before graph/recall execution;
-  - single-run artifacts still include `manualReplaySettings` that exactly capture profile key/display name, graph policy, recall policy, benchmark cohort, exact mission seeds/queries, and applied profile version/policy snapshots;
-  - the latest synced manual replay baseline used applied profile version `22`, but operators should still treat the `manualReplaySettings` from their own fresh artifact as the canonical replay source if profile versions advance again.
-  `C-DISCOVERY-PROFILES-ADMIN` is now fully proven and archived at the code/proof layer:
-  - reusable `discovery_policy_profiles` exist as additive operator-managed tuning truth for graph and recall lanes;
-  - `discovery_missions` and `discovery_recall_missions` can now reference `profile_id` and persist `applied_profile_version` plus `applied_policy_json` snapshots for historical reproducibility;
-  - `/admin/discovery` now ships a `Profiles` tab, mission/recall profile selectors, and explainability-first candidate/recall policy signals;
-  - `pnpm test:discovery:admin:compose` passed with reusable profile CRUD, mission attach, recall attach, profile archive/reactivate/delete, and visible explainability/profile version fields;
-  - live runtime and downstream safety remained green on the same baseline through:
-    - `/tmp/newsportal-live-discovery-examples-682e955a.json|md`
+  - if the user wants another iteration, open a follow-up capability focused specifically on:
+    - tender-portal semantic uplift beyond the current buyer-intent prompts; or
+    - website projection tightening for sources that still land in `articles_produced_but_zero_selected_outputs = 15`
     - `/tmp/newsportal-discovery-nonregression-9c663b86.json|md`
   the live discovery automation is wired to the currently shipped discovery/runtime surfaces and now also has a case-agnostic safety proof:
   - it enforces the DDGS-only guard (`DISCOVERY_ENABLED=1`, `DISCOVERY_SEARCH_PROVIDER=ddgs`, Brave/Serper keys empty)

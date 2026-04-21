@@ -38,9 +38,10 @@ Respond with JSON:
 Approve when the article clearly reflects buyer-side outsourcing demand, such as:
 - buyer-authored marketplace project cards for software build, integration, migration, rescue, support, or dedicated-team work
 - formal software procurement, vendor selection, bids, proposals, RFP/RFQ/tender, or implementation contracting
+- formal tender, contract notice, competition, or procurement-detail pages that describe software services, implementation scope, supplier bids, deadlines, contracting authorities, or submission requirements
 - an organization explicitly looking for an external delivery team, agency, contractor, partner, or vendor to execute software work
 
-Use "uncertain" when the item looks like a real buyer-side software request but the text is brief, truncated, or only partially confirms the sourcing pattern.
+Use "uncertain" when the item looks like a real buyer-side software request or formal procurement notice but the text is brief, truncated, or only partially confirms the software-delivery scope.
 
 Reject when the page is mainly:
 - a procurement portal shell, index, news page, FAQ, help page, or generic opportunities page
@@ -53,7 +54,10 @@ Important:
 - do not require the exact words "outsourcing" or "agency" if buyer-side software sourcing is otherwise explicit
 - prefer concrete delivery evidence such as budget, bids, proposals, deliverables, scope, timelines, existing codebase takeover, or backlog pressure
 - generic "opportunities" homepages or procurement navigation pages are out of scope even if they are vendor-facing
-- reject seller-authored surfaces even if they mention similar software terms`,
+- reject seller-authored surfaces even if they mention similar software terms
+- if title or lead already contains a direct buyer-side request with fixed price, proposals, quotes, or scoped developer support, treat that as the primary signal even when the body includes marketplace wrapper text
+- adjacent freelancer proposals, profile cards, and marketplace recommendations are wrapper noise unless they replace the buyer request as the main page purpose
+- a bland procurement title such as "competition", "contract notice", or similar can still be valid if the body clearly shows software procurement details, buyer authority context, deadlines, lots, contract scope, or submission instructions`,
   },
   {
     template_name: "Outsourcing buyer-intent criterion review",
@@ -81,6 +85,7 @@ Approve when the article clearly shows one or more of these:
 - a buyer-authored marketplace project card or tender notice describes a concrete software build, integration, migration, replacement, support takeover, or dedicated-team request
 - the text includes scoped delivery evidence such as budget, bids, proposals, quote request, deliverables, timeline, or statement of work
 - a real organization is running software procurement, vendor selection, RFQ/RFP/tender, or implementation contracting
+- a formal competition or contract notice page contains buyer-side procurement fields such as contracting authority, supplier submission, procurement scope, lots, contract value, CPV/service description, or response deadline for software work
 
 Use "uncertain" when the article looks buyer-side and delivery-scoped but the authorship or outsourcing intent is still truncated or implicit.
 
@@ -98,7 +103,10 @@ Important:
 - a single contractor/project post can still qualify if it clearly externalizes software delivery to a third party
 - words like partner, migration, MVP, modernization, or transformation are not enough on their own
 - seller-authored marketplace listings, freelancer profiles, and "available for hire" pages should be rejected
-- if evidence is weak and not plausibly buyer-side, return "reject"`,
+- if evidence is weak and not plausibly buyer-side, return "reject"
+- if the title or lead explicitly says a buyer is looking for developer support, proposals, quotes, bids, or a fixed-price project, treat that as the primary evidence even when the rest of the page contains marketplace chrome, navigation, freelancer proposals, or nearby seller cards
+- adjacent freelancer profiles, proposal lists, and marketplace recommendation widgets are ambient wrapper noise, not proof that the page is seller-authored
+- generic procurement titles like "competition" or "contract notice" should not be rejected on title alone when the body clearly describes software procurement or external delivery scope`,
   },
   {
     template_name: "Outsourcing buyer-intent global review",
@@ -124,6 +132,7 @@ Approve when the article clearly shows one or more of these:
 - a buyer-authored marketplace project card requests software build, implementation, integration, migration, rescue, support, or contract engineering work
 - a formal procurement or vendor-selection flow exists for software delivery or managed application services
 - the text contains concrete outsourcing evidence such as proposals, bids, quotes, budget, timeline, deliverables, statement of work, or replacing a current vendor
+- a formal tender or contract-notice page clearly describes software services, implementation scope, buyer authority, response deadline, or supplier submission instructions
 
 Use "uncertain" when buyer-side intent is plausible but the article is truncated or still missing explicit delivery context.
 
@@ -138,7 +147,9 @@ Important:
 - real buyer-side marketplace project cards are in scope even when the wording is short
 - exact keyword matching is not required if the sourcing pattern is concrete
 - generic government-contracting or opportunities landing pages should be rejected unless the page itself is a concrete software procurement notice
-- do not approve pages whose main function is navigation, aggregation, self-promotion, or recruiting`,
+- do not approve pages whose main function is navigation, aggregation, self-promotion, or recruiting
+- when title or lead already contains a direct buyer-side request with budget, proposals, open-for-proposals language, or scoped delivery need, do not let surrounding marketplace wrapper text override that core signal
+- procurement-detail pages with bland titles can still be approved when the body provides concrete software procurement context rather than shell navigation`,
   },
 ]);
 
@@ -259,7 +270,7 @@ const INTEREST_TEMPLATES = Object.freeze([
         "employment",
       ]),
     ],
-    allowed_content_kinds: ["editorial", "listing"],
+    allowed_content_kinds: ["editorial", "listing", "entity"],
     time_window_hours: null,
     priority: 1,
   },
@@ -360,7 +371,7 @@ const INTEREST_TEMPLATES = Object.freeze([
         "top freelancers",
       ]),
     ],
-    allowed_content_kinds: ["editorial", "listing"],
+    allowed_content_kinds: ["editorial", "listing", "entity"],
     time_window_hours: null,
     priority: 0.95,
   },
@@ -465,7 +476,14 @@ const INTEREST_TEMPLATES = Object.freeze([
         "directory",
       ]),
     ],
-    allowed_content_kinds: ["editorial", "listing", "document", "data_file", "api_payload"],
+    allowed_content_kinds: [
+      "editorial",
+      "listing",
+      "entity",
+      "document",
+      "data_file",
+      "api_payload",
+    ],
     time_window_hours: null,
     priority: 1,
   },
@@ -574,7 +592,7 @@ const INTEREST_TEMPLATES = Object.freeze([
         "contract opportunities",
       ]),
     ],
-    allowed_content_kinds: ["editorial", "listing", "document"],
+    allowed_content_kinds: ["editorial", "listing", "entity", "document"],
     time_window_hours: null,
     priority: 0.9,
   },
@@ -679,7 +697,7 @@ const INTEREST_TEMPLATES = Object.freeze([
         "case study",
       ]),
     ],
-    allowed_content_kinds: ["editorial", "listing"],
+    allowed_content_kinds: ["editorial", "listing", "entity"],
     time_window_hours: null,
     priority: 0.85,
   },

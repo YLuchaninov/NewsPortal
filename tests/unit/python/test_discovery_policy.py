@@ -41,6 +41,9 @@ class DiscoveryPolicyTests(unittest.TestCase):
                     "providerTypes": ["website"],
                     "supportedWebsiteKinds": ["editorial", "procurement_portal"],
                     "negativeDomains": ["spam.example"],
+                    "expectedSourceShapes": ["editorial_stream"],
+                    "allowedSourceFamilies": ["official_updates"],
+                    "diversityCaps": {"maxPerSourceFamily": 2},
                 },
             },
             mission_like={"target_provider_types": ["rss", "website"]},
@@ -52,6 +55,9 @@ class DiscoveryPolicyTests(unittest.TestCase):
             policy["supportedWebsiteKinds"],
             ["editorial", "procurement_portal"],
         )
+        self.assertEqual(policy["expectedSourceShapes"], ["editorial_stream"])
+        self.assertEqual(policy["allowedSourceFamilies"], ["official_updates"])
+        self.assertEqual(policy["diversityCaps"], {"maxPerSourceFamily": 2})
 
     def test_procurement_portal_matches_listing_like_probe_output(self) -> None:
         self.assertTrue(
@@ -101,6 +107,9 @@ class DiscoveryPolicyTests(unittest.TestCase):
         self.assertEqual(review["verdict"], "manual_review")
         self.assertEqual(review["policyVerdict"], "manual_review")
         self.assertEqual(review["reasonBucket"], "browser_assisted_residual")
+        self.assertEqual(review["onboardingVerdict"], "manual_review")
+        self.assertEqual(review["productivityRisk"], "high")
+        self.assertEqual(review["usefulnessDiagnostic"], "manual_only_residual")
 
     def test_brave_adapter_normalizes_provider_payload(self) -> None:
         adapter = BraveWebSearchAdapter(

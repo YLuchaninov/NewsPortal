@@ -75,6 +75,9 @@
   - `semantic_decision`
   - compatibility/read explain payload
 - technical filter и semantic filter не должны сливаться в один opaque reject.
+- bounded generic wrapper/category hardening belongs here, not in domain-specific allowlists:
+  - search/category/job-board wrapper pages may be rejected as technical noise before semantic usefulness is judged;
+  - this remains valid only when the rule is source-shape based and does not hardcode specific domains or case-only vocabulary.
 
 ### 5. Final selection truth
 
@@ -176,12 +179,14 @@
 - lock-scope reduction
 - per-channel poll lease
 - non-fatal enrichment/oEmbed degradation handling
+- generic wrapper/category-noise filtering that protects the downstream pipeline from treating search pages, browse pages, or job-board shells as stable buyer-intent articles
 
 Но только если:
 
 - сохраняется sequence-first ownership
 - не нарушается PostgreSQL/outbox discipline
 - не исчезает article/canonical provenance
+- diagnostics truth stays honest about where the loss happened; projected rows that are all rejected as technical wrapper noise may be counted as `resources_extracted_but_no_stable_articles` in product proof instead of semantic zero-yield.
 
 ## Что нельзя делать без отдельного stage и усиленного proof
 

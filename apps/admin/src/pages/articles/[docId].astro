@@ -371,6 +371,15 @@ const verificationColor: Record<string, string> = {
               </dd>
             </div>
             <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Downstream blocker</dt>
+              <dd class="mt-1 text-foreground">
+                {String(selectionDiagnostics.downstreamLossBucket ?? "—")} · stage: {String(selectionDiagnostics.selectionBlockerStage ?? "—")}
+              </dd>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {String(selectionDiagnostics.selectionBlockerReason ?? "No blocker reason recorded.")}
+              </p>
+            </div>
+            <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Filter coverage</dt>
               <dd class="mt-1 text-foreground">
                 system criteria: {selectionDiagnostics.systemCriterionRows} · user interests: {selectionDiagnostics.userInterestRows}
@@ -387,6 +396,9 @@ const verificationColor: Record<string, string> = {
               <dd class="mt-1 text-foreground">
                 hold count: {selectionDiagnostics.holdCount} · review pending: {selectionDiagnostics.llmReviewPendingCount} · llm review rows: {selectionDiagnostics.llmReviewRows} · notifications: {selectionDiagnostics.notificationRows}
               </dd>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {`verification: ${JSON.stringify(selectionDiagnostics.verificationSignalSummary ?? {})}`}
+              </p>
             </div>
           </dl>
         </section>

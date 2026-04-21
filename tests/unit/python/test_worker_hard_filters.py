@@ -214,6 +214,40 @@ class WorkerHardFilterTests(unittest.TestCase):
         self.assertEqual(reasons, [])
         self.assertTrue(within_window)
 
+    def test_rejects_wrapper_directory_noise_without_direct_request_signal(self) -> None:
+        passes, reasons, within_window = worker_main.passes_hard_filters(
+            article=self._make_article(
+                title="Cold Calling Freelance Jobs: Work Remote & Earn Online",
+                body=(
+                    "Browse by Category. Hire freelancers. Find work. "
+                    "Search buyers can search offers to buy now."
+                ),
+            ),
+            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            hard_constraints={},
+        )
+
+        self.assertFalse(passes)
+        self.assertIn("wrapper_directory_noise", reasons)
+        self.assertTrue(within_window)
+
+    def test_keeps_buyer_request_page_even_with_marketplace_wrapper_text(self) -> None:
+        passes, reasons, within_window = worker_main.passes_hard_filters(
+            article=self._make_article(
+                title="Looking for Developer Support on Ongoing Technical Projects",
+                body=(
+                    "Post Project. Browse by Category. Hire freelancers. "
+                    "Search freelancers to request a proposal."
+                ),
+            ),
+            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            hard_constraints={},
+        )
+
+        self.assertTrue(passes)
+        self.assertNotIn("wrapper_directory_noise", reasons)
+        self.assertTrue(within_window)
+
 
 if __name__ == "__main__":
     unittest.main()

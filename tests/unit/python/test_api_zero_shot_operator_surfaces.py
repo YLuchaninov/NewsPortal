@@ -114,6 +114,17 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(article["selection_source"], "final_selection_results")
         self.assertEqual(diagnostics["selectionMode"], "hold")
         self.assertEqual(diagnostics["selectionSummary"], "Gray zone held by profile policy")
+        self.assertEqual(
+            diagnostics["downstreamLossBucket"],
+            "articles_missing_interest_filter_results",
+        )
+        self.assertEqual(
+            diagnostics["selectionBlockerStage"], "interest_filtering"
+        )
+        self.assertEqual(
+            diagnostics["selectionBlockerReason"], "missing_interest_filter_results"
+        )
+        self.assertEqual(diagnostics["holdReason"], None)
         self.assertEqual(diagnostics["holdCount"], 1)
         self.assertEqual(diagnostics["notificationRows"], 0)
         self.assertEqual(article["selection_guidance"]["tone"], "warning")
@@ -195,6 +206,14 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(result["selection_explain"]["selectionMode"], "selected")
         self.assertEqual(result["selection_explain"]["selectionReason"], "semantic_match")
         self.assertEqual(result["selection_diagnostics"]["selectionMode"], "selected")
+        self.assertEqual(
+            result["selection_diagnostics"]["downstreamLossBucket"],
+            "articles_missing_interest_filter_results",
+        )
+        self.assertEqual(
+            result["selection_diagnostics"]["selectionBlockerStage"],
+            "interest_filtering",
+        )
         self.assertEqual(result["selection_diagnostics"]["systemCriterionRows"], 0)
         self.assertEqual(result["selection_guidance"]["tone"], "positive")
         self.assertEqual(len(result["verification_results"]), 2)
@@ -431,6 +450,16 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(explain["llmReviewPendingCount"], 0)
         diagnostics = result["selection_diagnostics"]
         self.assertEqual(diagnostics["selectionMode"], "hold")
+        self.assertEqual(
+            diagnostics["downstreamLossBucket"],
+            "articles_missing_interest_filter_results",
+        )
+        self.assertEqual(
+            diagnostics["selectionBlockerStage"], "interest_filtering"
+        )
+        self.assertEqual(
+            diagnostics["selectionBlockerReason"], "missing_interest_filter_results"
+        )
         self.assertEqual(diagnostics["grayZoneRows"], 0)
         self.assertEqual(diagnostics["holdCount"], 1)
         self.assertEqual(result["selection_guidance"]["tone"], "warning")

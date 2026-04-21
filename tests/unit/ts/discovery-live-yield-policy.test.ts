@@ -411,6 +411,9 @@ test("yield summary exposes normalized buckets including registration failures",
   assert.equal(summary.normalizedReasonBuckets.below_auto_approval_threshold, 1);
   assert.equal(summary.normalizedReasonBuckets.unsupported_challenge, 1);
   assert.equal(summary.normalizedReasonBuckets.candidate_found_not_onboarded, 1);
+  assert.equal(summary.stageLossBuckets.candidate_rejected_by_policy, 1);
+  assert.equal(summary.stageLossBuckets.candidate_manual_only, 1);
+  assert.equal(summary.productivityBuckets.source_onboarded_but_no_extracted_resources, 0);
 });
 
 test("multi-run proof keeps per-pack root-cause drift counts", () => {

@@ -534,10 +534,17 @@ class RankedSource:
         }
 
 
-def rank_portfolio(scored_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def rank_portfolio(
+    scored_sources: list[dict[str, Any]],
+    *,
+    diversity_caps: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     remaining = [dict(item) for item in scored_sources]
     selected: list[dict[str, Any]] = []
     slot_counts = {role: 0 for role in ROLE_SLOTS}
+    caps = dict(diversity_caps or {})
+    max_per_source_family = max(int(caps.get("maxPerSourceFamily") or 0), 0)
+    max_per_domain = max(int(caps.get("maxPerDomain") or 0), 0)
 
     while remaining:
         best_index = -1
@@ -561,6 +568,23 @@ def rank_portfolio(scored_sources: list[dict[str, Any]]) -> list[dict[str, Any]]
                     for existing in selected
                 ):
                     gain -= 0.15
+                if candidate_family and max_per_source_family > 0:
+                    family_count = sum(
+                        1
+                        for existing in selected
+                        if str(existing.get("source_family") or "").strip().lower() == candidate_family
+                    )
+                    if family_count >= max_per_source_family:
+                        gain -= 0.35
+                candidate_domain = str(candidate.get("canonical_domain") or "").strip().lower()
+                if candidate_domain and max_per_domain > 0:
+                    domain_count = sum(
+                        1
+                        for existing in selected
+                        if str(existing.get("canonical_domain") or "").strip().lower() == candidate_domain
+                    )
+                    if domain_count >= max_per_domain:
+                        gain -= 0.45
             for role in candidate.get("role_labels") or []:
                 slot = ROLE_SLOTS.get(role)
                 if slot and slot_counts[role] < slot["min"]:
@@ -619,8 +643,9 @@ def build_portfolio_snapshot(
     *,
     mission_graph: dict[str, Any],
     scored_sources: list[dict[str, Any]],
+    diversity_caps: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    ranked = rank_portfolio(scored_sources)
+    ranked = rank_portfolio(scored_sources, diversity_caps=diversity_caps)
     gaps = detect_coverage_gaps(ranked, mission_graph)
     return {
         "ranked_sources": ranked,

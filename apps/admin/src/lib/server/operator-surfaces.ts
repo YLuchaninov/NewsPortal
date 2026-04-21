@@ -258,6 +258,12 @@ export interface DiscoveryPolicyExplainability {
   qualityPrior: number | null;
   finalReviewScore: number | null;
   policyVerdict: string | null;
+  onboardingVerdict: string | null;
+  productivityRisk: string | null;
+  usefulnessDiagnostic: string | null;
+  stageLossBucket: string | null;
+  sourceFamily: string | null;
+  sourceShape: string | null;
   provider: string | null;
   residuals: string[];
   preferredDomainMatch: boolean;
@@ -360,6 +366,13 @@ export function resolveDiscoveryPolicyExplainability(
     qualityPrior: asNumber(policyReview.qualityPrior),
     finalReviewScore: asNumber(policyReview.finalReviewScore),
     policyVerdict: asString(policyReview.policyVerdict),
+    onboardingVerdict: asString(policyReview.onboardingVerdict),
+    productivityRisk: asString(policyReview.productivityRisk),
+    usefulnessDiagnostic: asString(policyReview.usefulnessDiagnostic),
+    stageLossBucket: asString(policyReview.stageLossBucket),
+    sourceFamily:
+      asString(matchedSignals.sourceFamily) ?? asString(candidate.source_family),
+    sourceShape: asString(matchedSignals.sourceShape),
     provider: asString(policyReview.provider) ?? asString(evaluation.search_provider),
     residuals: asStringList(policyReview.residuals),
     preferredDomainMatch:
@@ -437,6 +450,12 @@ export interface ArticleSelectionDiagnostics {
   selectionMode: string;
   selectionSummary: string;
   selectionReason: string | null;
+  downstreamLossBucket: string | null;
+  selectionBlockerStage: string | null;
+  selectionBlockerReason: string | null;
+  holdReason: string | null;
+  semanticSignalSummary: Record<string, unknown>;
+  verificationSignalSummary: Record<string, unknown>;
   holdCount: number;
   llmReviewPendingCount: number;
   candidateSignalUpliftCount: number;
@@ -709,6 +728,12 @@ export function resolveArticleSelectionDiagnostics(
       selectionSummary:
         asString(precomputed.selectionSummary) ?? "Selection not explained yet",
       selectionReason: asString(precomputed.selectionReason),
+      downstreamLossBucket: asString(precomputed.downstreamLossBucket),
+      selectionBlockerStage: asString(precomputed.selectionBlockerStage),
+      selectionBlockerReason: asString(precomputed.selectionBlockerReason),
+      holdReason: asString(precomputed.holdReason),
+      semanticSignalSummary: asRecord(precomputed.semanticSignalSummary),
+      verificationSignalSummary: asRecord(precomputed.verificationSignalSummary),
       holdCount: asInteger(precomputed.holdCount) ?? 0,
       llmReviewPendingCount: asInteger(precomputed.llmReviewPendingCount) ?? 0,
       candidateSignalUpliftCount:
@@ -773,6 +798,12 @@ export function resolveArticleSelectionDiagnostics(
     selectionSummary:
       asString(selection.selectionSummary) ?? articleState.selectionSummary,
     selectionReason: asString(selection.selectionReason) ?? articleState.selectionReason,
+    downstreamLossBucket: asString(selection.downstreamLossBucket),
+    selectionBlockerStage: asString(selection.selectionBlockerStage),
+    selectionBlockerReason: asString(selection.selectionBlockerReason),
+    holdReason: asString(selection.holdReason),
+    semanticSignalSummary: asRecord(selection.semanticSignalSummary),
+    verificationSignalSummary: asRecord(selection.verificationSignalSummary),
     holdCount: asInteger(selection.holdCount) ?? articleState.holdCount,
     llmReviewPendingCount:
       asInteger(selection.llmReviewPendingCount) ?? articleState.llmReviewPendingCount,

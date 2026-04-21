@@ -962,6 +962,16 @@ function normalizeErrorText(value) {
   return String(value ?? "").trim();
 }
 
+function sortCountEntries(entries, primaryKey) {
+  return [...entries].sort((left, right) => {
+    const countDelta = Number(right.count ?? 0) - Number(left.count ?? 0);
+    if (countDelta !== 0) {
+      return countDelta;
+    }
+    return String(left[primaryKey] ?? "").localeCompare(String(right[primaryKey] ?? ""));
+  });
+}
+
 function isImplementationIssueText(text) {
   const normalized = normalizeErrorText(text).toLowerCase();
   if (!normalized) {
@@ -1086,9 +1096,51 @@ async function readPerSiteEvidence(pool, readySites) {
             left join criteria c on c.criterion_id = ifr.criterion_id
             where
               a.channel_id = $1
-              and ifr.filter_scope = 'criterion'
+              and ifr.filter_scope = 'system_criterion'
             order by ifr.created_at desc
             limit 12
+          `,
+          [channel.channel_id]
+        )
+      : { rows: [] };
+    const interestFilterBreakdownResult = channel
+      ? await pool.query(
+          `
+            select
+              coalesce(ifr.technical_filter_state, 'missing') as technical_filter_state,
+              coalesce(ifr.semantic_decision, 'missing') as semantic_decision,
+              count(*)::int as count
+            from interest_filter_results ifr
+            join articles a on a.doc_id = ifr.doc_id
+            where
+              a.channel_id = $1
+              and ifr.filter_scope = 'system_criterion'
+            group by 1, 2
+          `,
+          [channel.channel_id]
+        )
+      : { rows: [] };
+    const filterReasonBreakdownResult = channel
+      ? await pool.query(
+          `
+            select
+              coalesce(reason_rows.filter_reason, 'none') as filter_reason,
+              count(*)::int as count
+            from interest_filter_results ifr
+            join articles a on a.doc_id = ifr.doc_id
+            left join lateral (
+              select jsonb_array_elements_text(
+                case
+                  when jsonb_typeof(coalesce(ifr.explain_json, '{}'::jsonb) -> 'filterReasons') = 'array'
+                    then coalesce(ifr.explain_json, '{}'::jsonb) -> 'filterReasons'
+                  else '[]'::jsonb
+                end
+              ) as filter_reason
+            ) reason_rows on true
+            where
+              a.channel_id = $1
+              and ifr.filter_scope = 'system_criterion'
+            group by 1
           `,
           [channel.channel_id]
         )
@@ -1106,6 +1158,28 @@ async function readPerSiteEvidence(pool, readySites) {
           [channel.channel_id]
         )
       : { rows: [{ total: 0, selected: 0 }] };
+    const finalSelectionBreakdownResult = channel
+      ? await pool.query(
+          `
+            select
+              coalesce(fsr.explain_json ->> 'downstreamLossBucket', 'final_selection_rejected') as downstream_loss_bucket,
+              coalesce(fsr.explain_json ->> 'selectionBlockerStage', 'final_selection') as selection_blocker_stage,
+              coalesce(
+                fsr.explain_json ->> 'selectionBlockerReason',
+                fsr.explain_json ->> 'selectionReason',
+                fsr.final_decision,
+                'final_selection_rejected'
+              ) as selection_blocker_reason,
+              count(*)::int as count,
+              count(*) filter (where fsr.is_selected = true)::int as selected_count
+            from final_selection_results fsr
+            join articles a on a.doc_id = fsr.doc_id
+            where a.channel_id = $1
+            group by 1, 2, 3
+          `,
+          [channel.channel_id]
+        )
+      : { rows: [] };
     const systemFeedResult = channel
       ? await pool.query(
           `
@@ -1142,6 +1216,31 @@ async function readPerSiteEvidence(pool, readySites) {
       title: row.title,
       url: row.url,
     }));
+    const interestFilterBreakdown = sortCountEntries(
+      interestFilterBreakdownResult.rows.map((row) => ({
+        technicalFilterState: row.technical_filter_state,
+        semanticDecision: row.semantic_decision,
+        count: Number(row.count ?? 0),
+      })),
+      "technicalFilterState"
+    );
+    const filterReasonBreakdown = sortCountEntries(
+      filterReasonBreakdownResult.rows.map((row) => ({
+        filterReason: row.filter_reason,
+        count: Number(row.count ?? 0),
+      })),
+      "filterReason"
+    );
+    const finalSelectionBreakdown = sortCountEntries(
+      finalSelectionBreakdownResult.rows.map((row) => ({
+        downstreamLossBucket: row.downstream_loss_bucket,
+        selectionBlockerStage: row.selection_blocker_stage,
+        selectionBlockerReason: row.selection_blocker_reason,
+        count: Number(row.count ?? 0),
+        selectedCount: Number(row.selected_count ?? 0),
+      })),
+      "downstreamLossBucket"
+    );
     if (criterionMatches.length > 0) {
       representativeMatches.push(
         ...criterionMatches.map((match) => ({
@@ -1160,12 +1259,22 @@ async function readPerSiteEvidence(pool, readySites) {
       .filter(Boolean);
 
     const selectedCount = Number(finalSelectionResult.rows[0]?.selected ?? 0);
+    const dominantFinalSelectionBlocker = finalSelectionBreakdown[0] ?? null;
+    const onlyTechnicalNoise =
+      articleCount > 0
+      && selectedCount === 0
+      && finalSelectionBreakdown.length > 0
+      && finalSelectionBreakdown.every(
+        (item) => item?.downstreamLossBucket === "technical_filter_rejected"
+      );
     let classification;
+    let usefulnessBucket;
     if (!channel || !fetchRun) {
       classification = {
         category: "implementation_issue",
         reason: "No persisted website channel or fetch run was found after import/poll.",
       };
+      usefulnessBucket = "source_onboarded_but_no_extracted_resources";
     } else if (resourceCount === 0) {
       classification = {
         category:
@@ -1178,6 +1287,7 @@ async function readPerSiteEvidence(pool, readySites) {
           latestErrorText ||
           "The channel produced no persisted web resources during the bounded live run.",
       };
+      usefulnessBucket = "source_onboarded_but_no_extracted_resources";
     } else if (
       failedResourceErrors.length > 0 &&
       failedResourceErrors.length === resourceCount &&
@@ -1189,10 +1299,11 @@ async function readPerSiteEvidence(pool, readySites) {
           isImplementationIssueText(combinedError)
             ? "implementation_issue"
             : String(site.validationStatus ?? "").trim() === NEEDS_BROWSER_FALLBACK_STATUS
-              ? "browser_fallback_residual"
+            ? "browser_fallback_residual"
               : "external/runtime_residual",
         reason: combinedError,
       };
+      usefulnessBucket = "resources_extracted_but_no_stable_articles";
     } else if (
       articleCount === 0 &&
       String(site.projectionExpectation ?? "") === "resource_only_is_normal"
@@ -1201,16 +1312,28 @@ async function readPerSiteEvidence(pool, readySites) {
         category: "resource_only_expected",
         reason: "Resource-only outcome is normal for this source profile and was observed live.",
       };
+      usefulnessBucket = "resources_extracted_but_no_stable_articles";
     } else if (articleCount > 0 && selectedCount > 0) {
       classification = {
         category: "projected_and_selected",
         reason: "Website resources projected into articles and at least one downstream final-selection row was selected.",
       };
+      usefulnessBucket = "selected_useful_evidence_present";
+    } else if (onlyTechnicalNoise) {
+      classification = {
+        category: "projected_but_not_selected",
+        reason:
+          "Website resources projected into article rows, but every downstream row was rejected as technical wrapper/category noise before semantic usefulness could be established.",
+      };
+      usefulnessBucket = "resources_extracted_but_no_stable_articles";
     } else if (articleCount > 0) {
       classification = {
         category: "projected_but_not_selected",
-        reason: "Website resources projected into articles and downstream filtering ran, but no final-selection row was selected.",
+        reason: dominantFinalSelectionBlocker
+          ? `Website resources projected into articles and downstream filtering ran, but no final-selection row was selected. Dominant blocker: ${dominantFinalSelectionBlocker.downstreamLossBucket} (${dominantFinalSelectionBlocker.selectionBlockerStage}:${dominantFinalSelectionBlocker.selectionBlockerReason}).`
+          : "Website resources projected into articles and downstream filtering ran, but no final-selection row was selected.",
       };
+      usefulnessBucket = "articles_produced_but_zero_selected_outputs";
     } else {
       classification = {
         category:
@@ -1220,6 +1343,7 @@ async function readPerSiteEvidence(pool, readySites) {
         reason:
           "Website resources were observed without a durable implementation issue signal, but the downstream outcome did not match the expected projected/resource-only success shapes.",
       };
+      usefulnessBucket = "resources_extracted_but_no_stable_articles";
     }
 
     evidence.push({
@@ -1261,11 +1385,14 @@ async function readPerSiteEvidence(pool, readySites) {
         total: Number(finalSelectionResult.rows[0]?.total ?? 0),
         selected: selectedCount,
       },
+      finalSelectionBreakdown,
       systemFeed: {
         total: Number(systemFeedResult.rows[0]?.total ?? 0),
         eligible: Number(systemFeedResult.rows[0]?.eligible ?? 0),
       },
       criterionMatches,
+      interestFilterBreakdown,
+      filterReasonBreakdown,
       sampleResources: resourceRowsResult.rows.slice(0, 5).map((row) => ({
         resourceId: row.resource_id,
         resourceKind: row.resource_kind,
@@ -1276,6 +1403,7 @@ async function readPerSiteEvidence(pool, readySites) {
       })),
       sampleArticles: articleRows.slice(0, 5),
       classification,
+      usefulnessBucket,
     });
   }
 
@@ -1287,6 +1415,10 @@ async function readPerSiteEvidence(pool, readySites) {
 
 function buildAggregateSummary(perSiteEvidence) {
   const categories = {};
+  const usefulnessBuckets = {};
+  const downstreamLossBuckets = {};
+  const selectionBlockerStages = {};
+  const interestFilterReasonCounts = {};
   let totalResources = 0;
   let totalArticles = 0;
   let totalSelected = 0;
@@ -1295,6 +1427,18 @@ function buildAggregateSummary(perSiteEvidence) {
   for (const site of perSiteEvidence) {
     categories[site.classification.category] =
       (categories[site.classification.category] ?? 0) + 1;
+    usefulnessBuckets[site.usefulnessBucket] =
+      (usefulnessBuckets[site.usefulnessBucket] ?? 0) + 1;
+    for (const row of Array.isArray(site.finalSelectionBreakdown) ? site.finalSelectionBreakdown : []) {
+      downstreamLossBuckets[row.downstreamLossBucket] =
+        (downstreamLossBuckets[row.downstreamLossBucket] ?? 0) + Number(row.count ?? 0);
+      selectionBlockerStages[row.selectionBlockerStage] =
+        (selectionBlockerStages[row.selectionBlockerStage] ?? 0) + Number(row.count ?? 0);
+    }
+    for (const row of Array.isArray(site.filterReasonBreakdown) ? site.filterReasonBreakdown : []) {
+      interestFilterReasonCounts[row.filterReason] =
+        (interestFilterReasonCounts[row.filterReason] ?? 0) + Number(row.count ?? 0);
+    }
     totalResources += Number(site.resourceCount ?? 0);
     totalArticles += Number(site.articleCount ?? 0);
     totalSelected += Number(site.finalSelection?.selected ?? 0);
@@ -1303,6 +1447,10 @@ function buildAggregateSummary(perSiteEvidence) {
 
   return {
     classificationCounts: categories,
+    usefulnessBucketCounts: usefulnessBuckets,
+    downstreamLossBucketCounts: downstreamLossBuckets,
+    selectionBlockerStageCounts: selectionBlockerStages,
+    interestFilterReasonCounts,
     totalResources,
     totalArticles,
     totalSelected,
@@ -1339,6 +1487,30 @@ function formatEvidenceMarkdown(summary) {
   for (const [category, count] of Object.entries(summary.aggregate.classificationCounts)) {
     lines.push(`- ${category}: ${count}`);
   }
+  lines.push("");
+  lines.push("## Usefulness Buckets");
+  lines.push("");
+  for (const [bucket, count] of Object.entries(summary.aggregate.usefulnessBucketCounts)) {
+    lines.push(`- ${bucket}: ${count}`);
+  }
+  lines.push("");
+  lines.push("## Downstream Article Buckets");
+  lines.push("");
+  for (const [bucket, count] of Object.entries(summary.aggregate.downstreamLossBucketCounts)) {
+    lines.push(`- ${bucket}: ${count}`);
+  }
+  lines.push("");
+  lines.push("## Selection Blocker Stages");
+  lines.push("");
+  for (const [stage, count] of Object.entries(summary.aggregate.selectionBlockerStageCounts)) {
+    lines.push(`- ${stage}: ${count}`);
+  }
+  lines.push("");
+  lines.push("## Interest Filter Reasons");
+  lines.push("");
+  for (const [reason, count] of Object.entries(summary.aggregate.interestFilterReasonCounts)) {
+    lines.push(`- ${reason}: ${count}`);
+  }
   if (summary.skippedSources.length > 0) {
     lines.push("");
     lines.push("## Skipped Sources");
@@ -1354,12 +1526,23 @@ function formatEvidenceMarkdown(summary) {
     lines.push(`### ${site.siteName}`);
     lines.push("");
     lines.push(`- Classification: \`${site.classification.category}\``);
+    lines.push(`- Usefulness bucket: \`${site.usefulnessBucket}\``);
     lines.push(`- Reason: ${site.classification.reason}`);
     lines.push(`- Fetch outcome: \`${site.latestFetchRun?.outcomeKind ?? "none"}\``);
     lines.push(`- Resources: \`${site.resourceCount}\``);
     lines.push(`- Projected articles: \`${site.articleCount}\``);
     lines.push(`- Final selection selected: \`${site.finalSelection.selected}\``);
     lines.push(`- System feed eligible: \`${site.systemFeed.eligible}\``);
+    if (site.finalSelectionBreakdown.length > 0) {
+      lines.push(
+        `- Dominant downstream blocker: \`${site.finalSelectionBreakdown[0].downstreamLossBucket}\` via \`${site.finalSelectionBreakdown[0].selectionBlockerStage}\``
+      );
+    }
+    if (site.filterReasonBreakdown.length > 0) {
+      lines.push(
+        `- Top filter reason: \`${site.filterReasonBreakdown[0].filterReason}\` (${site.filterReasonBreakdown[0].count})`
+      );
+    }
     if (site.criterionMatches.length > 0) {
       lines.push(`- Representative criterion match: ${site.criterionMatches[0].criterionName ?? "unknown criterion"} — ${site.criterionMatches[0].title ?? "untitled"}`);
     }

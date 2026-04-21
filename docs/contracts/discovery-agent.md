@@ -34,6 +34,7 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
   - optional structured provider-kind constraints such as `supportedWebsiteKinds`;
   - bounded graph/recall score thresholds;
   - additive benchmark cohort hints;
+  - additive generic product-tuning hints such as `expectedSourceShapes`, `allowedSourceFamilies`, `disfavoredSourceFamilies`, `usefulnessHints`, and bounded `diversityCaps`;
   - optional advanced prompt instructions.
 - Mission and recall mission ownership stays separate from profile ownership:
   - missions and recall missions still own title/description, seed topics or queries, languages/regions, budgets, priorities, status, and run lifecycle;
@@ -108,7 +109,17 @@ Discovery subsystem отвечает за graph-first mission planning plus boun
   - score vs threshold;
   - preferred-domain / blocked-domain / positive-keyword / negative-keyword matches;
   - benchmark-like status;
-  - linked profile name/version when a profile-backed snapshot exists.
+  - linked profile name/version when a profile-backed snapshot exists;
+  - additive product diagnostics:
+    - `onboardingVerdict`
+    - `productivityRisk`
+    - `usefulnessDiagnostic`
+    - `stageLossBucket`
+    - `sourceFamily`
+    - `sourceShape`
+- additive usefulness diagnostics must remain explainability/tuning truth, not a replacement for approve/promote boundary ownership:
+  - relevance, safety, provider compatibility, and profile thresholds still own approve/promote decisions;
+  - downstream tables such as `articles`, `interest_filter_results`, and `final_selection_results` may inform proof artifacts and operator diagnostics, but they must not become direct runtime-owner inputs for discovery auto-approval or recall promotion.
 - Portfolio snapshots are persisted, not ephemeral UI-only calculations.
 - Gap filling may create additional hypotheses, but only through the same class-registry-driven planning path.
 

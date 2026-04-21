@@ -155,6 +155,22 @@ export function parseOptionalNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function buildPolicyDiversityCaps(
+  payload: Record<string, unknown>,
+  prefix: "graph" | "recall"
+): Record<string, number> {
+  const caps: Record<string, number> = {};
+  const maxPerSourceFamily = parseOptionalNumber(payload[`${prefix}MaxPerSourceFamily`]);
+  const maxPerDomain = parseOptionalNumber(payload[`${prefix}MaxPerDomain`]);
+  if (maxPerSourceFamily != null && maxPerSourceFamily > 0) {
+    caps.maxPerSourceFamily = Math.trunc(maxPerSourceFamily);
+  }
+  if (maxPerDomain != null && maxPerDomain > 0) {
+    caps.maxPerDomain = Math.trunc(maxPerDomain);
+  }
+  return caps;
+}
+
 function parseOptionalJsonRecord(value: unknown): Record<string, unknown> | undefined {
   const raw = String(value ?? "").trim();
   if (!raw) {
@@ -183,6 +199,11 @@ function buildProfilePolicyPayload(
     positiveKeywords: parseTextList(payload[`${prefix}PositiveKeywords`]),
     negativeKeywords: parseTextList(payload[`${prefix}NegativeKeywords`]),
     preferredTactics: parseTextList(payload[`${prefix}PreferredTactics`]),
+    expectedSourceShapes: parseTextList(payload[`${prefix}ExpectedSourceShapes`]),
+    allowedSourceFamilies: parseTextList(payload[`${prefix}AllowedSourceFamilies`]),
+    disfavoredSourceFamilies: parseTextList(payload[`${prefix}DisfavoredSourceFamilies`]),
+    usefulnessHints: parseTextList(payload[`${prefix}UsefulnessHints`]),
+    diversityCaps: buildPolicyDiversityCaps(payload, prefix),
     advancedPromptInstructions:
       String(payload[`${prefix}AdvancedPromptInstructions`] ?? "").trim() || null,
   };
@@ -226,6 +247,24 @@ function buildPartialProfilePolicyPayload(
   }
   if (Object.prototype.hasOwnProperty.call(payload, `${prefix}PreferredTactics`)) {
     policy.preferredTactics = parseTextList(payload[`${prefix}PreferredTactics`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}ExpectedSourceShapes`)) {
+    policy.expectedSourceShapes = parseTextList(payload[`${prefix}ExpectedSourceShapes`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}AllowedSourceFamilies`)) {
+    policy.allowedSourceFamilies = parseTextList(payload[`${prefix}AllowedSourceFamilies`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}DisfavoredSourceFamilies`)) {
+    policy.disfavoredSourceFamilies = parseTextList(payload[`${prefix}DisfavoredSourceFamilies`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}UsefulnessHints`)) {
+    policy.usefulnessHints = parseTextList(payload[`${prefix}UsefulnessHints`]);
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(payload, `${prefix}MaxPerSourceFamily`) ||
+    Object.prototype.hasOwnProperty.call(payload, `${prefix}MaxPerDomain`)
+  ) {
+    policy.diversityCaps = buildPolicyDiversityCaps(payload, prefix);
   }
   if (Object.prototype.hasOwnProperty.call(payload, `${prefix}AdvancedPromptInstructions`)) {
     policy.advancedPromptInstructions =

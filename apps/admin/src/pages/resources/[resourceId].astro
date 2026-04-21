@@ -279,6 +279,15 @@ const selectionGuidanceSummary =
               <dd class="mt-1 text-foreground">{String(selectionDiagnostics.selectionReason ?? resource.selection_reason ?? "—")}</dd>
             </div>
             <div>
+              <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Downstream loss bucket</dt>
+              <dd class="mt-1 text-foreground">
+                {String(selectionDiagnostics.downstreamLossBucket ?? "—")} · stage: {String(selectionDiagnostics.selectionBlockerStage ?? "—")}
+              </dd>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {String(selectionDiagnostics.selectionBlockerReason ?? "No blocker reason recorded.")}
+              </p>
+            </div>
+            <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Hold / review</dt>
               <dd class="mt-1 text-foreground">
                 hold {String(selectionDiagnostics.holdCount ?? resource.selection_hold_count ?? 0)} · pending review {String(selectionDiagnostics.llmReviewPendingCount ?? resource.selection_llm_review_pending_count ?? 0)}
@@ -289,6 +298,9 @@ const selectionGuidanceSummary =
               <dd class="mt-1 text-foreground">
                 matched {String(selectionDiagnostics.matchedRows ?? 0)} · no-match {String(selectionDiagnostics.noMatchRows ?? 0)} · gray-zone {String(selectionDiagnostics.grayZoneRows ?? 0)}
               </dd>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {`semantic: ${JSON.stringify(selectionDiagnostics.semanticSignalSummary ?? {})}`}
+              </p>
             </div>
           </dl>
         </section>

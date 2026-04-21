@@ -14,6 +14,220 @@
 
 ## Completed items
 
+### 2026-04-21 — C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT — Closed the clean-baseline Example C outsourcing zero-yield gap through downstream diagnostics, admin-owned bundle retune, and bounded generic wrapper-noise hardening
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after discovery runtime/provider/policy work had already been hardened, the dominant product loss for the clean Example C outsourcing contour no longer sat in discovery approve/promote correctness. Sources and projected articles were reaching the downstream pipeline, but useful selected/eligible output stayed at zero. The truthful fix therefore had to target `resource -> article -> interest_filter_results -> final_selection_results`, keep discovery generic, and prefer admin-owned bundle truth over domain hardcoding.
+- Что изменилось:
+  - added normalized downstream diagnostics across runtime, API, admin, and proof:
+    - [`services/workers/app/final_selection.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/final_selection.py)
+    - [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py)
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py)
+    - [`apps/admin/src/lib/server/operator-surfaces.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/operator-surfaces.ts)
+    - [`apps/admin/src/pages/articles/[docId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles/[docId].astro)
+    - [`apps/admin/src/pages/resources/[resourceId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources/[resourceId].astro)
+    - `final_selection_results.explain_json` and admin/operator read surfaces now expose:
+      - `downstreamLossBucket`
+      - `selectionBlockerStage`
+      - `selectionBlockerReason`
+      - `holdReason`
+      - `semanticSignalSummary`
+      - `verificationSignalSummary`
+  - made the clean outsourcing proof artifact truthful at the stage-loss level:
+    - [`infra/scripts/run-live-website-outsourcing.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/run-live-website-outsourcing.mjs)
+    - the artifact now records:
+      - normalized usefulness buckets
+      - downstream loss buckets
+      - selection blocker stage counts
+      - interest filter reason counts
+      - per-site evidence, including whether projected rows were only technical wrapper/category noise
+  - retuned the Example C admin-owned outsourcing bundle instead of adding domain logic in workers:
+    - [`infra/scripts/lib/outsource-example-c.bundle.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/outsource-example-c.bundle.mjs)
+    - prompts now:
+      - keep buyer-authored marketplace request cards valid even with wrapper chrome;
+      - explicitly recognize formal tender / contract-notice / competition pages as buyer intent when the body shows procurement scope, authority, bids, deadlines, or supplier submission evidence;
+      - continue rejecting portal shells, category/search pages, freelancer profiles, and seller-authored service pages.
+  - added bounded generic engine hardening only where diagnostics justified it:
+    - [`services/workers/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/main.py)
+    - [`tests/unit/python/test_worker_hard_filters.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_worker_hard_filters.py)
+    - wrapper/category/job-board pages are now rejected as technical noise via `wrapper_directory_noise` when they look like search/directory shells without a direct buyer request in title/lead;
+    - direct buyer-request marketplace pages are preserved even when body chrome contains freelancer cards, navigation, or proposal widgets.
+  - kept discovery proof green after the downstream work:
+    - [`infra/scripts/seed-live-discovery-example-fixtures.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/seed-live-discovery-example-fixtures.mjs) now uses the truthful downstream-needed compile gate on the discovery proof fixture bootstrap, so the examples/yield contours no longer fail on an overly strict clean-stack criterion compile expectation.
+- Что было доказано:
+  - focused/static proof:
+    - `python -m unittest tests.unit.python.test_worker_hard_filters tests.unit.python.test_interest_auto_repair tests.unit.python.test_api_zero_shot_operator_surfaces tests.unit.python.test_final_selection`
+    - `pnpm unit_tests`
+    - `pnpm typecheck`
+  - clean-baseline outsourcing product proof:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal`
+    - `node infra/scripts/run-live-website-outsourcing.mjs`
+    - authoritative artifact:
+      - `/tmp/newsportal-live-website-outsourcing-2026-04-21T164917178Z.json|md`
+    - result:
+      - `classificationCounts`:
+        - `projected_but_not_selected = 18`
+        - `external/runtime_residual = 9`
+        - `projected_and_selected = 1`
+        - `browser_fallback_residual = 1`
+        - `skipped_rejected_open_web = 1`
+      - `usefulnessBucketCounts`:
+        - `articles_produced_but_zero_selected_outputs = 15`
+        - `resources_extracted_but_no_stable_articles = 3`
+        - `source_onboarded_but_no_extracted_resources = 10`
+        - `selected_useful_evidence_present = 1`
+      - `downstreamLossBucketCounts`:
+        - `semantic_rejected = 210`
+        - `technical_filter_rejected = 84`
+        - `gray_zone_hold = 20`
+        - `selected_useful_evidence_present = 2`
+      - `interestFilterReasonCounts` now explicitly include `wrapper_directory_noise = 125`
+      - `totalResources = 348`
+      - `totalArticles = 316`
+      - `totalSelected = 2`
+      - `totalEligible = 2`
+      - selected site:
+        - `PeoplePerHour`
+  - discovery non-regression remained green after the downstream hardening:
+    - `pnpm test:discovery:examples:compose`
+      - `/tmp/newsportal-live-discovery-examples-881b1ff5.json|md`
+      - later rerun:
+        - `/tmp/newsportal-live-discovery-examples-989efe9d.json|md`
+      - both results:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+    - `pnpm test:discovery:yield:compose`
+      - transient live residual:
+        - `/tmp/newsportal-live-discovery-yield-proof-6992dfa4.json|md`
+        - one run timed out waiting for Example C recall candidates
+      - authoritative rerun:
+        - `/tmp/newsportal-live-discovery-yield-proof-36e07737.json|md`
+      - authoritative result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+    - `git diff --check --`
+- Что capability доказала:
+  - the clean Example C outsourcing bundle is no longer zero-yield:
+    - `totalSelected > 0`
+    - `selected_useful_evidence_present > 0`
+  - the main downstream loss is now more truthful and more actionable:
+    - the earlier clean-baseline `articles_produced_but_zero_selected_outputs = 17` dropped to `15`;
+    - part of the former “zero selected” loss is now correctly isolated as technical wrapper/category noise rather than semantic failure of plausible buyer-intent content.
+  - the fix stayed inside the right layers:
+    - admin-owned prompt/bundle truth carried the use-case semantics;
+    - generic engine changes stayed bounded to source-shape wrapper filtering;
+    - discovery runtime remained generic and passed its compose proof after the downstream changes.
+
+### 2026-04-21 — C-DISCOVERY-PRODUCT-SELECTION-QUALITY-CLOSEOUT — Added discovery product diagnostics, balanced source-family-aware tuning, and admin-owned usefulness controls without hardcoded case/domain runtime logic
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after the approve-boundary/provider-decoupling work closed, discovery runtime was structurally healthier but still not product-ready enough for source selection. The next truthful step was not another single score tweak; it was to expose where usefulness is lost from candidate approval through onboarding, article extraction, and final selection, then tune discovery in a generic/admin-owned way without baking Example B/C or specific domains into runtime truth.
+- Что изменилось:
+  - added generic admin-managed usefulness tuning on top of existing discovery profiles:
+    - [`services/workers/app/discovery_policy.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_policy.py)
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py)
+    - [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts)
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+    - the shipped admin/runtime profile surface now supports additive generic fields:
+      - `expectedSourceShapes`
+      - `allowedSourceFamilies`
+      - `disfavoredSourceFamilies`
+      - `usefulnessHints`
+      - `diversityCaps.maxPerSourceFamily`
+      - `diversityCaps.maxPerDomain`
+  - kept discovery boundary ownership separate while adding product diagnostics:
+    - runtime `policyReview` now persists additive usefulness signals:
+      - `onboardingVerdict`
+      - `productivityRisk`
+      - `usefulnessDiagnostic`
+      - `stageLossBucket`
+      - `sourceFamily`
+      - `sourceShape`
+    - approve/promote gates still remain owned by mission fit, safety/provider compatibility, policy verdict, and profile thresholds; downstream tables are not fed back as a hidden runtime-owner score.
+  - made shortlist formation more source-family-aware without domain hardcoding:
+    - [`services/workers/app/source_scoring.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/source_scoring.py)
+    - [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py)
+    - graph shortlist selection now applies bounded diversity pressure by source family/domain using admin-managed caps instead of case-specific domain rules.
+  - normalized product diagnostics across proof artifacts:
+    - [`infra/scripts/lib/discovery-live-proof-profiles.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-proof-profiles.mjs)
+    - [`infra/scripts/lib/discovery-live-yield-policy.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-yield-policy.mjs)
+    - [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs)
+    - [`infra/scripts/run-live-website-outsourcing.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/run-live-website-outsourcing.mjs)
+    - discovery example artifacts now emit per-case `stageLossBuckets` and `productivityBuckets`;
+    - the clean Example C outsourcing artifact now also emits normalized usefulness buckets:
+      - `source_onboarded_but_no_extracted_resources`
+      - `resources_extracted_but_no_stable_articles`
+      - `articles_produced_but_zero_selected_outputs`
+      - `selected_useful_evidence_present`
+  - extended regression coverage for the new additive surfaces:
+    - [`tests/unit/python/test_discovery_policy.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_discovery_policy.py)
+    - [`tests/unit/python/test_api_discovery_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_discovery_management.py)
+    - [`tests/unit/ts/discovery-admin.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-admin.test.ts)
+    - [`tests/unit/ts/admin-operator-surfaces.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-operator-surfaces.test.ts)
+    - [`tests/unit/ts/discovery-live-yield-policy.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-live-yield-policy.test.ts)
+  - synced runtime/process truth:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md)
+- Что было доказано:
+  - focused implementation proof:
+    - `python -m unittest tests.unit.python.test_discovery_policy tests.unit.python.test_api_discovery_management`
+    - `pnpm unit_tests`
+    - `pnpm typecheck`
+  - discovery compose proof:
+    - `pnpm test:discovery:admin:compose`
+    - `pnpm test:discovery:examples:compose`
+      - `/tmp/newsportal-live-discovery-examples-dafb6241.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = weak`
+        - `finalVerdict = yield_weak`
+        - aggregate root causes:
+          - `yield_pass = 1`
+          - `review_policy_problem = 1`
+    - `pnpm test:discovery:nonregression:compose`
+      - `/tmp/newsportal-discovery-nonregression-ed418130.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `nonRegressionVerdict = pass`
+        - `finalVerdict = pass`
+    - `pnpm test:discovery:yield:compose`
+      - `/tmp/newsportal-live-discovery-yield-proof-a5fb0ebf.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+        - bounded multi-run gate:
+          - `Example B = 2/3`
+          - `Example C = 3/3`
+  - clean-baseline Example C outsourcing product proof:
+    - `pnpm dev:mvp:internal:down:volumes`
+    - `pnpm dev:mvp:internal`
+    - `node infra/scripts/run-live-website-outsourcing.mjs`
+      - `/tmp/newsportal-live-website-outsourcing-2026-04-21T123045997Z.json|md`
+      - result:
+        - coarse classification summary:
+          - `projected_but_not_selected = 17`
+          - `external/runtime_residual = 11`
+          - `browser_fallback_residual = 1`
+          - `skipped_rejected_open_web = 1`
+        - normalized usefulness summary:
+          - `articles_produced_but_zero_selected_outputs = 17`
+          - `source_onboarded_but_no_extracted_resources = 12`
+          - `totalResources = 339`
+          - `totalArticles = 304`
+          - `totalSelected = 0`
+- Что capability доказала:
+  - discovery runtime/admin/operator truth is now strong enough to explain product-quality loss in a generic, admin-owned way instead of hiding it inside one opaque score or hardcoded case/domain logic;
+  - the current remaining Example C clean-baseline usefulness blocker is no longer a discovery-runtime correctness issue: it is downstream-heavy, concentrated after article production rather than at approve/promote boundary ownership;
+  - future quality work should therefore open a separate downstream/final-selection capability instead of silently extending discovery runtime with case-specific heuristics.
+
 ### 2026-04-21 — STAGE-4-ADMIN-PROOF-DOC-CLOSEOUT and C-DISCOVERY-APPROVE-BOUNDARY-PRECISION-AND-PROVIDER-DECOUPLING — Closed compose-proof recovery with admin-owned discovery fixture truth and provider-decoupled approve-boundary runtime
 
 - Тип записи: stage + capability archive

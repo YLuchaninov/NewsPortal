@@ -289,6 +289,110 @@ def apply_document_candidate_signal_uplift(
     return (base_decision, None)
 
 
+def build_downstream_selection_diagnostics(
+    *,
+    total_filter_count: int,
+    matched_filter_count: int,
+    no_match_filter_count: int,
+    gray_zone_filter_count: int,
+    llm_review_pending_filter_count: int,
+    hold_filter_count: int,
+    technical_filtered_out_count: int,
+    verification_state: str | None,
+    selection_reason: str | None,
+    selection_decision: str,
+    candidate_signal_uplift_count: int = 0,
+    filter_reason_counts: Mapping[str, int] | None = None,
+) -> dict[str, Any]:
+    total = max(int(total_filter_count or 0), 0)
+    matched = max(int(matched_filter_count or 0), 0)
+    no_match = max(int(no_match_filter_count or 0), 0)
+    gray_zone = max(int(gray_zone_filter_count or 0), 0)
+    llm_review_pending = max(int(llm_review_pending_filter_count or 0), 0)
+    hold = max(int(hold_filter_count or 0), 0)
+    technical_filtered_out = max(int(technical_filtered_out_count or 0), 0)
+    candidate_signal_uplift = max(int(candidate_signal_uplift_count or 0), 0)
+    normalized_verification_state = str(verification_state or "").strip() or None
+    normalized_selection_reason = str(selection_reason or "").strip() or None
+
+    normalized_filter_reason_counts = {
+        str(key).strip(): max(int(value or 0), 0)
+        for key, value in (filter_reason_counts or {}).items()
+        if str(key).strip()
+    }
+    dominant_filter_reason = None
+    if normalized_filter_reason_counts:
+        dominant_filter_reason = max(
+            normalized_filter_reason_counts.items(),
+            key=lambda item: (item[1], item[0]),
+        )[0]
+
+    if total == 0:
+        downstream_loss_bucket = "articles_missing_interest_filter_results"
+        blocker_stage = "interest_filtering"
+        blocker_reason = "missing_interest_filter_results"
+    elif selection_decision == "selected":
+        downstream_loss_bucket = "selected_useful_evidence_present"
+        blocker_stage = "selected"
+        blocker_reason = normalized_selection_reason or (
+            "semantic_match" if matched > 0 else "strong_gray_zone_consensus"
+        )
+    elif llm_review_pending > 0:
+        downstream_loss_bucket = "llm_review_pending"
+        blocker_stage = "llm_review"
+        blocker_reason = normalized_selection_reason or "llm_review_pending"
+    elif hold > 0 or (
+        selection_decision == "gray_zone" and normalized_selection_reason in {"semantic_hold", "candidate_signal_hold"}
+    ):
+        downstream_loss_bucket = "gray_zone_hold"
+        blocker_stage = "hold_policy"
+        blocker_reason = normalized_selection_reason or "gray_zone_hold"
+    elif technical_filtered_out > 0 and matched == 0 and no_match == 0 and gray_zone == 0:
+        downstream_loss_bucket = "technical_filter_rejected"
+        blocker_stage = "technical_filter"
+        blocker_reason = dominant_filter_reason or normalized_selection_reason or "technical_filtered_out"
+    elif no_match > 0 and matched == 0 and gray_zone == 0:
+        downstream_loss_bucket = "semantic_rejected"
+        blocker_stage = "semantic_filter"
+        blocker_reason = normalized_selection_reason or "semantic_no_match"
+    elif selection_decision == "rejected":
+        downstream_loss_bucket = "final_selection_rejected"
+        blocker_stage = "final_selection"
+        blocker_reason = normalized_selection_reason or dominant_filter_reason or "final_selection_rejected"
+    else:
+        downstream_loss_bucket = "final_selection_rejected"
+        blocker_stage = "final_selection"
+        blocker_reason = normalized_selection_reason or "selection_incomplete"
+
+    return {
+        "downstreamLossBucket": downstream_loss_bucket,
+        "selectionBlockerStage": blocker_stage,
+        "selectionBlockerReason": blocker_reason,
+        "holdReason": (
+            normalized_selection_reason
+            if downstream_loss_bucket == "gray_zone_hold"
+            else None
+        ),
+        "semanticSignalSummary": {
+            "total": total,
+            "matched": matched,
+            "noMatch": no_match,
+            "grayZone": gray_zone,
+            "llmReviewPending": llm_review_pending,
+            "hold": hold,
+            "technicalFilteredOut": technical_filtered_out,
+            "candidateSignalUplift": candidate_signal_uplift,
+            "dominantFilterReason": dominant_filter_reason,
+            "filterReasonCounts": normalized_filter_reason_counts,
+        },
+        "verificationSignalSummary": {
+            "verificationState": normalized_verification_state,
+            "selectionDecision": selection_decision,
+            "selectionReason": normalized_selection_reason,
+        },
+    }
+
+
 def summarize_final_selection_result(
     *,
     total_filter_count: int,
@@ -300,6 +404,7 @@ def summarize_final_selection_result(
     technical_filtered_out_count: int,
     verification_state: str | None,
     candidate_signal_uplift_count: int = 0,
+    filter_reason_counts: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     total = max(int(total_filter_count or 0), 0)
     matched = max(int(matched_filter_count or 0), 0)
@@ -311,8 +416,21 @@ def summarize_final_selection_result(
     candidate_signal_uplift = max(int(candidate_signal_uplift_count or 0), 0)
     normalized_verification_state = str(verification_state or "").strip() or None
 
+    strong_gray_zone_consensus = (
+        gray_zone >= 4
+        and matched == 0
+        and no_match <= 1
+        and llm_review_pending == 0
+        and technical_filtered_out == 0
+    )
+
     selection_reason = "semantic_match"
-    if gray_zone > 0:
+    if strong_gray_zone_consensus:
+        decision = "selected"
+        compat_system_feed_decision = "eligible"
+        is_selected = True
+        selection_reason = "strong_gray_zone_consensus"
+    elif gray_zone > 0:
         decision = "gray_zone"
         compat_system_feed_decision = "pending_llm" if llm_review_pending > 0 else "filtered_out"
         is_selected = False
@@ -345,6 +463,20 @@ def summarize_final_selection_result(
         selection_reason = "no_system_match"
 
     compat_eligible_for_feed = compat_system_feed_decision in {"eligible", "pass_through"}
+    downstream_diagnostics = build_downstream_selection_diagnostics(
+        total_filter_count=total,
+        matched_filter_count=matched,
+        no_match_filter_count=no_match,
+        gray_zone_filter_count=gray_zone,
+        llm_review_pending_filter_count=llm_review_pending,
+        hold_filter_count=hold,
+        technical_filtered_out_count=technical_filtered_out,
+        verification_state=normalized_verification_state,
+        selection_reason=selection_reason,
+        selection_decision=decision,
+        candidate_signal_uplift_count=candidate_signal_uplift,
+        filter_reason_counts=filter_reason_counts,
+    )
 
     return {
         "decision": decision,
@@ -371,5 +503,6 @@ def summarize_final_selection_result(
                 "candidateSignalUplift": candidate_signal_uplift,
             },
             "candidateSignalUpliftCount": candidate_signal_uplift,
+            **downstream_diagnostics,
         },
     }

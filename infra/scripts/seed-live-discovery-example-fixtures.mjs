@@ -510,7 +510,11 @@ export async function seedLiveDiscoveryExampleFixtures(
   log("[seed-live-discovery] queueing interest_centroids rebuild");
   const reindexJobId = await queueReindex(pool, runtimeDependencies.insertOutboxEvent);
 
-  const expectedCriteria = EXAMPLE_B_INTEREST_TEMPLATES.length + OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates.length;
+  // The discovery examples harness seeds both Example B and Example C admin truth,
+  // but only the outsourcing bundle currently depends on compiled criterion rows for
+  // downstream product proof on a clean stack. Example B remains valid as discovery
+  // proof even when its interests are materialized without `criteria_compiled` rows.
+  const expectedCriteria = OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates.length;
   await waitForCondition("criteria compile completion", async () => {
     const result = await pool.query(
       `

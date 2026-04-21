@@ -195,6 +195,12 @@ test("resolveDiscoveryPolicyExplainability maps graph policy signals and thresho
     qualityPrior: null,
     finalReviewScore: null,
     policyVerdict: null,
+    onboardingVerdict: null,
+    productivityRisk: null,
+    usefulnessDiagnostic: null,
+    stageLossBucket: null,
+    sourceFamily: null,
+    sourceShape: null,
     provider: null,
     residuals: [],
     preferredDomainMatch: true,
@@ -237,6 +243,12 @@ test("resolveDiscoveryPolicyExplainability maps recall threshold from applied po
   assert.equal(explainability.qualityPrior, null);
   assert.equal(explainability.finalReviewScore, null);
   assert.equal(explainability.policyVerdict, null);
+  assert.equal(explainability.onboardingVerdict, null);
+  assert.equal(explainability.productivityRisk, null);
+  assert.equal(explainability.usefulnessDiagnostic, null);
+  assert.equal(explainability.stageLossBucket, null);
+  assert.equal(explainability.sourceFamily, null);
+  assert.equal(explainability.sourceShape, null);
   assert.equal(explainability.provider, null);
   assert.deepEqual(explainability.residuals, []);
   assert.equal(explainability.preferredDomainMatch, true);
@@ -259,6 +271,10 @@ test("resolveDiscoveryPolicyExplainability prefers runtime policyReview when pre
           qualityPrior: 0.69,
           finalReviewScore: 0.78,
           policyVerdict: "manual_review",
+          onboardingVerdict: "manual_review",
+          productivityRisk: "high",
+          usefulnessDiagnostic: "manual_only_residual",
+          stageLossBucket: "candidate_manual_only",
           provider: "brave",
           reasonBucket: "browser_assisted_residual",
           residuals: ["browser_assisted_recommended"],
@@ -268,6 +284,8 @@ test("resolveDiscoveryPolicyExplainability prefers runtime policyReview when pre
             positiveKeywordMatch: true,
             negativeKeywordMatch: false,
             benchmarkLike: false,
+            sourceFamily: "official_updates",
+            sourceShape: "editorial_stream",
           },
         },
       },
@@ -281,6 +299,12 @@ test("resolveDiscoveryPolicyExplainability prefers runtime policyReview when pre
   assert.equal(explainability.qualityPrior, 0.69);
   assert.equal(explainability.finalReviewScore, 0.78);
   assert.equal(explainability.policyVerdict, "manual_review");
+  assert.equal(explainability.onboardingVerdict, "manual_review");
+  assert.equal(explainability.productivityRisk, "high");
+  assert.equal(explainability.usefulnessDiagnostic, "manual_only_residual");
+  assert.equal(explainability.stageLossBucket, "candidate_manual_only");
+  assert.equal(explainability.sourceFamily, "official_updates");
+  assert.equal(explainability.sourceShape, "editorial_stream");
   assert.equal(explainability.provider, "brave");
   assert.deepEqual(explainability.residuals, ["browser_assisted_recommended"]);
   assert.equal(explainability.reasonBucket, "browser_assisted_residual");
@@ -481,6 +505,12 @@ test("resolveArticleSelectionDiagnostics summarizes explain payload rows generic
     selectionMode: "hold",
     selectionSummary: "Gray zone held by profile policy",
     selectionReason: "semantic_hold",
+    downstreamLossBucket: null,
+    selectionBlockerStage: null,
+    selectionBlockerReason: null,
+    holdReason: null,
+    semanticSignalSummary: {},
+    verificationSignalSummary: {},
     holdCount: 1,
     llmReviewPendingCount: 0,
     candidateSignalUpliftCount: 0,
@@ -506,6 +536,19 @@ test("resolveArticleSelectionDiagnostics prefers precomputed API diagnostics whe
       selectionMode: "selected",
       selectionSummary: "Selected by final-selection policy",
       selectionReason: "semantic_match",
+      downstreamLossBucket: "selected_useful_evidence_present",
+      selectionBlockerStage: "selected",
+      selectionBlockerReason: "semantic_match",
+      holdReason: null,
+      semanticSignalSummary: {
+        total: 3,
+        matched: 2,
+        noMatch: 1,
+      },
+      verificationSignalSummary: {
+        verificationState: "strong",
+        selectionDecision: "selected",
+      },
       holdCount: 0,
       llmReviewPendingCount: 0,
       candidateSignalUpliftCount: 1,
@@ -527,6 +570,9 @@ test("resolveArticleSelectionDiagnostics prefers precomputed API diagnostics whe
   });
 
   assert.equal(diagnostics.selectionMode, "selected");
+  assert.equal(diagnostics.downstreamLossBucket, "selected_useful_evidence_present");
+  assert.equal(diagnostics.selectionBlockerStage, "selected");
+  assert.equal(diagnostics.selectionBlockerReason, "semantic_match");
   assert.equal(diagnostics.systemCriterionRows, 3);
   assert.equal(diagnostics.notificationRows, 4);
   assert.equal(diagnostics.candidateSignalUpliftCount, 1);
@@ -550,6 +596,12 @@ test("resolveArticleSelectionDiagnostics falls back to article read-model select
     selectionMode: "hold",
     selectionSummary: "Gray zone held by profile policy",
     selectionReason: "semantic_hold",
+    downstreamLossBucket: null,
+    selectionBlockerStage: null,
+    selectionBlockerReason: null,
+    holdReason: null,
+    semanticSignalSummary: {},
+    verificationSignalSummary: {},
     holdCount: 1,
     llmReviewPendingCount: 0,
     candidateSignalUpliftCount: 0,

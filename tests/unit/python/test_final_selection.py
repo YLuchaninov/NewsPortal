@@ -108,6 +108,27 @@ class FinalSelectionLogicTests(unittest.TestCase):
             1,
         )
 
+    def test_promotes_strong_gray_zone_consensus_to_selected(self) -> None:
+        summary = summarize_final_selection_result(
+            total_filter_count=5,
+            matched_filter_count=0,
+            no_match_filter_count=1,
+            gray_zone_filter_count=4,
+            llm_review_pending_filter_count=0,
+            hold_filter_count=4,
+            technical_filtered_out_count=0,
+            verification_state="weak",
+        )
+
+        self.assertEqual(summary["decision"], "selected")
+        self.assertTrue(summary["isSelected"])
+        self.assertEqual(summary["selectionReason"], "strong_gray_zone_consensus")
+        self.assertEqual(summary["compatSystemFeedDecision"], "eligible")
+        self.assertEqual(
+            summary["explain_json"]["downstreamLossBucket"],
+            "selected_useful_evidence_present",
+        )
+
     def test_candidate_signal_uplift_promotes_near_threshold_request_to_gray_zone(self) -> None:
         decision, explain = apply_document_candidate_signal_uplift(
             title="Looking for an ERP implementation partner",

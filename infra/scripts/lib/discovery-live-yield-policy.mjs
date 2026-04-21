@@ -137,6 +137,16 @@ function classifyFromRuntimePolicyReview(candidate, context) {
     reviewScore,
     benchmarkLike,
     policySignals: asObject(policyReview.matchedSignals),
+    onboardingVerdict: normalizeText(policyReview.onboardingVerdict) || null,
+    productivityRisk: normalizeText(policyReview.productivityRisk) || null,
+    usefulnessDiagnostic: normalizeText(policyReview.usefulnessDiagnostic) || null,
+    stageLossBucket: normalizeText(policyReview.stageLossBucket) || null,
+    sourceFamily:
+      normalizeText(asObject(policyReview.matchedSignals).sourceFamily)
+      || null,
+    sourceShape:
+      normalizeText(asObject(policyReview.matchedSignals).sourceShape)
+      || null,
     context,
   };
   if (verdict === "auto_approve") {
@@ -153,6 +163,24 @@ function classifyFromRuntimePolicyReview(candidate, context) {
     rejectionReason: reasonBucket || "below_auto_approval_threshold",
     ...responseBase,
   };
+}
+
+function resolveCandidateLossBucket(candidate) {
+  const stageLossBucket = normalizeText(candidate.stageLossBucket);
+  if (stageLossBucket) {
+    return stageLossBucket;
+  }
+  const rejectionReason = normalizeText(candidate.rejectionReason);
+  if (
+    rejectionReason === "browser_assisted_residual"
+    || rejectionReason === "unsupported_challenge"
+  ) {
+    return "candidate_manual_only";
+  }
+  if (candidate.decision === "rejected") {
+    return "candidate_rejected_by_policy";
+  }
+  return "";
 }
 
 export function isBenchmarkLikeCandidate(candidate, caseDefinition) {
@@ -517,6 +545,101 @@ function buildNormalizedReasonBuckets(rejectedCandidates, allCandidates, coverag
   return Object.fromEntries(counts.entries());
 }
 
+function buildStageLossBuckets(allCandidates, downstreamEvidence) {
+  const counts = new Map([
+    ["candidate_rejected_by_policy", 0],
+    ["candidate_manual_only", 0],
+    ["candidate_promoted_but_no_useful_articles", 0],
+    ["articles_extracted_but_not_selected", 0],
+    ["external/runtime_residual", 0],
+    ["browser_fallback_residual", 0],
+  ]);
+
+  for (const candidate of allCandidates) {
+    const bucket = resolveCandidateLossBucket(candidate);
+    if (bucket && counts.has(bucket)) {
+      counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+    }
+  }
+
+  for (const row of downstreamEvidence) {
+    const errorText = normalizeText(row.error).toLowerCase();
+    if (errorText.includes("browser")) {
+      counts.set(
+        "browser_fallback_residual",
+        (counts.get("browser_fallback_residual") ?? 0) + 1
+      );
+      continue;
+    }
+    const hasFetchRuns = hasFetchRunEvidence(row);
+    const hasArticles = hasArticleEvidence(row);
+    const selectedCount = asNumber(asObject(row.finalSelection).selected, 0);
+    const hasAnyFinalSelection = hasFinalSelectionEvidence(row);
+    if (!hasFetchRuns && !hasArticles && !hasAnyFinalSelection) {
+      counts.set(
+        "external/runtime_residual",
+        (counts.get("external/runtime_residual") ?? 0) + 1
+      );
+      continue;
+    }
+    if (!hasArticles) {
+      counts.set(
+        "candidate_promoted_but_no_useful_articles",
+        (counts.get("candidate_promoted_but_no_useful_articles") ?? 0) + 1
+      );
+      continue;
+    }
+    if (selectedCount <= 0) {
+      counts.set(
+        "articles_extracted_but_not_selected",
+        (counts.get("articles_extracted_but_not_selected") ?? 0) + 1
+      );
+    }
+  }
+
+  return Object.fromEntries(counts.entries());
+}
+
+function buildProductivityBuckets(downstreamEvidence) {
+  const counts = new Map([
+    ["source_onboarded_but_no_extracted_resources", 0],
+    ["resources_extracted_but_no_stable_articles", 0],
+    ["articles_produced_but_zero_selected_outputs", 0],
+    ["selected_useful_evidence_present", 0],
+  ]);
+
+  for (const row of downstreamEvidence) {
+    const hasFetchRuns = hasFetchRunEvidence(row);
+    const hasArticles = hasArticleEvidence(row);
+    const selectedCount = asNumber(asObject(row.finalSelection).selected, 0);
+    const finalTotal = asNumber(asObject(row.finalSelection).total, 0);
+
+    if (!hasFetchRuns && !hasArticles && finalTotal <= 0) {
+      counts.set(
+        "source_onboarded_but_no_extracted_resources",
+        (counts.get("source_onboarded_but_no_extracted_resources") ?? 0) + 1
+      );
+    } else if (hasFetchRuns && !hasArticles) {
+      counts.set(
+        "resources_extracted_but_no_stable_articles",
+        (counts.get("resources_extracted_but_no_stable_articles") ?? 0) + 1
+      );
+    } else if (hasArticles && selectedCount <= 0) {
+      counts.set(
+        "articles_produced_but_zero_selected_outputs",
+        (counts.get("articles_produced_but_zero_selected_outputs") ?? 0) + 1
+      );
+    } else if (selectedCount > 0) {
+      counts.set(
+        "selected_useful_evidence_present",
+        (counts.get("selected_useful_evidence_present") ?? 0) + 1
+      );
+    }
+  }
+
+  return Object.fromEntries(counts.entries());
+}
+
 export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
   const graphCandidates = asArray(caseRun.graphLane?.candidates);
   const recallCandidates = asArray(caseRun.recallLane?.candidates);
@@ -555,6 +678,8 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
     allCandidates,
     coverageMatrix
   );
+  const stageLossBuckets = buildStageLossBuckets(allCandidates, downstreamEvidence);
+  const productivityBuckets = buildProductivityBuckets(downstreamEvidence);
   const caseAcceptance = asObject(caseDefinition.yieldAcceptance);
   const minimumChannels = Math.max(
     1,
@@ -587,6 +712,8 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
     ).length,
     minimumChannelsWithDownstreamEvidence: minimumChannels,
     normalizedReasonBuckets,
+    stageLossBuckets,
+    productivityBuckets,
     weakYieldReasons: Object.fromEntries(
       [...rejectionCounts.entries()].sort((left, right) => left[0].localeCompare(right[0]))
     ),

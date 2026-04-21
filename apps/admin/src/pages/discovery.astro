@@ -586,6 +586,32 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   <span class="text-xs font-medium">Preferred tactics</span>
                   <textarea name="graphPreferredTactics" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
                 </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Expected source shapes</span>
+                  <textarea name="graphExpectedSourceShapes" rows="2" placeholder={"editorial_stream\ndocument_repository"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Allowed source families</span>
+                  <textarea name="graphAllowedSourceFamilies" rows="2" placeholder={"official_updates\neditorial_publication"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Disfavored source families</span>
+                  <textarea name="graphDisfavoredSourceFamilies" rows="2" placeholder={"aggregator_directory\nvendor_marketing"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Max per source family</span>
+                    <input name="graphMaxPerSourceFamily" type="number" min="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Max per domain</span>
+                    <input name="graphMaxPerDomain" type="number" min="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                </div>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Usefulness hints</span>
+                  <textarea name="graphUsefulnessHints" rows="2" placeholder="resource_only_expected" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
                 <details class="rounded-xl border border-dashed border-border px-3 py-2">
                   <summary class="cursor-pointer text-sm font-medium">Expert-mode prompt override</summary>
                   <label class="mt-3 grid gap-1.5">
@@ -630,6 +656,32 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 <label class="grid gap-1.5">
                   <span class="text-xs font-medium">Preferred tactics</span>
                   <textarea name="recallPreferredTactics" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Expected source shapes</span>
+                  <textarea name="recallExpectedSourceShapes" rows="2" placeholder={"listing_resource\ndocument_repository"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Allowed source families</span>
+                  <textarea name="recallAllowedSourceFamilies" rows="2" placeholder={"procurement_listing\ndocument_repository"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Disfavored source families</span>
+                  <textarea name="recallDisfavoredSourceFamilies" rows="2" placeholder={"aggregator_directory\nvendor_marketing"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Max per source family</span>
+                    <input name="recallMaxPerSourceFamily" type="number" min="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Max per domain</span>
+                    <input name="recallMaxPerDomain" type="number" min="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                </div>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Usefulness hints</span>
+                  <textarea name="recallUsefulnessHints" rows="2" placeholder="resource_only_expected" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
                 </label>
                 <details class="rounded-xl border border-dashed border-border px-3 py-2">
                   <summary class="cursor-pointer text-sm font-medium">Expert-mode prompt override</summary>
@@ -807,6 +859,54 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                           <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall min promotion</span>
                           <input name="recallMinPromotionScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.recall_policy_json).minPromotionScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                         </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph expected shapes</span>
+                          <textarea name="graphExpectedSourceShapes" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).expectedSourceShapes).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall expected shapes</span>
+                          <textarea name="recallExpectedSourceShapes" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).expectedSourceShapes).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph allowed families</span>
+                          <textarea name="graphAllowedSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).allowedSourceFamilies).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall allowed families</span>
+                          <textarea name="recallAllowedSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).allowedSourceFamilies).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph disfavored families</span>
+                          <textarea name="graphDisfavoredSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).disfavoredSourceFamilies).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall disfavored families</span>
+                          <textarea name="recallDisfavoredSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).disfavoredSourceFamilies).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph usefulness hints</span>
+                          <textarea name="graphUsefulnessHints" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).usefulnessHints).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall usefulness hints</span>
+                          <textarea name="recallUsefulnessHints" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).usefulnessHints).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph max per family</span>
+                          <input name="graphMaxPerSourceFamily" type="number" min="1" value={String(asRecord(asRecord(profile.graph_policy_json).diversityCaps).maxPerSourceFamily ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall max per family</span>
+                          <input name="recallMaxPerSourceFamily" type="number" min="1" value={String(asRecord(asRecord(profile.recall_policy_json).diversityCaps).maxPerSourceFamily ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph max per domain</span>
+                          <input name="graphMaxPerDomain" type="number" min="1" value={String(asRecord(asRecord(profile.graph_policy_json).diversityCaps).maxPerDomain ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall max per domain</span>
+                          <input name="recallMaxPerDomain" type="number" min="1" value={String(asRecord(asRecord(profile.recall_policy_json).diversityCaps).maxPerDomain ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
                         <div class="grid gap-1">
                           <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Update</span>
                           <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
@@ -827,8 +927,12 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <div class="rounded-xl border border-dashed border-border px-3 py-3 text-xs">
                         <p>Graph preferred domains: {asStringList(asRecord(profile.graph_policy_json).preferredDomains).join(", ") || "—"}</p>
                         <p class="mt-1">Graph website kinds: {asStringList(asRecord(profile.graph_policy_json).supportedWebsiteKinds).join(", ") || "—"}</p>
+                        <p class="mt-1">Graph expected shapes: {asStringList(asRecord(profile.graph_policy_json).expectedSourceShapes).join(", ") || "—"}</p>
+                        <p class="mt-1">Graph allowed families: {asStringList(asRecord(profile.graph_policy_json).allowedSourceFamilies).join(", ") || "—"}</p>
                         <p class="mt-1">Recall preferred domains: {asStringList(asRecord(profile.recall_policy_json).preferredDomains).join(", ") || "—"}</p>
                         <p class="mt-1">Recall website kinds: {asStringList(asRecord(profile.recall_policy_json).supportedWebsiteKinds).join(", ") || "—"}</p>
+                        <p class="mt-1">Recall expected shapes: {asStringList(asRecord(profile.recall_policy_json).expectedSourceShapes).join(", ") || "—"}</p>
+                        <p class="mt-1">Recall allowed families: {asStringList(asRecord(profile.recall_policy_json).allowedSourceFamilies).join(", ") || "—"}</p>
                         <p class="mt-1">Benchmark domains: {asStringList(asRecord(profile.yield_benchmark_json).domains).join(", ") || "—"}</p>
                       </div>
                     </div>
@@ -1314,7 +1418,9 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <div class="mt-2 border-t border-border pt-2">
                         <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
                         <div class="mt-1">Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
-                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
+                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Onboarding {explainability.onboardingVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
+                        <div class="mt-1">Productivity risk {explainability.productivityRisk ?? "—"} · Diagnostic {explainability.usefulnessDiagnostic ?? "—"}</div>
+                        <div class="mt-1">Source family {explainability.sourceFamily ?? "—"} · Source shape {explainability.sourceShape ?? "—"} · Stage loss {explainability.stageLossBucket ?? "—"}</div>
                         <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>
@@ -1568,7 +1674,9 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
                         <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
                         <div class="mt-1">Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
-                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
+                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Onboarding {explainability.onboardingVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
+                        <div class="mt-1">Productivity risk {explainability.productivityRisk ?? "—"} · Diagnostic {explainability.usefulnessDiagnostic ?? "—"}</div>
+                        <div class="mt-1">Source family {explainability.sourceFamily ?? "—"} · Source shape {explainability.sourceShape ?? "—"} · Stage loss {explainability.stageLossBucket ?? "—"}</div>
                         <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>

@@ -3346,7 +3346,8 @@ async def execute_hypotheses(
                 "duplication_score": clamp_score(score_input.get("duplication_score")),
                 "role_labels": score_input.get("role_labels") or [],
                 "source_family": (
-                    policy_review.get("matchedSignals", {}).get("queryFamily")
+                    policy_review.get("matchedSignals", {}).get("sourceFamily")
+                    or policy_review.get("matchedSignals", {}).get("queryFamily")
                     if isinstance(policy_review.get("matchedSignals"), dict)
                     else None
                 ),
@@ -3395,6 +3396,11 @@ async def execute_hypotheses(
         portfolio = build_portfolio_snapshot(
             mission_graph=graph,
             scored_sources=scored_sources,
+            diversity_caps=(
+                graph_policy.get("diversityCaps")
+                if isinstance(graph_policy.get("diversityCaps"), dict)
+                else None
+            ),
         )
         await repository.replace_portfolio_snapshot(
             mission_id=mission_id_text,

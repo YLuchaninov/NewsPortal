@@ -1477,6 +1477,73 @@ def passes_allowed_content_kind(
     return (article_content_kind in normalized_allowed, article_content_kind)
 
 
+_WRAPPER_DIRECTORY_TITLE_FRAGMENTS = (
+    "search results",
+    "freelance jobs",
+    "remote jobs",
+    "jobs online",
+    "work remote & earn online",
+    "employment",
+    "talent network",
+    "browse jobs",
+)
+
+_WRAPPER_DIRECTORY_BODY_FRAGMENTS = (
+    "browse by category",
+    "hire freelancers",
+    "find work",
+    "search buyers can",
+    "search freelancers to request a proposal",
+    "freelancers can search projects to quote on",
+    "top freelancers",
+    "talent network",
+    "work remote & earn online",
+    "jobs online",
+)
+
+_DIRECT_REQUEST_TITLE_FRAGMENTS = (
+    "looking for",
+    "need ",
+    "seeking ",
+    "request for",
+    "rfp",
+    "quote",
+    "proposals",
+    "fixed price",
+    "open for proposals",
+    "vendor selection",
+    "implementation partner",
+    "migration partner",
+    "take over",
+    "continue development",
+    "support takeover",
+)
+
+
+def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
+    title_and_lead = " ".join(
+        str(article.get(field) or "")
+        for field in ("title", "lead")
+    ).casefold()
+    article_text = " ".join(
+        str(article.get(field) or "")
+        for field in ("title", "lead", "body")
+    ).casefold()
+    if any(fragment in title_and_lead for fragment in _DIRECT_REQUEST_TITLE_FRAGMENTS):
+        return False
+
+    title_hits = [
+        fragment for fragment in _WRAPPER_DIRECTORY_TITLE_FRAGMENTS if fragment in title_and_lead
+    ]
+    if "search results" in title_hits:
+        return True
+
+    body_hit_count = sum(
+        1 for fragment in _WRAPPER_DIRECTORY_BODY_FRAGMENTS if fragment in article_text
+    )
+    return bool(title_hits) and body_hit_count >= 2
+
+
 def passes_hard_filters(
     *,
     article: Mapping[str, Any],
@@ -1532,6 +1599,9 @@ def passes_hard_filters(
     }
     if forbidden_short_tokens & article_short_tokens:
         reasons.append("short_tokens_forbidden")
+
+    if has_wrapper_directory_noise(article):
+        reasons.append("wrapper_directory_noise")
 
     return (len(reasons) == 0, reasons, within_window)
 
@@ -1704,7 +1774,12 @@ async def find_reusable_criterion_llm_review(
 
 
 def resolve_criterion_review_final_decision(provider_decision: str | None) -> str:
-    return "relevant" if str(provider_decision or "").strip() == "approve" else "irrelevant"
+    normalized = str(provider_decision or "").strip()
+    if normalized == "approve":
+        return "relevant"
+    if normalized == "uncertain":
+        return "gray_zone"
+    return "irrelevant"
 
 
 async def persist_criterion_review_resolution(
@@ -1878,6 +1953,26 @@ async def upsert_final_selection_result(
         (doc_id,),
     )
     counts = await cursor.fetchone() or {}
+    await cursor.execute(
+        """
+        select explain_json -> 'filterReasons' as filter_reasons
+        from interest_filter_results
+        where doc_id = %s
+          and filter_scope = 'system_criterion'
+        """,
+        (doc_id,),
+    )
+    filter_reason_rows = await cursor.fetchall() or []
+    filter_reason_counts: dict[str, int] = {}
+    for row in filter_reason_rows:
+        raw_reasons = row.get("filter_reasons")
+        if not isinstance(raw_reasons, list):
+            continue
+        for raw_reason in raw_reasons:
+            reason = str(raw_reason or "").strip()
+            if not reason:
+                continue
+            filter_reason_counts[reason] = filter_reason_counts.get(reason, 0) + 1
     duplicate_article_count = 1
     if selection_context.get("canonicalDocumentId") is not None:
         await cursor.execute(
@@ -1907,6 +2002,7 @@ async def upsert_final_selection_result(
         candidate_signal_uplift_count=int(
             counts.get("candidate_signal_uplift_count") or 0
         ),
+        filter_reason_counts=filter_reason_counts,
     )
     explain_json = coerce_json_object(summary.get("explain_json"))
     explain_json["candidateSignalUpliftCount"] = int(

@@ -176,6 +176,28 @@ def _normalize_optional_float(value: Any) -> float | None:
     return parsed if parsed >= 0 else None
 
 
+def _normalize_optional_positive_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _normalize_discovery_diversity_caps(value: Any) -> dict[str, Any]:
+    source = value if isinstance(value, Mapping) else {}
+    caps: dict[str, Any] = {}
+    max_per_source_family = _normalize_optional_positive_int(source.get("maxPerSourceFamily"))
+    max_per_domain = _normalize_optional_positive_int(source.get("maxPerDomain"))
+    if max_per_source_family is not None:
+        caps["maxPerSourceFamily"] = max_per_source_family
+    if max_per_domain is not None:
+        caps["maxPerDomain"] = max_per_domain
+    return caps
+
+
 def normalize_discovery_graph_policy(value: Mapping[str, Any] | None) -> dict[str, Any]:
     source = value if isinstance(value, Mapping) else {}
     provider_types = [
@@ -193,6 +215,11 @@ def normalize_discovery_graph_policy(value: Mapping[str, Any] | None) -> dict[st
         "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
         "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
         "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
+        "expectedSourceShapes": _normalize_string_list(source.get("expectedSourceShapes")),
+        "allowedSourceFamilies": _normalize_string_list(source.get("allowedSourceFamilies")),
+        "disfavoredSourceFamilies": _normalize_string_list(source.get("disfavoredSourceFamilies")),
+        "usefulnessHints": _normalize_string_list(source.get("usefulnessHints")),
+        "diversityCaps": _normalize_discovery_diversity_caps(source.get("diversityCaps")),
         "minRssReviewScore": _normalize_optional_float(source.get("minRssReviewScore")),
         "minWebsiteReviewScore": _normalize_optional_float(source.get("minWebsiteReviewScore")),
         "advancedPromptInstructions": _normalize_optional_text(
@@ -218,6 +245,11 @@ def normalize_discovery_recall_policy(value: Mapping[str, Any] | None) -> dict[s
         "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
         "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
         "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
+        "expectedSourceShapes": _normalize_string_list(source.get("expectedSourceShapes")),
+        "allowedSourceFamilies": _normalize_string_list(source.get("allowedSourceFamilies")),
+        "disfavoredSourceFamilies": _normalize_string_list(source.get("disfavoredSourceFamilies")),
+        "usefulnessHints": _normalize_string_list(source.get("usefulnessHints")),
+        "diversityCaps": _normalize_discovery_diversity_caps(source.get("diversityCaps")),
         "minPromotionScore": _normalize_optional_float(source.get("minPromotionScore")),
         "advancedPromptInstructions": _normalize_optional_text(
             source.get("advancedPromptInstructions")
@@ -715,6 +747,14 @@ def build_selection_explain_payload(
     candidate_signal_uplift_count = as_json_int(
         final_explain.get("candidateSignalUpliftCount")
     )
+    downstream_loss_bucket = as_json_str(final_explain.get("downstreamLossBucket"))
+    selection_blocker_stage = as_json_str(final_explain.get("selectionBlockerStage"))
+    selection_blocker_reason = as_json_str(final_explain.get("selectionBlockerReason"))
+    hold_reason = as_json_str(final_explain.get("holdReason"))
+    semantic_signal_summary = as_json_object(final_explain.get("semanticSignalSummary"))
+    verification_signal_summary = as_json_object(
+        final_explain.get("verificationSignalSummary")
+    )
     canonical_review_reused = as_json_bool(
         final_explain.get("canonicalReviewReused")
         if "canonicalReviewReused" in final_explain
@@ -845,6 +885,12 @@ def build_selection_explain_payload(
         "selectionReason": selection_reason,
         "selectionMode": selection_mode,
         "selectionSummary": selection_summary,
+        "downstreamLossBucket": downstream_loss_bucket,
+        "selectionBlockerStage": selection_blocker_stage,
+        "selectionBlockerReason": selection_blocker_reason,
+        "holdReason": hold_reason,
+        "semanticSignalSummary": semantic_signal_summary,
+        "verificationSignalSummary": verification_signal_summary,
         "llmReviewPendingCount": llm_review_pending_count,
         "holdCount": hold_count,
         "candidateSignalUpliftCount": candidate_signal_uplift_count,
@@ -870,6 +916,75 @@ def build_selection_explain_payload(
         "verificationTargetId": selection_like.get("verification_target_id"),
         "finalSelectionResult": final_selection_result,
         "systemFeedResult": system_feed_result,
+    }
+
+
+def build_fallback_selection_blocker_payload(
+    *,
+    selection_explain: Mapping[str, Any],
+    system_criterion_rows: int,
+    matched_rows: int,
+    no_match_rows: int,
+    gray_zone_rows: int,
+    technical_filtered_out_rows: int,
+) -> dict[str, Any]:
+    selection_mode = str(selection_explain.get("selectionMode") or "").strip() or "pending"
+    selection_reason = str(selection_explain.get("selectionReason") or "").strip() or None
+    hold_count = as_json_int(selection_explain.get("holdCount"))
+    llm_review_pending_count = as_json_int(selection_explain.get("llmReviewPendingCount"))
+
+    if system_criterion_rows == 0:
+        return {
+            "downstreamLossBucket": "articles_missing_interest_filter_results",
+            "selectionBlockerStage": "interest_filtering",
+            "selectionBlockerReason": "missing_interest_filter_results",
+            "holdReason": None,
+        }
+    if selection_mode == "selected":
+        return {
+            "downstreamLossBucket": "selected_useful_evidence_present",
+            "selectionBlockerStage": "selected",
+            "selectionBlockerReason": selection_reason or "semantic_match",
+            "holdReason": None,
+        }
+    if selection_mode == "llm_review_pending" or llm_review_pending_count > 0:
+        return {
+            "downstreamLossBucket": "llm_review_pending",
+            "selectionBlockerStage": "llm_review",
+            "selectionBlockerReason": selection_reason or "llm_review_pending",
+            "holdReason": None,
+        }
+    if selection_mode == "hold" or hold_count > 0:
+        return {
+            "downstreamLossBucket": "gray_zone_hold",
+            "selectionBlockerStage": "hold_policy",
+            "selectionBlockerReason": selection_reason or "gray_zone_hold",
+            "holdReason": selection_reason or "gray_zone_hold",
+        }
+    if (
+        technical_filtered_out_rows > 0
+        and matched_rows == 0
+        and no_match_rows == 0
+        and gray_zone_rows == 0
+    ):
+        return {
+            "downstreamLossBucket": "technical_filter_rejected",
+            "selectionBlockerStage": "technical_filter",
+            "selectionBlockerReason": selection_reason or "technical_filtered_out",
+            "holdReason": None,
+        }
+    if no_match_rows > 0 and matched_rows == 0 and gray_zone_rows == 0:
+        return {
+            "downstreamLossBucket": "semantic_rejected",
+            "selectionBlockerStage": "semantic_filter",
+            "selectionBlockerReason": selection_reason or "semantic_no_match",
+            "holdReason": None,
+        }
+    return {
+        "downstreamLossBucket": "final_selection_rejected",
+        "selectionBlockerStage": "final_selection",
+        "selectionBlockerReason": selection_reason or "final_selection_rejected",
+        "holdReason": None,
     }
 
 
@@ -907,6 +1022,15 @@ def build_selection_diagnostics_payload(
         if technical_filter_state == "filtered_out":
             technical_filtered_out_rows += 1
 
+    blocker_payload = build_fallback_selection_blocker_payload(
+        selection_explain=selection_explain,
+        system_criterion_rows=system_criterion_rows,
+        matched_rows=matched_rows,
+        no_match_rows=no_match_rows,
+        gray_zone_rows=gray_zone_rows,
+        technical_filtered_out_rows=technical_filtered_out_rows,
+    )
+
     return {
         "source": selection_explain.get("source") or "pending",
         "decision": selection_explain.get("decision"),
@@ -914,6 +1038,27 @@ def build_selection_diagnostics_payload(
         "selectionSummary": selection_explain.get("selectionSummary")
         or "Selection not explained yet",
         "selectionReason": selection_explain.get("selectionReason"),
+        "downstreamLossBucket": selection_explain.get("downstreamLossBucket")
+        or blocker_payload.get("downstreamLossBucket"),
+        "selectionBlockerStage": selection_explain.get("selectionBlockerStage")
+        or blocker_payload.get("selectionBlockerStage"),
+        "selectionBlockerReason": selection_explain.get("selectionBlockerReason")
+        or blocker_payload.get("selectionBlockerReason"),
+        "holdReason": selection_explain.get("holdReason") or blocker_payload.get("holdReason"),
+        "semanticSignalSummary": selection_explain.get("semanticSignalSummary")
+        or {
+            "total": system_criterion_rows,
+            "matched": matched_rows,
+            "noMatch": no_match_rows,
+            "grayZone": gray_zone_rows,
+            "technicalFilteredOut": technical_filtered_out_rows,
+        },
+        "verificationSignalSummary": selection_explain.get("verificationSignalSummary")
+        or {
+            "verificationState": selection_explain.get("verificationState"),
+            "selectionDecision": selection_explain.get("decision"),
+            "selectionReason": selection_explain.get("selectionReason"),
+        },
         "holdCount": as_json_int(selection_explain.get("holdCount")),
         "llmReviewPendingCount": as_json_int(
             selection_explain.get("llmReviewPendingCount")
@@ -4577,6 +4722,78 @@ def get_discovery_summary() -> dict[str, Any]:
           (select count(*)::int from discovery_source_interest_scores) as source_interest_score_count,
           (select count(*)::int from discovery_portfolio_snapshots) as portfolio_snapshot_count,
           (select count(*)::int from discovery_feedback_events) as feedback_event_count,
+          (select count(*)::int from discovery_candidates c where coalesce(c.evaluation_json -> 'policyReview' ->> 'stageLossBucket', '') = 'candidate_rejected_by_policy') as candidate_rejected_by_policy_count,
+          (select count(*)::int from discovery_candidates c where coalesce(c.evaluation_json -> 'policyReview' ->> 'stageLossBucket', '') = 'candidate_manual_only') as candidate_manual_only_count,
+          (select count(*)::int from discovery_recall_candidates c where coalesce(c.evaluation_json -> 'policyReview' ->> 'stageLossBucket', '') = 'candidate_rejected_by_policy') as recall_candidate_rejected_by_policy_count,
+          (select count(*)::int from discovery_recall_candidates c where coalesce(c.evaluation_json -> 'policyReview' ->> 'stageLossBucket', '') = 'candidate_manual_only') as recall_candidate_manual_only_count,
+          (select count(*)::int from discovery_candidates c where coalesce(c.evaluation_json -> 'policyReview' ->> 'productivityRisk', '') = 'high') as high_productivity_risk_candidate_count,
+          (
+            select count(*)::int
+            from (
+              select distinct registered_channel_id as channel_id
+              from discovery_candidates
+              where registered_channel_id is not null
+              union
+              select distinct registered_channel_id as channel_id
+              from discovery_recall_candidates
+              where registered_channel_id is not null
+            ) dc
+            where not exists (select 1 from web_resources wr where wr.channel_id = dc.channel_id)
+              and not exists (select 1 from articles a where a.channel_id = dc.channel_id)
+          ) as source_onboarded_no_extracted_resources_count,
+          (
+            select count(*)::int
+            from (
+              select distinct registered_channel_id as channel_id
+              from discovery_candidates
+              where registered_channel_id is not null
+              union
+              select distinct registered_channel_id as channel_id
+              from discovery_recall_candidates
+              where registered_channel_id is not null
+            ) dc
+            where exists (select 1 from web_resources wr where wr.channel_id = dc.channel_id)
+              and not exists (select 1 from articles a where a.channel_id = dc.channel_id)
+          ) as resources_extracted_no_stable_articles_count,
+          (
+            select count(*)::int
+            from (
+              select distinct registered_channel_id as channel_id
+              from discovery_candidates
+              where registered_channel_id is not null
+              union
+              select distinct registered_channel_id as channel_id
+              from discovery_recall_candidates
+              where registered_channel_id is not null
+            ) dc
+            where exists (select 1 from articles a where a.channel_id = dc.channel_id)
+              and not exists (
+                select 1
+                from final_selection_results fs
+                join articles a on a.doc_id = fs.doc_id
+                where a.channel_id = dc.channel_id
+                  and fs.final_decision = 'selected'
+              )
+          ) as articles_produced_zero_selected_outputs_count,
+          (
+            select count(*)::int
+            from (
+              select distinct registered_channel_id as channel_id
+              from discovery_candidates
+              where registered_channel_id is not null
+              union
+              select distinct registered_channel_id as channel_id
+              from discovery_recall_candidates
+              where registered_channel_id is not null
+            ) dc
+            where exists (
+              select 1
+              from final_selection_results fs
+              join articles a on a.doc_id = fs.doc_id
+              where a.channel_id = dc.channel_id
+                and fs.final_decision = 'selected'
+            )
+          ) as selected_useful_evidence_present_count,
           (select coalesce(sum(cost_usd), 0) from discovery_cost_log) as total_cost_usd
         """
     ) or {}

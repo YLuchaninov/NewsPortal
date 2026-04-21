@@ -9,14 +9,29 @@ function cloneStringArray(value) {
 }
 
 function clonePolicy(policy) {
+  const diversityCaps = policy?.diversityCaps && typeof policy.diversityCaps === "object"
+    ? {
+        ...(typeof policy.diversityCaps.maxPerSourceFamily === "number"
+          ? { maxPerSourceFamily: policy.diversityCaps.maxPerSourceFamily }
+          : {}),
+        ...(typeof policy.diversityCaps.maxPerDomain === "number"
+          ? { maxPerDomain: policy.diversityCaps.maxPerDomain }
+          : {}),
+      }
+    : {};
   return {
     providerTypes: cloneStringArray(policy?.providerTypes ?? ["rss", "website"]),
     supportedWebsiteKinds: cloneStringArray(policy?.supportedWebsiteKinds),
     preferredDomains: cloneStringArray(policy?.preferredDomains),
-    blockedDomains: cloneStringArray(policy?.negativeDomains),
+    blockedDomains: cloneStringArray(policy?.blockedDomains ?? policy?.negativeDomains),
     positiveKeywords: cloneStringArray(policy?.positiveKeywords),
     negativeKeywords: cloneStringArray(policy?.negativeKeywords),
     preferredTactics: cloneStringArray(policy?.preferredTactics),
+    expectedSourceShapes: cloneStringArray(policy?.expectedSourceShapes),
+    allowedSourceFamilies: cloneStringArray(policy?.allowedSourceFamilies),
+    disfavoredSourceFamilies: cloneStringArray(policy?.disfavoredSourceFamilies),
+    usefulnessHints: cloneStringArray(policy?.usefulnessHints),
+    diversityCaps,
     minRssReviewScore:
       typeof policy?.minRssReviewScore === "number" ? policy.minRssReviewScore : undefined,
     minWebsiteReviewScore:

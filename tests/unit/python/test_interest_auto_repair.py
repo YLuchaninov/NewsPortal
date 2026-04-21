@@ -216,6 +216,20 @@ class _RecordingConnection(_FakeConnection):
 
 
 class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
+    def test_resolve_criterion_review_final_decision_preserves_uncertain_as_gray_zone(self) -> None:
+        self.assertEqual(
+            worker_main.resolve_criterion_review_final_decision("approve"),
+            "relevant",
+        )
+        self.assertEqual(
+            worker_main.resolve_criterion_review_final_decision("uncertain"),
+            "gray_zone",
+        )
+        self.assertEqual(
+            worker_main.resolve_criterion_review_final_decision("reject"),
+            "irrelevant",
+        )
+
     async def test_fetch_article_for_update_locks_only_article_row(self) -> None:
         cursor = _RecordingCursor(
             [
