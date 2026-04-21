@@ -304,6 +304,13 @@ def compute_source_interest_score(
     lead_time_score = clamp_score((channel_metrics or {}).get("lead_time_score", 0.5))
     yield_score = clamp_score((channel_metrics or {}).get("yield_score", 0.5))
     duplication_score = clamp_score((channel_metrics or {}).get("duplication_score", 0.15))
+    quality_prior = clamp_score(
+        clamp_score(profile.get("trust_score")) * 0.45
+        + clamp_score(profile.get("source_linking_quality")) * 0.2
+        + lead_time_score * 0.1
+        + yield_score * 0.15
+        + (1 - duplication_score) * 0.1
+    )
     contextual_score = clamp_score(
         fit_score * 0.45
         + novelty_score * 0.15
@@ -311,6 +318,7 @@ def compute_source_interest_score(
         + yield_score * 0.15
         + (1 - duplication_score) * 0.1
     )
+    final_review_score = clamp_score(contextual_score * 0.7 + quality_prior * 0.3)
 
     score = {
         "topic_coverage": topic_coverage,
@@ -319,14 +327,18 @@ def compute_source_interest_score(
         "evidence_depth": evidence_depth,
         "signal_to_noise": signal_to_noise,
         "fit_score": fit_score,
+        "quality_prior": quality_prior,
         "novelty_score": novelty_score,
         "lead_time_score": lead_time_score,
         "yield_score": yield_score,
         "duplication_score": duplication_score,
         "contextual_score": contextual_score,
+        "final_review_score": final_review_score,
         "scoring_breakdown": {
             "graphTokens": sorted(graph_tokens),
             "sourceTokens": sorted(source_tokens),
+            "qualityPrior": quality_prior,
+            "finalReviewScore": final_review_score,
             "channelMetrics": {
                 "metricSource": str((channel_metrics or {}).get("metric_source") or "generic_channel_quality"),
                 "yieldScore": yield_score,
@@ -495,6 +507,9 @@ class RankedSource:
     yield_score: float
     duplication_score: float
     role_labels: list[str]
+    quality_prior: float = 0.0
+    final_review_score: float = 0.0
+    source_family: str | None = None
     title: str | None = None
     url: str | None = None
 
@@ -506,11 +521,14 @@ class RankedSource:
             "trust_score": self.trust_score,
             "contextual_score": self.contextual_score,
             "fit_score": self.fit_score,
+            "quality_prior": self.quality_prior,
+            "final_review_score": self.final_review_score,
             "novelty_score": self.novelty_score,
             "lead_time_score": self.lead_time_score,
             "yield_score": self.yield_score,
             "duplication_score": self.duplication_score,
             "role_labels": list(self.role_labels),
+            "source_family": self.source_family,
             "title": self.title,
             "url": self.url,
         }
@@ -525,13 +543,24 @@ def rank_portfolio(scored_sources: list[dict[str, Any]]) -> list[dict[str, Any]]
         best_index = -1
         best_gain = -1.0
         for index, candidate in enumerate(remaining):
-            gain = clamp_score(candidate.get("contextual_score"))
+            gain = clamp_score(candidate.get("final_review_score") or candidate.get("contextual_score"))
             if selected:
                 max_similarity = max(
                     compute_source_similarity(candidate, existing)
                     for existing in selected
                 )
                 gain -= 0.25 * max_similarity
+                if any(
+                    str(existing.get("canonical_domain") or "") == str(candidate.get("canonical_domain") or "")
+                    for existing in selected
+                ):
+                    gain -= 0.4
+                candidate_family = str(candidate.get("source_family") or "").strip().lower()
+                if candidate_family and any(
+                    str(existing.get("source_family") or "").strip().lower() == candidate_family
+                    for existing in selected
+                ):
+                    gain -= 0.15
             for role in candidate.get("role_labels") or []:
                 slot = ROLE_SLOTS.get(role)
                 if slot and slot_counts[role] < slot["min"]:

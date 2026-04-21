@@ -269,6 +269,9 @@ class _FakeDiscoveryRepository:
             "status": "active",
             "priority": 2,
             "run_count": 0,
+            "profile_id": None,
+            "applied_profile_version": None,
+            "applied_policy_json": None,
         }
         self.recall_mission = {
             "recall_mission_id": "recall-mission-1",
@@ -283,6 +286,9 @@ class _FakeDiscoveryRepository:
             "status": "active",
             "max_candidates": 4,
             "created_by": "test",
+            "profile_id": None,
+            "applied_profile_version": None,
+            "applied_policy_json": None,
         }
         self.class_rows = [
             {
@@ -558,6 +564,38 @@ class _FakeDiscoveryRepository:
                 candidate["status"] = status
                 candidate["registered_channel_id"] = channel_id
                 candidate["rejection_reason"] = rejection_reason
+
+    async def update_candidate_review(
+        self,
+        *,
+        candidate_id: str,
+        evaluation_json: dict[str, Any],
+        status: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> None:
+        for candidate in self.candidates:
+            if candidate["candidate_id"] == candidate_id:
+                candidate["evaluation_json"] = dict(evaluation_json)
+                if status is not None:
+                    candidate["status"] = status
+                if rejection_reason is not None or status == "rejected":
+                    candidate["rejection_reason"] = rejection_reason
+
+    async def update_recall_candidate_review(
+        self,
+        *,
+        recall_candidate_id: str,
+        evaluation_json: dict[str, Any],
+        status: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> None:
+        for candidate in self.recall_candidates:
+            if candidate["recall_candidate_id"] == recall_candidate_id:
+                candidate["evaluation_json"] = dict(evaluation_json)
+                if status is not None:
+                    candidate["status"] = status
+                if rejection_reason is not None or status == "rejected":
+                    candidate["rejection_reason"] = rejection_reason
 
     async def list_hypothesis_candidate_stats(self, hypothesis_ids: list[str]) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []

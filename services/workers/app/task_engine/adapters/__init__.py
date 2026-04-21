@@ -11,7 +11,12 @@ from .llm_analyzer import GeminiLlmAnalyzerAdapter
 from .rss_probe import FeedparserRssProbeAdapter
 from .source_registrar import PostgresSourceRegistrarAdapter
 from .url_validator import HttpxUrlValidatorAdapter
-from .web_search import DdgsWebSearchAdapter, StubWebSearchAdapter
+from .web_search import (
+    BraveWebSearchAdapter,
+    DdgsWebSearchAdapter,
+    SerperWebSearchAdapter,
+    StubWebSearchAdapter,
+)
 from .website_probe import FetchersWebsiteProbeAdapter
 
 
@@ -29,6 +34,10 @@ def build_discovery_web_search_adapter() -> object:
         return StubWebSearchAdapter()
     if provider == "ddgs":
         return DdgsWebSearchAdapter()
+    if provider == "brave":
+        return BraveWebSearchAdapter()
+    if provider == "serper":
+        return SerperWebSearchAdapter()
     raise RuntimeError(f"Unsupported discovery search provider {provider!r}.")
 
 

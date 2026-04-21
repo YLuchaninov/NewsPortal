@@ -94,7 +94,8 @@ async function main(): Promise<void> {
             (table_name = 'discovery_candidates' and column_name in (
               'source_profile_id',
               'evaluation_json',
-              'registered_channel_id'
+              'registered_channel_id',
+              'updated_at'
             ))
             or
             (table_name = 'discovery_source_interest_scores' and column_name in (

@@ -417,38 +417,21 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 
 Сохраните `recall_mission_id`.
 
-#### Шаг 2. Создайте recall candidate
+#### Шаг 2. Запустите bounded recall acquisition через админку
 
-```sh
-curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-candidates \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "recallMissionId": "<recall_mission_id>",
-    "url": "https://recall-example.test/feed.xml",
-    "finalUrl": "https://recall-example.test/feed.xml",
-    "title": "Recall candidate local test",
-    "description": "Bounded recall candidate",
-    "providerType": "rss",
-    "status": "pending",
-    "qualitySignalSource": "manual_seed",
-    "evaluationJson": {"classification": "rss"},
-    "createdBy": "admin@example.test"
-  }'
-```
+В `/admin/discovery?tab=recall`:
 
-Сохраните `recall_candidate_id`.
+1. найдите созданную recall mission;
+2. нажмите `Acquire now`;
+3. дождитесь появления recall candidates в том же tab.
 
-#### Шаг 3. Promote recall candidate
+Если вам нужен абсолютно synthetic bounded replay без live acquisition, только тогда допускается manual seed recall candidate через maintenance API.
 
-```sh
-curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-candidates/<recall_candidate_id>/promote \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "enabled": true,
-    "reviewedBy": "admin@example.test",
-    "tags": ["manual-test"]
-  }'
-```
+#### Шаг 3. Продвиньте shortlisted recall candidate через админку
+
+На карточке recall candidate в `/admin/discovery?tab=recall` нажмите `Promote`.
+
+Это использует тот же bounded promote path, но уже через shipped admin operator surface.
 
 #### Шаг 4. Проверьте Recall tab
 
@@ -503,7 +486,7 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-candidates/<
 
 Следующее сейчас нормально:
 
-- Recall tab — read surface, а не обязательно full CRUD form для recall create/acquire
+- Recall tab теперь является bounded operator surface для recall create/acquire/promote, но maintenance API по-прежнему остается deeper observability lane
 - `promoted` и `duplicate` оба могут быть успешными bounded outcomes
 - generic source quality snapshot может существовать без mission-fit score
 - recall-first acquisition для этого handbook остается bounded to `rss` и `website`

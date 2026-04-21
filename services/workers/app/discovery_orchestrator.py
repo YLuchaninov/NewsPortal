@@ -13,6 +13,11 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
+from .discovery_policy import (
+    build_policy_review,
+    classify_pre_probe_negative,
+    normalize_runtime_discovery_policy,
+)
 from .source_scoring import (
     build_gap_filling_hypotheses,
     build_portfolio_snapshot,
@@ -39,6 +44,33 @@ DEFAULT_DISCOVERY_CRON = "0 */6 * * *"
 _ZERO_USD = Decimal("0")
 _USD_TO_CENTS = Decimal("100")
 DEFAULT_DISCOVERY_PROVIDER_TYPES = ["rss", "website", "api", "email_imap", "youtube"]
+DISCOVERY_QUERY_FAMILY_TERMS = {
+    "official_blog": "official blog",
+    "newsroom": "newsroom",
+    "engineering_updates": "engineering updates",
+    "security_advisory": "security advisory",
+    "release_notes": "release notes",
+    "procurement_notice": "procurement notice",
+    "rfp_tender": "rfp tender",
+    "vendor_selection": "vendor selection",
+    "lead_signal_funding": "funding",
+    "lead_signal_product_expansion": "product expansion",
+    "lead_signal_enterprise_rollout": "enterprise rollout",
+    "lead_signal_platform_migration": "platform migration",
+    "lead_signal_modernization": "modernization",
+}
+PROCUREMENT_QUERY_FAMILIES = {
+    "procurement_notice",
+    "rfp_tender",
+    "vendor_selection",
+}
+LEAD_SIGNAL_QUERY_FAMILIES = {
+    "lead_signal_funding",
+    "lead_signal_product_expansion",
+    "lead_signal_enterprise_rollout",
+    "lead_signal_platform_migration",
+    "lead_signal_modernization",
+}
 
 
 def _read_int_env(name: str, default: int) -> int:
@@ -295,11 +327,61 @@ def _default_interest_graph(mission: dict[str, Any], existing_urls: set[str] | N
     }
 
 
+def _normalize_query_family_key(value: str) -> str:
+    normalized = str(value or "").strip().lower().replace(" ", "_")
+    return normalized
+
+
+def _ordered_query_families(
+    *,
+    seed_text: str,
+    preferred_tactics: list[str],
+) -> list[str]:
+    procurement_hints = {"procurement", "tender", "vendor", "contract", "rfp", "outsourcing"}
+    lead_signal_hints = {"funding", "expansion", "enterprise", "migration", "modernization", "rollout"}
+    seed_tokens = _tokenize(seed_text)
+    preferred = [
+        family
+        for family in (_normalize_query_family_key(item) for item in preferred_tactics)
+        if family in DISCOVERY_QUERY_FAMILY_TERMS
+    ]
+    default_order = [
+        "official_blog",
+        "newsroom",
+        "engineering_updates",
+        "security_advisory",
+        "release_notes",
+        "procurement_notice",
+        "rfp_tender",
+        "vendor_selection",
+        "lead_signal_funding",
+        "lead_signal_product_expansion",
+        "lead_signal_enterprise_rollout",
+        "lead_signal_platform_migration",
+        "lead_signal_modernization",
+    ]
+    if seed_tokens & procurement_hints:
+        prioritized = list(PROCUREMENT_QUERY_FAMILIES) + list(LEAD_SIGNAL_QUERY_FAMILIES)
+    elif seed_tokens & lead_signal_hints:
+        prioritized = list(LEAD_SIGNAL_QUERY_FAMILIES) + list(PROCUREMENT_QUERY_FAMILIES)
+    else:
+        prioritized = default_order
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for family in [*preferred, *prioritized, *default_order]:
+        if family not in DISCOVERY_QUERY_FAMILY_TERMS or family in seen:
+            continue
+        seen.add(family)
+        ordered.append(family)
+    return ordered
+
+
 def _build_generation_seed(
     *,
     class_row: dict[str, Any],
     graph: dict[str, Any],
     stats_map: dict[tuple[str, str], dict[str, Any]],
+    applied_policy_json: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     class_key = str(class_row.get("class_key") or "").strip()
     seed_rules = dict(class_row.get("seed_rules_json") or {})
@@ -313,6 +395,12 @@ def _build_generation_seed(
     geos = _normalize_text_list(graph.get("geos"))
     source_types = _normalize_text_list(graph.get("source_types"))
     exclusions = _normalize_text_list(graph.get("exclusions"))
+    runtime_policy = normalize_runtime_discovery_policy(
+        lane="graph",
+        applied_policy_json=applied_policy_json,
+        mission_like={"target_provider_types": provider_types},
+    )
+    preferred_tactics = _normalize_text_list(runtime_policy.get("preferredTactics"))
 
     seeds: list[dict[str, Any]] = []
     for tactic_key in tactics:
@@ -325,40 +413,54 @@ def _build_generation_seed(
             trials = int(stat.get("trials") or 0)
             selection_score = (alpha / max(alpha + beta, 1.0)) + (1 / sqrt(trials + 1))
 
-        if class_key == "lexical":
-            term = subtopics[0] if subtopics else core_topic
-            query = f"{term} {tactic_key} source"
-        elif class_key == "facet":
-            facet_seed = (subtopics[0] if subtopics else core_topic)
-            query = f"{facet_seed} {tactic_key} updates"
-        elif class_key == "actor":
-            actor = entities[0] if entities else core_topic
-            query = f"{actor} {tactic_key} official blog"
-        elif class_key == "source_type":
+        base_seed = entities[0] if class_key == "actor" and entities else (
+            subtopics[0] if class_key in {"lexical", "facet"} and subtopics else core_topic
+        )
+        if class_key == "source_type":
             source_type = source_types[0] if source_types else "source"
-            query = f"{core_topic} {source_type} {tactic_key}".strip()
-        elif class_key == "evidence_chain":
-            query = f"{core_topic} {tactic_key} original source"
+            base_seed = f"{core_topic} {source_type}".strip()
         elif class_key == "contrarian":
             exclusion = exclusions[0] if exclusions else core_topic
             geo = geos[0] if geos else ""
-            query = f"{core_topic} {tactic_key} {exclusion} {geo}".strip()
-        else:
-            query = f"{core_topic} {tactic_key}".strip()
-        seeds.append(
-            {
-                "class_key": class_key,
-                "tactic_key": tactic_key,
-                "search_query": " ".join(query.split()),
-                "target_provider_type": provider_type,
-                "expected_value": f"{class_row.get('display_name') or class_key} / {tactic_key}",
-                "generation_context": {
-                    "origin": "registry_seed",
-                    "selection_score": round(selection_score, 4),
-                    "provider_types": provider_types,
-                },
-            }
+            base_seed = f"{core_topic} {exclusion} {geo}".strip()
+        if class_key not in {"lexical", "facet", "actor", "source_type", "evidence_chain", "contrarian"}:
+            query = f"{base_seed} {tactic_key}".strip()
+            seeds.append(
+                {
+                    "class_key": class_key,
+                    "tactic_key": tactic_key,
+                    "search_query": " ".join(query.split()),
+                    "target_provider_type": provider_type,
+                    "expected_value": f"{class_row.get('display_name') or class_key} / {tactic_key}",
+                    "generation_context": {
+                        "origin": "registry_seed",
+                        "selection_score": round(selection_score, 4),
+                        "provider_types": provider_types,
+                    },
+                }
+            )
+            continue
+        families = _ordered_query_families(
+            seed_text=f"{base_seed} {tactic_key}",
+            preferred_tactics=preferred_tactics,
         )
+        for family in families[:max_per_mission]:
+            query = f"{base_seed} {DISCOVERY_QUERY_FAMILY_TERMS[family]}".strip()
+            seeds.append(
+                {
+                    "class_key": class_key,
+                    "tactic_key": tactic_key,
+                    "search_query": " ".join(query.split()),
+                    "target_provider_type": provider_type,
+                    "expected_value": f"{class_row.get('display_name') or class_key} / {tactic_key}",
+                    "generation_context": {
+                        "origin": "registry_seed",
+                        "selection_score": round(selection_score, 4),
+                        "provider_types": provider_types,
+                        "query_family": family,
+                    },
+                }
+            )
 
     seeds.sort(
         key=lambda item: float(item.get("generation_context", {}).get("selection_score") or 0),
@@ -372,6 +474,7 @@ def _build_default_hypotheses_from_graph(
     graph: dict[str, Any],
     class_rows: list[dict[str, Any]],
     stats_rows: list[dict[str, Any]],
+    applied_policy_json: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     stats_map = {
         (str(row.get("class_key") or ""), str(row.get("tactic_key") or "")): dict(row)
@@ -384,6 +487,7 @@ def _build_default_hypotheses_from_graph(
                 class_row=class_row,
                 graph=graph,
                 stats_map=stats_map,
+                applied_policy_json=applied_policy_json,
             )
         )
     return hypotheses
@@ -590,6 +694,38 @@ class DiscoveryCoordinatorRepository:
             candidate_id,
             status,
             channel_id,
+            rejection_reason,
+        )
+
+    async def update_candidate_review(
+        self,
+        *,
+        candidate_id: str,
+        evaluation_json: dict[str, Any],
+        status: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> None:
+        await asyncio.to_thread(
+            self._update_candidate_review,
+            candidate_id,
+            evaluation_json,
+            status,
+            rejection_reason,
+        )
+
+    async def update_recall_candidate_review(
+        self,
+        *,
+        recall_candidate_id: str,
+        evaluation_json: dict[str, Any],
+        status: str | None = None,
+        rejection_reason: str | None = None,
+    ) -> None:
+        await asyncio.to_thread(
+            self._update_recall_candidate_review,
+            recall_candidate_id,
+            evaluation_json,
+            status,
             rejection_reason,
         )
 
@@ -854,6 +990,9 @@ class DiscoveryCoordinatorRepository:
               spent_cents,
               status,
               priority,
+              profile_id::text as profile_id,
+              applied_profile_version,
+              applied_policy_json,
               run_count,
               last_run_at,
               latest_portfolio_snapshot_id::text as latest_portfolio_snapshot_id,
@@ -886,6 +1025,9 @@ class DiscoveryCoordinatorRepository:
               scope_json,
               status,
               max_candidates,
+              profile_id::text as profile_id,
+              applied_profile_version,
+              applied_policy_json,
               created_by,
               created_at,
               updated_at
@@ -924,6 +1066,9 @@ class DiscoveryCoordinatorRepository:
                       spent_cents,
                       status,
                       priority,
+                      profile_id::text as profile_id,
+                      applied_profile_version,
+                      applied_policy_json,
                       run_count,
                       last_run_at,
                       latest_portfolio_snapshot_id::text as latest_portfolio_snapshot_id,
@@ -955,6 +1100,9 @@ class DiscoveryCoordinatorRepository:
                       scope_json,
                       status,
                       max_candidates,
+                      profile_id::text as profile_id,
+                      applied_profile_version,
+                      applied_policy_json,
                       created_by,
                       created_at,
                       updated_at
@@ -1182,6 +1330,9 @@ class DiscoveryCoordinatorRepository:
               h.generation_context,
               h.expected_value,
               m.interest_graph,
+              m.profile_id::text as profile_id,
+              m.applied_profile_version,
+              m.applied_policy_json,
               m.budget_cents,
               (
                 select coalesce(sum(cost_usd), 0)
@@ -1336,7 +1487,8 @@ class DiscoveryCoordinatorRepository:
                               sample_data = excluded.sample_data,
                               status = excluded.status,
                               registered_channel_id = coalesce(discovery_candidates.registered_channel_id, excluded.registered_channel_id),
-                              rejection_reason = excluded.rejection_reason
+                              rejection_reason = excluded.rejection_reason,
+                              updated_at = now()
                             returning
                               candidate_id::text as candidate_id,
                               mission_id::text as mission_id,
@@ -1484,7 +1636,7 @@ class DiscoveryCoordinatorRepository:
                 cursor.execute(
                     """
                     update discovery_candidates
-                    set source_profile_id = %s
+                    set source_profile_id = %s, updated_at = now()
                     where candidate_id = %s
                     """,
                     (source_profile_id, candidate_id),
@@ -1518,10 +1670,65 @@ class DiscoveryCoordinatorRepository:
                       status = %s,
                       registered_channel_id = %s,
                       rejection_reason = %s,
-                      reviewed_at = now()
+                      reviewed_at = now(),
+                      updated_at = now()
                     where candidate_id = %s
                     """,
                     (status, channel_id, rejection_reason, candidate_id),
+                )
+
+    def _update_candidate_review(
+        self,
+        candidate_id: str,
+        evaluation_json: dict[str, Any],
+        status: str | None,
+        rejection_reason: str | None,
+    ) -> None:
+        assignments = ["evaluation_json = %s::jsonb", "updated_at = now()"]
+        params: list[Any] = [Json(evaluation_json)]
+        if status is not None:
+            assignments.insert(0, "status = %s")
+            params.insert(0, status)
+        if rejection_reason is not None or status == "rejected":
+            assignments.insert(1 if status is not None else 0, "rejection_reason = %s")
+            params.insert(1 if status is not None else 0, rejection_reason)
+        params.append(candidate_id)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    update discovery_candidates
+                    set {', '.join(assignments)}
+                    where candidate_id = %s
+                    """,
+                    tuple(params),
+                )
+
+    def _update_recall_candidate_review(
+        self,
+        recall_candidate_id: str,
+        evaluation_json: dict[str, Any],
+        status: str | None,
+        rejection_reason: str | None,
+    ) -> None:
+        assignments = ["evaluation_json = %s::jsonb", "updated_at = now()"]
+        params: list[Any] = [Json(evaluation_json)]
+        if status is not None:
+            assignments.insert(0, "status = %s")
+            params.insert(0, status)
+        if rejection_reason is not None or status == "rejected":
+            assignments.insert(1 if status is not None else 0, "rejection_reason = %s")
+            params.insert(1 if status is not None else 0, rejection_reason)
+        params.append(recall_candidate_id)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    update discovery_recall_candidates
+                    set {', '.join(assignments)}
+                    where recall_candidate_id = %s
+                    """,
+                    tuple(params),
                 )
 
     def _list_hypothesis_candidate_stats(self, hypothesis_ids: list[str]) -> list[dict[str, Any]]:
@@ -2444,6 +2651,7 @@ def _candidate_rows_from_context(
         for item in _coerce_mapping_list(context.get("sampled_content"))
     }
     llm_assessments = _assessment_map(context.get("llm_analysis"))
+    search_meta = dict(context.get("search_meta") or {}) if isinstance(context.get("search_meta"), dict) else {}
     base_rows = context.get("probed_feeds") if provider_type == "rss" else context.get("probed_websites")
     if not isinstance(base_rows, list):
         return []
@@ -2495,6 +2703,7 @@ def _candidate_rows_from_context(
                 "evaluation_json": {
                     "matched_terms": scored.get("matched_terms") or [],
                     "passes_threshold": bool(scored.get("passes_threshold", False)),
+                    "search_provider": str(search_meta.get("provider") or ""),
                     "classification": classification,
                     "capabilities": capabilities,
                     "discovered_feed_urls": [
@@ -2567,44 +2776,104 @@ def _build_recall_search_plans(
     mission: dict[str, Any],
     provider_type: str,
     max_plans: int,
+    policy: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     plans: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
+    preferred_tactics = _normalize_text_list((policy or {}).get("preferredTactics"))
+    expansion_hints = {
+        "procurement",
+        "tender",
+        "vendor",
+        "contract",
+        "rfp",
+        "outsourcing",
+        "funding",
+        "expansion",
+        "enterprise",
+        "migration",
+        "modernization",
+        "rollout",
+    }
     for seed_query in _normalize_text_list(mission.get("seed_queries")):
-        query = seed_query if provider_type == "website" else f"{seed_query} rss"
-        key = ("seed_query", query.lower())
-        if key in seen:
+        seed_query_text = seed_query if provider_type == "website" else f"{seed_query} rss"
+        seed_query_key = ("seed_query", seed_query_text.lower())
+        if seed_query_key not in seen:
+            seen.add(seed_query_key)
+            plans.append(
+                {
+                    "query": seed_query_text,
+                    "quality_signal_source": "seed_query_search",
+                    "seed_type": "seed_query",
+                    "seed_value": seed_query,
+                    "query_family": None,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
+        if not preferred_tactics and not (_tokenize(seed_query) & expansion_hints):
             continue
-        seen.add(key)
-        plans.append(
-            {
-                "query": query,
-                "quality_signal_source": "seed_query_search",
-                "seed_type": "seed_query",
-                "seed_value": seed_query,
-            }
-        )
-        if len(plans) >= max_plans:
-            return plans
+        families = _ordered_query_families(seed_text=seed_query, preferred_tactics=preferred_tactics)
+        for family in families[:4]:
+            term = DISCOVERY_QUERY_FAMILY_TERMS[family]
+            base_query = f"{seed_query} {term}".strip()
+            query = base_query if provider_type == "website" else f"{base_query} rss"
+            key = ("seed_query", query.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            plans.append(
+                {
+                    "query": query,
+                    "quality_signal_source": "seed_query_search",
+                    "seed_type": "seed_query",
+                    "seed_value": seed_query,
+                    "query_family": family,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
     for seed_domain in _normalize_text_list(mission.get("seed_domains")):
         domain = _normalize_domain_seed(seed_domain)
         if not domain:
             continue
-        query = f"site:{domain}" if provider_type == "website" else f"site:{domain} rss"
-        key = ("seed_domain", query.lower())
-        if key in seen:
+        seed_domain_text = f"site:{domain}" if provider_type == "website" else f"site:{domain} rss"
+        seed_domain_key = ("seed_domain", seed_domain_text.lower())
+        if seed_domain_key not in seen:
+            seen.add(seed_domain_key)
+            plans.append(
+                {
+                    "query": seed_domain_text,
+                    "quality_signal_source": "seed_domain_search",
+                    "seed_type": "seed_domain",
+                    "seed_value": domain,
+                    "query_family": None,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
+        if not preferred_tactics and not (_tokenize(domain) & expansion_hints):
             continue
-        seen.add(key)
-        plans.append(
-            {
-                "query": query,
-                "quality_signal_source": "seed_domain_search",
-                "seed_type": "seed_domain",
-                "seed_value": domain,
-            }
-        )
-        if len(plans) >= max_plans:
-            return plans
+        families = _ordered_query_families(seed_text=domain, preferred_tactics=preferred_tactics)
+        for family in families[:3]:
+            term = DISCOVERY_QUERY_FAMILY_TERMS[family]
+            base_query = f"site:{domain} {term}".strip()
+            query = base_query if provider_type == "website" else f"{base_query} rss"
+            key = ("seed_domain", query.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            plans.append(
+                {
+                    "query": query,
+                    "quality_signal_source": "seed_domain_search",
+                    "seed_type": "seed_domain",
+                    "seed_value": domain,
+                    "query_family": family,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
     return plans
 
 
@@ -2712,8 +2981,10 @@ def _recall_candidate_rows_from_probe_results(
             "seed_type": target_meta.get("seed_type"),
             "seed_value": target_meta.get("seed_value"),
             "search_query": target_meta.get("search_query"),
+            "search_provider": target_meta.get("search_provider"),
             "search_result_title": target_meta.get("search_result_title"),
             "search_snippet": target_meta.get("search_snippet"),
+            "query_family": target_meta.get("query_family"),
         }
         title = str(row.get("feed_title") or row.get("title") or target_meta.get("search_result_title") or "")
         description = str(
@@ -2800,6 +3071,11 @@ async def plan_hypotheses(
             graph=graph,
             class_rows=class_rows,
             stats_rows=stats_rows,
+            applied_policy_json=(
+                mission.get("applied_policy_json")
+                if isinstance(mission.get("applied_policy_json"), dict)
+                else None
+            ),
         )
         raw_hypotheses = await resolve_runtime_call(
             runtime.llm_analyzer.analyze(
@@ -2961,10 +3237,23 @@ async def execute_hypotheses(
         )
         stored_candidates = await repository.upsert_candidates(candidates)
         approved_count = 0
-        threshold = settings.default_auto_approve_threshold
+        graph_policy = normalize_runtime_discovery_policy(
+            lane="graph",
+            applied_policy_json=(
+                hypothesis.get("applied_policy_json")
+                if isinstance(hypothesis.get("applied_policy_json"), dict)
+                else None
+            ),
+            mission_like=hypothesis,
+        )
         scored_sources: list[dict[str, Any]] = []
         for stored_candidate in stored_candidates:
             candidate_id = str(stored_candidate["candidate_id"])
+            evaluation_json = (
+                dict(stored_candidate.get("evaluation_json") or {})
+                if isinstance(stored_candidate.get("evaluation_json"), dict)
+                else {}
+            )
             profile_input = build_source_profile(stored_candidate)
             stored_profile = await repository.upsert_source_profile(
                 candidate_id=candidate_id,
@@ -2992,6 +3281,8 @@ async def execute_hypotheses(
                     snapshot_row=quality_snapshot,
                 )
                 quality_snapshot_count += 1
+            else:
+                quality_snapshot = {"recall_score": 0.0}
             score_input = compute_source_interest_score(
                 mission_graph=graph,
                 profile={**profile_input, **stored_profile},
@@ -3005,6 +3296,41 @@ async def execute_hypotheses(
                 score_row=score_input,
             )
             score_count += 1
+            policy_review = build_policy_review(
+                lane="graph",
+                policy=graph_policy,
+                candidate={
+                    **stored_candidate,
+                    "search_query": hypothesis.get("search_query"),
+                    "tactic_key": hypothesis.get("tactic_key"),
+                },
+                evaluation_json=evaluation_json,
+                fit_score=score_input.get("fit_score"),
+                quality_prior=quality_snapshot.get("recall_score"),
+                lexical_score=score_input.get("contextual_score"),
+                default_threshold=settings.default_auto_approve_threshold,
+                search_provider=str(evaluation_json.get("search_provider") or settings.search_provider),
+                query_family=str(
+                    (hypothesis.get("generation_context") or {}).get("query_family")
+                    if isinstance(hypothesis.get("generation_context"), dict)
+                    else ""
+                ),
+            )
+            evaluation_json["policyReview"] = policy_review
+            next_status = None
+            next_rejection_reason = None
+            if str(stored_candidate.get("status") or "") != "duplicate":
+                if policy_review["verdict"] == "rejected":
+                    next_status = "rejected"
+                    next_rejection_reason = str(policy_review.get("reasonBucket") or "policy_rejected")
+                else:
+                    next_status = "pending"
+            await repository.update_candidate_review(
+                candidate_id=candidate_id,
+                evaluation_json=evaluation_json,
+                status=next_status,
+                rejection_reason=next_rejection_reason,
+            )
             ranked_source = {
                 "candidate_id": candidate_id,
                 "source_profile_id": source_profile_id,
@@ -3012,22 +3338,29 @@ async def execute_hypotheses(
                 "trust_score": clamp_score(stored_profile.get("trust_score")),
                 "contextual_score": clamp_score(score_input.get("contextual_score")),
                 "fit_score": clamp_score(score_input.get("fit_score")),
+                "quality_prior": clamp_score(score_input.get("quality_prior")),
+                "final_review_score": clamp_score(policy_review.get("finalReviewScore") or score_input.get("final_review_score")),
                 "novelty_score": clamp_score(score_input.get("novelty_score")),
                 "lead_time_score": clamp_score(score_input.get("lead_time_score")),
                 "yield_score": clamp_score(score_input.get("yield_score")),
                 "duplication_score": clamp_score(score_input.get("duplication_score")),
                 "role_labels": score_input.get("role_labels") or [],
+                "source_family": (
+                    policy_review.get("matchedSignals", {}).get("queryFamily")
+                    if isinstance(policy_review.get("matchedSignals"), dict)
+                    else None
+                ),
                 "title": stored_candidate.get("title"),
                 "url": stored_candidate.get("url"),
             }
             scored_sources.append(ranked_source)
 
-            contextual_score = clamp_score(score_input.get("contextual_score"))
             if stored_candidate.get("status") == "duplicate":
                 continue
-            if threshold is not None and contextual_score >= float(threshold):
+            if policy_review.get("verdict") == "auto_approve":
                 source_payload = dict(stored_candidate)
-                source_payload["relevance_score"] = contextual_score
+                source_payload["relevance_score"] = clamp_score(policy_review.get("finalReviewScore"))
+                source_payload["evaluation_json"] = evaluation_json
                 registrations = await resolve_runtime_call(
                     runtime.source_registrar.register_sources(
                         sources=[source_payload],
@@ -3155,6 +3488,15 @@ async def acquire_recall_missions(
         recall_mission_id_text = str(mission["recall_mission_id"])
         max_candidates = max(1, int(mission.get("max_candidates") or settings.default_max_sources))
         mission_candidates: list[dict[str, Any]] = []
+        recall_policy = normalize_runtime_discovery_policy(
+            lane="recall",
+            applied_policy_json=(
+                mission.get("applied_policy_json")
+                if isinstance(mission.get("applied_policy_json"), dict)
+                else None
+            ),
+            mission_like=mission,
+        )
         supported_provider_types = [
             provider
             for provider in _normalize_text_list(mission.get("target_provider_types"))
@@ -3175,6 +3517,7 @@ async def acquire_recall_missions(
                 mission=mission,
                 provider_type=provider_type,
                 max_plans=min(max_candidates, 8),
+                policy=recall_policy,
             )
             for search_plan in search_plans:
                 if len(probe_targets) >= max_candidates:
@@ -3201,6 +3544,13 @@ async def acquire_recall_missions(
                     result_url = str(result.get("url") or "").strip()
                     if not result_url:
                         continue
+                    pre_probe_negative = classify_pre_probe_negative(
+                        url=result_url,
+                        title=str(result.get("title") or ""),
+                        snippet=str(result.get("snippet") or ""),
+                    )
+                    if pre_probe_negative:
+                        continue
                     if provider_type == "rss" and not _looks_like_feed_candidate_url(result_url):
                         continue
                     probe_url = (
@@ -3219,8 +3569,10 @@ async def acquire_recall_missions(
                             "seed_type": search_plan["seed_type"],
                             "seed_value": search_plan["seed_value"],
                             "search_query": search_plan["query"],
+                            "search_provider": str(search_meta.get("provider") or settings.search_provider),
                             "search_result_title": str(result.get("title") or ""),
                             "search_snippet": str(result.get("snippet") or ""),
+                            "query_family": str(search_plan.get("query_family") or ""),
                         },
                     )
                     if len(probe_targets) >= max_candidates:
@@ -3314,6 +3666,35 @@ async def acquire_recall_missions(
                 )
                 source_profile_count += 1
                 quality_snapshot_count += 1
+                policy_review = build_policy_review(
+                    lane="recall",
+                    policy=recall_policy,
+                    candidate=stored_candidate,
+                    evaluation_json=evaluation_json,
+                    fit_score=clamp_score(evaluation_json.get("relevance_score")),
+                    quality_prior=quality_snapshot.get("recall_score"),
+                    lexical_score=quality_snapshot.get("recall_score"),
+                    default_threshold=settings.default_auto_approve_threshold,
+                    search_provider=str(evaluation_json.get("search_provider") or settings.search_provider),
+                    query_family=str(evaluation_json.get("query_family") or ""),
+                )
+                evaluation_json["policyReview"] = policy_review
+                candidate_status = str(stored_candidate.get("status") or "pending")
+                next_status = candidate_status
+                rejection_reason = str(stored_candidate.get("rejection_reason") or "").strip() or None
+                if candidate_status != "duplicate":
+                    if policy_review["verdict"] == "rejected":
+                        next_status = "rejected"
+                        rejection_reason = str(policy_review["reasonBucket"] or "policy_rejected")
+                    else:
+                        next_status = "pending"
+                        rejection_reason = None
+                await repository.update_recall_candidate_review(
+                    recall_candidate_id=str(stored_candidate["recall_candidate_id"]),
+                    evaluation_json=evaluation_json,
+                    status=next_status,
+                    rejection_reason=rejection_reason,
+                )
             if str(stored_candidate.get("url") or "").strip():
                 channel_id = str(stored_candidate.get("registered_channel_id") or "").strip()
                 if channel_id:
@@ -3476,11 +3857,18 @@ async def re_evaluate_sources(
                     "trust_score": clamp_score(row.get("trust_score")),
                     "contextual_score": clamp_score(score_row.get("contextual_score")),
                     "fit_score": clamp_score(score_row.get("fit_score")),
+                    "quality_prior": clamp_score(score_row.get("quality_prior")),
+                    "final_review_score": clamp_score(score_row.get("final_review_score")),
                     "novelty_score": clamp_score(score_row.get("novelty_score")),
                     "lead_time_score": clamp_score(score_row.get("lead_time_score")),
                     "yield_score": clamp_score(score_row.get("yield_score")),
                     "duplication_score": clamp_score(score_row.get("duplication_score")),
                     "role_labels": score_row.get("role_labels") or [],
+                    "source_family": (
+                        (row.get("evaluation_json") or {}).get("policyReview", {}).get("matchedSignals", {}).get("queryFamily")
+                        if isinstance(row.get("evaluation_json"), dict)
+                        else None
+                    ),
                     "title": row.get("title"),
                     "url": row.get("url"),
                 }

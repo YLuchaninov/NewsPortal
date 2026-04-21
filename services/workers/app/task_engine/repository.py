@@ -38,7 +38,7 @@ class SequenceRepository(Protocol):
         trigger_meta: dict[str, Any],
     ) -> str: ...
 
-    async def mark_run_running(self, run_id: str) -> None: ...
+    async def mark_run_running(self, run_id: str) -> bool: ...
 
     async def mark_run_completed(self, run_id: str, *, context_json: dict[str, Any]) -> None: ...
 
@@ -142,8 +142,8 @@ class PostgresSequenceRepository:
             trigger_meta,
         )
 
-    async def mark_run_running(self, run_id: str) -> None:
-        await asyncio.to_thread(self._mark_run_running, run_id)
+    async def mark_run_running(self, run_id: str) -> bool:
+        return await asyncio.to_thread(self._mark_run_running, run_id)
 
     async def mark_run_completed(self, run_id: str, *, context_json: dict[str, Any]) -> None:
         await asyncio.to_thread(self._mark_run_completed, run_id, context_json)
@@ -355,7 +355,7 @@ class PostgresSequenceRepository:
             raise RuntimeError(f"Failed to create sequence run for {sequence_id}.")
         return str(row["run_id"])
 
-    def _mark_run_running(self, run_id: str) -> None:
+    def _mark_run_running(self, run_id: str) -> bool:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -363,9 +363,11 @@ class PostgresSequenceRepository:
                     update sequence_runs
                     set status = 'running', started_at = now(), error_text = null
                     where run_id = %s
+                      and status = 'pending'
                     """,
                     (run_id,),
                 )
+                return cursor.rowcount > 0
 
     def _mark_run_completed(self, run_id: str, context_json: dict[str, Any]) -> None:
         with self._connect() as connection:

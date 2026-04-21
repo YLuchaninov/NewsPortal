@@ -191,6 +191,12 @@ test("resolveDiscoveryPolicyExplainability maps graph policy signals and thresho
     reasonBucket: "below_auto_approval_threshold",
     score: 0.84,
     threshold: 0.8,
+    fitScore: null,
+    qualityPrior: null,
+    finalReviewScore: null,
+    policyVerdict: null,
+    provider: null,
+    residuals: [],
     preferredDomainMatch: true,
     negativeDomainMatch: false,
     positiveKeywordMatch: true,
@@ -227,11 +233,59 @@ test("resolveDiscoveryPolicyExplainability maps recall threshold from applied po
   assert.equal(explainability.lane, "recall");
   assert.equal(explainability.threshold, 0.65);
   assert.equal(explainability.score, 0.69);
+  assert.equal(explainability.fitScore, null);
+  assert.equal(explainability.qualityPrior, null);
+  assert.equal(explainability.finalReviewScore, null);
+  assert.equal(explainability.policyVerdict, null);
+  assert.equal(explainability.provider, null);
+  assert.deepEqual(explainability.residuals, []);
   assert.equal(explainability.preferredDomainMatch, true);
   assert.equal(explainability.positiveKeywordMatch, true);
   assert.equal(explainability.benchmarkLike, true);
   assert.equal(explainability.profileName, "Procurement profile");
   assert.equal(explainability.profileVersion, 2);
+});
+
+test("resolveDiscoveryPolicyExplainability prefers runtime policyReview when present", () => {
+  const explainability = resolveDiscoveryPolicyExplainability(
+    {
+      provider_type: "website",
+      title: "Engineering updates",
+      evaluation_json: {
+        policyReview: {
+          threshold: 0.7,
+          reviewScore: 0.78,
+          fitScore: 0.73,
+          qualityPrior: 0.69,
+          finalReviewScore: 0.78,
+          policyVerdict: "manual_review",
+          provider: "brave",
+          reasonBucket: "browser_assisted_residual",
+          residuals: ["browser_assisted_recommended"],
+          matchedSignals: {
+            preferredDomainMatch: true,
+            blockedDomainMatch: false,
+            positiveKeywordMatch: true,
+            negativeKeywordMatch: false,
+            benchmarkLike: false,
+          },
+        },
+      },
+    },
+    "graph"
+  );
+
+  assert.equal(explainability.threshold, 0.7);
+  assert.equal(explainability.score, 0.78);
+  assert.equal(explainability.fitScore, 0.73);
+  assert.equal(explainability.qualityPrior, 0.69);
+  assert.equal(explainability.finalReviewScore, 0.78);
+  assert.equal(explainability.policyVerdict, "manual_review");
+  assert.equal(explainability.provider, "brave");
+  assert.deepEqual(explainability.residuals, ["browser_assisted_recommended"]);
+  assert.equal(explainability.reasonBucket, "browser_assisted_residual");
+  assert.equal(explainability.preferredDomainMatch, true);
+  assert.equal(explainability.positiveKeywordMatch, true);
 });
 
 test("resolveArticleOperatorState prefers final-selection truth over compatibility badges", () => {

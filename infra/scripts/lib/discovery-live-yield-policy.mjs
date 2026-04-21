@@ -89,6 +89,7 @@ function summarizeCounts(items, keyName, topLimit) {
 export function getCandidateContext(candidate) {
   const evaluation = asObject(candidate.evaluation_json);
   const classification = asObject(evaluation.classification);
+  const policyReview = asObject(evaluation.policyReview);
   const providerType = normalizeText(candidate.provider_type).toLowerCase();
   const title = normalizeText(candidate.title);
   const url = normalizeText(candidate.final_url) || normalizeText(candidate.url);
@@ -119,6 +120,38 @@ export function getCandidateContext(candidate) {
     challengeKind,
     textualFields,
     evaluation,
+    policyReview,
+  };
+}
+
+function classifyFromRuntimePolicyReview(candidate, context) {
+  const policyReview = asObject(context.policyReview);
+  const verdict = normalizeText(policyReview.verdict).toLowerCase();
+  if (!verdict) {
+    return null;
+  }
+  const reviewScore = asNumber(policyReview.reviewScore, asNumber(policyReview.finalReviewScore, 0));
+  const reasonBucket = normalizeText(policyReview.reasonBucket) || null;
+  const benchmarkLike = Boolean(asObject(policyReview.matchedSignals).benchmarkLike);
+  const responseBase = {
+    reviewScore,
+    benchmarkLike,
+    policySignals: asObject(policyReview.matchedSignals),
+    context,
+  };
+  if (verdict === "auto_approve") {
+    return { decision: "approvable", ...responseBase };
+  }
+  if (verdict === "promotable") {
+    return { decision: "promotable", ...responseBase };
+  }
+  if (verdict === "duplicate") {
+    return { decision: "duplicate", ...responseBase };
+  }
+  return {
+    decision: "rejected",
+    rejectionReason: reasonBucket || "below_auto_approval_threshold",
+    ...responseBase,
   };
 }
 
@@ -273,6 +306,10 @@ export function scoreRecallCandidate(candidate, caseDefinition) {
 
 export function classifyGraphCandidate(candidate, caseDefinition, defaults) {
   const { reviewScore, signals, context } = scoreGraphCandidate(candidate, caseDefinition, defaults);
+  const runtimeReview = classifyFromRuntimePolicyReview(candidate, context);
+  if (runtimeReview) {
+    return runtimeReview;
+  }
   const policy = asObject(caseDefinition.graphPolicy);
   const supportedWebsiteKinds = resolveSupportedWebsiteKinds(caseDefinition, "graph", defaults);
   const isValid = candidate.is_valid === true;
@@ -356,6 +393,10 @@ export function classifyGraphCandidate(candidate, caseDefinition, defaults) {
 
 export function classifyRecallCandidate(candidate, caseDefinition, defaults) {
   const { reviewScore, signals, context } = scoreRecallCandidate(candidate, caseDefinition);
+  const runtimeReview = classifyFromRuntimePolicyReview(candidate, context);
+  if (runtimeReview) {
+    return runtimeReview;
+  }
   const policy = asObject(caseDefinition.recallPolicy);
   const supportedWebsiteKinds = resolveSupportedWebsiteKinds(caseDefinition, "recall", defaults);
 
@@ -661,7 +702,7 @@ export function determineRunVerdicts({ preconditions, preflight, caseRuns }) {
       finalVerdict: "precondition_failed",
     };
   }
-  if (asArray(preflight).some((item) => item.status !== "passed")) {
+  if (asArray(preflight).some((item) => item.status !== "passed" && item.status !== "skipped")) {
     return {
       runtimeVerdict: "fail",
       yieldVerdict: "fail",

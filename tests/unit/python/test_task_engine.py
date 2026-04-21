@@ -153,8 +153,12 @@ class InMemorySequenceRepository:
     async def get_run(self, run_id: str) -> SequenceRunRecord | None:
         return self.runs.get(run_id)
 
-    async def mark_run_running(self, run_id: str) -> None:
-        self.runs[run_id] = replace(self.runs[run_id], status="running", error_text=None)
+    async def mark_run_running(self, run_id: str) -> bool:
+        run = self.runs[run_id]
+        if run.status != "pending":
+            return False
+        self.runs[run_id] = replace(run, status="running", error_text=None)
+        return True
 
     async def mark_run_completed(self, run_id: str, *, context_json: dict[str, Any]) -> None:
         self.runs[run_id] = replace(
@@ -465,6 +469,20 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.runs["run-1"].status, "completed")
         self.assertEqual(repository.runs["run-1"].context_json["value"], 7)
         self.assertEqual(slept_for, [0.1])
+
+    async def test_executor_skips_duplicate_pickup_when_run_is_already_running(self) -> None:
+        executor, repository = self._build_executor(
+            task_graph=[
+                {"key": "emit", "module": "Emit", "options": {"key": "value", "value": 7}}
+            ],
+        )
+        repository.runs["run-1"] = replace(repository.runs["run-1"], status="running")
+
+        result = await executor.execute_run("run-1")
+
+        self.assertEqual(result["status"], "running")
+        self.assertTrue(result["skippedDuplicate"])
+        self.assertEqual(repository.task_runs, [])
 
     def _build_executor(
         self,

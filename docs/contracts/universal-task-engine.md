@@ -183,7 +183,10 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - `WORKER_ENABLE_SEQUENCE_CRON_SCHEDULER`
   - `WORKER_ENABLE_LEGACY_QUEUE_CONSUMERS`
   - `WORKER_SEQUENCE_RUNNER_CONCURRENCY`
+  - `WORKER_SEQUENCE_RUNNER_LOCK_DURATION_MS`
+  - `WORKER_SEQUENCE_RUNNER_STALLED_INTERVAL_MS`
   - `WORKER_SEQUENCE_CRON_POLL_INTERVAL_SECONDS`
+- Long-running sequence lanes such as discovery and website extraction must not rely on BullMQ's 30s default worker lock window; the shipped worker baseline now extends the `q.sequence` lock/stall window to 300000ms and still keeps DB-backed run claiming authoritative so duplicate job pickup cannot re-start the same `run_id`.
 - Relay default runtime after `UTE-S8` truthfully uses sequence routing unless `RELAY_ENABLE_SEQUENCE_ROUTING` is explicitly disabled.
 - Compose/runtime baselines, в которых API surface умеет создавать manual sequence runs, должны давать `services/api` доступ к Redis, потому что maintenance dispatch path enqueue-ит `q.sequence` jobs напрямую после DB write.
 - Cron polling/bootstrap остаётся DB-backed and minute-based: scheduler перечитывает active cron sequences из PostgreSQL, создаёт `sequence_runs` only for the currently due minute, записывает `trigger_meta.scheduledFor` и dispatch-ит в `q.sequence`; missed catch-up/backfill scheduling не считается реализованным до более поздней capability.

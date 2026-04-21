@@ -187,7 +187,9 @@ def normalize_discovery_graph_policy(value: Mapping[str, Any] | None) -> dict[st
         "providerTypes": provider_types or ["rss", "website"],
         "supportedWebsiteKinds": _normalize_string_list(source.get("supportedWebsiteKinds")),
         "preferredDomains": _normalize_string_list(source.get("preferredDomains")),
-        "blockedDomains": _normalize_string_list(source.get("blockedDomains")),
+        "blockedDomains": _normalize_string_list(
+            source.get("blockedDomains") or source.get("negativeDomains")
+        ),
         "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
         "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
         "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
@@ -210,7 +212,9 @@ def normalize_discovery_recall_policy(value: Mapping[str, Any] | None) -> dict[s
         "providerTypes": provider_types or ["rss", "website"],
         "supportedWebsiteKinds": _normalize_string_list(source.get("supportedWebsiteKinds")),
         "preferredDomains": _normalize_string_list(source.get("preferredDomains")),
-        "blockedDomains": _normalize_string_list(source.get("blockedDomains")),
+        "blockedDomains": _normalize_string_list(
+            source.get("blockedDomains") or source.get("negativeDomains")
+        ),
         "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
         "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
         "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
@@ -3887,7 +3891,8 @@ def update_discovery_candidate(
                   rejection_reason = %s,
                   reviewed_by = %s,
                   reviewed_at = now(),
-                  registered_channel_id = %s
+                  registered_channel_id = %s,
+                  updated_at = now()
                 where candidate_id = %s
                 """,
                 (

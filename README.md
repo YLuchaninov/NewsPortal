@@ -191,6 +191,7 @@ infra/
   - `DISCOVERY_SEARCH_PROVIDER=ddgs`
   - live search still stays dormant until `DISCOVERY_ENABLED=true`
   - manual approval by default
+  - profile thresholds own auto-approval / promote gates; `DISCOVERY_AUTO_APPROVE_THRESHOLD` only remains as a legacy fallback for profile-less missions
   - reusable RSS/website child sequences stay seeded as draft until explicitly activated
 - Main discovery env surface:
   - `DISCOVERY_ENABLED`
@@ -209,7 +210,9 @@ infra/
   - `DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD`
   - `DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD`
   - `DISCOVERY_MONTHLY_BUDGET_CENTS`
-  - `DISCOVERY_BRAVE_API_KEY` and `DISCOVERY_SERPER_API_KEY` remain dormant placeholders only
+  - `DISCOVERY_BRAVE_API_KEY`
+  - `DISCOVERY_SERPER_API_KEY`
+- Supported discovery search adapters are `stub`, `ddgs`, `brave`, and `serper`; the default stays `ddgs`, but runtime/provider semantics no longer assume DDGS outside the selected adapter.
 - Admin discovery surface lives at `/admin/discovery` behind the existing allowlisted admin/session boundary and keeps same-origin BFF writes with audit logging.
 
 ### Discovery live enable runbook
@@ -238,6 +241,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 ### Browser-assisted website and hard-site notes
 
 - Safe default stays unchanged: cheap/static website discovery remains first, and browser help is opt-in rather than default.
+- Browser-assisted or challenge-gated discovery candidates now stay on the manual-review path via runtime `policyReview`; they are not auto-registered.
 - Enable browser assistance only for public `website` channels when static discovery misses real resources or the site is clearly JS-heavy. The relevant website config keys are `browserFallbackEnabled=true` and `maxBrowserFetchesPerPoll` (keep the current default `2` unless you have a bounded reason to change it).
 - When discovery recommends browser help for a website candidate, the registered provider must still remain `website`; hidden feeds remain hints only and must not silently convert the source into RSS.
 - For a dedicated operator-facing manual pass of `website` channels, `/admin/resources`, projected vs resource-only rows, and bounded live-site checks, use [WEBSITE_SOURCES_TESTING.md](./WEBSITE_SOURCES_TESTING.md).

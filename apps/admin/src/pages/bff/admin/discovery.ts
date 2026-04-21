@@ -48,6 +48,8 @@ type DiscoveryIntent =
   | "delete_class"
   | "create_recall_mission"
   | "update_recall_mission"
+  | "acquire_recall_mission"
+  | "promote_recall_candidate"
   | "review_candidate"
   | "submit_feedback"
   | "re_evaluate";
@@ -73,6 +75,8 @@ export function resolveDiscoveryIntent(payload: Record<string, unknown>): Discov
     value === "delete_class" ||
     value === "create_recall_mission" ||
     value === "update_recall_mission" ||
+    value === "acquire_recall_mission" ||
+    value === "promote_recall_candidate" ||
     value === "review_candidate" ||
     value === "submit_feedback" ||
     value === "re_evaluate"
@@ -130,6 +134,18 @@ function parseOptionalProfileProviderTypes(value: unknown): string[] | undefined
   return parseProfileProviderTypes(raw);
 }
 
+function parseProfileWebsiteKinds(value: unknown): string[] {
+  return parseTextList(value);
+}
+
+function parseOptionalProfileWebsiteKinds(value: unknown): string[] | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return undefined;
+  }
+  return parseProfileWebsiteKinds(raw);
+}
+
 export function parseOptionalNumber(value: unknown): number | undefined {
   const raw = String(value ?? "").trim();
   if (!raw) {
@@ -161,6 +177,7 @@ function buildProfilePolicyPayload(
     ["rss", "website"];
   const policy: Record<string, unknown> = {
     providerTypes,
+    supportedWebsiteKinds: parseProfileWebsiteKinds(payload[`${prefix}SupportedWebsiteKinds`]),
     preferredDomains: parseTextList(payload[`${prefix}PreferredDomains`]),
     blockedDomains: parseTextList(payload[`${prefix}BlockedDomains`]),
     positiveKeywords: parseTextList(payload[`${prefix}PositiveKeywords`]),
@@ -189,6 +206,11 @@ function buildPartialProfilePolicyPayload(
   const prefix = lane === "graph" ? "graph" : "recall";
   if (Object.prototype.hasOwnProperty.call(payload, `${prefix}ProviderTypes`)) {
     policy.providerTypes = parseProfileProviderTypes(payload[`${prefix}ProviderTypes`]);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, `${prefix}SupportedWebsiteKinds`)) {
+    policy.supportedWebsiteKinds = parseOptionalProfileWebsiteKinds(
+      payload[`${prefix}SupportedWebsiteKinds`]
+    ) ?? [];
   }
   if (Object.prototype.hasOwnProperty.call(payload, `${prefix}PreferredDomains`)) {
     policy.preferredDomains = parseTextList(payload[`${prefix}PreferredDomains`]);
@@ -257,6 +279,7 @@ function hasAnyProfilePolicyField(
     lane === "graph"
       ? [
           "graphProviderTypes",
+          "graphSupportedWebsiteKinds",
           "graphPreferredDomains",
           "graphBlockedDomains",
           "graphPositiveKeywords",
@@ -268,6 +291,7 @@ function hasAnyProfilePolicyField(
         ]
       : [
           "recallProviderTypes",
+          "recallSupportedWebsiteKinds",
           "recallPreferredDomains",
           "recallBlockedDomains",
           "recallPositiveKeywords",
@@ -575,6 +599,27 @@ export function buildDiscoveryAuditPayload(
       profileId: String(payload.profileId ?? "").trim() || null,
       seedDomains: parseTextList(payload.seedDomains),
       seedQueries: parseTextList(payload.seedQueries),
+    };
+  }
+  if (intent === "acquire_recall_mission") {
+    return {
+      recallMissionId:
+        String(apiResult.recall_mission_id ?? payload.recallMissionId ?? "").trim() || null,
+      status: String(apiResult.status ?? "").trim() || null,
+      acquiredCandidateCount: apiResult.acquired_candidate_count ?? null,
+      runId: apiResult.run_id ?? null,
+    };
+  }
+  if (intent === "promote_recall_candidate") {
+    return {
+      recallCandidateId:
+        String(apiResult.recall_candidate_id ?? payload.recallCandidateId ?? "").trim() || null,
+      status: String(apiResult.status ?? "").trim() || null,
+      registeredChannelId:
+        String(apiResult.registered_channel_id ?? payload.registeredChannelId ?? "").trim() ||
+        null,
+      sourceProfileId:
+        String(apiResult.source_profile_id ?? payload.sourceProfileId ?? "").trim() || null,
     };
   }
   if (intent === "delete_class") {
@@ -1145,6 +1190,68 @@ export const POST: APIRoute = async ({ request }) => {
         browserRequest,
         redirectTo,
         "Recall mission updated",
+        result
+      );
+    }
+
+    if (intent === "acquire_recall_mission") {
+      const recallMissionId = String(payload.recallMissionId ?? "").trim();
+      if (!recallMissionId) {
+        throw new Error("Recall mission ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/recall-missions/${recallMissionId}/acquire`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_recall_mission_acquired",
+        "discovery_recall_mission",
+        recallMissionId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Recall acquisition requested",
+        result
+      );
+    }
+
+    if (intent === "promote_recall_candidate") {
+      const recallCandidateId = String(payload.recallCandidateId ?? "").trim();
+      if (!recallCandidateId) {
+        throw new Error("Recall candidate ID is required.");
+      }
+      const result = await callDiscoveryApi<Record<string, unknown>>(
+        `/maintenance/discovery/recall-candidates/${recallCandidateId}/promote`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            enabled: true,
+            reviewedBy: session.userId,
+            tags: parseTextList(payload.tags),
+          }),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        "discovery_recall_candidate_promoted",
+        "discovery_recall_candidate",
+        recallCandidateId,
+        buildDiscoveryAuditPayload(intent, payload, result)
+      );
+      return respondDiscoverySuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Recall candidate promotion requested",
         result
       );
     }

@@ -852,6 +852,7 @@ async function main() {
         providerType: "website",
         channels: [
           {
+            providerType: "website",
             name: bulkUpdatedChannelName,
             fetchUrl: `http://127.0.0.1:${fixtureServer.port}/`,
             language: "en",
@@ -892,6 +893,7 @@ async function main() {
         confirmOverwrite: true,
         channels: [
           {
+            providerType: "website",
             name: bulkUpdatedChannelName,
             fetchUrl: `http://127.0.0.1:${fixtureServer.port}/`,
             language: "en",

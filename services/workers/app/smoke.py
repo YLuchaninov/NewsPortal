@@ -203,7 +203,7 @@ class _AdaptiveSmokeWebsiteProbeAdapter:
                 "freshness": "daily",
                 "date_patterns_found": True,
                 "category_urls": [self._website_url],
-                "browser_assisted_recommended": True,
+                "browser_assisted_recommended": False,
                 "challenge_kind": None,
                 "sample_articles": [
                     {
@@ -3368,7 +3368,15 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                                         if isinstance(discovery_hints, dict)
                                         else []
                                     )
-                                    if not isinstance(config_json, dict) or not bool(config_json.get("browserFallbackEnabled")):
+                                    if not isinstance(config_json, dict):
+                                        raise RuntimeError(
+                                            "Discovery enabled smoke failed: registered source channel config_json did not stay structured."
+                                        )
+                                    if bool(
+                                        state_row.get("browser_assisted_recommended")
+                                        if isinstance(state_row, dict)
+                                        else False
+                                    ) and not bool(config_json.get("browserFallbackEnabled")):
                                         raise RuntimeError(
                                             "Discovery enabled smoke failed: browser-assisted website recommendation did not materialize into the registered source channel config."
                                         )

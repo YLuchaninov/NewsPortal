@@ -254,6 +254,12 @@ export interface DiscoveryPolicyExplainability {
   reasonBucket: string | null;
   score: number | null;
   threshold: number | null;
+  fitScore: number | null;
+  qualityPrior: number | null;
+  finalReviewScore: number | null;
+  policyVerdict: string | null;
+  provider: string | null;
+  residuals: string[];
   preferredDomainMatch: boolean;
   negativeDomainMatch: boolean;
   positiveKeywordMatch: boolean;
@@ -297,11 +303,12 @@ export function resolveDiscoveryPolicyExplainability(
 ): DiscoveryPolicyExplainability {
   const candidate = asRecord(candidateLike);
   const applied = asRecord(candidate.applied_policy_json);
+  const evaluation = asRecord(candidate.evaluation_json);
+  const policyReview = asRecord(evaluation.policyReview);
   const policy = asRecord(
     lane === "graph" ? applied.graphPolicy : applied.recallPolicy
   );
   const benchmark = asRecord(applied.yieldBenchmark);
-  const evaluation = asRecord(candidate.evaluation_json);
   const textParts = [
     asString(candidate.title),
     asString(candidate.description),
@@ -321,41 +328,65 @@ export function resolveDiscoveryPolicyExplainability(
   const benchmarkTacticKeywords = asStringList(benchmark.tacticKeywords);
   const providerType = asString(candidate.provider_type) ?? "rss";
   const threshold =
-    lane === "graph"
+    asNumber(policyReview.threshold) ??
+    (lane === "graph"
       ? providerType === "website"
         ? asNumber(policy.minWebsiteReviewScore)
         : asNumber(policy.minRssReviewScore)
-      : asNumber(policy.minPromotionScore);
+      : asNumber(policy.minPromotionScore));
   const score =
-    lane === "graph"
+    asNumber(policyReview.reviewScore) ??
+    (lane === "graph"
       ? asNumber(candidate.review_score ?? evaluation.reviewScore ?? candidate.relevance_score)
       : asNumber(
           candidate.recall_score ??
             evaluation.recallScore ??
             candidate.source_quality_recall_score
-        );
+        ));
   const reasonBucket =
+    asString(policyReview.reasonBucket) ??
     asString(evaluation.normalizedReasonBucket) ??
     asString(evaluation.reasonBucket) ??
     asString(candidate.reason_bucket) ??
     (asString(candidate.rejection_reason) ? "rejected" : null);
+  const matchedSignals = asRecord(policyReview.matchedSignals);
 
   return {
     lane,
     reasonBucket,
     score,
     threshold,
+    fitScore: asNumber(policyReview.fitScore),
+    qualityPrior: asNumber(policyReview.qualityPrior),
+    finalReviewScore: asNumber(policyReview.finalReviewScore),
+    policyVerdict: asString(policyReview.policyVerdict),
+    provider: asString(policyReview.provider) ?? asString(evaluation.search_provider),
+    residuals: asStringList(policyReview.residuals),
     preferredDomainMatch:
-      !!domain && preferredDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`)),
+      Object.prototype.hasOwnProperty.call(matchedSignals, "preferredDomainMatch")
+        ? asBoolean(matchedSignals.preferredDomainMatch)
+        : (!!domain &&
+            preferredDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`))),
     negativeDomainMatch:
-      !!domain && blockedDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`)),
-    positiveKeywordMatch: includesKeyword(textParts, positiveKeywords),
-    negativeKeywordMatch: includesKeyword(textParts, negativeKeywords),
+      Object.prototype.hasOwnProperty.call(matchedSignals, "blockedDomainMatch")
+        ? asBoolean(matchedSignals.blockedDomainMatch)
+        : (!!domain &&
+            blockedDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`))),
+    positiveKeywordMatch:
+      Object.prototype.hasOwnProperty.call(matchedSignals, "positiveKeywordMatch")
+        ? asBoolean(matchedSignals.positiveKeywordMatch)
+        : includesKeyword(textParts, positiveKeywords),
+    negativeKeywordMatch:
+      Object.prototype.hasOwnProperty.call(matchedSignals, "negativeKeywordMatch")
+        ? asBoolean(matchedSignals.negativeKeywordMatch)
+        : includesKeyword(textParts, negativeKeywords),
     benchmarkLike:
-      (!!domain &&
-        benchmarkDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`))) ||
-      includesKeyword(textParts, benchmarkTitleKeywords) ||
-      includesKeyword(textParts, benchmarkTacticKeywords),
+      Object.prototype.hasOwnProperty.call(matchedSignals, "benchmarkLike")
+        ? asBoolean(matchedSignals.benchmarkLike)
+        : (!!domain &&
+            benchmarkDomains.some((entry) => domain === entry || domain.endsWith(`.${entry}`))) ||
+          includesKeyword(textParts, benchmarkTitleKeywords) ||
+          includesKeyword(textParts, benchmarkTacticKeywords),
     profileName:
       asString(candidate.profile_display_name) ??
       asString(applied.profileDisplayName) ??

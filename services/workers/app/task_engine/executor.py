@@ -53,7 +53,18 @@ class SequenceExecutor:
             )
         )
 
-        await self._repository.mark_run_running(run_id)
+        claimed = await self._repository.mark_run_running(run_id)
+        if not claimed:
+            existing_run = await self._repository.get_run(run_id)
+            if existing_run is None:
+                raise ValueError(f"Sequence run {run_id} was not found.")
+            return {
+                "runId": run_id,
+                "status": existing_run.status,
+                "stoppedEarly": False,
+                "skippedDuplicate": True,
+                "context": dict(existing_run.context_json),
+            }
 
         try:
             for task_index, task in enumerate(sequence.task_graph):

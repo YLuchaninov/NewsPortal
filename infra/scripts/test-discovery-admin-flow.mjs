@@ -193,7 +193,7 @@ async function sendRequest(url, { method = "GET", headers = {}, body = "", timeo
   });
 }
 
-async function postForm(url, payload, { cookie } = {}) {
+async function postForm(url, payload, { cookie, timeoutMs } = {}) {
   const target = new URL(url);
   const body = new URLSearchParams(
     Object.entries(payload).map(([key, value]) => [key, String(value)])
@@ -209,7 +209,7 @@ async function postForm(url, payload, { cookie } = {}) {
       "Content-Length": Buffer.byteLength(body).toString(),
     },
     body,
-    timeoutMs: 15000,
+    timeoutMs: timeoutMs ?? 15000,
   });
 
   return {
@@ -218,7 +218,7 @@ async function postForm(url, payload, { cookie } = {}) {
   };
 }
 
-async function postJson(url, payload, { cookie } = {}) {
+async function postJson(url, payload, { cookie, timeoutMs } = {}) {
   const target = new URL(url);
   const body = JSON.stringify(payload);
   const response = await sendRequest(url, {
@@ -232,7 +232,7 @@ async function postJson(url, payload, { cookie } = {}) {
       "Content-Length": Buffer.byteLength(body).toString(),
     },
     body,
-    timeoutMs: 15000,
+    timeoutMs: timeoutMs ?? 15000,
   });
   return parseJsonResponse(response.text, response);
 }
@@ -482,12 +482,14 @@ async function main() {
       description: "Admin acceptance profile",
       status: "active",
       graphProviderTypes: "rss,website",
+      graphSupportedWebsiteKinds: "editorial\nlisting",
       graphPreferredDomains: `discovery-${runId}.example.test`,
       graphPositiveKeywords: "discovery\ncandidate",
       graphPreferredTactics: "acceptance_review",
       graphMinRssReviewScore: "0.70",
       graphMinWebsiteReviewScore: "0.80",
       recallProviderTypes: "rss,website",
+      recallSupportedWebsiteKinds: "editorial\nprocurement_portal",
       recallPreferredDomains: `recall-${runId}.example.test`,
       recallPositiveKeywords: "recall\ncandidate",
       recallPreferredTactics: "acceptance_manual",
@@ -508,7 +510,9 @@ async function main() {
       description: "Delete-path profile",
       status: "draft",
       graphProviderTypes: "rss,website",
+      graphSupportedWebsiteKinds: "editorial",
       recallProviderTypes: "rss,website",
+      recallSupportedWebsiteKinds: "editorial",
     }, { cookie: adminCookie });
     deletableProfileId = String(deleteProfile.json?.profile_id ?? "");
     if (!deletableProfileId) {
@@ -878,9 +882,22 @@ async function main() {
 
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=profiles`,
-      [`Acceptance profile ${runId}`, "Save profile", "Diagnostics"],
+      [`Acceptance profile ${runId}`, "Save profile", "Graph website kinds", "Recall website kinds", "Diagnostics"],
       { cookie: adminCookie }
     );
+    const profilePayload = await fetchJson(
+      `${apiBaseUrl}/maintenance/discovery/profiles/${encodeURIComponent(profileId)}`,
+      { cookie: adminCookie }
+    );
+    if (String(profilePayload?.graph_policy_json?.supportedWebsiteKinds?.[0] ?? "") !== "editorial") {
+      throw new Error("Discovery profile did not preserve graph supportedWebsiteKinds.");
+    }
+    if (
+      String(profilePayload?.recall_policy_json?.supportedWebsiteKinds?.[1] ?? "") !==
+      "procurement_portal"
+    ) {
+      throw new Error("Discovery profile did not preserve recall supportedWebsiteKinds.");
+    }
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=missions`,
       [missionTitle, "Run mission", "Compile graph", `Acceptance profile ${runId}`],
@@ -1010,9 +1027,17 @@ async function main() {
       status: "active",
       maxCandidates: "5",
       profileId,
-    }, { cookie: adminCookie });
+    }, { cookie: adminCookie, timeoutMs: 60000 });
     if (String(updatedRecallMission.json?.status ?? "") !== "active") {
       throw new Error("Recall mission update did not persist the active status.");
+    }
+    const acquiredRecallMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "acquire_recall_mission",
+      redirectTo: `${discoveryPath}?tab=recall`,
+      recallMissionId,
+    }, { cookie: adminCookie, timeoutMs: 60000 });
+    if (typeof acquiredRecallMission.json?.discovery_recall_executed_count !== "number") {
+      throw new Error("Recall mission acquire did not return discovery_recall_executed_count.");
     }
     const recallSourceProfileId = queryPostgres(
       env,
@@ -1123,16 +1148,21 @@ async function main() {
     if (!recallCandidateId) {
       throw new Error("Recall candidate creation did not return a recall_candidate_id.");
     }
-    const promotedRecallCandidate = await postJson(
-      `${apiBaseUrl}/maintenance/discovery/recall-candidates/${encodeURIComponent(recallCandidateId)}/promote`,
-      {
-        enabled: true,
-        reviewedBy: adminEmail,
-        tags: ["acceptance"],
-      }
+    await assertHtmlContains(
+      `${adminBaseUrl}/discovery?tab=recall`,
+      ["Acquire now", "Promote"],
+      { cookie: adminCookie }
     );
+    const promotedRecallCandidate = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+      intent: "promote_recall_candidate",
+      redirectTo: `${discoveryPath}?tab=recall`,
+      recallCandidateId,
+      tags: "acceptance",
+    }, { cookie: adminCookie, timeoutMs: 60000 });
     const recallPromotionState =
-      String(promotedRecallCandidate?.status ?? "") === "duplicate" ? "linked_duplicate" : "promoted";
+      String(promotedRecallCandidate.json?.status ?? "") === "duplicate"
+        ? "linked_duplicate"
+        : "promoted";
     await assertHtmlContains(
       `${adminBaseUrl}/discovery?tab=recall`,
       [`Recall mission ${runId}`, `Recall candidate ${runId}`, recallPromotionState, `Acceptance profile ${runId}`],

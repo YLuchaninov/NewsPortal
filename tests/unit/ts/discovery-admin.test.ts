@@ -66,6 +66,8 @@ test("BFF discovery helpers normalize graph-first form inputs and registry inten
   assert.equal(resolveDiscoveryIntent({ intent: "delete_class" }), "delete_class");
   assert.equal(resolveDiscoveryIntent({ intent: "create_profile" }), "create_profile");
   assert.equal(resolveDiscoveryIntent({ intent: "update_recall_mission" }), "update_recall_mission");
+  assert.equal(resolveDiscoveryIntent({ intent: "acquire_recall_mission" }), "acquire_recall_mission");
+  assert.equal(resolveDiscoveryIntent({ intent: "promote_recall_candidate" }), "promote_recall_candidate");
   assert.equal(resolveDiscoveryIntent({ intent: "unexpected" }), "create_mission");
   assert.equal(normalizeAuditEntityId("acceptance_class"), null);
   assert.equal(
@@ -265,6 +267,7 @@ test("profile and recall mission builders normalize structured policy and linkag
         description: "Structured profile",
         status: "active",
         graphProviderTypes: "rss,website,api",
+        graphSupportedWebsiteKinds: "editorial\nlisting",
         graphPreferredDomains: "example.com\nnews.test",
         graphBlockedDomains: "spam.test",
         graphPositiveKeywords: "analysis\npolicy",
@@ -274,6 +277,7 @@ test("profile and recall mission builders normalize structured policy and linkag
         graphMinWebsiteReviewScore: "0.83",
         graphAdvancedPromptInstructions: "Prefer newsroom voice",
         recallProviderTypes: "website,rss,email_imap",
+        recallSupportedWebsiteKinds: "editorial\nprocurement_portal",
         recallPreferredDomains: "procurement.test",
         recallBlockedDomains: "agency.test",
         recallPositiveKeywords: "rfp",
@@ -294,6 +298,7 @@ test("profile and recall mission builders normalize structured policy and linkag
       status: "active",
       graphPolicyJson: {
         providerTypes: ["rss", "website"],
+        supportedWebsiteKinds: ["editorial", "listing"],
         preferredDomains: ["example.com", "news.test"],
         blockedDomains: ["spam.test"],
         positiveKeywords: ["analysis", "policy"],
@@ -305,6 +310,7 @@ test("profile and recall mission builders normalize structured policy and linkag
       },
       recallPolicyJson: {
         providerTypes: ["website", "rss"],
+        supportedWebsiteKinds: ["editorial", "procurement_portal"],
         preferredDomains: ["procurement.test"],
         blockedDomains: ["agency.test"],
         positiveKeywords: ["rfp"],
@@ -327,7 +333,9 @@ test("profile and recall mission builders normalize structured policy and linkag
       displayName: "Updated profile",
       status: "archived",
       graphProviderTypes: "rss,website",
+      graphSupportedWebsiteKinds: "editorial",
       recallProviderTypes: "rss",
+      recallSupportedWebsiteKinds: "listing",
     }),
     {
       displayName: "Updated profile",
@@ -335,9 +343,11 @@ test("profile and recall mission builders normalize structured policy and linkag
       status: "archived",
       graphPolicyJson: {
         providerTypes: ["rss", "website"],
+        supportedWebsiteKinds: ["editorial"],
       },
       recallPolicyJson: {
         providerTypes: ["rss"],
+        supportedWebsiteKinds: ["listing"],
       },
       yieldBenchmarkJson: undefined,
     }
@@ -451,6 +461,44 @@ test("buildDiscoveryAuditPayload captures per-intent adaptive details", () => {
       missionId: "mission-3",
       interestGraphStatus: "compiled",
       interestGraphVersion: 2,
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryAuditPayload(
+      "acquire_recall_mission",
+      { recallMissionId: "recall-9" },
+      {
+        recall_mission_id: "recall-9",
+        status: "active",
+        acquired_candidate_count: 4,
+        run_id: "run-1",
+      }
+    ),
+    {
+      recallMissionId: "recall-9",
+      status: "active",
+      acquiredCandidateCount: 4,
+      runId: "run-1",
+    }
+  );
+
+  assert.deepEqual(
+    buildDiscoveryAuditPayload(
+      "promote_recall_candidate",
+      { recallCandidateId: "candidate-2" },
+      {
+        recall_candidate_id: "candidate-2",
+        status: "promoted",
+        registered_channel_id: "channel-7",
+        source_profile_id: "profile-7",
+      }
+    ),
+    {
+      recallCandidateId: "candidate-2",
+      status: "promoted",
+      registeredChannelId: "channel-7",
+      sourceProfileId: "profile-7",
     }
   );
 });

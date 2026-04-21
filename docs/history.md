@@ -14,6 +14,118 @@
 
 ## Completed items
 
+### 2026-04-21 — STAGE-4-ADMIN-PROOF-DOC-CLOSEOUT and C-DISCOVERY-APPROVE-BOUNDARY-PRECISION-AND-PROVIDER-DECOUPLING — Closed compose-proof recovery with admin-owned discovery fixture truth and provider-decoupled approve-boundary runtime
+
+- Тип записи: stage + capability archive
+- Финальный статус: archived
+- Зачем понадобилось: after the provider-decoupled discovery runtime, layered review model, and admin explainability changes landed, the remaining truthful blocker was no longer feature code but compose-proof recovery. The local compose DB had schema drift (`discovery_candidates.updated_at` missing plus missing discovery-core tables on an already-marked migrated DB), the examples harness still depended on proof fixtures that were not self-healed through admin-owned truth, nested non-regression/yield runners could deadlock by piping verbose compose output, and website admin acceptance was still drifting from the shared row-level bulk `providerType` contract.
+- Что изменилось:
+  - repaired compose schema truth instead of adding runtime fallbacks:
+    - [`database/migrations/0041_discovery_candidates_updated_at_repair.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0041_discovery_candidates_updated_at_repair.sql) now adds/backfills `discovery_candidates.updated_at` idempotently;
+    - [`database/migrations/0042_discovery_core_schema_repair_replay.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0042_discovery_core_schema_repair_replay.sql) now replays missing discovery-core tables/constraints/indexes on already-marked drifted compose DBs;
+    - [`services/relay/src/cli/test-migrations.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/relay/src/cli/test-migrations.ts) now treats `discovery_candidates.updated_at` as required discovery-core schema truth.
+  - aligned runtime/admin mutation paths to the repaired schema:
+    - [`services/workers/app/discovery_orchestrator.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/discovery_orchestrator.py) now bumps `updated_at` across candidate upsert, profile-link, review-update, and registration-update paths;
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py) now bumps `updated_at` on admin-side candidate review updates too.
+  - moved proof prerequisites into admin-owned fixture seeding rather than runtime-owned case logic:
+    - [`infra/scripts/seed-live-discovery-example-fixtures.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/seed-live-discovery-example-fixtures.mjs) now exports reusable fixture seeding without closing the caller-owned pool;
+    - [`infra/scripts/test-live-discovery-examples.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-examples.mjs) now self-seeds Example B/C proof fixtures through the same admin-owned truth surfaces the operator uses, and supports parent-owned nested mode via `DISCOVERY_EXAMPLES_SKIP_PREFLIGHT`, `DISCOVERY_EXAMPLES_SKIP_STACK_RESET`, and an explicit artifact-pointer file.
+  - fixed nested proof orchestration instead of treating it as product regression:
+    - [`infra/scripts/test-discovery-pipeline-nonregression.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-pipeline-nonregression.mjs) now runs the examples harness in parent-owned mode and reads artifact paths from a pointer file instead of buffering compose logs through a pipe;
+    - [`infra/scripts/test-live-discovery-yield-proof.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-live-discovery-yield-proof.mjs) now does the same for all three bounded runs and preserves early-stop behavior for real runtime/precondition failures;
+    - [`infra/scripts/lib/discovery-live-yield-policy.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/discovery-live-yield-policy.mjs) now treats nested preflight `skipped` as a valid parent-owned proof state instead of collapsing it into runtime failure.
+  - kept website admin acceptance aligned with the shared import contract instead of widening the BFF:
+    - [`infra/scripts/test-website-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-website-admin-flow.mjs) now sends `providerType: "website"` inside each website row for bulk preflight/apply, matching the shipped row-level provider contract.
+  - synced proof/document truth:
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md)
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+    - [`docs/history.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/history.md)
+- Что было доказано:
+  - compose/schema/runtime proof:
+    - `pnpm test:migrations:smoke`
+    - `pnpm test:discovery-enabled:compose`
+    - `pnpm test:discovery:admin:compose`
+    - `pnpm test:discovery:examples:compose`
+      - authoritative successful artifact:
+        - `/tmp/newsportal-live-discovery-examples-34290302.json|md`
+      - later parent-owned nested proof artifact:
+        - `/tmp/newsportal-live-discovery-examples-46e6e464.json|md`
+    - `pnpm test:discovery:nonregression:compose`
+      - authoritative artifact:
+        - `/tmp/newsportal-discovery-nonregression-bcc2ba98.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `nonRegressionVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+    - `pnpm test:discovery:yield:compose`
+      - authoritative artifact:
+        - `/tmp/newsportal-live-discovery-yield-proof-5c20aaa9.json|md`
+      - result:
+        - `runtimeVerdict = pass`
+        - `yieldVerdict = pass`
+        - `finalVerdict = pass`
+        - Example B `3/3`
+        - Example C `3/3`
+    - `pnpm test:website:compose`
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:hard-sites:compose`
+    - `git diff --check --`
+- Что stage и capability доказали:
+  - discovery runtime now remains generic and admin-configured even while proof still uses Example B/C datasets, because those datasets are materialized only through proof-owned fixture seeding on top of admin-owned entities, not through hardcoded runtime case/domain logic;
+  - provider-decoupled approve/promote-boundary logic, runtime-owned `policyReview`, profile-threshold ownership, and manual-review browser/challenge routing all survive the full compose contour, not just unit/targeted proof;
+  - the recovery blocker was resolved at the right layers: schema drift was fixed in migrations, proof fixture prerequisites moved into admin-owned bootstrap, nested proof orchestration was made honest and non-blocking, and website admin acceptance stayed within the shipped row-level provider contract.
+
+### 2026-04-20 — STAGE-1-ADMIN-DISCOVERY-OPERATOR-GAPS — Closed the remaining `/admin/discovery` operator gaps for profile website-kind tuning and recall acquire/promote
+
+- Тип записи: stage archive
+- Финальный статус: archived
+- Зачем понадобилось: during a fresh manual Example C admin replay on a new server, the shipped admin surface still had two real operator gaps: reusable profile forms could not persist `supportedWebsiteKinds`, and the recall tab remained mostly a read surface, so bounded recall acquisition and promotion still required maintenance-only fallback. That meant the proof-backed Example B/C settings from `DISCOVERY_MODE_TESTING.md` could not be replayed end to end through the admin UI alone.
+- Что изменилось:
+  - admin BFF now owns the missing operator intents in [`apps/admin/src/pages/bff/admin/discovery.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/discovery.ts):
+    - profile create/update payload builders now parse and persist `graphSupportedWebsiteKinds` / `recallSupportedWebsiteKinds`;
+    - new intents `acquire_recall_mission` and `promote_recall_candidate` now call the existing maintenance-backed discovery routes through the same-origin admin BFF and emit audit-log payloads.
+  - `/admin/discovery` now exposes the missing controls in [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro):
+    - create/edit profile forms now include structured `supportedWebsiteKinds` fields for graph and recall policies;
+    - profile diagnostics now surface configured website kinds alongside preferred domains and benchmark hints;
+    - the recall tab now exposes `Acquire now` on recall missions and `Promote` on eligible recall candidates, while keeping the same structured explainability and bounded operator semantics.
+  - admin acceptance proof in [`infra/scripts/test-discovery-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-discovery-admin-flow.mjs) now proves the new operator path:
+    - creates profiles with `supportedWebsiteKinds`;
+    - verifies the persisted policy through the discovery profile API;
+    - requests recall acquisition through the admin BFF;
+    - promotes a seeded recall candidate through the admin BFF instead of direct maintenance-only fallback.
+  - TS regression coverage in [`tests/unit/ts/discovery-admin.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/discovery-admin.test.ts) now covers the new structured profile fields and the new recall acquire/promote audit payloads.
+  - synced durable discovery truth and handbook language:
+    - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+    - [`docs/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - [`DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md)
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+    - [`docs/history.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/history.md)
+- Что было доказано:
+  - static and unit proof:
+    - `node --check apps/admin/src/pages/bff/admin/discovery.ts`
+    - `node --check infra/scripts/test-discovery-admin-flow.mjs`
+    - `node --import tsx --test tests/unit/ts/discovery-admin.test.ts`
+    - `pnpm typecheck`
+  - operator/runtime proof:
+    - `pnpm test:discovery:admin:compose`
+      - result: `discovery-admin-ok`
+      - proof now includes persisted `supportedWebsiteKinds`, admin-surfaced recall acquire, and admin-surfaced recall promotion
+      - representative artifact payload from the passing run:
+        - `missionId = 32462576-d338-4eba-a187-707d1da2ef7b`
+        - `recallMissionId = 56288668-a639-4a18-b5bf-72c3ba56cf71`
+        - `recallCandidateId = 03dcf266-ba44-4a6b-a9f6-7f474b07c23b`
+        - `recallPromotionState = promoted`
+        - `profileId = 265e6040-c7f0-4999-b770-6eb3d4e465d4`
+  - consistency proof:
+    - `git diff --check -- docs/work.md docs/history.md docs/blueprint.md docs/contracts/discovery-agent.md docs/verification.md DISCOVERY_MODE_TESTING.md apps/admin/src/pages/discovery.astro apps/admin/src/pages/bff/admin/discovery.ts infra/scripts/test-discovery-admin-flow.mjs tests/unit/ts/discovery-admin.test.ts`
+- Что stage доказал:
+  - shipped `/admin/discovery` is now truthful enough for end-to-end operator replay of profile-backed Example B/C discovery settings without falling back to raw maintenance calls just to acquire/promote recall candidates;
+  - structured profile policy parity between runtime proof profiles and admin profile forms now includes `supportedWebsiteKinds`;
+  - the admin/operator acceptance lane now proves the same operator path the handbook describes, instead of documenting a partially missing UI.
+
 ### 2026-04-20 — STAGE-4D-GENERALIZED-PROFILE-BACKED-RECALL-VALIDITY-AND-YIELD-RETUNE and C-DISCOVERY-GOOD-YIELD — Closed the DDGS-first good-yield capability with profile-backed Example B/C proof, non-regression still green
 
 - Тип записи: stage + capability archive

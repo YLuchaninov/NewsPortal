@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
 import { OUTSOURCE_EXAMPLE_C_BUNDLE } from "./lib/outsource-example-c.bundle.mjs";
@@ -486,82 +489,102 @@ async function queueReindex(pool, insertOutboxEvent) {
   return reindexJobId;
 }
 
+export async function seedLiveDiscoveryExampleFixtures(
+  log = console.log,
+  options = {},
+) {
+  const runtimeDependencies = await loadRuntimeDependencies();
+  const pool = options.pool ?? runtimeDependencies.getPool();
+  log("[seed-live-discovery] upserting Example B interest templates");
+  await upsertInterestTemplates(pool, runtimeDependencies, EXAMPLE_B_INTEREST_TEMPLATES);
+  log("[seed-live-discovery] upserting Example C interest templates");
+  await upsertInterestTemplates(pool, runtimeDependencies, OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates);
+
+  log("[seed-live-discovery] upserting Example B/C RSS channels");
+  const normalizedChannels = runtimeDependencies.parseBulkRssAdminChannelInputs([
+    ...EXAMPLE_B_CHANNELS,
+    ...EXAMPLE_C_CHANNELS,
+  ]);
+  await runtimeDependencies.upsertRssChannels(pool, normalizedChannels);
+
+  log("[seed-live-discovery] queueing interest_centroids rebuild");
+  const reindexJobId = await queueReindex(pool, runtimeDependencies.insertOutboxEvent);
+
+  const expectedCriteria = EXAMPLE_B_INTEREST_TEMPLATES.length + OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates.length;
+  await waitForCondition("criteria compile completion", async () => {
+    const result = await pool.query(
+      `
+        select
+          count(*)::int as total,
+          count(*) filter (where compile_status = 'compiled')::int as compiled
+        from criteria_compiled
+      `
+    );
+    const row = result.rows[0] ?? {};
+    const total = Number(row.total ?? 0);
+    const compiled = Number(row.compiled ?? 0);
+    return {
+      ok: total >= expectedCriteria && compiled >= expectedCriteria,
+      message: `criteria_compiled total=${total} compiled=${compiled}`,
+    };
+  });
+
+  await waitForCondition("interest_centroids rebuild", async () => {
+    const result = await pool.query(
+      `
+        select status, error_text
+        from reindex_jobs
+        where reindex_job_id = $1
+      `,
+      [reindexJobId]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return { ok: false, message: "reindex job missing" };
+    }
+    if (String(row.status ?? "") === "failed") {
+      throw new Error(`interest_centroids rebuild failed: ${String(row.error_text ?? "unknown error")}`);
+    }
+    return {
+      ok: String(row.status ?? "") === "completed",
+      message: `status=${String(row.status ?? "unknown")}`,
+    };
+  });
+
+  const counts = await pool.query(
+    `
+      select
+        (select count(*)::int from interest_templates) as interest_templates,
+        (select count(*)::int from criteria) as criteria,
+        (select count(*)::int from selection_profiles) as selection_profiles,
+        (select count(*)::int from source_channels where provider_type = 'rss') as rss_channels
+    `
+  );
+  return {
+    status: "ok",
+    counts: counts.rows[0] ?? null,
+    reindexJobId,
+  };
+}
+
 async function main() {
   const runtimeDependencies = await loadRuntimeDependencies();
   const pool = runtimeDependencies.getPool();
   try {
-    console.log("[seed-live-discovery] upserting Example B interest templates");
-    await upsertInterestTemplates(pool, runtimeDependencies, EXAMPLE_B_INTEREST_TEMPLATES);
-    console.log("[seed-live-discovery] upserting Example C interest templates");
-    await upsertInterestTemplates(pool, runtimeDependencies, OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates);
-
-    console.log("[seed-live-discovery] upserting Example B/C RSS channels");
-    const normalizedChannels = runtimeDependencies.parseBulkRssAdminChannelInputs([
-      ...EXAMPLE_B_CHANNELS,
-      ...EXAMPLE_C_CHANNELS,
-    ]);
-    await runtimeDependencies.upsertRssChannels(pool, normalizedChannels);
-
-    console.log("[seed-live-discovery] queueing interest_centroids rebuild");
-    const reindexJobId = await queueReindex(pool, runtimeDependencies.insertOutboxEvent);
-
-    const expectedCriteria = EXAMPLE_B_INTEREST_TEMPLATES.length + OUTSOURCE_EXAMPLE_C_BUNDLE.interest_templates.length;
-    await waitForCondition("criteria compile completion", async () => {
-      const result = await pool.query(
-        `
-          select
-            count(*)::int as total,
-            count(*) filter (where compile_status = 'compiled')::int as compiled
-          from criteria_compiled
-        `
-      );
-      const row = result.rows[0] ?? {};
-      const total = Number(row.total ?? 0);
-      const compiled = Number(row.compiled ?? 0);
-      return {
-        ok: total >= expectedCriteria && compiled >= expectedCriteria,
-        message: `criteria_compiled total=${total} compiled=${compiled}`,
-      };
-    });
-
-    await waitForCondition("interest_centroids rebuild", async () => {
-      const result = await pool.query(
-        `
-          select status, error_text
-          from reindex_jobs
-          where reindex_job_id = $1
-        `,
-        [reindexJobId]
-      );
-      const row = result.rows[0];
-      if (!row) {
-        return { ok: false, message: "reindex job missing" };
-      }
-      if (String(row.status ?? "") === "failed") {
-        throw new Error(`interest_centroids rebuild failed: ${String(row.error_text ?? "unknown error")}`);
-      }
-      return {
-        ok: String(row.status ?? "") === "completed",
-        message: `status=${String(row.status ?? "unknown")}`,
-      };
-    });
-
-    const counts = await pool.query(
-      `
-        select
-          (select count(*)::int from interest_templates) as interest_templates,
-          (select count(*)::int from criteria) as criteria,
-          (select count(*)::int from selection_profiles) as selection_profiles,
-          (select count(*)::int from source_channels where provider_type = 'rss') as rss_channels
-      `
-    );
-    console.log(JSON.stringify({ status: "ok", counts: counts.rows[0] ?? null }, null, 2));
+    const result = await seedLiveDiscoveryExampleFixtures(console.log, { pool });
+    console.log(JSON.stringify(result, null, 2));
   } finally {
     await pool.end();
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack : String(error));
-  process.exitCode = 1;
-});
+const isEntrypoint =
+  process.argv[1] != null
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isEntrypoint) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack : String(error));
+    process.exitCode = 1;
+  });
+}

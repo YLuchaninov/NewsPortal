@@ -552,6 +552,10 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   <span class="text-xs font-medium">Provider types</span>
                   <input name="graphProviderTypes" value="rss,website" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                 </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Supported website kinds</span>
+                  <textarea name="graphSupportedWebsiteKinds" rows="2" placeholder={"editorial\nprocurement_portal\nlisting"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
                 <div class="grid gap-3 sm:grid-cols-2">
                   <label class="grid gap-1.5">
                     <span class="text-xs font-medium">Min RSS review score</span>
@@ -598,6 +602,10 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 <label class="grid gap-1.5">
                   <span class="text-xs font-medium">Provider types</span>
                   <input name="recallProviderTypes" value="rss,website" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Supported website kinds</span>
+                  <textarea name="recallSupportedWebsiteKinds" rows="2" placeholder={"editorial\nprocurement_portal\nlisting"} class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
                 </label>
                 <label class="grid gap-1.5">
                   <span class="text-xs font-medium">Min promotion score</span>
@@ -776,8 +784,16 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                           <input name="graphProviderTypes" value={asStringList(asRecord(profile.graph_policy_json).providerTypes).join(",")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                         </label>
                         <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph website kinds</span>
+                          <textarea name="graphSupportedWebsiteKinds" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).supportedWebsiteKinds).join("\n")}</textarea>
+                        </label>
+                        <label class="grid gap-1">
                           <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall providers</span>
                           <input name="recallProviderTypes" value={asStringList(asRecord(profile.recall_policy_json).providerTypes).join(",")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall website kinds</span>
+                          <textarea name="recallSupportedWebsiteKinds" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).supportedWebsiteKinds).join("\n")}</textarea>
                         </label>
                         <label class="grid gap-1">
                           <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph min RSS</span>
@@ -810,7 +826,9 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       </div>
                       <div class="rounded-xl border border-dashed border-border px-3 py-3 text-xs">
                         <p>Graph preferred domains: {asStringList(asRecord(profile.graph_policy_json).preferredDomains).join(", ") || "—"}</p>
+                        <p class="mt-1">Graph website kinds: {asStringList(asRecord(profile.graph_policy_json).supportedWebsiteKinds).join(", ") || "—"}</p>
                         <p class="mt-1">Recall preferred domains: {asStringList(asRecord(profile.recall_policy_json).preferredDomains).join(", ") || "—"}</p>
+                        <p class="mt-1">Recall website kinds: {asStringList(asRecord(profile.recall_policy_json).supportedWebsiteKinds).join(", ") || "—"}</p>
                         <p class="mt-1">Benchmark domains: {asStringList(asRecord(profile.yield_benchmark_json).domains).join(", ") || "—"}</p>
                       </div>
                     </div>
@@ -1085,7 +1103,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
         <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 class="text-base font-semibold">Independent recall missions</h2>
           <p class="mt-1 text-sm text-muted-foreground">
-            These missions seed neutral acquisition without requiring `interest_graph`. Acquire and promote remain bounded maintenance API flows; this screen is the operator read surface for that backlog.
+            These missions seed neutral acquisition without requiring `interest_graph`. This admin surface now owns the bounded operator loop for recall mission acquisition and candidate promotion while keeping the same maintenance-backed runtime truth.
           </p>
           <form method="post" action={bffPath} class="mt-4 grid gap-3 rounded-2xl border border-border bg-background p-4">
             <input type="hidden" name="intent" value="create_recall_mission" />
@@ -1175,7 +1193,8 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   Profile: {String(mission.profile_display_name ?? mission.profile_key ?? "—")} · Applied version: {String(mission.applied_profile_version ?? "—")}
                 </p>
                 <p class="mt-1 text-xs text-muted-foreground">Updated {fmtDate(mission.updated_at)}</p>
-                <form method="post" action={bffPath} class="mt-3 grid gap-3 md:grid-cols-4">
+                <div class="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+                <form method="post" action={bffPath} class="grid gap-3 md:grid-cols-4">
                   <input type="hidden" name="intent" value="update_recall_mission" />
                   <input type="hidden" name="recallMissionId" value={String(mission.recall_mission_id ?? "")} />
                   <input type="hidden" name="redirectTo" value={currentPath} />
@@ -1212,6 +1231,16 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                     </button>
                   </div>
                 </form>
+                <form method="post" action={bffPath} class="grid gap-1">
+                  <input type="hidden" name="intent" value="acquire_recall_mission" />
+                  <input type="hidden" name="recallMissionId" value={String(mission.recall_mission_id ?? "")} />
+                  <input type="hidden" name="redirectTo" value={currentPath} />
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Run acquisition</span>
+                  <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                    Acquire now
+                  </button>
+                </form>
+                </div>
               </div>
             ))}
           </div>
@@ -1271,6 +1300,11 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <p class="text-xs text-muted-foreground">
                         Profile: {explainability.profileName ?? "—"} · Version: {String(explainability.profileVersion ?? "—")} · Reason bucket: {explainability.reasonBucket ?? "—"}
                       </p>
+                      {recallState.registeredChannelId && (
+                        <p class="text-xs text-muted-foreground">
+                          Registered channel: {recallState.registeredChannelId}
+                        </p>
+                      )}
                     </div>
                     <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
                       <div>Generic recall {quality.recallScore == null ? "—" : fmtPercent(quality.recallScore)}</div>
@@ -1279,10 +1313,24 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <div class="mt-1">Channel link {recallState.channelId ?? "not linked yet"}</div>
                       <div class="mt-2 border-t border-border pt-2">
                         <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
+                        <div class="mt-1">Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
+                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
                         <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>
+                        <div class="mt-1">Residuals {explainability.residuals.join(", ") || "—"}</div>
                       </div>
+                      {(recallState.promotionState === "pending" || recallState.promotionState === "reviewed") && (
+                        <form method="post" action={bffPath} class="mt-3 grid gap-1">
+                          <input type="hidden" name="intent" value="promote_recall_candidate" />
+                          <input type="hidden" name="recallCandidateId" value={String(candidate.recall_candidate_id ?? "")} />
+                          <input type="hidden" name="redirectTo" value={currentPath} />
+                          <input type="hidden" name="tags" value="admin_discovery_promote" />
+                          <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                            Promote
+                          </button>
+                        </form>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1519,9 +1567,12 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                     <div class="grid gap-2 xl:w-[26rem]">
                       <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
                         <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
+                        <div class="mt-1">Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
+                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
                         <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
                         <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>
+                        <div class="mt-1">Residuals {explainability.residuals.join(", ") || "—"}</div>
                       </div>
                       {String(candidate.status ?? "pending") === "pending" ? (
                         <div class="grid gap-2 sm:grid-cols-2">

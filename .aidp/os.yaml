@@ -490,6 +490,8 @@ runtime_facts:
     local_adapter_smoke_command: pnpm test:feed-ingress-adapters:smoke
   sequence_runtime:
     worker_sequence_runner_concurrency_env: WORKER_SEQUENCE_RUNNER_CONCURRENCY
+    worker_sequence_runner_lock_duration_env: WORKER_SEQUENCE_RUNNER_LOCK_DURATION_MS
+    worker_sequence_runner_stalled_interval_env: WORKER_SEQUENCE_RUNNER_STALLED_INTERVAL_MS
     python_fallback_default: 1
     local_compose_default: 4
     admin_operator_surface:

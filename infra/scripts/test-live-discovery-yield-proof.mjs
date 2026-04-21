@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -24,24 +25,28 @@ function parseJsonArtifactPath(output) {
   return last ? last[1].trim() : "";
 }
 
-function runSingleHarness(iteration) {
+function runSingleHarness(iteration, runId) {
   log(`Starting live discovery harness run ${iteration}.`);
-  const result = spawnSync("pnpm", ["test:discovery:examples:compose"], {
+  const pointerPath = `/tmp/newsportal-live-discovery-yield-run-${runId}-${iteration}.json`;
+  const result = spawnSync("node", ["infra/scripts/test-live-discovery-examples.mjs"], {
     cwd: repoRoot,
     encoding: "utf8",
     env: {
       ...process.env,
       DISCOVERY_ENABLED: "1",
+      DISCOVERY_EXAMPLES_SKIP_PREFLIGHT: "1",
+      DISCOVERY_EXAMPLES_SKIP_STACK_RESET: "1",
+      DISCOVERY_EXAMPLES_ARTIFACT_POINTER_FILE: pointerPath,
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "inherit", "inherit"],
   });
-  if (result.stdout) {
-    process.stdout.write(result.stdout);
+  let jsonPath = "";
+  try {
+    const pointer = JSON.parse(readFileSync(pointerPath, "utf8"));
+    jsonPath = String(pointer?.jsonPath ?? "").trim();
+  } catch {
+    jsonPath = parseJsonArtifactPath(`${result.stdout ?? ""}\n${result.stderr ?? ""}`);
   }
-  if (result.stderr) {
-    process.stderr.write(result.stderr);
-  }
-  const jsonPath = parseJsonArtifactPath(`${result.stdout ?? ""}\n${result.stderr ?? ""}`);
   return {
     status: result.status ?? 1,
     jsonPath,
@@ -49,6 +54,8 @@ function runSingleHarness(iteration) {
 }
 
 function formatProofMarkdown(report) {
+  const perCase = Array.isArray(report.multiRun?.perCase) ? report.multiRun.perCase : [];
+  const aggregateRootCauses = report.multiRun?.aggregateRootCauses ?? {};
   return [
     "# Live Discovery Yield Proof",
     "",
@@ -67,20 +74,22 @@ function formatProofMarkdown(report) {
     "",
     "## Per-case yield counts",
     "",
-    ...report.multiRun.perCase.map(
+    ...(perCase.length > 0
+      ? perCase.map(
       (item) => {
         const rootCauseSummary = Object.entries(item.rootCauseCounts ?? {})
           .map(([key, count]) => `${key}:${count}`)
           .join(", ");
-        return `- ${item.label}: ${item.passingRuns}/${item.totalRuns} passing runs (required ${report.multiRun.requiredPassingRuns}); root_causes=[${rootCauseSummary || "none"}]`;
+        return `- ${item.label}: ${item.passingRuns}/${item.totalRuns} passing runs (required ${report.multiRun?.requiredPassingRuns ?? "n/a"}); root_causes=[${rootCauseSummary || "none"}]`;
       }
-    ),
+    )
+      : ["- Multi-run summary unavailable because the proof stopped early."]),
     "",
     "## Aggregate Root Causes",
     "",
-    ...Object.entries(report.multiRun.aggregateRootCauses ?? {}).map(
-      ([key, count]) => `- ${key}: ${count}`
-    ),
+    ...(Object.keys(aggregateRootCauses).length > 0
+      ? Object.entries(aggregateRootCauses).map(([key, count]) => `- ${key}: ${count}`)
+      : ["- None recorded."]),
   ].join("\n");
 }
 
@@ -107,7 +116,7 @@ async function main() {
 
   try {
     for (let index = 0; index < runCount; index += 1) {
-      const execution = runSingleHarness(index + 1);
+      const execution = runSingleHarness(index + 1, runId);
       if (!execution.jsonPath) {
         throw new Error(`Run ${index + 1} did not report a JSON artifact path.`);
       }
@@ -124,6 +133,13 @@ async function main() {
           : false,
         caseRuns: parsed.caseRuns ?? [],
       });
+      if (parsed.finalVerdict === "precondition_failed" || parsed.runtimeVerdict === "fail") {
+        report.runtimeVerdict = parsed.runtimeVerdict ?? "fail";
+        report.yieldVerdict = parsed.yieldVerdict ?? "fail";
+        report.finalVerdict = parsed.finalVerdict ?? "fail";
+        report.error = `Run ${index + 1} ended early with ${String(parsed.finalVerdict ?? "fail")}.`;
+        return;
+      }
     }
 
     report.multiRun = determineMultiRunYieldProof(

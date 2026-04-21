@@ -67,9 +67,12 @@ function runCommand(command, args, options = {}) {
         process.stderr.write(result.stderr);
       }
     }
-    throw new Error(
+    const error = new Error(
       `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
     );
+    error.stdout = result.stdout ?? "";
+    error.stderr = result.stderr ?? "";
+    throw error;
   }
   return {
     status: result.status ?? 0,
@@ -567,6 +570,7 @@ async function main() {
   const startedAt = new Date().toISOString();
   const jsonPath = `/tmp/newsportal-discovery-nonregression-${runId}.json`;
   const mdPath = `/tmp/newsportal-discovery-nonregression-${runId}.md`;
+  const harnessPointerPath = `/tmp/newsportal-live-discovery-examples-pointer-${runId}.json`;
   const env = await readEnvFile(".env.dev");
   applyEnv(env);
   forceDiscoveryComposeEnv();
@@ -614,11 +618,16 @@ async function main() {
 
     log("Running live discovery harness for non-regression proof.");
     const harness = runCommand("node", ["infra/scripts/test-live-discovery-examples.mjs"], {
-      capture: true,
-      env: { DISCOVERY_ENABLED: "1" },
+      env: {
+        DISCOVERY_ENABLED: "1",
+        DISCOVERY_EXAMPLES_SKIP_PREFLIGHT: "1",
+        DISCOVERY_EXAMPLES_SKIP_STACK_RESET: "1",
+        DISCOVERY_EXAMPLES_ARTIFACT_POINTER_FILE: harnessPointerPath,
+      },
       allowFailure: true,
     });
-    const artifactPath = parseJsonArtifactPath(`${harness.stdout}\n${harness.stderr}`);
+    const harnessPointer = JSON.parse(await readFile(harnessPointerPath, "utf8"));
+    const artifactPath = String(harnessPointer?.jsonPath ?? "").trim();
     if (!artifactPath) {
       throw new Error("Live discovery harness did not report a JSON artifact path.");
     }

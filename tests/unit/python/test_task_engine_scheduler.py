@@ -101,8 +101,12 @@ class InMemoryRunRepository:
     async def get_run(self, run_id: str) -> SequenceRunRecord | None:
         return self.runs.get(run_id)
 
-    async def mark_run_running(self, run_id: str) -> None:
-        self.runs[run_id] = replace(self.runs[run_id], status="running", error_text=None)
+    async def mark_run_running(self, run_id: str) -> bool:
+        run = self.runs[run_id]
+        if run.status != "pending":
+            return False
+        self.runs[run_id] = replace(run, status="running", error_text=None)
+        return True
 
     async def mark_run_completed(self, run_id: str, *, context_json: dict[str, Any]) -> None:
         self.runs[run_id] = replace(

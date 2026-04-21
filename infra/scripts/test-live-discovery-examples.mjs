@@ -19,6 +19,7 @@ import {
   buildProfileBackedGraphMissionPayload,
   buildProfileBackedRecallMissionPayload,
 } from "./lib/discovery-live-proof-profiles.mjs";
+import { seedLiveDiscoveryExampleFixtures } from "./seed-live-discovery-example-fixtures.mjs";
 import {
   classifyGraphCandidate,
   classifyRecallCandidate,
@@ -61,6 +62,14 @@ function log(message) {
   console.log(`[live-discovery-examples] ${message}`);
 }
 
+function preflightStatusSucceeded(status) {
+  return status === "passed" || status === "skipped";
+}
+
+function shouldSkipStackReset() {
+  return String(process.env.DISCOVERY_EXAMPLES_SKIP_STACK_RESET ?? "").trim() === "1";
+}
+
 function runCommand(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
@@ -77,9 +86,12 @@ function runCommand(command, args, options = {}) {
         process.stderr.write(result.stderr);
       }
     }
-    throw new Error(
+    const error = new Error(
       `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
     );
+    error.stdout = result.stdout ?? "";
+    error.stderr = result.stderr ?? "";
+    throw error;
   }
 
   return {
@@ -409,6 +421,23 @@ function validateDdgsOnlyEnv(env) {
 }
 
 async function runPreflightCommands() {
+  if (String(process.env.DISCOVERY_EXAMPLES_SKIP_PREFLIGHT ?? "").trim() === "1") {
+    log("Skipping nested discovery preflight proof commands because the parent harness owns them.");
+    return [
+      {
+        name: "pnpm test:discovery-enabled:compose",
+        status: "skipped",
+        startedAt: new Date().toISOString(),
+        reason: "Skipped by parent proof harness.",
+      },
+      {
+        name: "pnpm test:discovery:admin:compose",
+        status: "skipped",
+        startedAt: new Date().toISOString(),
+        reason: "Skipped by parent proof harness.",
+      },
+    ];
+  }
   log("Running discovery preflight proof commands.");
   const commands = [
     {
@@ -438,6 +467,8 @@ async function runPreflightCommands() {
         status: "failed",
         startedAt,
         error: error instanceof Error ? error.message : String(error),
+        stdout: error && typeof error === "object" && "stdout" in error ? String(error.stdout ?? "").trim() : "",
+        stderr: error && typeof error === "object" && "stderr" in error ? String(error.stderr ?? "").trim() : "",
       });
       break;
     }
@@ -1727,11 +1758,16 @@ function formatEvidenceMarkdown(report) {
       report.preconditions.every((item) => item.status === "passed") ? "`passed`" : "`failed`"
     }`,
     `- Proof commands: ${
-      report.preflight.every((item) => item.status === "passed") ? "`passed`" : "`failed`"
+      report.preflight.every((item) => preflightStatusSucceeded(item.status)) ? "`passed`" : "`failed`"
     }`,
     `- Calibration: \`${report.calibrationPassed ? "passed" : "failed"}\``,
     `- Runtime case packs: ${report.enabledCasePacks.runtime.map((item) => `\`${item.shortLabel}\``).join(", ") || "none"}`,
     `- Validation case packs: ${report.enabledCasePacks.validation.map((item) => `\`${item.shortLabel}\``).join(", ") || "none"}`,
+    ``,
+    ...report.preflight.map((item) => {
+      const suffix = item.reason ? ` (${item.reason})` : "";
+      return `- ${item.name}: \`${item.status}\`${suffix}`;
+    }),
     ``,
     `## Calibration`,
     ``,
@@ -1783,6 +1819,7 @@ async function main() {
     calibration: [],
     calibrationPassed: false,
     discoverySurfaces: null,
+    fixtureSeed: null,
     archivedDisposableClasses: [],
     caseRuns: [],
     aggregateYieldDiagnostics: null,
@@ -1800,10 +1837,18 @@ async function main() {
       throw new Error(`DDGS-only guard failed: ${report.ddgsOnlyGuard.failures.join(" ")}`);
     }
 
-    await ensureComposeStack();
+    if (shouldSkipStackReset()) {
+      log("Skipping compose stack reset because the parent harness already owns the live stack.");
+    } else {
+      await ensureComposeStack();
+    }
     report.preflight = await runPreflightCommands();
     report.discoverySurfaces = await collectDiscoverySurfaceSnapshots();
     report.archivedDisposableClasses = await archiveDisposableDiscoveryClasses();
+    log("Seeding repo-owned discovery proof fixtures through admin-managed truth.");
+    report.fixtureSeed = await seedLiveDiscoveryExampleFixtures((message) => {
+      log(message.replace(/^\[seed-live-discovery\]\s*/, ""));
+    });
 
     const { getPool } = await loadRuntimeDependencies();
     pool = getPool();
@@ -1823,7 +1868,7 @@ async function main() {
       report.finalVerdict = "precondition_failed";
       return;
     }
-    if (report.preflight.some((item) => item.status !== "passed")) {
+    if (report.preflight.some((item) => !preflightStatusSucceeded(item.status))) {
       report.runtimeVerdict = "fail";
       report.yieldVerdict = "fail";
       report.finalVerdict = "fail";
@@ -1861,6 +1906,14 @@ async function main() {
     }
     await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     await writeFile(mdPath, `${formatEvidenceMarkdown(report)}\n`, "utf8");
+    const artifactPointerPath = String(process.env.DISCOVERY_EXAMPLES_ARTIFACT_POINTER_FILE ?? "").trim();
+    if (artifactPointerPath) {
+      await writeFile(
+        artifactPointerPath,
+        `${JSON.stringify({ jsonPath, mdPath, finalVerdict: report.finalVerdict }, null, 2)}\n`,
+        "utf8"
+      );
+    }
     log(`Wrote JSON evidence to ${jsonPath}`);
     log(`Wrote Markdown evidence to ${mdPath}`);
   }
@@ -1870,7 +1923,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack : error);
-  process.exitCode = 1;
-});
+const isEntrypoint =
+  process.argv[1] != null
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isEntrypoint) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack : error);
+    process.exitCode = 1;
+  });
+}

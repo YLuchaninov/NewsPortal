@@ -244,6 +244,24 @@ def sequence_runner_concurrency() -> int:
         return 1
 
 
+def sequence_runner_lock_duration_ms() -> int:
+    raw_value = os.getenv("WORKER_SEQUENCE_RUNNER_LOCK_DURATION_MS", "300000")
+    try:
+        return max(30000, int(raw_value))
+    except ValueError:
+        return 300000
+
+
+def sequence_runner_stalled_interval_ms() -> int:
+    raw_value = os.getenv("WORKER_SEQUENCE_RUNNER_STALLED_INTERVAL_MS")
+    if raw_value is None:
+        return sequence_runner_lock_duration_ms()
+    try:
+        return max(30000, int(raw_value))
+    except ValueError:
+        return sequence_runner_lock_duration_ms()
+
+
 def sequence_cron_poll_interval_seconds() -> float:
     raw_value = os.getenv("WORKER_SEQUENCE_CRON_POLL_INTERVAL_SECONDS", "30")
     try:
@@ -6224,6 +6242,8 @@ async def run_workers() -> None:
             {
                 "connection": build_redis_connection_options(),
                 "concurrency": sequence_runner_concurrency(),
+                "lockDuration": sequence_runner_lock_duration_ms(),
+                "stalledInterval": sequence_runner_stalled_interval_ms(),
             },
         )
 
