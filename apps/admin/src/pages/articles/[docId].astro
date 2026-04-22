@@ -451,9 +451,12 @@ const verificationColor: Record<string, string> = {
       </div>
     </div>
 
-    <details class="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <summary class="cursor-pointer list-none text-sm font-semibold text-foreground">
-        Raw enrichment debug
+    <details class="group rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+        <span>Raw enrichment debug</span>
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition group-open:rotate-180">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
       </summary>
       <pre class="mt-4 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(article.enrichment_debug ?? {}, null, 2)}</pre>
     </details>

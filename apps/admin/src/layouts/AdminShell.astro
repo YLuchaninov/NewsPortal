@@ -3,6 +3,7 @@ import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
 import { AdminLiveUpdateCoordinator } from "../components/AdminLiveUpdateCoordinator";
 import { AdminFlashToast } from "../components/AdminFlashToast";
+import { ADMIN_NAV_SECTIONS, findAdminNavItem, findAdminNavSection } from "../lib/admin-ia";
 import { resolveAdminAppPath } from "../lib/server/browser-flow";
 import type { AdminLiveUpdateSurface } from "../lib/live-updates";
 
@@ -25,47 +26,8 @@ const {
 } = Astro.props;
 
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-
-const navGroups = [
-  {
-    label: "Overview",
-    items: [
-      { href: "/", label: "Dashboard", icon: "grid", key: "dashboard" },
-      { href: "/help", label: "Help", icon: "help-circle", key: "help" },
-    ],
-  },
-  {
-    label: "Content",
-    items: [
-      { href: "/articles", label: "Articles", icon: "newspaper", key: "articles" },
-      { href: "/clusters", label: "Clusters", icon: "layers", key: "clusters" },
-    ],
-  },
-  {
-    label: "Sources",
-    items: [
-      { href: "/channels", label: "Channels", icon: "rss", key: "channels" },
-      { href: "/resources", label: "Resources", icon: "database", key: "resources" },
-      { href: "/discovery", label: "Discovery", icon: "compass", key: "discovery" },
-    ],
-  },
-  {
-    label: "AI",
-    items: [
-      { href: "/templates/llm", label: "LLM Templates", icon: "file-text", key: "llm-templates" },
-      { href: "/templates/interests", label: "System Interests", icon: "bookmark", key: "interest-templates" },
-      { href: "/user-interests", label: "User Interests", icon: "users", key: "user-interests" },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { href: "/automation", label: "Automation", icon: "workflow", key: "automation" },
-      { href: "/reindex", label: "Reindex", icon: "refresh-cw", key: "reindex" },
-      { href: "/observability", label: "Observability", icon: "activity", key: "observability" },
-    ],
-  },
-] as const;
+const activeItem = findAdminNavItem(activeNav ?? null);
+const activeSection = findAdminNavSection(activeNav ?? null);
 
 // Lucide-like SVG icons as inline strings
 const icons: Record<string, string> = {
@@ -110,7 +72,7 @@ const icons: Record<string, string> = {
 
         <!-- Navigation -->
         <nav class="flex-1 px-2 py-3 space-y-4">
-          {navGroups.map((group) => (
+          {ADMIN_NAV_SECTIONS.map((group) => (
             <div>
               <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
               {group.items.map(({ href, label, icon, key }) => (
@@ -167,7 +129,13 @@ const icons: Record<string, string> = {
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
           </button>
 
-          <div class="flex-1">
+          <div class="flex-1 min-w-0">
+            {activeSection && activeItem ? (
+              <div class="mb-1">
+                <p class="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{activeSection.label}</p>
+                <p class="truncate text-xs text-muted-foreground">{activeItem.summary}</p>
+              </div>
+            ) : null}
             <slot name="header-title" />
           </div>
 
@@ -207,7 +175,7 @@ const icons: Record<string, string> = {
           </button>
         </div>
         <nav class="flex-1 px-2 py-3 space-y-4">
-          {navGroups.map((group) => (
+          {ADMIN_NAV_SECTIONS.map((group) => (
             <div>
               <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
               {group.items.map(({ href, label, icon, key }) => (

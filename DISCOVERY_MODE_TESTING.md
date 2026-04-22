@@ -253,7 +253,7 @@ pnpm test:discovery:admin:compose
 - re-evaluation
 - recall seeding/promotion
 
-#### Шаг 2. Создайте class в `/admin/discovery?tab=classes`
+#### Шаг 2. Создайте class в class registry на `/admin/discovery`
 
 Используйте bounded local values вроде:
 
@@ -267,7 +267,7 @@ Max per mission: 3
 Seed rules JSON: {"tactics":["regional","local"]}
 ```
 
-#### Шаг 3. Создайте mission в `/admin/discovery?tab=missions`
+#### Шаг 3. Создайте mission через `/admin/discovery/missions`
 
 Для первого local pass используйте что-то вроде:
 
@@ -299,7 +299,7 @@ Optional interest graph JSON:
 После этого ожидается:
 
 - `interest_graph_status = compiled`
-- mission остается читаемой на `/admin/discovery?tab=missions`
+- mission остается читаемой на `/admin/discovery/missions`
 - mission detail в maintenance API больше не выглядит как pending graph draft
 
 #### Шаг 5. Запросите mission run
@@ -309,8 +309,8 @@ Optional interest graph JSON:
 Потом проверьте:
 
 - `/maintenance/discovery/missions/{mission_id}`
-- `/admin/discovery?tab=missions`
-- `/admin/discovery?tab=candidates`
+- `/admin/discovery/missions`
+- `/admin/discovery/candidates`
 
 #### Шаг 6. Проверьте кандидатов, review и feedback
 
@@ -419,7 +419,7 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 
 #### Шаг 2. Запустите bounded recall acquisition через админку
 
-В `/admin/discovery?tab=recall`:
+В `/admin/discovery/recall`:
 
 1. найдите созданную recall mission;
 2. нажмите `Acquire now`;
@@ -429,7 +429,7 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 
 #### Шаг 3. Продвиньте shortlisted recall candidate через админку
 
-На карточке recall candidate в `/admin/discovery?tab=recall` нажмите `Promote`.
+На карточке recall candidate в `/admin/discovery/recall` нажмите `Promote`.
 
 Это использует тот же bounded promote path, но уже через shipped admin operator surface.
 
@@ -437,7 +437,7 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 
 Откройте:
 
-- `/admin/discovery?tab=recall`
+- `/admin/discovery/recall`
 - `/maintenance/discovery/recall-missions`
 - `/maintenance/discovery/recall-candidates`
 - `/maintenance/discovery/summary`
@@ -479,7 +479,7 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 1. recall mission и recall candidate создаются без `interest_graph`
 2. promotion возвращает конкретный status, а не тихий partial failure
 3. recall candidate получает `registered_channel_id` или truthfully marked duplicate state
-4. `/admin/discovery?tab=recall` показывает backlog и promotion state
+4. `/admin/discovery/recall` показывает backlog и promotion state
 5. onboarding после promotion идет через normal `source_channels` contract, а не через скрытый parallel path
 
 ### C.5. Что не считается regression
@@ -637,7 +637,7 @@ Current freshest synced profile-backed proof artifacts:
 Manual replay pattern:
 
 1. Запустите `pnpm test:discovery:examples:compose` хотя бы один раз, чтобы materialize-ить reusable profiles и получить свежий artifact.
-2. Откройте `/admin/discovery?tab=profiles`.
+2. Откройте `/admin/discovery/profiles`.
 3. Найдите profile по стабильному `profileKey`.
 4. Для graph lane создайте mission и выберите этот profile в selector-е `Discovery profile`.
 5. Для recall lane создайте recall mission и выберите тот же profile.
@@ -865,7 +865,7 @@ Exact recall queries:
 
 What counts as success:
 
-- profile exists in `/admin/discovery?tab=profiles` with the correct key and version;
+- profile exists in `/admin/discovery/profiles` with the correct key and version;
 - graph and recall missions both show the attached profile and applied version;
 - artifact contains `manualReplaySettings.profile.profileKey = example_b_dev_news_proof`;
 - at least one passing run produces onboarded source plus downstream evidence;
@@ -1103,7 +1103,7 @@ Exact recall queries:
 
 What counts as success:
 
-- profile exists in `/admin/discovery?tab=profiles` with the correct key and version;
+- profile exists in `/admin/discovery/profiles` with the correct key and version;
 - graph and recall missions both show the attached profile and applied version;
 - artifact contains `manualReplaySettings.profile.profileKey = example_c_outsourcing_proof`;
 - at least one passing run produces onboarded source plus downstream evidence;

@@ -33,15 +33,51 @@ const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: 
 const bffPaths = { moderation: appPath("/bff/admin/moderation") };
 const pagePaths = { dashboard: appPath("/") };
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const currentView = String(Astro.url.searchParams.get("view") ?? "needs-review").trim() || "needs-review";
+const selectedArticleId = String(Astro.url.searchParams.get("selected") ?? "").trim();
 
 type R = Record<string, unknown>;
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const articles = await sdk.listArticlesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE });
-const articleRows = articles.items;
+const articleRows = articles.items.map((article) => {
+  const operatorState = resolveArticleOperatorState(article);
+  const operatorGuidance = resolveArticleOperatorGuidance(article);
+  return { article, operatorState, operatorGuidance };
+});
+
+const visibleArticleRows = articleRows.filter(({ article, operatorState }) => {
+  if (currentView === "selected") {
+    return operatorState.selectionDecision === "selected";
+  }
+  if (currentView === "held") {
+    return operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone";
+  }
+  if (currentView === "blocked") {
+    return String(article.visibility_state ?? "") === "blocked";
+  }
+  if (currentView === "recent-failures") {
+    return String(operatorState.enrichmentState ?? "") === "failed" || String(operatorState.processingState ?? "") === "pending";
+  }
+  return operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone" || String(article.visibility_state ?? "") === "blocked";
+});
+
+const articleViews = [
+  { key: "needs-review", label: "Needs review", count: articleRows.filter(({ article, operatorState }) => operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone" || String(article.visibility_state ?? "") === "blocked").length },
+  { key: "selected", label: "Selected", count: articleRows.filter(({ operatorState }) => operatorState.selectionDecision === "selected").length },
+  { key: "held", label: "Held", count: articleRows.filter(({ operatorState }) => operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone").length },
+  { key: "blocked", label: "Blocked", count: articleRows.filter(({ article }) => String(article.visibility_state ?? "") === "blocked").length },
+  { key: "recent-failures", label: "Recent failures", count: articleRows.filter(({ operatorState }) => String(operatorState.enrichmentState ?? "") === "failed" || String(operatorState.processingState ?? "") === "pending").length },
+] as const;
+
+const selectedArticleRow =
+  visibleArticleRows.find(({ article }) => String(article.doc_id ?? "") === selectedArticleId) ??
+  visibleArticleRows[0] ??
+  null;
 
 function resolvePageHref(nextPage: number): string {
   const target = new URL(Astro.url);
+  target.searchParams.delete("selected");
   if (nextPage <= DEFAULT_PAGE) {
     target.searchParams.delete("page");
   } else {
@@ -50,18 +86,56 @@ function resolvePageHref(nextPage: number): string {
   return `${target.pathname}${target.search}`;
 }
 
+function resolveViewHref(view: string): string {
+  const target = new URL(Astro.url);
+  target.searchParams.delete("selected");
+  target.searchParams.delete("page");
+  if (view === "needs-review") {
+    target.searchParams.delete("view");
+  } else {
+    target.searchParams.set("view", view);
+  }
+  return `${target.pathname}${target.search}`;
+}
 
-const stateColor: Record<string, string> = {
-  matched: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  notified: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
-  blocked: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  raw: "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-300",
-  normalized: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  deduped: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
-  embedded: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  clustered: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
-};
+function resolvePreviewHref(docId: string): string {
+  const target = new URL(Astro.url);
+  target.searchParams.set("selected", docId);
+  return `${target.pathname}${target.search}`;
+}
+
+function formatTimestamp(value: unknown): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function resolveSafeHref(rawValue: unknown): string | null {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+  try {
+    const normalized = new URL(rawValue);
+    if (!["http:", "https:"].includes(normalized.protocol)) {
+      return null;
+    }
+    return normalized.toString();
+  } catch {
+    return null;
+  }
+}
+
 
 const systemFeedColor: Record<string, string> = {
   eligible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
@@ -110,20 +184,43 @@ function shortId(value: unknown): string {
   </Fragment>
 
   <div class="space-y-5">
-    <div>
-      <h1 class="text-xl font-bold">Articles</h1>
-      <p class="text-sm text-muted-foreground mt-0.5">
-        {articles.total} article{articles.total !== 1 ? "s" : ""} total
-        {articles.total > 0 && ` — page ${articles.page} of ${Math.max(articles.totalPages, 1)}`}
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Operations</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Article triage</h1>
+      <p class="mt-2 text-sm leading-6 text-muted-foreground">
+        Use saved views to narrow the current page to the dominant operator task, then open article detail only when you need the full explainability stack.
       </p>
-    </div>
+      <div class="mt-5 flex flex-wrap gap-2">
+        {articleViews.map((view) => (
+          <a
+            href={resolveViewHref(view.key)}
+            class:list={[
+              "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              currentView === view.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+            ]}
+          >
+            {view.label}
+            <span class:list={[
+              "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px]",
+              currentView === view.key ? "bg-primary-foreground/15 text-primary-foreground" : "bg-background text-muted-foreground",
+            ]}>
+              {view.count}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
 
     <!-- State lifecycle explanation -->
     <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
       <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
         <span class="text-sm font-medium">Understanding article states</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+        <span class="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-transform group-open:rotate-180">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
       </summary>
       <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
         <p class="text-xs">Each row is still one editorial article observation, but the durable operator truth now lives across <code class="rounded bg-muted px-1 py-0.5">document_observations</code>, <code class="rounded bg-muted px-1 py-0.5">canonical_documents</code>, story-cluster verification, and <code class="rounded bg-muted px-1 py-0.5">final_selection_results</code>. The older <code class="rounded bg-muted px-1 py-0.5">system_feed_results</code> badge stays visible only as a compatibility read model.</p>
@@ -163,42 +260,56 @@ function shortId(value: unknown): string {
       </div>
     </details>
 
-    <div class="rounded-xl border border-border bg-card overflow-hidden">
-      {articles.total === 0 ? (
-        <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles yet</p>
-      ) : (
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-border">
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Title</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">State</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Reactions</th>
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Moderation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {articleRows.length === 0 ? (
-                <tr>
-                  <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No articles on this page</td>
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
+      <section class="overflow-hidden rounded-xl border border-border bg-card">
+        {articles.total === 0 ? (
+          <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles yet. New content will appear here after ingest runs.</p>
+        ) : visibleArticleRows.length === 0 ? (
+          <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles on this page match the current triage view. Switch views or try another page.</p>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border">
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Title</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">State</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Reactions</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Moderation</th>
                 </tr>
-              ) : articleRows.map((a) => (
-                <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                  <td class="px-4 py-3 max-w-[300px]">
-                    <a
-                      href={appPath(`/articles/${encodeURIComponent(String(a.doc_id ?? ""))}`)}
-                      class="font-medium text-xs line-clamp-2 hover:text-primary"
-                    >
-                      {String(a.title ?? "Untitled")}
-                    </a>
-                    <div class="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{String(a.lead ?? "")}</div>
-                  </td>
-                  <td class="px-4 py-3 hidden sm:table-cell">
-                    {(() => {
-                      const operatorState = resolveArticleOperatorState(a);
-                      const operatorGuidance = resolveArticleOperatorGuidance(a);
-
-                      return (
+              </thead>
+              <tbody>
+                {articleRows.length === 0 ? (
+                  <tr>
+                    <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No articles on this page. Try another page of results.</td>
+                  </tr>
+                ) : visibleArticleRows.map(({ article: a, operatorState, operatorGuidance }) => {
+                  const articleId = String(a.doc_id ?? "");
+                  const isSelected = selectedArticleRow
+                    ? String(selectedArticleRow.article.doc_id ?? "") === articleId
+                    : false;
+                  return (
+                    <tr class:list={[
+                      "border-b border-border last:border-0 transition-colors",
+                      isSelected ? "bg-primary/5" : "hover:bg-muted/30",
+                    ]}>
+                      <td class="px-4 py-3 max-w-[320px]">
+                        <a
+                          href={resolvePreviewHref(articleId)}
+                          class:list={[
+                            "font-medium text-xs line-clamp-2 transition-colors",
+                            isSelected ? "text-primary" : "hover:text-primary",
+                          ]}
+                        >
+                          {String(a.title ?? "Untitled")}
+                        </a>
+                        <div class="mt-0.5 text-[10px] text-muted-foreground line-clamp-1">{String(a.lead ?? "")}</div>
+                        <div class="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                          <span>{String(a.source_name ?? a.channel_name ?? "Unknown source")}</span>
+                          <span>·</span>
+                          <span>{formatTimestamp(a.extracted_published_at ?? a.published_at)}</span>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3 hidden sm:table-cell">
                         <div class="space-y-1">
                           <div class="flex flex-wrap gap-1">
                             <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${selectionModeColor[String(operatorState.selectionMode)] ?? "bg-muted text-muted-foreground"}`}>
@@ -214,86 +325,170 @@ function shortId(value: unknown): string {
                                 verify:{String(operatorState.verificationState)}
                               </span>
                             )}
-                            {operatorState.observationState && (
-                              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
-                                obs:{String(operatorState.observationState)}
-                              </span>
-                            )}
-                            {operatorState.duplicateKind && (
-                              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300">
-                                dup:{String(operatorState.duplicateKind)}
-                              </span>
-                            )}
                           </div>
                           <div class="text-[10px] text-muted-foreground">
                             canonical:{operatorState.canonicalDocumentId ? shortId(operatorState.canonicalDocumentId) : "pending"} · cluster:{operatorState.storyClusterId ? shortId(operatorState.storyClusterId) : "—"}
                           </div>
                           <div class="text-[10px] text-muted-foreground">
-                            raw:{String(operatorState.processingState ?? "raw")} · enrich:{String(operatorState.enrichmentState ?? "pending")} · compat:{String(operatorState.compatDecision ?? "—")}
-                          </div>
-                          <div class="text-[10px] text-muted-foreground">
                             {operatorState.selectionSummary}
                             {operatorState.selectionReason ? ` · reason:${operatorState.selectionReason}` : ""}
-                            {operatorState.holdCount > 0 ? ` · hold:${operatorState.holdCount}` : ""}
-                            {operatorState.llmReviewPendingCount > 0 ? ` · pending review:${operatorState.llmReviewPendingCount}` : ""}
                           </div>
-                          <div class="text-[10px] text-muted-foreground">
-                            next:{operatorGuidance.summary}
-                          </div>
-                          {a.visibility_state && a.visibility_state !== "visible" && (
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
-                              {String(a.visibility_state)}
-                            </span>
-                          )}
+                          <div class="text-[10px] text-muted-foreground">next:{operatorGuidance.summary}</div>
                         </div>
-                      );
-                    })()}
-                  </td>
-                  <td class="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
-                    👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}
-                  </td>
-                  <td class="px-4 py-3">
-                    {(() => {
-                      const articleTitle = String(a.title ?? "Untitled");
-                      const isBlocked = String(a.visibility_state ?? "") === "blocked";
+                      </td>
+                      <td class="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
+                        👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}
+                      </td>
+                      <td class="px-4 py-3">
+                        {(() => {
+                          const articleTitle = String(a.title ?? "Untitled");
+                          const isBlocked = String(a.visibility_state ?? "") === "blocked";
 
-                      return (
-                        <AdminConfirmAction
-                          action={bffPaths.moderation}
-                          title={isBlocked ? "Restore article visibility" : "Block article"}
-                          description={
-                            isBlocked
-                              ? `Restore "${articleTitle}" to the visible collection and allow it to participate in normal delivery again.`
-                              : `Hide "${articleTitle}" from collections and notifications until an admin restores it.`
-                          }
-                          triggerLabel={isBlocked ? "Unblock" : "Block"}
-                          confirmLabel={isBlocked ? "Unblock article" : "Block article"}
-                          fields={[
-                            { name: "docId", value: String(a.doc_id ?? "") },
-                            { name: "actionType", value: isBlocked ? "unblock" : "block" },
-                            { name: "redirectTo", value: currentPath },
-                          ]}
-                          triggerClassName={
-                            isBlocked
-                              ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
-                              : "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
-                          }
-                          confirmClassName={
-                            isBlocked
-                              ? "bg-emerald-600 text-white hover:bg-emerald-600/90"
-                              : ""
-                          }
-                          client:load
-                        />
-                      );
-                    })()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                          return (
+                            <AdminConfirmAction
+                              action={bffPaths.moderation}
+                              title={isBlocked ? "Restore article visibility" : "Block article"}
+                              description={
+                                isBlocked
+                                  ? `Restore "${articleTitle}" to collections and normal delivery.`
+                                  : `Hide "${articleTitle}" from collections and notifications until it is restored.`
+                              }
+                              triggerLabel={isBlocked ? "Unblock" : "Block"}
+                              confirmLabel={isBlocked ? "Unblock article" : "Block article"}
+                              fields={[
+                                { name: "docId", value: articleId },
+                                { name: "actionType", value: isBlocked ? "unblock" : "block" },
+                                { name: "redirectTo", value: currentPath },
+                              ]}
+                              triggerClassName={
+                                isBlocked
+                                  ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                                  : "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+                              }
+                              confirmClassName={
+                                isBlocked
+                                  ? "bg-emerald-600 text-white hover:bg-emerald-600/90"
+                                  : ""
+                              }
+                              client:load
+                            />
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <aside class="rounded-xl border border-border bg-card p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
+        {selectedArticleRow ? (
+          (() => {
+            const { article: selectedArticle, operatorState, operatorGuidance } = selectedArticleRow;
+            const sourceHref = resolveSafeHref(selectedArticle.url);
+            return (
+              <div class="space-y-5">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Preview</p>
+                  <h2 class="mt-2 text-lg font-semibold leading-tight">
+                    {String(selectedArticle.title ?? "Untitled article")}
+                  </h2>
+                  <p class="mt-2 text-sm text-muted-foreground">
+                    {String(selectedArticle.lead ?? "Open full detail if you need the full explainability stack and raw content rendering.")}
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${selectionModeColor[String(operatorState.selectionMode)] ?? "bg-muted text-muted-foreground"}`}>
+                    mode:{String(operatorState.selectionMode)}
+                  </span>
+                  {operatorState.selectionDecision && (
+                    <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${finalSelectionColor[String(operatorState.selectionDecision)] ?? systemFeedColor[String(operatorState.selectionDecision)] ?? "bg-muted text-muted-foreground"}`}>
+                      decision:{String(operatorState.selectionDecision)}
+                    </span>
+                  )}
+                  {operatorState.verificationState && (
+                    <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${verificationColor[String(operatorState.verificationState)] ?? "bg-muted text-muted-foreground"}`}>
+                      verify:{String(operatorState.verificationState)}
+                    </span>
+                  )}
+                  {selectedArticle.visibility_state && selectedArticle.visibility_state !== "visible" && (
+                    <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                      {String(selectedArticle.visibility_state)}
+                    </span>
+                  )}
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div class="rounded-2xl border border-border bg-background p-4">
+                    <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Source</p>
+                    <p class="mt-2 text-sm font-semibold">{String(selectedArticle.source_name ?? selectedArticle.channel_name ?? "Unknown source")}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">Published {formatTimestamp(selectedArticle.extracted_published_at ?? selectedArticle.published_at)}</p>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background p-4">
+                    <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Pipeline summary</p>
+                    <p class="mt-2 text-sm font-semibold">{operatorState.selectionSummary}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                      raw:{String(operatorState.processingState ?? "raw")} · enrich:{String(operatorState.enrichmentState ?? "pending")} · compat:{String(operatorState.compatDecision ?? "—")}
+                    </p>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background p-4">
+                    <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">IDs</p>
+                    <p class="mt-2 text-sm font-semibold">canonical {operatorState.canonicalDocumentId ? shortId(operatorState.canonicalDocumentId) : "pending"}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">cluster {operatorState.storyClusterId ? shortId(operatorState.storyClusterId) : "—"}</p>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background p-4">
+                    <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Engagement</p>
+                    <p class="mt-2 text-sm font-semibold">👍 {String(selectedArticle.like_count ?? 0)} / 👎 {String(selectedArticle.dislike_count ?? 0)}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">next: {operatorGuidance.summary}</p>
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-border bg-background p-4">
+                  <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Operator guidance</p>
+                  <p class="mt-2 text-sm text-foreground">{operatorGuidance.summary}</p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    {operatorState.selectionReason
+                      ? `Reason: ${operatorState.selectionReason}. `
+                      : ""}
+                    {operatorState.holdCount > 0 ? `Hold rows: ${operatorState.holdCount}. ` : ""}
+                    {operatorState.llmReviewPendingCount > 0 ? `Pending review: ${operatorState.llmReviewPendingCount}.` : ""}
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    href={appPath(`/articles/${encodeURIComponent(String(selectedArticle.doc_id ?? ""))}`)}
+                    class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    Open detail
+                  </a>
+                  {sourceHref && (
+                    <a
+                      href={sourceHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+                    >
+                      Open source
+                    </a>
+                  )}
+                </div>
+              </div>
+            );
+          })()
+        ) : (
+          <div class="py-8 text-center">
+            <p class="text-sm font-medium">No preview available</p>
+            <p class="mt-2 text-sm text-muted-foreground">
+              Pick an article row to inspect its operator summary without leaving triage.
+            </p>
+          </div>
+        )}
+      </aside>
     </div>
     {(articles.hasPrev || articles.hasNext) && (
       <PaginationNav

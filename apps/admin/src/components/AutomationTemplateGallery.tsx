@@ -242,7 +242,7 @@ export function AutomationTemplateGallery({
                         {String(plugin.module)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {readText(plugin.description, "No description")}
+                        {readText(plugin.description, "No description.")}
                       </p>
                     </div>
                   ))}

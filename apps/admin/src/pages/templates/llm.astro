@@ -43,7 +43,36 @@ function fmt(v: unknown) {
 const page = parsePage("page");
 const templates = await sdk.listLlmTemplatesPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
 const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
+const currentView = String(Astro.url.searchParams.get("view") ?? "active").trim() || "active";
 const activeCount = templates.items.filter((item) => item.is_active === true).length;
+const archivedCount = templates.items.filter((item) => item.is_active !== true).length;
+const visibleTemplates = templates.items.filter((item) => {
+  const scope = String(item.scope ?? "");
+  if (currentView === "all") {
+    return true;
+  }
+  if (currentView === "archived") {
+    return item.is_active !== true;
+  }
+  if (currentView === "global") {
+    return scope === "global";
+  }
+  if (currentView === "system-interests") {
+    return scope === "criteria";
+  }
+  if (currentView === "user-interests") {
+    return scope === "interests";
+  }
+  return item.is_active === true;
+});
+const templateViews = [
+  { key: "active", label: "Active", count: activeCount },
+  { key: "archived", label: "Archived", count: archivedCount },
+  { key: "system-interests", label: "System interests", count: templates.items.filter((item) => String(item.scope ?? "") === "criteria").length },
+  { key: "user-interests", label: "User interests", count: templates.items.filter((item) => String(item.scope ?? "") === "interests").length },
+  { key: "global", label: "Global", count: templates.items.filter((item) => String(item.scope ?? "") === "global").length },
+  { key: "all", label: "All", count: templates.items.length },
+] as const;
 
 function resolveListHref(nextPage: number): string {
   const target = new URL(Astro.url);
@@ -51,6 +80,17 @@ function resolveListHref(nextPage: number): string {
     target.searchParams.delete("page");
   } else {
     target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function resolveViewHref(view: string): string {
+  const target = new URL(Astro.url);
+  target.searchParams.delete("page");
+  if (view === "active") {
+    target.searchParams.delete("view");
+  } else {
+    target.searchParams.set("view", view);
   }
   return `${target.pathname}${target.search}`;
 }
@@ -77,10 +117,10 @@ function resolveListHref(nextPage: number): string {
   <div class="space-y-6">
     <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-2xl">
-        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">AI review prompts</p>
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Rules</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">LLM templates</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          Keep prompt authoring on dedicated create and edit screens. This list stays focused on activation state, scope coverage, and safe lifecycle actions.
+          Keep prompt authoring on dedicated create and edit screens. This list stays focused on scope, lifecycle state, and quick operator filtering instead of mixing editing into the catalog.
         </p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -99,6 +139,28 @@ function resolveListHref(nextPage: number): string {
       </div>
     </div>
 
+    <div class="flex flex-wrap gap-2">
+      {templateViews.map((view) => (
+        <a
+          href={resolveViewHref(view.key)}
+          class:list={[
+            "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+            currentView === view.key
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+          ]}
+        >
+          {view.label}
+          <span class:list={[
+            "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px]",
+            currentView === view.key ? "bg-primary-foreground/15 text-primary-foreground" : "bg-background text-muted-foreground",
+          ]}>
+            {view.count}
+          </span>
+        </a>
+      ))}
+    </div>
+
     <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div class="border-b border-border px-5 py-4">
         <h2 class="text-base font-semibold">Prompt library</h2>
@@ -111,10 +173,15 @@ function resolveListHref(nextPage: number): string {
       {templates.total === 0 ? (
         <div class="px-6 py-14 text-center">
           <p class="text-base font-medium">No LLM templates yet</p>
-          <p class="mt-2 text-sm text-muted-foreground">Create the first prompt template to control gray-zone model review.</p>
+          <p class="mt-2 text-sm text-muted-foreground">Create a template to control gray-zone model review.</p>
           <a href={appPath("/templates/llm/new")} class="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
             Create template
           </a>
+        </div>
+      ) : visibleTemplates.length === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No templates match this view</p>
+          <p class="mt-2 text-sm text-muted-foreground">Switch views to inspect another prompt slice.</p>
         </div>
       ) : (
         <div class="overflow-x-auto">
@@ -129,11 +196,7 @@ function resolveListHref(nextPage: number): string {
               </tr>
             </thead>
             <tbody>
-              {templates.items.length === 0 ? (
-                <tr>
-                  <td colspan="5" class="px-5 py-10 text-center text-sm text-muted-foreground">No templates on this page</td>
-                </tr>
-              ) : templates.items.map((template) => {
+              {visibleTemplates.map((template) => {
                 const promptTemplateId = String(template.prompt_template_id ?? "");
                 const isActive = template.is_active === true;
                 return (
@@ -182,8 +245,8 @@ function resolveListHref(nextPage: number): string {
                           action={appPath("/bff/admin/templates")}
                           title={isActive ? "Archive template" : "Reactivate template"}
                           description={isActive
-                            ? "Archived templates stay visible to operators but are no longer used for live gray-zone review."
-                            : "Reactivating this template makes it eligible for future gray-zone review decisions again."}
+                            ? "Archive this template to remove it from live review while keeping it recoverable."
+                            : "Reactivate this template to return it to live review."}
                           triggerLabel={isActive ? "Archive" : "Activate"}
                           confirmLabel={isActive ? "Archive template" : "Activate template"}
                           fields={[
@@ -199,7 +262,7 @@ function resolveListHref(nextPage: number): string {
                         <AdminConfirmAction
                           action={appPath("/bff/admin/templates")}
                           title="Delete template"
-                          description="Delete permanently only when you no longer need this template in the admin library. Existing review logs will keep their history, but the template record itself will be removed."
+                          description="Delete this template permanently. Existing review history stays recorded."
                           triggerLabel="Delete"
                           confirmLabel="Delete template"
                           fields={[

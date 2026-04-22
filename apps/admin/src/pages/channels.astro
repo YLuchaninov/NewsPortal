@@ -51,10 +51,7 @@ const pagePaths = {
   dashboard: appPath("/"),
   help: appPath("/help"),
   resources: appPath("/resources"),
-  newRssChannel: appPath("/channels/new"),
-  newWebsiteChannel: appPath("/channels/new?providerType=website"),
-  newApiChannel: appPath("/channels/new?providerType=api"),
-  newEmailImapChannel: appPath("/channels/new?providerType=email_imap"),
+  newSource: appPath("/channels/new"),
   importChannels: appPath("/channels/import"),
 };
 
@@ -247,6 +244,40 @@ const rssCount = sourceChannels.filter((channel) => channel.rawProviderType === 
 const websiteCount = sourceChannels.filter((channel) => channel.rawProviderType === "website").length;
 const apiCount = sourceChannels.filter((channel) => channel.rawProviderType === "api").length;
 const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderType === "email_imap").length;
+const currentView = String(Astro.url.searchParams.get("view") ?? "all").trim() || "all";
+
+const viewOptions = [
+  { key: "all", label: "All", count: sourceChannels.length },
+  { key: "attention", label: "Needs attention", count: attentionCount },
+  { key: "paused", label: "Paused", count: pausedCount },
+  { key: "rss", label: "RSS", count: rssCount },
+  { key: "website", label: "Website", count: websiteCount },
+  { key: "api", label: "API", count: apiCount },
+  { key: "email_imap", label: "Email IMAP", count: emailImapCount },
+] as const;
+
+function resolveViewHref(view: string): string {
+  const target = new URL(Astro.url);
+  if (view === "all") {
+    target.searchParams.delete("view");
+  } else {
+    target.searchParams.set("view", view);
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+const visibleChannels = sourceChannels.filter((channel) => {
+  if (currentView === "attention") {
+    return channel.needsAttention;
+  }
+  if (currentView === "paused") {
+    return !channel.isActive;
+  }
+  if (currentView === "rss" || currentView === "website" || currentView === "api" || currentView === "email_imap") {
+    return channel.rawProviderType === currentView;
+  }
+  return true;
+});
 ---
 
 <AdminShell title="Channels — Admin" session={session} flash={flash} activeNav="channels">
@@ -263,17 +294,8 @@ const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderTyp
       <a href={pagePaths.importChannels} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
         Bulk import
       </a>
-      <a href={pagePaths.newEmailImapChannel} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-        Add Email IMAP
-      </a>
-      <a href={pagePaths.newApiChannel} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-        Add API
-      </a>
-      <a href={pagePaths.newWebsiteChannel} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-        Add website
-      </a>
-      <a href={pagePaths.newRssChannel} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-        Add RSS
+      <a href={pagePaths.newSource} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+        Add source
       </a>
     </div>
   </Fragment>
@@ -283,37 +305,36 @@ const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderTyp
       <div class="max-w-2xl">
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Source operations</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">Source channels</h1>
-        <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          Keep list management lightweight here, then move into dedicated create and edit screens for full provider-specific details.
-          This page stays focused on operational health, safe destructive controls, clear provider-specific entry points, and shared bulk onboarding for RSS, website, API, and Email IMAP channels.
-        </p>
+            <p class="mt-2 text-sm leading-6 text-muted-foreground">
+              Use this page as the source operations index: filter by health or provider, pause/resume safely, then move into dedicated create or edit workspaces for deep provider-specific setup.
+            </p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
-          <p class="mt-1 text-2xl font-semibold">{channels.total}</p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{channels.total}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">RSS</p>
-          <p class="mt-1 text-2xl font-semibold">{rssCount}</p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{rssCount}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Website</p>
-          <p class="mt-1 text-2xl font-semibold">{websiteCount}</p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{websiteCount}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">API</p>
-          <p class="mt-1 text-2xl font-semibold">{apiCount}</p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{apiCount}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Email IMAP</p>
-          <p class="mt-1 text-2xl font-semibold">{emailImapCount}</p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{emailImapCount}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Attention / Paused</p>
-          <p class="mt-1 text-2xl font-semibold">
+          <p class="mt-auto inline-flex items-baseline whitespace-nowrap pt-4 text-[clamp(2.25rem,3vw,3.25rem)] font-semibold leading-none tracking-tight">
             <span class="text-amber-500">{attentionCount}</span>
-            <span class="mx-1 text-muted-foreground">/</span>
+            <span class="mx-2 text-muted-foreground">/</span>
             <span class="text-slate-500">{pausedCount}</span>
           </p>
         </div>
@@ -326,15 +347,15 @@ const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderTyp
           <div>
             <h2 class="text-base font-semibold">Operational overview</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              Channels can be paused inline, while full edits happen on dedicated screens to reduce accidental changes and keep provider-specific controls contained.
+              Keep the list dense and actionable here. Full provider settings, auth, and advanced fetch behavior live on separate edit screens.
             </p>
           </div>
           <a href={pagePaths.help} class="text-sm font-medium text-primary hover:underline">Read setup guide</a>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-3">
           <div class="rounded-2xl border border-border bg-background p-4">
-            <p class="text-sm font-medium">Create deliberately</p>
-            <p class="mt-2 text-sm text-muted-foreground">Use the dedicated create screen when you need the full RSS, website, API, or mailbox form with safe defaults.</p>
+            <p class="text-sm font-medium">One primary create path</p>
+            <p class="mt-2 text-sm text-muted-foreground">Start with a single “Add source” entry point, then choose the provider and continue in a dedicated wizard-like screen.</p>
           </div>
           <div class="rounded-2xl border border-border bg-background p-4">
             <p class="text-sm font-medium">Keep provider truth explicit</p>
@@ -374,7 +395,7 @@ const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderTyp
           </label>
           <AdminConfirmSubmitButton
             title="Apply bulk schedule"
-            description="This updates the polling schedule for all RSS channels. Use it when you intentionally want to retune the feed fleet, not for one-off channel changes."
+            description="Update the polling schedule for all RSS channels. Use this for fleet-wide tuning, not one-off channel edits."
             triggerLabel="Apply schedule"
             confirmLabel="Apply to RSS channels"
             triggerClassName="mt-2 bg-secondary text-secondary-foreground hover:bg-secondary/80"
@@ -395,32 +416,54 @@ const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderTyp
     <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div class="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 class="text-base font-semibold">All source channels</h2>
+          <h2 class="text-base font-semibold">Source index</h2>
           <p class="mt-1 text-sm text-muted-foreground">
-            {channels.total} channel{channels.total !== 1 ? "s" : ""} total
-            {channels.total > 0 && ` — page ${channels.page} of ${Math.max(channels.totalPages, 1)}`}
+            {visibleChannels.length} visible on this page
+            {channels.total > 0 && ` · ${channels.total} total channel${channels.total !== 1 ? "s" : ""} · page ${channels.page} of ${Math.max(channels.totalPages, 1)}`}
           </p>
+        </div>
+      </div>
+
+      <div class="border-b border-border px-5 py-3">
+        <div class="flex flex-wrap gap-2">
+          {viewOptions.map((view) => (
+            <a
+              href={resolveViewHref(view.key)}
+              class:list={[
+                "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                currentView === view.key
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+              ]}
+            >
+              {view.label}
+              <span class:list={[
+                "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px]",
+                currentView === view.key ? "bg-primary-foreground/15 text-primary-foreground" : "bg-background text-muted-foreground",
+              ]}>
+                {view.count}
+              </span>
+            </a>
+          ))}
         </div>
       </div>
 
       {channels.total === 0 ? (
         <div class="px-6 py-14 text-center">
           <p class="text-base font-medium">No source channels yet</p>
-          <p class="mt-2 text-sm text-muted-foreground">Create an RSS feed, website ingestion channel, JSON API channel, or mailbox ingest channel to get the fetcher online.</p>
+          <p class="mt-2 text-sm text-muted-foreground">Add a source to start polling feeds, sites, APIs, or mailboxes.</p>
           <div class="mt-5 flex flex-wrap justify-center gap-3">
-            <a href={pagePaths.newRssChannel} class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-              Add RSS channel
-            </a>
-            <a href={pagePaths.newWebsiteChannel} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
-              Add website channel
-            </a>
-            <a href={pagePaths.newApiChannel} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
-              Add API channel
-            </a>
-            <a href={pagePaths.newEmailImapChannel} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
-              Add Email IMAP channel
+            <a href={pagePaths.newSource} class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Add source
             </a>
           </div>
+        </div>
+      ) : visibleChannels.length === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No channels match this saved view</p>
+          <p class="mt-2 text-sm text-muted-foreground">
+            Switch views or clear the filter to see more sources.
+          </p>
         </div>
       ) : (
         <div class="overflow-x-auto">
@@ -435,17 +478,17 @@ const emailImapCount = sourceChannels.filter((channel) => channel.rawProviderTyp
               </tr>
             </thead>
             <tbody>
-              {sourceChannels.length === 0 ? (
+              {visibleChannels.length === 0 ? (
                 <tr>
                   <td colspan="5" class="px-5 py-10 text-center text-sm text-muted-foreground">No channels on this page</td>
                 </tr>
-              ) : sourceChannels.map((channel) => {
+              ) : visibleChannels.map((channel) => {
                 const editHref = appPath(`/channels/${channel.channelId}/edit`);
                 const resourcesHref = appPath(`/resources?channelId=${encodeURIComponent(channel.channelId)}`);
                 const destructiveLabel = channel.storedItemCount > 0 ? "Archive" : "Delete";
                 const destructiveDescription = channel.storedItemCount > 0
-                  ? `This channel already has ${channel.storedItemCount} stored item${channel.storedItemCount === 1 ? "" : "s"}. Confirming this action will archive the channel instead of hard-deleting it.`
-                  : "This channel has no stored item history, so the delete action will remove it permanently.";
+                  ? `This source already has ${channel.storedItemCount} stored item${channel.storedItemCount === 1 ? "" : "s"}. It will be archived, not deleted.`
+                  : "This source has no stored history yet, so deleting it removes it permanently.";
 
                 return (
                   <tr class="border-b border-border last:border-b-0">

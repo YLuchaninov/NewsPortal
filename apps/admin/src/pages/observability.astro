@@ -30,6 +30,7 @@ const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: 
 const pagePaths = { dashboard: appPath("/") };
 const FETCH_RUNS_PAGE_SIZE = 25;
 const LLM_REVIEWS_PAGE_SIZE = 25;
+const currentView = String(Astro.url.searchParams.get("view") ?? "fetch").trim() || "fetch";
 
 type R = Record<string, unknown>;
 function parsePage(paramName: string): number {
@@ -160,6 +161,16 @@ function resolveTableHref(paramName: string, nextPage: number): string {
   }
   return `${target.pathname}${target.search}`;
 }
+
+function resolveViewHref(view: string): string {
+  const target = new URL(Astro.url);
+  if (view === "fetch") {
+    target.searchParams.delete("view");
+  } else {
+    target.searchParams.set("view", view);
+  }
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <AdminShell
@@ -179,43 +190,68 @@ function resolveTableHref(paramName: string, nextPage: number): string {
   </Fragment>
 
   <div class="space-y-6">
-    <h1 class="text-xl font-bold">Observability</h1>
-    <p class="text-sm text-muted-foreground mt-0.5">Monitor fetch health, gray-zone AI review costs, and the operator telemetry that feeds canonical, verification, and final-selection decisions.</p>
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">System</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Observability</h1>
+      <p class="mt-2 text-sm leading-6 text-muted-foreground">
+        Split runtime evidence into two focused modes: fetch health for source operations, and AI review & budget for review-cost monitoring. Use this page to spot source instability, budget pressure, or noisy review traffic without mixing that telemetry into content-triage screens.
+      </p>
+      <div class="mt-5 flex flex-wrap gap-2">
+        {[
+          { key: "fetch", label: "Fetch health" },
+          { key: "ai", label: "AI review & budget" },
+        ].map((view) => (
+          <a
+            href={resolveViewHref(view.key)}
+            class:list={[
+              "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              currentView === view.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+            ]}
+          >
+            {view.label}
+          </a>
+        ))}
+      </div>
+    </section>
 
-    <!-- Observability explanation -->
     <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
       <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
         <span class="text-sm font-medium">Understanding these metrics</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
+        <span class="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-transform group-open:rotate-180">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
       </summary>
       <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
-        <div class="grid gap-2 sm:grid-cols-2">
+        <div class="grid gap-2 sm:grid-cols-3">
           <div class="rounded-md border border-border bg-card p-2.5">
-            <p class="font-medium text-foreground text-[11px] mb-0.5">LLM Usage (top cards)</p>
-            <p class="text-[11px]"><strong>Reviews</strong> = number of gray-zone articles sent to the AI. <strong>Tokens</strong> = total LLM API tokens consumed. <strong>Cost</strong> = estimated USD spend based on token pricing. <strong>Avg latency</strong> = mean response time from the LLM provider.</p>
+            <p class="font-medium text-foreground text-[11px] mb-0.5">Fetch health mode</p>
+            <p class="text-[11px]">Start here when a source looks stale or noisy. Outcome mix and run cadence tell you whether to inspect a channel, not a content rule.</p>
           </div>
           <div class="rounded-md border border-border bg-card p-2.5">
-            <p class="font-medium text-foreground text-[11px] mb-0.5">Fetch Runs (table)</p>
-            <p class="text-[11px]">Each row = one poll of a channel. <strong>new_content</strong> = found new articles. <strong>no_change</strong> = feed unchanged since last check. <strong>error</strong> = fetch failed (check the channel).</p>
+            <p class="font-medium text-foreground text-[11px] mb-0.5">AI review &amp; budget mode</p>
+            <p class="text-[11px]">Use this mode when spend, quota, or review latency looks off. It is about gray-zone review pressure, not about whether an article should be moderated.</p>
           </div>
-        </div>
-        <div class="rounded-md border border-border bg-card p-2.5">
-          <p class="font-medium text-foreground text-[11px] mb-0.5">Zero-shot cutover context</p>
-          <p class="text-[11px]">This page focuses on upstream telemetry: fetch stability and gray-zone review budgets. Canonical document ownership, story-cluster verification, and final selection now live on the <a href={appPath("/articles")} class="text-primary hover:underline">Articles</a> surface, while mission fit and generic channel-quality signals live on <a href={appPath("/discovery")} class="text-primary hover:underline">Discovery</a>.</p>
+          <div class="rounded-md border border-border bg-card p-2.5">
+            <p class="font-medium text-foreground text-[11px] mb-0.5">Escalate elsewhere</p>
+            <p class="text-[11px]">For canonical evidence, verification, and final selection use <a href={appPath("/articles")} class="text-primary hover:underline">Articles</a>. For mission fit and source-quality decisions use <a href={appPath("/discovery")} class="text-primary hover:underline">Discovery</a>.</p>
+          </div>
         </div>
       </div>
     </details>
 
-    <!-- LLM Usage Summary -->
-    <LiveObservabilitySummary
-      initial24h={initialUsage24h}
-      initial7d={initialUsage7d}
-      initialBudget={initialBudget}
-      client:load
-    />
+    {currentView === "ai" && (
+      <LiveObservabilitySummary
+        initial24h={initialUsage24h}
+        initial7d={initialUsage7d}
+        initialBudget={initialBudget}
+        client:load
+      />
+    )}
 
-    <!-- Fetch Runs -->
+    {currentView === "fetch" && (
     <div class="rounded-xl border border-border bg-card overflow-hidden">
       <div class="px-4 py-3 border-b border-border">
         <h2 class="font-semibold text-sm">Fetch Runs</h2>
@@ -234,7 +270,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
         />
       </div>
       {fetchRuns.total === 0 ? (
-        <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
+        <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet. Runs appear here after polling starts.</p>
       ) : (
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -250,7 +286,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
             <tbody>
               {fetchRuns.items.length === 0 ? (
                 <tr>
-                  <td colspan="5" class="px-4 py-8 text-center text-sm text-muted-foreground">No fetch runs on this page</td>
+                  <td colspan="5" class="px-4 py-8 text-center text-sm text-muted-foreground">No fetch runs on this page. Try another page of results.</td>
                 </tr>
               ) : fetchRuns.items.map((run) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
@@ -286,8 +322,9 @@ function resolveTableHref(paramName: string, nextPage: number): string {
         />
       )}
     </div>
+    )}
 
-    <!-- LLM Reviews -->
+    {currentView === "ai" && (
     <div class="rounded-xl border border-border bg-card overflow-hidden">
       <div class="px-4 py-3 border-b border-border">
         <h2 class="font-semibold text-sm">LLM Reviews</h2>
@@ -306,7 +343,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
         />
       </div>
       {llmReviews.total === 0 ? (
-        <p class="px-4 py-6 text-sm text-muted-foreground text-center">No LLM reviews yet</p>
+        <p class="px-4 py-6 text-sm text-muted-foreground text-center">No LLM reviews yet. Reviews appear here when gray-zone checks run.</p>
       ) : (
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -321,7 +358,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
             <tbody>
               {llmReviews.items.length === 0 ? (
                 <tr>
-                  <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No LLM reviews on this page</td>
+                  <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No LLM reviews on this page. Try another page of results.</td>
                 </tr>
               ) : llmReviews.items.map((r) => (
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
@@ -359,5 +396,6 @@ function resolveTableHref(paramName: string, nextPage: number): string {
         />
       )}
     </div>
+    )}
   </div>
 </AdminShell>

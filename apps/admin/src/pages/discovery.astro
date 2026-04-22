@@ -163,13 +163,7 @@ function resolvePageHref(paramName: string, nextPage: number): string {
 }
 
 function resolveMissionScopedHref(missionId: string): string {
-  const target = new URL(Astro.url);
-  if (missionId) {
-    target.searchParams.set("portfolioMissionId", missionId);
-  } else {
-    target.searchParams.delete("portfolioMissionId");
-  }
-  return `${target.pathname}${target.search}`;
+  return appPath(`/discovery/missions/${encodeURIComponent(missionId)}`);
 }
 
 const requestedMissionPage = Number.parseInt(Astro.url.searchParams.get("missionPage") ?? "1", 10);
@@ -261,22 +255,23 @@ const portfolioGaps = asArray(portfolioSnapshot.gaps_json);
 const portfolioSummary = asRecord(portfolioSnapshot.summary_json);
 const costItems = asArray(costs.items);
 
-const tabs = [
-  { key: "dashboard", label: "Dashboard" },
-  { key: "profiles", label: "Profiles" },
-  { key: "missions", label: "Missions" },
-  { key: "recall", label: "Recall" },
-  { key: "classes", label: "Classes" },
-  { key: "candidates", label: "Candidates" },
-  { key: "hypotheses", label: "Hypotheses" },
-  { key: "sources", label: "Sources" },
-  { key: "portfolio", label: "Portfolio" },
-  { key: "feedback", label: "Feedback" },
-];
-
 const pagePaths = {
   dashboard: appPath("/"),
+  discovery: appPath("/discovery"),
+  profiles: appPath("/discovery/profiles"),
+  missions: appPath("/discovery/missions"),
+  recall: appPath("/discovery/recall"),
+  candidates: appPath("/discovery/candidates"),
+  sources: appPath("/discovery/sources"),
 };
+const tabs = [
+  { key: "dashboard", label: "Overview", href: pagePaths.discovery },
+  { key: "profiles", label: "Profiles", href: pagePaths.profiles },
+  { key: "missions", label: "Missions", href: pagePaths.missions },
+  { key: "recall", label: "Recall", href: pagePaths.recall },
+  { key: "candidates", label: "Review queue", href: pagePaths.candidates },
+  { key: "sources", label: "Sources", href: pagePaths.sources },
+];
 const monthlyBudgetCents = asInt(
   summary.monthlyBudgetCents ?? costs.monthlyBudgetCents ?? runtimeConfig.discoveryMonthlyBudgetCents,
   0
@@ -314,27 +309,29 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Adaptive Discovery Agent</p>
           <h1 class="mt-2 text-2xl font-semibold tracking-tight">Dual-path discovery control plane</h1>
           <p class="mt-2 text-sm leading-6 text-muted-foreground">
-            Discovery now ships two bounded upstream lanes. Graph-first missions still own mission planning, hypothesis classes, and portfolio fit, while independent recall owns neutral acquisition backlog, generic source quality, and bounded promotion into normal channels. Downstream zero-shot filtering stays a separate consumer of the discovered corpus.
+            Discovery now follows a clearer operator split. Overview stays here, while reusable profiles, graph missions, recall acquisition, the candidate queue, and source-quality review each get their own focused route instead of competing inside one mega-screen.
           </p>
         </div>
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
             <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Enabled</p>
-            <p class={`mt-1 text-2xl font-semibold ${summary.enabled ? "text-emerald-500" : "text-slate-500"}`}>
+            <p class={`mt-auto pt-4 text-4xl font-semibold leading-none ${summary.enabled ? "text-emerald-500" : "text-slate-500"}`}>
               {summary.enabled ? "Yes" : "No"}
             </p>
           </div>
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
             <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Graph missions</p>
-            <p class="mt-1 text-2xl font-semibold">{String(operatorSummary.graphMissionCount)}</p>
+            <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{String(operatorSummary.graphMissionCount)}</p>
           </div>
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
             <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Recall missions</p>
-            <p class="mt-1 text-2xl font-semibold">{String(operatorSummary.recallMissionCount)}</p>
+            <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{String(operatorSummary.recallMissionCount)}</p>
           </div>
-          <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
             <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">This month</p>
-            <p class="mt-1 text-2xl font-semibold">{fmtUsd(monthToDateCostUsd)}</p>
+            <p class="mt-auto overflow-hidden whitespace-nowrap pt-4 text-[clamp(2.25rem,3vw,3.25rem)] font-semibold leading-none tracking-tight">
+              {fmtUsd(monthToDateCostUsd)}
+            </p>
           </div>
         </div>
       </div>
@@ -342,7 +339,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
       <div class="mt-5 flex flex-wrap gap-2">
         {tabs.map((item) => (
           <a
-            href={resolveTabHref(item.key)}
+            href={item.href}
             class:list={[
               "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
               tab === item.key || (tab === "dashboard" && item.key === "dashboard")
@@ -490,7 +487,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <div class="mt-4 space-y-2">
             {costItems.length === 0 ? (
               <p class="rounded-2xl border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
-                No discovery cost rows yet.
+                No discovery cost rows yet. Cost activity appears here after discovery runs.
               </p>
             ) : costItems.map((item) => (
               <div class="rounded-2xl border border-border bg-background px-4 py-3">
@@ -612,8 +609,15 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   <span class="text-xs font-medium">Usefulness hints</span>
                   <textarea name="graphUsefulnessHints" rows="2" placeholder="resource_only_expected" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
                 </label>
-                <details class="rounded-xl border border-dashed border-border px-3 py-2">
-                  <summary class="cursor-pointer text-sm font-medium">Expert-mode prompt override</summary>
+                <details class="group rounded-xl border border-dashed border-border px-3 py-2">
+                  <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                    <span>Expert-mode prompt override</span>
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition group-open:rotate-180">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                        <path d="m6 9 6 6 6-6"></path>
+                      </svg>
+                    </span>
+                  </summary>
                   <label class="mt-3 grid gap-1.5">
                     <span class="text-xs font-medium">Graph prompt instructions</span>
                     <textarea name="graphAdvancedPromptInstructions" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
@@ -683,8 +687,15 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   <span class="text-xs font-medium">Usefulness hints</span>
                   <textarea name="recallUsefulnessHints" rows="2" placeholder="resource_only_expected" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
                 </label>
-                <details class="rounded-xl border border-dashed border-border px-3 py-2">
-                  <summary class="cursor-pointer text-sm font-medium">Expert-mode prompt override</summary>
+                <details class="group rounded-xl border border-dashed border-border px-3 py-2">
+                  <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                    <span>Expert-mode prompt override</span>
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition group-open:rotate-180">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                        <path d="m6 9 6 6 6-6"></path>
+                      </svg>
+                    </span>
+                  </summary>
                   <label class="mt-3 grid gap-1.5">
                     <span class="text-xs font-medium">Recall prompt instructions</span>
                     <textarea name="recallAdvancedPromptInstructions" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
@@ -727,7 +738,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           </div>
           <div class="divide-y divide-border">
             {profileItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery profiles yet.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery profiles yet. Create one to standardize graph and recall policy.</p>
             ) : profileItems.map((profile) => {
               const profileId = String(profile.profile_id ?? "");
               const profileStatus = String(profile.status ?? "draft");
@@ -778,8 +789,8 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                         action={bffPath}
                         title={isArchived ? "Activate profile" : "Archive profile"}
                         description={isArchived
-                          ? "Activating the profile makes it attachable to new discovery missions and recall missions."
-                          : "Archiving keeps the profile readable historically but prevents new mission attachment."}
+                          ? "Make this profile available for new graph and recall missions."
+                          : "Keep this profile readable but block new mission attachments."}
                         triggerLabel={isArchived ? "Activate" : "Archive"}
                         confirmLabel={isArchived ? "Activate profile" : "Archive profile"}
                         fields={[
@@ -794,7 +805,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       <AdminConfirmAction
                         action={bffPath}
                         title="Delete profile"
-                        description="Delete permanently only when the profile is not attached anywhere. Attached profiles must be archived instead."
+                        description="Delete this profile permanently. Archive it instead if any mission still depends on it."
                         triggerLabel="Delete"
                         confirmLabel="Delete profile"
                         fields={[
@@ -1040,7 +1051,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           </div>
           <div class="divide-y divide-border">
             {missionItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No adaptive discovery missions yet.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No adaptive discovery missions yet. Create one to start graph-first discovery planning.</p>
             ) : missionItems.map((mission) => {
               const missionId = String(mission.mission_id ?? "");
               const missionStatus = String(mission.status ?? "planned");
@@ -1052,7 +1063,9 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                   <div class="space-y-1">
                     <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="text-sm font-semibold">{String(mission.title ?? "Untitled mission")}</h3>
+                      <a href={resolveMissionScopedHref(missionId)} class="text-sm font-semibold hover:text-primary">
+                        {String(mission.title ?? "Untitled mission")}
+                      </a>
                       <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                         {String(mission.status ?? "planned")}
                       </span>
@@ -1107,14 +1120,14 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       </button>
                     </form>
                     <a href={resolveMissionScopedHref(missionId)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-                      Open portfolio
+                      Open workspace
                     </a>
                     <AdminConfirmAction
                       action={bffPath}
                       title={isMissionArchived ? "Reactivate mission" : "Archive mission"}
                       description={isMissionArchived
-                        ? "Reactivating this mission returns it to the planned backlog so operators can compile or run it again."
-                        : "Archiving keeps the mission readable in discovery history but removes it from active planning and execution."}
+                        ? "Return this mission to the planned backlog so it can be compiled or run again."
+                        : "Keep this mission readable in history but remove it from active planning and execution."}
                       triggerLabel={missionActionLabel}
                       confirmLabel={isMissionArchived ? "Reactivate mission" : "Archive mission"}
                       fields={[
@@ -1129,7 +1142,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                     <AdminConfirmAction
                       action={bffPath}
                       title="Delete mission"
-                      description="Delete permanently only when this mission has no generated discovery history. Missions with hypotheses, runs, feedback, or portfolio state must be archived instead."
+                      description="Delete this mission permanently only if it has no discovery history. Archive it instead once runs, hypotheses, or feedback exist."
                       triggerLabel="Delete"
                       confirmLabel="Delete mission"
                       fields={[
@@ -1270,7 +1283,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <div class="mt-4 space-y-3">
             {recallMissionItems.length === 0 ? (
               <p class="rounded-2xl border border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
-                No recall missions yet.
+                No recall missions yet. Create one to start neutral source acquisition.
               </p>
             ) : recallMissionItems.map((mission) => (
               <div class="rounded-2xl border border-border bg-background px-4 py-4">
@@ -1370,7 +1383,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           </div>
           <div class="divide-y divide-border">
             {recallCandidateItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No recall candidates yet.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No recall candidates yet. They appear here after recall acquisition runs.</p>
             ) : recallCandidateItems.map((candidate) => {
               const quality = resolveDiscoverySourceQuality(candidate);
               const recallState = resolveDiscoveryRecallCandidateState(candidate);
@@ -1536,7 +1549,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           </div>
           <div class="divide-y divide-border">
             {classItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No hypothesis classes yet.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No hypothesis classes yet. Create one before planning new mission shapes.</p>
             ) : classItems.map((item) => {
               const classKey = String(item.class_key ?? "");
               const classStatus = String(item.status ?? "draft");
@@ -1561,8 +1574,8 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                     action={bffPath}
                     title={isClassArchived ? "Reactivate class" : "Archive class"}
                     description={isClassArchived
-                      ? "Reactivating this class makes it eligible again for future mission planning."
-                      : "Archiving keeps the class visible historically but removes it from new mission planning."}
+                      ? "Make this class available again for future mission planning."
+                      : "Keep this class visible in history but remove it from new mission planning."}
                     triggerLabel={isClassArchived ? "Activate" : "Archive"}
                     confirmLabel={isClassArchived ? "Reactivate class" : "Archive class"}
                     fields={[
@@ -1577,7 +1590,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   <AdminConfirmAction
                     action={bffPath}
                     title="Delete class"
-                    description="Delete permanently only when this class has no generated hypotheses yet. Once mission history exists, archive it instead."
+                    description="Delete this class permanently only if it has no generated hypotheses. Archive it instead once mission history exists."
                     triggerLabel="Delete"
                     confirmLabel="Delete class"
                     fields={[
@@ -1643,7 +1656,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
         </div>
           <div class="divide-y divide-border">
             {candidateItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet. They appear here after mission runs.</p>
             ) : candidateItems.map((candidate) => {
               const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
               return (
@@ -1750,7 +1763,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
             <tbody>
               {hypothesisItems.length === 0 ? (
                 <tr>
-                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No discovery hypotheses yet.</td>
+                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No discovery hypotheses yet. Compile or run a mission to generate them.</td>
                 </tr>
               ) : hypothesisItems.map((hypothesis) => (
                 <tr class="border-b border-border last:border-b-0">
@@ -1801,7 +1814,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
         </div>
         <div class="divide-y divide-border">
           {sourceProfileItems.length === 0 ? (
-            <p class="px-5 py-8 text-sm text-muted-foreground">No source profiles yet.</p>
+            <p class="px-5 py-8 text-sm text-muted-foreground">No source profiles yet. Discovery will add them after source evaluation runs.</p>
           ) : sourceProfileItems.map((profile) => {
             const score = sourceScoreByProfileId.get(String(profile.source_profile_id ?? ""));
             const channelMetrics = resolveDiscoveryChannelMetrics(score);
@@ -1908,7 +1921,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           </div>
           <div class="divide-y divide-border">
             {rankedSources.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No portfolio snapshot yet for the selected mission.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No portfolio snapshot yet. Run or refresh the selected mission first.</p>
             ) : rankedSources.map((item) => {
               const channelMetrics = resolveDiscoveryChannelMetrics(item);
 
@@ -1999,7 +2012,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           </div>
           <div class="divide-y divide-border">
             {feedbackItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No feedback events yet.</p>
+              <p class="px-5 py-8 text-sm text-muted-foreground">No feedback events yet. Review feedback appears here after operator decisions.</p>
             ) : feedbackItems.map((item) => (
               <div class="px-5 py-4">
                 <div class="flex flex-wrap items-center gap-2">

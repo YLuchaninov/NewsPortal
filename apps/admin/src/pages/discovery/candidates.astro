@@ -1,0 +1,6 @@
+---
+import { resolveAdminAppPath } from "../../lib/server/browser-flow";
+
+export const prerender = false;
+return Astro.redirect(resolveAdminAppPath(Astro.request, "/discovery?tab=candidates"));
+---

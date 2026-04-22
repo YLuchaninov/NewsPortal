@@ -97,8 +97,8 @@ const isActive = template.is_active === true;
             action={appPath("/bff/admin/templates")}
             title={isActive ? "Archive template" : "Reactivate template"}
             description={isActive
-              ? "Archived templates remain visible to operators but are removed from the active review set."
-              : "Reactivating the template makes it available for future live review decisions."}
+              ? "Archive this template to remove it from live review while keeping it recoverable."
+              : "Reactivate this template to return it to live review."}
             triggerLabel={isActive ? "Archive" : "Activate"}
             confirmLabel={isActive ? "Archive template" : "Activate template"}
             fields={[
@@ -114,7 +114,7 @@ const isActive = template.is_active === true;
           <AdminConfirmAction
             action={appPath("/bff/admin/templates")}
             title="Delete template"
-            description="Delete permanently only when this prompt should no longer exist in the admin library. Existing review history stays recorded, but the template record will be removed."
+            description="Delete this template permanently. Existing review history stays recorded."
             triggerLabel="Delete"
             confirmLabel="Delete template"
             fields={[

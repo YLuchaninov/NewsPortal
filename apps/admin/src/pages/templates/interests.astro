@@ -37,7 +37,36 @@ function parsePage(paramName: string): number {
 const page = parsePage("page");
 const templates = await sdk.listSystemInterestsPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
 const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
+const currentView = String(Astro.url.searchParams.get("view") ?? "active").trim() || "active";
 const activeCount = templates.items.filter((item) => item.is_active === true).length;
+const archivedCount = templates.items.filter((item) => item.is_active !== true).length;
+const visibleTemplates = templates.items.filter((item) => {
+  const priority = Number(item.priority ?? 0);
+  const llmReviewMode = resolveLlmReviewMode(
+    item.selection_profile_family,
+    asPolicyRecord(item.selection_profile_policy_json)
+  );
+  if (currentView === "all") {
+    return true;
+  }
+  if (currentView === "archived") {
+    return item.is_active !== true;
+  }
+  if (currentView === "high-priority") {
+    return priority >= 1;
+  }
+  if (currentView === "llm-review") {
+    return llmReviewMode === "always";
+  }
+  return item.is_active === true;
+});
+const templateViews = [
+  { key: "active", label: "Active", count: activeCount },
+  { key: "archived", label: "Archived", count: archivedCount },
+  { key: "high-priority", label: "High priority", count: templates.items.filter((item) => Number(item.priority ?? 0) >= 1).length },
+  { key: "llm-review", label: "LLM review", count: templates.items.filter((item) => resolveLlmReviewMode(item.selection_profile_family, asPolicyRecord(item.selection_profile_policy_json)) === "always").length },
+  { key: "all", label: "All", count: templates.items.length },
+] as const;
 
 function resolveListHref(nextPage: number): string {
   const target = new URL(Astro.url);
@@ -45,6 +74,17 @@ function resolveListHref(nextPage: number): string {
     target.searchParams.delete("page");
   } else {
     target.searchParams.set("page", String(nextPage));
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function resolveViewHref(view: string): string {
+  const target = new URL(Astro.url);
+  target.searchParams.delete("page");
+  if (view === "active") {
+    target.searchParams.delete("view");
+  } else {
+    target.searchParams.set("view", view);
   }
   return `${target.pathname}${target.search}`;
 }
@@ -102,7 +142,7 @@ function resolveLlmReviewMode(
   <div class="space-y-6">
     <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-2xl">
-        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Global selection</p>
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Rules</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">System interests</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
           These system interests define the reusable prototypes, hard constraints, time windows, and content-kind gates that shape the global system-selected collection. Active entries sync their matching constraints into the live criterion set used by fresh ingest and historical reindex, while allowed content kinds remain template-owned gates for which resource kinds may appear in the collection.
@@ -125,6 +165,28 @@ function resolveLlmReviewMode(
       </div>
     </div>
 
+    <div class="flex flex-wrap gap-2">
+      {templateViews.map((view) => (
+        <a
+          href={resolveViewHref(view.key)}
+          class:list={[
+            "inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+            currentView === view.key
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+          ]}
+        >
+          {view.label}
+          <span class:list={[
+            "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px]",
+            currentView === view.key ? "bg-primary-foreground/15 text-primary-foreground" : "bg-background text-muted-foreground",
+          ]}>
+            {view.count}
+          </span>
+        </a>
+      ))}
+    </div>
+
     <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div class="border-b border-border px-5 py-4">
         <h2 class="text-base font-semibold">System interest catalog</h2>
@@ -137,10 +199,15 @@ function resolveLlmReviewMode(
       {templates.total === 0 ? (
         <div class="px-6 py-14 text-center">
           <p class="text-base font-medium">No system interests yet</p>
-          <p class="mt-2 text-sm text-muted-foreground">Create the first system interest so the platform can start selecting content globally.</p>
+          <p class="mt-2 text-sm text-muted-foreground">Create a system interest to start selecting content globally.</p>
           <a href={appPath("/templates/interests/new")} class="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
             Create system interest
           </a>
+        </div>
+      ) : visibleTemplates.length === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No system interests match this view</p>
+          <p class="mt-2 text-sm text-muted-foreground">Switch views to inspect another slice of the rules catalog.</p>
         </div>
       ) : (
         <div class="overflow-x-auto">
@@ -156,11 +223,7 @@ function resolveLlmReviewMode(
               </tr>
             </thead>
             <tbody>
-              {templates.items.length === 0 ? (
-                <tr>
-                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No system interests on this page</td>
-                </tr>
-              ) : templates.items.map((template) => {
+              {visibleTemplates.map((template) => {
                 const interestTemplateId = String(template.interest_template_id ?? "");
                 const isActive = template.is_active === true;
                 const positiveCount = Array.isArray(template.positive_texts) ? (template.positive_texts as unknown[]).length : 0;
@@ -183,7 +246,7 @@ function resolveLlmReviewMode(
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
                       <p class="text-sm font-semibold">{String(template.name ?? "Unnamed system interest")}</p>
-                      <p class="mt-1 max-w-lg line-clamp-2 text-sm text-muted-foreground">{String(template.description ?? "No description yet.")}</p>
+                      <p class="mt-1 max-w-lg line-clamp-2 text-sm text-muted-foreground">{String(template.description ?? "No description.")}</p>
                     </td>
                     <td class="px-5 py-4 align-top">
                       <div class="flex flex-wrap gap-2">
@@ -243,8 +306,8 @@ function resolveLlmReviewMode(
                           action={appPath("/bff/admin/templates")}
                           title={isActive ? "Archive system interest" : "Reactivate system interest"}
                           description={isActive
-                            ? "Archived system interests stay visible to operators but disappear from the active catalog until you reactivate them."
-                            : "Reactivating this system interest makes it available again for operators and downstream content selection."}
+                            ? "Archive this system interest to remove it from the active catalog while keeping it recoverable."
+                            : "Reactivate this system interest to return it to the active catalog."}
                           triggerLabel={isActive ? "Archive" : "Activate"}
                           confirmLabel={isActive ? "Archive system interest" : "Activate system interest"}
                           fields={[
@@ -260,7 +323,7 @@ function resolveLlmReviewMode(
                         <AdminConfirmAction
                           action={appPath("/bff/admin/templates")}
                           title="Delete system interest"
-                          description="Delete permanently only when this global selection rule should no longer exist in the admin library at all."
+                          description="Delete this system interest permanently. Use archive instead if you may need it again."
                           triggerLabel="Delete"
                           confirmLabel="Delete system interest"
                           fields={[

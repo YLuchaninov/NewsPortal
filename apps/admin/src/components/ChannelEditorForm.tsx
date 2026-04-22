@@ -176,6 +176,31 @@ export function ChannelEditorForm({
       <input type="hidden" name="redirectTo" value={redirectTo} />
       {value.channelId && <input type="hidden" name="channelId" value={value.channelId} />}
 
+      <section className="rounded-2xl border border-border bg-background px-5 py-4">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { title: "Basics", body: "Identity, source URL, schedule, and active state." },
+            { title: "Auth", body: supportsAuthorizationHeader ? "Stored Authorization header when this source needs it." : "Credentials live in the mailbox section below." },
+            {
+              title: "Provider settings",
+              body: isWebsite
+                ? "Discovery modes, crawl budgets, and URL constraints."
+                : isApi
+                  ? "Payload mapping, request budgets, and enrichment."
+                  : isEmailImap
+                    ? "Mailbox connection, sender filter, and ingest limits."
+                    : "RSS adapter, enrichment thresholds, and feed-specific fetch controls.",
+            },
+            { title: "Advanced", body: "Collapsed by default for the noisiest provider-specific controls." },
+          ].map((item) => (
+            <div key={item.title} className="min-w-[180px] flex-1 rounded-2xl border border-border bg-card px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{item.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{item.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-5">
           <h2 className="text-base font-semibold text-foreground">{basicsTitle}</h2>
@@ -477,7 +502,7 @@ export function ChannelEditorForm({
         className="group rounded-2xl border border-border bg-card p-5 shadow-sm"
         open={mode === "edit" && !isRss}
       >
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
           <div>
             <p className="text-base font-semibold text-foreground">Advanced fetch settings</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -490,8 +515,19 @@ export function ChannelEditorForm({
                     : "Fine-tune runtime limits, feed parsing, and scheduling ceilings."}
             </p>
           </div>
-          <span className="text-xs font-medium text-primary transition group-open:rotate-180">
-            ⌄
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition group-open:rotate-180">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </span>
         </summary>
 

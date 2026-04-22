@@ -14,6 +14,278 @@
 
 ## Completed items
 
+### 2026-04-22 — PATCH-ADMIN-RESOURCE-KPI-LABEL-WRAP — Stabilized the remaining narrow KPI-card labels on the resources surface
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the earlier KPI fixes, screenshot review still showed one more awkward narrow-card case on the resources overview. The issue was no longer the numeric value itself, but the label treatment: longer titles like `Resource-only` and `Failed on page` were breaking in a visually uneven way and making the hero KPI strip feel less deliberate than the other admin surfaces.
+- Что изменилось:
+  - updated the resources KPI cards so they use the same min-height/value rhythm as the other polished admin hero grids and changed the label treatment to a bounded inline block that wraps by words more predictably:
+    - [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted screenshot/code audit for the remaining resources KPI label case
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the last visible resources-card issue was a label rhythm problem rather than another structural KPI layout regression;
+  - the resources hero strip now follows the same tighter KPI-card treatment as the other recently polished admin surfaces.
+
+### 2026-04-22 — PATCH-ADMIN-KPI-NARROW-CARD-WRAP — Stabilized the last two narrow-card KPI values on discovery and channels
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the broader admin UI polish sweep, two screenshoted KPI cards still behaved badly in narrow widths. The discovery monthly-spend card wrapped the currency value vertically because the text was allowed to break inside the number, and the channels `attention / paused` card could split the separator and values across lines instead of reading as one compact metric.
+- Что изменилось:
+  - updated the discovery monthly-spend KPI so the value stays on one line with tighter responsive sizing instead of breaking character-by-character:
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+  - updated the channels compound KPI so `attention / paused` renders as one nowrap inline metric with steadier spacing and responsive sizing:
+    - [`apps/admin/src/pages/channels.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels.astro)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted screenshot/code audit for the two remaining narrow-card KPI edge cases
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the remaining KPI regressions were typography/wrapping issues rather than deeper layout-structure problems;
+  - both narrow-card cases now keep their semantic value readable without awkward line breaks or split separators.
+
+### 2026-04-22 — SWEEP-ADMIN-UI-ALIGNMENT-AND-DISCLOSURE-POLISH — Tightened admin card alignment and normalized disclosure indicators across the operator UI
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after the operator-console rollout, screenshot review exposed a few visual inconsistencies that were now more noticeable than structural UX issues: KPI cards with uneven vertical rhythm, action rails on automation cards that did not line up cleanly, and `details/summary` blocks where the expand indicator was either too faint, too small, or inconsistent with other admin disclosures.
+- Что изменилось:
+  - normalized automation overview rhythm so summary cards keep a shared height and workflow-library cards use a fixed action rail with consistent button alignment:
+    - [`apps/admin/src/components/AutomationOverviewBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationOverviewBoard.tsx)
+  - tightened hero/KPI alignment on the affected operator indexes so metric cards keep a shared min-height and bottom-aligned values instead of drifting per label length:
+    - [`apps/admin/src/pages/channels.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels.astro)
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+  - replaced the small text-glyph disclosure treatment with a visible, shared chevron-in-circle pattern and hid inconsistent native markers across the affected advanced/diagnostic details blocks:
+    - [`apps/admin/src/components/ChannelEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/ChannelEditorForm.tsx)
+    - [`apps/admin/src/components/InterestTemplateEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/InterestTemplateEditorForm.tsx)
+    - [`apps/admin/src/pages/user-interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/user-interests.astro)
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+    - [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro)
+    - [`apps/admin/src/pages/observability.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/observability.astro)
+    - [`apps/admin/src/pages/articles/[docId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles/[docId].astro)
+    - [`apps/admin/src/pages/resources/[resourceId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources/[resourceId].astro)
+  - synced live process state after the sweep closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted screenshot/code audit against the reported admin surfaces and their real source components
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this sweep
+  - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - `git diff --check --`
+- Что sweep доказал:
+  - the reported admin misalignment was coming from repeatable layout patterns rather than isolated one-off rows, and the fixes now live at those shared operator surfaces;
+  - disclosure controls on the touched admin pages now use one visible visual language instead of mixing browser-default markers, tiny glyphs, and icon chevrons.
+
+### 2026-04-22 — SWEEP-ADMIN-DOCS-LABEL-CONSISTENCY — Synced examples and operator docs with the shipped admin labels, routes, and provider coverage
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after the operator-console rollout and both admin microcopy sweeps shipped, the live repo docs still described older admin navigation, older discovery tab URLs, and outdated provider/create-flow wording. The user asked for a full consistency pass so `EXAMPLES.md` and related operator docs would describe the current UI truth rather than the pre-redesign surface model.
+- Что изменилось:
+  - aligned top-level admin wording, source-import guidance, rules navigation, and provider coverage in:
+    - [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md)
+    - [`HOW_TO_USE.md`](/Users/user/Documents/workspace/my/NewsPortal/HOW_TO_USE.md)
+  - updated built-in example bundles so they point to `Channels → Import`, `Rules → LLM Templates`, and `Rules → System Interests` instead of the old bulk-import / left-column / right-column model:
+    - [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/EXAMPLES.md)
+  - rewrote discovery handbook references from old query-param tabs to the current overview plus focused routes model, while keeping class creation described against the main discovery registry:
+    - [`DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md)
+    - [`docs/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/manual-mvp-runbook.md)
+  - synced live process state after the sweep closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - repo audit for stale admin wording and route references:
+    - `rg -n "AI → Templates|Templates →|Bulk Import|Create Interest Template|Create LLM Template|Save LLM Template|Save Interest Template|Add RSS Channel|Create Channel|/admin/discovery\\?tab=" README.md EXAMPLES.md HOW_TO_USE.md DISCOVERY_MODE_TESTING.md docs/manual-mvp-runbook.md`
+    - authoritative result:
+      - no remaining matches in the touched live docs; the command exited with code `1`, which is the expected “no matches found” state for this audit.
+  - worktree hygiene proof:
+    - `git diff --check --`
+- Что sweep доказал:
+  - the main human-facing admin docs now describe the shipped operator console instead of the superseded entity-first / tab-query / split-column version of the UI;
+  - the docs now reflect the current source onboarding truth, including dedicated `Channels → Import`, the `Rules` split between `LLM Templates` and `System Interests`, focused discovery entry routes, and operator-ready provider coverage for `rss`, `website`, `api`, and `email_imap`.
+
+### 2026-04-22 — SWEEP-ADMIN-LOW-TRAFFIC-COPY-QA — Cleaned up the remaining low-traffic admin wording after the operator-console rollout
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after the high-traffic microcopy pass, the redesigned admin still had lower-traffic surfaces where empty states, fallback text, and confirm descriptions sounded older or more verbose than the rest of the shipped operator console. The user asked for one more polish pass focused only on those residual admin texts.
+- Что изменилось:
+  - shortened resource-ops wording and normalized empty/fallback copy on:
+    - [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro)
+    - [`apps/admin/src/pages/resources/[resourceId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources/[resourceId].astro)
+  - tightened lower-traffic automation and dashboard fallback text on:
+    - [`apps/admin/src/components/AutomationExecutionsBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationExecutionsBoard.tsx)
+    - [`apps/admin/src/components/AutomationOverviewBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationOverviewBoard.tsx)
+    - [`apps/admin/src/components/AutomationTemplateGallery.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationTemplateGallery.tsx)
+    - [`apps/admin/src/pages/index.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/index.astro)
+  - normalized low-traffic discovery empty states and confirm copy without reopening layout or behavior work on:
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+  - synced live process state for the completed sweep:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - `pnpm typecheck`
+  - `pnpm build`
+  - `pnpm test:web:viewports`
+  - `pnpm test:website:admin:compose`
+  - `pnpm test:discovery:admin:compose`
+  - `pnpm integration_tests`
+  - `git diff --check --`
+- Proof notes:
+  - the first `pnpm integration_tests` attempt hit a transient RSS smoke timeout inside the compose fetcher proof;
+  - the immediate rerun passed end-to-end without code changes, so the final proof state is green with an honest note about the flake.
+- Что sweep доказал:
+  - the remaining operator surfaces now use a more consistent “state plus next step” copy pattern instead of mixing newer concise labels with older long-form fallback text;
+  - the low-traffic wording cleanup stayed compatible with repo-owned browser/admin acceptance, including discovery-specific flows and the broader internal MVP admin path.
+
+### 2026-04-22 — SWEEP-ADMIN-MICROCOPY-CONSISTENCY — Normalized admin labels, empty states, and confirmation copy after the operator-console rollout
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after the operator-console redesign shipped, the highest-traffic admin surfaces still mixed concise operator wording with older long-form copy. The follow-up sweep was needed to make list screens, empty states, and confirm dialogs read like one product without reopening layout or behavior work.
+- Что изменилось:
+  - shortened residual long-form intro and maintenance copy on:
+    - [`apps/admin/src/pages/channels.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels.astro)
+    - [`apps/admin/src/pages/reindex.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/reindex.astro)
+  - normalized empty-state language so the touched operator lists now use a more consistent “what happened / what to do next” pattern across:
+    - [`apps/admin/src/pages/channels.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels.astro)
+    - [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro)
+    - [`apps/admin/src/pages/clusters.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/clusters.astro)
+    - [`apps/admin/src/pages/user-interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/user-interests.astro)
+    - [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro)
+    - [`apps/admin/src/pages/templates/llm.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/llm.astro)
+    - [`apps/admin/src/pages/observability.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/observability.astro)
+    - [`apps/admin/src/components/LiveReindexJobsSection.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LiveReindexJobsSection.tsx)
+    - [`apps/admin/src/components/AutomationOverviewBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationOverviewBoard.tsx)
+  - made destructive/archive/reactivate modal language shorter and more parallel on the main admin edit/catalog surfaces:
+    - [`apps/admin/src/pages/channels/[channelId]/edit.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels/[channelId]/edit.astro)
+    - [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro)
+    - [`apps/admin/src/pages/user-interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/user-interests.astro)
+    - [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro)
+    - [`apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro)
+    - [`apps/admin/src/pages/templates/llm.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/llm.astro)
+    - [`apps/admin/src/pages/templates/llm/[promptTemplateId]/edit.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/llm/[promptTemplateId]/edit.astro)
+- Что было доказано:
+  - `pnpm typecheck`
+  - `pnpm build`
+  - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - `pnpm integration_tests`
+    - authoritative result:
+      - internal MVP acceptance passed on the updated admin copy surfaces;
+      - transient browser/admin fixtures were cleaned up and the allowlisted Firebase admin identity was removed before stack shutdown.
+  - `git diff --check --`
+- Что sweep доказал:
+  - the post-redesign admin no longer has the most obvious tone drift between old explanatory text and the newer operator-console language on its highest-traffic surfaces;
+  - the copy cleanup stayed safely inside repo-owned acceptance contours by preserving known string-sensitive anchors on help, observability, and automation routes.
+
+### 2026-04-22 — C-ADMIN-UX-OPERATOR-CONSOLE-REDESIGN — Reframed the admin into a denser task-first operator console across shell, sources, operations, rules, and system/help surfaces
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the shipped admin had grown into a mix of entity-first CRUD screens, long explainers, and overloaded workspaces. The approved UX plan required a truthful operator-console reset: navigation around jobs-to-be-done, one dominant task per page, calmer high-density layouts, and fewer places where onboarding copy, diagnostics, and deep editing all competed on the same surface.
+- Что изменилось:
+  - reset the top-level admin IA and shared shell:
+    - [`apps/admin/src/lib/admin-ia.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/admin-ia.ts)
+    - [`apps/admin/src/layouts/AdminShell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/layouts/AdminShell.astro)
+    - the admin now groups navigation into `Home`, `Operations`, `Sources`, `Rules`, `System`, and `Help` instead of the earlier flatter entity-first structure.
+  - turned the dashboard into an operator home:
+    - [`apps/admin/src/pages/index.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/index.astro)
+    - [`apps/admin/src/components/LiveDashboardKpiGrid.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LiveDashboardKpiGrid.tsx)
+    - the home surface now centers attention queues, bounded health summaries, and next actions rather than a shortcut-card landing grid.
+  - reshaped source-heavy surfaces to reduce overload and split oversized workspaces:
+    - [`apps/admin/src/pages/channels.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels.astro)
+    - [`apps/admin/src/pages/channels/new.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels/new.astro)
+    - [`apps/admin/src/components/ChannelEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/ChannelEditorForm.tsx)
+    - [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro)
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+    - [`apps/admin/src/pages/discovery`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery)
+    - shipped outcomes:
+      - saved-view operator lists on channels;
+      - provider chooser plus bounded quick RSS entry on `/admin/channels/new`;
+      - visible section map on channel editing;
+      - inbox-style resources workspace;
+      - route-backed discovery destinations for overview, profiles, missions, recall, candidates, and sources.
+  - aligned operations and rules surfaces with the same list/detail/workspace rhythm:
+    - [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro)
+    - [`apps/admin/src/pages/clusters.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/clusters.astro)
+    - [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro)
+    - [`apps/admin/src/pages/templates/llm.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/llm.astro)
+    - [`apps/admin/src/components/InterestTemplateEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/InterestTemplateEditorForm.tsx)
+    - [`apps/admin/src/components/LlmTemplateEditorForm.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/LlmTemplateEditorForm.tsx)
+    - [`apps/admin/src/pages/user-interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/user-interests.astro)
+    - [`apps/admin/src/components/AdminUserInterestsLiveBindings.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminUserInterestsLiveBindings.tsx)
+    - shipped outcomes:
+      - triage-style article list with sticky preview workspace;
+      - dense table/detail pattern on clusters while preserving existing acceptance anchors;
+      - saved views and sectioned editors on rules catalogs;
+      - focused queue-plus-detail workspace for per-user interests with live mirrored state updates.
+  - closed the system/help residue so maintenance and guidance surfaces match the same operator model:
+    - [`apps/admin/src/pages/observability.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/observability.astro)
+    - [`apps/admin/src/pages/reindex.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/reindex.astro)
+    - [`apps/admin/src/pages/help.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/help.astro)
+    - [`apps/admin/src/components/AutomationOverviewBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationOverviewBoard.tsx)
+    - shipped outcomes:
+      - observability frames `Fetch health` and `AI review & budget` as two explicit operator jobs;
+      - reindex now presents consequence-aware maintenance choices instead of one long warning block;
+      - automation keeps the required workflow-workspace copy while visually rejoining the shared admin shell rhythm;
+      - help now behaves as task-first playbooks while preserving the acceptance-critical `Admin Guide`, `System Overview`, and `Discovery Control Plane` anchors.
+  - synced live process state for the completed capability:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - shared static proof:
+    - `pnpm typecheck`
+    - `pnpm build`
+  - browser/layout proof:
+    - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - admin route proof across the capability rollout:
+    - `pnpm test:website:admin:compose`
+    - `pnpm test:discovery:admin:compose`
+    - `pnpm integration_tests`
+    - the final `integration_tests` rerun passed after restoring the direct RSS create contract on `/admin/channels/new` and the expected cluster/help framing text used by the repo-owned admin acceptance harness.
+  - worktree hygiene proof:
+    - `git diff --check --`
+- Что capability доказала:
+  - the admin now behaves more like a professional operator console than a stack of unrelated CRUD pages:
+    - top-level navigation is task-first;
+    - the highest-impact surfaces use one dominant job per page;
+    - dense list/detail/workspace patterns repeat consistently across sources, operations, rules, and system pages.
+  - the redesign stayed inside repo-owned truth rather than drifting into mock-only design work:
+    - no backend truth was changed unless existing admin route contracts demanded compatibility;
+    - the shipped compose/browser acceptance harnesses still pass on the redesigned surfaces.
+  - the approved UX plan reached implementation-ready closeout rather than stopping at an audit or wireframe stage.
+
 ### 2026-04-22 — PATCH-AUTOMATION-WORKSPACE-VIEWPORT-PROOF — Closed the remaining responsive/browser proof gap for the shipped automation workspace
 
 - Тип записи: patch archive

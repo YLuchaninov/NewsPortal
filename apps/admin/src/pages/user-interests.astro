@@ -43,6 +43,9 @@ const pagePaths = {
 };
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const searchState = resolveAdminUserInterestSearchState(Astro.url.searchParams);
+const requestedWorkspaceMode = String(Astro.url.searchParams.get("mode") ?? "").trim();
+const workspaceMode = requestedWorkspaceMode === "create" ? "create" : "edit";
+const selectedInterestId = String(Astro.url.searchParams.get("selected") ?? "").trim();
 
 let lookupError: string | null = null;
 let target: AdminUserInterestTarget | null = null;
@@ -64,17 +67,56 @@ if (searchState.lookup) {
   }
 }
 
-const targetFields: AdminUserInterestContextField[] = target
-  ? buildAdminUserInterestContextFields(target, currentPath)
-  : [];
 const enabledCount = interests.filter((interest) => interest.enabled !== false).length;
 const compiledCount = interests.filter(
   (interest) => String(interest.compile_status ?? "") === "compiled"
 ).length;
+const selectedInterest =
+  interests.find((interest) => String(interest.interest_id ?? "") === selectedInterestId) ??
+  interests[0] ??
+  null;
 const liveUpdatesEndpoint = target
   ? `${appPath("/bff/admin/live-updates")}?surface=user-interests&userId=${encodeURIComponent(target.userId)}`
   : null;
 const initialInterestIds = interests.map((interest) => String(interest.interest_id ?? ""));
+
+function resolveWorkspaceHref(options?: {
+  selectedInterestId?: string | null;
+  mode?: "create" | "edit" | null;
+}): string {
+  const targetUrl = new URL(Astro.url);
+  if (target) {
+    targetUrl.searchParams.set("userId", target.userId);
+    targetUrl.searchParams.delete("email");
+  }
+  if (options?.selectedInterestId) {
+    targetUrl.searchParams.set("selected", options.selectedInterestId);
+  } else {
+    targetUrl.searchParams.delete("selected");
+  }
+  if (options?.mode === "create") {
+    targetUrl.searchParams.set("mode", "create");
+  } else {
+    targetUrl.searchParams.delete("mode");
+  }
+  return `${targetUrl.pathname}${targetUrl.search}`;
+}
+
+const createRedirectPath = target
+  ? resolveWorkspaceHref({ mode: "create" })
+  : currentPath;
+const selectedRedirectPath = target && selectedInterest
+  ? resolveWorkspaceHref({
+      selectedInterestId: String(selectedInterest.interest_id ?? ""),
+      mode: "edit",
+    })
+  : currentPath;
+const createTargetFields: AdminUserInterestContextField[] = target
+  ? buildAdminUserInterestContextFields(target, createRedirectPath)
+  : [];
+const editorTargetFields: AdminUserInterestContextField[] = target
+  ? buildAdminUserInterestContextFields(target, selectedRedirectPath)
+  : [];
 
 function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
   if (tone === "success") {
@@ -87,6 +129,18 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
     return "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
   }
   return "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+}
+
+function formatUpdatedAt(value: unknown): string {
+  if (!value) {
+    return "unknown";
+  }
+  return new Date(String(value)).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 ---
 
@@ -110,6 +164,11 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
     <a href={pagePaths.interestTemplates} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
       Interest templates
     </a>
+    {target && (
+      <a href={resolveWorkspaceHref({ mode: "create" })} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+        New interest
+      </a>
+    )}
     {target && (
       <a href={pagePaths.userInterests} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
         Clear user
@@ -236,6 +295,23 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
               ]}>
                 {target.isAnonymous ? "Anonymous" : "Signed-in identity"}
               </span>
+              <a
+                href={resolveWorkspaceHref({ mode: "create" })}
+                class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+              >
+                Create new
+              </a>
+              {selectedInterest && (
+                <a
+                  href={resolveWorkspaceHref({
+                    selectedInterestId: String(selectedInterest.interest_id ?? ""),
+                    mode: "edit",
+                  })}
+                  class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+                >
+                  Focus selected
+                </a>
+              )}
             </div>
           </div>
 
@@ -245,341 +321,451 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
           </div>
         </section>
 
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div class="mb-5">
-            <h2 class="text-base font-semibold">Create a new interest for this user</h2>
-            <p class="mt-1 text-sm text-muted-foreground">
-              Start with the core matching description and examples. Advanced lexical hints are optional.
-            </p>
-          </div>
-
-          <form method="post" action={appPath("/bff/admin/user-interests")} class="space-y-6">
-            {targetFields.map((field) => (
-              <input type="hidden" name={field.name} value={field.value} />
-            ))}
-
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="grid gap-1.5 md:col-span-2">
-                <span class="text-sm font-medium">Description</span>
-                <textarea
-                  name="description"
-                  rows="3"
-                  placeholder="News about AI regulation, governance, and public-sector oversight."
-                  class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                ></textarea>
-              </label>
-
-              <label class="grid gap-1.5">
-                <span class="text-sm font-medium">Positive prototypes</span>
-                <textarea
-                  name="positive_texts"
-                  rows="7"
-                  placeholder="EU AI Act&#10;Brussels regulation"
-                  class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                ></textarea>
-              </label>
-
-              <label class="grid gap-1.5">
-                <span class="text-sm font-medium">Negative prototypes</span>
-                <textarea
-                  name="negative_texts"
-                  rows="7"
-                  placeholder="sports&#10;celebrity gossip"
-                  class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                ></textarea>
-              </label>
-            </div>
-
-            <details class="group rounded-2xl border border-border bg-background/80 p-4">
-              <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-                <div>
-                  <p class="text-sm font-semibold">Advanced matching hints</p>
-                  <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, place hints, and time-window gating. Term lists accept line breaks or commas, and a blank time window means any age.</p>
-                </div>
-                <span class="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
-              </summary>
-
-              <div class="mt-5 grid gap-4 lg:grid-cols-2">
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Must-have terms</span>
-                  <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-                  <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
-                </label>
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Must-not-have terms</span>
-                  <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-                  <span class="text-xs text-muted-foreground">One term per line or comma-separated. Any match blocks the interest.</span>
-                </label>
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Places</span>
-                  <input name="places" type="text" placeholder="Warsaw, Brussels" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                </label>
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Allowed languages</span>
-                  <input name="languages_allowed" type="text" value="en" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                </label>
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Time window (hours)</span>
-                  <input name="time_window_hours" type="number" min="1" step="1" placeholder="168" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                  <span class="text-xs text-muted-foreground">Leave blank to match content from any time period.</span>
-                </label>
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Required short tokens</span>
-                  <input name="short_tokens_required" type="text" placeholder="AI, FTC" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                </label>
-                <label class="grid gap-1.5">
-                  <span class="text-sm font-medium">Forbidden short tokens</span>
-                  <input name="short_tokens_forbidden" type="text" placeholder="NBA, NFL" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                </label>
-              </div>
-            </details>
-
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="grid gap-1.5">
-                <span class="text-sm font-medium">Priority</span>
-                <input name="priority" type="number" min="0.1" max="1" step="0.1" value="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </label>
-              <label class="grid gap-1.5">
-                <span class="text-sm font-medium">Enabled</span>
-                <select name="enabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                  <option value="true" selected>Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </label>
-            </div>
-
-            <div class="flex flex-wrap items-center justify-end gap-2">
-              <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-                Create user interest
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section class="rounded-2xl border border-border bg-card shadow-sm">
-          <div class="border-b border-border px-5 py-4">
-            <h2 class="text-base font-semibold">Existing interests</h2>
-            <p class="mt-1 text-sm text-muted-foreground" data-admin-live-interest-summary>
-              {interests.length} interest{interests.length !== 1 ? "s" : ""} for the selected user
-            </p>
-          </div>
-
-          <div
-            data-admin-live-interest-refresh
-            class="hidden border-b border-border bg-primary/5 px-5 py-4"
-          >
-            <div class="flex flex-col items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-              <p class="font-medium text-foreground">
-                The interest list changed while this page was open
+        <div class="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
+          <section class="rounded-2xl border border-border bg-card shadow-sm xl:sticky xl:top-6 xl:self-start">
+            <div class="border-b border-border px-5 py-4">
+              <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Workspace</p>
+              <h2 class="mt-2 text-base font-semibold">Interest queue</h2>
+              <p class="mt-1 text-sm text-muted-foreground" data-admin-live-interest-summary>
+                {interests.length} interest{interests.length !== 1 ? "s" : ""} for the selected user
               </p>
+            </div>
+
+            <div
+              data-admin-live-interest-refresh
+              class="hidden border-b border-border bg-primary/5 px-5 py-4"
+            >
+              <div class="flex flex-col items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                <p class="font-medium text-foreground">
+                  The interest list changed while this page was open
+                </p>
+                <a
+                  href={currentPath}
+                  class="inline-flex h-8 items-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+                >
+                  Refresh this page
+                </a>
+              </div>
+            </div>
+
+            <div class="border-b border-border px-5 py-4">
               <a
-                href={currentPath}
-                class="inline-flex h-8 items-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+                href={resolveWorkspaceHref({ mode: "create" })}
+                class:list={[
+                  "flex items-center justify-between rounded-xl border px-4 py-3 transition-colors",
+                  workspaceMode === "create"
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border bg-background hover:border-primary/25 hover:bg-muted/40",
+                ]}
               >
-                Refresh this page
+                <div>
+                  <p class="text-sm font-semibold">Create new interest</p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    Add one more live per-user interest without touching global templates.
+                  </p>
+                </div>
+                <span class="text-xs font-medium text-primary">Open</span>
               </a>
             </div>
-          </div>
 
-          {interests.length === 0 ? (
-            <div class="px-6 py-14 text-center">
-              <p class="text-base font-medium">No interests for this user yet</p>
-              <p class="mt-2 text-sm text-muted-foreground">
-                Use the form above to create the first real per-user interest. This does not affect interest templates.
-              </p>
-            </div>
-          ) : (
-            <div class="divide-y divide-border">
-              {interests.map((interest) => {
-                const interestId = String(interest.interest_id ?? "");
-                const compileState = resolveAdminUserInterestCompileState(interest);
-                const hasCompiledSnapshot = Boolean(interest.compiled_json);
-                const isEnabled = interest.enabled !== false;
-                const updatedAt = interest.updated_at
-                  ? new Date(String(interest.updated_at)).toLocaleString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })
-                  : "unknown";
-                return (
-                  <details class="group px-5 py-4" open={false}>
-                    <summary class="flex cursor-pointer list-none flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <p class="text-sm font-semibold">{String(interest.description ?? "Untitled interest")}</p>
-                          <span class:list={[
-                            "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                            isEnabled
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                              : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
-                          ]}>
-                            {isEnabled ? "Enabled" : "Disabled"}
-                          </span>
-                          <span class:list={[
+            {interests.length === 0 ? (
+              <div class="px-6 py-14 text-center">
+                <p class="text-base font-medium">No interests for this user yet</p>
+                <p class="mt-2 text-sm text-muted-foreground">
+                  Use the create workspace to add the first live per-user interest.
+                </p>
+              </div>
+            ) : (
+              <div class="divide-y divide-border">
+                {interests.map((interest) => {
+                  const interestId = String(interest.interest_id ?? "");
+                  const compileState = resolveAdminUserInterestCompileState(interest);
+                  const hasCompiledSnapshot = Boolean(interest.compiled_json);
+                  const isEnabled = interest.enabled !== false;
+                  const isSelected = selectedInterest
+                    ? String(selectedInterest.interest_id ?? "") === interestId &&
+                      workspaceMode !== "create"
+                    : false;
+                  return (
+                    <a
+                      href={resolveWorkspaceHref({
+                        selectedInterestId: interestId,
+                        mode: "edit",
+                      })}
+                      class:list={[
+                        "block px-5 py-4 transition-colors",
+                        isSelected ? "bg-primary/5" : "hover:bg-muted/30",
+                      ]}
+                    >
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="text-sm font-semibold">
+                          {String(interest.description ?? "Untitled interest")}
+                        </p>
+                        <span class:list={[
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                          isEnabled
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                        ]}>
+                          {isEnabled ? "Enabled" : "Disabled"}
+                        </span>
+                        <span
+                          class:list={[
                             "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
                             badgeClass(compileState.tone),
-                          ]} data-admin-live-interest-status={interestId}>
-                            {compileState.label}
-                          </span>
-                        </div>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                          Version {String(interest.version ?? 1)} • Updated {updatedAt}
-                          <span data-admin-live-interest-compile-detail={interestId}>
-                            {compileState.detail ? ` • ${compileState.detail}` : ""}
-                          </span>
-                        </p>
-                      </div>
-
-                      <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          ]}
+                          data-admin-live-interest-status={interestId}
+                        >
+                          {compileState.label}
+                        </span>
                         <span
                           data-admin-live-interest-compiled-pill={interestId}
                           class:list={[
-                            "rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary",
+                            "rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary",
                             !hasCompiledSnapshot && "hidden",
                           ]}
                         >
-                          Compiled snapshot ready
+                          Compiled
                         </span>
-                        <span class="text-primary transition group-open:rotate-180">⌄</span>
                       </div>
-                    </summary>
-
-                    <div class="mt-5 grid gap-5">
+                      <p class="mt-1 text-xs text-muted-foreground">
+                        Version {String(interest.version ?? 1)} • Updated {formatUpdatedAt(interest.updated_at)}
+                        <span data-admin-live-interest-compile-detail={interestId}>
+                          {compileState.detail ? ` • ${compileState.detail}` : ""}
+                        </span>
+                      </p>
                       <div
                         data-admin-live-interest-error={interestId}
                         class:list={[
-                          "rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300",
+                          "mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300",
                           !(String(interest.compile_status ?? "") === "failed" && interest.error_text) && "hidden",
                         ]}
                       >
                         {String(interest.error_text ?? "")}
                       </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
-                      <form method="post" action={appPath(`/bff/admin/user-interests/${interestId}`)} class="space-y-5">
-                        {targetFields.map((field) => (
-                          <input type="hidden" name={field.name} value={field.value} />
-                        ))}
-                        <div class="grid gap-4 md:grid-cols-2">
-                          <label class="grid gap-1.5 md:col-span-2">
-                            <span class="text-sm font-medium">Description</span>
-                            <textarea
-                              name="description"
-                              rows="3"
-                              class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            >{String(interest.description ?? "")}</textarea>
-                          </label>
+          <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            {workspaceMode === "create" || !selectedInterest ? (
+              <div class="space-y-6">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Create</p>
+                  <h2 class="mt-2 text-base font-semibold">New interest for this user</h2>
+                  <p class="mt-1 text-sm text-muted-foreground">
+                    Use a dedicated create workspace so new interests do not compete visually with the existing queue.
+                  </p>
+                </div>
 
-                          <label class="grid gap-1.5">
-                            <span class="text-sm font-medium">Positive prototypes</span>
-                            <textarea
-                              name="positive_texts"
-                              rows="6"
-                              class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            >{formatLineListValue(interest.positive_texts)}</textarea>
-                          </label>
+                <form method="post" action={appPath("/bff/admin/user-interests")} class="space-y-6">
+                  {createTargetFields.map((field) => (
+                    <input type="hidden" name={field.name} value={field.value} />
+                  ))}
 
-                          <label class="grid gap-1.5">
-                            <span class="text-sm font-medium">Negative prototypes</span>
-                            <textarea
-                              name="negative_texts"
-                              rows="6"
-                              class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            >{formatLineListValue(interest.negative_texts)}</textarea>
-                          </label>
-                        </div>
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <label class="grid gap-1.5 md:col-span-2">
+                      <span class="text-sm font-medium">Description</span>
+                      <textarea
+                        name="description"
+                        rows="3"
+                        placeholder="News about AI regulation, governance, and public-sector oversight."
+                        class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      ></textarea>
+                    </label>
 
-                        <details class="group rounded-2xl border border-border bg-background/80 p-4">
-                          <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-                            <div>
-                              <p class="text-sm font-semibold">Advanced matching hints</p>
-                              <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, place hints, and time-window gating. Term lists accept line breaks or commas, and a blank time window means any age.</p>
-                            </div>
-                            <span class="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
-                          </summary>
+                    <label class="grid gap-1.5">
+                      <span class="text-sm font-medium">Positive prototypes</span>
+                      <textarea
+                        name="positive_texts"
+                        rows="7"
+                        placeholder="EU AI Act&#10;Brussels regulation"
+                        class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      ></textarea>
+                    </label>
 
-                          <div class="mt-5 grid gap-4 lg:grid-cols-2">
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Must-have terms</span>
-                              <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(interest.must_have_terms)}</textarea>
-                              <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
-                            </label>
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Must-not-have terms</span>
-                              <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(interest.must_not_have_terms)}</textarea>
-                              <span class="text-xs text-muted-foreground">One term per line or comma-separated. Any match blocks the interest.</span>
-                            </label>
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Places</span>
-                              <input name="places" type="text" value={formatCsvListValue(interest.places)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                            </label>
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Allowed languages</span>
-                              <input name="languages_allowed" type="text" value={formatCsvListValue(interest.languages_allowed)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                            </label>
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Time window (hours)</span>
-                              <input name="time_window_hours" type="number" min="1" step="1" value={interest.time_window_hours == null ? "" : String(interest.time_window_hours)} placeholder="168" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                              <span class="text-xs text-muted-foreground">Leave blank to match content from any time period.</span>
-                            </label>
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Required short tokens</span>
-                              <input name="short_tokens_required" type="text" value={formatCsvListValue(interest.short_tokens_required)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                            </label>
-                            <label class="grid gap-1.5">
-                              <span class="text-sm font-medium">Forbidden short tokens</span>
-                              <input name="short_tokens_forbidden" type="text" value={formatCsvListValue(interest.short_tokens_forbidden)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                            </label>
-                          </div>
-                        </details>
+                    <label class="grid gap-1.5">
+                      <span class="text-sm font-medium">Negative prototypes</span>
+                      <textarea
+                        name="negative_texts"
+                        rows="7"
+                        placeholder="sports&#10;celebrity gossip"
+                        class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      ></textarea>
+                    </label>
+                  </div>
 
-                        <div class="grid gap-4 md:grid-cols-2">
-                          <label class="grid gap-1.5">
-                            <span class="text-sm font-medium">Priority</span>
-                            <input name="priority" type="number" min="0.1" max="1" step="0.1" value={String(interest.priority ?? 1)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                          </label>
-                          <label class="grid gap-1.5">
-                            <span class="text-sm font-medium">Enabled</span>
-                            <select name="enabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                              <option value="true" selected={isEnabled}>Enabled</option>
-                              <option value="false" selected={!isEnabled}>Disabled</option>
-                            </select>
-                          </label>
-                        </div>
+                  <details class="group rounded-2xl border border-border bg-background/80 p-4">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                      <div>
+                        <p class="text-sm font-semibold">Advanced matching hints</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, place hints, and time-window gating. Term lists accept line breaks or commas, and a blank time window means any age.</p>
+                      </div>
+                      <span class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition group-open:rotate-180">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                          <path d="m6 9 6 6 6-6"></path>
+                        </svg>
+                      </span>
+                    </summary>
 
-                        <div class="flex flex-wrap items-center justify-between gap-3">
-                          <div class="flex flex-wrap gap-2">
-                            <button type="submit" name="_action" value="update" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-                              Save changes
-                            </button>
-                            <button type="submit" name="_action" value="clone" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
-                              Clone
-                            </button>
-                          </div>
-
-                          <AdminConfirmAction
-                            action={appPath(`/bff/admin/user-interests/${interestId}`)}
-                            title="Delete user interest"
-                            description="Delete this real per-user interest for the selected user. This does not touch global system interests or system-wide selection logic."
-                            triggerLabel="Delete"
-                            confirmLabel="Delete interest"
-                            fields={[
-                              ...targetFields,
-                              { name: "_action", value: "delete" },
-                            ]}
-                            triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
-                            client:load
-                          />
-                        </div>
-                      </form>
+                    <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Must-have terms</span>
+                        <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                        <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
+                      </label>
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Must-not-have terms</span>
+                        <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                        <span class="text-xs text-muted-foreground">One term per line or comma-separated. Any match blocks the interest.</span>
+                      </label>
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Places</span>
+                        <input name="places" type="text" placeholder="Warsaw, Brussels" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                      </label>
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Allowed languages</span>
+                        <input name="languages_allowed" type="text" value="en" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                      </label>
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Time window (hours)</span>
+                        <input name="time_window_hours" type="number" min="1" step="1" placeholder="168" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        <span class="text-xs text-muted-foreground">Leave blank to match content from any time period.</span>
+                      </label>
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Required short tokens</span>
+                        <input name="short_tokens_required" type="text" placeholder="AI, FTC" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                      </label>
+                      <label class="grid gap-1.5">
+                        <span class="text-sm font-medium">Forbidden short tokens</span>
+                        <input name="short_tokens_forbidden" type="text" placeholder="NBA, NFL" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                      </label>
                     </div>
                   </details>
+
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <label class="grid gap-1.5">
+                      <span class="text-sm font-medium">Priority</span>
+                      <input name="priority" type="number" min="0.1" max="1" step="0.1" value="1" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                    </label>
+                    <label class="grid gap-1.5">
+                      <span class="text-sm font-medium">Enabled</span>
+                      <select name="enabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                        <option value="true" selected>Enabled</option>
+                        <option value="false">Disabled</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="flex flex-wrap items-center justify-end gap-2">
+                    <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                      Create user interest
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              (() => {
+                const interestId = String(selectedInterest.interest_id ?? "");
+                const compileState = resolveAdminUserInterestCompileState(selectedInterest);
+                const hasCompiledSnapshot = Boolean(selectedInterest.compiled_json);
+                const isEnabled = selectedInterest.enabled !== false;
+                return (
+                  <div class="space-y-6">
+                    <div class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                      <div class="rounded-[1.5rem] border border-border bg-background p-5">
+                        <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Detail</p>
+                        <h2 class="mt-2 text-lg font-semibold tracking-tight">
+                          {String(selectedInterest.description ?? "Untitled interest")}
+                        </h2>
+                        <p class="mt-2 text-sm text-muted-foreground">
+                          Edit one real per-user interest at a time so compile state, queue actions, and matching hints stay readable.
+                        </p>
+                      </div>
+                      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                        <div class="rounded-2xl border border-border bg-background p-4">
+                          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+                          <div class="mt-2 flex flex-wrap gap-2">
+                            <span class:list={[
+                              "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                              isEnabled
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                            ]}>
+                              {isEnabled ? "Enabled" : "Disabled"}
+                            </span>
+                            <span
+                              class:list={[
+                                "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                                badgeClass(compileState.tone),
+                              ]}
+                              data-admin-live-interest-status={interestId}
+                            >
+                              {compileState.label}
+                            </span>
+                            <span
+                              data-admin-live-interest-compiled-pill={interestId}
+                              class:list={[
+                                "rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary",
+                                !hasCompiledSnapshot && "hidden",
+                              ]}
+                            >
+                              Compiled snapshot ready
+                            </span>
+                          </div>
+                        </div>
+                        <div class="rounded-2xl border border-border bg-background p-4">
+                          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Version</p>
+                          <p class="mt-2 text-sm font-semibold">{String(selectedInterest.version ?? 1)}</p>
+                          <p class="mt-1 text-xs text-muted-foreground">
+                            Updated {formatUpdatedAt(selectedInterest.updated_at)}
+                            <span data-admin-live-interest-compile-detail={interestId}>
+                              {compileState.detail ? ` • ${compileState.detail}` : ""}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      data-admin-live-interest-error={interestId}
+                      class:list={[
+                        "rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-300",
+                        !(String(selectedInterest.compile_status ?? "") === "failed" && selectedInterest.error_text) && "hidden",
+                      ]}
+                    >
+                      {String(selectedInterest.error_text ?? "")}
+                    </div>
+
+                    <form method="post" action={appPath(`/bff/admin/user-interests/${interestId}`)} class="space-y-5">
+                      {editorTargetFields.map((field) => (
+                        <input type="hidden" name={field.name} value={field.value} />
+                      ))}
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <label class="grid gap-1.5 md:col-span-2">
+                          <span class="text-sm font-medium">Description</span>
+                          <textarea
+                            name="description"
+                            rows="3"
+                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >{String(selectedInterest.description ?? "")}</textarea>
+                        </label>
+
+                        <label class="grid gap-1.5">
+                          <span class="text-sm font-medium">Positive prototypes</span>
+                          <textarea
+                            name="positive_texts"
+                            rows="6"
+                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >{formatLineListValue(selectedInterest.positive_texts)}</textarea>
+                        </label>
+
+                        <label class="grid gap-1.5">
+                          <span class="text-sm font-medium">Negative prototypes</span>
+                          <textarea
+                            name="negative_texts"
+                            rows="6"
+                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >{formatLineListValue(selectedInterest.negative_texts)}</textarea>
+                        </label>
+                      </div>
+
+                      <details class="group rounded-2xl border border-border bg-background/80 p-4">
+                        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                          <div>
+                            <p class="text-sm font-semibold">Advanced matching hints</p>
+                            <p class="mt-1 text-sm text-muted-foreground">Optional lexical constraints, languages, place hints, and time-window gating. Term lists accept line breaks or commas, and a blank time window means any age.</p>
+                          </div>
+                          <span class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition group-open:rotate-180">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                              <path d="m6 9 6 6 6-6"></path>
+                            </svg>
+                          </span>
+                        </summary>
+
+                        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Must-have terms</span>
+                            <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(selectedInterest.must_have_terms)}</textarea>
+                            <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Must-not-have terms</span>
+                            <textarea name="must_not_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(selectedInterest.must_not_have_terms)}</textarea>
+                            <span class="text-xs text-muted-foreground">One term per line or comma-separated. Any match blocks the interest.</span>
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Places</span>
+                            <input name="places" type="text" value={formatCsvListValue(selectedInterest.places)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Allowed languages</span>
+                            <input name="languages_allowed" type="text" value={formatCsvListValue(selectedInterest.languages_allowed)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Time window (hours)</span>
+                            <input name="time_window_hours" type="number" min="1" step="1" value={selectedInterest.time_window_hours == null ? "" : String(selectedInterest.time_window_hours)} placeholder="168" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            <span class="text-xs text-muted-foreground">Leave blank to match content from any time period.</span>
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Required short tokens</span>
+                            <input name="short_tokens_required" type="text" value={formatCsvListValue(selectedInterest.short_tokens_required)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                          </label>
+                          <label class="grid gap-1.5">
+                            <span class="text-sm font-medium">Forbidden short tokens</span>
+                            <input name="short_tokens_forbidden" type="text" value={formatCsvListValue(selectedInterest.short_tokens_forbidden)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                          </label>
+                        </div>
+                      </details>
+
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <label class="grid gap-1.5">
+                          <span class="text-sm font-medium">Priority</span>
+                          <input name="priority" type="number" min="0.1" max="1" step="0.1" value={String(selectedInterest.priority ?? 1)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        </label>
+                        <label class="grid gap-1.5">
+                          <span class="text-sm font-medium">Enabled</span>
+                          <select name="enabled" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                            <option value="true" selected={isEnabled}>Enabled</option>
+                            <option value="false" selected={!isEnabled}>Disabled</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap gap-2">
+                          <button type="submit" name="_action" value="update" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                            Save changes
+                          </button>
+                          <button type="submit" name="_action" value="clone" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+                            Clone
+                          </button>
+                        </div>
+
+                        <AdminConfirmAction
+                          action={appPath(`/bff/admin/user-interests/${interestId}`)}
+                          title="Delete user interest"
+                          description="Delete this per-user interest for the selected user. Global templates and system selection rules stay unchanged."
+                          triggerLabel="Delete"
+                          confirmLabel="Delete interest"
+                          fields={[
+                            ...editorTargetFields,
+                            { name: "_action", value: "delete" },
+                          ]}
+                          triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                          client:load
+                        />
+                      </div>
+                    </form>
+                  </div>
                 );
-              })}
-            </div>
-          )}
-        </section>
+              })()
+            )}
+          </section>
+        </div>
 
         <AdminUserInterestsLiveBindings
           targetUserId={target.userId}
@@ -592,8 +778,7 @@ function badgeClass(tone: AdminUserInterestCompileState["tone"]): string {
       <section class="rounded-2xl border border-dashed border-border bg-card/60 px-6 py-14 text-center shadow-sm">
         <p class="text-base font-medium">No user selected yet</p>
         <p class="mt-2 max-w-2xl mx-auto text-sm text-muted-foreground">
-          Find a user first, then this page will show their real `user_interests`, compile status, errors,
-          and audited manage actions. Interest templates stay separate on the global template screens.
+          Find a user to open their live interest workspace, compile state, and admin actions. Global templates stay on the template screens.
         </p>
       </section>
     )}

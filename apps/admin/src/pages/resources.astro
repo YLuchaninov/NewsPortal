@@ -117,6 +117,7 @@ const requestedResourceKind = Astro.url.searchParams.get("resourceKind")?.trim()
 const selectedResourceKind = RESOURCE_KINDS.includes(requestedResourceKind as typeof RESOURCE_KINDS[number])
   ? requestedResourceKind
   : "";
+const selectedResourceId = Astro.url.searchParams.get("selected")?.trim() ?? "";
 
 const [resources, websiteChannelsPage] = await Promise.all([
   sdk.listWebResourcesPage<WebResourcePreview>({
@@ -207,11 +208,19 @@ function readSelectionGuidance(resourceLike: unknown): { tone: string; summary: 
 const projectedOnPage = resources.items.filter((item) => item.projected_article_id).length;
 const resourceOnlyOnPage = resources.items.filter((item) => !item.projected_article_id).length;
 const failedOnPage = resources.items.filter((item) => String(item.extraction_state ?? "") === "failed").length;
+const selectedResourcePreview =
+  resources.items.find((item) => String(item.resource_id ?? "") === selectedResourceId) ?? resources.items[0] ?? null;
 
 const pagePaths = {
   dashboard: appPath("/"),
   channels: appPath("/channels"),
 };
+
+function resolveResourcePreviewHref(resourceId: string): string {
+  const target = new URL(Astro.url);
+  target.searchParams.set("selected", resourceId);
+  return `${target.pathname}${target.search}`;
+}
 ---
 
 <AdminShell title="Resources — Admin" session={session} flash={flash} activeNav="resources">
@@ -239,21 +248,29 @@ const pagePaths = {
         )}
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Results</p>
-          <p class="mt-1 text-2xl font-semibold">{resources.total}</p>
+        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span class="inline-block max-w-[8ch] leading-[1.35]">Results</span>
+          </p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{resources.total}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Projected</p>
-          <p class="mt-1 text-2xl font-semibold">{projectedOnPage}</p>
+        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span class="inline-block max-w-[8ch] leading-[1.35]">Projected</span>
+          </p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{projectedOnPage}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Resource-only</p>
-          <p class="mt-1 text-2xl font-semibold">{resourceOnlyOnPage}</p>
+        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span class="inline-block max-w-[8ch] leading-[1.35]">Resource only</span>
+          </p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{resourceOnlyOnPage}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
-          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Failed on page</p>
-          <p class="mt-1 text-2xl font-semibold">{failedOnPage}</p>
+        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span class="inline-block max-w-[8ch] leading-[1.35]">Failed on page</span>
+          </p>
+          <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{failedOnPage}</p>
         </div>
       </div>
     </div>
@@ -262,7 +279,7 @@ const pagePaths = {
       <div>
         <h2 class="text-base font-semibold">Filters</h2>
         <p class="mt-1 text-sm text-muted-foreground">
-          Narrow the list by website channel, extraction state, projection status, or resource kind. This surface is for operator inspection, not for changing runtime ownership.
+          Filter by website channel, extraction state, projection status, or resource kind. This surface is for inspection, not runtime edits.
         </p>
       </div>
       <form method="get" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -312,26 +329,27 @@ const pagePaths = {
       </form>
     </section>
 
-    <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <div class="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 class="text-base font-semibold">Persisted website resources</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            {resources.total} resource{resources.total !== 1 ? "s" : ""} total
-            {resources.total > 0 && ` — page ${resources.page} of ${Math.max(resources.totalPages, 1)}`}
-          </p>
+    <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div class="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 class="text-base font-semibold">Resource inbox</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              {resources.total} resource{resources.total !== 1 ? "s" : ""} total
+              {resources.total > 0 && ` — page ${resources.page} of ${Math.max(resources.totalPages, 1)}`}
+            </p>
+          </div>
         </div>
-      </div>
 
-      {resources.total === 0 ? (
-        <div class="px-6 py-14 text-center">
-          <p class="text-base font-medium">No website resources match these filters</p>
-          <p class="mt-2 text-sm text-muted-foreground">
-            Start with a website channel on <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a>, run ingest, then come back here to inspect projected and non-projecting rows.
-          </p>
-        </div>
-      ) : (
-        <div class="overflow-x-auto">
+        {resources.total === 0 ? (
+          <div class="px-6 py-14 text-center">
+            <p class="text-base font-medium">No website resources match these filters</p>
+            <p class="mt-2 text-sm text-muted-foreground">
+              Try broader filters or start with a website channel on <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a>, then run ingest and return here.
+            </p>
+          </div>
+        ) : (
+          <div class="overflow-x-auto">
           <table class="w-full min-w-[1080px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
@@ -346,10 +364,11 @@ const pagePaths = {
             <tbody>
               {resources.items.length === 0 ? (
                 <tr>
-                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No resources on this page</td>
+                  <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No resources on this page. Try another page of results.</td>
                 </tr>
               ) : resources.items.map((resource) => {
                 const resourceHref = appPath(`/resources/${encodeURIComponent(String(resource.resource_id ?? ""))}`);
+                const previewHref = resolveResourcePreviewHref(String(resource.resource_id ?? ""));
                 const projectedArticleHref = resource.projected_article_id
                   ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
                   : null;
@@ -361,9 +380,14 @@ const pagePaths = {
                 const projectionState = String(resource.projection_state ?? "pending").trim() || "pending";
                 const projectionError = String(resource.projection_error ?? "").trim();
                 return (
-                  <tr class="border-b border-border last:border-b-0">
+                  <tr class:list={[
+                    "border-b border-border last:border-b-0",
+                    String(resource.resource_id ?? "") === String(selectedResourcePreview?.resource_id ?? "")
+                      ? "bg-primary/5"
+                      : "",
+                  ]}>
                     <td class="px-5 py-4 align-top">
-                      <a href={resourceHref} class="text-sm font-semibold hover:text-primary">
+                      <a href={previewHref} class="text-sm font-semibold hover:text-primary">
                         {String(resource.title ?? "Untitled resource")}
                       </a>
                       <p class="mt-1 text-xs text-muted-foreground">{String(resource.channel_name ?? "Unknown website channel")}</p>
@@ -392,7 +416,7 @@ const pagePaths = {
                         {String(resource.extraction_state ?? "pending")}
                       </span>
                       <p class="mt-3 text-xs text-muted-foreground">
-                        {resource.extraction_error ? String(resource.extraction_error) : "No extraction error recorded."}
+                        {resource.extraction_error ? String(resource.extraction_error) : "No extraction error."}
                       </p>
                     </td>
                     <td class="px-5 py-4 align-top text-sm text-muted-foreground">
@@ -436,8 +460,8 @@ const pagePaths = {
                     </td>
                     <td class="px-5 py-4 align-top">
                       <div class="flex flex-wrap gap-2">
-                        <a href={resourceHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
-                          Detail
+                        <a href={previewHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                          Preview
                         </a>
                         {projectedArticleHref && (
                           <a href={projectedArticleHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
@@ -456,9 +480,83 @@ const pagePaths = {
               })}
             </tbody>
           </table>
+          </div>
+        )}
+      </section>
+
+      <aside class="rounded-2xl border border-border bg-card p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold">Quick preview</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Inspect the selected resource without leaving the inbox. Full drilldown still lives on the detail page.
+            </p>
+          </div>
+          {selectedResourcePreview && (
+            <a
+              href={appPath(`/resources/${encodeURIComponent(String(selectedResourcePreview.resource_id ?? ""))}`)}
+              class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+            >
+              Full detail
+            </a>
+          )}
         </div>
-      )}
-    </section>
+
+        {!selectedResourcePreview ? (
+          <div class="mt-6 rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-center text-sm text-muted-foreground">
+            Select a resource row to preview its current extraction and projection state.
+          </div>
+        ) : (
+          <div class="mt-6 space-y-4">
+            <div>
+              <p class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Selected resource</p>
+              <h3 class="mt-2 text-lg font-semibold">{String(selectedResourcePreview.title ?? "Untitled resource")}</h3>
+              <p class="mt-2 break-all text-sm text-muted-foreground">{String(selectedResourcePreview.final_url ?? selectedResourcePreview.url ?? "—")}</p>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Discovery</p>
+                <p class="mt-2 text-sm text-muted-foreground">{formatDiscoverySource(selectedResourcePreview.discovery_source)}</p>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  Kind: {String(selectedResourcePreview.resource_kind ?? "unknown")}
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Extraction</p>
+                <p class="mt-2 text-sm text-muted-foreground">{String(selectedResourcePreview.extraction_state ?? "pending")}</p>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  {String(selectedResourcePreview.extraction_error ?? "No extraction error.")}
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Projection</p>
+                <p class="mt-2 text-sm text-muted-foreground">
+                  {selectedResourcePreview.projected_article_id ? "Projected to article" : "Resource-only"}
+                </p>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  {String(selectedResourcePreview.projection_error ?? "Projection diagnostics are clean or not required.")}
+                </p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background p-4">
+                <p class="text-sm font-medium">Selection guidance</p>
+                <p class="mt-2 text-sm text-muted-foreground">{readSelectionGuidance(selectedResourcePreview).summary}</p>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  Mode: {String(selectedResourcePreview.selection_mode ?? "pending")} · Decision: {String(selectedResourcePreview.selection_decision ?? "—")}
+                </p>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+              <p>Discovered: {formatTimestamp(selectedResourcePreview.discovered_at)}</p>
+              <p class="mt-1">Published: {formatTimestamp(selectedResourcePreview.published_at)}</p>
+              <p class="mt-1">Updated: {formatTimestamp(selectedResourcePreview.updated_at)}</p>
+              <p class="mt-3">Channel: {String(selectedResourcePreview.channel_name ?? "Unknown website channel")}</p>
+            </div>
+          </div>
+        )}
+      </aside>
+    </div>
 
     {(resources.hasPrev || resources.hasNext) && (
       <PaginationNav

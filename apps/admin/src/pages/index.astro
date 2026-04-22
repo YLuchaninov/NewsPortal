@@ -3,6 +3,7 @@ import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { AdminLiveCollectionNotice } from "../components/AdminLiveCollectionNotice";
 import { LiveDashboardKpiGrid } from "../components/LiveDashboardKpiGrid";
+import { ADMIN_CONTINUE_ACTIONS } from "../lib/admin-ia";
 import AdminShell from "../layouts/AdminShell.astro";
 import { buildAdminLiveRevision } from "../lib/live-updates";
 import { resolveAdminSession } from "../lib/server/auth";
@@ -29,15 +30,11 @@ const pagePaths = {
   channels: appPath("/channels"),
   channelNew: appPath("/channels/new"),
   articles: appPath("/articles"),
-  clusters: appPath("/clusters"),
-  llmTemplates: appPath("/templates/llm"),
-  interestTemplates: appPath("/templates/interests"),
-  userInterests: appPath("/user-interests"),
   observability: appPath("/observability"),
   reindex: appPath("/reindex"),
-  help: appPath("/help"),
   discovery: appPath("/discovery"),
   resources: appPath("/resources"),
+  automation: appPath("/automation"),
 };
 
 type R = Record<string, unknown>;
@@ -74,12 +71,11 @@ function formatFetchRunDelta(run: R): string {
 }
 
 const kpiCards = !summary ? [] : [
-  { label: "System-selected content", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
-  { label: "Processed 24h", value: String(summary.processed_today ?? 0), color: "text-blue-500" },
-  { label: "Total Users", value: String(summary.total_users ?? 0), color: "text-violet-500" },
-  { label: "Overdue Channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
-  { label: "Fetch Failures 24h", value: String(summary.fetch_failures_24h ?? 0), color: (summary.fetch_failures_24h as number) > 0 ? "text-red-500" : "text-muted-foreground" },
-  { label: "LLM Reviews 24h", value: String(summary.llm_review_count_24h ?? 0), color: "text-primary" },
+  { label: "Needs attention", value: String(summary.attention_channels ?? 0), color: (summary.attention_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
+  { label: "Overdue channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
+  { label: "Fetch failures 24h", value: String(summary.fetch_failures_24h ?? 0), color: (summary.fetch_failures_24h as number) > 0 ? "text-red-500" : "text-muted-foreground" },
+  { label: "System-selected", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
+  { label: "New content 24h", value: String(summary.fetch_new_content_24h ?? 0), color: "text-cyan-500" },
   {
     label:
       summary.llm_review_enabled === true && summary.llm_monthly_quota_reached === true
@@ -100,8 +96,6 @@ const kpiCards = !summary ? [] : [
         ? "text-amber-500"
         : "text-emerald-500",
   },
-  { label: "New Content 24h", value: String(summary.fetch_new_content_24h ?? 0), color: "text-cyan-500" },
-  { label: "Needs Attention", value: String(summary.attention_channels ?? 0), color: (summary.attention_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
 ];
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=dashboard`;
@@ -153,6 +147,12 @@ const fetchRunsRevision = buildAdminLiveRevision([
   fetchRuns?.items[0]?.outcome_kind ?? "",
   fetchRuns?.items[0]?.new_article_count ?? "",
 ]);
+const summaryAttentionChannels = asInt(summary?.attention_channels, 0);
+const summaryOverdueChannels = asInt(summary?.overdue_channels, 0);
+const summaryFetchFailures = asInt(summary?.fetch_failures_24h, 0);
+const summarySelected = asInt(summary?.active_news, 0);
+const summaryLlmReviews = asInt(summary?.llm_review_count_24h, 0);
+const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
 ---
 
 <AdminShell
@@ -168,41 +168,115 @@ const fetchRunsRevision = buildAdminLiveRevision([
   </Fragment>
 
   <div class="space-y-6">
-      <!-- KPI grid -->
+      <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+        <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div class="max-w-3xl">
+            <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Home</p>
+            <h1 class="mt-2 text-2xl font-semibold tracking-tight">Operator console</h1>
+            <p class="mt-2 text-sm leading-6 text-muted-foreground">
+              Start from the live attention queue, continue recent operational work, and jump into the right admin surface without scanning the whole product map.
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a href={pagePaths.channelNew} class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Add source
+            </a>
+            <a href={pagePaths.discovery} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              Open discovery
+            </a>
+            <a href={pagePaths.observability} class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent">
+              Check health
+            </a>
+          </div>
+        </div>
+      </section>
+
       {initialDashboardSummary ? (
         <LiveDashboardKpiGrid initialSummary={initialDashboardSummary} client:load />
       ) : (
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 gap-3 xl:grid-cols-6">
           {kpiCards.map(({ label, value, color }) => (
             <div class="rounded-xl border border-border bg-card p-4">
-              <p class="text-xs text-muted-foreground mb-1">{label}</p>
+              <p class="mb-1 text-xs text-muted-foreground">{label}</p>
               <p class={`text-2xl font-bold ${color}`}>{value}</p>
             </div>
           ))}
         </div>
       )}
 
-      <!-- Quick navigation -->
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10">
-        {[
-          { href: pagePaths.channels, label: "Channels", desc: "Monitor source health" },
-          { href: pagePaths.resources, label: "Resources", desc: "Inspect website resource rows" },
-          { href: pagePaths.channelNew, label: "Add Channel", desc: "Create a new source channel" },
-          { href: pagePaths.discovery, label: "Discovery", desc: "Approve AI-found sources" },
-          { href: pagePaths.articles, label: "Articles", desc: "Moderate content" },
-          { href: pagePaths.clusters, label: "Clusters", desc: "Event clusters" },
-          { href: pagePaths.llmTemplates, label: "LLM Templates", desc: "Gray-zone prompts" },
-          { href: pagePaths.interestTemplates, label: "System Interests", desc: "Global selection rules" },
-          { href: pagePaths.userInterests, label: "User Interests", desc: "Per-user matching" },
-          { href: pagePaths.observability, label: "Observability", desc: "Fetch & LLM logs" },
-          { href: pagePaths.reindex, label: "Reindex", desc: "Rebuild indices" },
-          { href: pagePaths.help, label: "Help", desc: "Setup guide" },
-        ].map(({ href, label, desc }) => (
-          <a href={href} class="rounded-xl border border-border bg-card p-4 hover:bg-accent hover:border-primary/20 transition-all group">
-            <p class="font-medium text-sm group-hover:text-primary transition-colors">{label}</p>
-            <p class="text-xs text-muted-foreground mt-0.5">{desc}</p>
-          </a>
-        ))}
+      <div class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-base font-semibold">Needs attention now</h2>
+              <p class="mt-1 text-sm text-muted-foreground">
+                These are the live operator queues worth checking first when the system needs intervention.
+              </p>
+            </div>
+            <a href={pagePaths.channels} class="text-sm font-medium text-primary hover:underline">Open sources</a>
+          </div>
+          <div class="mt-4 grid gap-3 md:grid-cols-2">
+            {[
+              {
+                href: pagePaths.channels,
+                title: "Source health",
+                value: `${String(summaryAttentionChannels)} attention / ${String(summaryOverdueChannels)} overdue`,
+                tone: summaryAttentionChannels > 0 || summaryOverdueChannels > 0 ? "border-amber-200" : "border-border",
+                body: "Prioritize broken, overdue, or paused channels before drilling into deeper diagnostics.",
+              },
+              {
+                href: pagePaths.discovery,
+                title: "Discovery queues",
+                value: "Missions, recall, candidates",
+                tone: "border-border",
+                body: "Review acquisition progress, candidate backlog, and promotion state without mixing everything into one screen.",
+              },
+              {
+                href: pagePaths.articles,
+                title: "Content triage",
+                value: `${String(summarySelected)} selected / ${String(summaryLlmReviews)} LLM reviews`,
+                tone: "border-border",
+                body: "Inspect selected, held, or blocked article outcomes from one operations lane.",
+              },
+              {
+                href: pagePaths.observability,
+                title: "System health",
+                value: `${String(summaryFetchFailures)} fetch failures / ${String(summaryQueuedReindex)} queued maintenance`,
+                tone: summaryFetchFailures > 0 ? "border-rose-200" : "border-border",
+                body: "Use health surfaces for runtime evidence, not for editing primary source or content entities.",
+              },
+            ].map(({ href, title, value, tone, body }) => (
+              <a href={href} class={`rounded-2xl border bg-background p-4 transition-colors hover:bg-accent ${tone}`}>
+                <p class="text-sm font-medium text-foreground">{title}</p>
+                <p class="mt-2 text-xl font-semibold">{value}</p>
+                <p class="mt-2 text-sm text-muted-foreground">{body}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-base font-semibold">Continue recent work</h2>
+              <p class="mt-1 text-sm text-muted-foreground">
+                Jump back into the main operator jobs without reading the full IA every time.
+              </p>
+            </div>
+          </div>
+          <div class="mt-4 space-y-3">
+            {ADMIN_CONTINUE_ACTIONS.map((action) => (
+              <a href={appPath(action.href)} class="flex items-start justify-between gap-4 rounded-2xl border border-border bg-background px-4 py-3 transition-colors hover:bg-accent">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{action.section}</p>
+                  <p class="mt-1 text-sm font-medium text-foreground">{action.label}</p>
+                  <p class="mt-1 text-sm text-muted-foreground">{action.summary}</p>
+                </div>
+                <span class="shrink-0 text-sm text-primary">Open →</span>
+              </a>
+            ))}
+          </div>
+        </section>
       </div>
 
       <!-- Recent Fetch Runs -->
@@ -226,7 +300,7 @@ const fetchRunsRevision = buildAdminLiveRevision([
           <a href={pagePaths.observability} class="text-xs text-primary hover:underline">View all →</a>
         </div>
         {!fetchRuns || fetchRuns.total === 0 ? (
-          <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet</p>
+          <p class="px-4 py-6 text-sm text-muted-foreground text-center">No fetch runs yet. Fresh polling activity will appear here.</p>
         ) : (
           <div class="overflow-x-auto">
             <table class="w-full text-sm">

@@ -30,15 +30,50 @@ type R = Record<string, unknown>;
 const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
 const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
 const clusters = await sdk.listClustersPage<R>({ page, pageSize: CLUSTERS_PAGE_SIZE });
+const selectedClusterId = String(Astro.url.searchParams.get("selected") ?? "").trim();
+const selectedCluster =
+  clusters.items.find((cluster) => String(cluster.cluster_id ?? "") === selectedClusterId) ??
+  clusters.items[0] ??
+  null;
 
 function resolvePageHref(nextPage: number): string {
   const target = new URL(Astro.url);
+  target.searchParams.delete("selected");
   if (nextPage <= DEFAULT_PAGE) {
     target.searchParams.delete("page");
   } else {
     target.searchParams.set("page", String(nextPage));
   }
   return `${target.pathname}${target.search}`;
+}
+
+function resolvePreviewHref(clusterId: string): string {
+  const target = new URL(Astro.url);
+  target.searchParams.set("selected", clusterId);
+  return `${target.pathname}${target.search}`;
+}
+
+function formatTimestamp(value: unknown): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? (value as unknown[]).map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
 }
 ---
 
@@ -52,67 +87,163 @@ function resolvePageHref(nextPage: number): string {
   </Fragment>
 
   <div class="space-y-5">
-    <div>
-      <h1 class="text-xl font-bold">Event Clusters</h1>
-      <p class="text-sm text-muted-foreground mt-0.5">
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Operations</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Event Clusters</h1>
+      <p class="mt-2 text-sm leading-6 text-muted-foreground">
+        Review cluster density, geography, and verification posture from one table, then inspect one cluster at a time in the side preview before deciding to open deeper article detail.
+      </p>
+      <p class="mt-3 text-sm text-muted-foreground">
         {clusters.total} cluster{clusters.total !== 1 ? "s" : ""} total
         {clusters.total > 0 && ` — page ${clusters.page} of ${Math.max(clusters.totalPages, 1)}`}
       </p>
-    </div>
+    </section>
 
-    <!-- Clusters explanation -->
-    <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
-      <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
-        <span class="text-sm font-medium">What are event clusters?</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto shrink-0 text-muted-foreground transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6"/></svg>
-      </summary>
-      <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
-        <p class="text-xs">When multiple articles cover the <strong>same real-world event</strong>, the system automatically groups them into clusters. This prevents users from receiving multiple notifications about the same story.</p>
-        <div class="grid gap-2 sm:grid-cols-2">
-          <div class="rounded-md border border-border bg-card p-2.5">
-            <p class="font-medium text-foreground text-[11px] mb-0.5">How clustering works</p>
-            <p class="text-[11px]">Articles are compared using semantic similarity (55%), named entities (20%), geographic overlap (15%), and time proximity (10%). If the combined score is ≥ 0.78, the article joins an existing cluster.</p>
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
+      <section class="overflow-hidden rounded-xl border border-border bg-card">
+        {clusters.total === 0 ? (
+          <div class="flex flex-col items-center justify-center py-16 text-center">
+            <p class="font-medium text-sm">No clusters yet</p>
+            <p class="text-xs text-muted-foreground mt-1">Clusters appear automatically as articles are processed.</p>
           </div>
-          <div class="rounded-md border border-border bg-card p-2.5">
-            <p class="font-medium text-foreground text-[11px] mb-0.5">Why it matters</p>
-            <p class="text-[11px]">Clustering enables notification suppression — once a user is notified about an event, follow-up articles in the same cluster won't trigger duplicate alerts.</p>
-          </div>
-        </div>
-      </div>
-    </details>
-
-    {clusters.total === 0 ? (
-      <div class="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-border bg-card">
-        <p class="font-medium text-sm">No clusters yet</p>
-        <p class="text-xs text-muted-foreground mt-1">Clusters are built automatically as articles are processed</p>
-      </div>
-    ) : (
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {clusters.items.length === 0 ? (
-          <div class="sm:col-span-2 lg:col-span-3 flex flex-col items-center justify-center py-16 text-center rounded-xl border border-border bg-card">
+        ) : clusters.items.length === 0 ? (
+          <div class="flex flex-col items-center justify-center py-16 text-center">
             <p class="font-medium text-sm">No clusters on this page</p>
-            <p class="text-xs text-muted-foreground mt-1">Use the pager below to return to a page with cluster cards</p>
+            <p class="text-xs text-muted-foreground mt-1">Try another page to return to cluster rows.</p>
           </div>
-        ) : clusters.items.map((cluster) => (
-          <div class="rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-colors">
-            <p class="font-medium text-sm line-clamp-2">
-              {String(cluster.primary_title ?? cluster.cluster_id ?? "Unnamed cluster")}
-            </p>
-            <div class="flex items-center gap-3 mt-2">
-              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-secondary text-secondary-foreground">
-                {String(cluster.article_count ?? 0)} articles
-              </span>
-              {Array.isArray(cluster.top_places) && (cluster.top_places as string[]).length > 0 && (
-                <span class="text-xs text-muted-foreground truncate">
-                  {(cluster.top_places as string[]).slice(0, 3).join(", ")}
-                </span>
-              )}
-            </div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr class="border-b border-border">
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Cluster</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Coverage</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Signals</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clusters.items.map((cluster) => {
+                  const clusterId = String(cluster.cluster_id ?? "");
+                  const topPlaces = asStringList(cluster.top_places);
+                  const isSelected = selectedCluster
+                    ? String(selectedCluster.cluster_id ?? "") === clusterId
+                    : false;
+                  return (
+                    <tr class:list={[
+                      "border-b border-border last:border-0 transition-colors",
+                      isSelected ? "bg-primary/5" : "hover:bg-muted/30",
+                    ]}>
+                      <td class="px-4 py-3">
+                        <a
+                          href={resolvePreviewHref(clusterId)}
+                          class:list={[
+                            "font-medium text-sm transition-colors",
+                            isSelected ? "text-primary" : "hover:text-primary",
+                          ]}
+                        >
+                          {String(cluster.primary_title ?? cluster.cluster_id ?? "Unnamed cluster")}
+                        </a>
+                        <p class="mt-1 text-[11px] text-muted-foreground">cluster:{clusterId ? clusterId.slice(0, 8) : "—"}</p>
+                      </td>
+                      <td class="px-4 py-3 text-xs text-muted-foreground">
+                        <p>{String(cluster.article_count ?? 0)} article{Number(cluster.article_count ?? 0) === 1 ? "" : "s"}</p>
+                        <p class="mt-1">Updated {formatTimestamp(cluster.updated_at ?? cluster.created_at)}</p>
+                      </td>
+                      <td class="px-4 py-3 text-xs text-muted-foreground">
+                        {topPlaces.length > 0 ? (
+                          <div class="flex flex-wrap gap-1.5">
+                            {topPlaces.slice(0, 3).map((place) => (
+                              <span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+                                {place}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span>No top places yet</span>
+                        )}
+                      </td>
+                      <td class="px-4 py-3">
+                        <a
+                          href={resolvePreviewHref(clusterId)}
+                          class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+                        >
+                          Preview
+                        </a>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
-      </div>
-    )}
+        )}
+      </section>
+
+      <aside class="rounded-xl border border-border bg-card p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
+        {selectedCluster ? (
+          (() => {
+            const topPlaces = asStringList(selectedCluster.top_places);
+            return (
+              <div class="space-y-5">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Preview</p>
+                  <h2 class="mt-2 text-lg font-semibold leading-tight">
+                    {String(selectedCluster.primary_title ?? selectedCluster.cluster_id ?? "Unnamed cluster")}
+                  </h2>
+                  <p class="mt-2 text-sm text-muted-foreground">
+                    Clusters group multiple article observations into one event-level operator surface so moderation and notification reasoning do not fragment across duplicates.
+                  </p>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div class="rounded-2xl border border-border bg-background p-4">
+                    <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Volume</p>
+                    <p class="mt-2 text-sm font-semibold">
+                      {String(selectedCluster.article_count ?? 0)} article{Number(selectedCluster.article_count ?? 0) === 1 ? "" : "s"}
+                    </p>
+                    <p class="mt-1 text-xs text-muted-foreground">cluster:{String(selectedCluster.cluster_id ?? "").slice(0, 8) || "—"}</p>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background p-4">
+                    <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Timestamps</p>
+                    <p class="mt-2 text-sm font-semibold">Updated {formatTimestamp(selectedCluster.updated_at ?? selectedCluster.created_at)}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">Created {formatTimestamp(selectedCluster.created_at)}</p>
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-border bg-background p-4">
+                  <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Top places</p>
+                  {topPlaces.length > 0 ? (
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      {topPlaces.map((place) => (
+                        <span class="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+                          {place}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p class="mt-2 text-sm text-muted-foreground">This cluster has not accumulated clear geography hints yet.</p>
+                  )}
+                </div>
+
+                <div class="rounded-2xl border border-border bg-background p-4">
+                  <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Why clusters matter</p>
+                  <p class="mt-2 text-sm font-semibold text-foreground">What are event clusters?</p>
+                  <p class="mt-2 text-sm text-foreground">
+                    One cluster represents one event-level storyline. Operators can use it to reason about duplicate suppression, verification spread, and follow-up density instead of reviewing each observation in isolation.
+                  </p>
+                </div>
+              </div>
+            );
+          })()
+        ) : (
+          <div class="py-8 text-center">
+            <p class="text-sm font-medium">No cluster selected</p>
+            <p class="mt-2 text-sm text-muted-foreground">Pick a cluster row to inspect its event-level summary.</p>
+          </div>
+        )}
+      </aside>
+    </div>
     {(clusters.hasPrev || clusters.hasNext) && (
       <PaginationNav
         page={clusters.page}

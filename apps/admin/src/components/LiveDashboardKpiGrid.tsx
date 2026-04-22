@@ -34,22 +34,15 @@ function buildCards(summary: AdminDashboardSummarySnapshot) {
   };
   return [
     {
-      label: "System-selected content",
-      value: String(summary.activeNews),
-      color: "text-emerald-500",
+      label: "Needs attention",
+      value: String(summary.attentionChannels),
+      color:
+        summary.attentionChannels > 0
+          ? "text-amber-500"
+          : "text-muted-foreground",
     },
     {
-      label: "Processed 24h",
-      value: String(summary.processedToday),
-      color: "text-blue-500",
-    },
-    {
-      label: "Total Users",
-      value: String(summary.totalUsers),
-      color: "text-violet-500",
-    },
-    {
-      label: "Overdue Channels",
+      label: "Overdue channels",
       value: String(summary.overdueChannels),
       color:
         summary.overdueChannels > 0
@@ -57,7 +50,7 @@ function buildCards(summary: AdminDashboardSummarySnapshot) {
           : "text-muted-foreground",
     },
     {
-      label: "Fetch Failures 24h",
+      label: "Fetch failures 24h",
       value: String(summary.fetchFailures24h),
       color:
         summary.fetchFailures24h > 0
@@ -65,24 +58,21 @@ function buildCards(summary: AdminDashboardSummarySnapshot) {
           : "text-muted-foreground",
     },
     {
-      label: "LLM Reviews 24h",
-      value: String(summary.llmReviewCount24h),
-      color: "text-primary",
+      label: "System-selected",
+      value: String(summary.activeNews),
+      color: "text-emerald-500",
     },
-    llmBudgetCard,
     {
-      label: "New Content 24h",
+      label: "New content 24h",
       value: String(summary.newContent24h),
       color: "text-cyan-500",
     },
     {
-      label: "Needs Attention",
-      value: String(summary.attentionChannels),
-      color:
-        summary.attentionChannels > 0
-          ? "text-amber-500"
-          : "text-muted-foreground",
+      label: "LLM reviews 24h",
+      value: String(summary.llmReviewCount24h),
+      color: "text-primary",
     },
+    llmBudgetCard,
   ];
 }
 
@@ -112,7 +102,7 @@ export function LiveDashboardKpiGrid({
   }, []);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
       {buildCards(summary).map(({ label, value, color }) => (
         <div key={label} className="rounded-xl border border-border bg-card p-4">
           <p className="mb-1 text-xs text-muted-foreground">{label}</p>

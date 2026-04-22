@@ -41,331 +41,216 @@ const pagePaths = {
     </nav>
   </Fragment>
 
-  <div class="max-w-4xl space-y-8">
-    <div>
-      <h1 class="text-2xl font-bold">Admin Guide</h1>
-      <p class="text-sm text-muted-foreground mt-1">
-        Everything you need to know about configuring and operating {DEFAULT_BRAND_CONFIG.productName}.
+  <div class="max-w-6xl space-y-8">
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Help</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Admin Guide</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        Use this page as an operator playbook. Start from the job you need to finish, then jump
+        into the right surface instead of reading the entire product manual front to back.
       </p>
-    </div>
+      <div class="mt-5 grid gap-3 md:grid-cols-3">
+        <a href={pagePaths.channels} class="rounded-2xl border border-border bg-background/70 p-4 transition hover:border-primary/40 hover:bg-muted/40">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Sources</p>
+          <p class="mt-2 text-base font-semibold">Find and fix a source issue</p>
+          <p class="mt-2 text-sm text-muted-foreground">Start in Channels or Observability when fetches fail, cadence looks stale, or onboarding needs a safe path.</p>
+        </a>
+        <a href={pagePaths.articles} class="rounded-2xl border border-border bg-background/70 p-4 transition hover:border-primary/40 hover:bg-muted/40">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Operations</p>
+          <p class="mt-2 text-base font-semibold">Triage content and decisions</p>
+          <p class="mt-2 text-sm text-muted-foreground">Use Articles and Clusters when an operator needs to inspect canonical state, moderation, or verification context.</p>
+        </a>
+        <a href={pagePaths.reindex} class="rounded-2xl border border-border bg-background/70 p-4 transition hover:border-primary/40 hover:bg-muted/40">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Maintenance</p>
+          <p class="mt-2 text-base font-semibold">Replay or repair system state</p>
+          <p class="mt-2 text-sm text-muted-foreground">Use Reindex or Automation when the data baseline changed and you need controlled maintenance with visible consequences.</p>
+        </a>
+      </div>
+    </section>
 
-    <!-- Table of Contents -->
     <nav class="rounded-xl border border-border bg-card p-4">
-      <p class="text-sm font-semibold mb-2">On this page</p>
-      <ul class="grid gap-1 sm:grid-cols-2 text-sm">
+      <p class="text-sm font-semibold mb-2">Jump to</p>
+      <ul class="grid gap-1 sm:grid-cols-3 text-sm">
         <li><a href="#overview" class="text-primary hover:underline">System Overview</a></li>
         <li><a href="#discovery" class="text-primary hover:underline">Discovery Control Plane</a></li>
-        <li><a href="#channels" class="text-primary hover:underline">Channels &amp; RSS Feeds</a></li>
-        <li><a href="#templates" class="text-primary hover:underline">LLM &amp; System Interests</a></li>
-        <li><a href="#gray-zone" class="text-primary hover:underline">Gray Zone &amp; AI Review</a></li>
-        <li><a href="#articles" class="text-primary hover:underline">Content &amp; Moderation</a></li>
-        <li><a href="#clusters" class="text-primary hover:underline">Event Clusters</a></li>
+        <li><a href="#operations" class="text-primary hover:underline">Operational Playbooks</a></li>
+        <li><a href="#rules" class="text-primary hover:underline">Rules &amp; AI Review</a></li>
         <li><a href="#reindex" class="text-primary hover:underline">Reindex &amp; Maintenance</a></li>
         <li><a href="#observability" class="text-primary hover:underline">Observability &amp; Costs</a></li>
       </ul>
     </nav>
 
-    <!-- System Overview -->
     <section id="overview" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">System Overview</h2>
       <p class="text-sm text-muted-foreground">
-        {DEFAULT_BRAND_CONFIG.productName} is a zero-shot filtering, personalization, and notification system.
-        It ingests heterogeneous content through RSS and website channels into a common ingestion substrate.
-        Editorial resources continue through the article pipeline, while non-editorial resources remain first-class content items instead of being forced into a news-only worldview. The shipped operator model is now `acquire -> normalize -> canonicalize -> cluster/verify -> interest filter -> final select`.
+        {DEFAULT_BRAND_CONFIG.productName} remains a zero-shot acquisition, filtering, and notification system. The operator model is `acquire -> normalize -> canonicalize -> cluster/verify -> interest filter -> final select`, and the UI is now split so each surface owns one clearer job in that path.
       </p>
-      <div class="rounded-xl border border-border bg-card p-4">
-        <p class="text-xs font-semibold mb-2">Data flow</p>
-        <div class="flex items-center gap-2 flex-wrap text-xs">
-          {[
-            { label: "RSS + Websites", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
-            { label: "→" },
-            { label: "Fetchers", color: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300" },
-            { label: "→" },
-            { label: "PostgreSQL", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" },
-            { label: "→" },
-            { label: "Normalize & Canonicalize", color: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
-            { label: "→" },
-            { label: "Cluster & Verify", color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300" },
-            { label: "→" },
-            { label: "Interest Filter", color: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300" },
-            { label: "→" },
-            { label: "Final Select & Notify", color: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300" },
-          ].map(({ label, color }) =>
-            color
-              ? <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${color}`}>{label}</span>
-              : <span class="text-muted-foreground">{label}</span>
-          )}
-        </div>
-        <p class="text-[11px] text-muted-foreground mt-3">
-          All heavy processing happens asynchronously via BullMQ queues. The UI never waits for NLP operations.
-          PostgreSQL is the single source of truth; Redis is only used as a transport layer.
-        </p>
-      </div>
-      <div class="grid gap-3 sm:grid-cols-3">
-        <div class="rounded-md border border-border bg-card p-3">
-          <p class="font-medium text-xs mb-1">Zero-shot</p>
-          <p class="text-[11px] text-muted-foreground">No training required. The system keeps all found information, then filters canonicalized evidence against interests instead of relying on a top-k search product.</p>
-        </div>
-        <div class="rounded-md border border-border bg-card p-3">
-          <p class="font-medium text-xs mb-1">Explainable</p>
-          <p class="text-[11px] text-muted-foreground">Operators can now inspect observation, canonical document, verification, and final-selection state separately instead of inferring everything from one article row.</p>
-        </div>
-        <div class="rounded-md border border-border bg-card p-3">
-          <p class="font-medium text-xs mb-1">Cost-efficient</p>
-          <p class="text-[11px] text-muted-foreground">Baseline LLM calls happen only for system-interest gray-zone reviews. All other matching is local CPU using open-source models.</p>
-        </div>
+      <div class="grid gap-3 md:grid-cols-3">
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Acquire</p>
+          <p class="mt-2 text-sm font-medium">Channels, Resources, Discovery</p>
+          <p class="mt-2 text-xs text-muted-foreground">Bring sources in, inspect source quality, and separate mission fit from generic recall quality before content enters the editorial pipeline.</p>
+        </article>
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Decide</p>
+          <p class="mt-2 text-sm font-medium">Articles, Clusters, Rules</p>
+          <p class="mt-2 text-xs text-muted-foreground">Inspect canonical evidence, verification strength, moderation state, and the rules that shape system or user matching.</p>
+        </article>
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Maintain</p>
+          <p class="mt-2 text-sm font-medium">Observability, Reindex, Automation</p>
+          <p class="mt-2 text-xs text-muted-foreground">Monitor fetch health and budgets, queue bounded repair work, and tune recurring maintenance workflows without mixing those jobs into content triage.</p>
+        </article>
       </div>
     </section>
 
     <section id="discovery" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">Discovery Control Plane</h2>
       <p class="text-sm text-muted-foreground">
-        <a href={pagePaths.discovery} class="text-primary hover:underline">Discovery</a> is now a dual-path operator surface. Graph-first missions still own mission planning, class-registry hypotheses, feedback, and portfolio assembly, while independent recall owns neutral acquisition backlog, generic source-quality snapshots, and bounded promotion into normal channels.
+        <a href={pagePaths.discovery} class="text-primary hover:underline">Discovery</a> is a dual-path operator surface. Graph-first missions own mission planning, hypotheses, and portfolio fit, while recall owns neutral acquisition backlog, source-quality snapshots, and bounded promotion into normal channels.
       </p>
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
         <div class="rounded-xl border border-border bg-card p-4">
-          <p class="text-xs font-semibold">What to read separately</p>
-          <ul class="mt-2 list-disc list-inside text-[11px] text-muted-foreground space-y-1">
-            <li><strong>Mission fit</strong> explains why a source helps a specific graph-first portfolio.</li>
-            <li><strong>Generic source quality</strong> tracks freshness, duplication pressure, lead time, and extractability independently from interests.</li>
-            <li><strong>Neutral recall backlog</strong> shows candidates found without requiring <code class="rounded bg-muted px-1 py-0.5">interest_graph</code>.</li>
-            <li><strong>Promotion state</strong> shows whether a recall candidate already resolved into a normal <code class="rounded bg-muted px-1 py-0.5">source_channel</code>.</li>
-          </ul>
+          <p class="text-xs font-semibold">Debug order</p>
+          <ol class="mt-3 list-decimal list-inside space-y-2 text-xs text-muted-foreground">
+            <li>Check mission fit or recall quality before changing downstream rules.</li>
+            <li>Read generic source quality separately from system-selected outcomes.</li>
+            <li>Only promote a discovery result once the source quality looks durable enough for normal channel operations.</li>
+          </ol>
         </div>
         <div class="rounded-xl border border-border bg-card p-4">
           <p class="text-xs font-semibold">What not to conflate</p>
-          <p class="mt-2 text-[11px] text-muted-foreground">
-            Discovery quality is upstream acquisition truth. It is no longer learned from downstream system-selected outcomes, and it is not the same thing as final zero-shot filtering, user matching, or notification eligibility.
-          </p>
-          <p class="mt-2 text-[11px] text-muted-foreground">
-            When debugging noisy discovery, check generic source quality and recall duplication before tightening interests or downstream filters.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Channels -->
-    <section id="channels" class="space-y-3">
-      <h2 class="text-lg font-bold border-b border-border pb-2">Channels &amp; Source Onboarding</h2>
-      <p class="text-sm text-muted-foreground">
-        <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> are source channels.
-        Today the admin supports both RSS feeds and website ingestion channels. RSS is still the simplest path for editorial sources, while website channels keep generic discovery semantics for collections, entities, documents, and hidden feeds without automatically converting the provider type.
-      </p>
-      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
-        <p class="text-xs font-semibold">Setting up your first RSS channel</p>
-        <ol class="list-decimal list-inside text-xs text-muted-foreground space-y-1.5">
-          <li>Go to <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> and click <strong>Add RSS</strong>.</li>
-          <li>Enter a descriptive name (e.g. "Reuters World News") and the feed URL.</li>
-          <li>Set the poll interval — how often the system checks for new content from that source. <code class="rounded bg-muted px-1 py-0.5">300</code> = every 5 minutes.</li>
-          <li>Enable <strong>Adaptive</strong> mode (recommended) — the system slows down polling when a feed is quiet and speeds up when new content appears.</li>
-          <li>Click <strong>Create Channel</strong>. The system starts polling immediately if set to Active.</li>
-        </ol>
-      </div>
-      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
-        <p class="text-xs font-semibold">Setting up your first website channel</p>
-        <ol class="list-decimal list-inside text-xs text-muted-foreground space-y-1.5">
-          <li>Go to <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> and click <strong>Add Website</strong>.</li>
-          <li>Enter the site homepage or collection entry URL, not a guessed RSS URL.</li>
-          <li>Keep sitemap, feed, collection, and download discovery enabled unless you have a reason to narrow the scope.</li>
-          <li>Add allow/block regexes only when the site has obvious login, cart, or low-value navigation paths.</li>
-          <li>Leave browser fallback disabled by default. Turn it on only for hard JS sites with explicit proof that the cheap discovery modes miss required resources.</li>
-        </ol>
-      </div>
-      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
-        <p class="text-xs font-semibold">Bulk import example</p>
-        <p class="text-xs text-muted-foreground">Bulk import now supports mixed RSS, website, API, and Email IMAP onboarding on the shared import screen. Every row must declare its own <code>providerType</code>, so provider-specific validation stays explicit and mixed batches do not rely on hidden mode switches.</p>
-        <pre class="text-[11px] font-mono bg-muted/30 rounded-md p-3 overflow-x-auto">{JSON.stringify([
-  {
-    "providerType": "rss",
-    "name": "Reuters World News",
-    "fetchUrl": "https://feeds.reuters.com/reuters/worldNews",
-    "language": "en",
-    "pollIntervalSeconds": 300,
-    "adaptiveEnabled": true,
-    "isActive": true
-  },
-  {
-    "providerType": "website",
-    "name": "EU Data Portal",
-    "fetchUrl": "https://example.com/",
-    "pollIntervalSeconds": 900,
-    "maxResourcesPerPoll": 20,
-    "isActive": true
-  }
-], null, 2)}</pre>
-      </div>
-    </section>
-
-    <!-- Templates -->
-    <section id="templates" class="space-y-3">
-      <h2 class="text-lg font-bold border-b border-border pb-2">LLM &amp; System Interests</h2>
-      <p class="text-sm text-muted-foreground">
-        <a href={pagePaths.llmTemplates} class="text-primary hover:underline">LLM Templates</a> configure AI review prompts,
-        while <a href={pagePaths.interestTemplates} class="text-primary hover:underline">System Interests</a> define reusable topic prototypes, hard constraints, time windows, and content-kind gates for live system selection.
-      </p>
-      <p class="text-[11px] text-muted-foreground">
-        Matching constraints sync into live criteria for fresh ingest and historical reindex, while <code class="rounded bg-muted px-1 py-0.5">allowed_content_kinds</code> stays on the template itself as a gate for which resource kinds can appear in the system-selected collection.
-      </p>
-
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div class="rounded-xl border border-border bg-card p-4 space-y-2">
-          <p class="text-xs font-semibold">🤖 LLM Templates</p>
-          <p class="text-[11px] text-muted-foreground">
-            When a system interest falls in the gray zone (0.45–0.72), the baseline runtime sends it
-            to an external LLM (like Google Gemini) for review. LLM templates define the exact prompt.
-          </p>
-            <p class="text-[11px] font-medium mt-2">Scopes:</p>
-          <ul class="text-[11px] text-muted-foreground space-y-0.5 list-disc list-inside">
-            <li><code class="rounded bg-muted px-1 py-0.5">criteria</code> — runtime storage key currently used for system-interest reviews</li>
-            <li><code class="rounded bg-muted px-1 py-0.5">interests</code> — reserved for future opt-in or premium user-interest reviews</li>
-            <li><code class="rounded bg-muted px-1 py-0.5">global</code> — fallback when no specific template exists</li>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li><strong>Mission fit</strong> is not the same thing as final zero-shot filtering.</li>
+            <li><strong>Generic source quality</strong> should be debugged before tightening interests.</li>
+            <li><strong>Recall promotion</strong> should not be used as a shortcut for normal source onboarding.</li>
           </ul>
-          <p class="text-[11px] font-medium mt-2">Expected JSON response:</p>
-          <pre class="text-[10px] font-mono bg-muted/30 rounded-md p-2">{"{"}"decision": "approve|reject|uncertain",
-  "score": 0.0,
-  "reason": "..."{"}"}</pre>
-        </div>
-
-        <div class="rounded-xl border border-border bg-card p-4 space-y-2">
-          <p class="text-xs font-semibold">📋 System Interests</p>
-          <p class="text-[11px] text-muted-foreground">
-            Predefined global selection rules that shape the system-selected collection.
-            Each entry has positive and negative prototypes plus advanced hard filters like time window, must-have terms, and allowed content kinds.
-          </p>
-          <p class="text-[11px] font-medium mt-2">Example: "AI Policy" template</p>
-          <div class="text-[11px] text-muted-foreground">
-            <p class="font-medium text-emerald-600 dark:text-emerald-400">✓ Positive prototypes (SHOULD match):</p>
-            <ul class="list-disc list-inside ml-2 space-y-0.5">
-              <li>EU passes landmark AI regulation act</li>
-              <li>US government proposes AI safety framework</li>
-              <li>China announces national AI strategy update</li>
-            </ul>
-            <p class="font-medium text-red-500 mt-1.5">✗ Negative prototypes (should NOT match):</p>
-            <ul class="list-disc list-inside ml-2 space-y-0.5">
-              <li>New iPhone AI assistant features released</li>
-              <li>Google unveils latest AI chatbot upgrade</li>
-              <li>AI startup raises $100M funding round</li>
-            </ul>
-          </div>
-          <p class="text-[10px] text-muted-foreground mt-2 italic">
-            Negatives are critical — without them, false positives increase dramatically.
-          </p>
-          <p class="text-[10px] text-muted-foreground mt-2">
-            Hard constraints use different semantics: <code class="rounded bg-muted px-1 py-0.5">must_have_terms</code> is
-            OR / any-match in the article text, <code class="rounded bg-muted px-1 py-0.5">must_not_have_terms</code> blocks on any match,
-            <code class="rounded bg-muted px-1 py-0.5">time_window_hours</code> rejects stale content before scoring only when it is set, and a blank value means "any time", while <code class="rounded bg-muted px-1 py-0.5">short_tokens_required</code> stays stricter and behaves like an AND check on extracted short tokens.
-          </p>
         </div>
       </div>
     </section>
 
-    <!-- Gray Zone -->
-    <section id="gray-zone" class="space-y-3">
-      <h2 class="text-lg font-bold border-b border-border pb-2">Gray Zone &amp; AI Review</h2>
-      <div class="rounded-xl border border-border bg-card p-4 space-y-3">
-        <p class="text-sm text-muted-foreground">
-          The matching engine scores each content item on a 0–1 scale against system interests and user interests, but the baseline LLM review lane currently applies only to system interests:
-        </p>
-        <div class="grid gap-2 sm:grid-cols-3">
-          <div class="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 p-3 text-center">
-            <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">≥ 0.72</p>
-            <p class="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">Relevant</p>
-            <p class="text-[10px] text-muted-foreground mt-0.5">Confidently matched — may trigger notification</p>
-          </div>
-          <div class="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3 text-center">
-            <p class="text-lg font-bold text-amber-600 dark:text-amber-400">0.45 – 0.72</p>
-            <p class="text-[11px] font-medium text-amber-800 dark:text-amber-300">Gray Zone</p>
-            <p class="text-[10px] text-muted-foreground mt-0.5">System-interest gray zone — sent to LLM for review</p>
-          </div>
-          <div class="rounded-md bg-muted border border-border p-3 text-center">
-            <p class="text-lg font-bold text-muted-foreground">≤ 0.45</p>
-            <p class="text-[11px] font-medium">Irrelevant</p>
-            <p class="text-[10px] text-muted-foreground mt-0.5">Confidently not a match — ignored</p>
-          </div>
-        </div>
-        <p class="text-xs text-muted-foreground">
-          The LLM's response (<code class="rounded bg-muted px-1 py-0.5">approve</code>,
-          <code class="rounded bg-muted px-1 py-0.5">reject</code>, or
-          <code class="rounded bg-muted px-1 py-0.5">uncertain</code>) determines the final action.
-          <code class="rounded bg-muted px-1 py-0.5">uncertain</code> defaults to "don't notify" for safety. User-interest gray-zone reviews are disabled in the baseline tier and suppress instead.
-        </p>
-        <p class="text-xs text-muted-foreground">
-          <strong>LLM costs are controlled</strong> — only system-interest gray-zone items trigger API calls in the baseline runtime. All other
-          matching uses local CPU with open-source embedding models. The lane also supports an env-driven monthly hard cap; once exhausted, gray-zone system-interest criteria are auto-accepted or auto-rejected based on the configured policy instead of staying pending. Monitor both spend and cap state on the
-          <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page.
-        </p>
+    <section id="operations" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Operational Playbooks</h2>
+      <div class="grid gap-3 md:grid-cols-2">
+        <article id="channels" class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Channels &amp; Source Onboarding</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            Use <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> for normal source operations. RSS stays the fastest editorial path; website channels keep generic discovery semantics for collections, entities, documents, and hidden feeds.
+          </p>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li>Add RSS when you already trust the feed URL.</li>
+            <li>Add Website when you need the system to discover feeds, collections, or extractable resources.</li>
+            <li>Use Observability to confirm whether the problem is fetch health before editing source rules.</li>
+          </ul>
+        </article>
+        <article id="articles" class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Content &amp; Moderation</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            <a href={pagePaths.articles} class="text-primary hover:underline">Articles</a> is the main triage surface for editorial observations, canonical document ownership, verification, and final-selection read model state.
+          </p>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li>Use block/unblock when the collection decision is wrong.</li>
+            <li>Use the preview workspace before jumping to full detail.</li>
+            <li>Read raw processing state only after the summary area points to a pipeline problem.</li>
+          </ul>
+        </article>
+        <article id="clusters" class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Event Clusters</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            <a href={pagePaths.clusters} class="text-primary hover:underline">Clusters</a> groups canonical documents that describe the same event. Use it when you need corroboration context, duplicate pressure, or verification strength instead of one row’s local metadata.
+          </p>
+        </article>
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">User-specific tuning</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            <a href={appPath("/user-interests")} class="text-primary hover:underline">User Interests</a> now opens as a focused workspace after lookup. Keep the left queue for prioritization and use the main pane for the one interest you are actively editing or compiling.
+          </p>
+        </article>
       </div>
     </section>
 
-    <!-- Articles -->
-    <section id="articles" class="space-y-3">
-      <h2 class="text-lg font-bold border-b border-border pb-2">Content &amp; Moderation</h2>
-      <p class="text-sm text-muted-foreground">
-        The <a href={pagePaths.articles} class="text-primary hover:underline">Articles</a> page shows all
-        editorial content items with state badges and moderation controls. Each row is still an editorial observation, but the page now also exposes canonical document IDs, story-cluster verification, and the final-selection read model.
-      </p>
-      <div class="rounded-xl border border-border bg-card p-4">
-        <p class="text-xs font-semibold mb-2">Editorial operator lifecycle</p>
-        <div class="flex items-center gap-2 flex-wrap text-xs">
-          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">pending</span>
-          <span class="text-muted-foreground">→</span>
-          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">canonicalized</span>
-          <span class="text-muted-foreground">→</span>
-          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300">verified</span>
-          <span class="text-muted-foreground">→</span>
-          <span class="inline-flex items-center rounded-full px-2.5 py-1 font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">selected</span>
-        </div>
-        <p class="text-[11px] text-muted-foreground mt-2">
-          <strong>Block</strong> removes an editorial item from the system-selected collection. <strong>Unblock</strong> restores it.
-          Raw <code class="rounded bg-muted px-1 py-0.5">processing_state</code> badges remain visible for maintenance, but final collection eligibility comes from <code class="rounded bg-muted px-1 py-0.5">final_selection_results</code>.
-        </p>
+    <section id="rules" class="space-y-3">
+      <h2 class="text-lg font-bold border-b border-border pb-2">Rules &amp; AI Review</h2>
+      <div class="grid gap-3 md:grid-cols-2">
+        <article id="templates" class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">LLM &amp; System Interests</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            <a href={pagePaths.llmTemplates} class="text-primary hover:underline">LLM Templates</a> define review prompts, while <a href={pagePaths.interestTemplates} class="text-primary hover:underline">System Interests</a> define reusable prototypes, hard constraints, time windows, and content-kind gates for system selection.
+          </p>
+          <p class="mt-3 text-xs text-muted-foreground">
+            Matching constraints sync into live criteria for fresh ingest and historical reindex, while <code class="rounded bg-muted px-1 py-0.5">allowed_content_kinds</code> remains the gate for what can appear in the system-selected collection.
+          </p>
+        </article>
+        <article id="gray-zone" class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Gray Zone &amp; AI Review</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            The baseline LLM lane currently applies only to system-interest gray-zone decisions. User-interest gray-zone review stays suppressed in the baseline tier.
+          </p>
+          <div class="mt-3 grid gap-2 sm:grid-cols-3">
+            <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-center dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">≥ 0.72</p>
+              <p class="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">Relevant</p>
+            </div>
+            <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-center dark:border-amber-900/40 dark:bg-amber-950/20">
+              <p class="text-lg font-bold text-amber-600 dark:text-amber-400">0.45 – 0.72</p>
+              <p class="text-[11px] font-medium text-amber-800 dark:text-amber-300">Gray Zone</p>
+            </div>
+            <div class="rounded-md border border-border bg-muted p-3 text-center">
+              <p class="text-lg font-bold text-muted-foreground">≤ 0.45</p>
+              <p class="text-[11px] font-medium">Irrelevant</p>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-muted-foreground">
+            Monitor budget and cap behavior on <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a>, not on the rule-editing pages themselves.
+          </p>
+        </article>
       </div>
     </section>
 
-    <!-- Clusters -->
-    <section id="clusters" class="space-y-3">
-      <h2 class="text-lg font-bold border-b border-border pb-2">Event Clusters</h2>
-      <p class="text-sm text-muted-foreground">
-        <a href={pagePaths.clusters} class="text-primary hover:underline">Clusters</a> group canonical documents
-        that cover the same real-world event. The system builds clusters automatically and records verification strength from corroboration, source-family diversity, and conflicting evidence.
-      </p>
-      <p class="text-xs text-muted-foreground">
-        Legacy event-cluster UI still exists, but the operator cutover truth now centers on additive <code class="rounded bg-muted px-1 py-0.5">story_clusters</code> and <code class="rounded bg-muted px-1 py-0.5">verification_results</code>.
-      </p>
-    </section>
-
-    <!-- Reindex -->
     <section id="reindex" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">Reindex &amp; Maintenance</h2>
-      <p class="text-sm text-muted-foreground">
-        The <a href={pagePaths.reindex} class="text-primary hover:underline">Reindex</a> page lets you
-        rebuild derived indices. This is safe — it recalculates lookup structures without deleting any data.
-      </p>
-      <div class="rounded-md border border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
-        <p class="text-xs"><strong>When to reindex:</strong> After major changes to system interests or user interests, if matching quality seems degraded, or after a database restore. Reindexing runs in the background and typically takes a few minutes.</p>
+      <div class="grid gap-3 md:grid-cols-2">
+        <article class="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <p class="text-sm font-medium">When to reindex</p>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li>After major system-interest or user-interest changes.</li>
+            <li>After a restore or repair that changed the effective baseline.</li>
+            <li>When matching quality looks stale but ingest health still looks normal.</li>
+          </ul>
+        </article>
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">What maintenance does not do</p>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li>It does not delete stored content.</li>
+            <li>It does not resend retro notifications.</li>
+            <li>It does not replace source debugging when the real issue is fetch failure.</li>
+          </ul>
+        </article>
       </div>
+      <p class="text-sm text-muted-foreground">
+        Start on <a href={pagePaths.reindex} class="text-primary hover:underline">Reindex</a> for one-off repairs, and use <a href={pagePaths.reindex} class="text-primary hover:underline">Reindex</a> plus <a href={appPath("/automation")} class="text-primary hover:underline">Automation</a> together when the same maintenance job needs a repeatable operator-owned workflow.
+      </p>
     </section>
 
-    <!-- Observability -->
     <section id="observability" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">Observability &amp; Costs</h2>
       <p class="text-sm text-muted-foreground">
-        The <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page
-        shows three key things: RSS fetch performance, gray-zone LLM review costs, and the current article-review monthly budget state.
+        The <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page is split into fetch health and AI review &amp; budget so source instability and review-cost pressure are debugged separately.
       </p>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div class="rounded-md border border-border bg-card p-3">
-          <p class="font-medium text-xs mb-1">Fetch Runs</p>
-          <p class="text-[11px] text-muted-foreground">Each row is one poll of a channel. Outcomes: <strong>new_content</strong> (found new content items), <strong>no_change</strong> (source unchanged), <strong>error</strong> (failed). High error counts → check that channel.</p>
-        </div>
-        <div class="rounded-md border border-border bg-card p-3">
-          <p class="font-medium text-xs mb-1">LLM Reviews</p>
-          <p class="text-[11px] text-muted-foreground">Each row is one gray-zone AI review. Shows the content item, decision (approve/reject/uncertain), tokens consumed, cost, and latency. Use this to monitor your AI spend.</p>
-        </div>
+      <div class="grid gap-3 md:grid-cols-3">
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Fetch Runs</p>
+          <p class="mt-2 text-xs text-muted-foreground">Each row is one poll of a channel. High error counts mean inspect the source first, not the matching rules.</p>
+        </article>
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">LLM Reviews</p>
+          <p class="mt-2 text-xs text-muted-foreground">Each row is one gray-zone review with decision, tokens, cost, and latency. Use it to watch review pressure rather than article correctness.</p>
+        </article>
+        <article class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Budget state</p>
+          <p class="mt-2 text-xs text-muted-foreground">Track remaining monthly budget, hard-stop state, and post-cap policy here before changing prompts or thresholds elsewhere.</p>
+        </article>
       </div>
-      <p class="text-xs text-muted-foreground">
-        The same page now also shows the baseline article-review monthly cap, current UTC-month spend, remaining budget, hard-stop status, and whether post-cap policy is configured to accept or reject gray-zone system-interest criteria. For canonical, verification, and final-selection truth, use the Articles surface; for mission fit plus generic channel quality, use Discovery.
-      </p>
     </section>
   </div>
 </AdminShell>

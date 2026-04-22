@@ -224,20 +224,19 @@ export function AutomationOverviewBoard({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.22),transparent_32%),linear-gradient(135deg,rgba(23,23,23,1),rgba(9,9,11,1))] p-6 text-white shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
+      <section className="overflow-hidden rounded-[2rem] border border-border bg-[linear-gradient(135deg,rgba(251,191,36,0.10),rgba(255,255,255,0)),linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.88))] p-6 text-foreground shadow-sm dark:bg-[linear-gradient(135deg,rgba(251,191,36,0.10),rgba(0,0,0,0)),linear-gradient(180deg,rgba(24,24,27,0.96),rgba(24,24,27,0.92))]">
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-200/80">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/80">
               Workflow Workspace
             </p>
             <div className="space-y-3">
               <h1 className="max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">
                 Build, run, and tune automations from one visual control room
               </h1>
-              <p className="max-w-2xl text-sm leading-6 text-white/72">
-                The old sequence JSON CRUD view is replaced with a template-led workflow
-                workspace. Start fast from a curated preset, then open the canvas to tune the
-                linear task lane with execution-safe settings.
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                Start from a best-practice preset, open the visual builder only when you need
+                it, and keep execution health visible without leaving the admin shell.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -245,7 +244,7 @@ export function AutomationOverviewBoard({
                 type="button"
                 onClick={() => void handleCreateSuggested()}
                 disabled={creatingSuggested}
-                className="bg-orange-500 text-zinc-950 hover:bg-orange-400"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {creatingSuggested ? "Creating…" : "Start From Best Practice"}
               </Button>
@@ -254,19 +253,19 @@ export function AutomationOverviewBoard({
                 variant="secondary"
                 onClick={() => void handleCreateBlank()}
                 disabled={creatingBlank}
-                className="border border-white/15 bg-white/8 text-white hover:bg-white/14"
+                className="border border-border bg-background text-foreground hover:bg-muted"
               >
                 {creatingBlank ? "Creating…" : "Blank Linear Workflow"}
               </Button>
               <a
                 href={templatesHref}
-                className="inline-flex h-10 items-center justify-center rounded-md border border-white/15 px-4 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-border px-4 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               >
                 Explore Templates
               </a>
             </div>
             {errorMessage && (
-              <p className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+              <p className="rounded-2xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200">
                 {errorMessage}
               </p>
             )}
@@ -274,29 +273,29 @@ export function AutomationOverviewBoard({
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "Workflows", value: liveSummary.totalSequences, tone: "text-white" },
-              { label: "Active", value: liveSummary.activeSequences, tone: "text-emerald-300" },
-              { label: "Pending Runs", value: liveSummary.pendingRuns, tone: "text-amber-200" },
-              { label: "Failed Runs", value: liveSummary.failedRuns, tone: "text-rose-300" },
+              { label: "Workflows", value: liveSummary.totalSequences, tone: "text-foreground" },
+              { label: "Active", value: liveSummary.activeSequences, tone: "text-emerald-600 dark:text-emerald-300" },
+              { label: "Pending Runs", value: liveSummary.pendingRuns, tone: "text-amber-600 dark:text-amber-200" },
+              { label: "Failed Runs", value: liveSummary.failedRuns, tone: "text-rose-600 dark:text-rose-300" },
               {
                 label: "Recent Outbox",
                 value: liveSummary.recentOutboxEvents,
-                tone: "text-sky-200",
+                tone: "text-sky-600 dark:text-sky-200",
               },
               {
                 label: "Pending Outbox",
                 value: liveSummary.pendingOutboxEvents,
-                tone: "text-orange-200",
+                tone: "text-orange-600 dark:text-orange-200",
               },
             ].map((card) => (
               <div
                 key={card.label}
-                className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4 backdrop-blur"
+                className="flex min-h-[8.5rem] flex-col justify-between rounded-[1.5rem] border border-border bg-background/80 p-4"
               >
-                <p className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   {card.label}
                 </p>
-                <p className={`mt-3 text-3xl font-semibold ${card.tone}`}>{card.value}</p>
+                <p className={`mt-4 text-3xl font-semibold leading-none ${card.tone}`}>{card.value}</p>
               </div>
             ))}
           </div>
@@ -325,7 +324,7 @@ export function AutomationOverviewBoard({
           <CardContent className="space-y-4 pt-5">
             {filteredSequences.length === 0 ? (
               <div className="rounded-[1.25rem] border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                No workflows match this filter.
+                No workflows match this filter. Try a broader search.
               </div>
             ) : (
               filteredSequences.map((sequence) => {
@@ -338,8 +337,8 @@ export function AutomationOverviewBoard({
                     key={sequenceId}
                     className="rounded-[1.4rem] border border-border bg-background/70 p-4"
                   >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-start">
+                      <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-base font-semibold text-foreground">
                             {readText(sequence.title)}
@@ -353,7 +352,7 @@ export function AutomationOverviewBoard({
                           </span>
                         </div>
                         <p className="max-w-2xl text-sm text-muted-foreground">
-                          {readText(sequence.description, "No description yet")}
+                          {readText(sequence.description, "No description")}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Trigger {readText(sequence.trigger_event)} • Cron {readText(sequence.cron)} •
@@ -372,16 +371,16 @@ export function AutomationOverviewBoard({
                           </div>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex w-full flex-col gap-2 md:w-[12.5rem]">
                         <a
                           href={`${automationRootPath}/${encodeURIComponent(sequenceId)}`}
-                          className="inline-flex h-9 items-center justify-center rounded-md bg-orange-500 px-3 text-sm font-medium text-zinc-950 transition hover:bg-orange-400"
+                          className="inline-flex h-9 w-full items-center justify-center rounded-md bg-orange-500 px-3 text-sm font-medium text-zinc-950 transition hover:bg-orange-400"
                         >
                           Open Builder
                         </a>
                         <a
                           href={`${automationRootPath}/${encodeURIComponent(sequenceId)}/executions`}
-                          className="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition hover:bg-accent"
+                          className="inline-flex h-9 w-full items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition hover:bg-accent"
                         >
                           Executions
                         </a>
@@ -431,7 +430,7 @@ export function AutomationOverviewBoard({
             <CardContent className="space-y-3">
               {failureRuns.length === 0 ? (
                 <div className="rounded-[1.1rem] border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
-                  No failed runs in the latest window.
+                  No failed runs in the latest window. New failures will appear here.
                 </div>
               ) : (
                 failureRuns.slice(0, 4).map((run) => (
@@ -477,7 +476,7 @@ export function AutomationOverviewBoard({
             <CardContent className="space-y-3">
               {liveOutbox.length === 0 ? (
                 <div className="rounded-[1.1rem] border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
-                  No outbox rows in the latest window.
+                  No outbox rows in the latest window. Recent relay events will appear here.
                 </div>
               ) : (
                 liveOutbox.slice(0, 6).map((event) => (

@@ -399,7 +399,7 @@ Only test it if you intentionally opt in:
 1. Follow the discovery env/bootstrap section in [README.md](/Users/user/Documents/workspace/my/NewsPortal/README.md) and use [DISCOVERY_MODE_TESTING.md](/Users/user/Documents/workspace/my/NewsPortal/DISCOVERY_MODE_TESTING.md) as the dedicated operator handbook for this subsystem.
 2. Enable `DISCOVERY_ENABLED=1`.
 3. Run `pnpm test:discovery-enabled:compose` before trusting a live manual run.
-4. Run `pnpm test:discovery:examples:compose` if you want the shipped Example B/C profile-backed proof lane and the emitted `manualReplaySettings` that can then be replayed through `/admin/discovery`.
+4. Run `pnpm test:discovery:examples:compose` if you want the shipped Example B/C profile-backed proof lane and the emitted `manualReplaySettings` that can then be replayed through the discovery overview and focused routes under `/admin/discovery`.
 5. Run `pnpm test:discovery:admin:compose` if you also want the bounded admin/operator acceptance contour for missions, candidates, feedback, recall state, promotion wiring, and visible profile/version fields before manual clicking.
 6. If discovery approves a public JS-heavy website candidate with browser assistance recommended, keep the resulting source as `website` and verify any browser provenance on `/resources` instead of treating it as RSS.
 

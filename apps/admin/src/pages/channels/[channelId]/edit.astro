@@ -76,8 +76,8 @@ const storedItemCount = asInt(channel.stored_item_count, 0);
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const deleteLabel = storedItemCount > 0 ? "Archive channel" : "Delete channel";
 const deleteDescription = storedItemCount > 0
-  ? `This channel is already linked to ${storedItemCount} stored item${storedItemCount === 1 ? "" : "s"}. Confirming this action will archive it instead of hard-deleting it.`
-  : `This ${providerSubject} channel has no stored history yet, so deleting it will permanently remove it and its runtime state.`;
+  ? `This source already has ${storedItemCount} stored item${storedItemCount === 1 ? "" : "s"}. It will be archived, not deleted.`
+  : `This ${providerSubject} has no stored history yet, so deleting it removes it permanently.`;
 ---
 
 <AdminShell title="Edit Channel — Admin" session={session} flash={flash} activeNav="channels">
@@ -253,8 +253,8 @@ const deleteDescription = storedItemCount > 0
             <h2 class="text-base font-semibold text-foreground">Danger zone</h2>
             <p class="mt-1 text-sm text-muted-foreground">
               {storedItemCount > 0
-                ? `Because this ${providerSubject} already has stored history, the destructive action archives it instead of deleting the record.`
-                : `This ${providerSubject} can be permanently deleted because it has no stored items yet.`}
+                ? `This ${providerSubject} has stored history, so the destructive action becomes archive.`
+                : `This ${providerSubject} has no stored history yet, so it can be deleted permanently.`}
             </p>
           </div>
           <AdminConfirmAction

@@ -158,86 +158,129 @@ const initialJobs = {
     </nav>
   </Fragment>
 
-  <div class="space-y-6 max-w-xl">
-    <div>
-      <h1 class="text-xl font-bold">Reindex</h1>
-      <p class="text-sm text-muted-foreground mt-0.5">Queue derived-index rebuilds and bounded historical repair jobs</p>
-    </div>
+  <div class="space-y-6 max-w-6xl">
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">System</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Reindex</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        Use this page when matching quality looks stale, a restore changed the data baseline,
+        or you need to replay historical content against the current rule set. Reindexing is
+        safe for stored content: it recalculates derived state and optional historical matches,
+        but it does not delete rows or resend retro notifications.
+      </p>
+    </section>
 
-    <!-- Reindex explanation -->
-    <div class="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
-      <div class="flex items-start gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5 text-amber-500 dark:text-amber-400"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-        <div>
-          <p class="text-sm font-medium">When should you reindex?</p>
-          <p class="text-xs text-muted-foreground mt-1">
-            The system maintains derived indices (like interest centroids) that are built from data stored in PostgreSQL.
-            If you notice matching quality degrading, or if active system interests or user interests have been significantly changed,
-            reindexing rebuilds these derived structures from scratch. <strong>This is safe</strong> — it doesn't delete any data,
-            it just recalculates the index used for fast similarity lookups.
-          </p>
-          <p class="text-xs text-muted-foreground mt-2">
-            If you also want already persisted content items to be corrected in PostgreSQL, use <strong>Rebuild + repair existing content</strong>.
-            That mode rematches historical rows against the current system-interest set, including the active compatibility <code>selection_profiles</code> snapshot and any policy-allowed optional LLM review, but it does <strong>not</strong>
-            resend retro notifications.
-          </p>
-          <p class="text-xs text-muted-foreground mt-2">
-            You can optionally prepend fetchers-owned article enrichment to that historical repair path. This stays on editorial <code>articles</code>, reuses the existing enrichment owner, and still skips retro notification delivery.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="rounded-xl border border-border bg-card p-5">
-      <h2 class="font-semibold text-sm mb-4">Queue Reindex Job</h2>
-      <form method="post" action={reindexBffPath} class="grid gap-3">
-        <input type="hidden" name="redirectTo" value={currentPath} />
-        <div class="grid gap-1.5">
-          <label class="text-sm font-medium" for="indexName">Index name</label>
-          <select id="indexName" name="indexName"
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <option value="interest_centroids">interest_centroids</option>
-          </select>
-        </div>
-        <div class="grid gap-1.5">
-          <label class="text-sm font-medium" for="jobKind">Mode</label>
-          <select id="jobKind" name="jobKind"
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <option value="rebuild">Rebuild index only</option>
-            <option value="backfill">Rebuild + repair existing content</option>
-          </select>
-        </div>
-        <p class="text-xs text-muted-foreground">
-          Reindexing runs asynchronously in the background. Historical repair rematches existing content items in the DB against the current system-interest set and records the active compatibility selection-profile snapshot used for replay,
-          but intentionally skips retro notification delivery.
+    <section class="grid gap-4 xl:grid-cols-3">
+      <article class="rounded-2xl border border-border bg-card p-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Mode 1</p>
+        <h2 class="mt-2 text-base font-semibold">Rebuild index only</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Refresh derived lookup structures such as interest centroids when relevance feels stale.
         </p>
-        <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
-          <input id="includeEnrichment" name="includeEnrichment" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
-          <span class="space-y-1">
-            <span class="block text-sm font-medium">Also rerun fetchers-owned article enrichment</span>
-            <span class="block text-xs text-muted-foreground">
-              Only affects <strong>Rebuild + repair existing content</strong>. The repair replays editorial articles through enrichment before normalize/dedup/embed/match steps and still skips retro notifications.
+        <p class="mt-3 text-xs text-muted-foreground">Use when the rules changed, but historical rows themselves do not need repair.</p>
+      </article>
+      <article class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Mode 2</p>
+        <h2 class="mt-2 text-base font-semibold">Rebuild + repair existing content</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Rematch historical rows against the current system-interest set and the active
+          compatibility selection-profile snapshot.
+        </p>
+        <p class="mt-3 text-xs text-muted-foreground">Use when already persisted content should reflect current matching policy.</p>
+      </article>
+      <article class="rounded-2xl border border-border bg-card p-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Optional</p>
+        <h2 class="mt-2 text-base font-semibold">Prepend enrichment replay</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Run editorial articles back through fetchers-owned enrichment before the repair path.
+        </p>
+        <p class="mt-3 text-xs text-muted-foreground">Keep force rerun off unless you intentionally want to revisit already enriched rows.</p>
+      </article>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+      <div class="rounded-xl border border-border bg-card p-5">
+        <div class="mb-4">
+          <h2 class="font-semibold text-sm">Queue Reindex Job</h2>
+          <p class="mt-1 text-xs text-muted-foreground">
+            One primary action lives here: choose the safest mode for the job you actually need.
+          </p>
+        </div>
+        <form method="post" action={reindexBffPath} class="grid gap-3">
+          <input type="hidden" name="redirectTo" value={currentPath} />
+          <div class="grid gap-1.5">
+            <label class="text-sm font-medium" for="indexName">Index name</label>
+            <select id="indexName" name="indexName"
+              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <option value="interest_centroids">interest_centroids</option>
+            </select>
+          </div>
+          <div class="grid gap-1.5">
+            <label class="text-sm font-medium" for="jobKind">Mode</label>
+            <select id="jobKind" name="jobKind"
+              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <option value="rebuild">Rebuild index only</option>
+              <option value="backfill">Rebuild + repair existing content</option>
+            </select>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Historical repair runs asynchronously, records the active compatibility profile
+            snapshot used for replay, and intentionally skips retro notification delivery.
+          </p>
+          <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
+            <input id="includeEnrichment" name="includeEnrichment" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
+            <span class="space-y-1">
+              <span class="block text-sm font-medium">Also rerun fetchers-owned article enrichment</span>
+              <span class="block text-xs text-muted-foreground">
+                Only affects <strong>Rebuild + repair existing content</strong>. The repair replays editorial articles through enrichment before normalize/dedup/embed/match steps and still skips retro notifications.
+              </span>
             </span>
-          </span>
-        </label>
-        <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
-          <input id="forceEnrichment" name="forceEnrichment" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
-          <span class="space-y-1">
-            <span class="block text-sm font-medium">Force rerun even already enriched articles</span>
-            <span class="block text-xs text-muted-foreground">
-              Leave this off for the normal historical repair path. Use it only when you intentionally want to rerun enrichment on rows that already have `enriched` state.
+          </label>
+          <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
+            <input id="forceEnrichment" name="forceEnrichment" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
+            <span class="space-y-1">
+              <span class="block text-sm font-medium">Force rerun even already enriched articles</span>
+              <span class="block text-xs text-muted-foreground">
+                Leave this off for the normal repair path. Use it only when you intentionally want to rerun enrichment on rows that already have `enriched` state.
+              </span>
             </span>
-          </span>
-        </label>
-        <AdminConfirmSubmitButton
-          title="Queue maintenance job"
-          description="This starts an asynchronous rebuild job in the background. Choose rebuild-only for derived index refreshes, or backfill to also repair historical content matches. Optional enrichment replay still uses the existing fetchers owner and never resends retro notifications."
-          triggerLabel="Queue maintenance job"
-          confirmLabel="Start job"
-          client:load
-        />
-      </form>
-    </div>
+          </label>
+          <AdminConfirmSubmitButton
+            title="Queue maintenance job"
+            description="Start an asynchronous rebuild job. Use rebuild-only for index refreshes, or backfill to repair historical matches. Enrichment replay still skips retro notifications."
+            triggerLabel="Queue maintenance job"
+            confirmLabel="Start job"
+            client:load
+          />
+        </form>
+      </div>
+
+      <aside class="space-y-4">
+        <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <p class="text-sm font-medium">When should you reindex?</p>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li>After meaningful changes to system interests or user interests.</li>
+            <li>After a restore or repair that changed the effective data baseline.</li>
+            <li>When matching quality looks stale but raw ingest still looks healthy.</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">What this job does not do</p>
+          <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
+            <li>It does not delete historical content.</li>
+            <li>It does not resend retro notifications.</li>
+            <li>It does not change fetch cadence or source health configuration.</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <p class="text-sm font-medium">Next check after you queue it</p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            Watch the live jobs section below for status, progress, and the exact selection-profile
+            snapshot applied to the replay.
+          </p>
+        </div>
+      </aside>
+    </section>
 
     <LiveReindexJobsSection
       initialJobs={initialJobs}

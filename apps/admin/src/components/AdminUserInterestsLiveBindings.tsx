@@ -27,24 +27,20 @@ function compileToneClass(tone: AdminUserInterestCompileTone): string {
   return "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
 }
 
-function setText(
-  selector: string,
-  value: string
-): void {
-  const node = document.querySelector<HTMLElement>(selector);
-  if (node) {
+function setText(selector: string, value: string): void {
+  const nodes = document.querySelectorAll<HTMLElement>(selector);
+  for (const node of nodes) {
     node.textContent = value;
   }
 }
 
 function toggleNode(selector: string, visible: boolean, text?: string): void {
-  const node = document.querySelector<HTMLElement>(selector);
-  if (!node) {
-    return;
-  }
-  node.classList.toggle("hidden", !visible);
-  if (text != null) {
-    node.textContent = text;
+  const nodes = document.querySelectorAll<HTMLElement>(selector);
+  for (const node of nodes) {
+    node.classList.toggle("hidden", !visible);
+    if (text != null) {
+      node.textContent = text;
+    }
   }
 }
 
@@ -69,10 +65,10 @@ function applySnapshot(snapshot: AdminUserInterestsLiveSnapshot): void {
   );
 
   for (const interest of snapshot.interests) {
-    const statusNode = document.querySelector<HTMLElement>(
+    const statusNodes = document.querySelectorAll<HTMLElement>(
       `[data-admin-live-interest-status="${interest.interestId}"]`
     );
-    if (statusNode) {
+    for (const statusNode of statusNodes) {
       statusNode.textContent = interest.compileLabel;
       statusNode.className = [
         "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",

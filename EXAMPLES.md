@@ -2,7 +2,7 @@
 
 > **Для кого этот документ:** для администратора, который уже поднял NewsPortal и хочет быстро наполнить систему готовыми RSS-каналами, LLM-шаблонами и шаблонами интересов под типовой сценарий.
 >
-> **Что этот документ покрывает:** primary operator-facing source для built-in example bundles (`RSS + Templates`) и отдельный appendix по discovery mode, который помогает расширять эти же сценарии новыми источниками.
+> **Что этот документ покрывает:** primary operator-facing source для built-in example bundles (`RSS + Rules`) и отдельный appendix по discovery mode, который помогает расширять эти же сценарии новыми источниками.
 >
 > **Что этот документ не покрывает полностью:** полный `.env.dev` bootstrap, весь manual MVP runbook, полный website/hard-site operator pass и live-internet edge cases вне bounded local setup.
 >
@@ -45,9 +45,9 @@
 
 Каждый пример содержит **полный content-набор настроек** для одного тематического сценария, готовый к вводу в панель администратора после базового setup:
 
-1. **RSS-каналы** — JSON для массового импорта (Bulk Import) на странице Channels; для shared bulk import каждая row должна явно нести `providerType`
+1. **RSS-каналы** — JSON для страницы **Channels → Import**; для shared bulk import каждая row должна явно нести `providerType`
 2. **LLM-шаблоны** — active baseline промпты, состав которых зависит от сценария; ориентируйтесь на конкретный пример ниже. Для Example C все 3 scope (`interests`, `criteria`, `global`) являются active baseline.
-3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице Templates в правой колонке и синхронизируются в live `criteria`
+3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице **Rules → System Interests** и синхронизируются в live `criteria`
 4. **Profile policy, hard filters и candidate cues** — для каждого system interest теперь важно заполнить прототипы, profile policy (`Strictness`, `Unresolved outcome`, `LLM review mode`), `must_not_have_terms`, `allowed_content_kinds`, `priority` и `candidate uplift positive/negative cues`; `must_have_terms` и `time_window_hours` остаются опциональными hard filters и для recall-first baseline обычно оставляются пустыми
 
 Для built-in example bundles именно этот файл должен считаться первичным human-facing источником. Узкие companion docs в `docs/data_scripts/*` могут помогать отдельному use case, но не должны расходиться с этим документом и не должны переопределять его.
@@ -61,9 +61,9 @@
 **Порядок действий:**
 
 ```
-1. Импортировать каналы (Channels → Bulk Import)
-2. Создать LLM-шаблоны (Templates → левая колонка)
-3. Создать шаблоны интересов (Templates → правая колонка)
+1. Импортировать каналы (Channels → Import)
+2. Создать LLM-шаблоны (Rules → LLM Templates)
+3. Создать шаблоны интересов (Rules → System Interests)
 4. Для каждого system interest выставить runtime policy ровно так, как она указана в текущем примере: `Strictness` может различаться по шаблонам, а `Unresolved outcome = hold` и `LLM review mode = always` остаются baseline, если ниже не указано иное
 5. Запустить переиндексацию (Reindex → interest_centroids)
 6. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
@@ -162,7 +162,7 @@
 
 ### A.1. RSS-каналы
 
-Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
+Перейдите в **Channels → Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
 
 ```json
 [
@@ -333,7 +333,7 @@
 
 ### A.2. LLM-шаблоны
 
-Перейдите в **Templates** и создайте в левой колонке как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
+Перейдите в **Rules → LLM Templates** и создайте как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
 
 #### LLM-шаблон 1: interests (optional future-ready, не используется в baseline по умолчанию)
 
@@ -448,7 +448,7 @@ When in doubt, reject. It is better to miss a borderline article than to clutter
 
 ### A.3. Шаблоны интересов
 
-Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
+Перейдите в **Rules → System Interests** и создайте следующие шаблоны через экран **Create system interest**. Для каждого шаблона вводите прототипы **по одному на строке**.
 
 #### Общие runtime-настройки для всех job-board шаблонов
 
@@ -999,7 +999,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
 
 ### B.1. RSS-каналы
 
-Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
+Перейдите в **Channels → Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
 
 ```json
 [
@@ -1193,7 +1193,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
 
 ### B.2. LLM-шаблоны
 
-Перейдите в **Templates** и создайте в левой колонке как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
+Перейдите в **Rules → LLM Templates** и создайте как минимум два active baseline шаблона: `criteria` и `global`. Ниже также приведён optional future-ready шаблон `interests`, если позже будет включена расширенная персонализация.
 
 #### LLM-шаблон 1: interests (optional future-ready, не используется в baseline по умолчанию)
 
@@ -1312,7 +1312,7 @@ Default to reject if uncertain. Quality over quantity.
 
 ### B.3. Шаблоны интересов
 
-Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы **по одному на строке**.
+Перейдите в **Rules → System Interests** и создайте следующие шаблоны через экран **Create system interest**. Для каждого шаблона вводите прототипы **по одному на строке**.
 
 #### Общие runtime-настройки для всех dev-news шаблонов
 
@@ -1876,7 +1876,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 ### C.1. RSS-каналы
 
-Перейдите в **Channels → Bulk Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
+Перейдите в **Channels → Import**, вставьте следующий JSON и нажмите **Validate**, затем **Import JSON**. Для shared bulk import каждая row ниже уже явно включает `"providerType": "rss"`:
 
 ```json
 [
@@ -2027,7 +2027,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/data_scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/data_scripts/outsource_balanced_templates.json` — reference asset для ручного сравнения/переноса, но не отдельный competing handbook.
 
-Перейдите в **Templates** и создайте в левой колонке все 3 active baseline шаблона: `interests`, `criteria` и `global`.
+Перейдите в **Rules → LLM Templates** и создайте все 3 active baseline шаблона: `interests`, `criteria` и `global`.
 
 Ниже приведены значения, которые теперь должны считаться primary operator-facing truth для outsourcing Example C. Они синхронизированы с live admin-tuned bundle и больше не должны отставать от текущих `interest_templates`, `selection_profiles` и `llm_prompt_templates`.
 
@@ -2181,7 +2181,7 @@ Important:
 
 ### C.3. Шаблоны интересов
 
-Перейдите в **Templates** и создайте следующие шаблоны в правой колонке (**Create Interest Template**). Для каждого шаблона вводите прототипы и cue-группы **по одному на строке**.
+Перейдите в **Rules → System Interests** и создайте следующие шаблоны через экран **Create system interest**. Для каждого шаблона вводите прототипы и cue-группы **по одному на строке**.
 
 Текущий built-in outsourcing baseline intentionally уже и строже старого широкого варианта. Для рабочего default используйте именно эти 5 шаблонов: ниже зафиксирован уже admin-tuned bundle, синхронизированный с live runtime.
 
@@ -2603,7 +2603,7 @@ Discovery в NewsPortal не заменяет готовые bundles из это
 - exact graph/recall policy values;
 - benchmark cohorts;
 - exact mission seeds и recall queries;
-- manual replay steps через `/admin/discovery`;
+- manual replay steps через discovery overview и focused entry routes under `/admin/discovery`;
 - canonical proof command `pnpm test:discovery:examples:compose`.
 
 Этот файл оставляет только high-level tie-in между example bundles и discovery, чтобы не дублировать длинные profile settings в двух местах.
@@ -2613,9 +2613,9 @@ Discovery в NewsPortal не заменяет готовые bundles из это
 Discovery добавляет:
 
 - поиск новых кандидатов в источники под уже выбранную тематику;
-- mission-based planning через `/admin/discovery`;
+- mission-based planning через `/admin/discovery/missions`;
 - review/approve loop для найденных RSS и `website` кандидатов;
-- cost/quota visibility через `/admin/discovery` и `/maintenance/discovery/*`.
+- cost/quota visibility через `/admin/discovery`, focused discovery routes, и `/maintenance/discovery/*`.
 
 Discovery не заменяет:
 
@@ -2727,9 +2727,9 @@ pnpm test:discovery-enabled:compose
 
 5. Проверьте, что runtime действительно включился:
    - `GET /maintenance/discovery/summary` показывает `enabled=true`;
-   - `/admin/discovery` показывает активный provider, model и месячный quota state;
+   - `/admin/discovery` показывает активный provider, model и месячный quota state, а focused routes вроде `/admin/discovery/missions` и `/admin/discovery/recall` разводят operator workflows по отдельным поверхностям;
    - при исчерпании месячного лимита UI/API должны честно показать quota reached вместо тихой деградации.
-6. Только после этого начинайте реальные mission runs в `/admin/discovery`.
+6. Только после этого начинайте реальные mission runs через discovery overview или focused mission workspace на `/admin/discovery/missions`.
 
 Для полного operator-testing walkthrough после этого bounded enable шага переходите в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md): там отдельно разобраны graph-first mission flow, independent recall flow, promoted-vs-duplicate outcomes и canonical proof contour для этой зоны.
 
@@ -2739,7 +2739,7 @@ pnpm test:discovery-enabled:compose
 pnpm test:discovery:examples:compose
 ```
 
-После этого откройте `DISCOVERY_MODE_TESTING.md` и повторите те же `Discovery Profiles` руками через `/admin/discovery`.
+После этого откройте `DISCOVERY_MODE_TESTING.md` и повторите те же `Discovery Profiles` руками через `/admin/discovery/profiles`.
 
 ### 7.5. Как связать discovery с примерами A, B и C
 

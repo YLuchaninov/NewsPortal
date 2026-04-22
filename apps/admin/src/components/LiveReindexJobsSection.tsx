@@ -188,7 +188,7 @@ export function LiveReindexJobsSection({
       <div className="divide-y divide-border">
         {jobs.items.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No jobs on this page
+            No jobs on this page. Try another page of results.
           </div>
         ) : (
           jobs.items.map((job) => (

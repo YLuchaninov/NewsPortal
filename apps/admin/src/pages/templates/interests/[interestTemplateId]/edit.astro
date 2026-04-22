@@ -186,8 +186,8 @@ const candidateSignalSummary =
             action={appPath("/bff/admin/templates")}
             title={isActive ? "Archive system interest" : "Reactivate system interest"}
             description={isActive
-              ? "Archived system interests stay visible to operators but stop appearing in the active global-selection catalog."
-              : "Reactivating the system interest puts it back into the active global-selection catalog."}
+              ? "Archive this system interest to remove it from the active catalog while keeping it recoverable."
+              : "Reactivate this system interest to return it to the active catalog."}
             triggerLabel={isActive ? "Archive" : "Activate"}
             confirmLabel={isActive ? "Archive system interest" : "Activate system interest"}
             fields={[
@@ -203,7 +203,7 @@ const candidateSignalSummary =
           <AdminConfirmAction
             action={appPath("/bff/admin/templates")}
             title="Delete system interest"
-            description="Delete permanently only when this system interest should be removed from the admin library entirely."
+            description="Delete this system interest permanently. Use archive instead if you may need it again."
             triggerLabel="Delete"
             confirmLabel="Delete system interest"
             fields={[

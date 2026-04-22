@@ -1,5 +1,3 @@
-import * as React from "react";
-
 import { FormField, Input, Textarea } from "@newsportal/ui";
 
 export interface LlmTemplateEditorValue {
@@ -40,6 +38,32 @@ export function LlmTemplateEditorForm({
       {value.promptTemplateId && (
         <input type="hidden" name="promptTemplateId" value={value.promptTemplateId} />
       )}
+
+      <section className="rounded-2xl border border-dashed border-border bg-background/70 p-4 shadow-sm">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Editor map
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Basics</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Template name and language hint for operator-facing identification.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Scope & lifecycle</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Choose whether the prompt serves system interests, user interests, or the global fallback.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Prompt body</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Keep the placeholder contract explicit so runtime review stays predictable.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-5">

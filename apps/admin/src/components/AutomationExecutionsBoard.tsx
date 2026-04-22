@@ -255,7 +255,7 @@ export function AutomationExecutionsBoard({
           <CardContent className="space-y-4 pt-5">
             {liveRunsPage.items.length === 0 ? (
               <div className="rounded-[1.2rem] border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                No runs match the current filter.
+                No runs match this filter. Try a broader filter.
               </div>
             ) : (
               liveRunsPage.items.map((run) => {
@@ -345,7 +345,7 @@ export function AutomationExecutionsBoard({
                   <div className="space-y-3">
                     {selectedTaskRuns.length === 0 ? (
                       <div className="rounded-[1.2rem] border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                        No task rows yet for this run.
+                        No task rows yet for this run. Task history appears here once execution starts.
                       </div>
                     ) : (
                       selectedTaskRuns.map((taskRun) => (

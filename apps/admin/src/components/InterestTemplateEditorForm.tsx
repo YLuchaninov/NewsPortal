@@ -65,6 +65,32 @@ export function InterestTemplateEditorForm({
         <input type="hidden" name="interestTemplateId" value={value.interestTemplateId} />
       )}
 
+      <section className="rounded-2xl border border-dashed border-border bg-background/70 p-4 shadow-sm">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Editor map
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Basics</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Name, lifecycle state, description, and positive or negative prototypes.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Runtime policy</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Review-mode, unresolved-outcome, and candidate-cue settings from the synced selection profile.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Advanced matching</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Lexical gates, content kinds, time window, and optional uplift cues for borderline content.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-5">
           <h2 className="text-base font-semibold text-foreground">
@@ -280,14 +306,27 @@ export function InterestTemplateEditorForm({
       </section>
 
       <details className="group rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
           <div>
             <p className="text-base font-semibold text-foreground">Advanced matching hints</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Optional lexical constraints, geographic hints, time-window gating, and content-kind gates for more precise global selection.
             </p>
           </div>
-          <span className="text-xs font-medium text-primary transition group-open:rotate-180">⌄</span>
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition group-open:rotate-180">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
         </summary>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">

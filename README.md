@@ -213,7 +213,7 @@ infra/
   - `DISCOVERY_BRAVE_API_KEY`
   - `DISCOVERY_SERPER_API_KEY`
 - Supported discovery search adapters are `stub`, `ddgs`, `brave`, and `serper`; the default stays `ddgs`, but runtime/provider semantics no longer assume DDGS outside the selected adapter.
-- Admin discovery surface lives at `/admin/discovery` behind the existing allowlisted admin/session boundary and keeps same-origin BFF writes with audit logging.
+- Admin discovery surfaces live under `/admin/discovery` behind the existing allowlisted admin/session boundary and keep same-origin BFF writes with audit logging. The overview remains at `/admin/discovery`, while focused entry routes now include `/admin/discovery/profiles`, `/admin/discovery/missions`, `/admin/discovery/recall`, `/admin/discovery/candidates`, and `/admin/discovery/sources`.
 
 ### Discovery live enable runbook
 
@@ -227,7 +227,7 @@ infra/
 4. Prove the profile-backed Example B/C discovery harness with `pnpm test:discovery:examples:compose` if you want a repo-owned live run that materializes reusable `Discovery Profiles` and emits canonical `manualReplaySettings` for later manual replay.
 5. For a real local enable, restart the relevant containers with `DISCOVERY_ENABLED=1` in the runtime env, then verify:
    - `GET /maintenance/discovery/summary` shows `enabled=true`, the expected discovery LLM model, and the monthly quota fields;
-   - `/admin/discovery` shows the active provider/model plus the monthly quota state;
+   - `/admin/discovery` overview shows the active provider/model plus the monthly quota state, while the focused discovery routes keep profiles, missions, recall, candidates, and source quality easier to inspect separately;
    - manual mission runs succeed before quota exhaustion and return `409` after the hard cap is reached.
 6. Monitor discovery live via:
    - `/maintenance/discovery/summary`
@@ -258,14 +258,14 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 - Для Astro SSR/BFF теперь используются отдельные app base URLs: `NEWSPORTAL_WEB_APP_BASE_URL` и `NEWSPORTAL_ADMIN_APP_BASE_URL`; compose прокидывает их в контейнеры как `NEWSPORTAL_APP_BASE_URL`, чтобы redirects и trusted host reconstruction не деградировали в `http://localhost/`.
 - `apps/web` и `apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
 - Browser/session routes `web` и `admin` больше не делят `/api/*` c Python API: public/read API остается на `/api/*`, а Astro BFF живет на `/bff/*`; через nginx admin surface доступен на `/admin/`, поэтому его browser/BFF paths снаружи имеют вид `/admin/bff/*`.
-- Admin now also exposes `/admin/discovery` for mission planning, candidate review, hypothesis inspection and cost summaries, while FastAPI keeps the canonical `/maintenance/discovery/*` read/action surface for SDK/BFF consumers.
+- Admin now also exposes the discovery control plane under `/admin/discovery` for mission planning, candidate review, hypothesis inspection, recall, and cost summaries, while FastAPI keeps the canonical `/maintenance/discovery/*` read/action surface for SDK/BFF consumers.
 - Для first-run admin bootstrap используется `ADMIN_ALLOWLIST_EMAILS`; allowlisted email получает локальную роль `admin` при первом успешном Firebase sign-in, а exact allowlisted address допускает repeatable `+alias` sign-in для internal tests. После bootstrap PostgreSQL остается источником истины для authorization.
 - Active admin `interest_templates` materialize-ятся в live system-interest rules, поэтому операторский system layer уже участвует и во fresh ingest, и в historical backfill.
 - Fresh ingest и historical backfill теперь идут в system-first порядке: `system interests -> system-interest-scope gray-zone LLM -> system-selected collection -> optional per-user user_interests`.
 - Пользователь без `user_interests` все равно видит system-selected collection; baseline notifications пока остаются personalization-lane contract, а не отдельным system alert path.
 - `web` keeps `/` as the global system-selected collection and exposes a separate `/matches` surface for per-user personalized matches.
 - Successful user-interest create/update/clone flows now compile first and then queue a scoped `repair` replay for historical system-selected content, without resending retro notifications.
-- Umbrella `pnpm integration_tests` acceptance все еще остается RSS-first ingest path, но website lane теперь имеет отдельные deterministic proofs через `pnpm test:website:compose` и `pnpm test:website:admin:compose`; `api` / `email_imap` operator acceptance по-прежнему остаются follow-up scope.
+- Umbrella `pnpm integration_tests` acceptance все еще остается RSS-first ingest path, но website lane теперь имеет отдельные deterministic proofs через `pnpm test:website:compose` и `pnpm test:website:admin:compose`; отдельный admin/operator CRUD proof для `website`, `api`, и `email_imap` source flows также входит в `pnpm test:website:admin:compose`.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
 - `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
 - Admin surface показывает provider-agnostic scheduling health, append-only fetch history, website resource browse/detail observability via `/admin/resources`, и LLM usage/budget rollups; read-model API дополнена `/maintenance/fetch-runs`, `/maintenance/llm-reviews`, `/maintenance/llm-usage-summary`, `/maintenance/llm-budget-summary` и `/maintenance/web-resources*`.
@@ -277,7 +277,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 
 Для ручного MVP прогона теперь есть консистентный baseline:
 
-- admin умеет создавать RSS и website channels, а website lane теперь дает `/admin/resources` browse/detail для projected и resource-only `web_resources`;
+- admin умеет создавать `rss`, `website`, `api` и `email_imap` sources, а website lane теперь дает `/admin/resources` browse/detail для projected и resource-only `web_resources`;
 - browser-assisted website handling for public JS-heavy sites is available as an opt-in website-channel setting via `browserFallbackEnabled`; cheap static modes remain default and browser provenance should surface on `/admin/resources`;
 - provider-wide scheduling patch позволяет массово назначать `fast=300`, `normal=900`, `slow=3600`, `daily=86400`, `three_day=259200`;
 - fetchers сохраняют `source_channel_runtime_state` и append-only `channel_fetch_runs`, поэтому overdue/adaptive/failed каналы видны отдельно от `source_channels.last_*`;
@@ -300,7 +300,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 
 - фактический browser receipt для `web_push` остается manual-only proof item;
 - repo не содержит канонического списка real RSS feeds, только импортный template; реальные feed URLs оператор подставляет сам.
-- current committed admin/operator source CRUD supports RSS and website onboarding; `api` и `email_imap` ingest остаются code-present, но не operator-ready частью этого manual baseline.
+- current committed admin/operator source CRUD supports `rss`, `website`, `api`, and `email_imap` onboarding; `youtube` ingest остается future-ready и пока не входит в operator-ready часть этого manual baseline.
 
 ## Targeted Smokes
 
