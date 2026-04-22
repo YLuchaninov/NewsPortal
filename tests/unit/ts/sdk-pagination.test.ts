@@ -407,6 +407,44 @@ test("cancelSequenceRun posts cancel reason to the dedicated route", async () =>
   assert.match(requestedBody, /"reason":"Operator requested stop\."}/);
 });
 
+test("retrySequenceRun posts retry payload to the dedicated route", async () => {
+  let requestedUrl = "";
+  let requestedMethod = "";
+  let requestedBody = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedMethod = String(init?.method ?? "GET");
+      requestedBody = String(init?.body ?? "");
+      return new Response(
+        JSON.stringify({
+          run_id: "run-2",
+          status: "pending",
+          retry_of_run_id: "run-1",
+        }),
+        {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.retrySequenceRun<Record<string, unknown>>("run-1", {
+    requestedBy: "admin-1",
+    contextOverrides: { force: true },
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/sequence-runs/run-1/retry"
+  );
+  assert.equal(requestedMethod, "POST");
+  assert.match(requestedBody, /"requestedBy":"admin-1"/);
+  assert.match(requestedBody, /"force":true/);
+});
+
 test("listOutboxEvents preserves explicit limit", async () => {
   let requestedUrl = "";
   const sdk = createNewsPortalSdk({

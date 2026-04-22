@@ -200,6 +200,11 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         `/maintenance/sequence-runs/${encodeURIComponent(runId)}/cancel`,
         payload ?? {}
       ),
+    retrySequenceRun: <T>(runId: string, payload?: unknown) =>
+      postJson<T>(
+        `/maintenance/sequence-runs/${encodeURIComponent(runId)}/retry`,
+        payload ?? {}
+      ),
     listOutboxEvents: <T>(limit?: number) =>
       getJson<T>("/maintenance/outbox", {
         limit,

@@ -267,6 +267,7 @@ class PostgresSequenceRepository:
                       title,
                       description,
                       task_graph,
+                      editor_state,
                       status,
                       trigger_event,
                       cron,
@@ -293,6 +294,7 @@ class PostgresSequenceRepository:
                       status,
                       context_json,
                       trigger_type,
+                      retry_of_run_id::text as retry_of_run_id,
                       trigger_meta,
                       error_text
                     from sequence_runs
@@ -416,6 +418,7 @@ class PostgresSequenceRepository:
                       title,
                       description,
                       task_graph,
+                      editor_state,
                       status,
                       trigger_event,
                       cron,

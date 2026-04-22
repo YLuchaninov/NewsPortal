@@ -19,6 +19,7 @@ import {
   buildSequenceCancelApiPayload,
   buildSequenceCreateApiPayload,
   buildSequenceManualRunApiPayload,
+  buildSequenceRetryApiPayload,
   buildSequenceUpdateApiPayload,
   resolveSequenceAdminIntent,
   type SequenceAdminIntent,
@@ -101,6 +102,8 @@ function resolveActionType(intent: SequenceAdminIntent): string {
       return "sequence_run_requested";
     case "cancel_run":
       return "sequence_run_cancelled";
+    case "retry_run":
+      return "sequence_run_retried";
   }
 }
 
@@ -234,6 +237,36 @@ export const POST: APIRoute = async ({ request }) => {
         browserRequest,
         redirectTo,
         "Sequence run requested",
+        result,
+        202
+      );
+    }
+
+    if (intent === "retry_run") {
+      const runId = String(payload.runId ?? "").trim();
+      if (!runId) {
+        throw new Error("Run ID is required.");
+      }
+      const result = await callAutomationApi<Record<string, unknown>>(
+        `/maintenance/sequence-runs/${encodeURIComponent(runId)}/retry`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(buildSequenceRetryApiPayload(payload, session.userId)),
+        }
+      );
+      await writeAuditLog(
+        session.userId,
+        resolveActionType(intent),
+        "sequence_run",
+        String(result.run_id ?? ""),
+        buildSequenceAuditPayload(intent, payload, result)
+      );
+      return respondAutomationSuccess(
+        request,
+        browserRequest,
+        redirectTo,
+        "Sequence retry requested",
         result,
         202
       );

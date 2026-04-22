@@ -14,6 +14,87 @@
 
 ## Completed items
 
+### 2026-04-22 — PATCH-AUTOMATION-WORKSPACE-VIEWPORT-PROOF — Closed the remaining responsive/browser proof gap for the shipped automation workspace
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the automation workspace capability shipped, the only explicit residual proof gap was browser viewport coverage for the new multi-route UX. The user then asked to run the missing tests rather than leave that as a follow-up-only note.
+- Что изменилось:
+  - no product code changes were required;
+  - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md) was updated to open a proof-only patch, record the result, and return the live state to no-active-item status once the smoke passed.
+- Что было доказано:
+  - `pnpm test:web:viewports`
+  - authoritative result:
+    - `status = web-viewports-ok`
+    - viewports covered:
+      - `desktop`
+      - `tablet`
+      - `mobile`
+    - responsive/browser smoke completed on the current tree without exposing a new automation-workspace regression.
+- Что patch доказал:
+  - the shipped workspace did not introduce a visible responsive break severe enough to fail the repo-owned browser viewport contour;
+  - the automation workspace capability no longer carries an explicit missing-proof note inside the live handoff state.
+
+### 2026-04-22 — C-AUTOMATION-VISUAL-WORKSPACE — Replaced the legacy sequence CRUD page with a shipped multi-route visual workflow workspace
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the previous `/automation` screen exposed the sequence engine as one dense CRUD page with raw JSON and mixed concerns. Operators needed a faster template-led entry point, a truthful visual editing surface for the existing linear runtime, dedicated execution history, and better observability without introducing fake DAG semantics or a shadow orchestration path.
+- Что изменилось:
+  - replaced the monolithic admin page with a shipped multi-route workspace:
+    - overview/library on [`apps/admin/src/pages/automation.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/automation.astro)
+    - template gallery on [`apps/admin/src/pages/automation/templates.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/automation/templates.astro)
+    - React Flow editor on [`apps/admin/src/pages/automation/[sequenceId].astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/automation/[sequenceId].astro)
+    - workflow-scoped executions view on [`apps/admin/src/pages/automation/[sequenceId]/executions.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/automation/[sequenceId]/executions.astro)
+  - shipped the new React islands and typed editor model:
+    - [`apps/admin/src/components/AutomationOverviewBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationOverviewBoard.tsx)
+    - [`apps/admin/src/components/AutomationTemplateGallery.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationTemplateGallery.tsx)
+    - [`apps/admin/src/components/AutomationEditorWorkspace.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationEditorWorkspace.tsx)
+    - [`apps/admin/src/components/AutomationExecutionsBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationExecutionsBoard.tsx)
+    - [`apps/admin/src/lib/automation-workspace.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/automation-workspace.ts)
+    - [`apps/admin/src/lib/server/automation-workspace.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/automation-workspace.ts)
+  - kept `task_graph` as the execution source of truth while adding additive operator metadata:
+    - [`database/migrations/0043_automation_visual_workspace.sql`](/Users/user/Documents/workspace/my/NewsPortal/database/migrations/0043_automation_visual_workspace.sql)
+    - [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py)
+    - [`services/workers/app/task_engine/models.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/models.py)
+    - [`services/workers/app/task_engine/repository.py`](/Users/user/Documents/workspace/my/NewsPortal/services/workers/app/task_engine/repository.py)
+    - additive runtime truth now includes optional `editor_state` on sequences, optional human-facing task `label` / `notes`, and `retry_of_run_id` on retried runs.
+  - expanded the admin/operator control path without bypassing maintenance contracts:
+    - [`apps/admin/src/lib/server/automation.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/automation.ts)
+    - [`apps/admin/src/pages/bff/admin/automation.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/automation.ts)
+    - [`packages/sdk/src/index.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/sdk/src/index.ts)
+    - write flows now accept JSON-backed editor payloads, preserve advanced JSON fallback, and expose failed-run retry through the same maintenance-backed path.
+  - added an automation-specific live updates surface so the new overview/editor/executions pages can refresh summary, runs, and outbox visibility without full reloads:
+    - [`apps/admin/src/lib/live-updates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/live-updates.ts)
+    - [`apps/admin/src/lib/server/live-updates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/lib/server/live-updates.ts)
+    - [`apps/admin/src/pages/bff/admin/live-updates.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/bff/admin/live-updates.ts)
+  - refreshed proof-owned tests and operator smoke:
+    - [`tests/unit/ts/automation-workspace.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/automation-workspace.test.ts)
+    - [`tests/unit/ts/admin-automation.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/admin-automation.test.ts)
+    - [`tests/unit/ts/sdk-pagination.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/sdk-pagination.test.ts)
+    - [`tests/unit/python/test_api_sequence_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_sequence_management.py)
+    - [`infra/scripts/test-automation-admin-flow.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-automation-admin-flow.mjs)
+    - the automation acceptance harness now rebuilds the bounded automation services before exercising the compose stack, so the smoke reflects current workspace code instead of stale images.
+- Что было доказано:
+  - static/type proof:
+    - `pnpm --filter @newsportal/admin typecheck`
+    - `pnpm typecheck`
+  - targeted unit proof:
+    - `node --import tsx --test tests/unit/ts/admin-automation.test.ts tests/unit/ts/automation-workspace.test.ts tests/unit/ts/sdk-pagination.test.ts`
+    - `python -m unittest tests.unit.python.test_api_sequence_management`
+  - real operator smoke:
+    - `node infra/scripts/test-automation-admin-flow.mjs`
+    - authoritative result:
+      - `status = automation-admin-ok`
+      - new sequence create/update/archive path passed
+      - manual run creation plus pending-only cancel path passed
+      - workflow executions route preflight passed
+      - recent outbox visibility proof passed
+- Что capability доказала:
+  - the shipped automation UX is now template-first and multi-route by default without inventing unsupported runtime semantics;
+  - React Flow is used as a truthful presentational/editor layer for the current sequential engine rather than as a fake arbitrary DAG runtime;
+  - operator-facing retry, editor metadata, and live updates now exist inside the same maintenance/API truth instead of a parallel admin-only path.
+
 ### 2026-04-21 — C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT — Closed the clean-baseline Example C outsourcing zero-yield gap through downstream diagnostics, admin-owned bundle retune, and bounded generic wrapper-noise hardening
 
 - Тип записи: capability archive

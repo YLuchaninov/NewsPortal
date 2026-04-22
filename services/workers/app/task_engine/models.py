@@ -31,6 +31,8 @@ class TaskDefinition:
     key: str
     module: str
     options: dict[str, Any] = field(default_factory=dict)
+    label: str | None = None
+    notes: str | None = None
     enabled: bool = True
     retry: TaskRetryPolicy = field(default_factory=TaskRetryPolicy)
     timeout_ms: int = DEFAULT_TASK_TIMEOUT_MS
@@ -48,6 +50,8 @@ class TaskDefinition:
             key=key,
             module=module,
             options=dict(options_value),
+            label=str(value["label"]) if value.get("label") is not None else None,
+            notes=str(value["notes"]) if value.get("notes") is not None else None,
             enabled=bool(value.get("enabled", True)),
             retry=TaskRetryPolicy.from_mapping(
                 value.get("retry") if isinstance(value.get("retry"), Mapping) else None
@@ -62,6 +66,7 @@ class SequenceDefinition:
     title: str
     task_graph: list[TaskDefinition]
     status: str
+    editor_state: dict[str, Any] | None = None
     trigger_event: str | None = None
     cron: str | None = None
     run_count: int = 0
@@ -81,6 +86,11 @@ class SequenceDefinition:
             title=str(record["title"]),
             task_graph=[TaskDefinition.from_mapping(node) for node in task_graph_value],
             status=str(record["status"]),
+            editor_state=(
+                dict(record["editor_state"])
+                if isinstance(record.get("editor_state"), Mapping)
+                else None
+            ),
             trigger_event=(
                 str(record["trigger_event"]) if record.get("trigger_event") is not None else None
             ),
@@ -104,6 +114,7 @@ class SequenceRunRecord:
     status: str
     context_json: dict[str, Any]
     trigger_type: str
+    retry_of_run_id: str | None = None
     trigger_meta: dict[str, Any] | None = None
     error_text: str | None = None
 
@@ -123,6 +134,11 @@ class SequenceRunRecord:
             status=str(record["status"]),
             context_json=dict(context_value),
             trigger_type=str(record["trigger_type"]),
+            retry_of_run_id=(
+                str(record["retry_of_run_id"])
+                if record.get("retry_of_run_id") is not None
+                else None
+            ),
             trigger_meta=dict(trigger_meta) if isinstance(trigger_meta, Mapping) else None,
             error_text=str(record["error_text"]) if record.get("error_text") is not None else None,
         )

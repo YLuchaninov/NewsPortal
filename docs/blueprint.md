@@ -2636,7 +2636,7 @@ Legacy intermediate article events (`article.normalized`, `article.embedded`, `a
 - interest explain;
 - suppressions;
 - reindex jobs;
-- automation/sequence operator view и recent outbox visibility;
+- automation visual workflow workspace with overview/templates/editor/executions routes, retry/cancel controls, and recent outbox visibility;
 - failed job retry;
 - interest templates;
 - LLM prompt templates и policy rules.
@@ -2647,8 +2647,8 @@ Legacy intermediate article events (`article.normalized`, `article.embedded`, `a
 
 - compile interest;
 - compile criterion;
-- sequence CRUD, soft-archive, manual run, pending-only cancel, run status и task-run detail;
-- same-origin admin operator surface for sequence CRUD/manual run/cancel plus plugin/outbox visibility at `/automation` via `/admin/bff/admin/automation`, while direct read contracts remain on FastAPI/SDK;
+- sequence CRUD, soft-archive, manual run, failed-run retry, pending-only cancel, run status и task-run detail;
+- same-origin admin operator workspace for sequence CRUD/manual run/retry/cancel plus plugin/outbox visibility at `/automation`, `/automation/templates`, `/automation/{sequenceId}`, and `/automation/{sequenceId}/executions` via `/admin/bff/admin/automation`, while direct read contracts remain on FastAPI/SDK;
 - plugin catalog и agent draft-sequence create/run surface;
 - discovery summary/profile/mission/class/candidate/hypothesis/source-profile/source-interest-score/portfolio/feedback/re-evaluation surfaces under `/maintenance/discovery/*`, with reusable discovery-profile CRUD plus graph compile and class-registry management as maintenance-only actions and manual candidate approval as the default baseline;
 - rebuild HNSW;

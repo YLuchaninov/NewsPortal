@@ -1600,6 +1600,7 @@ class SequenceCreatePayload(BaseModel):
 
     title: str
     task_graph: list[dict[str, Any]] = Field(alias="taskGraph")
+    editor_state: dict[str, Any] | None = Field(default=None, alias="editorState")
     description: str | None = None
     status: Literal["draft", "active", "archived"] = "draft"
     trigger_event: str | None = Field(default=None, alias="triggerEvent")
@@ -1614,6 +1615,7 @@ class SequenceUpdatePayload(BaseModel):
 
     title: str | None = None
     task_graph: list[dict[str, Any]] | None = Field(default=None, alias="taskGraph")
+    editor_state: dict[str, Any] | None = Field(default=None, alias="editorState")
     description: str | None = None
     status: Literal["draft", "active", "archived"] | None = None
     trigger_event: str | None = Field(default=None, alias="triggerEvent")
@@ -1627,6 +1629,14 @@ class SequenceManualRunPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     context_json: dict[str, Any] = Field(default_factory=dict, alias="contextJson")
+    trigger_meta: dict[str, Any] = Field(default_factory=dict, alias="triggerMeta")
+    requested_by: str | None = Field(default=None, alias="requestedBy")
+
+
+class SequenceRetryRunPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    context_overrides: dict[str, Any] = Field(default_factory=dict, alias="contextOverrides")
     trigger_meta: dict[str, Any] = Field(default_factory=dict, alias="triggerMeta")
     requested_by: str | None = Field(default=None, alias="requestedBy")
 
@@ -1907,6 +1917,13 @@ def validate_sequence_task_graph(task_graph: list[dict[str, Any]]) -> None:
         raise SequenceValidationError(["task_graph must be an array."])
 
     errors = TASK_REGISTRY.validate_task_graph(task_graph)
+    for index, task in enumerate(task_graph):
+        label = task.get("label")
+        notes = task.get("notes")
+        if label is not None and not isinstance(label, str):
+            errors.append(f"Task at index {index} label must be a string.")
+        if notes is not None and not isinstance(notes, str):
+            errors.append(f"Task at index {index} notes must be a string.")
     if errors:
         raise SequenceValidationError(errors)
 
@@ -1933,6 +1950,13 @@ def validate_sequence_context_json(context_json: dict[str, Any]) -> None:
 def validate_trigger_meta(trigger_meta: dict[str, Any]) -> None:
     if not isinstance(trigger_meta, dict):
         raise SequenceValidationError(["trigger_meta must be an object."])
+
+
+def validate_sequence_editor_state(editor_state: dict[str, Any] | None) -> None:
+    if editor_state is None:
+        return
+    if not isinstance(editor_state, dict):
+        raise SequenceValidationError(["editor_state must be an object."])
 
 
 def normalize_sequence_cron(cron: str | None) -> str | None:
@@ -1965,6 +1989,7 @@ def sequence_select_sql() -> str:
           title,
           description,
           task_graph,
+          editor_state,
           status,
           trigger_event,
           cron,
@@ -1983,6 +2008,7 @@ def sequence_run_select_sql() -> str:
         select
           sr.run_id::text as run_id,
           sr.sequence_id::text as sequence_id,
+          sr.retry_of_run_id::text as retry_of_run_id,
           s.title as sequence_title,
           sr.status,
           sr.context_json,
@@ -2054,6 +2080,7 @@ def get_sequence_definition(sequence_id: str) -> dict[str, Any]:
 
 def create_sequence_definition(payload: SequenceCreatePayload) -> dict[str, Any]:
     validate_sequence_task_graph(payload.task_graph)
+    validate_sequence_editor_state(payload.editor_state)
     normalized_cron = normalize_sequence_cron(payload.cron)
 
     with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
@@ -2064,6 +2091,7 @@ def create_sequence_definition(payload: SequenceCreatePayload) -> dict[str, Any]
                   title,
                   description,
                   task_graph,
+                  editor_state,
                   status,
                   trigger_event,
                   cron,
@@ -2071,12 +2099,13 @@ def create_sequence_definition(payload: SequenceCreatePayload) -> dict[str, Any]
                   tags,
                   created_by
                 )
-                values (%s, %s, %s::jsonb, %s, %s, %s, %s, %s::text[], %s)
+                values (%s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s::text[], %s)
                 returning
                   sequence_id::text as sequence_id,
                   title,
                   description,
                   task_graph,
+                  editor_state,
                   status,
                   trigger_event,
                   cron,
@@ -2091,6 +2120,11 @@ def create_sequence_definition(payload: SequenceCreatePayload) -> dict[str, Any]
                     payload.title,
                     payload.description,
                     dump_json_value(payload.task_graph, "task_graph"),
+                    (
+                        dump_json_value(payload.editor_state, "editor_state")
+                        if payload.editor_state is not None
+                        else None
+                    ),
                     payload.status,
                     payload.trigger_event,
                     normalized_cron,
@@ -2124,6 +2158,8 @@ def update_sequence_definition(
 
     if "task_graph" in values and values["task_graph"] is not None:
         validate_sequence_task_graph(values["task_graph"])
+    if "editor_state" in values:
+        validate_sequence_editor_state(values["editor_state"])
     if "cron" in values:
         values["cron"] = normalize_sequence_cron(values["cron"])
 
@@ -2147,6 +2183,14 @@ def update_sequence_definition(
         assignments.append("task_graph = %s::jsonb")
         params.append(dump_json_value(values["task_graph"], "task_graph"))
 
+    if "editor_state" in values:
+        assignments.append("editor_state = %s::jsonb")
+        params.append(
+            dump_json_value(values["editor_state"], "editor_state")
+            if values["editor_state"] is not None
+            else None
+        )
+
     if "tags" in values:
         assignments.append("tags = %s::text[]")
         params.append(values["tags"])
@@ -2166,6 +2210,7 @@ def update_sequence_definition(
                   title,
                   description,
                   task_graph,
+                  editor_state,
                   status,
                   trigger_event,
                   cron,
@@ -2201,6 +2246,7 @@ def archive_sequence_definition(sequence_id: str) -> dict[str, Any]:
                   title,
                   description,
                   task_graph,
+                  editor_state,
                   status,
                   trigger_event,
                   cron,
@@ -2256,6 +2302,7 @@ def create_sequence_run_request_for_trigger(
     context_json: dict[str, Any],
     trigger_meta: dict[str, Any],
     trigger_type: Literal["manual", "cron", "agent", "api", "event"],
+    retry_of_run_id: str | None = None,
 ) -> dict[str, Any]:
     validate_sequence_context_json(context_json)
     validate_trigger_meta(trigger_meta)
@@ -2286,16 +2333,18 @@ def create_sequence_run_request_for_trigger(
                     insert into sequence_runs (
                       run_id,
                       sequence_id,
+                      retry_of_run_id,
                       status,
                       context_json,
                       trigger_type,
                       trigger_meta
                     )
-                    values (%s, %s, 'pending', %s::jsonb, %s, %s::jsonb)
+                    values (%s, %s, %s, 'pending', %s::jsonb, %s, %s::jsonb)
                     """,
                     (
                         run_id,
                         sequence_id,
+                        retry_of_run_id,
                         dump_json_value(context_json, "context_json"),
                         trigger_type,
                         dump_json_value(trigger_meta, "trigger_meta"),
@@ -2329,6 +2378,51 @@ def create_sequence_run_request(
         context_json=payload.context_json,
         trigger_meta=trigger_meta,
         trigger_type="manual",
+    )
+
+
+def retry_sequence_run_request(
+    run_id: str,
+    payload: SequenceRetryRunPayload,
+) -> dict[str, Any]:
+    existing_run = get_sequence_run(run_id)
+    if str(existing_run.get("status") or "") != "failed":
+        raise SequenceConflictError(
+            f"Sequence run {run_id} is not failed and cannot be retried."
+        )
+
+    base_context = (
+        dict(existing_run["context_json"])
+        if isinstance(existing_run.get("context_json"), Mapping)
+        else {}
+    )
+    merged_context = {
+        **base_context,
+        **payload.context_overrides,
+    }
+    validate_sequence_context_json(merged_context)
+
+    base_trigger_meta = (
+        dict(existing_run["trigger_meta"])
+        if isinstance(existing_run.get("trigger_meta"), Mapping)
+        else {}
+    )
+    trigger_meta = {
+        **base_trigger_meta,
+        **payload.trigger_meta,
+        "source": "maintenance_retry",
+        "retryOfRunId": run_id,
+        "originalTriggerType": existing_run.get("trigger_type"),
+    }
+    if payload.requested_by:
+        trigger_meta["requestedBy"] = payload.requested_by
+
+    return create_sequence_run_request_for_trigger(
+        str(existing_run["sequence_id"]),
+        context_json=merged_context,
+        trigger_meta=trigger_meta,
+        trigger_type="manual",
+        retry_of_run_id=run_id,
     )
 
 
@@ -7405,5 +7499,24 @@ def cancel_sequence_run(
     except (
         SequenceConflictError,
         SequenceNotFoundError,
+    ) as error:
+        raise_sequence_http_exception(error)
+
+
+@app.post("/maintenance/sequence-runs/{run_id}/retry", status_code=202)
+def retry_sequence_run(
+    run_id: str,
+    payload: SequenceRetryRunPayload | None = None,
+) -> dict[str, Any]:
+    try:
+        return retry_sequence_run_request(
+            run_id,
+            payload or SequenceRetryRunPayload(),
+        )
+    except (
+        SequenceConflictError,
+        SequenceDispatchError,
+        SequenceNotFoundError,
+        SequenceValidationError,
     ) as error:
         raise_sequence_http_exception(error)

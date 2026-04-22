@@ -2,7 +2,8 @@ export type AdminLiveUpdateSurface =
   | "dashboard"
   | "reindex"
   | "observability"
-  | "user-interests";
+  | "user-interests"
+  | "automation";
 
 export interface AdminCollectionSignal {
   total: number;
@@ -147,11 +148,45 @@ export interface AdminUserInterestsLiveSnapshot {
   interests: AdminUserInterestStatusSnapshot[];
 }
 
+export interface AdminAutomationLiveSnapshot {
+  surface: "automation";
+  fetchedAt: string;
+  revision: string;
+  hasPendingWork: boolean;
+  sequenceId: string | null;
+  selectedRunId: string | null;
+  summary: {
+    totalSequences: number;
+    activeSequences: number;
+    draftSequences: number;
+    archivedSequences: number;
+    recentRuns: number;
+    pendingRuns: number;
+    failedRuns: number;
+    completedRuns: number;
+    recentOutboxEvents: number;
+    pendingOutboxEvents: number;
+    failedOutboxEvents: number;
+    revision: string;
+  };
+  runs: {
+    total: number;
+    revision: string;
+    items: Record<string, unknown>[];
+  };
+  outbox: {
+    total: number;
+    revision: string;
+    items: Record<string, unknown>[];
+  };
+}
+
 export type AdminLiveUpdatesSnapshot =
   | AdminDashboardLiveSnapshot
   | AdminReindexLiveSnapshot
   | AdminObservabilityLiveSnapshot
-  | AdminUserInterestsLiveSnapshot;
+  | AdminUserInterestsLiveSnapshot
+  | AdminAutomationLiveSnapshot;
 
 export interface AdminLiveUpdatesResponse {
   sessionActive: boolean;

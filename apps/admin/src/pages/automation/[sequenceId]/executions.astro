@@ -1,0 +1,70 @@
+---
+import { AutomationExecutionsBoard } from "../../../components/AutomationExecutionsBoard";
+import AdminShell from "../../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../../lib/server/browser-flow";
+import { loadAutomationExecutionsData } from "../../../lib/server/automation-workspace";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sequenceId = Astro.params.sequenceId ?? "";
+const requestedRunId = Astro.url.searchParams.get("runId")?.trim() ?? "";
+const requestedStatus = Astro.url.searchParams.get("status")?.trim() ?? "";
+const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10);
+const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+const data = await loadAutomationExecutionsData({
+  sequenceId,
+  page,
+  pageSize: 12,
+  status: requestedStatus || null,
+  runId: requestedRunId || null,
+});
+const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=automation&sequenceId=${encodeURIComponent(sequenceId)}&runId=${encodeURIComponent(data.selectedRunId)}`;
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<AdminShell
+  title="Automation Executions — Admin"
+  session={session}
+  flash={flash}
+  activeNav="automation"
+  liveUpdatesEndpoint={liveUpdatesEndpoint}
+  liveUpdatesSurface="automation"
+>
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/automation")} class="hover:text-foreground">Automation</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">Executions</span>
+    </nav>
+  </Fragment>
+
+  <AutomationExecutionsBoard
+    sequence={data.sequence}
+    runsPage={data.runsPage}
+    initialSelectedRunId={data.selectedRunId}
+    taskRunsByRunId={data.taskRunsByRunId}
+    automationBffPath={appPath("/bff/admin/automation")}
+    editorHref={appPath(`/automation/${sequenceId}`)}
+    currentPath={currentPath}
+    outboxEvents={data.outboxEvents}
+    client:load
+  />
+</AdminShell>

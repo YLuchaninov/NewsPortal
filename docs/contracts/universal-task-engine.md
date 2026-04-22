@@ -25,7 +25,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 ## Out of scope
 
 - discovery/enrichment plugin behavior beyond their own task contracts;
-- visual sequence editor;
+- arbitrary DAG/branching workflow execution semantics beyond the current linear `TaskGraph` runtime;
 - agent UX specifics сверх catalog/run API;
 - удаление legacy queue/event contracts до финального cutover stage.
 
@@ -54,9 +54,9 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 ### Data model
 
 - `sequences`
-  Хранит sequence definition, `task_graph`, status, optional `trigger_event`, optional `cron`, counters и metadata.
+  Хранит sequence definition, `task_graph`, status, optional `trigger_event`, optional `cron`, optional `editor_state`, counters и metadata.
 - `sequence_runs`
-  Хранит один запуск sequence, trigger metadata, accumulated/final `context_json`, run status, timestamps и error.
+  Хранит один запуск sequence, trigger metadata, accumulated/final `context_json`, run status, timestamps, optional `retry_of_run_id` и error.
 - `sequence_task_runs`
   Хранит lifecycle отдельной задачи внутри run: input snapshot, output snapshot, status, duration и error.
 
@@ -77,7 +77,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 ### TaskGraph contract
 
 - `TaskGraph` — упорядоченный массив задач.
-- Каждая задача содержит `key`, `module`, `options`, optional `enabled`, optional `retry`, optional `timeout_ms`.
+- Каждая задача содержит `key`, `module`, `options`, optional `enabled`, optional `retry`, optional `timeout_ms`, optional human-facing `label`, and optional operator `notes`.
 - `module` должен существовать в registry.
 - `key` должен быть уникален внутри sequence.
 - Repo-consistent module naming для discovery/enrichment stages использует dotted IDs (`discovery.*`, `utility.db_store`, `enrichment.*`), а не PascalCase proposal names из `NEW_ARCHITECTURE.md`.
@@ -103,6 +103,12 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 - Task plugins остаются self-contained execution units и не должны брать на себя обязанности relay или global scheduler.
 - Sequence management API остается internal/maintenance surface, пока capability явно не расширит public client contract.
 - Astro admin operator UX for shipped sequence control lives on `/automation` with same-origin BFF writes under `/admin/bff/admin/automation`; it must reuse the same maintenance contracts instead of inventing a parallel runtime path.
+- The shipped operator UX is now a multi-route visual workspace:
+  - `/automation` overview/library
+  - `/automation/templates` template gallery
+  - `/automation/{sequenceId}` visual editor
+  - `/automation/{sequenceId}/executions` workflow-scoped execution history
+- This workspace may use a presentational graph/canvas model, but `task_graph` remains the execution source of truth; saved `editor_state` is additive operator metadata and must not silently broaden runtime execution semantics.
 - Legacy handlers и новые plugins могут временно coexist only during staged migration; их boundaries должны быть explicit, а не hidden.
 
 ## Maintenance API contract
@@ -115,6 +121,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - `/maintenance/sequence-runs/{run_id}`
   - `/maintenance/sequence-runs/{run_id}/task-runs`
   - `/maintenance/sequence-runs/{run_id}/cancel`
+  - `/maintenance/sequence-runs/{run_id}/retry`
   - `/maintenance/sequence-plugins`
   - `/maintenance/agent/sequence-tools`
   - `/maintenance/agent/sequences`
@@ -122,6 +129,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 - Manual run path обязан сначала создать `sequence_runs` row в PostgreSQL, а уже потом делать best-effort enqueue в `q.sequence`.
 - Если dispatch не удался, API обязано пометить созданный run как `failed` с recorded dispatch error, а не оставлять silent pending row.
 - До отдельной runtime stage cooperative cancellation truthfully поддерживается только для `pending` runs; `running` runs через API пока не прерываются.
+- Failed-run retry must reuse the same persisted sequence definition and create a new `sequence_runs` row linked through `retry_of_run_id`; retry does not mutate the original failed run in place.
 - First-class admin operator reads may aggregate FastAPI/SDK sequence state with recent run/outbox visibility, but write actions still must flow through the same maintenance API and explicit audit logging path.
 - Agent create/run path обязан reuse-ить те же `create sequence -> create sequence_run -> enqueue q.sequence -> read run` contracts, а не bypass-ить их отдельным in-memory orchestration path.
 - Agent-created sequences на текущем additive stage создаются как `draft` by default; последующий live activation остаётся вопросом более позднего cutover/operator stage.
@@ -246,7 +254,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
   - `pnpm test:criterion-compile:compose`
   - `pnpm test:cluster-match-notify:compose`
   - explicit proof that default runtime suppresses legacy intermediate article fanout while preserving inbox/idempotency and `system_feed_results` gating
-- Post-cutover admin/operator surface changes on this boundary must additionally rerun `node infra/scripts/test-automation-admin-flow.mjs`, so shipped `/automation` sequence/outbox UX stays aligned with the maintenance contract.
+- Post-cutover admin/operator surface changes on this boundary must additionally rerun `node infra/scripts/test-automation-admin-flow.mjs`, so the shipped automation workspace routes and sequence/outbox UX stay aligned with the maintenance contract.
 - Plugin migration stages:
   использовать parity-oriented proof against current handler behavior plus existing worker smoke paths where relevant.
 - Broader umbrella `pnpm integration_tests` remains desirable, but unrelated failures outside the sequence/runtime boundary may stay as explicitly recorded residuals once all cutover-specific proofs above pass.

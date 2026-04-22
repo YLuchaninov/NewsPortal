@@ -395,12 +395,12 @@ Durable completed detail переносится в `docs/history.md`.
 
 ## Next recommended action
 
-- no active implementation item; if the user wants to push the outsourcing bundle beyond the current `articles_produced_but_zero_selected_outputs = 15`, open a follow-up capability specifically for tender-portal semantic lift or website projection tightening rather than reopening the closed downstream diagnostics slice.
+- no active implementation item; open a new bounded follow-up only if the user wants another automation workspace iteration beyond the now-complete proof set.
 
 ## Archive sync status
 
 - Completed item or capability awaiting archive sync:
-  none after syncing `C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT` into `docs/history.md`
+  none after syncing `PATCH-AUTOMATION-WORKSPACE-VIEWPORT-PROOF` into `docs/history.md`
 - Why it is still live, if applicable:
   n/a
 - Archive action required next:
@@ -475,53 +475,24 @@ Durable completed detail переносится в `docs/history.md`.
 ## Handoff
 
 - Current active item and status:
-  no active implementation item; `C-DOWNSTREAM-OUTSOURCING-SELECTION-USEFULNESS-CLOSEOUT` is complete and archived.
+  no active implementation item; `C-AUTOMATION-VISUAL-WORKSPACE` is complete and archived.
 - What is already proven:
-  - clean Example C outsourcing proof now clears the zero-yield blocker:
-    - `/tmp/newsportal-live-website-outsourcing-2026-04-21T164917178Z.json|md`
-    - `totalSelected = 2`
-    - `totalEligible = 2`
-    - `selected_useful_evidence_present = 1`
-    - `articles_produced_but_zero_selected_outputs = 15`
-  - discovery non-regression after the downstream changes is green:
-    - `/tmp/newsportal-live-discovery-examples-989efe9d.json|md`
-    - `/tmp/newsportal-live-discovery-yield-proof-36e07737.json|md`
+  - the automation workspace capability now ships the new multi-route operator UX on `/automation`, `/automation/templates`, `/automation/[sequenceId]`, and `/automation/[sequenceId]/executions`
+  - targeted proof is green:
+    - `pnpm --filter @newsportal/admin typecheck`
+    - `pnpm typecheck`
+    - `node --import tsx --test tests/unit/ts/admin-automation.test.ts tests/unit/ts/automation-workspace.test.ts tests/unit/ts/sdk-pagination.test.ts`
+    - `python -m unittest tests.unit.python.test_api_sequence_management`
+    - `node infra/scripts/test-automation-admin-flow.mjs`
+    - `pnpm test:web:viewports`
 - What is not yet proven or is currently failing:
   - no active deterministic failure remains inside the closed capability
-  - one transient live residual was observed during an earlier `pnpm test:discovery:yield:compose` attempt:
-    - `/tmp/newsportal-live-discovery-yield-proof-6992dfa4.json|md`
-    - Run 3 timed out waiting for Example C recall candidates
-    - a clean rerun passed and is the authoritative proof artifact
 - Recommended next action:
-  - if the user wants another iteration, open a follow-up capability focused specifically on:
-    - tender-portal semantic uplift beyond the current buyer-intent prompts; or
-    - website projection tightening for sources that still land in `articles_produced_but_zero_selected_outputs = 15`
-    - `/tmp/newsportal-discovery-nonregression-9c663b86.json|md`
-  the live discovery automation is wired to the currently shipped discovery/runtime surfaces and now also has a case-agnostic safety proof:
-  - it enforces the DDGS-only guard (`DISCOVERY_ENABLED=1`, `DISCOVERY_SEARCH_PROVIDER=ddgs`, Brave/Serper keys empty)
-  - it treats `pnpm test:discovery-enabled:compose` and `pnpm test:discovery:admin:compose` as mandatory preflight proof before live execution
-  - it separates runtime-enabled case packs from validation-only packs; Example B/C remain required runtime packs, while calibration can now include additional synthetic/generalized packs without turning them into DB preconditions
-  - it verifies runtime-pack preconditions from PostgreSQL (`interest_templates`, `criteria`, `selection_profiles`, baseline `source_channels`) instead of reconstructing state from `EXAMPLES.md`
-  - it runs both graph-first and recall-first discovery lanes through maintenance APIs and records machine-readable plus Markdown evidence at `/tmp/newsportal-live-discovery-examples-<runId>.json|md`
-  - it classifies weak yield through reusable root-cause buckets and aggregate pack diagnostics instead of only Example-specific residual wording
-  - the new non-regression runner at `/tmp/newsportal-discovery-nonregression-0c105e1b.json|md` proves `runtime=pass` and `nonRegression=pass` with zero drift on the pre-existing downstream corpus
-  - adaptive discovery smoke is now deterministic against active `live_example_*` residue because smoke planning uses only its own `adaptive_smoke_*` class
-  - the orchestrator task budget for live DDGS runs now covers long `plan_hypotheses` / evaluation / re-evaluation work
-  - the harness now reads latest `sequence_task_runs` so stale run-level `running` status no longer forces a long false-negative wait
-  - the latest authoritative generalized proof artifacts are:
-    - `/tmp/newsportal-live-discovery-examples-b7b86b83.json|md`
-    - `/tmp/newsportal-discovery-nonregression-0c105e1b.json|md`
-    - the first proves `runtimeVerdict=pass`, `yieldVerdict=weak`
-    - the second proves `runtimeVerdict=pass`, `nonRegressionVerdict=pass`, `yieldVerdict=weak`, `finalVerdict=pass_with_residuals`
-  - it keeps the current discovery scope truthful:
-    - only `rss` / `website` are in-scope for the automation
-    - browser-assisted website candidates remain `website`
-    - duplicate-linked recall promotions count as valid onboarding evidence
+  - if the user wants another iteration, open a fresh bounded item for either:
+    - post-ship workspace polish such as richer node ergonomics, denser execution diagnostics, or additional template curation that still preserves the linear runtime truth; or
+    - a future true-branching workflow capability, which must be framed as new runtime work rather than a UI-only extension.
 - What is still unproven or intentionally left open:
-  the new capability is intentionally still open:
-  - provider-neutral runtime support for `brave` / `serper` is not yet implemented or proven;
-  - approve/promote-boundary `policyReview` semantics are not yet runtime-owned;
-  - query-family redesign, two-stage hard negatives, layered scorer fields, shortlist dedup, and admin/proof parity are still pending.
+  - true arbitrary branching/DAG execution remains intentionally out of scope; the shipped editor must continue to serialize back to the current sequential `task_graph` contract.
 - Scope or coordination warning for the next agent:
-  the worktree already contains unsynced discovery/admin doc changes from the completed operator-gap stage; preserve those edits and layer the new capability on top instead of reverting them.
-  do not reopen `C-DISCOVERY-GOOD-YIELD` just to continue general discovery evolution. Open a new item instead, and keep the stronger architectural requirement intact: discovery core policy must stay reusable for future case packs, Example B/C are proof cohorts rather than architectural owners, and any new tuning change must preserve the downstream non-regression boundary from `docs/contracts/article-pipeline-core.md`, `docs/contracts/discovery-agent.md`, and `docs/contracts/zero-shot-interest-filtering.md`.
+  - the worktree contains already-completed capability changes plus durable doc sync for the automation workspace; preserve them and open a new item instead of reopening this archived capability.
+  - the automation acceptance harness now depends on rebuilding bounded compose services first because `admin`, `api`, `worker`, and `migrate` do not run from bind-mounted source in the canonical compose baseline.

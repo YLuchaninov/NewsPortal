@@ -12,7 +12,8 @@ function parseSurface(value: string | null): AdminLiveUpdateSurface | null {
     value === "dashboard" ||
     value === "reindex" ||
     value === "observability" ||
-    value === "user-interests"
+    value === "user-interests" ||
+    value === "automation"
   ) {
     return value;
   }
@@ -52,6 +53,8 @@ export const GET: APIRoute = async ({ request }) => {
       page: parsePositiveInt(url.searchParams.get("page")),
       pageSize: parsePositiveInt(url.searchParams.get("pageSize")),
       userId: url.searchParams.get("userId") ?? undefined,
+      sequenceId: url.searchParams.get("sequenceId") ?? undefined,
+      runId: url.searchParams.get("runId") ?? undefined,
     });
 
     return Response.json(serializeAdminLiveUpdatesResponse(snapshot), {

@@ -3,7 +3,12 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 
 import {
+  loadAutomationExecutionsData,
+  loadAutomationOverviewData,
+} from "./automation-workspace";
+import {
   buildAdminLiveRevision,
+  type AdminAutomationLiveSnapshot,
   type AdminCollectionSignal,
   type AdminDashboardLiveSnapshot,
   type AdminDashboardSummarySnapshot,
@@ -463,11 +468,115 @@ async function loadUserInterestsSnapshot(input: {
   };
 }
 
+async function loadAutomationSnapshot(input: {
+  page?: number;
+  pageSize?: number;
+  sequenceId?: string;
+  runId?: string;
+}): Promise<AdminAutomationLiveSnapshot> {
+  const sequenceId = normalizeMaybeText(input.sequenceId);
+  if (sequenceId) {
+    const executions = await loadAutomationExecutionsData({
+      sequenceId,
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 8,
+      runId: input.runId ?? null,
+    });
+    const summary = {
+      totalSequences: 1,
+      activeSequences: normalizeText(executions.sequence.status) === "active" ? 1 : 0,
+      draftSequences: normalizeText(executions.sequence.status) === "draft" ? 1 : 0,
+      archivedSequences: normalizeText(executions.sequence.status) === "archived" ? 1 : 0,
+      recentRuns: executions.runsPage.total,
+      pendingRuns: executions.runsPage.items.filter((run) => normalizeText(run.status) === "pending").length,
+      failedRuns: executions.runsPage.items.filter((run) => normalizeText(run.status) === "failed").length,
+      completedRuns: executions.runsPage.items.filter((run) => normalizeText(run.status) === "completed").length,
+      recentOutboxEvents: executions.outboxEvents.length,
+      pendingOutboxEvents: executions.outboxEvents.filter((event) => normalizeText(event.status) === "pending").length,
+      failedOutboxEvents: executions.outboxEvents.filter((event) => normalizeText(event.status) === "failed").length,
+      revision: buildAdminLiveRevision([
+        executions.sequence.updated_at,
+        executions.runsPage.total,
+        executions.runsPage.items.map((run) => [run.run_id, run.status, run.error_text, run.finished_at]),
+        executions.outboxEvents.map((event) => [event.event_id, event.status, event.created_at]),
+      ]),
+    };
+
+    return {
+      surface: "automation",
+      fetchedAt: new Date().toISOString(),
+      revision: buildAdminLiveRevision([
+        summary.revision,
+        sequenceId,
+        executions.selectedRunId,
+      ]),
+      hasPendingWork: summary.pendingRuns > 0 || summary.pendingOutboxEvents > 0,
+      sequenceId,
+      selectedRunId: executions.selectedRunId || null,
+      summary,
+      runs: {
+        total: executions.runsPage.total,
+        revision: buildAdminLiveRevision(
+          executions.runsPage.items.map((run) => [run.run_id, run.status, run.finished_at, run.error_text])
+        ),
+        items: executions.runsPage.items,
+      },
+      outbox: {
+        total: executions.outboxEvents.length,
+        revision: buildAdminLiveRevision(
+          executions.outboxEvents.map((event) => [event.event_id, event.status, event.created_at])
+        ),
+        items: executions.outboxEvents,
+      },
+    };
+  }
+
+  const overview = await loadAutomationOverviewData({
+    page: input.page ?? 1,
+    pageSize: input.pageSize ?? 12,
+  });
+
+  return {
+    surface: "automation",
+    fetchedAt: new Date().toISOString(),
+    revision: buildAdminLiveRevision([
+      overview.summary.totalSequences,
+      overview.summary.pendingRuns,
+      overview.summary.failedRuns,
+      overview.recentRuns.map((run) => [run.run_id, run.status, run.finished_at, run.error_text]),
+      overview.outboxEvents.map((event) => [event.event_id, event.status, event.created_at]),
+    ]),
+    hasPendingWork: overview.summary.pendingRuns > 0 || overview.summary.pendingOutboxEvents > 0,
+    sequenceId: null,
+    selectedRunId: null,
+    summary: {
+      ...overview.summary,
+      revision: buildAdminLiveRevision(Object.values(overview.summary)),
+    },
+    runs: {
+      total: overview.recentRuns.length,
+      revision: buildAdminLiveRevision(
+        overview.recentRuns.map((run) => [run.run_id, run.status, run.finished_at, run.error_text])
+      ),
+      items: overview.recentRuns,
+    },
+    outbox: {
+      total: overview.outboxEvents.length,
+      revision: buildAdminLiveRevision(
+        overview.outboxEvents.map((event) => [event.event_id, event.status, event.created_at])
+      ),
+      items: overview.outboxEvents,
+    },
+  };
+}
+
 export async function loadAdminLiveUpdatesSnapshot(input: {
   surface: AdminLiveUpdateSurface;
   page?: number;
   pageSize?: number;
   userId?: string;
+  sequenceId?: string;
+  runId?: string;
 }): Promise<AdminLiveUpdatesSnapshot> {
   if (input.surface === "dashboard") {
     return loadDashboardSnapshot();
@@ -480,6 +589,14 @@ export async function loadAdminLiveUpdatesSnapshot(input: {
   }
   if (input.surface === "observability") {
     return loadObservabilitySnapshot();
+  }
+  if (input.surface === "automation") {
+    return loadAutomationSnapshot({
+      page: input.page,
+      pageSize: input.pageSize,
+      sequenceId: input.sequenceId,
+      runId: input.runId,
+    });
   }
   return loadUserInterestsSnapshot({
     userId: input.userId ?? "",

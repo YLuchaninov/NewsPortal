@@ -5,8 +5,10 @@ import {
   buildSequenceCancelApiPayload,
   buildSequenceCreateApiPayload,
   buildSequenceManualRunApiPayload,
+  buildSequenceRetryApiPayload,
   buildSequenceUpdateApiPayload,
   isSequenceRunCancellable,
+  isSequenceRunRetryable,
   resolveSequenceAdminIntent,
   resolveSequenceOperatorSummary,
 } from "../../../apps/admin/src/lib/server/automation.ts";
@@ -21,6 +23,9 @@ test("buildSequenceCreateApiPayload normalizes create fields for the maintenance
       cron: " */15 * * * * ",
       maxRuns: "3",
       tags: "ops, admin\nmanual",
+      editorState: {
+        viewport: { x: 0, y: 0, zoom: 0.9 },
+      },
       createdBy: "",
       taskGraph: JSON.stringify([
         {
@@ -48,6 +53,9 @@ test("buildSequenceCreateApiPayload normalizes create fields for the maintenance
     cron: "*/15 * * * *",
     maxRuns: 3,
     tags: ["ops", "admin", "manual"],
+    editorState: {
+      viewport: { x: 0, y: 0, zoom: 0.9 },
+    },
     createdBy: "admin-user-1",
   });
 });
@@ -61,6 +69,7 @@ test("buildSequenceUpdateApiPayload keeps nullable maintenance fields explicit",
     cron: "",
     maxRuns: "",
     tags: "",
+    editorState: "",
     createdBy: "",
     taskGraph: JSON.stringify([
       {
@@ -86,6 +95,7 @@ test("buildSequenceUpdateApiPayload keeps nullable maintenance fields explicit",
     cron: null,
     maxRuns: null,
     tags: [],
+    editorState: null,
     createdBy: null,
   });
 });
@@ -119,11 +129,35 @@ test("buildSequenceCancelApiPayload keeps blank cancel reasons nullable", () => 
   });
 });
 
+test("buildSequenceRetryApiPayload keeps retry overrides explicit for JSON-backed executions UI", () => {
+  const payload = buildSequenceRetryApiPayload(
+    {
+      contextOverrides: { force: true },
+      triggerMeta: '{"sourceEventId":"run-1"}',
+    },
+    "admin-user-1"
+  );
+
+  assert.deepEqual(payload, {
+    contextOverrides: {
+      force: true,
+    },
+    triggerMeta: {
+      sourceEventId: "run-1",
+      requestedFrom: "admin",
+    },
+    requestedBy: "admin-user-1",
+  });
+});
+
 test("sequence admin helpers expose intent routing and recent-state summaries", () => {
   assert.equal(resolveSequenceAdminIntent({ intent: "run_sequence" }), "run_sequence");
+  assert.equal(resolveSequenceAdminIntent({ intent: "retry_run" }), "retry_run");
   assert.equal(resolveSequenceAdminIntent({ intent: "unknown" }), "create_sequence");
   assert.equal(isSequenceRunCancellable("pending"), true);
   assert.equal(isSequenceRunCancellable("completed"), false);
+  assert.equal(isSequenceRunRetryable("failed"), true);
+  assert.equal(isSequenceRunRetryable("completed"), false);
 
   const summary = resolveSequenceOperatorSummary({
     sequences: [

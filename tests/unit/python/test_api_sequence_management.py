@@ -57,6 +57,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
         self.assertIn("/maintenance/sequence-runs/{run_id}", paths)
         self.assertIn("/maintenance/sequence-runs/{run_id}/task-runs", paths)
         self.assertIn("/maintenance/sequence-runs/{run_id}/cancel", paths)
+        self.assertIn("/maintenance/sequence-runs/{run_id}/retry", paths)
         self.assertIn("/maintenance/sequence-plugins", paths)
 
     def test_list_sequences_delegates_to_paginated_helper(self) -> None:
@@ -105,6 +106,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
         payload = api_main.SequenceCreatePayload.model_validate(
             {
                 "title": "Sequence 1",
+                "editorState": {"viewport": {"x": 0, "y": 0, "zoom": 1}},
                 "taskGraph": [
                     {
                         "key": "normalize",
@@ -171,6 +173,12 @@ class ApiSequenceManagementTests(unittest.TestCase):
             api_main.update_sequence_definition("sequence-1", payload)
 
         self.assertEqual(error.exception.errors, ["task_graph cannot be null."])
+
+    def test_validate_sequence_editor_state_rejects_non_object(self) -> None:
+        with self.assertRaises(api_main.SequenceValidationError) as error:
+            api_main.validate_sequence_editor_state("bad-state")  # type: ignore[arg-type]
+
+        self.assertEqual(error.exception.errors, ["editor_state must be an object."])
 
     def test_delete_sequence_route_archives_sequence(self) -> None:
         archived = {
@@ -317,6 +325,62 @@ class ApiSequenceManagementTests(unittest.TestCase):
 
         self.assertEqual(result, cancelled)
         cancel.assert_called_once_with("run-1", reason="Operator requested stop.")
+
+    def test_retry_sequence_run_route_uses_retry_helper(self) -> None:
+        payload = api_main.SequenceRetryRunPayload.model_validate(
+            {
+                "requestedBy": "operator-1",
+                "contextOverrides": {"force": True},
+                "triggerMeta": {"sourceEventId": "run-1"},
+            }
+        )
+        retried = {
+            "run_id": "run-2",
+            "status": "pending",
+            "retry_of_run_id": "run-1",
+        }
+
+        with patch.object(api_main, "retry_sequence_run_request", return_value=retried) as retry:
+            result = api_main.retry_sequence_run("run-1", payload)
+
+        self.assertEqual(result, retried)
+        retry.assert_called_once_with("run-1", payload)
+
+    def test_retry_sequence_run_request_reuses_failed_run_context(self) -> None:
+        payload = api_main.SequenceRetryRunPayload.model_validate(
+            {
+                "requestedBy": "operator-1",
+                "contextOverrides": {"force": True},
+                "triggerMeta": {"sourceEventId": "run-1"},
+            }
+        )
+        existing_run = {
+            "run_id": "run-1",
+            "sequence_id": "sequence-1",
+            "status": "failed",
+            "context_json": {"doc_id": "doc-9"},
+            "trigger_type": "manual",
+            "trigger_meta": {"source": "maintenance_api"},
+        }
+
+        with (
+            patch.object(api_main, "get_sequence_run", return_value=existing_run),
+            patch.object(
+                api_main,
+                "create_sequence_run_request_for_trigger",
+                return_value={"run_id": "run-2", "status": "pending"},
+            ) as create_run,
+        ):
+            result = api_main.retry_sequence_run_request("run-1", payload)
+
+        self.assertEqual(result, {"run_id": "run-2", "status": "pending"})
+        create_run.assert_called_once()
+        kwargs = create_run.call_args.kwargs
+        self.assertEqual(kwargs["retry_of_run_id"], "run-1")
+        self.assertEqual(kwargs["context_json"]["doc_id"], "doc-9")
+        self.assertTrue(kwargs["context_json"]["force"])
+        self.assertEqual(kwargs["trigger_meta"]["retryOfRunId"], "run-1")
+        self.assertEqual(kwargs["trigger_meta"]["requestedBy"], "operator-1")
 
 
 if __name__ == "__main__":

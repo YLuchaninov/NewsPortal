@@ -1,0 +1,50 @@
+---
+import { AutomationTemplateGallery } from "../../components/AutomationTemplateGallery";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { groupAutomationPlugins, type AutomationPluginRecord } from "../../lib/automation-workspace";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+import { loadAutomationTemplatesData } from "../../lib/server/automation-workspace";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const data = await loadAutomationTemplatesData();
+const paletteGroups = groupAutomationPlugins(
+  data.plugins as unknown as AutomationPluginRecord[]
+);
+---
+
+<AdminShell title="Automation Templates — Admin" session={session} flash={flash} activeNav="automation">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/automation")} class="hover:text-foreground">Automation</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">Templates</span>
+    </nav>
+  </Fragment>
+
+  <AutomationTemplateGallery
+    automationBffPath={appPath("/bff/admin/automation")}
+    automationRootPath={appPath("/automation")}
+    currentUserId={session.userId}
+    paletteGroups={paletteGroups}
+    client:load
+  />
+</AdminShell>

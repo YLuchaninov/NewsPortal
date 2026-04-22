@@ -5,10 +5,12 @@ export type SequenceAdminIntent =
   | "update_sequence"
   | "archive_sequence"
   | "run_sequence"
-  | "cancel_run";
+  | "cancel_run"
+  | "retry_run";
 
 const SEQUENCE_STATUSES = new Set(["draft", "active", "archived"]);
 const CANCELLABLE_SEQUENCE_RUN_STATUSES = new Set(["pending"]);
+const RETRYABLE_SEQUENCE_RUN_STATUSES = new Set(["failed"]);
 
 type LooseRecord = Record<string, unknown>;
 
@@ -44,6 +46,12 @@ function readOptionalPositiveInteger(value: unknown, fieldName: string): number 
 }
 
 function parseJsonValue(rawValue: unknown, fieldName: string): unknown {
+  if (
+    rawValue != null &&
+    typeof rawValue === "object"
+  ) {
+    return rawValue;
+  }
   const normalized = readOptionalString(rawValue);
   if (!normalized) {
     return null;
@@ -66,8 +74,22 @@ function parseJsonObject(rawValue: unknown, fieldName: string): LooseRecord {
   throw new Error(`${fieldName} must be a JSON object.`);
 }
 
+function parseOptionalJsonObject(
+  rawValue: unknown,
+  fieldName: string
+): LooseRecord | null {
+  const parsed = parseJsonValue(rawValue, fieldName);
+  if (parsed == null) {
+    return null;
+  }
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    return parsed as LooseRecord;
+  }
+  throw new Error(`${fieldName} must be a JSON object.`);
+}
+
 function parseTaskGraph(rawValue: unknown): LooseRecord[] {
-  const parsed = parseJsonValue(rawValue, "taskGraph");
+  const parsed = Array.isArray(rawValue) ? rawValue : parseJsonValue(rawValue, "taskGraph");
   if (!Array.isArray(parsed)) {
     throw new Error("taskGraph must be a JSON array.");
   }
@@ -97,7 +119,8 @@ export function resolveSequenceAdminIntent(payload: Record<string, unknown>): Se
     intent === "update_sequence" ||
     intent === "archive_sequence" ||
     intent === "run_sequence" ||
-    intent === "cancel_run"
+    intent === "cancel_run" ||
+    intent === "retry_run"
   ) {
     return intent;
   }
@@ -120,6 +143,7 @@ export function buildSequenceCreateApiPayload(
     title: readRequiredString(payload.title, "title"),
     description: readOptionalString(payload.description),
     taskGraph: parseTaskGraph(payload.taskGraph),
+    editorState: parseOptionalJsonObject(payload.editorState, "editorState"),
     status: resolveSequenceStatus(payload.status),
     triggerEvent: readOptionalString(payload.triggerEvent),
     cron: readOptionalString(payload.cron),
@@ -134,6 +158,7 @@ export function buildSequenceUpdateApiPayload(payload: Record<string, unknown>):
     title: readRequiredString(payload.title, "title"),
     description: readOptionalString(payload.description),
     taskGraph: parseTaskGraph(payload.taskGraph),
+    editorState: parseOptionalJsonObject(payload.editorState, "editorState"),
     status: resolveSequenceStatus(payload.status),
     triggerEvent: readOptionalString(payload.triggerEvent),
     cron: readOptionalString(payload.cron),
@@ -160,6 +185,20 @@ export function buildSequenceManualRunApiPayload(
 export function buildSequenceCancelApiPayload(payload: Record<string, unknown>): Record<string, unknown> {
   return {
     reason: readOptionalString(payload.reason),
+  };
+}
+
+export function buildSequenceRetryApiPayload(
+  payload: Record<string, unknown>,
+  requestedBy: string
+): Record<string, unknown> {
+  return {
+    contextOverrides: parseJsonObject(payload.contextOverrides, "contextOverrides"),
+    triggerMeta: {
+      ...parseJsonObject(payload.triggerMeta, "triggerMeta"),
+      requestedFrom: "admin",
+    },
+    requestedBy,
   };
 }
 
@@ -193,6 +232,14 @@ export function buildSequenceAuditPayload(
     };
   }
 
+  if (intent === "retry_run") {
+    return {
+      runId: apiResult.run_id ?? readOptionalString(payload.runId),
+      retryOfRunId: apiResult.retry_of_run_id ?? readOptionalString(payload.runId),
+      status: apiResult.status ?? null,
+    };
+  }
+
   return {
     runId: apiResult.run_id ?? readOptionalString(payload.runId),
     reason: readOptionalString(payload.reason),
@@ -202,6 +249,10 @@ export function buildSequenceAuditPayload(
 
 export function isSequenceRunCancellable(status: unknown): boolean {
   return CANCELLABLE_SEQUENCE_RUN_STATUSES.has(String(status ?? "").trim());
+}
+
+export function isSequenceRunRetryable(status: unknown): boolean {
+  return RETRYABLE_SEQUENCE_RUN_STATUSES.has(String(status ?? "").trim());
 }
 
 export interface SequenceOperatorSummary {
@@ -248,6 +299,7 @@ export async function listRecentSequenceRuns(limit = 12): Promise<Record<string,
       select
         sr.run_id::text as run_id,
         sr.sequence_id::text as sequence_id,
+        sr.retry_of_run_id::text as retry_of_run_id,
         s.title as sequence_title,
         sr.status,
         sr.context_json,
@@ -275,6 +327,121 @@ export async function listRecentSequenceRuns(limit = 12): Promise<Record<string,
         where str.run_id = sr.run_id
       ) task_stats on true
       order by sr.created_at desc
+      limit $1
+    `,
+    [limit]
+  );
+}
+
+export interface SequenceRunsPage {
+  items: Record<string, unknown>[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+}
+
+export async function listSequenceRunsPage(input: {
+  sequenceId?: string | null;
+  page?: number;
+  pageSize?: number;
+  status?: string | null;
+}): Promise<SequenceRunsPage> {
+  const pageSize = Math.max(1, Math.min(50, input.pageSize ?? 12));
+  const page = Math.max(1, input.page ?? 1);
+  const offset = (page - 1) * pageSize;
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (readOptionalString(input.sequenceId)) {
+    params.push(readOptionalString(input.sequenceId));
+    where.push(`sr.sequence_id::text = $${params.length}`);
+  }
+  if (readOptionalString(input.status)) {
+    params.push(readOptionalString(input.status));
+    where.push(`sr.status = $${params.length}`);
+  }
+
+  const whereSql = where.length > 0 ? `where ${where.join(" and ")}` : "";
+  const countRows = await queryRows<{ total: number }>(
+    `
+      select count(*)::int as total
+      from sequence_runs sr
+      ${whereSql}
+    `,
+    params
+  );
+  const total = countRows[0]?.total ?? 0;
+  const items = await queryRows<Record<string, unknown>>(
+    `
+      select
+        sr.run_id::text as run_id,
+        sr.sequence_id::text as sequence_id,
+        sr.retry_of_run_id::text as retry_of_run_id,
+        s.title as sequence_title,
+        sr.status,
+        sr.context_json,
+        sr.trigger_type,
+        sr.trigger_meta,
+        sr.started_at,
+        sr.finished_at,
+        sr.error_text,
+        sr.created_at,
+        coalesce(task_stats.total_tasks, 0) as total_tasks,
+        coalesce(task_stats.completed_tasks, 0) as completed_tasks,
+        coalesce(task_stats.failed_tasks, 0) as failed_tasks,
+        coalesce(task_stats.skipped_tasks, 0) as skipped_tasks,
+        coalesce(task_stats.running_tasks, 0) as running_tasks
+      from sequence_runs sr
+      join sequences s on s.sequence_id = sr.sequence_id
+      left join lateral (
+        select
+          count(*)::int as total_tasks,
+          count(*) filter (where status = 'completed')::int as completed_tasks,
+          count(*) filter (where status = 'failed')::int as failed_tasks,
+          count(*) filter (where status = 'skipped')::int as skipped_tasks,
+          count(*) filter (where status = 'running')::int as running_tasks
+        from sequence_task_runs str
+        where str.run_id = sr.run_id
+      ) task_stats on true
+      ${whereSql}
+      order by sr.created_at desc
+      limit $${params.length + 1}
+      offset $${params.length + 2}
+    `,
+    [...params, pageSize, offset]
+  );
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    hasPrev: page > 1,
+    hasNext: offset + items.length < total,
+  };
+}
+
+export async function listRecentAutomationOutboxEvents(
+  limit = 20
+): Promise<Record<string, unknown>[]> {
+  return queryRows<Record<string, unknown>>(
+    `
+      select
+        event_id::text as event_id,
+        event_type,
+        aggregate_type,
+        aggregate_id,
+        status,
+        attempt_count,
+        error_message,
+        created_at,
+        published_at
+      from outbox_events
+      order by created_at desc
       limit $1
     `,
     [limit]

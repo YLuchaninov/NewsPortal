@@ -1,0 +1,57 @@
+---
+import { AutomationEditorWorkspace } from "../../components/AutomationEditorWorkspace";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+import { loadAutomationEditorData } from "../../lib/server/automation-workspace";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sequenceId = Astro.params.sequenceId ?? "";
+const data = await loadAutomationEditorData(sequenceId);
+const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=automation&sequenceId=${encodeURIComponent(sequenceId)}`;
+---
+
+<AdminShell
+  title="Automation Editor — Admin"
+  session={session}
+  flash={flash}
+  activeNav="automation"
+  liveUpdatesEndpoint={liveUpdatesEndpoint}
+  liveUpdatesSurface="automation"
+>
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/automation")} class="hover:text-foreground">Automation</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">Editor</span>
+    </nav>
+  </Fragment>
+
+  <AutomationEditorWorkspace
+    sequence={data.sequence}
+    plugins={data.plugins}
+    automationBffPath={appPath("/bff/admin/automation")}
+    automationRootPath={appPath("/automation")}
+    executionsHref={appPath(`/automation/${sequenceId}/executions`)}
+    templatesHref={appPath("/automation/templates")}
+    client:load
+  />
+</AdminShell>

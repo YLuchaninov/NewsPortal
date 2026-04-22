@@ -31,6 +31,7 @@ const STACK_SERVICES = [
   "admin",
   "nginx",
 ];
+const REBUILD_SERVICES = ["migrate", "relay", "worker", "api", "admin"];
 
 function log(message) {
   console.log(`[automation-admin] ${message}`);
@@ -231,6 +232,8 @@ async function waitForHttpHealth(label, url) {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for automation-admin acceptance.");
+  log("Rebuilding the automation admin services so compose uses the current workspace code.");
+  runCompose("build", ...REBUILD_SERVICES);
   runCompose("up", "-d", ...STACK_SERVICES);
   await Promise.all([
     waitForHttpHealth("api", "http://127.0.0.1:8000/health"),
@@ -323,7 +326,11 @@ async function main() {
   log("Preflighting the automation surface.");
   await assertHtmlContains(
     automationUrl,
-    ["Automation and outbox", "Create sequence", "Plugin catalog", "Recent outbox events"],
+    [
+      "Build, run, and tune automations from one visual control room",
+      "Workflow Library",
+      "Recent Outbox",
+    ],
     { cookie: adminCookie }
   );
 
@@ -387,6 +394,11 @@ async function main() {
   if (String(updateResult.json.title ?? "") !== updatedTitle) {
     throw new Error("Sequence update did not persist the new title.");
   }
+  await assertHtmlContains(
+    `${adminBaseUrl}/automation/${sequenceId}`,
+    [updatedTitle, "Visual Workflow Builder", "Run Now"],
+    { cookie: adminCookie }
+  );
 
   log("Stopping the worker so the new run remains cancellable.");
   runCompose("stop", "worker");
@@ -411,9 +423,11 @@ async function main() {
     throw new Error(`Expected pending run status, received ${String(runResult.json.status ?? "unknown")}.`);
   }
 
+  const executionsUrl = `${adminBaseUrl}/automation/${sequenceId}/executions`;
+
   await assertHtmlContains(
-    automationUrl,
-    [updatedTitle, runIdText, "Cancel run"],
+    executionsUrl,
+    [updatedTitle, runIdText, "Selected Run"],
     { cookie: adminCookie }
   );
 
