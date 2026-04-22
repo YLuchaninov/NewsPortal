@@ -1,0 +1,631 @@
+---
+import {
+  buildAdminPaneStateStorageKey,
+  buildAdminPaneWidthStorageKey,
+} from "./admin-layout";
+
+export interface Props {
+  paneId: string;
+  paneLabel: string;
+  collapsedLabel?: string;
+  defaultWidth?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  minMainWidth?: number;
+  widthStep?: number;
+}
+
+const {
+  paneId,
+  paneLabel,
+  collapsedLabel = paneLabel,
+  defaultWidth = 420,
+  minWidth = 340,
+  maxWidth = 620,
+  minMainWidth = 720,
+  widthStep = 24,
+} = Astro.props;
+
+const paneStateStorageKey = buildAdminPaneStateStorageKey(paneId);
+const paneWidthStorageKey = buildAdminPaneWidthStorageKey(paneId);
+const paneContentId = `admin-workspace-pane-${paneId.replace(/[^a-z0-9_-]/gi, "-")}`;
+const paneResizeInstructionsId = `${paneContentId}-resize-instructions`;
+---
+
+<style is:global>
+  .admin-workspace-pane {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .admin-workspace-pane__main {
+    min-width: 0;
+  }
+
+  .admin-workspace-pane__collapsed-rail {
+    display: none;
+  }
+
+  .admin-workspace-pane__pane-shell {
+    min-width: 0;
+  }
+
+  .admin-workspace-pane__pane-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .admin-workspace-pane__pane-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .admin-workspace-pane__pane-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .admin-workspace-pane__pane-toolbar-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .admin-workspace-pane__width-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--muted) / 0.4);
+    padding: 0.25rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .admin-workspace-pane__width-hint {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .admin-workspace-pane__toolbar-button {
+    display: inline-flex;
+    height: 2rem;
+    width: 2rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.85);
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      border-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .admin-workspace-pane__toolbar-button:hover,
+  .admin-workspace-pane__toolbar-button:focus-visible {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+  }
+
+  .admin-workspace-pane__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .admin-workspace-pane__resize-handle {
+    display: none;
+  }
+
+  .admin-workspace-pane__collapsed-button {
+    display: inline-flex;
+    min-height: 15rem;
+    width: 3.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 0.92);
+    padding: 1rem 0.625rem;
+    box-shadow: 0 18px 36px rgba(2, 6, 23, 0.12);
+    backdrop-filter: blur(12px);
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .admin-workspace-pane__collapsed-button:hover,
+  .admin-workspace-pane__collapsed-button:focus-visible {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+  }
+
+  .admin-workspace-pane__collapsed-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+  }
+
+  @media (min-width: 1280px) {
+    .admin-workspace-pane {
+      display: grid;
+      width: 100%;
+      grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, var(--admin-pane-width, 420px));
+      align-items: start;
+      gap: 1rem;
+    }
+
+    .admin-workspace-pane[data-admin-pane="collapsed"] {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .admin-workspace-pane[data-admin-pane="open"] .admin-workspace-pane__collapsed-rail {
+      display: none;
+    }
+
+    .admin-workspace-pane[data-admin-pane="collapsed"] .admin-workspace-pane__collapsed-rail {
+      display: flex;
+      position: sticky;
+      top: 1.5rem;
+      align-self: start;
+    }
+
+    .admin-workspace-pane__pane-shell {
+      position: sticky;
+      top: 1.5rem;
+      align-self: start;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .admin-workspace-pane[data-admin-pane="collapsed"] .admin-workspace-pane__pane-shell {
+      display: none;
+    }
+
+    .admin-workspace-pane__pane-card {
+      position: relative;
+      min-width: 0;
+    }
+
+    .admin-workspace-pane__resize-handle {
+      position: absolute;
+      top: 0;
+      left: -0.75rem;
+      display: flex;
+      height: 100%;
+      width: 1rem;
+      cursor: col-resize;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      color: hsl(var(--muted-foreground));
+      touch-action: none;
+    }
+
+    .admin-workspace-pane__resize-handle::before {
+      content: "";
+      height: 3.5rem;
+      width: 2px;
+      border-radius: 9999px;
+      background: hsl(var(--border));
+      opacity: 0.95;
+      transition:
+        background-color 150ms ease,
+        transform 150ms ease;
+    }
+
+    .admin-workspace-pane__resize-handle:hover::before,
+    .admin-workspace-pane__resize-handle:focus-visible::before,
+    .admin-workspace-pane[data-admin-pane-resizing="true"] .admin-workspace-pane__resize-handle::before {
+      background: hsl(var(--primary));
+      transform: scaleY(1.1);
+    }
+  }
+</style>
+
+<div
+  class="admin-workspace-pane"
+  data-admin-pane-root
+  data-admin-pane="open"
+  data-admin-pane-id={paneId}
+  data-admin-pane-default-width={String(defaultWidth)}
+  data-admin-pane-min-width={String(minWidth)}
+  data-admin-pane-max-width={String(maxWidth)}
+  data-admin-pane-min-main-width={String(minMainWidth)}
+  data-admin-pane-width-step={String(widthStep)}
+  style={`--admin-pane-width:${defaultWidth}px; --admin-pane-main-min:${minMainWidth}px;`}
+>
+  <div class="admin-workspace-pane__main">
+    <slot name="main" />
+  </div>
+
+  <div class="admin-workspace-pane__collapsed-rail">
+    <button
+      type="button"
+      class="admin-workspace-pane__collapsed-button"
+      data-admin-pane-open
+      aria-label={`Open ${paneLabel.toLowerCase()} pane`}
+      title={`Open ${paneLabel}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m9 18 6-6-6-6"></path>
+      </svg>
+      <span class="admin-workspace-pane__collapsed-label">{collapsedLabel}</span>
+    </button>
+  </div>
+
+  <div class="admin-workspace-pane__pane-shell" data-admin-pane-shell>
+    <section
+      id={paneContentId}
+      class="admin-workspace-pane__pane-card rounded-2xl border border-border bg-card shadow-sm"
+    >
+      <p id={paneResizeInstructionsId} class="admin-workspace-pane__sr-only">
+        Use left and right arrow keys to resize in {widthStep}px steps. Home jumps to the minimum width, End jumps to the maximum width, and Delete or Backspace resets the recommended width.
+      </p>
+      <button
+        type="button"
+        class="admin-workspace-pane__resize-handle"
+        data-admin-pane-resize
+        aria-label={`Resize ${paneLabel.toLowerCase()} pane`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-controls={paneContentId}
+        aria-describedby={paneResizeInstructionsId}
+        tabindex="0"
+      ></button>
+
+      <div class="admin-workspace-pane__pane-toolbar border-b border-border px-5 py-4">
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-primary/80">Workspace</p>
+          <p class="mt-1 text-sm font-semibold">{paneLabel}</p>
+        </div>
+
+        <div class="admin-workspace-pane__pane-toolbar-actions">
+          <div class="admin-workspace-pane__pane-toolbar-meta">
+            <span class="admin-workspace-pane__width-badge" data-admin-pane-width-badge>
+              {defaultWidth}px
+            </span>
+            <span class="admin-workspace-pane__width-hint" data-admin-pane-width-hint>
+              {widthStep}px step
+            </span>
+          </div>
+          <button
+            type="button"
+            class="admin-workspace-pane__toolbar-button"
+            data-admin-pane-reset-width
+            aria-label={`Reset ${paneLabel.toLowerCase()} pane width`}
+            title={`Reset ${paneLabel} width`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.708"></path>
+              <path d="M3 3v6h6"></path>
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="admin-workspace-pane__toolbar-button"
+            data-admin-pane-collapse
+            aria-label={`Collapse ${paneLabel.toLowerCase()} pane`}
+            title={`Collapse ${paneLabel}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 18-6-6 6-6"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-5">
+        <slot name="pane" />
+      </div>
+    </section>
+  </div>
+</div>
+
+<script
+  is:inline
+  define:vars={{
+    paneId,
+    paneStateStorageKey,
+    paneWidthStorageKey,
+  }}
+>
+  (() => {
+    const desktopQuery = window.matchMedia("(min-width: 1280px)");
+    const root = document.querySelector(
+      `[data-admin-pane-root][data-admin-pane-id="${paneId}"]`
+    );
+    if (!root) {
+      return;
+    }
+
+    const clamp = (value, minValue, maxValue, fallbackValue) => {
+      const numeric = Number.isFinite(value) ? value : fallbackValue;
+      return Math.min(maxValue, Math.max(minValue, numeric));
+    };
+
+    const readPaneState = (value) =>
+      value === "collapsed" || value === "open" ? value : "open";
+
+    const readStoredWidth = () => {
+      try {
+        const stored = window.localStorage.getItem(paneWidthStorageKey);
+        if (!stored) {
+          return null;
+        }
+        const parsed = Number.parseInt(stored ?? "", 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const readStoredState = () => {
+      try {
+        return readPaneState(window.localStorage.getItem(paneStateStorageKey));
+      } catch {
+        return "open";
+      }
+    };
+
+    const persistState = (value) => {
+      try {
+        window.localStorage.setItem(paneStateStorageKey, value);
+      } catch {}
+    };
+
+    const persistWidth = (value) => {
+      try {
+        window.localStorage.setItem(paneWidthStorageKey, String(Math.round(value)));
+      } catch {}
+    };
+
+    const minWidth = Number.parseInt(root.dataset.adminPaneMinWidth ?? "340", 10);
+    const maxWidth = Number.parseInt(root.dataset.adminPaneMaxWidth ?? "620", 10);
+    const defaultWidth = Number.parseInt(
+      root.dataset.adminPaneDefaultWidth ?? "420",
+      10
+    );
+    const widthStep = Math.max(
+      1,
+      Number.parseInt(root.dataset.adminPaneWidthStep ?? "24", 10) || 24
+    );
+    const minMainWidth = Number.parseInt(
+      root.dataset.adminPaneMinMainWidth ?? "720",
+      10
+    );
+
+    const collapseButton = root.querySelector("[data-admin-pane-collapse]");
+    const openButton = root.querySelector("[data-admin-pane-open]");
+    const resizeHandle = root.querySelector("[data-admin-pane-resize]");
+    const resetWidthButton = root.querySelector("[data-admin-pane-reset-width]");
+    const widthBadge = root.querySelector("[data-admin-pane-width-badge]");
+    const widthHint = root.querySelector("[data-admin-pane-width-hint]");
+    const linkedOpeners = document.querySelectorAll(
+      `[data-admin-pane-open-link="${paneId}"]`
+    );
+
+    let desiredState = readStoredState();
+    let currentWidth = defaultWidth;
+    let isResizing = false;
+
+    const getAvailablePaneWidth = () => {
+      const containerWidth = root.getBoundingClientRect().width;
+      return Math.max(minWidth, containerWidth - minMainWidth - 24);
+    };
+
+    const getEffectiveMaxWidth = () => {
+      const containerWidth = root.getBoundingClientRect().width;
+      const availablePaneWidth = getAvailablePaneWidth();
+      const responsiveMaxWidth = Math.floor(containerWidth * 0.5);
+      return Math.max(minWidth, Math.min(availablePaneWidth, Math.max(maxWidth, responsiveMaxWidth)));
+    };
+
+    const getRecommendedPaneWidth = () => {
+      const containerWidth = root.getBoundingClientRect().width;
+      const effectiveMaxWidth = getEffectiveMaxWidth();
+      const responsivePreferredWidth = Math.floor(containerWidth * 0.42);
+      return clamp(
+        Math.max(defaultWidth, responsivePreferredWidth),
+        minWidth,
+        effectiveMaxWidth,
+        defaultWidth
+      );
+    };
+
+    const containerHasRoom = () => {
+      const containerWidth = root.getBoundingClientRect().width;
+      return containerWidth >= currentWidth + minMainWidth + 24;
+    };
+
+    const applyPaneLayout = () => {
+      currentWidth = clamp(
+        currentWidth,
+        minWidth,
+        getEffectiveMaxWidth(),
+        getRecommendedPaneWidth()
+      );
+      root.style.setProperty("--admin-pane-width", `${currentWidth}px`);
+      root.style.setProperty("--admin-pane-main-min", `${minMainWidth}px`);
+
+      const effectiveState =
+        desktopQuery.matches && desiredState === "open" && containerHasRoom()
+          ? "open"
+          : "collapsed";
+
+      root.dataset.adminPane = effectiveState;
+      root.dataset.adminPaneResizing = isResizing ? "true" : "false";
+
+      collapseButton?.setAttribute("aria-expanded", String(effectiveState === "open"));
+      openButton?.setAttribute("aria-expanded", String(effectiveState === "open"));
+      resetWidthButton?.setAttribute(
+        "aria-label",
+        `Reset ${paneLabel.toLowerCase()} pane width to ${Math.round(getRecommendedPaneWidth())} pixels`
+      );
+      resizeHandle?.setAttribute("aria-valuemin", String(minWidth));
+      resizeHandle?.setAttribute("aria-valuemax", String(getEffectiveMaxWidth()));
+      resizeHandle?.setAttribute("aria-valuenow", String(Math.round(currentWidth)));
+      resizeHandle?.setAttribute(
+        "aria-valuetext",
+        `Width ${Math.round(currentWidth)} pixels, step ${widthStep} pixels, minimum ${minWidth}, maximum ${Math.round(getEffectiveMaxWidth())}`
+      );
+      if (widthBadge) {
+        widthBadge.textContent = `${Math.round(currentWidth)}px`;
+      }
+      if (widthHint) {
+        widthHint.textContent = `${widthStep}px step`;
+      }
+    };
+
+    const setPaneState = (nextState) => {
+      desiredState = nextState;
+      persistState(nextState);
+      applyPaneLayout();
+    };
+
+    const setPaneWidth = (nextWidth, persist = true) => {
+      currentWidth = clamp(nextWidth, minWidth, getEffectiveMaxWidth(), getRecommendedPaneWidth());
+      if (persist) {
+        persistWidth(currentWidth);
+      }
+      applyPaneLayout();
+    };
+
+    const resetPaneWidth = () => {
+      setPaneState("open");
+      setPaneWidth(getRecommendedPaneWidth());
+    };
+
+    collapseButton?.addEventListener("click", () => setPaneState("collapsed"));
+    openButton?.addEventListener("click", () => setPaneState("open"));
+    resetWidthButton?.addEventListener("click", resetPaneWidth);
+    linkedOpeners.forEach((element) => {
+      element.addEventListener("click", () => {
+        desiredState = "open";
+        persistState("open");
+      });
+    });
+
+    if (resizeHandle) {
+      let originX = 0;
+      let originWidth = currentWidth;
+
+      const stopResize = () => {
+        if (!isResizing) {
+          return;
+        }
+        isResizing = false;
+        root.dataset.adminPaneResizing = "false";
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        persistWidth(currentWidth);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", stopResize);
+      };
+
+      const onPointerMove = (event) => {
+        if (!isResizing) {
+          return;
+        }
+        const delta = originX - event.clientX;
+        setPaneWidth(originWidth + delta, false);
+      };
+
+      resizeHandle.addEventListener("pointerdown", (event) => {
+        if (!desktopQuery.matches || root.dataset.adminPane !== "open") {
+          return;
+        }
+        isResizing = true;
+        originX = event.clientX;
+        originWidth = currentWidth;
+        root.dataset.adminPaneResizing = "true";
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", stopResize, { once: true });
+      });
+
+      resizeHandle.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          setPaneState("open");
+          setPaneWidth(currentWidth + widthStep);
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          setPaneState("open");
+          setPaneWidth(currentWidth - widthStep);
+          return;
+        }
+        if (event.key === "Home") {
+          event.preventDefault();
+          setPaneState("open");
+          setPaneWidth(minWidth);
+          return;
+        }
+        if (event.key === "End") {
+          event.preventDefault();
+          setPaneState("open");
+          setPaneWidth(getEffectiveMaxWidth());
+          return;
+        }
+        if (event.key === "Delete" || event.key === "Backspace") {
+          event.preventDefault();
+          resetPaneWidth();
+        }
+      });
+    }
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => applyPaneLayout());
+      observer.observe(root);
+    } else {
+      window.addEventListener("resize", applyPaneLayout);
+    }
+
+    desktopQuery.addEventListener("change", applyPaneLayout);
+    const storedWidth = readStoredWidth();
+    const recommendedWidth = getRecommendedPaneWidth();
+    currentWidth =
+      storedWidth === null
+        ? recommendedWidth
+        : Math.abs(storedWidth - defaultWidth) <= widthStep
+          ? Math.max(storedWidth, recommendedWidth)
+          : clamp(storedWidth, minWidth, getEffectiveMaxWidth(), recommendedWidth);
+    applyPaneLayout();
+  })();
+</script>

@@ -1,6 +1,7 @@
 ---
 import { AdminUserInterestsLiveBindings } from "../components/AdminUserInterestsLiveBindings";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
+import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -79,6 +80,7 @@ const liveUpdatesEndpoint = target
   ? `${appPath("/bff/admin/live-updates")}?surface=user-interests&userId=${encodeURIComponent(target.userId)}`
   : null;
 const initialInterestIds = interests.map((interest) => String(interest.interest_id ?? ""));
+const USER_INTERESTS_PANE_ID = "user-interests-workspace";
 
 function resolveWorkspaceHref(options?: {
   selectedInterestId?: string | null;
@@ -165,7 +167,11 @@ function formatUpdatedAt(value: unknown): string {
       Interest templates
     </a>
     {target && (
-      <a href={resolveWorkspaceHref({ mode: "create" })} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+      <a
+        href={resolveWorkspaceHref({ mode: "create" })}
+        data-admin-pane-open-link={USER_INTERESTS_PANE_ID}
+        class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      >
         New interest
       </a>
     )}
@@ -297,6 +303,7 @@ function formatUpdatedAt(value: unknown): string {
               </span>
               <a
                 href={resolveWorkspaceHref({ mode: "create" })}
+                data-admin-pane-open-link={USER_INTERESTS_PANE_ID}
                 class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
               >
                 Create new
@@ -307,6 +314,7 @@ function formatUpdatedAt(value: unknown): string {
                     selectedInterestId: String(selectedInterest.interest_id ?? ""),
                     mode: "edit",
                   })}
+                  data-admin-pane-open-link={USER_INTERESTS_PANE_ID}
                   class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
                 >
                   Focus selected
@@ -321,8 +329,17 @@ function formatUpdatedAt(value: unknown): string {
           </div>
         </section>
 
-        <div class="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
-          <section class="rounded-2xl border border-border bg-card shadow-sm xl:sticky xl:top-6 xl:self-start">
+        <AdminWorkspacePane
+          paneId={USER_INTERESTS_PANE_ID}
+          paneLabel="Interest editor"
+          collapsedLabel="Editor"
+          defaultWidth={640}
+          minWidth={520}
+          maxWidth={900}
+          minMainWidth={320}
+        >
+          <Fragment slot="main">
+            <section class="rounded-2xl border border-border bg-card shadow-sm xl:sticky xl:top-6 xl:self-start">
             <div class="border-b border-border px-5 py-4">
               <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Workspace</p>
               <h2 class="mt-2 text-base font-semibold">Interest queue</h2>
@@ -351,6 +368,7 @@ function formatUpdatedAt(value: unknown): string {
             <div class="border-b border-border px-5 py-4">
               <a
                 href={resolveWorkspaceHref({ mode: "create" })}
+                data-admin-pane-open-link={USER_INTERESTS_PANE_ID}
                 class:list={[
                   "flex items-center justify-between rounded-xl border px-4 py-3 transition-colors",
                   workspaceMode === "create"
@@ -392,6 +410,7 @@ function formatUpdatedAt(value: unknown): string {
                         selectedInterestId: interestId,
                         mode: "edit",
                       })}
+                      data-admin-pane-open-link={USER_INTERESTS_PANE_ID}
                       class:list={[
                         "block px-5 py-4 transition-colors",
                         isSelected ? "bg-primary/5" : "hover:bg-muted/30",
@@ -448,9 +467,10 @@ function formatUpdatedAt(value: unknown): string {
                 })}
               </div>
             )}
-          </section>
+            </section>
+          </Fragment>
 
-          <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <Fragment slot="pane">
             {workspaceMode === "create" || !selectedInterest ? (
               <div class="space-y-6">
                 <div>
@@ -764,8 +784,8 @@ function formatUpdatedAt(value: unknown): string {
                 );
               })()
             )}
-          </section>
-        </div>
+          </Fragment>
+        </AdminWorkspacePane>
 
         <AdminUserInterestsLiveBindings
           targetUserId={target.userId}

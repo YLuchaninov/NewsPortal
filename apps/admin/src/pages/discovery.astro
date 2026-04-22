@@ -3,6 +3,7 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
+import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -166,6 +167,42 @@ function resolveMissionScopedHref(missionId: string): string {
   return appPath(`/discovery/missions/${encodeURIComponent(missionId)}`);
 }
 
+function resolveSelectionHref(
+  nextTab: string,
+  updates: Record<string, string | number | null | undefined>
+): string {
+  const target = new URL(Astro.url);
+  if (nextTab === "dashboard") {
+    target.searchParams.delete("tab");
+  } else {
+    target.searchParams.set("tab", nextTab);
+  }
+  for (const [key, value] of Object.entries(updates)) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) {
+      target.searchParams.delete(key);
+    } else {
+      target.searchParams.set(key, normalized);
+    }
+  }
+  return `${target.pathname}${target.search}`;
+}
+
+function resolveSelectedItemId(
+  items: R[],
+  paramName: string,
+  keyName: string
+): string {
+  const requested = String(Astro.url.searchParams.get(paramName) ?? "").trim();
+  const hasRequested = items.some(
+    (item) => String(item[keyName] ?? "").trim() === requested
+  );
+  if (hasRequested) {
+    return requested;
+  }
+  return String(items[0]?.[keyName] ?? "");
+}
+
 const requestedMissionPage = Number.parseInt(Astro.url.searchParams.get("missionPage") ?? "1", 10);
 const requestedProfilePage = Number.parseInt(Astro.url.searchParams.get("profilePage") ?? "1", 10);
 const requestedClassPage = Number.parseInt(Astro.url.searchParams.get("classPage") ?? "1", 10);
@@ -226,11 +263,38 @@ const operatorSummary = resolveDiscoveryOperatorSummary(summary);
 const attachableProfiles = profileItems.filter(
   (item) => String(item.status ?? "") === "active"
 );
-const selectedMissionIdRaw = String(Astro.url.searchParams.get("portfolioMissionId") ?? "").trim();
+const selectedPortfolioMissionIdRaw = String(Astro.url.searchParams.get("portfolioMissionId") ?? "").trim();
 const selectedMissionId =
-  missionItems.find((item) => String(item.mission_id ?? "") === selectedMissionIdRaw) != null
-    ? selectedMissionIdRaw
+  missionItems.find((item) => String(item.mission_id ?? "") === selectedPortfolioMissionIdRaw) != null
+    ? selectedPortfolioMissionIdRaw
     : String(missionItems[0]?.mission_id ?? "");
+const selectedMissionWorkspaceId = resolveSelectedItemId(
+  missionItems,
+  "selectedMissionId",
+  "mission_id"
+);
+const selectedMissionWorkspace =
+  missionItems.find(
+    (item) => String(item.mission_id ?? "") === selectedMissionWorkspaceId
+  ) ?? null;
+const selectedCandidateId = resolveSelectedItemId(
+  candidateItems,
+  "selectedCandidateId",
+  "candidate_id"
+);
+const selectedCandidate =
+  candidateItems.find(
+    (item) => String(item.candidate_id ?? "") === selectedCandidateId
+  ) ?? null;
+const selectedSourceProfileId = resolveSelectedItemId(
+  sourceProfileItems,
+  "selectedSourceProfileId",
+  "source_profile_id"
+);
+const selectedSourceProfile =
+  sourceProfileItems.find(
+    (item) => String(item.source_profile_id ?? "") === selectedSourceProfileId
+  ) ?? null;
 const portfolioResult = selectedMissionId
   ? asRecord(await sdk.getDiscoveryMissionPortfolio<R>(selectedMissionId).catch(() => ({})))
   : {};
@@ -968,194 +1032,312 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
     )}
 
     {tab === "missions" && (
-      <div class="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 class="text-base font-semibold">Create mission</h2>
-          <form method="post" action={bffPath} class="mt-4 grid gap-3">
-            <input type="hidden" name="intent" value="create_mission" />
-            <input type="hidden" name="redirectTo" value={currentPath} />
-            <label class="grid gap-1.5">
-              <span class="text-xs font-medium">Title</span>
-              <input name="title" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            </label>
-            <label class="grid gap-1.5">
-              <span class="text-xs font-medium">Description</span>
-              <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-            </label>
-            <label class="grid gap-1.5">
-              <span class="text-xs font-medium">Discovery profile</span>
-              <select name="profileId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                <option value="">No reusable profile</option>
-                {attachableProfiles.map((profile) => (
-                  <option value={String(profile.profile_id ?? "")}>
-                    {String(profile.display_name ?? profile.profile_key ?? "Profile")} · v{String(profile.version ?? 1)} · {String(profile.status ?? "draft")}
-                  </option>
-                ))}
-              </select>
-              <span class="text-[11px] text-muted-foreground">
-                Profiles own structured discovery tuning. Seeds, budget, and run status stay mission-owned.
-              </span>
-            </label>
-            <label class="grid gap-1.5">
-              <span class="text-xs font-medium">Seed topics (one per line)</span>
-              <textarea name="seedTopics" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-            </label>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Seed languages</span>
-                <textarea name="seedLanguages" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-              </label>
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Seed regions</span>
-                <textarea name="seedRegions" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-              </label>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Target provider types</span>
-                <input name="targetProviderTypes" value="rss,website,api,email_imap,youtube" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </label>
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Priority</span>
-                <input name="priority" type="number" value="0" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </label>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-3">
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Max hypotheses</span>
-                <input name="maxHypotheses" type="number" min="1" value="10" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </label>
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Max sources</span>
-                <input name="maxSources" type="number" min="1" value="20" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </label>
-              <label class="grid gap-1.5">
-                <span class="text-xs font-medium">Budget (cents)</span>
-                <input name="budgetCents" type="number" min="0" value={String(summary.defaultBudgetCents ?? 500)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </label>
-            </div>
-            <label class="grid gap-1.5">
-              <span class="text-xs font-medium">Optional interest graph JSON</span>
-              <textarea name="interestGraph" rows="10" placeholder='{"core_topic":"EU AI","subtopics":["regulation"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-            </label>
-            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-              Create mission
-            </button>
-          </form>
-        </section>
-
-        <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-          <div class="border-b border-border px-5 py-4">
-            <h2 class="text-base font-semibold">Missions</h2>
-            <p class="mt-1 text-sm text-muted-foreground">{missions.total} mission{missions.total === 1 ? "" : "s"} total</p>
-          </div>
-          <div class="divide-y divide-border">
-            {missionItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No adaptive discovery missions yet. Create one to start graph-first discovery planning.</p>
-            ) : missionItems.map((mission) => {
-              const missionId = String(mission.mission_id ?? "");
-              const missionStatus = String(mission.status ?? "planned");
-              const isMissionArchived = missionStatus === "archived";
-              const missionActionLabel = isMissionArchived ? "Activate" : "Archive";
-              const missionActionIntent = isMissionArchived ? "activate_mission" : "archive_mission";
-              return (
-              <div class="px-5 py-4">
-                <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <div class="space-y-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <a href={resolveMissionScopedHref(missionId)} class="text-sm font-semibold hover:text-primary">
-                        {String(mission.title ?? "Untitled mission")}
-                      </a>
-                      <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {String(mission.status ?? "planned")}
-                      </span>
-                      <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        graph: {String(mission.interest_graph_status ?? "pending")}
-                      </span>
-                    </div>
-                    <p class="text-sm text-muted-foreground">{String(mission.description ?? "No description")}</p>
-                    <p class="text-xs text-muted-foreground">
-                      Seeds: {asStringList(mission.seed_topics).join(", ") || "—"} · Providers: {asStringList(mission.target_provider_types).join(", ") || "rss, website, api, email_imap, youtube"} · Run count: {String(mission.run_count ?? 0)}
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      Budget: {fmtBudget(mission.budget_cents)} · Spend: {fmtMoney(mission.spent_cents ?? 0)} · Latest portfolio: {String(mission.latest_portfolio_snapshot_id ?? "—")}
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      Profile: {String(mission.profile_display_name ?? mission.profile_key ?? "—")} · Applied version: {String(mission.applied_profile_version ?? "—")}
+      <AdminWorkspacePane
+        paneId="discovery-missions"
+        paneLabel="Mission workspace"
+        collapsedLabel="Mission"
+        defaultWidth={540}
+        minWidth={420}
+        maxWidth={760}
+        minMainWidth={760}
+      >
+        <Fragment slot="main">
+          <div class="space-y-4">
+            <details class="rounded-2xl border border-border bg-card p-5 shadow-sm" open={missionItems.length === 0}>
+              <summary class="cursor-pointer list-none">
+                <div class="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h2 class="text-base font-semibold">Create mission</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                      Start a new graph-first mission without pinning the full composer beside the queue.
                     </p>
                   </div>
-                  <div class="flex flex-wrap gap-2">
-                    <form method="post" action={bffPath}>
-                      <input type="hidden" name="intent" value="compile_graph" />
-                      <input type="hidden" name="missionId" value={missionId} />
-                      <input type="hidden" name="redirectTo" value={currentPath} />
-                      <button
-                        type="submit"
-                        disabled={isMissionArchived}
-                        class:list={[
-                          "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
-                          isMissionArchived
-                            ? "cursor-not-allowed border-border bg-muted text-muted-foreground"
-                            : "border-input hover:bg-accent",
-                        ]}
-                      >
-                        Compile graph
-                      </button>
-                    </form>
-                    <form method="post" action={bffPath}>
-                      <input type="hidden" name="intent" value="run_mission" />
-                      <input type="hidden" name="missionId" value={missionId} />
-                      <input type="hidden" name="redirectTo" value={currentPath} />
-                      <button
-                        type="submit"
-                        disabled={monthlyQuotaReached || isMissionArchived}
-                        class:list={[
-                          "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors",
-                          monthlyQuotaReached || isMissionArchived
-                            ? "cursor-not-allowed bg-muted text-muted-foreground"
-                            : "bg-primary text-primary-foreground hover:bg-primary/90",
-                        ]}
-                      >
-                        {isMissionArchived ? "Archived" : monthlyQuotaReached ? "Quota blocked" : "Run mission"}
-                      </button>
-                    </form>
-                    <a href={resolveMissionScopedHref(missionId)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-                      Open workspace
-                    </a>
-                    <AdminConfirmAction
-                      action={bffPath}
-                      title={isMissionArchived ? "Reactivate mission" : "Archive mission"}
-                      description={isMissionArchived
-                        ? "Return this mission to the planned backlog so it can be compiled or run again."
-                        : "Keep this mission readable in history but remove it from active planning and execution."}
-                      triggerLabel={missionActionLabel}
-                      confirmLabel={isMissionArchived ? "Reactivate mission" : "Archive mission"}
-                      fields={[
-                        { name: "intent", value: missionActionIntent },
-                        { name: "missionId", value: missionId },
-                        { name: "redirectTo", value: currentPath },
-                      ]}
-                      triggerClassName={isMissionArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
-                      confirmClassName={isMissionArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
-                      client:load
-                    />
-                    <AdminConfirmAction
-                      action={bffPath}
-                      title="Delete mission"
-                      description="Delete this mission permanently only if it has no discovery history. Archive it instead once runs, hypotheses, or feedback exist."
-                      triggerLabel="Delete"
-                      confirmLabel="Delete mission"
-                      fields={[
-                        { name: "intent", value: "delete_mission" },
-                        { name: "missionId", value: missionId },
-                        { name: "redirectTo", value: currentPath },
-                      ]}
-                      triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
-                      client:load
-                    />
+                  <span class="text-[11px] font-medium uppercase tracking-[0.16em] text-primary/80">
+                    Expand composer
+                  </span>
+                </div>
+              </summary>
+              <form method="post" action={bffPath} class="mt-4 grid gap-3 border-t border-border pt-4">
+                <input type="hidden" name="intent" value="create_mission" />
+                <input type="hidden" name="redirectTo" value={currentPath} />
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Title</span>
+                  <input name="title" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Description</span>
+                  <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Discovery profile</span>
+                  <select name="profileId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                    <option value="">No reusable profile</option>
+                    {attachableProfiles.map((profile) => (
+                      <option value={String(profile.profile_id ?? "")}>
+                        {String(profile.display_name ?? profile.profile_key ?? "Profile")} · v{String(profile.version ?? 1)} · {String(profile.status ?? "draft")}
+                      </option>
+                    ))}
+                  </select>
+                  <span class="text-[11px] text-muted-foreground">
+                    Profiles own structured discovery tuning. Seeds, budget, and run status stay mission-owned.
+                  </span>
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Seed topics (one per line)</span>
+                  <textarea name="seedTopics" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Seed languages</span>
+                    <textarea name="seedLanguages" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Seed regions</span>
+                    <textarea name="seedRegions" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                  </label>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Target provider types</span>
+                    <input name="targetProviderTypes" value="rss,website,api,email_imap,youtube" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Priority</span>
+                    <input name="priority" type="number" value="0" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Max hypotheses</span>
+                    <input name="maxHypotheses" type="number" min="1" value="10" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Max sources</span>
+                    <input name="maxSources" type="number" min="1" value="20" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="grid gap-1.5">
+                    <span class="text-xs font-medium">Budget (cents)</span>
+                    <input name="budgetCents" type="number" min="0" value={String(summary.defaultBudgetCents ?? 500)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                </div>
+                <label class="grid gap-1.5">
+                  <span class="text-xs font-medium">Optional interest graph JSON</span>
+                  <textarea name="interestGraph" rows="10" placeholder='{"core_topic":"EU AI","subtopics":["regulation"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+                </label>
+                <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                  Create mission
+                </button>
+              </form>
+            </details>
+
+            <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+              <div class="border-b border-border px-5 py-4">
+                <h2 class="text-base font-semibold">Missions</h2>
+                <p class="mt-1 text-sm text-muted-foreground">{missions.total} mission{missions.total === 1 ? "" : "s"} total</p>
+              </div>
+              <div class="divide-y divide-border">
+                {missionItems.length === 0 ? (
+                  <p class="px-5 py-8 text-sm text-muted-foreground">No adaptive discovery missions yet. Create one to start graph-first discovery planning.</p>
+                ) : missionItems.map((mission) => {
+                  const missionId = String(mission.mission_id ?? "");
+                  const isSelected = missionId === selectedMissionWorkspaceId;
+                  return (
+                    <article class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}>
+                      <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div class="space-y-1.5">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <a
+                              href={resolveSelectionHref("missions", { selectedMissionId: missionId })}
+                              data-admin-pane-open-link="discovery-missions"
+                              class="text-sm font-semibold hover:text-primary"
+                            >
+                              {String(mission.title ?? "Untitled mission")}
+                            </a>
+                            <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              {String(mission.status ?? "planned")}
+                            </span>
+                            <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              graph: {String(mission.interest_graph_status ?? "pending")}
+                            </span>
+                          </div>
+                          <p class="text-sm text-muted-foreground">{String(mission.description ?? "No description")}</p>
+                          <div class="admin-table-chip-wrap">
+                            <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                              Seeds {asStringList(mission.seed_topics).length || 0}
+                            </span>
+                            <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                              Providers {asStringList(mission.target_provider_types).length || 0}
+                            </span>
+                            <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                              Runs {String(mission.run_count ?? 0)}
+                            </span>
+                            <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                              Spend {fmtMoney(mission.spent_cents ?? 0)}
+                            </span>
+                          </div>
+                          <p class="text-xs text-muted-foreground">
+                            Profile {String(mission.profile_display_name ?? mission.profile_key ?? "—")} · Version {String(mission.applied_profile_version ?? "—")} · Latest portfolio {String(mission.latest_portfolio_snapshot_id ?? "—")}
+                          </p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                          <a
+                            href={resolveSelectionHref("missions", { selectedMissionId: missionId })}
+                            data-admin-pane-open-link="discovery-missions"
+                            class:list={[
+                              "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                              isSelected
+                                ? "border-primary/40 bg-primary/10 text-primary"
+                                : "border-input hover:bg-accent",
+                            ]}
+                          >
+                            Open pane
+                          </a>
+                          <a href={resolveMissionScopedHref(missionId)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                            Portfolio
+                          </a>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              {(missions.hasPrev || missions.hasNext) && (
+                <PaginationNav
+                  className="rounded-none border-x-0 border-b-0"
+                  page={missions.page}
+                  totalPages={missions.totalPages}
+                  hasPrev={missions.hasPrev}
+                  hasNext={missions.hasNext}
+                  prevHref={resolvePageHref("missionPage", missions.page - 1)}
+                  nextHref={resolvePageHref("missionPage", missions.page + 1)}
+                />
+              )}
+            </section>
+          </div>
+        </Fragment>
+
+        <Fragment slot="pane">
+          {selectedMissionWorkspace ? (() => {
+            const mission = selectedMissionWorkspace;
+            const missionId = String(mission.mission_id ?? "");
+            const missionStatus = String(mission.status ?? "planned");
+            const isMissionArchived = missionStatus === "archived";
+            const missionActionLabel = isMissionArchived ? "Activate" : "Archive";
+            const missionActionIntent = isMissionArchived ? "activate_mission" : "archive_mission";
+            return (
+              <div class="space-y-5">
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      {missionStatus}
+                    </span>
+                    <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      graph: {String(mission.interest_graph_status ?? "pending")}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 class="text-2xl font-semibold tracking-tight">{String(mission.title ?? "Untitled mission")}</h2>
+                    <p class="mt-2 text-sm leading-6 text-muted-foreground">
+                      {String(mission.description ?? "No description recorded for this mission.")}
+                    </p>
+                  </div>
+                  <div class="grid gap-3 md:grid-cols-2">
+                    <div class="rounded-2xl border border-border bg-background px-4 py-3">
+                      <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Delivery</p>
+                      <p class="mt-2 text-sm font-semibold">Budget {fmtBudget(mission.budget_cents)}</p>
+                      <p class="mt-1 text-sm text-muted-foreground">
+                        Spend {fmtMoney(mission.spent_cents ?? 0)} · Runs {String(mission.run_count ?? 0)}
+                      </p>
+                    </div>
+                    <div class="rounded-2xl border border-border bg-background px-4 py-3">
+                      <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Profile</p>
+                      <p class="mt-2 text-sm font-semibold">
+                        {String(mission.profile_display_name ?? mission.profile_key ?? "No reusable profile")}
+                      </p>
+                      <p class="mt-1 text-sm text-muted-foreground">
+                        Applied version {String(mission.applied_profile_version ?? "—")} · Priority {String(mission.priority ?? 0)}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                    Seeds {asStringList(mission.seed_topics).join(", ") || "—"}<br />
+                    Providers {asStringList(mission.target_provider_types).join(", ") || "rss, website, api, email_imap, youtube"}<br />
+                    Latest portfolio {String(mission.latest_portfolio_snapshot_id ?? "—")}
                   </div>
                 </div>
-                <form method="post" action={bffPath} class="mt-4 grid gap-3 md:grid-cols-4">
+
+                <div class="flex flex-wrap gap-2">
+                  <form method="post" action={bffPath}>
+                    <input type="hidden" name="intent" value="compile_graph" />
+                    <input type="hidden" name="missionId" value={missionId} />
+                    <input type="hidden" name="redirectTo" value={currentPath} />
+                    <button
+                      type="submit"
+                      disabled={isMissionArchived}
+                      class:list={[
+                        "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                        isMissionArchived
+                          ? "cursor-not-allowed border-border bg-muted text-muted-foreground"
+                          : "border-input hover:bg-accent",
+                      ]}
+                    >
+                      Compile graph
+                    </button>
+                  </form>
+                  <form method="post" action={bffPath}>
+                    <input type="hidden" name="intent" value="run_mission" />
+                    <input type="hidden" name="missionId" value={missionId} />
+                    <input type="hidden" name="redirectTo" value={currentPath} />
+                    <button
+                      type="submit"
+                      disabled={monthlyQuotaReached || isMissionArchived}
+                      class:list={[
+                        "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors",
+                        monthlyQuotaReached || isMissionArchived
+                          ? "cursor-not-allowed bg-muted text-muted-foreground"
+                          : "bg-primary text-primary-foreground hover:bg-primary/90",
+                      ]}
+                    >
+                      {isMissionArchived ? "Archived" : monthlyQuotaReached ? "Quota blocked" : "Run mission"}
+                    </button>
+                  </form>
+                  <a href={resolveMissionScopedHref(missionId)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                    Open portfolio
+                  </a>
+                  <AdminConfirmAction
+                    action={bffPath}
+                    title={isMissionArchived ? "Reactivate mission" : "Archive mission"}
+                    description={isMissionArchived
+                      ? "Return this mission to the planned backlog so it can be compiled or run again."
+                      : "Keep this mission readable in history but remove it from active planning and execution."}
+                    triggerLabel={missionActionLabel}
+                    confirmLabel={isMissionArchived ? "Reactivate mission" : "Archive mission"}
+                    fields={[
+                      { name: "intent", value: missionActionIntent },
+                      { name: "missionId", value: missionId },
+                      { name: "redirectTo", value: currentPath },
+                    ]}
+                    triggerClassName={isMissionArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
+                    confirmClassName={isMissionArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
+                    client:load
+                  />
+                  <AdminConfirmAction
+                    action={bffPath}
+                    title="Delete mission"
+                    description="Delete this mission permanently only if it has no discovery history. Archive it instead once runs, hypotheses, or feedback exist."
+                    triggerLabel="Delete"
+                    confirmLabel="Delete mission"
+                    fields={[
+                      { name: "intent", value: "delete_mission" },
+                      { name: "missionId", value: missionId },
+                      { name: "redirectTo", value: currentPath },
+                    ]}
+                    triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                    client:load
+                  />
+                </div>
+
+                <form method="post" action={bffPath} class="grid gap-3 rounded-2xl border border-border bg-background p-4 md:grid-cols-2">
                   <input type="hidden" name="intent" value="update_mission" />
                   <input type="hidden" name="missionId" value={missionId} />
                   <input type="hidden" name="redirectTo" value={currentPath} />
@@ -1189,8 +1371,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                       ))}
                     </select>
                   </label>
-                  <div class="grid gap-1">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Interest graph</span>
+                  <div class="md:col-span-2">
                     <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
                       Save mission
                     </button>
@@ -1198,21 +1379,13 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 </form>
               </div>
             );
-            })}
-          </div>
-          {(missions.hasPrev || missions.hasNext) && (
-            <PaginationNav
-              className="rounded-none border-x-0 border-b-0"
-              page={missions.page}
-              totalPages={missions.totalPages}
-              hasPrev={missions.hasPrev}
-              hasNext={missions.hasNext}
-              prevHref={resolvePageHref("missionPage", missions.page - 1)}
-              nextHref={resolvePageHref("missionPage", missions.page + 1)}
-            />
+          })() : (
+            <div class="rounded-2xl border border-dashed border-border bg-background px-4 py-10 text-sm text-muted-foreground">
+              Select a mission to review planning, budget, and run actions without leaving the list.
+            </div>
           )}
-        </section>
-      </div>
+        </Fragment>
+      </AdminWorkspacePane>
     )}
 
     {tab === "recall" && (
@@ -1649,97 +1822,172 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
     )}
 
     {tab === "candidates" && (
-      <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-        <div class="border-b border-border px-5 py-4">
-          <h2 class="text-base font-semibold">Candidates</h2>
-          <p class="mt-1 text-sm text-muted-foreground">{candidates.total} candidate{candidates.total === 1 ? "" : "s"} total</p>
-        </div>
-          <div class="divide-y divide-border">
-            {candidateItems.length === 0 ? (
-              <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet. They appear here after mission runs.</p>
-            ) : candidateItems.map((candidate) => {
-              const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
-              return (
-                <div class="px-5 py-4">
-                  <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-                    <div class="space-y-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="text-sm font-semibold">{String(candidate.title ?? candidate.url ?? "Candidate")}</h3>
-                        <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          {String(candidate.status ?? "pending")}
-                        </span>
-                        <span class="inline-flex items-center rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground border border-border">
-                          {String(candidate.provider_type ?? "rss")}
-                        </span>
+      <AdminWorkspacePane
+        paneId="discovery-candidates"
+        paneLabel="Candidate moderation"
+        collapsedLabel="Candidate"
+        defaultWidth={560}
+        minWidth={420}
+        maxWidth={760}
+        minMainWidth={760}
+      >
+        <Fragment slot="main">
+          <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+            <div class="border-b border-border px-5 py-4">
+              <h2 class="text-base font-semibold">Candidates</h2>
+              <p class="mt-1 text-sm text-muted-foreground">{candidates.total} candidate{candidates.total === 1 ? "" : "s"} total</p>
+            </div>
+            <div class="divide-y divide-border">
+              {candidateItems.length === 0 ? (
+                <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet. They appear here after mission runs.</p>
+              ) : candidateItems.map((candidate) => {
+                const candidateId = String(candidate.candidate_id ?? "");
+                const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
+                const isSelected = candidateId === selectedCandidateId;
+                return (
+                  <article class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}>
+                    <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div class="space-y-1.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <a
+                            href={resolveSelectionHref("candidates", { selectedCandidateId: candidateId })}
+                            data-admin-pane-open-link="discovery-candidates"
+                            class="text-sm font-semibold hover:text-primary"
+                          >
+                            {String(candidate.title ?? candidate.url ?? "Candidate")}
+                          </a>
+                          <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {String(candidate.status ?? "pending")}
+                          </span>
+                          <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {String(candidate.provider_type ?? "rss")}
+                          </span>
+                        </div>
+                        <a href={String(candidate.url ?? "#")} target="_blank" class="break-all text-sm text-primary hover:underline">
+                          {String(candidate.url ?? "—")}
+                        </a>
+                        <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
+                        <p class="text-xs text-muted-foreground">
+                          Mission {String(candidate.mission_title ?? "—")} · Class {String(candidate.class_key ?? "—")} · Tactic {String(candidate.tactic_key ?? "—")} · Score {asFloat(candidate.relevance_score, 0).toFixed(2)}
+                        </p>
+                        <p class="text-xs text-muted-foreground">
+                          Profile {explainability.profileName ?? "—"} · Version {String(explainability.profileVersion ?? "—")} · Reason bucket {explainability.reasonBucket ?? "—"}
+                        </p>
                       </div>
-                      <a href={String(candidate.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
-                        {String(candidate.url ?? "—")}
+                      <a
+                        href={resolveSelectionHref("candidates", { selectedCandidateId: candidateId })}
+                        data-admin-pane-open-link="discovery-candidates"
+                        class:list={[
+                          "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                          isSelected
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : "border-input hover:bg-accent",
+                        ]}
+                      >
+                        Review
                       </a>
-                      <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
-                      <p class="text-xs text-muted-foreground">
-                        Mission: {String(candidate.mission_title ?? "—")} · Class: {String(candidate.class_key ?? "—")} · Tactic: {String(candidate.tactic_key ?? "—")} · Score: {asFloat(candidate.relevance_score, 0).toFixed(2)}
-                      </p>
-                      <p class="text-xs text-muted-foreground">
-                        Profile: {explainability.profileName ?? "—"} · Version: {String(explainability.profileVersion ?? "—")} · Reason bucket: {explainability.reasonBucket ?? "—"}
-                      </p>
                     </div>
-                    <div class="grid gap-2 xl:w-[26rem]">
-                      <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
-                        <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
-                        <div class="mt-1">Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
-                        <div class="mt-1">Policy verdict {explainability.policyVerdict ?? "—"} · Onboarding {explainability.onboardingVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
-                        <div class="mt-1">Productivity risk {explainability.productivityRisk ?? "—"} · Diagnostic {explainability.usefulnessDiagnostic ?? "—"}</div>
-                        <div class="mt-1">Source family {explainability.sourceFamily ?? "—"} · Source shape {explainability.sourceShape ?? "—"} · Stage loss {explainability.stageLossBucket ?? "—"}</div>
-                        <div class="mt-1">Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
-                        <div class="mt-1">Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
-                        <div class="mt-1">Benchmark-like {explainability.benchmarkLike ? "yes" : "no"}</div>
-                        <div class="mt-1">Residuals {explainability.residuals.join(", ") || "—"}</div>
-                      </div>
-                      {String(candidate.status ?? "pending") === "pending" ? (
-                        <div class="grid gap-2 sm:grid-cols-2">
-                          <form method="post" action={bffPath} class="flex gap-2">
-                            <input type="hidden" name="intent" value="review_candidate" />
-                            <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
-                            <input type="hidden" name="status" value="approved" />
-                            <input type="hidden" name="redirectTo" value={currentPath} />
-                            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-                              Approve
-                            </button>
-                          </form>
-                          <form method="post" action={bffPath} class="grid gap-2">
-                            <input type="hidden" name="intent" value="review_candidate" />
-                            <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
-                            <input type="hidden" name="status" value="rejected" />
-                            <input type="hidden" name="redirectTo" value={currentPath} />
-                            <input name="rejectionReason" placeholder="reason" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-                              Reject
-                            </button>
-                          </form>
-                        </div>
-                      ) : (
-                        <div class="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                          Reviewed {fmtDate(candidate.reviewed_at)} by {String(candidate.reviewed_by ?? "system")}
-                        </div>
-                      )}
-                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {(candidates.hasPrev || candidates.hasNext) && (
+              <PaginationNav
+                className="rounded-none border-x-0 border-b-0"
+                page={candidates.page}
+                totalPages={candidates.totalPages}
+                hasPrev={candidates.hasPrev}
+                hasNext={candidates.hasNext}
+                prevHref={resolvePageHref("candidatePage", candidates.page - 1)}
+                nextHref={resolvePageHref("candidatePage", candidates.page + 1)}
+              />
+            )}
+          </section>
+        </Fragment>
+
+        <Fragment slot="pane">
+          {selectedCandidate ? (() => {
+            const candidate = selectedCandidate;
+            const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
+            return (
+              <div class="space-y-5">
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      {String(candidate.status ?? "pending")}
+                    </span>
+                    <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      {String(candidate.provider_type ?? "rss")}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 class="text-2xl font-semibold tracking-tight">{String(candidate.title ?? candidate.url ?? "Candidate")}</h2>
+                    <a href={String(candidate.url ?? "#")} target="_blank" class="mt-2 block break-all text-sm text-primary hover:underline">
+                      {String(candidate.url ?? "—")}
+                    </a>
+                    <p class="mt-3 text-sm leading-6 text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                    Mission {String(candidate.mission_title ?? "—")} · Class {String(candidate.class_key ?? "—")} · Tactic {String(candidate.tactic_key ?? "—")}<br />
+                    Relevance score {asFloat(candidate.relevance_score, 0).toFixed(2)} · Profile {explainability.profileName ?? "—"} · Version {String(explainability.profileVersion ?? "—")}
                   </div>
                 </div>
-              );
-            })}
-        </div>
-        {(candidates.hasPrev || candidates.hasNext) && (
-          <PaginationNav
-            className="rounded-none border-x-0 border-b-0"
-            page={candidates.page}
-            totalPages={candidates.totalPages}
-            hasPrev={candidates.hasPrev}
-            hasNext={candidates.hasNext}
-            prevHref={resolvePageHref("candidatePage", candidates.page - 1)}
-            nextHref={resolvePageHref("candidatePage", candidates.page + 1)}
-          />
-        )}
-      </section>
+
+                <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                  <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Explainability</p>
+                  <div class="mt-3 space-y-1.5">
+                    <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
+                    <div>Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
+                    <div>Policy verdict {explainability.policyVerdict ?? "—"} · Onboarding {explainability.onboardingVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
+                    <div>Productivity risk {explainability.productivityRisk ?? "—"} · Diagnostic {explainability.usefulnessDiagnostic ?? "—"}</div>
+                    <div>Source family {explainability.sourceFamily ?? "—"} · Source shape {explainability.sourceShape ?? "—"} · Stage loss {explainability.stageLossBucket ?? "—"}</div>
+                    <div>Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
+                    <div>Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
+                    <div>Benchmark-like {explainability.benchmarkLike ? "yes" : "no"} · Residuals {explainability.residuals.join(", ") || "—"}</div>
+                  </div>
+                </div>
+
+                {String(candidate.status ?? "pending") === "pending" ? (
+                  <div class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+                    <div class="flex flex-wrap gap-2">
+                      <form method="post" action={bffPath} class="flex gap-2">
+                        <input type="hidden" name="intent" value="review_candidate" />
+                        <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                        <input type="hidden" name="status" value="approved" />
+                        <input type="hidden" name="redirectTo" value={currentPath} />
+                        <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                          Approve
+                        </button>
+                      </form>
+                    </div>
+                    <form method="post" action={bffPath} class="grid gap-2">
+                      <input type="hidden" name="intent" value="review_candidate" />
+                      <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                      <input type="hidden" name="status" value="rejected" />
+                      <input type="hidden" name="redirectTo" value={currentPath} />
+                      <label class="grid gap-1">
+                        <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Rejection reason</span>
+                        <input name="rejectionReason" placeholder="Explain why this candidate should not be promoted" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                      </label>
+                      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                        Reject
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                    Reviewed {fmtDate(candidate.reviewed_at)} by {String(candidate.reviewed_by ?? "system")}
+                  </div>
+                )}
+              </div>
+            );
+          })() : (
+            <div class="rounded-2xl border border-dashed border-border bg-background px-4 py-10 text-sm text-muted-foreground">
+              Select a candidate to review explainability and moderation actions in one side pane.
+            </div>
+          )}
+        </Fragment>
+      </AdminWorkspacePane>
     )}
 
     {tab === "hypotheses" && (
@@ -1815,75 +2063,155 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
     )}
 
     {tab === "sources" && (
-      <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-        <div class="border-b border-border px-5 py-4">
-          <h2 class="text-base font-semibold">Source profiles</h2>
-          <p class="mt-1 text-sm text-muted-foreground">{sourceProfiles.total} profile{sourceProfiles.total === 1 ? "" : "s"} total</p>
-        </div>
-        <div class="divide-y divide-border">
-          {sourceProfileItems.length === 0 ? (
-            <p class="px-5 py-8 text-sm text-muted-foreground">No source profiles yet. Discovery will add them after source evaluation runs.</p>
-          ) : sourceProfileItems.map((profile) => {
+      <AdminWorkspacePane
+        paneId="discovery-sources"
+        paneLabel="Source detail"
+        collapsedLabel="Source"
+        defaultWidth={540}
+        minWidth={420}
+        maxWidth={760}
+        minMainWidth={760}
+      >
+        <Fragment slot="main">
+          <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+            <div class="border-b border-border px-5 py-4">
+              <h2 class="text-base font-semibold">Source profiles</h2>
+              <p class="mt-1 text-sm text-muted-foreground">{sourceProfiles.total} profile{sourceProfiles.total === 1 ? "" : "s"} total</p>
+            </div>
+            <div class="divide-y divide-border">
+              {sourceProfileItems.length === 0 ? (
+                <p class="px-5 py-8 text-sm text-muted-foreground">No source profiles yet. Discovery will add them after source evaluation runs.</p>
+              ) : sourceProfileItems.map((profile) => {
+                const profileId = String(profile.source_profile_id ?? "");
+                const isSelected = profileId === selectedSourceProfileId;
+                return (
+                  <article class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}>
+                    <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div class="space-y-1.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <a
+                            href={resolveSelectionHref("sources", { selectedSourceProfileId: profileId })}
+                            data-admin-pane-open-link="discovery-sources"
+                            class="text-sm font-semibold hover:text-primary"
+                          >
+                            {String(profile.canonical_domain ?? "Unknown domain")}
+                          </a>
+                          <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {String(profile.source_type ?? "unknown")}
+                          </span>
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                          Org {String(profile.org_name ?? "—")} · Country {String(profile.country ?? "—")} · Languages {asStringList(profile.languages).join(", ") || "—"}
+                        </p>
+                        <p class="text-xs text-muted-foreground">
+                          Trust {fmtPercent(profile.trust_score)} · Accountability {fmtPercent(profile.author_accountability)} · Technical quality {fmtPercent(profile.technical_quality)}
+                        </p>
+                      </div>
+                      <a
+                        href={resolveSelectionHref("sources", { selectedSourceProfileId: profileId })}
+                        data-admin-pane-open-link="discovery-sources"
+                        class:list={[
+                          "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                          isSelected
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : "border-input hover:bg-accent",
+                        ]}
+                      >
+                        Inspect
+                      </a>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {(sourceProfiles.hasPrev || sourceProfiles.hasNext) && (
+              <PaginationNav
+                className="rounded-none border-x-0 border-b-0"
+                page={sourceProfiles.page}
+                totalPages={sourceProfiles.totalPages}
+                hasPrev={sourceProfiles.hasPrev}
+                hasNext={sourceProfiles.hasNext}
+                prevHref={resolvePageHref("sourcePage", sourceProfiles.page - 1)}
+                nextHref={resolvePageHref("sourcePage", sourceProfiles.page + 1)}
+              />
+            )}
+          </section>
+        </Fragment>
+
+        <Fragment slot="pane">
+          {selectedSourceProfile ? (() => {
+            const profile = selectedSourceProfile;
             const score = sourceScoreByProfileId.get(String(profile.source_profile_id ?? ""));
             const channelMetrics = resolveDiscoveryChannelMetrics(score);
             const sourceQuality = resolveDiscoverySourceQuality(profile);
             return (
-              <div class="px-5 py-4">
-                <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-                  <div class="space-y-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="text-sm font-semibold">{String(profile.canonical_domain ?? "Unknown domain")}</h3>
-                      <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {String(profile.source_type ?? "unknown")}
-                      </span>
-                    </div>
-                    <p class="text-sm text-muted-foreground">
-                      Org: {String(profile.org_name ?? "—")} · Country: {String(profile.country ?? "—")} · Languages: {asStringList(profile.languages).join(", ") || "—"}
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      Trust {fmtPercent(profile.trust_score)} · Accountability {fmtPercent(profile.author_accountability)} · Technical quality {fmtPercent(profile.technical_quality)}
+              <div class="space-y-5">
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      {String(profile.source_type ?? "unknown")}
+                    </span>
+                    <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      {String(profile.country ?? "Unknown country")}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 class="text-2xl font-semibold tracking-tight">{String(profile.canonical_domain ?? "Unknown domain")}</h2>
+                    <p class="mt-2 text-sm leading-6 text-muted-foreground">
+                      Org {String(profile.org_name ?? "—")} · Languages {asStringList(profile.languages).join(", ") || "—"}
                     </p>
                   </div>
-                  <div class="grid gap-3 md:grid-cols-2">
-                    <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
-                      <div class="font-medium text-foreground">Generic source quality</div>
-                      <div class="mt-1">Recall score {sourceQuality.recallScore == null ? "—" : fmtPercent(sourceQuality.recallScore)}</div>
-                      <div class="mt-1">Metric source {metricSourceLabel(sourceQuality.metricSource)}</div>
-                      <div class="mt-1">Yield {fmtPercent(sourceQuality.yieldScore ?? 0)} · Lead {fmtPercent(sourceQuality.leadTimeScore ?? 0)} · Dupes {fmtPercent(sourceQuality.duplicationScore ?? 0)}</div>
-                      <div class="mt-1">Snapshot {sourceQuality.snapshotReason ?? "—"} · {fmtDate(sourceQuality.scoredAt)}</div>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                    <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Generic source quality</p>
+                    <div class="mt-3 space-y-1.5">
+                      <div>Recall score {sourceQuality.recallScore == null ? "—" : fmtPercent(sourceQuality.recallScore)}</div>
+                      <div>Metric source {metricSourceLabel(sourceQuality.metricSource)}</div>
+                      <div>Yield {fmtPercent(sourceQuality.yieldScore ?? 0)} · Lead {fmtPercent(sourceQuality.leadTimeScore ?? 0)} · Dupes {fmtPercent(sourceQuality.duplicationScore ?? 0)}</div>
+                      <div>Snapshot {sourceQuality.snapshotReason ?? "—"} · {fmtDate(sourceQuality.scoredAt)}</div>
                     </div>
-                    <div class="rounded-2xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
-                      <div class="font-medium text-foreground">Mission fit</div>
-                      {score ? (
-                        <>
-                          <div class="mt-1">Contextual fit {fmtPercent(score.contextual_score)}</div>
-                          <div class="mt-1">Channel quality {metricSourceLabel(channelMetrics.metricSource)}</div>
-                          <div class="mt-1">Yield {fmtPercent(channelMetrics.yieldScore ?? 0)} · Lead {fmtPercent(channelMetrics.leadTimeScore ?? 0)} · Dupes {fmtPercent(channelMetrics.duplicationScore ?? 0)}</div>
-                          <div class="mt-1">Unique articles {String(channelMetrics.uniqueArticlesPeriod ?? 0)} / {String(channelMetrics.totalArticlesPeriod ?? 0)}</div>
-                          <div class="mt-1">Roles: {asStringList(score.role_labels).join(", ") || "—"}</div>
-                        </>
-                      ) : (
-                        <div class="mt-1">No mission-scoped source score for the current portfolio mission.</div>
-                      )}
-                    </div>
+                  </div>
+                  <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                    <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Mission fit</p>
+                    {score ? (
+                      <div class="mt-3 space-y-1.5">
+                        <div>Contextual fit {fmtPercent(score.contextual_score)}</div>
+                        <div>Channel quality {metricSourceLabel(channelMetrics.metricSource)}</div>
+                        <div>Yield {fmtPercent(channelMetrics.yieldScore ?? 0)} · Lead {fmtPercent(channelMetrics.leadTimeScore ?? 0)} · Dupes {fmtPercent(channelMetrics.duplicationScore ?? 0)}</div>
+                        <div>Unique articles {String(channelMetrics.uniqueArticlesPeriod ?? 0)} / {String(channelMetrics.totalArticlesPeriod ?? 0)}</div>
+                        <div>Roles {asStringList(score.role_labels).join(", ") || "—"}</div>
+                      </div>
+                    ) : (
+                      <div class="mt-3">No mission-scoped source score for the current portfolio mission.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                  <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Operator context</p>
+                  <div class="mt-3 space-y-1.5">
+                    <div>Trust {fmtPercent(profile.trust_score)} · Accountability {fmtPercent(profile.author_accountability)} · Technical quality {fmtPercent(profile.technical_quality)}</div>
+                    <div>Context mission {selectedMissionId || "No active portfolio mission"}</div>
+                    {selectedMissionId ? (
+                      <div>
+                        <a href={resolveMissionScopedHref(selectedMissionId)} class="text-primary hover:underline">
+                          Open current mission portfolio
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
             );
-          })}
-        </div>
-        {(sourceProfiles.hasPrev || sourceProfiles.hasNext) && (
-          <PaginationNav
-            className="rounded-none border-x-0 border-b-0"
-            page={sourceProfiles.page}
-            totalPages={sourceProfiles.totalPages}
-            hasPrev={sourceProfiles.hasPrev}
-            hasNext={sourceProfiles.hasNext}
-            prevHref={resolvePageHref("sourcePage", sourceProfiles.page - 1)}
-            nextHref={resolvePageHref("sourcePage", sourceProfiles.page + 1)}
-          />
-        )}
-      </section>
+          })() : (
+            <div class="rounded-2xl border border-dashed border-border bg-background px-4 py-10 text-sm text-muted-foreground">
+              Select a source profile to compare generic quality against the current mission-fit context.
+            </div>
+          )}
+        </Fragment>
+      </AdminWorkspacePane>
     )}
 
     {tab === "portfolio" && (

@@ -224,14 +224,14 @@ export function AutomationOverviewBoard({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border bg-[linear-gradient(135deg,rgba(251,191,36,0.10),rgba(255,255,255,0)),linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,255,255,0.88))] p-6 text-foreground shadow-sm dark:bg-[linear-gradient(135deg,rgba(251,191,36,0.10),rgba(0,0,0,0)),linear-gradient(180deg,rgba(24,24,27,0.96),rgba(24,24,27,0.92))]">
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/80">
+      <section className="overflow-hidden rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr] xl:items-start">
+          <div className="space-y-3">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">
               Workflow Workspace
             </p>
-            <div className="space-y-3">
-              <h1 className="max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">
+            <div className="space-y-2.5">
+              <h1 className="max-w-3xl text-2xl font-semibold tracking-tight md:text-[2rem]">
                 Build, run, and tune automations from one visual control room
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -290,12 +290,12 @@ export function AutomationOverviewBoard({
             ].map((card) => (
               <div
                 key={card.label}
-                className="flex min-h-[8.5rem] flex-col justify-between rounded-[1.5rem] border border-border bg-background/80 p-4"
+                className="flex min-h-[7rem] flex-col justify-between rounded-2xl border border-border bg-background p-4"
               >
-                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                   {card.label}
                 </p>
-                <p className={`mt-4 text-3xl font-semibold leading-none ${card.tone}`}>{card.value}</p>
+                <p className={`mt-3 text-[2rem] font-semibold leading-none ${card.tone}`}>{card.value}</p>
               </div>
             ))}
           </div>

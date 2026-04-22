@@ -14,6 +14,207 @@
 
 ## Completed items
 
+### 2026-04-22 — PATCH-ADMIN-PANE-GRID-COLUMN-CORRECTION — Reverted the failed flex experiment and fixed the real open-state grid-column bug
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the failed parent-width experiment, the user clarified the exact visual symptom more precisely: when the preview pane width changed, the pane appeared to move away from the right edge by roughly its own width. That pointed to a shared layout-slot bug rather than pane-width math or sticky positioning.
+- Что изменилось:
+  - corrected the shared desktop pane layout in:
+    - [`apps/admin/src/components/AdminWorkspacePane.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminWorkspacePane.astro)
+  - specifically:
+    - reverted the last flex-based pane layout experiment;
+    - restored the shared grid-based desktop contract;
+    - fixed the open-state desktop grid so it now uses exactly two columns: `main` and `pane`;
+    - kept the collapsed-state grid as `main + rail`, preserving the existing compact rail behavior without leaving an empty dedicated pane-width track on the right.
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted audit of the user-described “pane moves away from the right edge by its own width” regression
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the real root cause was a shared grid-column mismatch: in open state the pane rendered in the second column while a separate pane-width column remained empty on the far right;
+  - fixing the open-state column template is the truthful correction, while the earlier flex conversion was unnecessary and regressive.
+
+### 2026-04-22 — PATCH-ADMIN-PANE-PARENT-WIDTH-COVERAGE — Switched the shared open desktop pane contract to a parent-covering flex layout
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after two earlier pane follow-ups, screenshot review still showed a deeper layout bug: when the preview pane grew wider, it looked as if the whole pane was offset inward from the right edge and the main region plus pane no longer covered the parent workspace width together.
+- Что изменилось:
+  - corrected the shared desktop layout primitive in:
+    - [`apps/admin/src/components/AdminWorkspacePane.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminWorkspacePane.astro)
+  - specifically:
+    - replaced the open-state desktop grid contract with a direct flex-based parent-covering layout;
+    - made the main region explicitly `flex: 1 1 auto` so it absorbs the remaining width instead of shrinking into a content-sized left column;
+    - kept the right pane as a fixed-width flex item so resize still maps to the actual pane width while the pane remains anchored to the parent’s right edge;
+    - kept the collapsed rail as a non-growing sticky flex item in collapsed mode.
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted audit of the screenshoted “pane offsets from the right edge while growing” regression
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the remaining empty-right-tail issue was rooted in the shared desktop layout contract rather than pane width math alone;
+  - a direct flex layout is a more truthful primitive for these first-wave operator workspaces because it guarantees that main content plus pane cover the full parent width together.
+
+### 2026-04-22 — PATCH-ADMIN-PANE-RESIZE-AND-WIDTH-CORRECTION — Corrected the shared pane contract so resize feels predictable again and open panes initialize at a truer desktop width
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: immediately after the previous “full-right workspace” follow-up, the user reported that the new pane behavior felt worse: the resize handle no longer behaved like a normal right-pane width control, while the expanded pane still did not feel like it was using the right-side workspace convincingly enough.
+- Что изменилось:
+  - corrected the shared desktop pane contract in:
+    - [`apps/admin/src/components/AdminWorkspacePane.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminWorkspacePane.astro)
+  - specifically:
+    - removed the fractional open-state grid behavior that made width adjustments feel indirect and strange;
+    - restored a direct width-based pane column so drag/keyboard resize once again maps cleanly to the actual right-pane width;
+    - added a responsive recommended open width that initializes panes wider on roomy desktops while still respecting collapse logic and bounded resizing;
+    - treated old default-width localStorage values as “default-like” so first-wave panes can adopt the wider recommended width without wiping out clearly custom user-resized widths.
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted shared-pane contract audit against the user-reported “strange slider + still too narrow” regression
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this correction patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the regression came from the shared fractional layout experiment, not from page-specific pane markup;
+  - shared panes can open noticeably wider while keeping resize behavior direct and predictable when the width model stays explicit.
+
+### 2026-04-22 — PATCH-ADMIN-PANE-FULL-RIGHT-WORKSPACE — Widened the shared right workspace pane so expanded previews occupy the full usable right-side area
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the first compact-sidebar/shared-pane rollout, screenshot review showed that the new right preview panels still looked like narrow floating cards even in their expanded state. The user expectation was a true right-side workspace that consumes the available area, not a fixed-width card parked on the edge.
+- Что изменилось:
+  - widened the shared open-state desktop grid contract in:
+    - [`apps/admin/src/components/AdminWorkspacePane.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminWorkspacePane.astro)
+  - specifically:
+    - changed the desktop open-state grid so the main region and the right pane both participate in the available width instead of treating the pane width as a hard fixed card column;
+    - promoted the stored pane width to a lower bound for the right workspace rather than a permanently narrow fixed width;
+    - updated the pane shell itself to fill its grid column, so expanded panes on `articles`, `clusters`, `resources`, and `user-interests` now read as full right workspaces.
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted shared-pane layout audit against the screenshoted clusters preview case
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the “floating narrow card” behavior was rooted in the shared pane-width contract rather than page-local markup;
+  - widening the shared grid contract fixes the first-wave preview/workspace pages together without reopening the broader compact-sidebar capability.
+
+### 2026-04-22 — PATCH-AUTOMATION-HERO-CONSISTENCY — Tightened the automation overview hero so it matches the rest of the admin shell rhythm
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: screenshot review showed that the top hero/workspace block on the automation overview did not visually belong to the rest of the authenticated admin. It used a distinct tinted fill and a noticeably taller composition than neighboring operator surfaces, which made the page feel like a separate product again even after the broader admin rollout.
+- Что изменилось:
+  - normalized the top automation overview hero in:
+    - [`apps/admin/src/components/AutomationOverviewBoard.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AutomationOverviewBoard.tsx)
+  - specifically:
+    - replaced the off-pattern tinted/gradient hero shell with the same `bg-card` / bordered surface language used on the other admin top sections;
+    - reduced the hero's visual weight by tightening grid gaps, shrinking the heading scale, and bringing the top label back to the standard admin eyebrow treatment;
+    - reduced the KPI card height and label spacing so the summary rail no longer consumes unnecessary vertical space.
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted visual/code audit of the automation overview hero against the other shipped admin top sections
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the inconsistency was local to the automation overview hero rather than a shell-wide issue;
+  - the automation landing surface can keep its operator-specific content while still sharing the same visual hierarchy and density as the rest of the admin console.
+
+### 2026-04-22 — PATCH-ADMIN-COMPACT-SIDEBAR-AND-WORKSPACE-PANES — Added a compact desktop sidebar rail and shared collapsible/resizable right-pane contract to the first admin operator surfaces
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the operator-console redesign and the follow-up visual polish, the user asked for the next workflow-density slice: make the authenticated admin chrome consume less space when needed, and stop rebuilding similar right preview panes independently on each list-heavy page. The goal was better table/list width on desktop without losing orientation or reopening backend/API work.
+- Что изменилось:
+  - introduced a small admin-only browser layout contract for:
+    - sidebar persistence (`expanded | compact`)
+    - per-surface right-pane persistence (`open | collapsed`)
+    - per-surface bounded pane widths
+    - shared width clamping helpers and storage keys
+    - files:
+      - [`apps/admin/src/components/admin-layout.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/admin-layout.ts)
+  - added a reusable desktop workspace-pane primitive with:
+    - collapse / reopen affordances
+    - bounded pointer-based resize
+    - per-surface localStorage persistence
+    - auto-collapse when the main region would become too narrow
+    - baseline keyboard support on the resize handle
+    - file:
+      - [`apps/admin/src/components/AdminWorkspacePane.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminWorkspacePane.astro)
+  - updated the shared authenticated shell so it now:
+    - bootstraps sidebar compact state in `<head>` before render
+    - exposes a desktop compact/expand toggle in the top bar
+    - collapses the desktop nav into an icon rail while keeping active state obvious and labels accessible through titles/`aria-label`
+    - keeps the existing mobile overlay-sidebar flow unchanged
+    - file:
+      - [`apps/admin/src/layouts/AdminShell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/layouts/AdminShell.astro)
+  - rolled the shared pane contract through the first four list/workspace-heavy operator surfaces:
+    - `articles` now uses a shared resizable/collapsible preview pane and reopens it automatically when a preview row is selected:
+      - [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro)
+    - `clusters` now uses the same shared preview-pane contract:
+      - [`apps/admin/src/pages/clusters.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/clusters.astro)
+    - `resources` now uses the same shared preview-pane contract:
+      - [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro)
+    - `user-interests` now uses the same shared workspace-pane contract for its queue/editor split and reopens the editor when create/focus links are used:
+      - [`apps/admin/src/pages/user-interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/user-interests.astro)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted code audit against:
+    - shared desktop sidebar persistence + compact rail behavior
+    - shared pane collapse/reopen behavior
+    - width-bounded resize logic
+    - first-rollout coverage on `articles`, `clusters`, `resources`, and `user-interests`
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - pre-existing repo hints remained non-blocking and unrelated to the shipped behavior
+  - `pnpm build`
+    - authoritative result:
+      - workspace build completed successfully
+      - existing admin Vite externalization warnings for `pg` remained unchanged and non-blocking
+  - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - `pnpm test:website:admin:compose`
+    - authoritative result:
+      - `status = website-admin-ok`
+      - provider/admin acceptance still passed through the updated authenticated shell while covering:
+        - `website`
+        - `api`
+        - `email_imap`
+  - `git diff --check --`
+- Что patch доказал:
+  - the admin can gain materially more usable width on dense desktop surfaces without a broader IA rewrite or any backend/API changes;
+  - compact sidebar state and per-surface pane state can both remain browser-only and still survive reloads and route changes cleanly;
+  - the first operator surfaces now share one consistent right-pane behavior instead of continuing to diverge through page-by-page grid layouts.
+
 ### 2026-04-22 — PATCH-ADMIN-THEME-SWITCHER — Added authenticated light/dark/system theme switching to the admin shell
 
 - Тип записи: patch archive

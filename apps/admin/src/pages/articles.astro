@@ -4,6 +4,7 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
+import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
 import {
   resolveArticleOperatorGuidance,
@@ -69,6 +70,7 @@ const articleViews = [
   { key: "blocked", label: "Blocked", count: articleRows.filter(({ article }) => String(article.visibility_state ?? "") === "blocked").length },
   { key: "recent-failures", label: "Recent failures", count: articleRows.filter(({ operatorState }) => String(operatorState.enrichmentState ?? "") === "failed" || String(operatorState.processingState ?? "") === "pending").length },
 ] as const;
+const ARTICLE_PANE_ID = "articles-preview";
 
 const selectedArticleRow =
   visibleArticleRows.find(({ article }) => String(article.doc_id ?? "") === selectedArticleId) ??
@@ -260,8 +262,17 @@ function shortId(value: unknown): string {
       </div>
     </details>
 
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
-      <section class="overflow-hidden rounded-xl border border-border bg-card">
+    <AdminWorkspacePane
+      paneId={ARTICLE_PANE_ID}
+      paneLabel="Article preview"
+      collapsedLabel="Preview"
+      defaultWidth={420}
+      minWidth={340}
+      maxWidth={620}
+      minMainWidth={540}
+    >
+      <Fragment slot="main">
+        <section class="overflow-hidden rounded-xl border border-border bg-card">
         {articles.total === 0 ? (
           <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles yet. New content will appear here after ingest runs.</p>
         ) : visibleArticleRows.length === 0 ? (
@@ -296,6 +307,7 @@ function shortId(value: unknown): string {
                         <div class="admin-table-cell-stack">
                           <a
                             href={resolvePreviewHref(articleId)}
+                            data-admin-pane-open-link={ARTICLE_PANE_ID}
                             class:list={[
                               "font-medium text-xs line-clamp-2 transition-colors",
                               isSelected ? "text-primary" : "hover:text-primary",
@@ -388,9 +400,10 @@ function shortId(value: unknown): string {
             </table>
           </div>
         )}
-      </section>
+        </section>
+      </Fragment>
 
-      <aside class="rounded-xl border border-border bg-card p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
+      <Fragment slot="pane">
         {selectedArticleRow ? (
           (() => {
             const { article: selectedArticle, operatorState, operatorGuidance } = selectedArticleRow;
@@ -398,8 +411,7 @@ function shortId(value: unknown): string {
             return (
               <div class="space-y-5">
                 <div>
-                  <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Preview</p>
-                  <h2 class="mt-2 text-lg font-semibold leading-tight">
+                  <h2 class="text-lg font-semibold leading-tight">
                     {String(selectedArticle.title ?? "Untitled article")}
                   </h2>
                   <p class="mt-2 text-sm text-muted-foreground">
@@ -494,8 +506,8 @@ function shortId(value: unknown): string {
             </p>
           </div>
         )}
-      </aside>
-    </div>
+      </Fragment>
+    </AdminWorkspacePane>
     {(articles.hasPrev || articles.hasNext) && (
       <PaginationNav
         page={articles.page}

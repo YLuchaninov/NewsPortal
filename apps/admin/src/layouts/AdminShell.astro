@@ -3,7 +3,9 @@ import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
 import { AdminLiveUpdateCoordinator } from "../components/AdminLiveUpdateCoordinator";
 import { AdminFlashToast } from "../components/AdminFlashToast";
+import AdminDesktopSidebarNav from "../components/AdminDesktopSidebarNav";
 import { AdminThemeToggle } from "../components/AdminThemeToggle";
+import { ADMIN_SIDEBAR_STORAGE_KEY } from "../components/admin-layout";
 import { ADMIN_THEME_STORAGE_KEY } from "../components/admin-theme";
 import { ADMIN_NAV_SECTIONS, findAdminNavSection } from "../lib/admin-ia";
 import { resolveAdminAppPath } from "../lib/server/browser-flow";
@@ -46,6 +48,17 @@ const icons: Record<string, string> = {
   database: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>`,
   "help-circle": `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>`,
 };
+const desktopNavSections = ADMIN_NAV_SECTIONS.map((group) => ({
+  label: group.label,
+  isActive: activeSection?.label === group.label,
+  items: group.items.map(({ href, label, icon, key }) => ({
+    href: appPath(href),
+    label,
+    key,
+    iconSvg: icons[icon],
+    isActive: activeNav === key,
+  })),
+}));
 ---
 
 <style is:global>
@@ -86,6 +99,60 @@ const icons: Record<string, string> = {
     align-items: flex-start;
     gap: 0.5rem;
   }
+
+  @media (min-width: 768px) {
+    html[data-admin-sidebar="compact"] [data-admin-sidebar] {
+      width: 4.75rem;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-brand-text],
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-section-label],
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-link-label],
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-user-meta],
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-signout-label] {
+      display: none;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-nav] {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-link] {
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-user-card] {
+      justify-content: center;
+      padding-left: 0.25rem;
+      padding-right: 0.25rem;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-signout] {
+      justify-content: center;
+      padding-left: 0.25rem;
+      padding-right: 0.25rem;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-footer] {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-expanded-footer] {
+      display: none;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-compact-footer] {
+      display: flex;
+    }
+
+    html[data-admin-sidebar="compact"] [data-admin-sidebar-active-section="true"] [data-admin-sidebar-section-marker] {
+      opacity: 1;
+    }
+  }
 </style>
 
 <html lang="en">
@@ -93,18 +160,34 @@ const icons: Record<string, string> = {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <script is:inline define:vars={{ adminThemeStorageKey: ADMIN_THEME_STORAGE_KEY }}>
+    <script
+      is:inline
+      define:vars={{
+        adminThemeStorageKey: ADMIN_THEME_STORAGE_KEY,
+        adminSidebarStorageKey: ADMIN_SIDEBAR_STORAGE_KEY,
+      }}
+    >
       (() => {
         const root = document.documentElement;
-        const storageKey = adminThemeStorageKey;
+        const themeStorageKey = adminThemeStorageKey;
+        const sidebarStorageKey = adminSidebarStorageKey;
         const isThemeMode = (value) =>
           value === "light" || value === "dark" || value === "system";
+        const isSidebarMode = (value) => value === "expanded" || value === "compact";
         const preference = (() => {
           try {
-            const stored = window.localStorage.getItem(storageKey);
+            const stored = window.localStorage.getItem(themeStorageKey);
             return isThemeMode(stored) ? stored : "system";
           } catch {
             return "system";
+          }
+        })();
+        const sidebarMode = (() => {
+          try {
+            const stored = window.localStorage.getItem(sidebarStorageKey);
+            return isSidebarMode(stored) ? stored : "expanded";
+          } catch {
+            return "expanded";
           }
         })();
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -112,6 +195,7 @@ const icons: Record<string, string> = {
           preference === "dark" ? "dark" : preference === "light" ? "light" : prefersDark ? "dark" : "light";
         root.dataset.themePreference = preference;
         root.dataset.theme = effectiveTheme;
+        root.dataset.adminSidebar = sidebarMode;
         root.classList.toggle("dark", effectiveTheme === "dark");
         root.style.colorScheme = effectiveTheme;
       })();
@@ -127,60 +211,26 @@ const icons: Record<string, string> = {
       <div class="relative z-10 flex h-screen overflow-hidden">
 
       <!-- Sidebar -->
-      <aside id="sidebar" class="hidden md:flex flex-col w-56 shrink-0 border-r border-border bg-card/88 backdrop-blur overflow-y-auto">
+      <aside
+        id="sidebar"
+        data-admin-sidebar
+        class="hidden md:flex flex-col w-56 shrink-0 border-r border-border bg-card/88 backdrop-blur overflow-y-auto transition-[width] duration-200"
+      >
         <!-- Logo -->
         <div class="flex h-14 items-center gap-2.5 px-4 border-b border-border shrink-0">
           <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">N</span>
-          <div>
+          <div data-admin-sidebar-brand-text>
             <p class="text-sm font-semibold leading-none">{DEFAULT_BRAND_CONFIG.productName}</p>
             <p class="text-[10px] text-muted-foreground">Admin Console</p>
           </div>
         </div>
 
-        <!-- Navigation -->
-        <nav class="flex-1 px-2 py-3 space-y-4">
-          {ADMIN_NAV_SECTIONS.map((group) => (
-            <div>
-              <p class="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>
-              {group.items.map(({ href, label, icon, key }) => (
-                <a
-                  href={appPath(href)}
-                  class={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
-                    activeNav === key
-                      ? "bg-primary/15 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                  }`}
-                >
-                  <span class="shrink-0" set:html={icons[icon]} />
-                  {label}
-                </a>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <!-- User section -->
-        {session && (
-          <div class="px-2 py-3 border-t border-border mt-auto shrink-0">
-            <div class="flex items-center gap-2 px-2 py-2 rounded-md bg-muted/50">
-              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-medium">
-                {session.userId.charAt(0).toUpperCase()}
-              </span>
-              <div class="flex-1 overflow-hidden">
-                <p class="text-xs font-medium truncate">Admin</p>
-                <p class="text-[10px] text-muted-foreground truncate">
-                  {session.roles.join(", ") || "viewer"}
-                </p>
-              </div>
-            </div>
-            <form method="post" action={appPath("/bff/auth/logout")} class="mt-2">
-              <button type="submit" class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                Sign out
-              </button>
-            </form>
-          </div>
-        )}
+        <AdminDesktopSidebarNav
+          sections={desktopNavSections}
+          session={session ? { userId: session.userId, roles: session.roles } : null}
+          logoutAction={appPath("/bff/auth/logout")}
+          client:load
+        />
       </aside>
 
       <!-- Main content -->
@@ -207,6 +257,19 @@ const icons: Record<string, string> = {
 
           <!-- Header actions -->
           <div class="flex items-center gap-2">
+            <button
+              type="button"
+              id="admin-sidebar-toggle"
+              class="hidden md:inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+              aria-label="Toggle compact sidebar"
+              title="Toggle compact sidebar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                <path d="M9 4v16"></path>
+              </svg>
+              <span class="ml-2 hidden lg:inline" id="admin-sidebar-toggle-label">Compact nav</span>
+            </button>
             <AdminThemeToggle client:load />
             <slot name="header-actions" />
           </div>
@@ -264,6 +327,38 @@ const icons: Record<string, string> = {
       const btn = document.getElementById("mobile-sidebar-btn");
       const overlay = document.getElementById("mobile-sidebar-overlay");
       const closeBtn = document.getElementById("close-mobile-sidebar");
+      const sidebarToggle = document.getElementById("admin-sidebar-toggle");
+      const sidebarToggleLabel = document.getElementById("admin-sidebar-toggle-label");
+      const sidebarStorageKey = "newsportal-admin-sidebar";
+      const root = document.documentElement;
+
+      const applySidebarMode = (mode: "expanded" | "compact") => {
+        root.dataset.adminSidebar = mode;
+        sidebarToggle?.setAttribute("aria-pressed", String(mode === "compact"));
+        sidebarToggle?.setAttribute(
+          "aria-label",
+          mode === "compact" ? "Expand sidebar" : "Compact sidebar"
+        );
+        sidebarToggle?.setAttribute(
+          "title",
+          mode === "compact" ? "Expand sidebar" : "Compact sidebar"
+        );
+        if (sidebarToggleLabel) {
+          sidebarToggleLabel.textContent =
+            mode === "compact" ? "Expand nav" : "Compact nav";
+        }
+      };
+
+      applySidebarMode(root.dataset.adminSidebar === "compact" ? "compact" : "expanded");
+
+      sidebarToggle?.addEventListener("click", () => {
+        const nextMode = root.dataset.adminSidebar === "compact" ? "expanded" : "compact";
+        applySidebarMode(nextMode);
+        try {
+          window.localStorage.setItem(sidebarStorageKey, nextMode);
+        } catch {}
+      });
+
       btn?.addEventListener("click", () => overlay?.classList.remove("hidden"));
       closeBtn?.addEventListener("click", () => overlay?.classList.add("hidden"));
       overlay?.addEventListener("click", (e) => {

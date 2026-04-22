@@ -3,6 +3,7 @@ import { DEFAULT_PAGE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
+import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -35,6 +36,7 @@ const selectedCluster =
   clusters.items.find((cluster) => String(cluster.cluster_id ?? "") === selectedClusterId) ??
   clusters.items[0] ??
   null;
+const CLUSTERS_PANE_ID = "clusters-preview";
 
 function resolvePageHref(nextPage: number): string {
   const target = new URL(Astro.url);
@@ -99,8 +101,17 @@ function asStringList(value: unknown): string[] {
       </p>
     </section>
 
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
-      <section class="overflow-hidden rounded-xl border border-border bg-card">
+    <AdminWorkspacePane
+      paneId={CLUSTERS_PANE_ID}
+      paneLabel="Cluster preview"
+      collapsedLabel="Preview"
+      defaultWidth={400}
+      minWidth={340}
+      maxWidth={600}
+      minMainWidth={540}
+    >
+      <Fragment slot="main">
+        <section class="overflow-hidden rounded-xl border border-border bg-card">
         {clusters.total === 0 ? (
           <div class="flex flex-col items-center justify-center py-16 text-center">
             <p class="font-medium text-sm">No clusters yet</p>
@@ -138,6 +149,7 @@ function asStringList(value: unknown): string[] {
                         <div class="admin-table-cell-stack">
                           <a
                             href={resolvePreviewHref(clusterId)}
+                            data-admin-pane-open-link={CLUSTERS_PANE_ID}
                             class:list={[
                               "font-medium text-sm transition-colors",
                               isSelected ? "text-primary" : "hover:text-primary",
@@ -171,6 +183,7 @@ function asStringList(value: unknown): string[] {
                         <div class="admin-table-actions min-w-0">
                           <a
                             href={resolvePreviewHref(clusterId)}
+                            data-admin-pane-open-link={CLUSTERS_PANE_ID}
                             class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
                           >
                             Preview
@@ -184,17 +197,17 @@ function asStringList(value: unknown): string[] {
             </table>
           </div>
         )}
-      </section>
+        </section>
+      </Fragment>
 
-      <aside class="rounded-xl border border-border bg-card p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
+      <Fragment slot="pane">
         {selectedCluster ? (
           (() => {
             const topPlaces = asStringList(selectedCluster.top_places);
             return (
               <div class="space-y-5">
                 <div>
-                  <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Preview</p>
-                  <h2 class="mt-2 text-lg font-semibold leading-tight">
+                  <h2 class="text-lg font-semibold leading-tight">
                     {String(selectedCluster.primary_title ?? selectedCluster.cluster_id ?? "Unnamed cluster")}
                   </h2>
                   <p class="mt-2 text-sm text-muted-foreground">
@@ -248,8 +261,8 @@ function asStringList(value: unknown): string[] {
             <p class="mt-2 text-sm text-muted-foreground">Pick a cluster row to inspect its event-level summary.</p>
           </div>
         )}
-      </aside>
-    </div>
+      </Fragment>
+    </AdminWorkspacePane>
     {(clusters.hasPrev || clusters.hasNext) && (
       <PaginationNav
         page={clusters.page}
