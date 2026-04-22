@@ -23,31 +23,40 @@
   --color-ring: hsl(var(--ring));
 }
 
-:root {
+:root,
+html[data-theme="light"] {
   --radius: 0.5rem;
 
-  --background: 35 30% 97%;
-  --foreground: 20 14% 10%;
+  --background: 35 28% 96%;
+  --foreground: 20 16% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 20 14% 10%;
+  --card-foreground: 20 16% 12%;
   --popover: 0 0% 100%;
-  --popover-foreground: 20 14% 10%;
+  --popover-foreground: 20 16% 12%;
   --primary: 18 65% 47%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 35 20% 93%;
-  --secondary-foreground: 20 14% 25%;
-  --muted: 35 15% 94%;
-  --muted-foreground: 20 10% 48%;
-  --accent: 35 25% 91%;
-  --accent-foreground: 20 14% 15%;
+  --secondary: 30 20% 92%;
+  --secondary-foreground: 20 18% 28%;
+  --muted: 30 18% 93%;
+  --muted-foreground: 20 12% 44%;
+  --accent: 32 24% 90%;
+  --accent-foreground: 20 16% 14%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 35 18% 88%;
-  --input: 35 18% 88%;
+  --border: 30 16% 84%;
+  --input: 30 16% 84%;
   --ring: 18 65% 47%;
+
+  --admin-shell-backdrop:
+    radial-gradient(circle at top left, rgba(196, 92, 47, 0.18), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 251, 246, 0.98), rgba(244, 238, 229, 1));
+  --admin-shell-grid-line: rgba(148, 163, 184, 0.12);
+  color-scheme: light;
 }
 
-.dark {
+html.dark,
+html[data-theme="dark"] {
   --background: 222 47% 6%;
   --foreground: 210 40% 93%;
   --card: 222 47% 9%;
@@ -56,6 +65,7 @@
   --popover-foreground: 215 20% 80%;
   --primary: 18 65% 58%;
   --primary-foreground: 0 0% 100%;
+  --destructive-foreground: 0 0% 100%;
   --secondary: 217 33% 14%;
   --secondary-foreground: 210 40% 90%;
   --muted: 217 33% 14%;
@@ -63,10 +73,16 @@
   --accent: 217 33% 17%;
   --accent-foreground: 210 40% 90%;
   --destructive: 0 55% 45%;
-  --destructive-foreground: 0 0% 100%;
   --border: 217 33% 18%;
   --input: 217 33% 18%;
   --ring: 18 65% 58%;
+
+  --admin-shell-backdrop:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.10), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 1));
+  --admin-shell-grid-line: rgba(148, 163, 184, 0.08);
+  color-scheme: dark;
 }
 
 * {
@@ -80,6 +96,17 @@ body {
   font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.admin-shell-backdrop {
+  background-image: var(--admin-shell-backdrop);
+}
+
+.admin-shell-grid {
+  background-image:
+    linear-gradient(var(--admin-shell-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--admin-shell-grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
 /* Scrollbar */

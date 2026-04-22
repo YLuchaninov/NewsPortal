@@ -211,7 +211,7 @@ function resolveLlmReviewMode(
         </div>
       ) : (
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[920px] text-sm">
+          <table class="admin-table w-full min-w-[920px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">System interest</th>
@@ -219,7 +219,7 @@ function resolveLlmReviewMode(
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Content kinds</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Priority</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Status</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+                <th class="admin-table-actions-col px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -245,11 +245,13 @@ function resolveLlmReviewMode(
                 return (
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
-                      <p class="text-sm font-semibold">{String(template.name ?? "Unnamed system interest")}</p>
-                      <p class="mt-1 max-w-lg line-clamp-2 text-sm text-muted-foreground">{String(template.description ?? "No description.")}</p>
+                      <div class="admin-table-cell-stack max-w-lg">
+                        <p class="text-sm font-semibold leading-5">{String(template.name ?? "Unnamed system interest")}</p>
+                        <p class="line-clamp-2 text-sm leading-6 text-muted-foreground">{String(template.description ?? "No description.")}</p>
+                      </div>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <div class="flex flex-wrap gap-2">
+                      <div class="admin-table-chip-wrap">
                         <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
                           {positiveCount} positive
                         </span>
@@ -262,7 +264,7 @@ function resolveLlmReviewMode(
                       </div>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <div class="flex max-w-xs flex-wrap gap-2">
+                      <div class="admin-table-chip-wrap max-w-xs">
                         {(allowedKinds.length > 0 ? allowedKinds : ["editorial", "listing", "entity", "document", "data_file", "api_payload"]).map((kind: string) => (
                           <span class="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
                             {kind}
@@ -271,35 +273,37 @@ function resolveLlmReviewMode(
                       </div>
                     </td>
                     <td class="px-5 py-4 align-top text-sm text-muted-foreground">
-                      <p>{String(template.priority ?? 1)}</p>
-                      <p class="mt-1 text-xs">
-                        {String(selectionProfilePolicy.strictness ?? "balanced")} · {unresolvedDecision}
-                      </p>
-                    </td>
-                    <td class="px-5 py-4 align-top">
-                      <div class="flex flex-wrap gap-2">
-                        <span class:list={[
-                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                          isActive
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                            : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
-                        ]}>
-                          {isActive ? "Active" : "Archived"}
-                        </span>
-                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                          unresolved:{unresolvedDecision}
-                        </span>
+                      <div class="admin-table-cell-stack">
+                        <p class="text-base font-semibold leading-none text-foreground">{String(template.priority ?? 1)}</p>
+                        <p class="text-xs leading-5">
+                          {String(selectionProfilePolicy.strictness ?? "balanced")} · {unresolvedDecision}
+                        </p>
                       </div>
-                      <p class="mt-2 text-xs text-muted-foreground">
-                        {profileStatus} · llm:{llmReviewMode}
-                      </p>
-                      <p class="mt-1 text-xs text-muted-foreground">
-                        candidate:{candidateSignalSource}
-                      </p>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <div class="flex flex-wrap gap-2">
-                        <a href={appPath(`/templates/interests/${interestTemplateId}/edit`)} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                      <div class="admin-table-cell-stack">
+                        <div class="admin-table-chip-wrap">
+                          <span class:list={[
+                            "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                            isActive
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                              : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                          ]}>
+                            {isActive ? "Active" : "Archived"}
+                          </span>
+                          <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                            unresolved:{unresolvedDecision}
+                          </span>
+                        </div>
+                        <div class="admin-table-meta text-xs text-muted-foreground">
+                          <p>{profileStatus} · llm:{llmReviewMode}</p>
+                          <p>candidate:{candidateSignalSource}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="admin-table-actions">
+                        <a href={appPath(`/templates/interests/${interestTemplateId}/edit`)} class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
                           Edit
                         </a>
                         <AdminConfirmAction
@@ -316,7 +320,7 @@ function resolveLlmReviewMode(
                             { name: "interestTemplateId", value: interestTemplateId },
                             { name: "redirectTo", value: currentListPath },
                           ]}
-                          triggerClassName={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
+                          triggerClassName={isActive ? "min-w-[7.5rem] justify-center border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "min-w-[7.5rem] justify-center border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
                           confirmClassName={isActive ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-emerald-600 text-white hover:bg-emerald-600/90"}
                           client:load
                         />
@@ -332,7 +336,7 @@ function resolveLlmReviewMode(
                             { name: "interestTemplateId", value: interestTemplateId },
                             { name: "redirectTo", value: currentListPath },
                           ]}
-                          triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                          triggerClassName="min-w-[7.5rem] justify-center border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
                           client:load
                         />
                       </div>

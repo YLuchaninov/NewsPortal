@@ -268,13 +268,13 @@ function shortId(value: unknown): string {
           <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles on this page match the current triage view. Switch views or try another page.</p>
         ) : (
           <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="admin-table w-full text-sm">
               <thead>
                 <tr class="border-b border-border">
                   <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Title</th>
                   <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">State</th>
                   <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Reactions</th>
-                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Moderation</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground sm:w-[8.5rem]">Moderation</th>
                 </tr>
               </thead>
               <tbody>
@@ -293,20 +293,22 @@ function shortId(value: unknown): string {
                       isSelected ? "bg-primary/5" : "hover:bg-muted/30",
                     ]}>
                       <td class="px-4 py-3 max-w-[320px]">
-                        <a
-                          href={resolvePreviewHref(articleId)}
-                          class:list={[
-                            "font-medium text-xs line-clamp-2 transition-colors",
-                            isSelected ? "text-primary" : "hover:text-primary",
-                          ]}
-                        >
-                          {String(a.title ?? "Untitled")}
-                        </a>
-                        <div class="mt-0.5 text-[10px] text-muted-foreground line-clamp-1">{String(a.lead ?? "")}</div>
-                        <div class="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                          <span>{String(a.source_name ?? a.channel_name ?? "Unknown source")}</span>
-                          <span>·</span>
-                          <span>{formatTimestamp(a.extracted_published_at ?? a.published_at)}</span>
+                        <div class="admin-table-cell-stack">
+                          <a
+                            href={resolvePreviewHref(articleId)}
+                            class:list={[
+                              "font-medium text-xs line-clamp-2 transition-colors",
+                              isSelected ? "text-primary" : "hover:text-primary",
+                            ]}
+                          >
+                            {String(a.title ?? "Untitled")}
+                          </a>
+                          <div class="text-[10px] text-muted-foreground line-clamp-1">{String(a.lead ?? "")}</div>
+                          <div class="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                            <span>{String(a.source_name ?? a.channel_name ?? "Unknown source")}</span>
+                            <span>·</span>
+                            <span>{formatTimestamp(a.extracted_published_at ?? a.published_at)}</span>
+                          </div>
                         </div>
                       </td>
                       <td class="px-4 py-3 hidden sm:table-cell">
@@ -337,43 +339,47 @@ function shortId(value: unknown): string {
                         </div>
                       </td>
                       <td class="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
-                        👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}
+                        <div class="admin-table-meta">
+                          <p>👍 {String(a.like_count ?? 0)} / 👎 {String(a.dislike_count ?? 0)}</p>
+                        </div>
                       </td>
                       <td class="px-4 py-3">
-                        {(() => {
-                          const articleTitle = String(a.title ?? "Untitled");
-                          const isBlocked = String(a.visibility_state ?? "") === "blocked";
+                        <div class="admin-table-actions min-w-0">
+                          {(() => {
+                            const articleTitle = String(a.title ?? "Untitled");
+                            const isBlocked = String(a.visibility_state ?? "") === "blocked";
 
-                          return (
-                            <AdminConfirmAction
-                              action={bffPaths.moderation}
-                              title={isBlocked ? "Restore article visibility" : "Block article"}
-                              description={
-                                isBlocked
-                                  ? `Restore "${articleTitle}" to collections and normal delivery.`
-                                  : `Hide "${articleTitle}" from collections and notifications until it is restored.`
-                              }
-                              triggerLabel={isBlocked ? "Unblock" : "Block"}
-                              confirmLabel={isBlocked ? "Unblock article" : "Block article"}
-                              fields={[
-                                { name: "docId", value: articleId },
-                                { name: "actionType", value: isBlocked ? "unblock" : "block" },
-                                { name: "redirectTo", value: currentPath },
-                              ]}
-                              triggerClassName={
-                                isBlocked
-                                  ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
-                                  : "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
-                              }
-                              confirmClassName={
-                                isBlocked
-                                  ? "bg-emerald-600 text-white hover:bg-emerald-600/90"
-                                  : ""
-                              }
-                              client:load
-                            />
-                          );
-                        })()}
+                            return (
+                              <AdminConfirmAction
+                                action={bffPaths.moderation}
+                                title={isBlocked ? "Restore article visibility" : "Block article"}
+                                description={
+                                  isBlocked
+                                    ? `Restore "${articleTitle}" to collections and normal delivery.`
+                                    : `Hide "${articleTitle}" from collections and notifications until it is restored.`
+                                }
+                                triggerLabel={isBlocked ? "Unblock" : "Block"}
+                                confirmLabel={isBlocked ? "Unblock article" : "Block article"}
+                                fields={[
+                                  { name: "docId", value: articleId },
+                                  { name: "actionType", value: isBlocked ? "unblock" : "block" },
+                                  { name: "redirectTo", value: currentPath },
+                                ]}
+                                triggerClassName={
+                                  isBlocked
+                                    ? "min-w-[7.5rem] justify-center border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                                    : "min-w-[7.5rem] justify-center border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+                                }
+                                confirmClassName={
+                                  isBlocked
+                                    ? "bg-emerald-600 text-white hover:bg-emerald-600/90"
+                                    : ""
+                                }
+                                client:load
+                              />
+                            );
+                          })()}
+                        </div>
                       </td>
                     </tr>
                   );

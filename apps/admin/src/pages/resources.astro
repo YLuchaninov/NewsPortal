@@ -350,7 +350,7 @@ function resolveResourcePreviewHref(resourceId: string): string {
           </div>
         ) : (
           <div class="overflow-x-auto">
-          <table class="w-full min-w-[1080px] text-sm">
+          <table class="admin-table w-full min-w-[1080px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Resource</th>
@@ -358,7 +358,7 @@ function resolveResourcePreviewHref(resourceId: string): string {
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Extraction</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Projection / selection</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Observed</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+                <th class="admin-table-actions-col px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -387,89 +387,101 @@ function resolveResourcePreviewHref(resourceId: string): string {
                       : "",
                   ]}>
                     <td class="px-5 py-4 align-top">
-                      <a href={previewHref} class="text-sm font-semibold hover:text-primary">
-                        {String(resource.title ?? "Untitled resource")}
-                      </a>
-                      <p class="mt-1 text-xs text-muted-foreground">{String(resource.channel_name ?? "Unknown website channel")}</p>
-                      <p class="mt-2 max-w-xl break-all text-sm text-muted-foreground">{String(resource.final_url ?? resource.url ?? "—")}</p>
-                    </td>
-                    <td class="px-5 py-4 align-top">
-                      <div class="flex flex-wrap gap-2">
-                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(String(resource.resource_kind ?? "unknown"))}`}>
-                          {String(resource.resource_kind ?? "unknown")}
-                        </span>
-                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${isBrowserDiscoverySource(resource.discovery_source) ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200" : "bg-muted text-muted-foreground"}`}>
-                          {formatDiscoverySource(resource.discovery_source)}
-                        </span>
+                      <div class="admin-table-cell-stack max-w-xl">
+                        <a href={previewHref} class="text-sm font-semibold leading-5 hover:text-primary">
+                          {String(resource.title ?? "Untitled resource")}
+                        </a>
+                        <p class="text-xs text-muted-foreground">{String(resource.channel_name ?? "Unknown website channel")}</p>
+                        <p class="break-all text-sm leading-6 text-muted-foreground">{String(resource.final_url ?? resource.url ?? "—")}</p>
                       </div>
-                      <p class="mt-3 text-xs text-muted-foreground">
-                        docs {String(resource.documents_count ?? 0)} · media {String(resource.media_count ?? 0)} · links {String(resource.links_out_count ?? 0)}
-                      </p>
-                      {isBrowserDiscoverySource(resource.discovery_source) && (
-                        <p class="mt-2 text-xs text-muted-foreground">
-                          Browser-assisted discovery supplied this resource instead of the cheap static modes.
-                        </p>
-                      )}
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(String(resource.extraction_state ?? "pending"))}`}>
-                        {String(resource.extraction_state ?? "pending")}
-                      </span>
-                      <p class="mt-3 text-xs text-muted-foreground">
-                        {resource.extraction_error ? String(resource.extraction_error) : "No extraction error."}
-                      </p>
-                    </td>
-                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
-                      {resource.projected_article_id ? (
-                        <>
-                          <p class="font-medium text-foreground">Projected</p>
-                          <a href={projectedArticleHref ?? "#"} class="mt-1 inline-flex text-xs text-primary hover:underline">
-                            {String(resource.projected_article_title ?? resource.projected_article_id)}
-                          </a>
-                        </>
-                      ) : (
-                        <>
-                          <p class="font-medium text-foreground">Not projected</p>
-                          <p class="mt-1 text-xs text-muted-foreground">
-                            {projectionError || "Kept as acquisition/projection diagnostics only."}
-                          </p>
-                        </>
-                      )}
-                      <div class="mt-3 flex flex-wrap gap-2">
-                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(projectionState)}`}>
-                          projection:{projectionState}
-                        </span>
-                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${selectionBadgeClass(selectionMode)}`}>
-                          mode:{selectionMode}
-                        </span>
-                        {selectionDecision && (
-                          <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${selectionBadgeClass(selectionDecision)}`}>
-                            decision:{selectionDecision}
+                      <div class="admin-table-cell-stack">
+                        <div class="admin-table-chip-wrap">
+                          <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(String(resource.resource_kind ?? "unknown"))}`}>
+                            {String(resource.resource_kind ?? "unknown")}
                           </span>
-                        )}
+                          <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${isBrowserDiscoverySource(resource.discovery_source) ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200" : "bg-muted text-muted-foreground"}`}>
+                            {formatDiscoverySource(resource.discovery_source)}
+                          </span>
+                        </div>
+                        <div class="admin-table-meta text-xs text-muted-foreground">
+                          <p>
+                            docs {String(resource.documents_count ?? 0)} · media {String(resource.media_count ?? 0)} · links {String(resource.links_out_count ?? 0)}
+                          </p>
+                          {isBrowserDiscoverySource(resource.discovery_source) && (
+                            <p>
+                              Browser-assisted discovery supplied this resource instead of the cheap static modes.
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <p class="mt-2 text-xs text-muted-foreground">{selectionSummary}</p>
-                      <p class="mt-1 text-xs text-muted-foreground">
-                        next:{selectionGuidance.summary}
-                      </p>
-                    </td>
-                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
-                      <p>Discovered: {formatTimestamp(resource.discovered_at)}</p>
-                      <p class="mt-1">Published: {formatTimestamp(resource.published_at)}</p>
-                      <p class="mt-1">Updated: {formatTimestamp(resource.updated_at)}</p>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <div class="flex flex-wrap gap-2">
-                        <a href={previewHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                      <div class="admin-table-cell-stack">
+                        <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(String(resource.extraction_state ?? "pending"))}`}>
+                          {String(resource.extraction_state ?? "pending")}
+                        </span>
+                        <p class="text-xs leading-5 text-muted-foreground">
+                          {resource.extraction_error ? String(resource.extraction_error) : "No extraction error."}
+                        </p>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                      <div class="admin-table-cell-stack">
+                        {resource.projected_article_id ? (
+                          <div class="admin-table-meta">
+                            <p class="font-medium text-foreground">Projected</p>
+                            <a href={projectedArticleHref ?? "#"} class="inline-flex text-xs text-primary hover:underline">
+                              {String(resource.projected_article_title ?? resource.projected_article_id)}
+                            </a>
+                          </div>
+                        ) : (
+                          <div class="admin-table-meta">
+                            <p class="font-medium text-foreground">Not projected</p>
+                            <p class="text-xs text-muted-foreground">
+                              {projectionError || "Kept as acquisition/projection diagnostics only."}
+                            </p>
+                          </div>
+                        )}
+                        <div class="admin-table-chip-wrap">
+                          <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass(projectionState)}`}>
+                            projection:{projectionState}
+                          </span>
+                          <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${selectionBadgeClass(selectionMode)}`}>
+                            mode:{selectionMode}
+                          </span>
+                          {selectionDecision && (
+                            <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${selectionBadgeClass(selectionDecision)}`}>
+                              decision:{selectionDecision}
+                            </span>
+                          )}
+                        </div>
+                        <div class="admin-table-meta text-xs text-muted-foreground">
+                          <p>{selectionSummary}</p>
+                          <p>next:{selectionGuidance.summary}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                      <div class="admin-table-meta">
+                        <p>Discovered: {formatTimestamp(resource.discovered_at)}</p>
+                        <p>Published: {formatTimestamp(resource.published_at)}</p>
+                        <p>Updated: {formatTimestamp(resource.updated_at)}</p>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 align-top">
+                      <div class="admin-table-actions">
+                        <a href={previewHref} class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
                           Preview
                         </a>
                         {projectedArticleHref && (
-                          <a href={projectedArticleHref} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                          <a href={projectedArticleHref} class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
                             Article
                           </a>
                         )}
                         {sourceHref && (
-                          <a href={sourceHref} target="_blank" rel="noopener noreferrer" class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                          <a href={sourceHref} target="_blank" rel="noopener noreferrer" class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
                             Open source
                           </a>
                         )}

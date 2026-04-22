@@ -22,6 +22,7 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current memory
 
 - Runtime core инициализирован; ordinary implementation work разрешен.
+- On 2026-04-22 `PATCH-ADMIN-THEME-SWITCHER` completed and was archived after adding authenticated admin `light / dark / system` switching with browser persistence, early shell bootstrap, and explicit light/dark token layers while leaving sign-in fixed dark.
 - On 2026-04-22 `C-ADMIN-UX-OPERATOR-CONSOLE-REDESIGN` reached capability-level completion and was archived into `docs/history.md`.
 - On 2026-04-22 `SWEEP-ADMIN-MICROCOPY-CONSISTENCY` completed and was archived after normalizing the highest-traffic admin copy surfaces.
 - On 2026-04-22 `SWEEP-ADMIN-LOW-TRAFFIC-COPY-QA` completed and was archived after cleaning up remaining low-traffic admin empty states, fallback text, and confirm copy on discovery/resources/automation surfaces.
@@ -41,6 +42,22 @@ Durable completed detail переносится в `docs/history.md`.
   - goal: keep long KPI labels readable and rhythmically aligned inside narrow cards instead of breaking at awkward points;
   - intended touch set: the affected resources KPI surface plus synced process files if the patch closes.
 - On 2026-04-22 `PATCH-ADMIN-RESOURCE-KPI-LABEL-WRAP` completed and was archived after stabilizing the remaining narrow KPI-card labels on the resources surface.
+- On 2026-04-22 a new admin table-alignment follow-up started after screenshot review exposed inconsistent content rhythm inside operator table/list rows:
+  - goal: normalize content alignment across admin tables and dense list rows so labels, badges, metrics, and action stacks share a clearer row rhythm;
+  - intended touch set: relevant `apps/admin/**` table/list surfaces plus synced process files if the sweep closes.
+- On 2026-04-22 `SWEEP-ADMIN-TABLE-CONTENT-ALIGNMENT` completed and was archived after normalizing the repeated table-row rhythm across dense admin catalogs, status cells, and action columns.
+- On 2026-04-22 a small admin shell visual follow-up started after the user reported that the dark decorative background was only still visible on the sign-in screen:
+  - goal: restore a polished dark shell background for the authenticated admin workspace without reopening broader layout or color-token work;
+  - intended touch set: `apps/admin/src/layouts/AdminShell.astro` plus synced process files if the patch closes.
+- On 2026-04-22 `PATCH-ADMIN-SHELL-BACKGROUND-RESTORE` completed and was archived after restoring the decorative dark background on the authenticated admin shell.
+- On 2026-04-22 a tiny admin header follow-up started after the user reported that the middle summary line in the authenticated header is redundant and hurts the layout:
+  - goal: remove the redundant section-summary line from the shared admin header while preserving a functional section label plus breadcrumb/title composition;
+  - intended touch set: `apps/admin/src/layouts/AdminShell.astro` plus synced process files if the patch closes.
+- On 2026-04-22 `PATCH-ADMIN-HEADER-SUMMARY-REMOVE` completed and was archived after removing the redundant middle summary line from the shared admin header.
+- On 2026-04-22 a small admin theme follow-up started after the user rebuilt the admin and confirmed that token-based surfaces were still rendering in a light palette:
+  - goal: make the shared admin token palette truly dark by default so cards, chrome, and content surfaces all render consistently dark instead of mixing a dark shell with light `bg-card` surfaces;
+  - intended touch set: `apps/admin/src/styles/globals.css` plus synced process files if the patch closes.
+- On 2026-04-22 `PATCH-ADMIN-DARK-THEME-BASELINE` completed and was archived after switching the shared admin token baseline to dark-first so token-based surfaces render consistently dark after rebuild.
 - The shipped admin now follows the approved operator IA across:
   - shell/navigation;
   - dashboard;
@@ -70,18 +87,14 @@ Durable completed detail переносится в `docs/history.md`.
 
 ## Worktree coherence
 
-- Current dirty worktree is expected and aligns with the archived admin UX capability, the archived microcopy sweeps, the archived docs consistency sweep, the archived admin UI polish sweep, the archived admin KPI follow-up patch, the archived resources KPI follow-up patch, and synced process files:
+- Current dirty worktree is expected and aligns with the archived admin theme-switcher patch plus earlier archived admin UI work:
   - `apps/admin/**`
-  - `EXAMPLES.md`
-  - `README.md`
   - `docs/**`
-  - `docs/work.md`
-  - `docs/history.md`
 - No secondary active item is currently tracked.
 
 ## Next recommended action
 
-- no active KPI-label follow-up is required; open a new item only if another screenshot-driven visual edge case appears.
+- wait for the next user-directed admin polish or theme follow-up; authenticated admin theme switching is closed and archived.
 
 ## Archive sync status
 
@@ -99,6 +112,7 @@ Durable completed detail переносится в `docs/history.md`.
   - `pnpm typecheck`
   - `pnpm build`
   - `pnpm test:web:viewports`
+  - `git diff --check --`
   - `pnpm test:website:admin:compose`
   - `pnpm test:discovery:admin:compose`
   - `pnpm integration_tests`
@@ -108,6 +122,6 @@ Durable completed detail переносится в `docs/history.md`.
 
 ## Handoff state
 
-- No live work item is active right now.
-- The parent admin UX capability, both admin copy sweeps, the docs consistency sweep, the admin UI polish sweep, the KPI follow-up patch, and the resources KPI-label patch are archived in `docs/history.md`.
-- The next agent should treat the current admin visual state as synced unless the user explicitly asks for another follow-up screenshot pass.
+- There is no active admin UI work item right now.
+- The parent admin UX capability, both admin copy sweeps, the docs consistency sweep, the admin UI polish sweep, the KPI follow-up patch, the resources KPI-label patch, the admin table-alignment sweep, the admin shell background patch, the admin header summary patch, and the admin dark-theme patch are archived in `docs/history.md`.
+- The authenticated theme switcher is also archived in `docs/history.md`; the next agent should keep any future theme follow-up explicit and should not silently expand into sign-in theming or server persistence unless the user asks for that next slice.

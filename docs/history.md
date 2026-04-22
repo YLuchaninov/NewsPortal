@@ -14,6 +14,158 @@
 
 ## Completed items
 
+### 2026-04-22 — PATCH-ADMIN-THEME-SWITCHER — Added authenticated light/dark/system theme switching to the admin shell
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the dark-baseline follow-up, the authenticated admin was consistently dark again, but it was still hard-locked to one palette. The user asked for a proper operator-facing theme switcher instead of another one-off dark tweak: authenticated admin only, browser-persisted, no DB/BFF changes, and no reopening of the sign-in surface.
+- Что изменилось:
+  - introduced a small admin-only theme contract with browser persistence, `ThemeMode` validation, effective-theme resolution, and DOM application helpers:
+    - [`apps/admin/src/components/admin-theme.ts`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/admin-theme.ts)
+  - added a compact header theme control as a client island using the shared dropdown primitives and immediate DOM updates for `light`, `dark`, and `system`:
+    - [`apps/admin/src/components/AdminThemeToggle.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/AdminThemeToggle.tsx)
+  - updated the authenticated admin shell so it no longer hardcodes `class="dark"`, now bootstraps the effective theme in `<head>` before hydration, and always exposes the switcher in the shared top bar:
+    - [`apps/admin/src/layouts/AdminShell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/layouts/AdminShell.astro)
+  - replaced the temporary dark-first token hack with an explicit bidirectional light/dark token model plus shell backdrop variables while keeping `.dark` compatibility for the fixed dark sign-in surface:
+    - [`apps/admin/src/styles/globals.css`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/styles/globals.css)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted shell/theme audit for:
+    - early theme bootstrap before hydration
+    - browser-only persistence
+    - preserved fixed-dark sign-in contract
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `pnpm build`
+    - authoritative result:
+      - workspace build completed successfully
+      - existing admin Vite externalization warnings for `pg` remained unchanged and non-blocking
+  - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - `git diff --check --`
+- Что patch доказал:
+  - authenticated admin theme switching can live entirely in the browser without adding new DB truth or BFF endpoints;
+  - the admin shell now supports `light`, `dark`, and `system` consistently across SSR shell render, client hydration, and route changes;
+  - the sign-in screen remains intentionally fixed dark and is no longer coupled to the authenticated admin token baseline.
+
+### 2026-04-22 — PATCH-ADMIN-DARK-THEME-BASELINE — Switched the shared admin token baseline to dark-first
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after rebuild, the user confirmed that the authenticated admin was still rendering a mixed shell: explicit decorative gradients were dark, but token-driven surfaces like `bg-card`, `bg-background`, `bg-muted`, and shared chrome still used a light baseline. The issue was in the admin-wide token defaults rather than page-specific layout code.
+- Что изменилось:
+  - switched the shared admin CSS token baseline from light-first to dark-first by moving the dark palette into `:root` and leaving the previous light palette as an explicit `.light` opt-in that the admin does not currently use:
+    - [`apps/admin/src/styles/globals.css`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/styles/globals.css)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted admin theme-token audit against the rebuilt mixed dark/light shell
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - `git diff --check --`
+- Что patch доказал:
+  - the “only login is dark” regression was a token-baseline problem, not just a missing shell gradient;
+  - after rebuild, shared admin surfaces can now render consistently as a dark console instead of mixing a dark background with light cards and chrome.
+
+### 2026-04-22 — PATCH-ADMIN-HEADER-SUMMARY-REMOVE — Removed the redundant middle summary line from the shared admin header
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: the user called out that the authenticated admin header had one line too many. The section label was useful, and the breadcrumb/title line was useful, but the extra item-summary line in the middle created visual noise like `Rules / Global selection logic and reusable editorial policy. / Dashboard/System Interests` and made the shared header feel less functional.
+- Что изменилось:
+  - removed the shared active-item summary line from the authenticated admin shell and tightened the remaining header stack so it now renders as a compact `section label + breadcrumb/title` composition:
+    - [`apps/admin/src/layouts/AdminShell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/layouts/AdminShell.astro)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted shared-header audit against the reported redundant middle line
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the clutter came from one shell-level summary row rather than page-specific breadcrumbs;
+  - the header remains orienting and functional with just the section label and the page breadcrumb/title layer.
+
+### 2026-04-22 — PATCH-ADMIN-SHELL-BACKGROUND-RESTORE — Restored the decorative dark background on the authenticated admin shell
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the table-alignment pass, the user reported that the rich dark background still existed on the sign-in screen but not on the authenticated admin workspace. The issue was not color tokens or tables themselves: `sign-in.astro` had its own decorative layered backdrop, while `AdminShell.astro` was still rendering the app on a flat `bg-background` surface.
+- Что изменилось:
+  - restored a dark multi-layer shell backdrop for authenticated admin pages with subtle radial gradients and a low-contrast grid, and made the shell chrome slightly translucent so the background is visible without hurting readability:
+    - [`apps/admin/src/layouts/AdminShell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/layouts/AdminShell.astro)
+  - synced live process state after the patch closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted shell-vs-sign-in background audit
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this patch
+  - `git diff --check --`
+- Что patch доказал:
+  - the missing “beautiful dark background” was a shell-level backdrop omission rather than a broken theme or table-styling regression;
+  - the authenticated admin now visually belongs to the same dark operator product family as the sign-in screen again.
+
+### 2026-04-22 — SWEEP-ADMIN-TABLE-CONTENT-ALIGNMENT — Normalized row rhythm, status stacks, and action rails across admin tables
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: after the earlier KPI/disclosure polish, screenshot review showed that the remaining visual drift had moved into dense table rows. The issue was broader than one broken page: multiple admin catalogs still mixed unstructured `align-top` cells, uneven primary/secondary text rhythm, chip groups with ad hoc spacing, and action columns that wrapped differently from page to page.
+- Что изменилось:
+  - introduced a small admin-only table helper contract for vertical alignment, cell stacks, metadata stacks, chip wraps, and fixed-width action rails:
+    - [`apps/admin/src/layouts/AdminShell.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/layouts/AdminShell.astro)
+  - normalized the densest operator catalogs so titles, badge groups, numeric/status metadata, and action buttons now follow a steadier row rhythm on:
+    - [`apps/admin/src/pages/templates/interests.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/interests.astro)
+    - [`apps/admin/src/pages/templates/llm.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/templates/llm.astro)
+    - [`apps/admin/src/pages/resources.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/resources.astro)
+    - [`apps/admin/src/pages/channels.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/channels.astro)
+  - aligned the lighter operational tables with the same vertical contract so simpler rows no longer drift against the denser catalogs:
+    - [`apps/admin/src/pages/articles.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/articles.astro)
+    - [`apps/admin/src/pages/clusters.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/clusters.astro)
+    - [`apps/admin/src/pages/index.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/index.astro)
+    - [`apps/admin/src/pages/observability.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/observability.astro)
+    - [`apps/admin/src/pages/discovery.astro`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/discovery.astro)
+    - [`apps/admin/src/components/BulkChannelImport.tsx`](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/components/BulkChannelImport.tsx)
+  - synced live process state after the sweep closed:
+    - [`docs/work.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- Что было доказано:
+  - targeted audit of all shipped admin `<table>` surfaces plus the screenshoted dense-rule row pattern
+  - `pnpm typecheck`
+    - authoritative result:
+      - `0` errors
+      - existing repo-wide hints remained non-blocking and unrelated to this sweep
+  - `pnpm test:web:viewports`
+    - authoritative result:
+      - `status = web-viewports-ok`
+      - viewports covered:
+        - `desktop`
+        - `tablet`
+        - `mobile`
+  - `git diff --check --`
+- Что sweep доказал:
+  - the reported misalignment was a repeated admin-table contract problem rather than a one-off screenshot bug;
+  - dense rows across rules, sources, discovery, and lighter ops tables now share a more consistent structure for primary text, secondary text, chip groups, and action rails without reopening broader IA work.
+
 ### 2026-04-22 — PATCH-ADMIN-RESOURCE-KPI-LABEL-WRAP — Stabilized the remaining narrow KPI-card labels on the resources surface
 
 - Тип записи: patch archive

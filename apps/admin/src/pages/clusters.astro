@@ -113,13 +113,13 @@ function asStringList(value: unknown): string[] {
           </div>
         ) : (
           <div class="overflow-x-auto">
-            <table class="w-full min-w-[760px] text-sm">
+            <table class="admin-table w-full min-w-[760px] text-sm">
               <thead>
                 <tr class="border-b border-border">
                   <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Cluster</th>
                   <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Coverage</th>
                   <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Signals</th>
-                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Open</th>
+                  <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground w-[8.5rem]">Open</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,20 +135,24 @@ function asStringList(value: unknown): string[] {
                       isSelected ? "bg-primary/5" : "hover:bg-muted/30",
                     ]}>
                       <td class="px-4 py-3">
-                        <a
-                          href={resolvePreviewHref(clusterId)}
-                          class:list={[
-                            "font-medium text-sm transition-colors",
-                            isSelected ? "text-primary" : "hover:text-primary",
-                          ]}
-                        >
-                          {String(cluster.primary_title ?? cluster.cluster_id ?? "Unnamed cluster")}
-                        </a>
-                        <p class="mt-1 text-[11px] text-muted-foreground">cluster:{clusterId ? clusterId.slice(0, 8) : "—"}</p>
+                        <div class="admin-table-cell-stack">
+                          <a
+                            href={resolvePreviewHref(clusterId)}
+                            class:list={[
+                              "font-medium text-sm transition-colors",
+                              isSelected ? "text-primary" : "hover:text-primary",
+                            ]}
+                          >
+                            {String(cluster.primary_title ?? cluster.cluster_id ?? "Unnamed cluster")}
+                          </a>
+                          <p class="text-[11px] text-muted-foreground">cluster:{clusterId ? clusterId.slice(0, 8) : "—"}</p>
+                        </div>
                       </td>
                       <td class="px-4 py-3 text-xs text-muted-foreground">
-                        <p>{String(cluster.article_count ?? 0)} article{Number(cluster.article_count ?? 0) === 1 ? "" : "s"}</p>
-                        <p class="mt-1">Updated {formatTimestamp(cluster.updated_at ?? cluster.created_at)}</p>
+                        <div class="admin-table-meta">
+                          <p>{String(cluster.article_count ?? 0)} article{Number(cluster.article_count ?? 0) === 1 ? "" : "s"}</p>
+                          <p>Updated {formatTimestamp(cluster.updated_at ?? cluster.created_at)}</p>
+                        </div>
                       </td>
                       <td class="px-4 py-3 text-xs text-muted-foreground">
                         {topPlaces.length > 0 ? (
@@ -164,12 +168,14 @@ function asStringList(value: unknown): string[] {
                         )}
                       </td>
                       <td class="px-4 py-3">
-                        <a
-                          href={resolvePreviewHref(clusterId)}
-                          class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
-                        >
-                          Preview
-                        </a>
+                        <div class="admin-table-actions min-w-0">
+                          <a
+                            href={resolvePreviewHref(clusterId)}
+                            class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent"
+                          >
+                            Preview
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   );

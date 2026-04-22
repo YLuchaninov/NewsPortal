@@ -185,14 +185,14 @@ function resolveViewHref(view: string): string {
         </div>
       ) : (
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[900px] text-sm">
+          <table class="admin-table w-full min-w-[900px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Template</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scope</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Status</th>
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Preview</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+                <th class="admin-table-actions-col px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -202,9 +202,13 @@ function resolveViewHref(view: string): string {
                 return (
                   <tr class="border-b border-border last:border-b-0">
                     <td class="px-5 py-4 align-top">
-                      <p class="text-sm font-semibold">{String(template.name ?? "Unnamed template")}</p>
-                      <p class="mt-1 text-xs text-muted-foreground">Language: {String(template.language ?? "Any")}</p>
-                      <p class="mt-1 text-xs text-muted-foreground">Updated {fmt(template.updated_at)}</p>
+                      <div class="admin-table-cell-stack">
+                        <p class="text-sm font-semibold leading-5">{String(template.name ?? "Unnamed template")}</p>
+                        <div class="admin-table-meta text-xs text-muted-foreground">
+                          <p>Language: {String(template.language ?? "Any")}</p>
+                          <p>Updated {fmt(template.updated_at)}</p>
+                        </div>
+                      </div>
                     </td>
                     <td class="px-5 py-4 align-top">
                       <span class:list={[
@@ -221,24 +225,28 @@ function resolveViewHref(view: string): string {
                       </span>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <span class:list={[
-                        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                        isActive
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                          : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
-                      ]}>
-                        {isActive ? "Active" : "Archived"}
-                      </span>
-                      <p class="mt-2 text-xs text-muted-foreground">Version {String(template.version ?? 1)}</p>
+                      <div class="admin-table-cell-stack">
+                        <span class:list={[
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                          isActive
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+                        ]}>
+                          {isActive ? "Active" : "Archived"}
+                        </span>
+                        <p class="text-xs text-muted-foreground">Version {String(template.version ?? 1)}</p>
+                      </div>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <p class="max-w-md line-clamp-3 text-sm text-muted-foreground font-mono">
-                        {String(template.template_text ?? "")}
-                      </p>
+                      <div class="admin-table-cell-stack">
+                        <p class="max-w-md line-clamp-3 text-sm leading-6 text-muted-foreground font-mono">
+                          {String(template.template_text ?? "")}
+                        </p>
+                      </div>
                     </td>
                     <td class="px-5 py-4 align-top">
-                      <div class="flex flex-wrap gap-2">
-                        <a href={appPath(`/templates/llm/${promptTemplateId}/edit`)} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                      <div class="admin-table-actions">
+                        <a href={appPath(`/templates/llm/${promptTemplateId}/edit`)} class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
                           Edit
                         </a>
                         <AdminConfirmAction
@@ -255,7 +263,7 @@ function resolveViewHref(view: string): string {
                             { name: "promptTemplateId", value: promptTemplateId },
                             { name: "redirectTo", value: currentListPath },
                           ]}
-                          triggerClassName={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
+                          triggerClassName={isActive ? "min-w-[7.5rem] justify-center border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20" : "min-w-[7.5rem] justify-center border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20"}
                           confirmClassName={isActive ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-emerald-600 text-white hover:bg-emerald-600/90"}
                           client:load
                         />
@@ -271,7 +279,7 @@ function resolveViewHref(view: string): string {
                             { name: "promptTemplateId", value: promptTemplateId },
                             { name: "redirectTo", value: currentListPath },
                           ]}
-                          triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                          triggerClassName="min-w-[7.5rem] justify-center border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
                           client:load
                         />
                       </div>

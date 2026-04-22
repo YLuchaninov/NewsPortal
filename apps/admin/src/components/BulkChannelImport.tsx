@@ -847,7 +847,7 @@ export function BulkChannelImport({
             Field reference
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2 rounded-md border border-border bg-muted/30 p-3">
-            <table className="w-full text-[11px]">
+            <table className="admin-table w-full text-[11px]">
               <thead>
                 <tr className="border-b border-border">
                   <th className="py-1 text-left font-medium">Field</th>
@@ -858,14 +858,14 @@ export function BulkChannelImport({
               <tbody>
                 {Object.entries(viewModel.fieldSchema).map(([field, info]) => (
                   <tr key={field} className="border-b border-border last:border-0">
-                    <td className="py-1 font-mono">
+                    <td className="py-1 align-top font-mono">
                       {field}
                       {viewModel.requiredFields.includes(field) && (
                         <span className="ml-0.5 text-red-500">*</span>
                       )}
                     </td>
-                    <td className="py-1 text-muted-foreground">{info.type}</td>
-                    <td className="py-1 text-muted-foreground">{info.description}</td>
+                    <td className="py-1 align-top text-muted-foreground">{info.type}</td>
+                    <td className="py-1 align-top text-muted-foreground">{info.description}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1749,7 +1749,7 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
           <p class="mt-1 text-sm text-muted-foreground">{hypotheses.total} hypothesis{hypotheses.total === 1 ? "" : "es"} total</p>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[1120px] text-sm">
+          <table class="admin-table w-full min-w-[1120px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
                 <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mission</th>
@@ -1768,24 +1768,32 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
               ) : hypothesisItems.map((hypothesis) => (
                 <tr class="border-b border-border last:border-b-0">
                   <td class="px-5 py-4 align-top">
-                    <div class="font-medium">{String(hypothesis.mission_title ?? "—")}</div>
-                    <div class="mt-1 text-xs text-muted-foreground">{String(hypothesis.status ?? "pending")}</div>
+                    <div class="admin-table-meta">
+                      <div class="font-medium">{String(hypothesis.mission_title ?? "—")}</div>
+                      <div class="text-xs text-muted-foreground">{String(hypothesis.status ?? "pending")}</div>
+                    </div>
                   </td>
                   <td class="px-5 py-4 align-top">
-                    <div>{String(hypothesis.class_key ?? "—")}</div>
-                    <div class="mt-1 text-xs text-muted-foreground">{String(hypothesis.tactic_key ?? "default")}</div>
+                    <div class="admin-table-meta">
+                      <div>{String(hypothesis.class_key ?? "—")}</div>
+                      <div class="text-xs text-muted-foreground">{String(hypothesis.tactic_key ?? "default")}</div>
+                    </div>
                   </td>
                   <td class="px-5 py-4 align-top text-muted-foreground">{String(hypothesis.search_query ?? "—")}</td>
                   <td class="px-5 py-4 align-top text-muted-foreground">{String(hypothesis.expected_value ?? "—")}</td>
                   <td class="px-5 py-4 align-top">
-                    <div>{String(hypothesis.sources_found ?? 0)} found</div>
-                    <div class="mt-1 text-xs text-muted-foreground">
-                      {String(hypothesis.sources_approved ?? 0)} approved · {asFloat(hypothesis.effectiveness, 0).toFixed(2)} effectiveness
+                    <div class="admin-table-meta">
+                      <div>{String(hypothesis.sources_found ?? 0)} found</div>
+                      <div class="text-xs text-muted-foreground">
+                        {String(hypothesis.sources_approved ?? 0)} approved · {asFloat(hypothesis.effectiveness, 0).toFixed(2)} effectiveness
+                      </div>
                     </div>
                   </td>
                   <td class="px-5 py-4 align-top">
-                    <div>{fmtUsd(hypothesis.execution_cost_usd)}</div>
-                    <div class="mt-1 text-xs text-muted-foreground">{fmtMoney(hypothesis.execution_cost_cents ?? 0)}</div>
+                    <div class="admin-table-meta">
+                      <div>{fmtUsd(hypothesis.execution_cost_usd)}</div>
+                      <div class="text-xs text-muted-foreground">{fmtMoney(hypothesis.execution_cost_cents ?? 0)}</div>
+                    </div>
                   </td>
                 </tr>
               ))}

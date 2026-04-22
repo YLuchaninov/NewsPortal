@@ -3,7 +3,9 @@ import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
 import { AdminLiveUpdateCoordinator } from "../components/AdminLiveUpdateCoordinator";
 import { AdminFlashToast } from "../components/AdminFlashToast";
-import { ADMIN_NAV_SECTIONS, findAdminNavItem, findAdminNavSection } from "../lib/admin-ia";
+import { AdminThemeToggle } from "../components/AdminThemeToggle";
+import { ADMIN_THEME_STORAGE_KEY } from "../components/admin-theme";
+import { ADMIN_NAV_SECTIONS, findAdminNavSection } from "../lib/admin-ia";
 import { resolveAdminAppPath } from "../lib/server/browser-flow";
 import type { AdminLiveUpdateSurface } from "../lib/live-updates";
 
@@ -26,7 +28,6 @@ const {
 } = Astro.props;
 
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
-const activeItem = findAdminNavItem(activeNav ?? null);
 const activeSection = findAdminNavSection(activeNav ?? null);
 
 // Lucide-like SVG icons as inline strings
@@ -47,20 +48,86 @@ const icons: Record<string, string> = {
 };
 ---
 
-<html lang="en" class="dark">
+<style is:global>
+  .admin-table th,
+  .admin-table td {
+    vertical-align: top;
+  }
+
+  .admin-table-cell-stack {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .admin-table-meta {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .admin-table-chip-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .admin-table-actions-col {
+    width: 12rem;
+  }
+
+  .admin-table-actions {
+    display: flex;
+    min-width: 8.75rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+</style>
+
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <script is:inline define:vars={{ adminThemeStorageKey: ADMIN_THEME_STORAGE_KEY }}>
+      (() => {
+        const root = document.documentElement;
+        const storageKey = adminThemeStorageKey;
+        const isThemeMode = (value) =>
+          value === "light" || value === "dark" || value === "system";
+        const preference = (() => {
+          try {
+            const stored = window.localStorage.getItem(storageKey);
+            return isThemeMode(stored) ? stored : "system";
+          } catch {
+            return "system";
+          }
+        })();
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const effectiveTheme =
+          preference === "dark" ? "dark" : preference === "light" ? "light" : prefersDark ? "dark" : "light";
+        root.dataset.themePreference = preference;
+        root.dataset.theme = effectiveTheme;
+        root.classList.toggle("dark", effectiveTheme === "dark");
+        root.style.colorScheme = effectiveTheme;
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body class="min-h-screen bg-background text-foreground antialiased">
-    <div class="flex h-screen overflow-hidden">
+    <div class="relative isolate min-h-screen overflow-hidden">
+      <div class="admin-shell-backdrop pointer-events-none absolute inset-0"></div>
+      <div class="admin-shell-grid pointer-events-none absolute inset-0 opacity-40 dark:opacity-30"></div>
+      <div class="relative z-10 flex h-screen overflow-hidden">
 
       <!-- Sidebar -->
-      <aside id="sidebar" class="hidden md:flex flex-col w-56 shrink-0 border-r border-border bg-card overflow-y-auto">
+      <aside id="sidebar" class="hidden md:flex flex-col w-56 shrink-0 border-r border-border bg-card/88 backdrop-blur overflow-y-auto">
         <!-- Logo -->
         <div class="flex h-14 items-center gap-2.5 px-4 border-b border-border shrink-0">
           <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">N</span>
@@ -119,7 +186,7 @@ const icons: Record<string, string> = {
       <!-- Main content -->
       <div class="flex flex-col flex-1 overflow-hidden">
         <!-- Top bar -->
-        <header class="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-6">
+        <header class="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/88 px-4 backdrop-blur md:px-6">
           <!-- Mobile menu button -->
           <button
             type="button"
@@ -129,18 +196,18 @@ const icons: Record<string, string> = {
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
           </button>
 
-          <div class="flex-1 min-w-0">
-            {activeSection && activeItem ? (
-              <div class="mb-1">
-                <p class="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{activeSection.label}</p>
-                <p class="truncate text-xs text-muted-foreground">{activeItem.summary}</p>
-              </div>
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+            {activeSection ? (
+              <p class="truncate text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{activeSection.label}</p>
             ) : null}
-            <slot name="header-title" />
+            <div class="min-w-0">
+              <slot name="header-title" />
+            </div>
           </div>
 
           <!-- Header actions -->
           <div class="flex items-center gap-2">
+            <AdminThemeToggle client:load />
             <slot name="header-actions" />
           </div>
         </header>
@@ -164,7 +231,7 @@ const icons: Record<string, string> = {
 
     <!-- Mobile sidebar overlay -->
     <div id="mobile-sidebar-overlay" class="hidden fixed inset-0 z-50 bg-black/50 md:hidden">
-      <aside class="flex flex-col w-64 h-full bg-card border-r border-border overflow-y-auto">
+      <aside class="flex flex-col w-64 h-full bg-card/92 border-r border-border backdrop-blur overflow-y-auto">
         <div class="flex h-14 items-center justify-between gap-2.5 px-4 border-b border-border shrink-0">
           <div class="flex items-center gap-2.5">
             <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">N</span>
@@ -190,6 +257,7 @@ const icons: Record<string, string> = {
           ))}
         </nav>
       </aside>
+      </div>
     </div>
 
     <script>
