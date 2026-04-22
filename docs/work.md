@@ -27,7 +27,9 @@ Durable completed detail переносится в `docs/history.md`.
   - `pnpm typecheck` passed;
   - `git diff --check --` passed;
   - `pnpm test:discovery:admin:compose` passed after rebuilding the admin image;
-  - `pnpm test:web:viewports` failed once with `Timed out waiting for system-selected collection row for viewport smoke`, and the immediate rerun remained stuck in the same downstream setup segment after deterministic RSS fetch, so the stage is not yet ready to close.
+  - the remaining blocker is `pnpm test:web:viewports`, which failed once with `Timed out waiting for system-selected collection row for viewport smoke` and then hung twice in the same downstream setup segment after deterministic RSS fetch, so the stage is not yet ready to close.
+- On 2026-04-22 the remaining product-side implementation gap inside `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP` was closed:
+  - `missions`, `candidates`, and `sources` rows in `discovery.astro` now support true row click / keyboard open behavior that selects the item and forces the corresponding workspace pane open, instead of requiring only the title link or a dedicated CTA.
 - On 2026-04-22 `PATCH-ADMIN-PANE-GRID-COLUMN-CORRECTION` completed and was archived after reverting the failed flex experiment and fixing the real shared-pane bug: in open state a separate pane-width grid column remained empty on the right while the pane itself rendered in the second column.
 - On 2026-04-22 `PATCH-ADMIN-PANE-PARENT-WIDTH-COVERAGE` completed and was archived after switching the shared open desktop pane contract to a parent-covering flex layout so main content and the right pane fill the full workspace width together.
 - On 2026-04-22 `PATCH-ADMIN-PANE-RESIZE-AND-WIDTH-CORRECTION` completed and was archived after correcting the shared pane follow-up so resize behavior feels predictable again and open panes initialize at a more truthful desktop width.
@@ -150,6 +152,7 @@ Durable completed detail переносится в `docs/history.md`.
 ## Next recommended action
 
 - investigate or rerun `pnpm test:web:viewports` until the viewport proof is either green or confidently classified as an unrelated/flaky downstream failure, then sync/archive the stage if no code changes are needed.
+- investigate or rerun `pnpm test:web:viewports` until the viewport proof is either green or confidently classified as an unrelated/flaky downstream failure, then sync/archive the stage if no code changes are needed.
 
 ## Archive sync status
 
@@ -169,12 +172,13 @@ Durable completed detail переносится в `docs/history.md`.
 - `pnpm test:discovery:admin:compose` is green for this stage and cleaned up its disposable discovery/admin acceptance fixtures before exit.
 - `pnpm test:web:viewports` is currently unresolved for this stage:
   - first run failed with `Timed out waiting for system-selected collection row for viewport smoke`;
-  - second run advanced through admin sign-in, web bootstrap, interest/channel creation, and deterministic RSS fetch, then stopped producing output before completion.
+  - second run advanced through admin sign-in, web bootstrap, interest/channel creation, and deterministic RSS fetch, then stopped producing output before completion;
+  - third run repeated the same hang after deterministic RSS fetch even after the final discovery row-click patch.
 - No new long-lived manual cleanup is currently tracked for this cycle.
 
 ## Handoff state
 
 - Active item: `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP` is currently `blocked` on unresolved viewport proof, not on missing implementation.
-- Code is already landed in `apps/admin/src/components/AdminWorkspacePane.astro`, `apps/admin/src/components/AdminDesktopSidebarNav.tsx`, `apps/admin/src/layouts/AdminShell.astro`, and `apps/admin/src/pages/discovery.astro`; the remaining blocker is truthful completion of the viewport proof.
+- Code is already landed in `apps/admin/src/components/AdminWorkspacePane.astro`, `apps/admin/src/components/AdminDesktopSidebarNav.tsx`, `apps/admin/src/layouts/AdminShell.astro`, and `apps/admin/src/pages/discovery.astro`; the remaining blocker is truthful completion or explicit reclassification of the viewport proof.
 - The parent admin UX capability, both admin copy sweeps, the docs consistency sweep, the admin UI polish sweep, the KPI follow-up patch, the resources KPI-label patch, the admin table-alignment sweep, the admin shell background patch, the admin header summary patch, the admin dark-theme patch, the authenticated theme switcher, the compact-sidebar/shared-pane patch, the pane full-right follow-up patch, the pane resize/width correction patch, the pane parent-width coverage patch, the pane grid-column correction patch, and the automation-hero consistency patch are archived in `docs/history.md`.
 - The next agent should keep this work bounded to the declared discovery tabs plus shared shell/pane primitives unless the user explicitly widens scope.

@@ -1142,7 +1142,13 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                   const missionId = String(mission.mission_id ?? "");
                   const isSelected = missionId === selectedMissionWorkspaceId;
                   return (
-                    <article class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}>
+                    <article
+                      class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}
+                      data-discovery-row-href={resolveSelectionHref("missions", { selectedMissionId: missionId })}
+                      data-discovery-row-pane="discovery-missions"
+                      role="link"
+                      tabindex="0"
+                    >
                       <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                         <div class="space-y-1.5">
                           <div class="flex flex-wrap items-center gap-2">
@@ -1845,7 +1851,13 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
                 const isSelected = candidateId === selectedCandidateId;
                 return (
-                  <article class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}>
+                  <article
+                    class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}
+                    data-discovery-row-href={resolveSelectionHref("candidates", { selectedCandidateId: candidateId })}
+                    data-discovery-row-pane="discovery-candidates"
+                    role="link"
+                    tabindex="0"
+                  >
                     <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                       <div class="space-y-1.5">
                         <div class="flex flex-wrap items-center gap-2">
@@ -2085,7 +2097,13 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
                 const profileId = String(profile.source_profile_id ?? "");
                 const isSelected = profileId === selectedSourceProfileId;
                 return (
-                  <article class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}>
+                  <article
+                    class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}
+                    data-discovery-row-href={resolveSelectionHref("sources", { selectedSourceProfileId: profileId })}
+                    data-discovery-row-pane="discovery-sources"
+                    role="link"
+                    tabindex="0"
+                  >
                     <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                       <div class="space-y-1.5">
                         <div class="flex flex-wrap items-center gap-2">
@@ -2379,4 +2397,64 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
       </div>
     )}
   </div>
+
+  <script is:inline>
+    (() => {
+      const interactiveSelector = [
+        "a",
+        "button",
+        "input",
+        "select",
+        "textarea",
+        "label",
+        "[role='button']",
+        "[role='link']",
+        "[data-admin-pane-open-link]",
+      ].join(",");
+
+      const openPaneState = (paneId) => {
+        try {
+          window.localStorage.setItem(`newsportal-admin-pane:${paneId}:state`, "open");
+        } catch {}
+      };
+
+      const rows = document.querySelectorAll("[data-discovery-row-href][data-discovery-row-pane]");
+      rows.forEach((row) => {
+        const href = row.getAttribute("data-discovery-row-href");
+        const paneId = row.getAttribute("data-discovery-row-pane");
+        if (!href || !paneId) {
+          return;
+        }
+
+        const navigate = () => {
+          openPaneState(paneId);
+          window.location.href = href;
+        };
+
+        row.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) {
+            navigate();
+            return;
+          }
+          if (target.closest(interactiveSelector)) {
+            return;
+          }
+          navigate();
+        });
+
+        row.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+          const target = event.target;
+          if (target instanceof Element && target.closest(interactiveSelector) !== row && target !== row) {
+            return;
+          }
+          event.preventDefault();
+          navigate();
+        });
+      });
+    })();
+  </script>
 </AdminShell>
