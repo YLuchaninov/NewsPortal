@@ -1,20 +1,12 @@
 import type { APIRoute } from "astro";
-import type { PoolClient } from "pg";
-
-import { CRITERION_COMPILE_REQUESTED_EVENT } from "@newsportal/contracts";
 
 import {
-  deleteInterestTemplate,
-  deleteLlmTemplate,
-  parseInterestTemplateInput,
-  parseLlmTemplateInput,
-  saveInterestTemplate,
-  saveLlmTemplate,
-  setInterestTemplateActiveState,
-  setLlmTemplateActiveState,
-  syncInterestTemplateCriterion,
-  syncInterestTemplateSelectionProfile,
-} from "../../../lib/server/admin-templates";
+  deleteTemplateWithAudit,
+  saveTemplateFromPayload,
+  setTemplateActiveStateWithAudit,
+  type TemplateKind,
+} from "@newsportal/control-plane";
+
 import {
   buildAdminSignInPath,
   buildFlashRedirect,
@@ -27,12 +19,10 @@ import {
   resolveAdminSession,
 } from "../../../lib/server/auth";
 import { getPool } from "../../../lib/server/db";
-import { insertOutboxEvent } from "../../../lib/server/outbox";
 import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
-type TemplateKind = "interest" | "llm";
 type TemplateIntent = "save" | "archive" | "activate" | "delete";
 
 function resolveTemplateKind(payload: Record<string, unknown>): TemplateKind {
@@ -91,29 +81,6 @@ export function formatTemplateBrowserErrorMessage(
   return message;
 }
 
-async function writeAuditLog(
-  client: Pick<PoolClient, "query">,
-  actorUserId: string,
-  actionType: string,
-  entityType: string,
-  entityId: string,
-  payloadJson: Record<string, unknown>
-): Promise<void> {
-  await client.query(
-    `
-      insert into audit_log (
-        actor_user_id,
-        action_type,
-        entity_type,
-        entity_id,
-        payload_json
-      )
-      values ($1, $2, $3, $4, $5::jsonb)
-    `,
-    [actorUserId, actionType, entityType, entityId, JSON.stringify(payloadJson)]
-  );
-}
-
 export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
   const payload = await readRequestPayload(request);
@@ -139,294 +106,92 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
 
-  let client: PoolClient | null = null;
   try {
     const pool = getPool();
-    client = await pool.connect();
     const intent = resolveTemplateIntent(payload);
-    await client.query("begin");
-
-    if (kind === "interest") {
-      if (intent === "save") {
-        const template = parseInterestTemplateInput(payload);
-        const result = await saveInterestTemplate(client, template);
-        const syncResult = await syncInterestTemplateCriterion(client, result.interestTemplateId);
-        const profileSyncResult = await syncInterestTemplateSelectionProfile(
-          client,
-          result.interestTemplateId,
-          template
-        );
-        if (syncResult.compileRequested) {
-          await insertOutboxEvent(client, {
-            eventType: CRITERION_COMPILE_REQUESTED_EVENT,
-            aggregateType: "criterion",
-            aggregateId: syncResult.criterionId,
-            payload: {
-              criterionId: syncResult.criterionId,
-              version: syncResult.version,
-            },
-          });
-        }
-        const entityPath = resolveTemplateEditPath(
-          request,
-          "interest",
-          result.interestTemplateId
-        );
-        await writeAuditLog(
-          client,
-          session.userId,
-          result.created ? "interest_template_created" : "interest_template_updated",
-          "interest_template",
-          result.interestTemplateId,
-          {
-            name: template.name,
-            isActive: template.isActive,
-            created: result.created,
-            criterionId: syncResult.criterionId,
-            criterionVersion: syncResult.version,
-            criterionCompileRequested: syncResult.compileRequested,
-            selectionProfileId: profileSyncResult.selectionProfileId,
-            selectionProfileVersion: profileSyncResult.version,
-            selectionProfileStrictness: template.selectionProfileStrictness,
-            selectionProfileUnresolvedDecision:
-              template.selectionProfileUnresolvedDecision,
-            selectionProfileLlmReviewMode: template.selectionProfileLlmReviewMode,
-            candidatePositiveSignalGroupCount: template.candidatePositiveSignals.length,
-            candidateNegativeSignalGroupCount: template.candidateNegativeSignals.length,
-          }
-        );
-        await client.query("commit");
-
-        if (browserRequest) {
-          return buildFlashRedirect(request, {
-            section: "templates",
-            status: "success",
-            message: result.created ? "System interest created" : "System interest updated",
-            redirectTo: entityPath,
-          });
-        }
-
-        return Response.json(
-          {
-            interestTemplateId: result.interestTemplateId,
-            created: result.created,
-          },
-          { status: result.created ? 201 : 200 }
-        );
-      }
-
-      const interestTemplateId = String(payload.interestTemplateId ?? "").trim();
-      if (!interestTemplateId) {
-        throw new Error("Interest template ID is required for this action.");
-      }
-
-      if (intent === "archive") {
-        await setInterestTemplateActiveState(client, interestTemplateId, false);
-        const syncResult = await syncInterestTemplateCriterion(client, interestTemplateId);
-        const profileSyncResult = await syncInterestTemplateSelectionProfile(
-          client,
-          interestTemplateId
-        );
-        await writeAuditLog(
-          client,
-          session.userId,
-          "interest_template_archived",
-          "interest_template",
-          interestTemplateId,
-          {
-            criterionId: syncResult.criterionId,
-            criterionVersion: syncResult.version,
-            criterionCompileRequested: syncResult.compileRequested,
-            selectionProfileId: profileSyncResult.selectionProfileId,
-            selectionProfileVersion: profileSyncResult.version,
-          }
-        );
-        await client.query("commit");
-        if (browserRequest) {
-          return buildFlashRedirect(request, {
-            section: "templates",
-            status: "success",
-            message: "System interest archived",
-            redirectTo,
-          });
-        }
-        return Response.json({ ok: true });
-      }
-
-      if (intent === "activate") {
-        await setInterestTemplateActiveState(client, interestTemplateId, true);
-        const syncResult = await syncInterestTemplateCriterion(client, interestTemplateId);
-        const profileSyncResult = await syncInterestTemplateSelectionProfile(
-          client,
-          interestTemplateId
-        );
-        if (syncResult.compileRequested) {
-          await insertOutboxEvent(client, {
-            eventType: CRITERION_COMPILE_REQUESTED_EVENT,
-            aggregateType: "criterion",
-            aggregateId: syncResult.criterionId,
-            payload: {
-              criterionId: syncResult.criterionId,
-              version: syncResult.version,
-            },
-          });
-        }
-        await writeAuditLog(
-          client,
-          session.userId,
-          "interest_template_activated",
-          "interest_template",
-          interestTemplateId,
-          {
-            criterionId: syncResult.criterionId,
-            criterionVersion: syncResult.version,
-            criterionCompileRequested: syncResult.compileRequested,
-            selectionProfileId: profileSyncResult.selectionProfileId,
-            selectionProfileVersion: profileSyncResult.version,
-          }
-        );
-        await client.query("commit");
-        if (browserRequest) {
-          return buildFlashRedirect(request, {
-            section: "templates",
-            status: "success",
-            message: "System interest reactivated",
-            redirectTo,
-          });
-        }
-        return Response.json({ ok: true });
-      }
-
-      await deleteInterestTemplate(client, interestTemplateId);
-      await writeAuditLog(
-        client,
-        session.userId,
-        "interest_template_deleted",
-        "interest_template",
-        interestTemplateId,
-        {}
-      );
-      await client.query("commit");
-      if (browserRequest) {
-        return buildFlashRedirect(request, {
-          section: "templates",
-          status: "success",
-          message: "System interest deleted",
-          redirectTo: listPath,
-        });
-      }
-      return Response.json({ ok: true });
-    }
 
     if (intent === "save") {
-      const template = parseLlmTemplateInput(payload);
-      const result = await saveLlmTemplate(client, template);
-      const entityPath = resolveTemplateEditPath(request, "llm", result.promptTemplateId);
-      await writeAuditLog(
-        client,
-        session.userId,
-        result.created ? "llm_template_created" : "llm_template_updated",
-        "llm_template",
-        result.promptTemplateId,
-        {
-          name: template.name,
-          scope: template.scope,
-          isActive: template.isActive,
-          created: result.created,
-        }
-      );
-      await client.query("commit");
+      const result = await saveTemplateFromPayload(pool, session.userId, payload);
+      const entityPath = resolveTemplateEditPath(request, result.kind, result.entityId);
 
       if (browserRequest) {
         return buildFlashRedirect(request, {
           section: "templates",
           status: "success",
-          message: result.created ? "LLM template created" : "LLM template updated",
+          message:
+            kind === "interest"
+              ? result.created
+                ? "System interest created"
+                : "System interest updated"
+              : result.created
+                ? "LLM template created"
+                : "LLM template updated",
           redirectTo: entityPath,
         });
       }
 
       return Response.json(
-        {
-          promptTemplateId: result.promptTemplateId,
-          created: result.created,
-        },
+        kind === "interest"
+          ? {
+              interestTemplateId: result.entityId,
+              created: result.created,
+            }
+          : {
+              promptTemplateId: result.entityId,
+              created: result.created,
+            },
         { status: result.created ? 201 : 200 }
       );
     }
 
-    const promptTemplateId = String(payload.promptTemplateId ?? "").trim();
-    if (!promptTemplateId) {
-      throw new Error("LLM template ID is required for this action.");
+    const templateId = String(
+      kind === "interest" ? payload.interestTemplateId ?? "" : payload.promptTemplateId ?? ""
+    ).trim();
+    if (!templateId) {
+      throw new Error(
+        kind === "interest"
+          ? "Interest template ID is required for this action."
+          : "LLM template ID is required for this action."
+      );
     }
 
-    if (intent === "archive") {
-      await setLlmTemplateActiveState(client, promptTemplateId, false);
-      await writeAuditLog(
-        client,
+    if (intent === "archive" || intent === "activate") {
+      await setTemplateActiveStateWithAudit(
+        pool,
         session.userId,
-        "llm_template_archived",
-        "llm_template",
-        promptTemplateId,
-        {}
+        kind,
+        templateId,
+        intent === "activate"
       );
-      await client.query("commit");
       if (browserRequest) {
         return buildFlashRedirect(request, {
           section: "templates",
           status: "success",
-          message: "LLM template archived",
+          message:
+            kind === "interest"
+              ? intent === "activate"
+                ? "System interest reactivated"
+                : "System interest archived"
+              : intent === "activate"
+                ? "LLM template reactivated"
+                : "LLM template archived",
           redirectTo,
         });
       }
       return Response.json({ ok: true });
     }
 
-    if (intent === "activate") {
-      await setLlmTemplateActiveState(client, promptTemplateId, true);
-      await writeAuditLog(
-        client,
-        session.userId,
-        "llm_template_activated",
-        "llm_template",
-        promptTemplateId,
-        {}
-      );
-      await client.query("commit");
-      if (browserRequest) {
-        return buildFlashRedirect(request, {
-          section: "templates",
-          status: "success",
-          message: "LLM template reactivated",
-          redirectTo,
-        });
-      }
-      return Response.json({ ok: true });
-    }
-
-    await deleteLlmTemplate(client, promptTemplateId);
-    await writeAuditLog(
-      client,
-      session.userId,
-      "llm_template_deleted",
-      "llm_template",
-      promptTemplateId,
-      {}
-    );
-    await client.query("commit");
+    await deleteTemplateWithAudit(pool, session.userId, kind, templateId);
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "templates",
         status: "success",
-        message: "LLM template deleted",
+        message: kind === "interest" ? "System interest deleted" : "LLM template deleted",
         redirectTo: listPath,
       });
     }
     return Response.json({ ok: true });
   } catch (error) {
-    if (client) {
-      await client.query("rollback").catch(() => undefined);
-    }
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "templates",
@@ -443,7 +208,5 @@ export const POST: APIRoute = async ({ request }) => {
         status: 500,
       }
     );
-  } finally {
-    client?.release();
   }
 };

@@ -305,6 +305,37 @@ services:
     networks:
       - app_net
 
+  mcp:
+    build:
+      context: ../..
+      dockerfile: infra/docker/mcp.Dockerfile
+    command: ["pnpm", "--filter", "@newsportal/mcp", "start"]
+    environment:
+      MCP_PORT: ${MCP_PORT:-4300}
+      NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
+      NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
+      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${MCP_PORT:-4300}:4300"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4300/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - app_net
+
   nginx:
     image: nginx:1.27-alpine
     depends_on:
@@ -315,6 +346,8 @@ services:
       api:
         condition: service_healthy
       relay:
+        condition: service_healthy
+      mcp:
         condition: service_healthy
     ports:
       - "${NGINX_PORT:-8080}:80"

@@ -37,6 +37,8 @@
   Durable contract для additive independent-recall discovery cutover: generic source-quality snapshots, neutral recall-first acquisition, promotion boundaries and compatibility rules with the existing graph-first mission flow.
 - `docs/contracts/feed-ingress-adapters.md`
   Durable contract для aggregator-aware RSS/Atom intake: internal adapter strategies, Reddit/HN/Google normalization, pre-ingest stale gating, adapter provenance и operator/API visibility without new provider types.
+- `docs/contracts/mcp-control-plane.md`
+  Durable contract для remote admin MCP control plane: HTTP endpoint, admin-issued token auth, shared control-plane write orchestration, scope/destructive policy, request logging и compose/nginx delivery truth.
 - `docs/contracts/zero-shot-interest-filtering.md`
   Durable cutover contract для перехода к full-flow zero-shot filtering architecture: raw observations, canonical documents, duplicate/story clustering, verification state, semantic interest filtering, final selection truth и doc-sync/cutover discipline.
 - `docs/contracts/test-access-and-fixtures.md`

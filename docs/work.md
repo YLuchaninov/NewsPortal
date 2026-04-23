@@ -17,19 +17,103 @@ Durable completed detail переносится в `docs/history.md`.
 ## Current mode
 
 - Operating mode: normal
-- Why now: on 2026-04-22 the user asked to continue the admin UX/UI operator-console rollout and bring the plan to real code plus proof.
+- Why now: on 2026-04-23 the user asked to implement the new remote MCP admin control-plane capability end to end.
 
 ## Current memory
 
 - Runtime core инициализирован; ordinary implementation work разрешен.
-- On 2026-04-22 the user requested the next desktop-productivity implementation slice for admin: extend the shared pane contract into discovery list-heavy tabs, enrich compact sidebar rail UX, and strengthen shared pane resize accessibility without changing backend/API truth.
-- On 2026-04-22 `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP` landed its code changes in the shared admin shell/pane primitives plus `discovery` missions/candidates/sources, but the stage remains live because required proof is only partially green so far:
-  - `pnpm typecheck` passed;
-  - `git diff --check --` passed;
-  - `pnpm test:discovery:admin:compose` passed after rebuilding the admin image;
-  - the remaining blocker is `pnpm test:web:viewports`, which failed once with `Timed out waiting for system-selected collection row for viewport smoke` and then hung twice in the same downstream setup segment after deterministic RSS fetch, so the stage is not yet ready to close.
-- On 2026-04-22 the remaining product-side implementation gap inside `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP` was closed:
-  - `missions`, `candidates`, and `sources` rows in `discovery.astro` now support true row click / keyboard open behavior that selects the item and forces the corresponding workspace pane open, instead of requiring only the title link or a dedicated CTA.
+- On 2026-04-23 `PATCH-MCP-CLIENT-DOCS-AND-TESTING-GUIDES` completed and was archived after adding a dedicated `docs/mcp/` subfolder for NewsPortal MCP operator docs:
+  - `docs/mcp/README.md` now indexes the NewsPortal MCP docs pack and records canonical local URLs, auth assumptions, and source references;
+  - `docs/mcp/client-setups.md` now contains concrete NewsPortal MCP setup examples for Codex, OpenCode, Cursor, VS Code, Claude Code, and Claude Desktop notes;
+  - `docs/mcp/http-smoke.md` now contains raw `curl` examples for `GET /mcp`, JSON-RPC discovery, resources, prompts, read-only tool calls, and failure checks;
+  - `docs/mcp/testing.md` now separates canonical local compose proof from provider-backed local evidence and bounded non-local smoke guidance.
+- On 2026-04-23 `PATCH-MCP-SCENARIO-PLAYBOOKS` completed and was archived after expanding the NewsPortal MCP orientation layer across the main bounded operator scenarios:
+  - `services/mcp/src/resources.ts` now exposes explicit scenario guides for:
+    - `sequences`
+    - `discovery`
+    - `system interests`
+    - `LLM templates`
+    - `channels`
+    - `read-only observability`
+    - `cleanup`
+  - `services/mcp/src/prompts.ts` now exposes scenario start prompts for:
+    - `sequences`
+    - `discovery`
+    - `system interests`
+    - `LLM templates`
+    - `channels`
+    - `observability`
+  - `docs/contracts/mcp-control-plane.md` now records that the shipped orientation layer should cover the main bounded operator scenarios explicitly, not just a generic overview;
+  - `tests/unit/ts/mcp-control-plane.test.ts` now verifies the scenario resources and prompts remain discoverable through the MCP registries.
+- On 2026-04-23 `PATCH-MCP-AGENT-ORIENTATION-GUIDANCE` completed and was archived after adding built-in server-orientation guidance to the MCP surface:
+  - `services/mcp/src/resources.ts` now exposes `newsportal://guide/server-overview` and `newsportal://guide/operator-playbooks`;
+  - `services/mcp/src/prompts.ts` now exposes `operator.session.start` as a starter prompt for safe NewsPortal MCP workflow;
+  - `docs/contracts/mcp-control-plane.md` now records the orientation-layer contract explicitly;
+  - `tests/unit/ts/mcp-control-plane.test.ts` now verifies the new guidance resources and prompt are discoverable through the MCP registries.
+- On 2026-04-23 `PATCH-MCP-LIVE-RECALL-USEFULNESS-TUNING` completed and was archived after tightening the MCP live developer-news recall case around high-signal domains instead of generic release-note searches:
+  - `infra/scripts/test-mcp-http-live.mjs` now uses targeted `site:` recall seed queries and classifier-relevant `negativeDomains` for the live developer-source case;
+  - the new regression check in `tests/unit/ts/mcp-http-live-case.test.ts` locks that live-case contract;
+  - the latest live MCP artifact is:
+    - `/tmp/newsportal-mcp-http-live-4e8d9b19-55b6-4c91-82ea-13627ef52d2d.json`
+    - `/tmp/newsportal-mcp-http-live-4e8d9b19-55b6-4c91-82ea-13627ef52d2d.md`
+  - latest truthful outcome after the tuning:
+    - `runtime verdict = healthy`
+    - `usefulness verdict = healthy`
+    - the live recall lane produced `3` candidates and successfully promoted one candidate into a bounded channel through MCP.
+- On 2026-04-23 `PATCH-MCP-NGINX-LONG-REQUEST-TIMEOUT` completed and was archived after fixing the real product-side cause of the live MCP `504` residual:
+  - the dedicated `/mcp` nginx route now carries explicit long-request proxy timeouts instead of inheriting the default ~60s cutoff;
+  - the new regression check in `tests/unit/ts/mcp-nginx-route.test.ts` locks that timeout contract;
+  - the latest live MCP artifact is:
+    - `/tmp/newsportal-mcp-http-live-c5ab8a06-ae8f-43af-a074-279368b4796a.json`
+    - `/tmp/newsportal-mcp-http-live-c5ab8a06-ae8f-43af-a074-279368b4796a.md`
+  - latest truthful outcome after the fix:
+    - `runtime verdict = healthy`
+    - `usefulness verdict = yield-usefulness-weak-but-runtime-healthy`
+    - the earlier nginx `504 Gateway Time-out` on `/mcp` is no longer present.
+- On 2026-04-23 `PATCH-MCP-LIVE-HTTP-RESIDUAL-DIAGNOSTICS` completed and was archived after hardening the supplemental live MCP harness so residuals no longer collapse into opaque parse errors:
+  - `infra/scripts/lib/mcp-http-testkit.mjs` now preserves structured HTTP diagnostics for non-JSON responses (`status`, `statusText`, `content-type`, `server`, `bodyKind`, `bodyPreview`, `sourceHint`) and structured MCP JSON-RPC diagnostics for tool errors;
+  - `infra/scripts/test-mcp-http-live.mjs` now records those diagnostics in live `/tmp` artifacts and uses more realistic recall promotion logic by classifying/iterating candidates instead of blindly promoting the first one;
+  - the latest live proof artifact is:
+    - `/tmp/newsportal-mcp-http-live-0ea3186e-91aa-459b-9cb7-2dcbc510f035.json`
+    - `/tmp/newsportal-mcp-http-live-0ea3186e-91aa-459b-9cb7-2dcbc510f035.md`
+  - latest truthful live residual:
+    - `POST /mcp` returned `504 Gateway Time-out` HTML during recall acquisition;
+    - the artifact now preserves request metadata and body preview instead of only `Unexpected token '<'`.
+- On 2026-04-23 `C-MCP-HTTP-REAL-WORLD-TEST-EXPANSION` completed and was archived after expanding MCP proof into a layered HTTP-only deterministic-plus-live contour:
+  - deterministic `pnpm test:mcp:compose` now orchestrates realistic scenario modules with `/tmp` JSON/Markdown artifacts;
+  - focused reruns were added for auth, reads, writes, and discovery-heavy MCP HTTP coverage;
+  - supplemental `pnpm test:mcp:http:live` now records provider/runtime residuals as evidence instead of collapsing every weak external run into a false regression;
+  - shipped-vs-deferred doc parity is explicit and unit-tested.
+- The proof expansion exposed and fixed one truthful backend defect during closeout:
+  - discovery mission list pagination now aliases `discovery_missions m` correctly in its count query, so MCP `discovery.missions.list` no longer fails with a `500` when filtering by status.
+- Latest authoritative MCP proof results on 2026-04-23:
+  - `pnpm unit_tests`
+  - `pnpm typecheck`
+  - `pnpm test:mcp:compose`
+  - `pnpm test:mcp:http:live`
+  - `git diff --check --`
+- Latest deterministic MCP artifact:
+  - `/tmp/newsportal-mcp-http-deterministic-d12c4908-9530-4d7d-bba9-666f50684f71.json`
+  - `/tmp/newsportal-mcp-http-deterministic-d12c4908-9530-4d7d-bba9-666f50684f71.md`
+- Latest live MCP artifact:
+  - `/tmp/newsportal-mcp-http-live-1d114677-fbc8-4d46-bf4f-453bf233316c.json`
+  - `/tmp/newsportal-mcp-http-live-1d114677-fbc8-4d46-bf4f-453bf233316c.md`
+- Latest live MCP verdict:
+  - `runtime verdict = external-runtime-residual`
+  - `usefulness verdict = external-runtime-residual`
+- On 2026-04-23 `C-MCP-REMOTE-ADMIN-CONTROL-PLANE` completed and was archived after shipping the remote HTTP MCP control plane end to end:
+  - additive PostgreSQL persistence for `mcp_access_tokens` and `mcp_request_log`;
+  - shared `packages/control-plane` orchestration for admin template/channel writes plus MCP token lifecycle;
+  - admin `/automation/mcp` issuance/list/revoke workspace and thin BFF token routes;
+  - standalone `services/mcp` HTTP server with bearer-token auth, tool/resource/prompt registry, audit/request logging, and operator write/read parity across the bounded surfaces;
+  - compose/nginx delivery at `/mcp`;
+  - MCP compose acceptance and full unit/type proof green.
+- The acceptance cycle exposed and fixed one truthful backend defect before close: sequence retry now strips persisted runtime-only `_...` keys from failed-run context before validating retry overrides, so MCP/operator retry works against genuinely failed runs.
+- Proof closed green on 2026-04-23 with:
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - `pnpm test:mcp:compose`
+  - `git diff --check --`
 - On 2026-04-22 `PATCH-ADMIN-PANE-GRID-COLUMN-CORRECTION` completed and was archived after reverting the failed flex experiment and fixing the real shared-pane bug: in open state a separate pane-width grid column remained empty on the right while the pane itself rendered in the second column.
 - On 2026-04-22 `PATCH-ADMIN-PANE-PARENT-WIDTH-COVERAGE` completed and was archived after switching the shared open desktop pane contract to a parent-covering flex layout so main content and the right pane fill the full workspace width together.
 - On 2026-04-22 `PATCH-ADMIN-PANE-RESIZE-AND-WIDTH-CORRECTION` completed and was archived after correcting the shared pane follow-up so resize behavior feels predictable again and open panes initialize at a more truthful desktop width.
@@ -87,72 +171,35 @@ Durable completed detail переносится в `docs/history.md`.
   - `pnpm test:discovery:admin:compose`
   - `pnpm integration_tests`
   - `git diff --check --`
+- On 2026-04-22 `C-ADMIN-DISCOVERY-PANE-RAIL-A11Y` reached capability-level completion and was archived into `docs/history.md` after:
+  - shipping the discovery right-pane rollout on `missions`, `candidates`, and `sources`;
+  - upgrading compact desktop sidebar rail UX with richer tooltip/footer/orientation affordances;
+  - strengthening shared pane resize keyboard/a11y semantics;
+  - closing the last product-side gap with true row click / keyboard open behavior on discovery rows;
+  - finally turning the previously flaky viewport proof green with:
+    - `pnpm typecheck`
+    - `pnpm test:web:viewports`
+    - `pnpm test:discovery:admin:compose`
+    - `git diff --check --`
 - Earlier discovery/downstream capabilities remain archived in `docs/history.md`; no older execution detail is required for the current live handoff.
 
 ## Capability planning
 
 ### Active capabilities
-
-#### C-ADMIN-DISCOVERY-PANE-RAIL-A11Y
-
-- Capability goal: deliver the next desktop-operator productivity slice for admin by bringing the shared pane contract into discovery’s list-heavy tabs, maturing compact desktop sidebar rail UX, and improving keyboard/accessibility semantics for pane resize.
-- Capability outcome:
-  - `discovery` missions/candidates/sources use the same persistent collapsible right workspace-pane pattern as the first-wave admin surfaces;
-  - compact desktop sidebar becomes orientation-safe with tooltip labels, active section signaling, and a compact footer menu;
-  - `AdminWorkspacePane` exposes a stronger resize accessibility contract with explicit width state, keyboard reset, and clearer assistive text.
-- Full completion condition:
-  - discovery list-heavy tabs ship with query-backed selected-state + right pane behavior;
-  - compact sidebar rail ships with richer hover/focus/operator affordances on desktop;
-  - shared pane resize semantics and a11y proof are green;
-  - process files are synced and the stage is archived.
-- Proposed stage breakdown:
-  - `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP` — implement the discovery pane rollout, compact rail UX upgrade, shared resize a11y, and proof them together.
-- Immediate next stage:
-  - `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP`
+- none
 
 ### Current work items
-
-#### STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP
-
-- Kind: Stage
-- Status: blocked
-- Goal: implement the first end-to-end discovery pane rollout plus compact rail UX and shared pane resize accessibility.
-- In scope:
-  - `discovery.astro` pane rollout for `missions`, `candidates`, and `sources`;
-  - shared `AdminWorkspacePane` resize/a11y contract;
-  - compact desktop sidebar rail tooltip/footer/active-marker UX;
-  - process sync after stage proof closes.
-- Out of scope:
-  - discovery route-model rewrite;
-  - pane rollout for `profiles`, `recall`, `portfolio`, `hypotheses`, `feedback`, or dashboard;
-  - mobile sidebar redesign;
-  - backend/API/schema changes.
-- Allowed paths:
-  - `apps/admin/src/pages/discovery.astro`
-  - `apps/admin/src/layouts/AdminShell.astro`
-  - `apps/admin/src/components/AdminWorkspacePane.astro`
-  - `apps/admin/src/components/AdminDesktopSidebarNav.tsx`
-  - `docs/work.md`
-  - `docs/history.md`
-- Required proof:
-  - `pnpm typecheck`
-  - `pnpm test:web:viewports`
-  - `pnpm test:discovery:admin:compose`
-  - `git diff --check --`
-- Risk:
-  - medium; this stage changes shared desktop admin interaction primitives and a large discovery operator surface in one bounded rollout.
+- none
 
 ## Worktree coherence
 
-- Current dirty worktree is expected and aligns with the active discovery/rail/a11y stage plus earlier archived admin UI work:
-  - `apps/admin/**`
-  - `docs/**`
-- No secondary active item is currently tracked.
+- Current dirty worktree is mixed but truthful:
+  - the previously completed but uncommitted MCP rollout remains present across docs, admin, schema, shared control-plane services, SDK, MCP service, infra, and tests;
+  - the just-completed MCP proof expansion intentionally overlaps that same bounded MCP area, especially `infra/scripts`, `package.json`, proof docs, and the discovery backend files needed for one blocking regression fix.
 
 ## Next recommended action
 
-- investigate or rerun `pnpm test:web:viewports` until the viewport proof is either green or confidently classified as an unrelated/flaky downstream failure, then sync/archive the stage if no code changes are needed.
-- investigate or rerun `pnpm test:web:viewports` until the viewport proof is either green or confidently classified as an unrelated/flaky downstream failure, then sync/archive the stage if no code changes are needed.
+- none; wait for the next user request.
 
 ## Archive sync status
 
@@ -165,20 +212,58 @@ Durable completed detail переносится в `docs/history.md`.
 
 ## Test artifacts and cleanup state
 
-- This turn used transient compose/browser acceptance fixtures only.
-- Proof status for the active stage:
+- This turn used transient compose/browser acceptance fixtures plus additive PostgreSQL request-log/token rows from the MCP proof.
+- Cleanup completed during the final proof cycle:
+  - the transient Firebase alias admin used by `pnpm test:mcp:compose` was deleted in-script after the run;
+  - deterministic and live MCP proof runs revoked or archived the bounded fixtures they owned when the shipped surfaces allowed it;
+  - the explicit revoke-check token was revoked during proof;
+  - expired token fixtures remained expired additive rows by design.
+- Remaining additive state that does not require cleanup:
+  - `mcp_request_log` and related audit rows produced by the proof;
+  - revoked/expired MCP token rows that truthfully represent lifecycle history;
+  - `/tmp/newsportal-mcp-http-deterministic-*.json|md` and `/tmp/newsportal-mcp-http-live-*.json|md` artifacts left intentionally for operator review.
+- Most recent completed admin discovery/rail/a11y proof cycle:
   - `pnpm typecheck`
+  - `pnpm test:web:viewports`
+  - `pnpm test:discovery:admin:compose`
   - `git diff --check --`
-- `pnpm test:discovery:admin:compose` is green for this stage and cleaned up its disposable discovery/admin acceptance fixtures before exit.
-- `pnpm test:web:viewports` is currently unresolved for this stage:
-  - first run failed with `Timed out waiting for system-selected collection row for viewport smoke`;
-  - second run advanced through admin sign-in, web bootstrap, interest/channel creation, and deterministic RSS fetch, then stopped producing output before completion;
-  - third run repeated the same hang after deterministic RSS fetch even after the final discovery row-click patch.
 - No new long-lived manual cleanup is currently tracked for this cycle.
 
 ## Handoff state
 
-- Active item: `STAGE-1-DISCOVERY-PANE-RAIL-A11Y-ROLLUP` is currently `blocked` on unresolved viewport proof, not on missing implementation.
-- Code is already landed in `apps/admin/src/components/AdminWorkspacePane.astro`, `apps/admin/src/components/AdminDesktopSidebarNav.tsx`, `apps/admin/src/layouts/AdminShell.astro`, and `apps/admin/src/pages/discovery.astro`; the remaining blocker is truthful completion or explicit reclassification of the viewport proof.
+- Active item: none.
+- Latest completed work:
+  - `PATCH-MCP-CLIENT-DOCS-AND-TESTING-GUIDES` is archived in `docs/history.md` with the new `docs/mcp/` index, client setup guides, HTTP smoke examples, and local-vs-remote testing guide.
+  - `PATCH-MCP-SCENARIO-PLAYBOOKS` is archived in `docs/history.md` with the new scenario guide resources, session-start prompts, contract sync, and unit/type proof closeout.
+  - `PATCH-MCP-AGENT-ORIENTATION-GUIDANCE` is archived in `docs/history.md` with the new guide resources, starter prompt, contract sync, and unit-proof closeout.
+  - `PATCH-MCP-LIVE-RECALL-USEFULNESS-TUNING` is archived in `docs/history.md` with the targeted recall seed/policy tuning, regression test, and green live proof closeout.
+  - `PATCH-MCP-NGINX-LONG-REQUEST-TIMEOUT` is archived in `docs/history.md` with the nginx boundary fix, regression test, and live proof closeout.
+  - `PATCH-MCP-LIVE-HTTP-RESIDUAL-DIAGNOSTICS` is archived in `docs/history.md` with the live-proof hardening details for HTTP and MCP diagnostics plus the recall-promotion selection fix.
+  - `C-MCP-HTTP-REAL-WORLD-TEST-EXPANSION` is archived in `docs/history.md` with deterministic/live proof details, doc-parity behavior, focused reruns, and the discovery mission count-query backend fix.
+  - `C-MCP-REMOTE-ADMIN-CONTROL-PLANE` is archived in `docs/history.md` with full implementation and proof detail.
+- Current repo state:
+  - the MCP rollout is implemented but not yet committed;
+  - the MCP proof expansion is also implemented and verified inside that same uncommitted MCP area.
 - The parent admin UX capability, both admin copy sweeps, the docs consistency sweep, the admin UI polish sweep, the KPI follow-up patch, the resources KPI-label patch, the admin table-alignment sweep, the admin shell background patch, the admin header summary patch, the admin dark-theme patch, the authenticated theme switcher, the compact-sidebar/shared-pane patch, the pane full-right follow-up patch, the pane resize/width correction patch, the pane parent-width coverage patch, the pane grid-column correction patch, and the automation-hero consistency patch are archived in `docs/history.md`.
-- The next agent should keep this work bounded to the declared discovery tabs plus shared shell/pane primitives unless the user explicitly widens scope.
+- The next agent must preserve the shipped MCP boundary:
+  - admin-issued bearer tokens only;
+  - no browser-cookie reuse as MCP auth;
+  - no direct DB-bypass writes around existing maintenance/control-plane owners.
+- The next agent must also preserve proof layering:
+  - deterministic compose MCP HTTP proof remains the canonical gate;
+  - live/provider-backed MCP evidence should stay supplemental and must classify external residuals honestly.
+- Latest supplemental proof truth:
+  - live MCP residuals now carry enough evidence to distinguish gateway/upstream HTML from opaque parse failures, and recall promotion in the live harness now searches for promotable candidates instead of assuming the first recall row is valid.
+- Latest boundary truth:
+  - the shipped `/mcp` ingress now allows long-lived MCP requests to complete, so future live residuals should no longer be attributed to nginx's default proxy timeout on this route.
+- Current patch evidence:
+  - the previous generic recall seeds were dominated by low-signal search results (`rss.app`, `feedspot`, `wikipedia`, explainers, and unrelated release-note pages), but the latest targeted live case now closes green with a real promoted recall candidate.
+- Current guidance gap:
+  - the MCP surface now exposes both:
+    - an explicit “what this server is for / how to start / safe workflow” layer through guide resources and a starter prompt;
+    - domain-specific scenario playbooks for the main bounded operator flows instead of expecting clients to infer concrete workflow only from tool names.
+- Current docs truth:
+  - a dedicated `docs/mcp/` subfolder now explains:
+    - how to connect major MCP clients to NewsPortal, including OpenCode;
+    - how to smoke-test the raw HTTP surface;
+    - how to distinguish canonical local proof from bounded remote smoke.

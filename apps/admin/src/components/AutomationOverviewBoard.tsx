@@ -42,6 +42,7 @@ interface AutomationOverviewBoardProps {
   automationBffPath: string;
   automationRootPath: string;
   templatesHref: string;
+  mcpTokensHref: string;
   currentUserId: string;
 }
 
@@ -110,6 +111,7 @@ export function AutomationOverviewBoard({
   automationBffPath,
   automationRootPath,
   templatesHref,
+  mcpTokensHref,
   currentUserId,
 }: AutomationOverviewBoardProps) {
   const [query, setQuery] = useState("");
@@ -262,6 +264,12 @@ export function AutomationOverviewBoard({
                 className="inline-flex h-10 items-center justify-center rounded-md border border-border px-4 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               >
                 Explore Templates
+              </a>
+              <a
+                href={mcpTokensHref}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-border px-4 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                Manage MCP Tokens
               </a>
             </div>
             {errorMessage && (

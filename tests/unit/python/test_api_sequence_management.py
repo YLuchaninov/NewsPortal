@@ -358,7 +358,12 @@ class ApiSequenceManagementTests(unittest.TestCase):
             "run_id": "run-1",
             "sequence_id": "sequence-1",
             "status": "failed",
-            "context_json": {"doc_id": "doc-9"},
+            "context_json": {
+                "doc_id": "doc-9",
+                "_sequence_id": "sequence-1",
+                "_run_id": "run-1",
+                "_stop": True,
+            },
             "trigger_type": "manual",
             "trigger_meta": {"source": "maintenance_api"},
         }
@@ -379,6 +384,9 @@ class ApiSequenceManagementTests(unittest.TestCase):
         self.assertEqual(kwargs["retry_of_run_id"], "run-1")
         self.assertEqual(kwargs["context_json"]["doc_id"], "doc-9")
         self.assertTrue(kwargs["context_json"]["force"])
+        self.assertNotIn("_sequence_id", kwargs["context_json"])
+        self.assertNotIn("_run_id", kwargs["context_json"])
+        self.assertNotIn("_stop", kwargs["context_json"])
         self.assertEqual(kwargs["trigger_meta"]["retryOfRunId"], "run-1")
         self.assertEqual(kwargs["trigger_meta"]["requestedBy"], "operator-1")
 

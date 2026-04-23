@@ -2637,6 +2637,7 @@ Legacy intermediate article events (`article.normalized`, `article.embedded`, `a
 - suppressions;
 - reindex jobs;
 - automation visual workflow workspace with overview/templates/editor/executions routes, retry/cancel controls, and recent outbox visibility;
+- admin MCP control plane with token-managed remote operator access at `/automation/mcp` and `/mcp`;
 - failed job retry;
 - interest templates;
 - LLM prompt templates и policy rules.
@@ -2649,6 +2650,10 @@ Legacy intermediate article events (`article.normalized`, `article.embedded`, `a
 - compile criterion;
 - sequence CRUD, soft-archive, manual run, failed-run retry, pending-only cancel, run status и task-run detail;
 - same-origin admin operator workspace for sequence CRUD/manual run/retry/cancel plus plugin/outbox visibility at `/automation`, `/automation/templates`, `/automation/{sequenceId}`, and `/automation/{sequenceId}/executions` via `/admin/bff/admin/automation`, while direct read contracts remain on FastAPI/SDK;
+- remote MCP control plane remains a separate operator transport, not a second backend:
+  - admin-issued MCP bearer tokens are managed from `/automation/mcp`;
+  - MCP reads and writes must reuse existing public/maintenance surfaces or extracted transport-agnostic control-plane services;
+  - MCP must not reuse browser cookies or bypass runtime owners with ad hoc SQL writes;
 - plugin catalog и agent draft-sequence create/run surface;
 - discovery summary/profile/mission/class/candidate/hypothesis/source-profile/source-interest-score/portfolio/feedback/re-evaluation surfaces under `/maintenance/discovery/*`, with reusable discovery-profile CRUD plus graph compile and class-registry management as maintenance-only actions and manual candidate approval as the default baseline;
 - rebuild HNSW;

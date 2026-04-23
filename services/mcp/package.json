@@ -1,0 +1,17 @@
+{
+  "name": "@newsportal/mcp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "start": "node --import tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@newsportal/config": "workspace:*",
+    "@newsportal/control-plane": "workspace:*",
+    "@newsportal/sdk": "workspace:*",
+    "fastify": "^5.6.0",
+    "pg": "^8.16.3"
+  }
+}

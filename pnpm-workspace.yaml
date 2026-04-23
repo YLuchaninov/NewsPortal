@@ -2,4 +2,5 @@ packages:
   - "apps/*"
   - "packages/*"
   - "services/fetchers"
+  - "services/mcp"
   - "services/relay"

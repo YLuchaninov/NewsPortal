@@ -277,6 +277,8 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       getJson<T>(`/maintenance/discovery/classes/${classKey}`),
     updateDiscoveryClass: <T>(classKey: string, payload: unknown) =>
       patchJson<T>(`/maintenance/discovery/classes/${classKey}`, payload),
+    deleteDiscoveryClass: <T>(classKey: string) =>
+      deleteJson<T>(`/maintenance/discovery/classes/${classKey}`),
     listDiscoveryMissions: <T>(params?: DiscoveryMissionListQuery) =>
       getPaginated<T>("/maintenance/discovery/missions", {
         status: params?.status,
@@ -289,6 +291,8 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       getJson<T>(`/maintenance/discovery/missions/${missionId}`),
     updateDiscoveryMission: <T>(missionId: string, payload: unknown) =>
       patchJson<T>(`/maintenance/discovery/missions/${missionId}`, payload),
+    deleteDiscoveryMission: <T>(missionId: string) =>
+      deleteJson<T>(`/maintenance/discovery/missions/${missionId}`),
     listDiscoveryRecallMissions: <T>(params?: DiscoveryRecallMissionListQuery) =>
       getPaginated<T>("/maintenance/discovery/recall-missions", {
         status: params?.status,

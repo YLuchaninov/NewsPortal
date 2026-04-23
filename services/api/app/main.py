@@ -1947,6 +1947,17 @@ def validate_sequence_context_json(context_json: dict[str, Any]) -> None:
         raise SequenceValidationError(errors)
 
 
+def sanitize_sequence_retry_context(context_json: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(context_json, Mapping):
+        return {}
+
+    return {
+        str(key): value
+        for key, value in context_json.items()
+        if isinstance(key, str) and not key.startswith("_") and key not in RESERVED_CONTEXT_KEYS
+    }
+
+
 def validate_trigger_meta(trigger_meta: dict[str, Any]) -> None:
     if not isinstance(trigger_meta, dict):
         raise SequenceValidationError(["trigger_meta must be an object."])
@@ -2391,10 +2402,10 @@ def retry_sequence_run_request(
             f"Sequence run {run_id} is not failed and cannot be retried."
         )
 
-    base_context = (
-        dict(existing_run["context_json"])
+    base_context = sanitize_sequence_retry_context(
+        existing_run.get("context_json")
         if isinstance(existing_run.get("context_json"), Mapping)
-        else {}
+        else None
     )
     merged_context = {
         **base_context,
@@ -3075,7 +3086,7 @@ def list_discovery_missions_page(
     if not paginate:
         return query_all(f"{base_sql}\nlimit %s", tuple([*params, limit]))
 
-    count_sql = "select count(*)::int as total from discovery_missions"
+    count_sql = "select count(*)::int as total from discovery_missions m"
     if filters:
         count_sql = f"{count_sql}\nwhere {' and '.join(filters)}"
     total = query_count(count_sql, tuple(params))

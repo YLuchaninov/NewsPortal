@@ -47,6 +47,7 @@ project:
     - docs/contracts/browser-assisted-websites.md
     - docs/contracts/content-model.md
     - docs/contracts/discovery-agent.md
+    - docs/contracts/mcp-control-plane.md
     - docs/contracts/independent-recall-discovery.md
     - docs/contracts/zero-shot-interest-filtering.md
     - docs/contracts/universal-selection-profiles.md
@@ -103,6 +104,13 @@ commands:
   website_compose_smoke: "pnpm test:website:compose"
   website_admin_compose_smoke: "pnpm test:website:admin:compose"
   automation_admin_smoke: "node infra/scripts/test-automation-admin-flow.mjs"
+  mcp_compose_smoke: "pnpm test:mcp:compose"
+  mcp_http_matrix: "pnpm test:mcp:http:matrix"
+  mcp_http_auth: "pnpm test:mcp:http:auth"
+  mcp_http_reads: "pnpm test:mcp:http:reads"
+  mcp_http_writes: "pnpm test:mcp:http:writes"
+  mcp_http_discovery: "pnpm test:mcp:http:discovery"
+  mcp_http_live: "pnpm test:mcp:http:live"
   discovery_admin_compose_smoke: "pnpm test:discovery:admin:compose"
   discovery_examples_compose_proof: "pnpm test:discovery:examples:compose"
   discovery_nonregression_compose_proof: "pnpm test:discovery:nonregression:compose"
@@ -498,6 +506,15 @@ runtime_facts:
       page: apps/admin/src/pages/automation.astro
       bff: apps/admin/src/pages/bff/admin/automation.ts
     operator_smoke_command: node infra/scripts/test-automation-admin-flow.mjs
+  mcp_control_plane:
+    deep_contract: docs/contracts/mcp-control-plane.md
+    remote_path: /mcp
+    admin_operator_surface:
+      page: apps/admin/src/pages/automation/mcp.astro
+      bff: apps/admin/src/pages/bff/admin/mcp-tokens.ts
+    primary_auth_model: admin_issued_bearer_token
+    browser_cookie_reuse_allowed: false
+    canonical_compose_smoke_command: pnpm test:mcp:compose
   web_ingestion:
     website_provider_enabled: true
     deep_contract: docs/contracts/browser-assisted-websites.md

@@ -1,0 +1,45 @@
+---
+import { McpTokenWorkspace } from "../../components/McpTokenWorkspace";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+import { loadMcpTokenWorkspaceData } from "../../lib/server/mcp-tokens";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const data = await loadMcpTokenWorkspaceData();
+---
+
+<AdminShell title="MCP Tokens — Admin" session={session} flash={flash} activeNav="automation">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/automation")} class="hover:text-foreground">Automation</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">MCP Tokens</span>
+    </nav>
+  </Fragment>
+
+  <McpTokenWorkspace
+    mcpBffPath={appPath("/bff/admin/mcp-tokens")}
+    initialTokens={data.tokens}
+    scopeOptions={data.scopeOptions}
+    client:load
+  />
+</AdminShell>

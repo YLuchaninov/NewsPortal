@@ -2,9 +2,6 @@ FROM node:22-alpine
 
 WORKDIR /workspace
 
-ARG NEWSPORTAL_APP_BASE_URL=http://127.0.0.1:4322/
-ENV NEWSPORTAL_APP_BASE_URL=$NEWSPORTAL_APP_BASE_URL
-
 RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json ./
@@ -20,15 +17,13 @@ COPY packages/contracts/src packages/contracts/src
 COPY packages/sdk/package.json packages/sdk/package.json
 COPY packages/sdk/tsconfig.json packages/sdk/tsconfig.json
 COPY packages/sdk/src packages/sdk/src
-COPY packages/ui/package.json packages/ui/package.json
-COPY packages/ui/tsconfig.json packages/ui/tsconfig.json
-COPY packages/ui/src packages/ui/src
 COPY apps/admin/package.json apps/admin/package.json
-COPY apps/admin/astro.config.mjs apps/admin/astro.config.mjs
 COPY apps/admin/tsconfig.json apps/admin/tsconfig.json
 COPY apps/admin/src apps/admin/src
+COPY services/mcp/package.json services/mcp/package.json
+COPY services/mcp/tsconfig.json services/mcp/tsconfig.json
+COPY services/mcp/src services/mcp/src
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @newsportal/admin build
 
-CMD ["pnpm", "--filter", "@newsportal/admin", "start"]
+CMD ["pnpm", "--filter", "@newsportal/mcp", "start"]

@@ -58,6 +58,7 @@
 - Public Python API остается владельцем `/api/*`; browser/session mutation flows для Astro живут в app-local `/bff/*` и `/admin/bff/*`.
 - browser-heavy website probing/rendering остается fetchers-owned runtime concern: worker adapters могут вызывать internal fetchers endpoints, но не должны тащить собственный Playwright/browser stack внутрь Python orchestration.
 - `packages/contracts`, `packages/sdk`, `packages/config` и `packages/ui` остаются shared layers; service-local implementation detail не должен silently протекать в shared packages без durable reason.
+- `packages/control-plane`, когда присутствует, остается transport-agnostic operator orchestration layer reused by admin BFF and MCP; neither Astro route handlers nor MCP transport code may fork template/channel/token write logic into parallel copies.
 - Source inputs должны оставаться отделенными от derived artifacts в `data/indices`, snapshots, model caches и прочих rebuildable слоях.
 - `services/workers/app/task_engine` при staged rollout остается orchestration layer внутри worker domain: relay не должен становиться executor-ом, а plugins не должны bypass-ить PostgreSQL + outbox discipline.
 
@@ -105,6 +106,7 @@
 - queue payloads остаются ID-based и компактными;
 - env contracts должны явно различать internal service URLs и public/browser URLs;
 - browser/BFF naming не должен вводить в заблуждение относительно ownership paths (`/bff/*` vs `/api/*`).
+- MCP naming должен явно различать token, request-log, tool, resource и prompt contracts; не используй vague labels вроде `mcp action` там, где есть отдельные auth, audit, and execution semantics.
 - sequence-engine symbols должны явно различать sequence definition, run, task-run, plugin, executor и relay handoff; не вводи vague names вроде `task utils` для orchestration core.
 
 ## State, Data and Side-effect Discipline

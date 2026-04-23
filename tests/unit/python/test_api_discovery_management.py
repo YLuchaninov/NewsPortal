@@ -157,7 +157,8 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         self.assertEqual(result["items"], items)
 
         count_sql, count_params = query_count.call_args.args
-        self.assertIn("from discovery_missions", count_sql)
+        self.assertIn("from discovery_missions m", count_sql)
+        self.assertIn("where m.status = %s", count_sql)
         self.assertEqual(count_params, ("active",))
 
         items_sql, items_params = query_all.call_args.args

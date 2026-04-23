@@ -49,3 +49,7 @@ services:
   admin:
     env_file:
       - ../../.env.dev
+
+  mcp:
+    env_file:
+      - ../../.env.dev

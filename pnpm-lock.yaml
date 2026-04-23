@@ -56,6 +56,9 @@ importers:
       '@newsportal/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@newsportal/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
       '@newsportal/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -64,7 +67,7 @@ importers:
         version: link:../../packages/ui
       '@tailwindcss/vite':
         specifier: ^4.2.2
-        version: 4.2.2(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.2.2(vite@6.4.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2))
       '@xyflow/react':
         specifier: ^12.10.2
         version: 12.10.2(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -152,6 +155,15 @@ importers:
   packages/config: {}
 
   packages/contracts: {}
+
+  packages/control-plane:
+    dependencies:
+      '@newsportal/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      pg:
+        specifier: ^8.16.3
+        version: 8.20.0
 
   packages/sdk: {}
 
@@ -254,6 +266,24 @@ importers:
       playwright:
         specifier: ^1.54.2
         version: 1.58.2
+
+  services/mcp:
+    dependencies:
+      '@newsportal/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@newsportal/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
+      '@newsportal/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      fastify:
+        specifier: ^5.6.0
+        version: 5.8.2
+      pg:
+        specifier: ^8.16.3
+        version: 8.20.0
 
   services/relay:
     dependencies:
@@ -5564,6 +5594,13 @@ snapshots:
       '@tailwindcss/oxide-wasm32-wasi': 4.2.2
       '@tailwindcss/oxide-win32-arm64-msvc': 4.2.2
       '@tailwindcss/oxide-win32-x64-msvc': 4.2.2
+
+  '@tailwindcss/vite@4.2.2(vite@6.4.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2))':
+    dependencies:
+      '@tailwindcss/node': 4.2.2
+      '@tailwindcss/oxide': 4.2.2
+      tailwindcss: 4.2.2
+      vite: 6.4.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2)
 
   '@tailwindcss/vite@4.2.2(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:

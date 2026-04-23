@@ -12,6 +12,7 @@
     "@astrojs/node": "^9.5.5",
     "@astrojs/react": "^5.0.1",
     "@newsportal/config": "workspace:*",
+    "@newsportal/control-plane": "workspace:*",
     "@newsportal/contracts": "workspace:*",
     "@newsportal/sdk": "workspace:*",
     "@newsportal/ui": "workspace:*",
