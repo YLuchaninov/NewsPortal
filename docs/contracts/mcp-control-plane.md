@@ -12,6 +12,7 @@ MCP control plane добавляет для NewsPortal отдельный remote
 - admin-issued MCP bearer tokens, их inventory, revoke/block flow и audit;
 - transport-agnostic control-plane orchestration для admin/MCP writes;
 - MCP tools, resources и prompts для bounded operator surfaces;
+- article/content diagnostics and residual-analysis read surfaces for evidence-based tuning;
 - request logging, scope enforcement и destructive confirmation policy;
 - compose/nginx delivery contract.
 
@@ -56,6 +57,9 @@ MCP control plane добавляет для NewsPortal отдельный remote
   - `system_interests.*`
   - `llm_templates.*`
   - `channels.*`
+  - `articles.*`
+  - `content_items.*`
+  - `articles.residuals.*`
   - `discovery.*`
   - `sequences.*`
   - `sequence_runs.*`
@@ -73,6 +77,7 @@ MCP control plane добавляет для NewsPortal отдельный remote
     - system interests
     - LLM templates
     - channels
+    - article diagnostics and residual tuning
     - read-only observability
     - cleanup/destructive planning
   - this guidance layer exists to help clients discover safe usage patterns, but clients still control whether and when prompts/resources are loaded.
@@ -124,6 +129,7 @@ MCP control plane добавляет для NewsPortal отдельный remote
 - local proof must cover:
   - token issuance;
   - authenticated MCP read;
+  - article/content diagnostics and residual-analysis reads;
   - authenticated MCP write;
   - revoked-token failure;
   - nginx route reachability.

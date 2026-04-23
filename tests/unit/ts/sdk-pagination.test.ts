@@ -138,6 +138,96 @@ test("listArticlesPage sends pagination params to the admin article list", async
   assert.deepEqual(response, expected);
 });
 
+test("listContentItemsPage preserves search and sort params", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          items: [],
+          page: 2,
+          pageSize: 5,
+          total: 8,
+          totalPages: 2,
+          hasNext: false,
+          hasPrev: true,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.listContentItemsPage<Record<string, unknown>>({
+    page: 2,
+    pageSize: 5,
+    sort: "title_desc",
+    q: "agent hints",
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/content-items?page=2&pageSize=5&sort=title_desc&q=agent+hints"
+  );
+});
+
+test("article residual endpoints preserve filters and pagination params", async () => {
+  const requestedUrls = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  await sdk.listArticleResidualsPage<Record<string, unknown>>({
+    page: 3,
+    pageSize: 15,
+    downstreamLossBucket: "semantic_rejected",
+    selectionBlockerStage: "semantic_filter",
+    selectionBlockerReason: "semantic_no_match",
+    selectionMode: "rejected",
+    verificationState: "weak",
+    processingState: "processed",
+    observationState: "canonicalized",
+    duplicateKind: "canonical",
+    q: "climate",
+  });
+  await sdk.getArticleResidualSummary<Record<string, unknown>>({
+    downstreamLossBucket: "gray_zone_hold",
+    selectionMode: "hold",
+    q: "operators",
+  });
+
+  assert.equal(
+    requestedUrls[0],
+    "http://api.example.test/maintenance/articles/residuals?page=3&pageSize=15&downstreamLossBucket=semantic_rejected&selectionBlockerStage=semantic_filter&selectionBlockerReason=semantic_no_match&selectionMode=rejected&verificationState=weak&processingState=processed&observationState=canonicalized&duplicateKind=canonical&q=climate"
+  );
+  assert.equal(
+    requestedUrls[1],
+    "http://api.example.test/maintenance/articles/residuals/summary?downstreamLossBucket=gray_zone_hold&selectionMode=hold&q=operators"
+  );
+});
+
 test("listFetchRunsPage preserves filters while sending pagination params", async () => {
   let requestedUrl = "";
   const sdk = createNewsPortalSdk({

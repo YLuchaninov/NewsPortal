@@ -14,6 +14,145 @@
 
 ## Completed items
 
+### 2026-04-23 — C-MCP-ARTICLE-DIAGNOSTICS-AND-TUNING-SURFACE — Add article/content diagnostics and residual-analysis surfaces to NewsPortal MCP
+
+- Тип записи: capability archive
+- Финальный статус: archived
+- Зачем понадобилось: the user wanted NewsPortal MCP to move beyond summary-only observability so an MCP client could understand which editorial articles did not reach `system-selected` / final-selection surfaces, why they were filtered out, and how to use that evidence to tune `system interests`, `LLM templates`, and discovery profiles without any direct DB bypass.
+- Что изменилось:
+  - extended the maintenance API in [`services/api/app/main.py`](/Users/user/Documents/workspace/my/NewsPortal/services/api/app/main.py):
+    - added `/maintenance/articles/residuals`
+    - added `/maintenance/articles/residuals/summary`
+    - reused the existing selection diagnostics vocabulary instead of inventing a second blocker taxonomy
+    - added diagnostics-from-counts helpers so residual list/summary and existing explain surfaces stay aligned on the same fallback logic
+  - extended `@newsportal/sdk` in [`packages/sdk/src/index.ts`](/Users/user/Documents/workspace/my/NewsPortal/packages/sdk/src/index.ts):
+    - `listArticleResidualsPage`
+    - `getArticleResidualSummary`
+    - richer `listContentItemsPage` query support (`sort` and `q`)
+  - extended the MCP HTTP tool registry in [`services/mcp/src/tools.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/mcp/src/tools.ts):
+    - `articles.list`
+    - `articles.read`
+    - `articles.explain`
+    - `content_items.list`
+    - `content_items.read`
+    - `content_items.explain`
+    - `articles.residuals.list`
+    - `articles.residuals.summary`
+    - added compact-by-default shaping so heavy body/raw/media fields remain opt-in via `includeBody`, `includeBodyHtml`, `includeRawPayload`, and `includeMediaAssets`
+  - extended MCP guide resources in [`services/mcp/src/resources.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/mcp/src/resources.ts):
+    - `newsportal://guide/scenarios/article-diagnostics`
+    - `newsportal://articles/residuals-summary`
+    - updated server overview and operator playbooks so article diagnostics is now a first-class bounded MCP scenario
+  - extended MCP prompts in [`services/mcp/src/prompts.ts`](/Users/user/Documents/workspace/my/NewsPortal/services/mcp/src/prompts.ts):
+    - `system_interest.polish`
+    - `llm_template.tune`
+    - `discovery.profile.tune`
+    - these prompts stay recommendation-only and explicitly preserve the invariant that downstream diagnostics inform operators but do not become direct discovery auto-approval inputs
+  - hardened deterministic MCP compose orchestration in:
+    - [`infra/scripts/lib/mcp-http-scenarios.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/lib/mcp-http-scenarios.mjs)
+    - [`infra/scripts/test-mcp-compose.mjs`](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/test-mcp-compose.mjs)
+    - focused read scenarios now self-discover entity ids from list surfaces instead of depending on prior write scenarios
+    - scenario groups now inject explicit prerequisites like auth bootstrap
+    - doc-parity full-registry assertion stays strict on the canonical full matrix while focused reruns no longer pretend to cover the entire shipped tool surface
+  - extended proof in:
+    - [`tests/unit/python/test_api_zero_shot_operator_surfaces.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_zero_shot_operator_surfaces.py)
+    - [`tests/unit/python/test_api_sequence_management.py`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/python/test_api_sequence_management.py)
+    - [`tests/unit/ts/mcp-control-plane.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/mcp-control-plane.test.ts)
+    - [`tests/unit/ts/sdk-pagination.test.ts`](/Users/user/Documents/workspace/my/NewsPortal/tests/unit/ts/sdk-pagination.test.ts)
+  - synced durable docs:
+    - [`docs/contracts/mcp-control-plane.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/mcp-control-plane.md)
+    - [`docs/verification.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+    - canonical product-facing MCP docs in [`docs/product/operator/mcp/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/README.md), [`docs/product/operator/mcp/http-smoke.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/http-smoke.md), and [`docs/product/operator/mcp/testing.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/testing.md)
+- Что проверено:
+  - `pnpm typecheck`
+  - `pnpm unit_tests`
+  - focused deterministic read matrix:
+    - `node infra/scripts/test-mcp-compose.mjs --group=reads --skip-build`
+    - artifact: `/tmp/newsportal-mcp-http-deterministic-aa15cdd7-1ff7-4880-8052-0b634c3ff68a.json`
+  - canonical deterministic full matrix:
+    - `node infra/scripts/test-mcp-compose.mjs --skip-build`
+    - artifact: `/tmp/newsportal-mcp-http-deterministic-5162a6bc-c106-40ad-98e9-ef20f50dce1c.json`
+  - `git diff --check --`
+- Что capability доказала:
+  - NewsPortal MCP can now explain article/content residuals over HTTP rather than forcing operators to infer tuning needs only from top-level summary metrics
+  - article/content diagnostics stay behind existing HTTP owners and `@newsportal/sdk`; MCP still does not bypass runtime ownership or reach into PostgreSQL directly
+  - the shipped MCP guidance layer now teaches a bounded read-first article diagnostics workflow instead of exposing only raw tools
+  - the deterministic MCP read/write proof contour remains honest even for focused reruns because prerequisites and coverage assumptions are now explicit rather than hidden in scenario order
+
+### 2026-04-23 — PATCH-ROOT-PRODUCT-DOC-STUB-CLEANUP — Remove root-level product stub docs after consolidation
+
+- Тип записи: patch archive
+- Финальный статус: archived
+- Зачем понадобилось: after the product-doc consolidation sweep, the user asked to also tidy the repository root except for `README.md`; the remaining root-level product stub files no longer added value and made the root noisier than intended.
+- Что изменилось:
+  - removed the root-level product stub files that had only been serving as temporary redirect pages:
+    - `EXAMPLES.md`
+    - `HOW_TO_USE.md`
+    - `DISCOVERY_MODE_TESTING.md`
+    - `WEBSITE_SOURCE_EXAMPLES.md`
+    - `WEBSITE_SOURCES_TESTING.md`
+    - `firebase_setup.md`
+    - `NEW_ARCHITECTURE.md`
+  - updated [`docs/product/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/README.md) so the canonical rule now says:
+    - root product entrypoint stays only in `README.md`
+    - compatibility stubs remain only on legacy Markdown paths under `docs/`
+- Что проверено:
+  - `find . -maxdepth 1 -type f \( -name '*.md' -o -name '*.mdx' -o -name '*.txt' \) | sort`
+  - `git diff --check -- EXAMPLES.md HOW_TO_USE.md DISCOVERY_MODE_TESTING.md WEBSITE_SOURCE_EXAMPLES.md WEBSITE_SOURCES_TESTING.md firebase_setup.md NEW_ARCHITECTURE.md docs/product/README.md docs/work.md docs/history.md`
+- Что patch доказал:
+  - the repo root now keeps only:
+    - `README.md` as the product-facing root doc
+    - `AGENTS.md` as the system-owned root doc
+  - the product docs tree remains canonical under `docs/product/**` without duplicated root-level stub residue.
+
+### 2026-04-23 — SWEEP-PRODUCT-DOCS-CONSOLIDATION — Consolidate product docs under `docs/product/**`
+
+- Тип записи: sweep archive
+- Финальный статус: archived
+- Зачем понадобилось: the user asked to gather only the product documentation into one bounded docs tree with subfolders while explicitly avoiding any migration of the agent/runtime-core system docs.
+- Что изменилось:
+  - created the canonical product-doc tree under [`docs/product/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/README.md) with bounded subfolders for:
+    - architecture
+    - audits
+    - operator guides
+    - examples
+    - MCP docs
+    - data-script assets
+  - moved the product-facing operator/example/setup docs from the repo root into `docs/product/operator/**`, including:
+    - [`docs/product/operator/HOW_TO_USE.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/HOW_TO_USE.md)
+    - [`docs/product/operator/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/manual-mvp-runbook.md)
+    - [`docs/product/operator/examples/EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/EXAMPLES.md)
+    - [`docs/product/operator/examples/DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/DISCOVERY_MODE_TESTING.md)
+    - [`docs/product/operator/examples/WEBSITE_SOURCE_EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/WEBSITE_SOURCE_EXAMPLES.md)
+    - [`docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md)
+    - [`docs/product/operator/setup/firebase_setup.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/setup/firebase_setup.md)
+    - [`docs/product/operator/mcp/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/README.md) plus the sibling MCP setup/smoke/testing docs
+  - moved the product architecture and audit docs into:
+    - [`docs/product/architecture/architecture-overview.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/architecture-overview.md)
+    - [`docs/product/architecture/NEW_ARCHITECTURE.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/NEW_ARCHITECTURE.md)
+    - [`docs/product/architecture/generic-candidate-recall-plan.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/generic-candidate-recall-plan.md)
+    - [`docs/product/audits/website-ingestion-scraping-audit-2026-04-15.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/audits/website-ingestion-scraping-audit-2026-04-15.md)
+  - moved the data-script asset pack into [`docs/product/data-scripts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/README.md) with its JSON/reference companions;
+  - rewired moved product docs so their canonical cross-links now point at `docs/product/**`;
+  - left compatibility stub pages on the old product-doc paths in the repo root and under `docs/` for the moved Markdown entrypoints;
+  - updated [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md) to become product-facing again:
+    - added the new product-doc index links
+    - removed the `AI runtime-core` section and related read-order / authority-order guidance
+    - retargeted README links for discovery, website testing, and the manual runbook to the new `docs/product/**` paths
+- Что проверено:
+  - `rg --files docs/product`
+  - `rg -n "AI runtime-core|Read order|Authority order|docs/manual-mvp-runbook\\.md\\)|docs/data_scripts/|\\]\\(\\./README\\.md\\)|\\]\\(\\./HOW_TO_USE\\.md\\)|\\]\\(\\./docs/manual-mvp-runbook\\.md\\)" README.md docs/product`
+  - `git diff --check -- README.md docs/product EXAMPLES.md HOW_TO_USE.md DISCOVERY_MODE_TESTING.md WEBSITE_SOURCE_EXAMPLES.md WEBSITE_SOURCES_TESTING.md firebase_setup.md NEW_ARCHITECTURE.md docs/manual-mvp-runbook.md docs/architecture-overview.md docs/generic-candidate-recall-plan.md docs/website-ingestion-scraping-audit-2026-04-15.md docs/mcp docs/data_scripts docs/work.md`
+  - manual spot-check of:
+    - `README.md`
+    - `docs/product/README.md`
+    - representative moved product docs
+    - old-path compatibility stubs
+- Что sweep доказал:
+  - product documentation now has one canonical namespace under `docs/product/**`;
+  - old human entrypoints remain usable without reopening runtime-core files as part of the migration;
+  - the repo root `README.md` now serves as a product-facing landing page instead of a runtime-core explainer.
+
 ### 2026-04-23 — PATCH-MCP-CLIENT-DOCS-AND-TESTING-GUIDES — Add a dedicated NewsPortal MCP docs pack for clients and testing
 
 - Тип записи: patch archive
@@ -6708,3 +6847,43 @@
     - weak live yield is currently treated as an honest residual, not as a runtime defect.
 - Follow-up:
   - open a new bounded item only if the user wants to improve discovery candidate quality/onboarding policy for Example B/C, rather than just preserve the proved non-fail runtime lane.
+
+### 2026-04-23 — C-PRODUCT-DOC-AUDIT-AND-BLUEPRINT-SPLIT
+
+- Тип записи: capability archive
+- Финальный статус: done
+- Зачем понадобилось: пользователь попросил полностью проверить и исправить продуктовую документацию NewsPortal, оставить `docs/contracts/**` вне scope и разделить `docs/blueprint.md` на runtime-facing shell и отдельный canonical product blueprint.
+- Что изменилось:
+  - создан [`docs/product/architecture/product-blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/product-blueprint.md) как канонический полный architecture/reference документ для самого продукта на базе прежнего long-form blueprint content;
+  - [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md) переписан в compact runtime-facing shell, который сохраняет только execution-relevant summary, invariants, boundaries, risk zones и явную ссылку на product blueprint;
+  - [`README.md`](/Users/user/Documents/workspace/my/NewsPortal/README.md), [`docs/product/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/README.md), [`docs/product/architecture/architecture-overview.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/architecture-overview.md), [`docs/product/architecture/generic-candidate-recall-plan.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/generic-candidate-recall-plan.md) и связанные product docs были досинхронизированы на новую canonical architecture truth;
+  - верхушки канонических operator docs были выровнены по качеству и полноте framing:
+    - [`docs/product/operator/HOW_TO_USE.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/HOW_TO_USE.md)
+    - [`docs/product/operator/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/manual-mvp-runbook.md)
+    - [`docs/product/operator/examples/EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/EXAMPLES.md)
+    - [`docs/product/operator/examples/DISCOVERY_MODE_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/DISCOVERY_MODE_TESTING.md)
+    - [`docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md)
+    - [`docs/product/operator/examples/WEBSITE_SOURCE_EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/WEBSITE_SOURCE_EXAMPLES.md)
+    - [`docs/product/operator/mcp/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/README.md)
+    - [`docs/product/operator/mcp/client-setups.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/client-setups.md)
+    - [`docs/product/operator/mcp/http-smoke.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/http-smoke.md)
+    - [`docs/product/operator/mcp/testing.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/mcp/testing.md)
+    - [`docs/product/operator/setup/firebase_setup.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/setup/firebase_setup.md)
+  - проверено, что legacy product docs outside `docs/product/**` остались только короткими compatibility stubs:
+    - [`docs/architecture-overview.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/architecture-overview.md)
+    - [`docs/manual-mvp-runbook.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/manual-mvp-runbook.md)
+    - [`docs/generic-candidate-recall-plan.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/generic-candidate-recall-plan.md)
+    - [`docs/website-ingestion-scraping-audit-2026-04-15.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/website-ingestion-scraping-audit-2026-04-15.md)
+    - [`docs/mcp/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/mcp/README.md) и companion files
+    - [`docs/data_scripts/README.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/data_scripts/README.md) и companion Markdown stub.
+- Что проверено:
+  - `find docs/product -type f | sort`
+  - `rg -n 'docs/blueprint\.md' README.md docs/product docs/architecture-overview.md docs/manual-mvp-runbook.md docs/generic-candidate-recall-plan.md docs/website-ingestion-scraping-audit-2026-04-15.md docs/mcp docs/data_scripts`
+  - `rg -n 'Canonical product doc moved to' docs/architecture-overview.md docs/manual-mvp-runbook.md docs/generic-candidate-recall-plan.md docs/website-ingestion-scraping-audit-2026-04-15.md docs/mcp docs/data_scripts`
+  - `rg -n 'dev:mvp:internal|integration_tests|unit_tests|test:website:admin:compose|test:hard-sites:compose|test:discovery-enabled:compose|test:discovery:examples:compose|typecheck' package.json apps services infra -g 'package.json'`
+  - `git diff --check -- README.md docs/product docs/blueprint.md docs/architecture-overview.md docs/manual-mvp-runbook.md docs/generic-candidate-recall-plan.md docs/website-ingestion-scraping-audit-2026-04-15.md docs/mcp docs/data_scripts docs/work.md docs/history.md`
+- Риски или gaps:
+  - live website example URLs and external MCP client guidance are truthful for the current repo/docs pass but remain naturally time-sensitive and may need future refresh;
+  - `docs/contracts/**` intentionally stayed out of scope for this capability and were not reconciled here.
+- Follow-up:
+  - none

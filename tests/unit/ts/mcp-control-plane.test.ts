@@ -196,6 +196,14 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
 
   const toolNames = listMcpTools().map((tool) => tool.name);
   assert.ok(toolNames.includes("admin.summary.get"));
+  assert.ok(toolNames.includes("articles.list"));
+  assert.ok(toolNames.includes("articles.read"));
+  assert.ok(toolNames.includes("articles.explain"));
+  assert.ok(toolNames.includes("content_items.list"));
+  assert.ok(toolNames.includes("content_items.read"));
+  assert.ok(toolNames.includes("content_items.explain"));
+  assert.ok(toolNames.includes("articles.residuals.list"));
+  assert.ok(toolNames.includes("articles.residuals.summary"));
   assert.ok(toolNames.includes("sequences.create"));
   assert.ok(toolNames.includes("discovery.recall_missions.pause"));
 
@@ -207,8 +215,10 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/system-interests"));
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/llm-templates"));
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/channels"));
+  assert.ok(resourceUris.includes("newsportal://guide/scenarios/article-diagnostics"));
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/observability"));
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/cleanup"));
+  assert.ok(resourceUris.includes("newsportal://articles/residuals-summary"));
   const resource = resolveMcpResource("newsportal://admin/summary");
   assert.equal(resource.name, "admin.summary");
   const guideResource = resolveMcpResource("newsportal://guide/server-overview");
@@ -225,6 +235,9 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(promptNames.includes("llm_templates.session.plan"));
   assert.ok(promptNames.includes("channels.session.plan"));
   assert.ok(promptNames.includes("observability.session.plan"));
+  assert.ok(promptNames.includes("system_interest.polish"));
+  assert.ok(promptNames.includes("llm_template.tune"));
+  assert.ok(promptNames.includes("discovery.profile.tune"));
   const prompt = resolveMcpPrompt("sequence.draft");
   assert.equal(prompt.name, "sequence.draft");
   const orientationPrompt = resolveMcpPrompt("operator.session.start");
@@ -251,6 +264,15 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.match(
     observabilityRendered.messages[0]?.content.text ?? "",
     /newsportal:\/\/guide\/scenarios\/observability/i
+  );
+  const systemInterestPolishPrompt = resolveMcpPrompt("system_interest.polish");
+  const systemInterestPolishRendered = systemInterestPolishPrompt.render({
+    interestName: "AI safety",
+    residualPattern: "semantic_rejected repeated across policy-analysis articles",
+  });
+  assert.match(
+    systemInterestPolishRendered.messages[0]?.content.text ?? "",
+    /newsportal:\/\/guide\/scenarios\/article-diagnostics/i
   );
   assert.ok(listMcpPrompts().length >= 10);
 

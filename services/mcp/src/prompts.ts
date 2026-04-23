@@ -225,6 +225,87 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
     },
   },
   {
+    name: "system_interest.polish",
+    description: "Turn article residual evidence into a bounded system-interest tuning recommendation.",
+    arguments: [
+      { name: "interestName", description: "Interest or topic being tuned.", required: true },
+      { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
+    ],
+    render: (args) => {
+      const interestName = readRequiredString(args.interestName, "interestName");
+      const residualPattern = readRequiredString(args.residualPattern, "residualPattern");
+      return {
+        description: "System-interest tuning guide",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Use newsportal://guide/scenarios/article-diagnostics and the current article/content diagnostics to tune the system interest "${interestName}". ` +
+                `The repeated residual pattern is "${residualPattern}". ` +
+                `Return a bounded recommendation covering: what evidence suggests the current scope is too narrow or too broad, which positive/negative signals should change, what should stay unchanged, and what follow-up read-after-write checks an operator should perform. Do not auto-write changes.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "llm_template.tune",
+    description: "Turn article residual evidence into a bounded LLM template tuning recommendation.",
+    arguments: [
+      { name: "templateName", description: "Template being tuned.", required: true },
+      { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
+    ],
+    render: (args) => {
+      const templateName = readRequiredString(args.templateName, "templateName");
+      const residualPattern = readRequiredString(args.residualPattern, "residualPattern");
+      return {
+        description: "LLM template tuning guide",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Use newsportal://guide/scenarios/article-diagnostics and current article/content residual evidence to tune the LLM template "${templateName}". ` +
+                `The repeated residual pattern is "${residualPattern}". ` +
+                `Return a bounded recommendation describing which prompt instructions, output expectations, or review thresholds should change, which parts should remain stable, and how to verify the change through NewsPortal MCP after an operator applies it. Do not auto-write changes.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.profile.tune",
+    description: "Turn article residual evidence into a bounded discovery-profile tuning recommendation.",
+    arguments: [
+      { name: "profileName", description: "Discovery profile being tuned.", required: true },
+      { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
+    ],
+    render: (args) => {
+      const profileName = readRequiredString(args.profileName, "profileName");
+      const residualPattern = readRequiredString(args.residualPattern, "residualPattern");
+      return {
+        description: "Discovery profile tuning guide",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Use newsportal://guide/scenarios/article-diagnostics and the relevant discovery/profile reads to tune discovery profile "${profileName}" from downstream evidence. ` +
+                `The repeated residual pattern is "${residualPattern}". ` +
+                `Return a bounded recommendation covering profile scope, provider/source constraints, escalation policy, and what follow-up checks should confirm the change, while preserving the invariant that downstream diagnostics inform operators but do not become direct auto-approval inputs. Do not auto-write changes.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
     name: "discovery.mission.review",
     description: "Review a discovery mission before compile/run.",
     arguments: [

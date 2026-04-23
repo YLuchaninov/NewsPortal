@@ -2,6 +2,14 @@
 
 Этот файл фиксирует точный маршрут по Firebase Console для текущего состояния репозитория NewsPortal.
 
+Краткий framing:
+
+- Для кого: для оператора или разработчика, который поднимает локальный или тестовый продуктовый baseline NewsPortal и еще не настроил Firebase auth.
+- Что покрывает: минимально необходимую настройку Firebase Authentication и значения для `.env.dev`.
+- Что вне scope: Firebase Hosting, Firestore, production rollout governance и agent/runtime-core process rules.
+- Prerequisites: доступ к Firebase Console и право создать или изменить web app и auth providers в выбранном проекте.
+- Expected result: у вас есть рабочие `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_API_KEY` и `ADMIN_ALLOWLIST_EMAILS`, а `web`/`admin` auth path перестает быть bootstrap blocker.
+
 Используй его вместе с:
 
 - `docs/engineering.md` — для общей engineering discipline;

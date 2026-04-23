@@ -25,54 +25,20 @@
 
 YouTube и browser-heavy anti-bot fetchers пока остаются future-ready направлением.
 
-## Источники истины
+## Product Docs
 
-- [docs/blueprint.md](docs/blueprint.md)
-- [AGENTS.md](AGENTS.md)
-- [docs/engineering.md](docs/engineering.md)
-- [docs/verification.md](docs/verification.md)
+Продуктовая документация собрана в [docs/product/README.md](docs/product/README.md).
 
-## AI runtime-core
+Быстрые входные точки:
 
-В репозитории используется компактный AI runtime-core из семи файлов:
-
-- `AGENTS.md`
-- `docs/work.md`
-- `docs/blueprint.md`
-- `docs/engineering.md`
-- `docs/verification.md`
-- `docs/history.md`
-- `.aidp/os.yaml`
-
-Рабочий read order для обычной implementation work:
-
-1. `AGENTS.md`
-2. `docs/work.md`
-3. `docs/blueprint.md`
-4. `docs/engineering.md`
-5. `docs/verification.md`
-6. `.aidp/os.yaml`
-7. `docs/history.md` только при необходимости durable historical detail
-
-Authority order для конфликтов между runtime-файлами:
-
-1. `AGENTS.md`
-2. `docs/blueprint.md`
-3. `.aidp/os.yaml`
-4. `docs/engineering.md`
-5. `docs/verification.md`
-6. `docs/work.md`
-7. `docs/history.md`
-
-Различие режимов:
-
-- `setup mode` используется только для первичной инициализации или переинициализации runtime core;
-- `normal mode` используется для обычной работы, где каждое изменение начинается с явного work item.
-
-Authoritative runtime core живет только в корне репозитория и в `docs/`/`.aidp/`.
-Временный refresh source package уже retired после verified transfer-audit.
-
-Для stateful backend testing и fixture cleanup используй deep contract doc [docs/contracts/test-access-and-fixtures.md](docs/contracts/test-access-and-fixtures.md).
+- [Documentation Index](docs/product/README.md)
+- [Product Blueprint](docs/product/architecture/product-blueprint.md)
+- [Operator Guide](docs/product/operator/HOW_TO_USE.md)
+- [Manual MVP Runbook](docs/product/operator/manual-mvp-runbook.md)
+- [Example Bundles](docs/product/operator/examples/EXAMPLES.md)
+- [MCP Operator Docs](docs/product/operator/mcp/README.md)
+- [Architecture Overview](docs/product/architecture/architecture-overview.md)
+- [Data Script Assets](docs/product/data-scripts/README.md)
 
 ## Базовая структура
 
@@ -236,7 +202,7 @@ infra/
    - worker logs for discovery planning/execution errors
 7. Roll back by setting `DISCOVERY_ENABLED=0` or switching `DISCOVERY_SEARCH_PROVIDER=stub`, then restart the affected runtime.
 
-For a dedicated operator-facing testing handbook for this subsystem, including bounded enable smoke, profile-backed Example B/C replay, graph-first mission testing, and independent recall/promotion checks, use [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md).
+For a dedicated operator-facing testing handbook for this subsystem, including bounded enable smoke, profile-backed Example B/C replay, graph-first mission testing, and independent recall/promotion checks, use [docs/product/operator/examples/DISCOVERY_MODE_TESTING.md](docs/product/operator/examples/DISCOVERY_MODE_TESTING.md).
 
 ### Browser-assisted website and hard-site notes
 
@@ -244,7 +210,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 - Browser-assisted or challenge-gated discovery candidates now stay on the manual-review path via runtime `policyReview`; they are not auto-registered.
 - Enable browser assistance only for public `website` channels when static discovery misses real resources or the site is clearly JS-heavy. The relevant website config keys are `browserFallbackEnabled=true` and `maxBrowserFetchesPerPoll` (keep the current default `2` unless you have a bounded reason to change it).
 - When discovery recommends browser help for a website candidate, the registered provider must still remain `website`; hidden feeds remain hints only and must not silently convert the source into RSS.
-- For a dedicated operator-facing manual pass of `website` channels, `/admin/resources`, projected vs resource-only rows, and bounded live-site checks, use [WEBSITE_SOURCES_TESTING.md](./WEBSITE_SOURCES_TESTING.md).
+- For a dedicated operator-facing manual pass of `website` channels, `/admin/resources`, projected vs resource-only rows, and bounded live-site checks, use [docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md](docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md).
 - For the expanded repo-owned real-site matrix after local website proof is green, run `node infra/scripts/test-live-website-matrix.mjs`; it validates 16 primary public sites across static editorial, document/download-heavy, public changelog, and browser-candidate shapes and writes a JSON evidence bundle under `/tmp/newsportal-live-website-matrix-<runId>.json`.
 - Operator verification for this lane should include:
   - `pnpm test:hard-sites:compose`
@@ -285,7 +251,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 - public `/collections/system-selected` теперь показывает system-selected content items по article/resource gate, даже если у текущего пользователя нет ни одного `user_interest`;
 - web показывает configured notification channels, working `notification_preferences`, browser-side `web_push` connect flow и расширенный lifecycle interests.
 
-Полный operator-facing runbook теперь собран в [docs/manual-mvp-runbook.md](docs/manual-mvp-runbook.md). Используй его, если нужен не только quick start, а полный local MVP walkthrough c setup, API checks, moderation/backfill, optional notifications и cleanup/reset guidance.
+Полный operator-facing runbook теперь собран в [docs/product/operator/manual-mvp-runbook.md](docs/product/operator/manual-mvp-runbook.md). Используй его, если нужен не только quick start, а полный local MVP walkthrough c setup, API checks, moderation/backfill, optional notifications и cleanup/reset guidance.
 
 Минимальный manual checklist:
 

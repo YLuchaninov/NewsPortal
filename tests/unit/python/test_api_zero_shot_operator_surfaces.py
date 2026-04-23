@@ -264,6 +264,165 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(explain["canonicalSelectionReused"], True)
         self.assertEqual(explain["duplicateArticleCountForCanonical"], 6)
 
+    def test_list_article_residuals_filters_and_shapes_selection_buckets(self) -> None:
+        row = {
+            "doc_id": "doc-semantic",
+            "url": "https://example.com/semantic",
+            "title": "Semantic miss",
+            "lead": "Residual evidence",
+            "lang": "en",
+            "processing_state": "processed",
+            "observation_state": "canonicalized",
+            "duplicate_kind": "canonical",
+            "final_selection_decision": "rejected",
+            "final_selection_selected": False,
+            "final_selection_verification_state": "weak",
+            "final_selection_reason": "semantic_no_match",
+            "system_feed_decision": "filtered_out",
+            "system_feed_eligible": False,
+            "system_criterion_rows": 2,
+            "user_interest_rows": 0,
+            "matched_rows": 0,
+            "no_match_rows": 2,
+            "gray_zone_rows": 0,
+            "technical_filtered_out_rows": 0,
+            "llm_review_rows": 0,
+            "notification_rows": 0,
+        }
+
+        with patch.object(api_main, "query_all", return_value=[row]) as query_all:
+            result = api_main.list_article_residuals(
+                downstream_loss_bucket="semantic_rejected",
+                selection_blocker_stage="semantic_filter",
+                selection_blocker_reason="semantic_no_match",
+                selection_mode="rejected",
+                verification_state="weak",
+                processing_state="processed",
+                observation_state="canonicalized",
+                duplicate_kind="canonical",
+                q="semantic",
+                page=1,
+                page_size=20,
+            )
+
+        self.assertEqual(result["total"], 1)
+        item = result["items"][0]
+        self.assertEqual(item["doc_id"], "doc-semantic")
+        self.assertEqual(item["selection_mode"], "rejected")
+        self.assertEqual(
+            item["selection_diagnostics"]["downstreamLossBucket"],
+            "semantic_rejected",
+        )
+        self.assertEqual(
+            item["selection_diagnostics"]["selectionBlockerStage"],
+            "semantic_filter",
+        )
+        self.assertEqual(
+            item["selection_diagnostics"]["selectionBlockerReason"],
+            "semantic_no_match",
+        )
+        self.assertEqual(item["interest_filter_summary"]["noMatchRows"], 2)
+        sql = query_all.call_args.args[0]
+        params = query_all.call_args.args[1]
+        self.assertIn("from interest_filter_results", sql)
+        self.assertIn("coalesce(fsr.verification_state, st.verification_state, vrc.verification_state)", sql)
+        self.assertIn("coalesce(a.title, '') ilike %s", sql)
+        self.assertIn("%semantic%", params)
+
+    def test_list_article_residuals_can_filter_hold_bucket_without_new_taxonomy(self) -> None:
+        hold_row = {
+            "doc_id": "doc-hold",
+            "title": "Held row",
+            "final_selection_decision": "gray_zone",
+            "final_selection_reason": "semantic_hold",
+            "final_selection_hold_count": 1,
+            "system_criterion_rows": 2,
+            "gray_zone_rows": 1,
+            "llm_review_rows": 0,
+            "notification_rows": 0,
+        }
+        selected_row = {
+            "doc_id": "doc-selected",
+            "title": "Selected row",
+            "final_selection_decision": "selected",
+            "final_selection_selected": True,
+            "system_criterion_rows": 2,
+            "matched_rows": 2,
+            "llm_review_rows": 0,
+            "notification_rows": 0,
+        }
+
+        with patch.object(api_main, "query_all", return_value=[hold_row, selected_row]):
+            result = api_main.list_article_residuals(
+                downstream_loss_bucket="gray_zone_hold",
+                selection_mode="hold",
+                page=1,
+                page_size=20,
+            )
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["items"][0]["doc_id"], "doc-hold")
+        self.assertEqual(
+            result["items"][0]["selection_diagnostics"]["selectionBlockerStage"],
+            "hold_policy",
+        )
+
+    def test_article_residual_summary_returns_bucket_counts(self) -> None:
+        rows = [
+            {
+                "doc_id": "doc-selected",
+                "final_selection_decision": "selected",
+                "final_selection_selected": True,
+                "final_selection_verification_state": "strong",
+                "system_criterion_rows": 2,
+                "matched_rows": 2,
+                "llm_review_rows": 0,
+                "notification_rows": 1,
+            },
+            {
+                "doc_id": "doc-technical",
+                "final_selection_decision": "rejected",
+                "final_selection_reason": "technical_filtered_out",
+                "processing_state": "processed",
+                "observation_state": "canonicalized",
+                "duplicate_kind": "canonical",
+                "system_criterion_rows": 1,
+                "matched_rows": 0,
+                "no_match_rows": 0,
+                "gray_zone_rows": 0,
+                "technical_filtered_out_rows": 1,
+                "llm_review_rows": 0,
+                "notification_rows": 0,
+            },
+            {
+                "doc_id": "doc-hold",
+                "final_selection_decision": "gray_zone",
+                "final_selection_reason": "semantic_hold",
+                "final_selection_hold_count": 1,
+                "processing_state": "processed",
+                "observation_state": "canonicalized",
+                "duplicate_kind": "canonical",
+                "system_criterion_rows": 2,
+                "gray_zone_rows": 1,
+                "llm_review_rows": 0,
+                "notification_rows": 0,
+            },
+        ]
+
+        with patch.object(api_main, "query_all", return_value=rows):
+            result = api_main.summarize_article_residuals()
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["totals"]["selected"], 1)
+        self.assertEqual(result["totals"]["technicalFiltered"], 1)
+        self.assertEqual(result["totals"]["hold"], 1)
+        downstream_groups = {
+            row["value"]: row["count"] for row in result["groups"]["downstreamLossBuckets"]
+        }
+        self.assertEqual(downstream_groups["selected_useful_evidence_present"], 1)
+        self.assertEqual(downstream_groups["technical_filter_rejected"], 1)
+        self.assertEqual(downstream_groups["gray_zone_hold"], 1)
+
     def test_content_item_explain_includes_operator_selection_fields(self) -> None:
         with (
             patch.object(

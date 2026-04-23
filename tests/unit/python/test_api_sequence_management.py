@@ -42,6 +42,8 @@ class ApiSequenceManagementTests(unittest.TestCase):
 
         self.assertIn("/maintenance/articles/{doc_id}/enrichment/retry", paths)
         self.assertIn("/maintenance/articles", paths)
+        self.assertIn("/maintenance/articles/residuals", paths)
+        self.assertIn("/maintenance/articles/residuals/summary", paths)
         self.assertIn("/maintenance/articles/{doc_id}", paths)
         self.assertIn("/maintenance/articles/{doc_id}/explain", paths)
         self.assertIn("/maintenance/llm-budget-summary", paths)

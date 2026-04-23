@@ -29,6 +29,9 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       toolFamilies: {
         read: [
           "admin.summary.get",
+          "articles.list/read/explain",
+          "content_items.list/read/explain",
+          "articles.residuals.list/summary",
           "system_interests.list/read",
           "llm_templates.list/read",
           "channels.list/read",
@@ -82,6 +85,16 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
           ],
         },
         {
+          name: "article-diagnostics-and-tuning",
+          guideResource: "newsportal://guide/scenarios/article-diagnostics",
+          steps: [
+            "Read newsportal://articles/residuals-summary first to find the dominant downstream-loss buckets.",
+            "Inspect one blocker bucket at a time with articles.residuals.list, articles.read, and articles.explain.",
+            "Compare the editorial observation with content_items.read/content_items.explain when selected/public truth matters.",
+            "Tune one interest, template, or discovery profile at a time and read the changed entity back after any mutation.",
+          ],
+        },
+        {
           name: "configuration-maintenance",
           guideResource: "newsportal://guide/scenarios/system-interests",
           steps: [
@@ -98,6 +111,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         "newsportal://guide/scenarios/system-interests",
         "newsportal://guide/scenarios/llm-templates",
         "newsportal://guide/scenarios/channels",
+        "newsportal://guide/scenarios/article-diagnostics",
         "newsportal://guide/scenarios/observability",
         "newsportal://guide/scenarios/cleanup",
       ],
@@ -311,6 +325,48 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
+    uri: "newsportal://guide/scenarios/article-diagnostics",
+    name: "guide.scenarios.article-diagnostics",
+    description: "Concrete MCP playbook for article residual analysis and evidence-based tuning.",
+    mimeType: "application/json",
+    read: async () => ({
+      objective:
+        "Use this scenario to understand why editorial observations did not reach selected content and to produce bounded tuning recommendations from article/content evidence.",
+      startWith: [
+        "Read newsportal://articles/residuals-summary first to identify the dominant blocker buckets.",
+        "Use articles.residuals.list to inspect representative rows for one blocker at a time.",
+        "Inspect the same case through articles.explain and, when relevant, content_items.explain to compare editorial observation truth with selected/public truth.",
+      ],
+      recommendedTools: {
+        read: [
+          "articles.list",
+          "articles.read",
+          "articles.explain",
+          "articles.residuals.list",
+          "articles.residuals.summary",
+          "content_items.list",
+          "content_items.read",
+          "content_items.explain",
+        ],
+        writeFollowThrough: [
+          "system_interests.update",
+          "llm_templates.update",
+          "discovery.profiles.update",
+        ],
+      },
+      sessionFlow: [
+        "Diagnose residual buckets before drilling into single examples.",
+        "Separate technical filtering, semantic rejection, gray-zone hold, and review-pending cases before proposing config changes.",
+        "Tune one interest, template, or discovery profile at a time and keep recommendations bounded to repeated evidence patterns.",
+        "After any mutation outside this read-first flow, re-read the affected entity through MCP before making the next recommendation.",
+      ],
+      invariants: [
+        "Downstream article/content diagnostics may inform operator prompts and decisions, but they must not become direct discovery auto-approval inputs.",
+        "Do not treat one residual row as enough evidence for broad policy changes; look for repeated patterns inside the same bucket.",
+      ],
+    }),
+  },
+  {
     uri: "newsportal://guide/scenarios/observability",
     name: "guide.scenarios.observability",
     description: "Concrete MCP playbook for read-only operator diagnosis across admin summary, budgets, web resources, and fetch runs.",
@@ -486,6 +542,13 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     description: "Current fetch runs summary list.",
     mimeType: "application/json",
     read: async ({ sdk }) => sdk.listFetchRuns<Record<string, unknown>>(),
+  },
+  {
+    uri: "newsportal://articles/residuals-summary",
+    name: "articles.residuals.summary",
+    description: "Aggregate article residual buckets for diagnostics and tuning sessions.",
+    mimeType: "application/json",
+    read: async ({ sdk }) => sdk.getArticleResidualSummary<Record<string, unknown>>(),
   },
 ] as const;
 

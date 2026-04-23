@@ -10,6 +10,17 @@ type QueryValue = string | number | boolean | null | undefined;
 type ChannelListQuery = PaginationQuery & { providerType?: string };
 type FetchRunsQuery = PaginationQuery & { channelId?: string };
 type SequenceListQuery = PaginationQuery;
+type ArticleResidualListQuery = PaginationQuery & {
+  downstreamLossBucket?: string;
+  selectionBlockerStage?: string;
+  selectionBlockerReason?: string;
+  selectionMode?: string;
+  verificationState?: string;
+  processingState?: string;
+  observationState?: string;
+  duplicateKind?: string;
+  q?: string;
+};
 type WebResourceListQuery = PaginationQuery & {
   channelId?: string;
   extractionState?: string;
@@ -132,10 +143,12 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         sort: params?.sort,
         q: params?.q?.trim() || undefined,
       }),
-    listContentItemsPage: <T>(params?: PaginationQuery) =>
+    listContentItemsPage: <T>(params?: WebContentListQuery) =>
       getPaginated<T>("/content-items", {
         page: params?.page,
         pageSize: params?.pageSize,
+        sort: params?.sort,
+        q: params?.q?.trim() || undefined,
       }),
     getContentItem: <T>(contentItemId: string) =>
       getJson<T>(`/content-items/${encodeURIComponent(contentItemId)}`),
@@ -158,6 +171,32 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       getPaginated<T>("/maintenance/articles", {
         page: params?.page,
         pageSize: params?.pageSize,
+      }),
+    listArticleResidualsPage: <T>(params?: ArticleResidualListQuery) =>
+      getPaginated<T>("/maintenance/articles/residuals", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        downstreamLossBucket: params?.downstreamLossBucket,
+        selectionBlockerStage: params?.selectionBlockerStage,
+        selectionBlockerReason: params?.selectionBlockerReason,
+        selectionMode: params?.selectionMode,
+        verificationState: params?.verificationState,
+        processingState: params?.processingState,
+        observationState: params?.observationState,
+        duplicateKind: params?.duplicateKind,
+        q: params?.q?.trim() || undefined,
+      }),
+    getArticleResidualSummary: <T>(params?: Omit<ArticleResidualListQuery, "page" | "pageSize">) =>
+      getJson<T>("/maintenance/articles/residuals/summary", {
+        downstreamLossBucket: params?.downstreamLossBucket,
+        selectionBlockerStage: params?.selectionBlockerStage,
+        selectionBlockerReason: params?.selectionBlockerReason,
+        selectionMode: params?.selectionMode,
+        verificationState: params?.verificationState,
+        processingState: params?.processingState,
+        observationState: params?.observationState,
+        duplicateKind: params?.duplicateKind,
+        q: params?.q?.trim() || undefined,
       }),
     getArticle: <T>(docId: string) => getJson<T>(`/maintenance/articles/${docId}`),
     getArticleExplain: <T>(docId: string) => getJson<T>(`/maintenance/articles/${docId}/explain`),

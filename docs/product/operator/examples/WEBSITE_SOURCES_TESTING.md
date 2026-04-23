@@ -6,7 +6,9 @@
 >
 > **Что этот документ не покрывает полностью:** полный MVP runbook, discovery mission planning, YouTube onboarding, login-required websites, CAPTCHA bypass, cookie/session replay и любой stealth scraping.
 >
-> **Перед началом:** прочитайте [HOW_TO_USE.md](./HOW_TO_USE.md) для общего admin flow, [README.md](./README.md) для runtime/discovery notes и [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md) для полного local MVP walkthrough.
+> **Перед началом:** прочитайте [HOW_TO_USE.md](../HOW_TO_USE.md) для общего admin flow, [README.md](../../../README.md) для runtime/discovery notes и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) для полного local MVP walkthrough.
+>
+> **Как понять, что сценарий пройден успешно:** выбранный `website` channel дает ожидаемый mix `web_resources` и projections, а `/admin/resources` подтверждает честную границу между projected editorial rows и resource-only rows.
 
 > **Для широкого bounded live pass:** после того как локальный website proof зелёный, можно запустить `node infra/scripts/test-live-website-matrix.mjs`. Этот repo-owned harness прогоняет 16 primary public sites across `static_editorial`, `documents_downloads`, `public_changelog` и `browser_candidate`, сохраняет `/tmp/newsportal-live-website-matrix-<runId>.json`, и не заменяет deterministic compose acceptance.
 

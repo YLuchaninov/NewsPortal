@@ -44,6 +44,7 @@ async function main() {
     scenarios: args.scenarios,
     group: args.group,
   });
+  harness.selectedScenarioKeys = scenarioKeys;
   const startedAt = new Date().toISOString();
   let report = null;
 

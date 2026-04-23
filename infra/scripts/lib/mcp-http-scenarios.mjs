@@ -64,10 +64,54 @@ function hasContentArray(result) {
 
 function buildPromptArguments(name, runId) {
   switch (name) {
+    case "operator.session.start":
+      return {
+        objective: `review article residual diagnostics ${runId}`,
+        domain: "article diagnostics",
+      };
+    case "sequences.session.plan":
+      return {
+        objective: `review deterministic sequence flows ${runId}`,
+      };
+    case "discovery.session.plan":
+      return {
+        objective: `review deterministic discovery flows ${runId}`,
+      };
+    case "system_interests.session.plan":
+      return {
+        topic: `operator residual tuning ${runId}`,
+      };
+    case "llm_templates.session.plan":
+      return {
+        templateIntent: `improve residual explainability guidance ${runId}`,
+      };
+    case "channels.session.plan":
+      return {
+        source: `deterministic source ${runId}`,
+      };
+    case "observability.session.plan":
+      return {
+        question: `why did deterministic MCP coverage change for ${runId}`,
+      };
     case "system_interest.create":
       return {
         topic: `MCP operator monitoring ${runId}`,
         audience: "operators",
+      };
+    case "system_interest.polish":
+      return {
+        interestName: `Operator interest ${runId}`,
+        residualPattern: "semantic_rejected repeated across explainable article residuals",
+      };
+    case "llm_template.tune":
+      return {
+        templateName: `Operator template ${runId}`,
+        residualPattern: "llm_review_pending repeated in gray-zone article residuals",
+      };
+    case "discovery.profile.tune":
+      return {
+        profileName: `Operator profile ${runId}`,
+        residualPattern: "gray_zone_hold repeated after recall-style candidate recovery",
       };
     case "discovery.mission.review":
       return {
@@ -949,37 +993,25 @@ function buildReadToolCalls(harness) {
   return [
     { name: "admin.summary.get", args: {} },
     { name: "system_interests.list", args: { page: 1, pageSize: 20 } },
-    { name: "system_interests.read", args: { interestTemplateId: harness.getEntity("interestTemplateId") } },
     { name: "llm_templates.list", args: { page: 1, pageSize: 20 } },
-    { name: "llm_templates.read", args: { promptTemplateId: harness.getEntity("promptTemplateId") } },
     { name: "channels.list", args: { page: 1, pageSize: 20 } },
-    { name: "channels.read", args: { channelId: harness.getEntity("channelId") } },
     { name: "sequences.list", args: { page: 1, pageSize: 20 } },
-    { name: "sequences.read", args: { sequenceId: harness.getEntity("validSequenceId") } },
     { name: "sequences.plugins.list", args: {} },
-    { name: "sequences.runs.read", args: { runId: harness.getEntity("failedRunId") } },
-    { name: "sequences.run_task_runs.list", args: { runId: harness.getEntity("failedRunId") } },
     { name: "discovery.summary.get", args: {} },
     { name: "discovery.profiles.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.profiles.read", args: { profileId: harness.getEntity("profileId") } },
     { name: "discovery.classes.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.classes.read", args: { classKey: harness.getEntity("classKey") } },
     { name: "discovery.missions.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.missions.read", args: { missionId: harness.getEntity("missionId") } },
-    { name: "discovery.missions.portfolio.read", args: { missionId: harness.getEntity("missionId") } },
     { name: "discovery.recall_missions.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.recall_missions.read", args: { recallMissionId: harness.getEntity("recallMissionId") } },
-    { name: "discovery.candidates.list", args: { page: 1, pageSize: 20, missionId: harness.getEntity("missionId") } },
-    { name: "discovery.candidates.read", args: { candidateId: harness.getEntity("candidateId") } },
-    { name: "discovery.recall_candidates.list", args: { page: 1, pageSize: 20, recallMissionId: harness.getEntity("recallMissionId") } },
-    { name: "discovery.recall_candidates.read", args: { recallCandidateId: harness.getEntity("recallCandidateId") } },
-    { name: "discovery.hypotheses.list", args: { page: 1, pageSize: 20, missionId: harness.getEntity("missionId") } },
+    { name: "discovery.candidates.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.recall_candidates.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.hypotheses.list", args: { page: 1, pageSize: 20 } },
     { name: "discovery.source_profiles.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.source_profiles.read", args: { sourceProfileId: harness.getEntity("sourceProfileId") } },
-    { name: "discovery.source_interest_scores.list", args: { page: 1, pageSize: 20, missionId: harness.getEntity("missionId") } },
-    { name: "discovery.source_interest_scores.read", args: { scoreId: harness.getEntity("scoreId") } },
-    { name: "discovery.feedback.list", args: { page: 1, pageSize: 20, missionId: harness.getEntity("missionId") } },
+    { name: "discovery.source_interest_scores.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.feedback.list", args: { page: 1, pageSize: 20 } },
     { name: "discovery.costs.summary", args: {} },
+    { name: "articles.list", args: { page: 1, pageSize: 20 } },
+    { name: "content_items.list", args: { page: 1, pageSize: 20 } },
+    { name: "articles.residuals.summary", args: {} },
     { name: "web_resources.list", args: { page: 1, pageSize: 20 } },
     { name: "fetch_runs.list", args: { page: 1, pageSize: 20 } },
     { name: "llm_budget.summary", args: {} },
@@ -990,10 +1022,24 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
   const evidence = [];
   const token = harness.tokens.analyst.token;
   const results = [];
+  const listResults = {};
+  let articleList = null;
+  let contentItemList = null;
+  let articleResidualSummary = null;
   let webResourceList = null;
 
   for (const call of buildReadToolCalls(harness)) {
     const output = await harness.mcpToolCall(token, call.name, call.args);
+    listResults[call.name] = output;
+    if (call.name === "articles.list") {
+      articleList = output;
+    }
+    if (call.name === "content_items.list") {
+      contentItemList = output;
+    }
+    if (call.name === "articles.residuals.summary") {
+      articleResidualSummary = output;
+    }
     if (call.name === "web_resources.list") {
       webResourceList = output;
     }
@@ -1003,12 +1049,151 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
     });
   }
 
+  const firstSystemInterest = readFirstRow(listResults["system_interests.list"] ?? {});
+  const interestTemplateId = readIdentifier(firstSystemInterest, [
+    "interest_template_id",
+    "interestTemplateId",
+  ]);
+  if (interestTemplateId) {
+    await harness.mcpToolCall(token, "system_interests.read", {
+      interestTemplateId,
+    });
+  }
+
+  const firstTemplate = readFirstRow(listResults["llm_templates.list"] ?? {});
+  const promptTemplateId = readIdentifier(firstTemplate, ["prompt_template_id", "promptTemplateId"]);
+  if (promptTemplateId) {
+    await harness.mcpToolCall(token, "llm_templates.read", {
+      promptTemplateId,
+    });
+  }
+
+  const firstChannel = readFirstRow(listResults["channels.list"] ?? {});
+  const channelId = readIdentifier(firstChannel, ["channel_id", "channelId"]);
+  if (channelId) {
+    await harness.mcpToolCall(token, "channels.read", { channelId });
+  }
+
+  const firstSequence = readFirstRow(listResults["sequences.list"] ?? {});
+  const sequenceId = readIdentifier(firstSequence, ["sequence_id", "sequenceId"]);
+  if (sequenceId) {
+    const sequence = await harness.mcpToolCall(token, "sequences.read", { sequenceId });
+    const runId = readIdentifier(sequence, ["latest_run_id", "latestRunId"]);
+    if (runId) {
+      await harness.mcpToolCall(token, "sequences.runs.read", { runId });
+      await harness.mcpToolCall(token, "sequences.run_task_runs.list", { runId });
+    }
+  }
+
+  const firstProfile = readFirstRow(listResults["discovery.profiles.list"] ?? {});
+  const profileId = readIdentifier(firstProfile, ["profile_id", "profileId"]);
+  if (profileId) {
+    await harness.mcpToolCall(token, "discovery.profiles.read", { profileId });
+  }
+
+  const firstClass = readFirstRow(listResults["discovery.classes.list"] ?? {});
+  const classKey = readIdentifier(firstClass, ["class_key", "classKey"]);
+  if (classKey) {
+    await harness.mcpToolCall(token, "discovery.classes.read", { classKey });
+  }
+
+  const firstMission = readFirstRow(listResults["discovery.missions.list"] ?? {});
+  const missionId = readIdentifier(firstMission, ["mission_id", "missionId"]);
+  if (missionId) {
+    await harness.mcpToolCall(token, "discovery.missions.read", { missionId });
+    await harness.mcpToolCall(token, "discovery.missions.portfolio.read", { missionId });
+  }
+
+  const firstRecallMission = readFirstRow(listResults["discovery.recall_missions.list"] ?? {});
+  const recallMissionId = readIdentifier(firstRecallMission, [
+    "recall_mission_id",
+    "recallMissionId",
+  ]);
+  if (recallMissionId) {
+    await harness.mcpToolCall(token, "discovery.recall_missions.read", { recallMissionId });
+  }
+
+  const firstCandidate = readFirstRow(listResults["discovery.candidates.list"] ?? {});
+  const candidateId = readIdentifier(firstCandidate, ["candidate_id", "candidateId"]);
+  if (candidateId) {
+    await harness.mcpToolCall(token, "discovery.candidates.read", { candidateId });
+  }
+
+  const firstRecallCandidate = readFirstRow(listResults["discovery.recall_candidates.list"] ?? {});
+  const recallCandidateId = readIdentifier(firstRecallCandidate, [
+    "recall_candidate_id",
+    "recallCandidateId",
+  ]);
+  if (recallCandidateId) {
+    await harness.mcpToolCall(token, "discovery.recall_candidates.read", { recallCandidateId });
+  }
+
+  const firstSourceProfile = readFirstRow(listResults["discovery.source_profiles.list"] ?? {});
+  const sourceProfileId = readIdentifier(firstSourceProfile, [
+    "source_profile_id",
+    "sourceProfileId",
+  ]);
+  if (sourceProfileId) {
+    await harness.mcpToolCall(token, "discovery.source_profiles.read", { sourceProfileId });
+  }
+
+  const firstSourceInterestScore = readFirstRow(
+    listResults["discovery.source_interest_scores.list"] ?? {}
+  );
+  const scoreId = readIdentifier(firstSourceInterestScore, ["score_id", "scoreId"]);
+  if (scoreId) {
+    await harness.mcpToolCall(token, "discovery.source_interest_scores.read", { scoreId });
+  }
+
   const firstWebResource = readFirstRow(webResourceList ?? {});
   const resourceId = readIdentifier(firstWebResource, ["resource_id", "resourceId"]);
   if (resourceId) {
     await harness.mcpToolCall(token, "web_resources.read", {
       resourceId,
     });
+  }
+
+  const firstArticle = readFirstRow(articleList ?? {});
+  const articleDocId = readIdentifier(firstArticle, ["doc_id", "docId"]);
+  if (articleDocId) {
+    await harness.mcpToolCall(token, "articles.read", {
+      docId: articleDocId,
+    });
+    await harness.mcpToolCall(token, "articles.explain", {
+      docId: articleDocId,
+    });
+  }
+
+  const firstContentItem = readFirstRow(contentItemList ?? {});
+  const contentItemId = readIdentifier(firstContentItem, ["content_item_id", "contentItemId"]);
+  if (contentItemId) {
+    await harness.mcpToolCall(token, "content_items.read", {
+      contentItemId,
+    });
+    await harness.mcpToolCall(token, "content_items.explain", {
+      contentItemId,
+    });
+  }
+
+  const residualSummaryRow = extractFirstObjectRow(articleResidualSummary);
+  const residualGroups = residualSummaryRow?.groups;
+  const firstResidualBucket = Array.isArray(residualGroups?.downstreamLossBuckets)
+    ? residualGroups.downstreamLossBuckets[0]?.value
+    : null;
+  const residualList = await harness.mcpToolCall(token, "articles.residuals.list", {
+    page: 1,
+    pageSize: 20,
+    ...(firstResidualBucket ? { downstreamLossBucket: firstResidualBucket } : {}),
+  });
+  const firstResidualRow = readFirstRow(residualList ?? {});
+  if (firstResidualRow && firstResidualBucket) {
+    assert(
+      readIdentifier(firstResidualRow.selection_diagnostics, ["downstreamLossBucket"]) ===
+        firstResidualBucket ||
+        String(firstResidualRow?.selection_diagnostics?.downstreamLossBucket ?? "") ===
+          String(firstResidualBucket),
+      "articles.residuals.list should agree with the chosen residual bucket filter."
+    );
   }
 
   const deniedWrite = await postJson(
@@ -1315,6 +1500,12 @@ async function scenarioRequestLogAndAuditEvidence(harness) {
 
 async function scenarioDocParityMatrix(harness) {
   const evidence = [];
+  const selectedScenarioKeys = Array.isArray(harness.selectedScenarioKeys)
+    ? harness.selectedScenarioKeys
+    : [];
+  const isFullMatrix =
+    selectedScenarioKeys.length === DETERMINISTIC_SCENARIO_ORDER.length &&
+    DETERMINISTIC_SCENARIO_ORDER.every((name) => selectedScenarioKeys.includes(name));
   const matrix = buildMcpDocParityMatrix({
     shippedTools: harness.shippedInventory.tools,
     shippedResources: harness.shippedInventory.resources,
@@ -1323,11 +1514,17 @@ async function scenarioDocParityMatrix(harness) {
     coveredResources: harness.getCoverage().resources,
     coveredPrompts: harness.getCoverage().prompts,
   });
-  assertFullShippedCoverage(matrix);
+  if (isFullMatrix) {
+    assertFullShippedCoverage(matrix);
+  }
   harness.docParityMatrix = matrix;
 
   pushEvidence(evidence, "shipped-summary", matrix.summary.shippedTools);
   pushEvidence(evidence, "legacy-examples", matrix.legacy.examples);
+  pushEvidence(evidence, "coverage-mode", {
+    assertedFullShippedCoverage: isFullMatrix,
+    selectedScenarios: selectedScenarioKeys,
+  });
 
   return {
     key: "doc-parity-matrix",
@@ -1348,19 +1545,41 @@ export const DETERMINISTIC_SCENARIOS = {
   "doc-parity-matrix": scenarioDocParityMatrix,
 };
 
+function withScenarioPrerequisites(scenarios) {
+  const planned = Array.from(scenarios ?? []).filter(Boolean);
+  const ordered = [];
+  const push = (name) => {
+    if (!ordered.includes(name)) {
+      ordered.push(name);
+    }
+  };
+  const needsAuth = planned.some((name) => name !== "auth-and-token-lifecycle");
+  const needsProtocolDiscovery = planned.includes("doc-parity-matrix");
+  if (needsAuth) {
+    push("auth-and-token-lifecycle");
+  }
+  if (needsProtocolDiscovery) {
+    push("protocol-discovery");
+  }
+  for (const name of planned) {
+    push(name);
+  }
+  return ordered;
+}
+
 export function resolveDeterministicScenarios({ scenarios = [], group } = {}) {
   const explicit = Array.from(scenarios ?? [])
     .map((name) => String(name ?? "").trim())
     .filter(Boolean);
   if (explicit.length > 0) {
-    return explicit;
+    return withScenarioPrerequisites(explicit);
   }
   if (group) {
     const resolved = DETERMINISTIC_SCENARIO_GROUPS[String(group).trim()];
     if (!resolved) {
       throw new Error(`Unknown MCP HTTP scenario group "${group}".`);
     }
-    return resolved;
+    return withScenarioPrerequisites(resolved);
   }
   return [...DETERMINISTIC_SCENARIO_ORDER];
 }

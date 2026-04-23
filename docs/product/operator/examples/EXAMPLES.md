@@ -6,7 +6,9 @@
 >
 > **Что этот документ не покрывает полностью:** полный `.env.dev` bootstrap, весь manual MVP runbook, полный website/hard-site operator pass и live-internet edge cases вне bounded local setup.
 >
-> **Перед началом:** прочитайте [HOW_TO_USE.md](./HOW_TO_USE.md) для общего админ-потока, [README.md](./README.md) для discovery/runtime env и [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md) для полного MVP walkthrough.
+> **Перед началом:** прочитайте [HOW_TO_USE.md](../HOW_TO_USE.md) для общего админ-потока, [README.md](../../../README.md) для discovery/runtime env и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) для полного MVP walkthrough.
+>
+> **Как понять, что пример применен успешно:** каналы импортированы, rules созданы, `interest_centroids` переиндексирован, а в `Articles`, `Clusters` и `Observability` видно ожидаемое наполнение без необходимости гадать, какой doc теперь канонический.
 
 ---
 
@@ -50,13 +52,13 @@
 3. **Шаблоны интересов** — набор системных тем с положительными и отрицательными прототипами, которые создаются на странице **Rules → System Interests** и синхронизируются в live `criteria`
 4. **Profile policy, hard filters и candidate cues** — для каждого system interest теперь важно заполнить прототипы, profile policy (`Strictness`, `Unresolved outcome`, `LLM review mode`), `must_not_have_terms`, `allowed_content_kinds`, `priority` и `candidate uplift positive/negative cues`; `must_have_terms` и `time_window_hours` остаются опциональными hard filters и для recall-first baseline обычно оставляются пустыми
 
-Для built-in example bundles именно этот файл должен считаться первичным human-facing источником. Узкие companion docs в `docs/data_scripts/*` могут помогать отдельному use case, но не должны расходиться с этим документом и не должны переопределять его.
+Для built-in example bundles именно этот файл должен считаться первичным human-facing источником. Узкие companion docs в `docs/product/data-scripts/*` могут помогать отдельному use case, но не должны расходиться с этим документом и не должны переопределять его.
 
 Перед использованием примеров убедитесь, что у вас уже есть:
 
 1. Заполненный `.env.dev` и рабочий локальный stack
 2. Настроенный Firebase admin sign-in и allowlist
-3. Понимание, что базовый content bundle живет здесь, discovery setup теперь описан в разделе 7, а полный website/hard-site manual pass по-прежнему живет в `README.md` и `docs/manual-mvp-runbook.md`
+3. Понимание, что базовый content bundle живет здесь, discovery setup теперь описан в разделе 7, а полный website/hard-site manual pass по-прежнему живет в `README.md` и `docs/product/operator/manual-mvp-runbook.md`
 
 **Порядок действий:**
 
@@ -67,7 +69,7 @@
 4. Для каждого system interest выставить runtime policy ровно так, как она указана в текущем примере: `Strictness` может различаться по шаблонам, а `Unresolved outcome = hold` и `LLM review mode = always` остаются baseline, если ниже не указано иное
 5. Запустить переиндексацию (Reindex → interest_centroids)
 6. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
-7. Если нужен полный MVP/manual verification pass, вернуться к `docs/manual-mvp-runbook.md`, а не останавливаться на этом документе
+7. Если нужен полный MVP/manual verification pass, вернуться к `docs/product/operator/manual-mvp-runbook.md`, а не останавливаться на этом документе
 ```
 
 > ⚠️ **Не забудьте переиндексацию!** После создания или изменения шаблонов интересов всегда запускайте переиндексацию `interest_centroids`. Это обновит derived index, а режим repair/backfill поможет пересчитать уже существующие статьи по текущему системному набору тем.
@@ -2025,7 +2027,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 ### C.2. LLM-шаблоны
 
-Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/data_scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/data_scripts/outsource_balanced_templates.json` — reference asset для ручного сравнения/переноса, но не отдельный competing handbook.
+Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/product/data-scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/product/data-scripts/outsource_balanced_templates.json` — reference asset для ручного сравнения/переноса, но не отдельный competing handbook.
 
 Перейдите в **Rules → LLM Templates** и создайте все 3 active baseline шаблона: `interests`, `criteria` и `global`.
 
@@ -2838,7 +2840,7 @@ pnpm test:discovery:examples:compose
 Даже после этого appendix здесь сознательно не дублируются:
 
 - полный `.env.dev` bootstrap и все runtime env details из `README.md`;
-- весь operator manual verification flow из `docs/manual-mvp-runbook.md`;
+- весь operator manual verification flow из `docs/product/operator/manual-mvp-runbook.md`;
 - browser-assisted hard-site walkthrough beyond the short discovery tie-in above;
 - live-internet anti-bot escalation, login-required sources, CAPTCHA solving и manual challenge bypass;
 - полноценный operator-ready rollout для discovery provider types `api`, `email_imap` и `youtube`.
@@ -2880,12 +2882,12 @@ pnpm test:discovery:examples:compose
 > Потому что для sales/discovery они работают как **lead signals**, а не как готовые лиды. Новость про funding, запуск нового продукта, rollout AI-функции или enterprise-модернизацию сама по себе не означает сделку — но часто подсказывает, у кого в ближайшие месяцы появляется потребность в внешней delivery-команде. Именно поэтому в примере C такие источники сочетаются со строгими negative prototypes и conservative LLM review.
 
 **В: Покрывает ли этот документ discovery, website channels и hard-site/browser fallback настройку?**
-> Теперь частично. Раздел 7 покрывает discovery enable path, смысл `DISCOVERY_*` настроек и то, как discovery соотносится с примерами A/B/C. Но полный operator manual verification, website `/resources`, hard-site/browser fallback и cleanup/reset по-прежнему подробно живут в `README.md` и `docs/manual-mvp-runbook.md`.
+> Теперь частично. Раздел 7 покрывает discovery enable path, смысл `DISCOVERY_*` настроек и то, как discovery соотносится с примерами A/B/C. Но полный operator manual verification, website `/resources`, hard-site/browser fallback и cleanup/reset по-прежнему подробно живут в `README.md` и `docs/product/operator/manual-mvp-runbook.md`.
 
 ---
 
 > 📖 **Связанные документы:**
-> - [HOW_TO_USE.md](./HOW_TO_USE.md) — полное руководство по администрированию NewsPortal
-> - [README.md](./README.md) — runtime env, discovery enable и smoke/proof команды
-> - [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md) — полный local MVP walkthrough, cleanup/reset, optional discovery и website verification
+> - [HOW_TO_USE.md](../HOW_TO_USE.md) — полное руководство по администрированию NewsPortal
+> - [README.md](../../../README.md) — runtime env, discovery enable и smoke/proof команды
+> - [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) — полный local MVP walkthrough, cleanup/reset, optional discovery и website verification
 > - Раздел **Help & Guide** в боковом меню админки — встроенный справочник на английском языке

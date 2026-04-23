@@ -6,7 +6,9 @@
 >
 > **Что этот документ не покрывает полностью:** полный MVP runbook, общий bootstrap всего продукта, uncontrolled live-internet rollout, stealth scraping, login-required discovery targets, и operator-ready onboarding для discovery provider types `api`, `email_imap` и `youtube`.
 >
-> **Перед началом:** держите рядом [HOW_TO_USE.md](./HOW_TO_USE.md), [README.md](./README.md), [EXAMPLES.md](./EXAMPLES.md) и [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md).
+> **Перед началом:** держите рядом [HOW_TO_USE.md](../HOW_TO_USE.md), [README.md](../../../README.md), [EXAMPLES.md](./EXAMPLES.md) и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md).
+>
+> **Как понять, что сценарий пройден успешно:** выбранный discovery lane дает ожидаемые evidence surfaces в `/admin/discovery`, `/maintenance/discovery/*` и repo-owned proof-командах без смешивания graph-first missions, recall backlog и promotion state.
 
 ---
 
@@ -1119,7 +1121,7 @@ Current truthful note:
 ## 10. FAQ по discovery mode
 
 **В: Нужно ли discovery для обычного MVP run?**
-> Нет. Canonical safe-by-default MVP baseline остается без discovery. Для общего продукта используйте `docs/manual-mvp-runbook.md`.
+> Нет. Canonical safe-by-default MVP baseline остается без discovery. Для общего продукта используйте `docs/product/operator/manual-mvp-runbook.md`.
 
 **В: Можно ли тестировать discovery только через `/admin/discovery`?**
 > Не полностью. Для честного локального proof сначала нужен `pnpm test:discovery-enabled:compose`, а recall create/promote flow сейчас truthfully bounded maintenance API path.

@@ -143,6 +143,95 @@ const detailSchema = {
   additionalProperties: true,
 } satisfies Record<string, unknown>;
 
+const contentDetailSchema = {
+  type: "object",
+  properties: {
+    docId: { type: "string" },
+    contentItemId: { type: "string" },
+    includeBody: { type: "boolean" },
+    includeBodyHtml: { type: "boolean" },
+    includeRawPayload: { type: "boolean" },
+    includeMediaAssets: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies Record<string, unknown>;
+
+function isFlagEnabled(value: unknown): boolean {
+  return value === true || String(value ?? "").trim().toLowerCase() === "true";
+}
+
+function readOptionalContentSort(
+  value: unknown
+): "latest" | "oldest" | "title_asc" | "title_desc" | undefined {
+  const normalized = readOptionalString(value);
+  if (
+    normalized === "latest" ||
+    normalized === "oldest" ||
+    normalized === "title_asc" ||
+    normalized === "title_desc"
+  ) {
+    return normalized;
+  }
+  return undefined;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : null;
+}
+
+function shapeContentLikeRecord(
+  value: unknown,
+  args: Record<string, unknown>
+): Record<string, unknown> | null {
+  const record = asObject(value);
+  if (!record) {
+    return null;
+  }
+  if (!isFlagEnabled(args.includeBody)) {
+    delete record.body;
+  }
+  if (!isFlagEnabled(args.includeBodyHtml)) {
+    delete record.body_html;
+    delete record.full_content_html;
+  }
+  if (!isFlagEnabled(args.includeRawPayload)) {
+    delete record.raw_payload_json;
+  }
+  if (!isFlagEnabled(args.includeMediaAssets)) {
+    delete record.media_assets;
+    delete record.media_json;
+  }
+  return record;
+}
+
+function shapePaginatedContentItems(
+  value: unknown,
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const payload = asObject(value) ?? {};
+  const items = Array.isArray(payload.items)
+    ? payload.items.map((entry) => shapeContentLikeRecord(entry, args) ?? entry)
+    : [];
+  return {
+    ...payload,
+    items,
+  };
+}
+
+function shapeExplainPayload(
+  value: unknown,
+  itemKey: "article" | "content_item",
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const payload = asObject(value) ?? {};
+  return {
+    ...payload,
+    [itemKey]: shapeContentLikeRecord(payload[itemKey], args) ?? payload[itemKey],
+  };
+}
+
 function createReadTool(
   name: string,
   description: string,
@@ -250,6 +339,167 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     detailSchema,
     async ({ sdk }, args) =>
       sdk.getChannel<Record<string, unknown>>(readRequiredString(args.channelId, "channelId"))
+  ),
+  createReadTool(
+    "articles.list",
+    "List editorial article observations from the maintenance API.",
+    pagingSchema,
+    async ({ sdk }, args) =>
+      shapePaginatedContentItems(
+        await sdk.listArticlesPage<Record<string, unknown>>(readPageArgs(args)),
+        args
+      )
+  ),
+  createReadTool(
+    "articles.read",
+    "Read one editorial article observation with compact defaults.",
+    {
+      ...contentDetailSchema,
+      required: ["docId"],
+    },
+    async ({ sdk }, args) =>
+      shapeContentLikeRecord(
+        await sdk.getArticle<Record<string, unknown>>(readRequiredString(args.docId, "docId")),
+        args
+      )
+  ),
+  createReadTool(
+    "articles.explain",
+    "Read article-level selection diagnostics, filter evidence, and verification context.",
+    {
+      ...contentDetailSchema,
+      required: ["docId"],
+    },
+    async ({ sdk }, args) =>
+      shapeExplainPayload(
+        await sdk.getArticleExplain<Record<string, unknown>>(
+          readRequiredString(args.docId, "docId")
+        ),
+        "article",
+        args
+      )
+  ),
+  createReadTool(
+    "content_items.list",
+    "List selected/public content items with optional search and sort.",
+    {
+      type: "object",
+      properties: {
+        page: { type: "number" },
+        pageSize: { type: "number" },
+        sort: { type: "string" },
+        q: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    async ({ sdk }, args) =>
+      shapePaginatedContentItems(
+        await sdk.listContentItemsPage<Record<string, unknown>>({
+          ...readPageArgs(args),
+          sort: readOptionalContentSort(args.sort),
+          q: readOptionalString(args.q) ?? undefined,
+        }),
+        args
+      )
+  ),
+  createReadTool(
+    "content_items.read",
+    "Read one content item with compact defaults.",
+    {
+      ...contentDetailSchema,
+      required: ["contentItemId"],
+    },
+    async ({ sdk }, args) =>
+      shapeContentLikeRecord(
+        await sdk.getContentItem<Record<string, unknown>>(
+          readRequiredString(args.contentItemId, "contentItemId")
+        ),
+        args
+      )
+  ),
+  createReadTool(
+    "content_items.explain",
+    "Read content-item explainability including selection diagnostics and guidance.",
+    {
+      ...contentDetailSchema,
+      required: ["contentItemId"],
+    },
+    async ({ sdk }, args) =>
+      shapeExplainPayload(
+        await sdk.getContentItemExplain<Record<string, unknown>>(
+          readRequiredString(args.contentItemId, "contentItemId")
+        ),
+        "content_item",
+        args
+      )
+  ),
+  createReadTool(
+    "articles.residuals.list",
+    "List article residual buckets for tuning and operator diagnosis.",
+    {
+      type: "object",
+      properties: {
+        page: { type: "number" },
+        pageSize: { type: "number" },
+        downstreamLossBucket: { type: "string" },
+        selectionBlockerStage: { type: "string" },
+        selectionBlockerReason: { type: "string" },
+        selectionMode: { type: "string" },
+        verificationState: { type: "string" },
+        processingState: { type: "string" },
+        observationState: { type: "string" },
+        duplicateKind: { type: "string" },
+        q: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    async ({ sdk }, args) =>
+      shapePaginatedContentItems(
+        await sdk.listArticleResidualsPage<Record<string, unknown>>({
+          ...readPageArgs(args),
+          downstreamLossBucket: readOptionalString(args.downstreamLossBucket) ?? undefined,
+          selectionBlockerStage: readOptionalString(args.selectionBlockerStage) ?? undefined,
+          selectionBlockerReason: readOptionalString(args.selectionBlockerReason) ?? undefined,
+          selectionMode: readOptionalString(args.selectionMode) ?? undefined,
+          verificationState: readOptionalString(args.verificationState) ?? undefined,
+          processingState: readOptionalString(args.processingState) ?? undefined,
+          observationState: readOptionalString(args.observationState) ?? undefined,
+          duplicateKind: readOptionalString(args.duplicateKind) ?? undefined,
+          q: readOptionalString(args.q) ?? undefined,
+        }),
+        args
+      )
+  ),
+  createReadTool(
+    "articles.residuals.summary",
+    "Read aggregate residual diagnostics and blocker-bucket counts.",
+    {
+      type: "object",
+      properties: {
+        downstreamLossBucket: { type: "string" },
+        selectionBlockerStage: { type: "string" },
+        selectionBlockerReason: { type: "string" },
+        selectionMode: { type: "string" },
+        verificationState: { type: "string" },
+        processingState: { type: "string" },
+        observationState: { type: "string" },
+        duplicateKind: { type: "string" },
+        q: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    async ({ sdk }, args) =>
+      sdk.getArticleResidualSummary<Record<string, unknown>>({
+        downstreamLossBucket: readOptionalString(args.downstreamLossBucket) ?? undefined,
+        selectionBlockerStage: readOptionalString(args.selectionBlockerStage) ?? undefined,
+        selectionBlockerReason: readOptionalString(args.selectionBlockerReason) ?? undefined,
+        selectionMode: readOptionalString(args.selectionMode) ?? undefined,
+        verificationState: readOptionalString(args.verificationState) ?? undefined,
+        processingState: readOptionalString(args.processingState) ?? undefined,
+        observationState: readOptionalString(args.observationState) ?? undefined,
+        duplicateKind: readOptionalString(args.duplicateKind) ?? undefined,
+        q: readOptionalString(args.q) ?? undefined,
+      })
   ),
   createReadTool(
     "sequences.list",

@@ -7,12 +7,16 @@
 > **Что этот документ не покрывает полностью:** полный local MVP runbook, discovery mission planning, login-required websites, CAPTCHA bypass, cookie/session replay, stealth scraping и любые гарантии, что внешний сайт не поменяет структуру после 15 апреля 2026.
 >
 > **Дата подбора примеров:** 15 апреля 2026. Все URL ниже были подобраны как актуальные публичные страницы официальных сайтов на эту дату.
+>
+> **Prerequisites:** локальный NewsPortal stack, доступ в admin, working `website` channel flow и готовность принимать, что live public sites могут измениться после даты подбора.
+>
+> **Как понять, что пример сработал:** channel создался, `web_resources` появились с ожидаемыми `resource_kind`/projection, и вы можете интерпретировать успех или честный gap без подмены resource-only truth article-only ожиданиями.
 
 Перед началом полезно держать рядом:
 
-- [HOW_TO_USE.md](./HOW_TO_USE.md)
-- [README.md](./README.md)
-- [docs/manual-mvp-runbook.md](./docs/manual-mvp-runbook.md)
+- [HOW_TO_USE.md](../HOW_TO_USE.md)
+- [README.md](../../../README.md)
+- [Manual MVP Runbook](../manual-mvp-runbook.md)
 - [WEBSITE_SOURCES_TESTING.md](./WEBSITE_SOURCES_TESTING.md)
 
 ### Expanded automated live matrix

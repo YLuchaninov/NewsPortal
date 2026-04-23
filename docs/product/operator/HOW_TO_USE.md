@@ -1,6 +1,14 @@
 # HOW_TO_USE.md — Руководство по администрированию NewsPortal
 
 > **Для кого этот документ:** для администратора системы NewsPortal. Технические знания не требуются — всё объяснено простым языком с примерами и скриншот-подобными описаниями интерфейса.
+>
+> **Что этот документ покрывает:** ежедневную работу в админке NewsPortal: dashboard, source channels, rules, articles, clusters, reindex и observability.
+>
+> **Что этот документ не покрывает полностью:** полный local bootstrap stack-а, discovery-specific operator testing, live website matrices, MCP client setup и stateful cleanup/reset детали.
+>
+> **Prerequisites:** рабочий локальный или удаленный NewsPortal runtime, admin access и базовая настройка из [`manual-mvp-runbook.md`](./manual-mvp-runbook.md), если вы запускаете систему локально впервые.
+>
+> **Как понять, что все в порядке:** вы можете войти в `/admin`, создать или изменить source/rule, увидеть изменения на operator surfaces и использовать этот документ без необходимости читать runtime-core или chat history.
 
 ---
 
@@ -257,7 +265,7 @@ Website channel нужен, когда у источника нет удобно
 Если вы готовите manual verification или проверяете hard-site path, используйте также:
 
 - `README.md` — для discovery/discovery-env и bounded runtime enable path
-- `docs/manual-mvp-runbook.md` — для полного operator walkthrough и `/resources` проверки
+- `docs/product/operator/manual-mvp-runbook.md` — для полного operator walkthrough и `/resources` проверки
 - `WEBSITE_SOURCES_TESTING.md` — для отдельной пошаговой инструкции именно по `website` sources, `/admin/resources`, projected/resource-only rows и bounded live-site checklist
 - `node infra/scripts/test-live-website-matrix.mjs` — для расширенного bounded live-site прогона по 16 реальным public website targets уже после того, как локальный website proof (`website`, `hard-sites`, `channel-auth`, `website-admin`, `enrichment`) зелёный
 
