@@ -63,16 +63,6 @@ const WEBSITE_FIXTURE_HOST = "127.0.0.2";
 const RESOURCE_INGEST_TRIGGER_EVENT = "resource.ingest.requested";
 const ARTICLE_INGEST_TRIGGER_EVENT = "article.ingest.requested";
 
-const PROCESSING_STATE_ORDER: Record<string, number> = {
-  raw: 0,
-  normalized: 1,
-  deduped: 2,
-  embedded: 3,
-  clustered: 4,
-  matched: 5,
-  notified: 6,
-};
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);

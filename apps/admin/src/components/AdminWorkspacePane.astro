@@ -404,13 +404,17 @@ const paneResizeInstructionsId = `${paneContentId}-resize-instructions`;
     const persistState = (value) => {
       try {
         window.localStorage.setItem(paneStateStorageKey, value);
-      } catch {}
+      } catch {
+        return;
+      }
     };
 
     const persistWidth = (value) => {
       try {
         window.localStorage.setItem(paneWidthStorageKey, String(Math.round(value)));
-      } catch {}
+      } catch {
+        return;
+      }
     };
 
     const minWidth = Number.parseInt(root.dataset.adminPaneMinWidth ?? "340", 10);

@@ -1311,20 +1311,18 @@ function buildFailureDetails(error) {
 async function runSiteValidation(runId, cookie, group, site) {
   clearCrawlPolicyCache(pickDomain(site.fetchUrl));
 
-  let channelId = "";
   let capturedError = null;
   const create = await postForm(
     "http://127.0.0.1:4322/bff/admin/channels",
     buildChannelPayload(runId, group.key, site),
     { cookie }
   );
-  channelId = String(create.json?.channelId ?? "");
+  const channelId = String(create.json?.channelId ?? "");
   if (!channelId) {
     throw new Error(`Creating ${site.candidateName} did not return a channelId.`);
   }
 
-  let cleanupAttempted = false;
-  let cleanupSucceeded = false;
+  let cleanupStatus;
   let result = null;
 
   try {
@@ -1370,14 +1368,16 @@ async function runSiteValidation(runId, cookie, group, site) {
   } catch (error) {
     capturedError = error;
   } finally {
-    cleanupAttempted = true;
-    cleanupSucceeded = await deleteOrArchiveChannel(cookie, channelId);
+    cleanupStatus = {
+      attempted: true,
+      succeeded: await deleteOrArchiveChannel(cookie, channelId),
+    };
   }
 
   if (capturedError) {
     if (capturedError && typeof capturedError === "object") {
-      capturedError.cleanupAttempted = cleanupAttempted;
-      capturedError.cleanupSucceeded = cleanupSucceeded;
+      capturedError.cleanupAttempted = cleanupStatus.attempted;
+      capturedError.cleanupSucceeded = cleanupStatus.succeeded;
       capturedError.channelId = channelId;
     }
     throw capturedError;
@@ -1385,8 +1385,8 @@ async function runSiteValidation(runId, cookie, group, site) {
 
   return {
     ...result,
-    cleanupAttempted,
-    cleanupSucceeded,
+    cleanupAttempted: cleanupStatus.attempted,
+    cleanupSucceeded: cleanupStatus.succeeded,
   };
 }
 
@@ -1456,7 +1456,7 @@ async function main() {
     throw new Error("The requested --group/--site filters did not match any live website candidates.");
   }
 
-  let adminCookie = null;
+  let adminCookie;
   try {
     await ensureFirebasePasswordUser(firebaseApiKey, adminEmail, adminPassword);
 

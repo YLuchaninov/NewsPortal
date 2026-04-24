@@ -46,7 +46,7 @@ async function main() {
   });
   harness.selectedScenarioKeys = scenarioKeys;
   const startedAt = new Date().toISOString();
-  let report = null;
+  let report;
 
   await harness.setup({
     rebuild: !args.skipBuild,

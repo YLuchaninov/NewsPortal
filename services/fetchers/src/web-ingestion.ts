@@ -1949,8 +1949,7 @@ export class CrawlPolicyCacheService {
 export async function probeWebsiteCapabilities(
   channelUrl: string,
   policy: RuntimeCrawlPolicy,
-  config: WebsiteChannelConfig,
-  authContext?: WebsiteAuthContext
+  config: WebsiteChannelConfig
 ): Promise<WebsiteCapabilities> {
   const contentTypes: string[] = [];
   const homepageKey = buildConditionalStateKey("homepage", channelUrl);
@@ -2965,8 +2964,7 @@ export async function discoverWebsiteResources(input: {
   const capabilities = await probeWebsiteCapabilities(
     input.channelUrl,
     input.policy,
-    input.config,
-    authContext
+    input.config
   );
   const modes = selectWebsiteDiscoveryModes(capabilities, input.config);
   const discovered: DiscoveredWebsiteResource[] = [];

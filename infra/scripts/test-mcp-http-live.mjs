@@ -400,7 +400,7 @@ async function main() {
   });
 
   try {
-    const liveToken = await runStep(report, "issue-live-operator-token", async () => {
+    await runStep(report, "issue-live-operator-token", async () => {
       const issued = await harness.issueToken({
         label: `live-${harness.runId}`,
         scopes:

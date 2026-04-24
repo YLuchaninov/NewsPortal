@@ -142,16 +142,6 @@ function metricSourceLabel(value: unknown): string {
   return normalized === "generic_channel_quality" ? "generic intake quality" : normalized || "generic intake quality";
 }
 
-function resolveTabHref(nextTab: string): string {
-  const target = new URL(Astro.url);
-  if (nextTab === "dashboard") {
-    target.searchParams.delete("tab");
-  } else {
-    target.searchParams.set("tab", nextTab);
-  }
-  return `${target.pathname}${target.search}`;
-}
-
 function resolvePageHref(paramName: string, nextPage: number): string {
   const target = new URL(Astro.url);
   target.searchParams.set("tab", tab || "dashboard");
@@ -2415,7 +2405,9 @@ const activeLlmModel = String(summary.llmModel ?? runtimeConfig.discoveryLlmMode
       const openPaneState = (paneId) => {
         try {
           window.localStorage.setItem(`newsportal-admin-pane:${paneId}:state`, "open");
-        } catch {}
+        } catch {
+          return;
+        }
       };
 
       const rows = document.querySelectorAll("[data-discovery-row-href][data-discovery-row-pane]");

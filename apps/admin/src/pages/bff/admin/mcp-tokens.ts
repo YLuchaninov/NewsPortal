@@ -26,7 +26,7 @@ function resolveTokenIntent(payload: Record<string, unknown>): TokenIntent {
   return String(payload.intent ?? "issue").trim() === "revoke" ? "revoke" : "issue";
 }
 
-export const POST: APIRoute = async ({ request, clientAddress }) => {
+export const POST: APIRoute = async ({ request }) => {
   const browserRequest = requestPrefersHtmlNavigation(request);
   const payload = await readRequestPayload(request);
   const redirectTo = resolveAdminRedirectPath(

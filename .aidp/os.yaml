@@ -1,16 +1,32 @@
-version: 42
+# AI Dev Process OS runtime schema для NewsPortal
+package_version: 1.6.1
+schema_version: 28
 mode: Minimal
 initialized: true
 core:
-  style: compact-strict-polished-blueprint-capability-planning
+  style: compact-strict-polished-blueprint-capability-planning-anti-drift
   installed_files:
-    - AGENTS.md
-    - docs/work.md
-    - docs/blueprint.md
-    - docs/engineering.md
-    - docs/verification.md
-    - docs/history.md
-    - .aidp/os.yaml
+  - .aidp/AGENTS.md
+  - .aidp/work.md
+  - .aidp/blueprint.md
+  - .aidp/engineering.md
+  - .aidp/verification.md
+  - .aidp/history.md
+  - .aidp/os.yaml
+  - .aidp/contracts/article-pipeline-core.md
+  - .aidp/contracts/auth-session-boundary.md
+  - .aidp/contracts/browser-assisted-websites.md
+  - .aidp/contracts/content-model.md
+  - .aidp/contracts/discovery-agent.md
+  - .aidp/contracts/feed-ingress-adapters.md
+  - .aidp/contracts/independent-recall-discovery.md
+  - .aidp/contracts/mcp-control-plane.md
+  - .aidp/contracts/notifications-and-digests.md
+  - .aidp/contracts/runtime-migrations-and-derived-state.md
+  - .aidp/contracts/test-access-and-fixtures.md
+  - .aidp/contracts/universal-selection-profiles.md
+  - .aidp/contracts/universal-task-engine.md
+  - .aidp/contracts/zero-shot-interest-filtering.md
 coordination:
   multi_agent_allowed: false
   single_worktree_truth_required: true
@@ -26,48 +42,41 @@ planning:
   stage_dependency_enforcement: true
   dependency_override_requires_human_approval: true
 project:
-  name: newsportal
+  name: news-portal
   placeholder_values_present: false
-  shape: polyglot-monorepo
+  shape: polyglot pnpm monorepo
+  language: русский runtime-core; код и продуктовые docs могут быть смешанными ru/en по существующему стилю
+  package_manager: pnpm
+  primary_database: PostgreSQL
+  queue_transport: Redis + BullMQ
+  local_runtime: Docker Compose через infra/docker/compose.yml и infra/docker/compose.dev.yml
   runtime_surfaces:
-    - apps/web
-    - apps/admin
-    - services/fetchers
-    - services/relay
-    - services/api
-    - services/workers
-    - services/ml
-    - services/indexer
+  - Astro web app apps/web на порту 4321
+  - Astro admin app apps/admin на порту 4322
+  - FastAPI read/debug/maintenance API services/api на порту 8000
+  - Node fetchers service services/fetchers на порту 4100
+  - Node outbox relay services/relay на порту 4000
+  - Node MCP control-plane service services/mcp на порту 4300
+  - Python worker runtime services/workers
+  - PostgreSQL на host port 55432 в local compose
+  - Redis на host port 56379 в local compose
+  - nginx local front door на host port 8080
+  - Mailpit SMTP/UI в dev compose на портах 1025 и 8025
   delivery_surfaces:
-    - infra/docker/compose.yml
-    - infra/docker/compose.dev.yml
-    - infra/docker/compose.prod.yml
-    - infra/nginx/default.conf
-    - README.md
-    - docs/contracts/browser-assisted-websites.md
-    - docs/contracts/content-model.md
-    - docs/contracts/discovery-agent.md
-    - docs/contracts/mcp-control-plane.md
-    - docs/contracts/independent-recall-discovery.md
-    - docs/contracts/zero-shot-interest-filtering.md
-    - docs/contracts/universal-selection-profiles.md
-    - docs/contracts/test-access-and-fixtures.md
-    - docs/contracts/universal-task-engine.md
+  - Dockerfiles в infra/docker
+  - compose baseline в infra/docker/compose.yml
+  - dev overlay в infra/docker/compose.dev.yml
+  - nginx config в infra/nginx/default.conf
   entry_points:
-    - apps/web/src/pages/api/health.ts
-    - apps/admin/src/pages/api/health.ts
-    - apps/admin/src/pages/automation.astro
-    - apps/admin/src/pages/bff/admin/automation.ts
-    - apps/admin/src/pages/discovery.astro
-    - apps/admin/src/pages/bff/admin/discovery.ts
-    - services/fetchers/src/main.ts
-    - services/fetchers/src/enrichment.ts
-    - services/relay/src/main.ts
-    - services/api/app/main.py
-    - services/workers/app/main.py
-    - services/workers/app/discovery_orchestrator.py
-    - services/workers/app/task_engine/executor.py
-    - services/indexer/app/main.py
+  - package.json root scripts
+  - pnpm-workspace.yaml workspace packages
+  - database/migrations ordered SQL migrations
+  - services/api/app/main.py FastAPI app
+  - services/workers/app/main.py worker app
+  - services/fetchers/src/main.ts fetchers service
+  - services/relay/src/main.ts relay service
+  - services/mcp/src/main.ts MCP service
+  - apps/web/src/pages and apps/admin/src/pages Astro routes
 capabilities:
   build: true
   lint: true
@@ -80,122 +89,176 @@ capabilities:
   database: true
   migrations: true
 commands:
-  install: "pnpm install"
-  dev: "pnpm dev:mvp:internal"
-  dev_no_build: "pnpm dev:mvp:internal:no-build"
-  dev_stop: "pnpm dev:mvp:internal:stop"
-  dev_down: "pnpm dev:mvp:internal:down"
-  dev_down_volumes: "pnpm dev:mvp:internal:down:volumes"
-  dev_logs: "pnpm dev:mvp:internal:logs"
-  build: "pnpm build"
-  lint: "pnpm lint"
-  typecheck: "pnpm typecheck"
-  unit_tests: "pnpm unit_tests"
-  article_yield_diagnostics: "pnpm article:yield:diagnostics"
-  article_yield_remediate: "pnpm article:yield:remediate -- --apply"
-  website_projection_replay: "pnpm website:projection:replay"
-  website_projection_replay_compose: "pnpm website:projection:replay:compose"
-  migrations_smoke: "pnpm test:migrations:smoke"
-  integration_tests: "pnpm integration_tests"
-  smoke: "pnpm integration_tests"
-  web_viewports_smoke: "pnpm test:web:viewports"
-  ingest_smoke: "pnpm test:ingest:compose"
-  channel_auth_compose_smoke: "pnpm test:channel-auth:compose"
-  website_compose_smoke: "pnpm test:website:compose"
-  website_admin_compose_smoke: "pnpm test:website:admin:compose"
-  automation_admin_smoke: "node infra/scripts/test-automation-admin-flow.mjs"
-  mcp_compose_smoke: "pnpm test:mcp:compose"
-  mcp_http_matrix: "pnpm test:mcp:http:matrix"
-  mcp_http_auth: "pnpm test:mcp:http:auth"
-  mcp_http_reads: "pnpm test:mcp:http:reads"
-  mcp_http_writes: "pnpm test:mcp:http:writes"
-  mcp_http_discovery: "pnpm test:mcp:http:discovery"
-  mcp_http_live: "pnpm test:mcp:http:live"
-  discovery_admin_compose_smoke: "pnpm test:discovery:admin:compose"
-  discovery_examples_compose_proof: "pnpm test:discovery:examples:compose"
-  discovery_nonregression_compose_proof: "pnpm test:discovery:nonregression:compose"
-  discovery_yield_compose_proof: "pnpm test:discovery:yield:compose"
-  hard_sites_compose_smoke: "pnpm test:hard-sites:compose"
-  feed_ingress_adapter_smoke: "pnpm test:feed-ingress-adapters:smoke"
-  enrichment_compose_smoke: "pnpm test:enrichment:compose"
-  discovery_enabled_compose_smoke: "pnpm test:discovery-enabled:compose"
-  llm_budget_stop_smoke: "pnpm test:llm-budget-stop:smoke"
-  llm_budget_stop_compose_smoke: "pnpm test:llm-budget-stop:compose"
-  ingest_multi_compose: "pnpm test:ingest:multi:compose"
-  ingest_soak_compose: "pnpm test:ingest:soak:compose"
-  cluster_match_notify_compose: "pnpm test:cluster-match-notify:compose"
-  reindex_backfill_compose: "pnpm test:reindex-backfill:compose"
-  package_release: ""
-  deploy: ""
+  install: pnpm install
+  python_dev_requirements: python -m pip install -r infra/docker/python.dev-requirements.txt
+  dev: pnpm dev:mvp:internal
+  dev_no_build: pnpm dev:mvp:internal:no-build
+  dev_stop: pnpm dev:mvp:internal:stop
+  dev_down: pnpm dev:mvp:internal:down
+  dev_down_volumes: pnpm dev:mvp:internal:down:volumes
+  dev_logs: pnpm dev:mvp:internal:logs
+  check_scaffold: pnpm check:scaffold
+  build: pnpm build
+  lint: pnpm lint
+  lint_ts: pnpm lint:ts
+  lint_py: pnpm lint:py
+  typecheck: pnpm typecheck
+  unit_tests: pnpm unit_tests
+  unit_tests_ts: pnpm unit_tests:ts
+  unit_tests_py: pnpm unit_tests:py
+  integration_tests: pnpm integration_tests
+  smoke: pnpm test:mvp:internal
+  relay_tests: pnpm test:relay
+  relay_compose: pnpm test:relay:compose
+  relay_phase3: pnpm test:relay:phase3
+  relay_phase3_compose: pnpm test:relay:phase3:compose
+  relay_phase45_compose: pnpm test:relay:phase45:compose
+  migrations_smoke: pnpm test:migrations:smoke
+  db_seed_outbox_smoke: pnpm db:seed:outbox-smoke
+  fetch_rss_once: pnpm fetch:rss:once
+  rss_ingest_compose: pnpm test:ingest:compose
+  rss_ingest_multi_compose: pnpm test:ingest:multi:compose
+  rss_ingest_soak_compose: pnpm test:ingest:soak:compose
+  website_compose: pnpm test:website:compose
+  website_admin_compose: pnpm test:website:admin:compose
+  website_matrix_compose: pnpm test:website:matrix:compose
+  website_projection_replay: pnpm website:projection:replay
+  website_projection_replay_compose: pnpm website:projection:replay:compose
+  automation_admin_compose: pnpm test:automation:admin:compose
+  discovery_enabled_compose: pnpm test:discovery-enabled:compose
+  discovery_enabled_smoke: pnpm test:discovery-enabled:smoke
+  discovery_admin_compose: pnpm test:discovery:admin:compose
+  discovery_examples_compose: pnpm test:discovery:examples:compose
+  discovery_nonregression_compose: pnpm test:discovery:nonregression:compose
+  discovery_yield_compose: pnpm test:discovery:yield:compose
+  mcp_compose: pnpm test:mcp:compose
+  mcp_http_matrix: pnpm test:mcp:http:matrix
+  mcp_http_auth: pnpm test:mcp:http:auth
+  mcp_http_reads: pnpm test:mcp:http:reads
+  mcp_http_writes: pnpm test:mcp:http:writes
+  mcp_http_discovery: pnpm test:mcp:http:discovery
+  mcp_http_live: pnpm test:mcp:http:live
+  web_viewports: pnpm test:web:viewports
+  web_ui_audit: pnpm test:web:ui-audit
+  db_migrate: pnpm db:migrate
+  article_yield_diagnostics: pnpm article:yield:diagnostics
+  article_yield_remediate: pnpm article:yield:remediate
+  feed_ingress_adapters_smoke: pnpm test:feed-ingress-adapters:smoke
+  channel_auth_compose: pnpm test:channel-auth:compose
+  criterion_compile_smoke: pnpm test:criterion-compile:smoke
+  criterion_compile_compose: pnpm test:criterion-compile:compose
+  cluster_match_notify_smoke: pnpm test:cluster-match-notify:smoke
+  cluster_match_notify_compose: pnpm test:cluster-match-notify:compose
+  llm_budget_stop_smoke: pnpm test:llm-budget-stop:smoke
+  llm_budget_stop_compose: pnpm test:llm-budget-stop:compose
+  reindex_backfill_compose: pnpm test:reindex-backfill:compose
+  enrichment_compose: pnpm test:enrichment:compose
+  hard_sites_compose: pnpm test:hard-sites:compose
+  embed_smoke: pnpm test:embed:smoke
+  embed_compose: pnpm test:embed:compose
+  interest_compile_smoke: pnpm test:interest-compile:smoke
+  interest_compile_compose: pnpm test:interest-compile:compose
+  normalize_dedup_smoke: pnpm test:normalize-dedup:smoke
+  normalize_dedup_compose: pnpm test:normalize-dedup:compose
+  index_check_interest_centroids: pnpm index:check:interest-centroids
+  index_check_event_cluster_centroids: pnpm index:check:event-cluster-centroids
+  index_rebuild_interest_centroids: pnpm index:rebuild:interest-centroids
+  index_rebuild_event_cluster_centroids: pnpm index:rebuild:event-cluster-centroids
+  package_release: ''
+  deploy: ''
+proof_gaps:
+  package_release: В репозитории не объявлен отдельный release packaging gate.
+  deploy: Production deploy-команда не объявлена; baseline delivery proof идет через local compose.
 risk_defaults:
-  low: локальная целевая проверка
-  medium: статическая проверка плюс поведенческая проверка по затронутой границе
-  high: полный релевантный gate-набор плюс усиленная проверка границ и остаточных рисков
+  low: targeted local proof
+  medium: static plus targeted behavioral proof
+  high: full relevant gate set plus stronger review
 work_kinds:
-  - Stage
-  - Patch
-  - Sweep
-  - Spike
+- Stage
+- Patch
+- Sweep
+- Spike
 states:
-  - planned
-  - ready
-  - active
-  - blocked
-  - done
-  - archived
+- planned
+- ready
+- active
+- blocked
+- done
+- cancelled
+- superseded
+- archived
 allowed_transitions:
-  - planned->ready
-  - ready->active
-  - active->blocked
-  - blocked->ready
-  - active->done
-  - done->archived
+- planned->ready
+- ready->active
+- active->blocked
+- blocked->ready
+- active->done
+- planned->cancelled
+- ready->cancelled
+- active->cancelled
+- blocked->cancelled
+- planned->superseded
+- ready->superseded
+- active->superseded
+- blocked->superseded
+- done->archived
+- cancelled->archived
+- superseded->archived
+routing:
+  supported_live_modes:
+  - setup
+  - normal
+  - repair
+  live_mode_owner: .aidp/work.md
+  initial_router_read_order:
+  - .aidp/AGENTS.md
+  - .aidp/os.yaml
+  - .aidp/work.md
+  deeper_read_order_defined_in_agents: true
+  audit_requests_supported: true
+  setup_required_until_initialized: true
 context_hygiene:
   short_current_memory: true
   durable_full_history: true
   current_memory_target_lines: 20-40
   recent_changes_max_bullets: 8
+  observation_quarantine_required: true
+  attempt_memory_required: true
+  parked_items_allowed: true
+  phase_boundary_compression_preferred: true
   auto_compress_triggers:
-    - item_done
-    - item_archiving
-    - primary_item_changed
-    - work_doc_exceeds_limits
-    - recent_changes_overflow
-    - stale_completed_detail_in_live_doc
-    - stale_capability_line_after_replan
-    - meaningful_handoff_or_session_end
-  compression_command: RUN CONTEXT COMPRESSION NOW
+  - item_done
+  - item_archiving
+  - primary_item_changed
+  - work_doc_exceeds_limits
+  - recent_changes_overflow
+  - stale_completed_detail_in_live_doc
+  - stale_capability_line_after_replan
+  - meaningful_handoff_or_session_end
 handoff:
   required_after_meaningful_work: true
+  resume_protocol_required_on_new_session: true
   required_fields:
-    - current_item_status
-    - next_recommended_action
-    - proven_state
-    - unproven_or_blocked_state
-    - scope_or_coordination_warning
+  - current_item_status
+  - next_recommended_action
+  - proven_state
+  - unproven_or_blocked_state
+  - scope_or_coordination_warning
 audit_mode:
   enabled: true
   optional: true
-  default_mode: read_only
-  audit_command: RUN CONSISTENCY AUDIT NOW
-  apply_command: APPLY APPROVED AUDIT FIXES NOW
+  overlay_not_primary_live_mode: true
+  work_doc_field: Audit overlay
+  default_behavior: read_only_first
   approval_required_for_apply: true
-  safe_fix_scope:
-    - move_completed_detail_to_history
-    - normalize_required_sections
-    - add_missing_empty_required_blocks
-    - shrink_current_memory_preserving_meaning
-    - archive_done_item_with_durable_history
-    - remove_obvious_live_doc_duplication
-  forbidden_fix_scope:
-    - change_architecture_or_invariants
-    - change_risk_level_without_human_decision
-    - redefine_work_intent_by_guesswork
-    - redefine_scope_semantics
-    - rewrite_proof_policy_meaning
-    - change_machine_facts_by_guesswork
 maintenance:
   agent_managed_core: true
+  router_materialization_must_be_merge_safe: true
+  start_of_session_check_required: true
+  resume_protocol_enforced_by_agent: true
+  blocked_revalidation_required: true
+  blocked_revalidation_after_days: 7
+  live_docs_must_remain_relevant_to_current_active_work: true
   work_sync_required_after_meaningful_change: true
   stage_and_capability_sync_required: true
   worktree_coherence_check_required: true
@@ -205,360 +268,76 @@ maintenance:
   capability_archive_required_when_no_live_next_stage: true
 authority:
   order:
-    - AGENTS.md
-    - docs/blueprint.md
-    - .aidp/os.yaml
-    - docs/engineering.md
-    - docs/verification.md
-    - docs/work.md
-    - docs/history.md
+  - .aidp/AGENTS.md
+  - .aidp/blueprint.md
+  - .aidp/os.yaml
+  - .aidp/engineering.md
+  - .aidp/verification.md
+  - .aidp/work.md
+  - .aidp/history.md
   preserve_blueprint_truth_on_execution_conflict: true
+precedence:
+  repo_canonical_truth: .aidp/*
+  human_docs_explanatory_only: true
+  external_global_instructions_are_hints_only: true
+  transient_tool_outputs_require_sync_before_canonization: true
+  external_provenance_required_before_canonization: true
+anti_drift:
+  observations_are_not_canonical_until_confirmed: true
+  consolidation_gate_required: true
+  explicit_supersede_required_for_conflicting_truth: true
+  route_purity_required: true
+  local_canonical_neighborhood_loading: true
+  no_second_source_of_truth: true
+delegation:
+  read_only_research_subagents_allowed: true
+  isolated_delegated_workers_require_explicit_scope: true
+  parallel_write_same_worktree_forbidden: true
+  delegated_context_contract_required: true
+  subagent_output_is_observation_until_confirmed: true
 deep_contract_docs:
   allowed: true
   required_when_touched: true
   temporary_docs_must_merge_into_history_or_stable_contract: true
   preferred_locations:
-    - docs/contracts/
+  - .aidp/contracts/
   templates_included: true
+  active_contracts:
+  - .aidp/contracts/article-pipeline-core.md
+  - .aidp/contracts/auth-session-boundary.md
+  - .aidp/contracts/browser-assisted-websites.md
+  - .aidp/contracts/content-model.md
+  - .aidp/contracts/discovery-agent.md
+  - .aidp/contracts/feed-ingress-adapters.md
+  - .aidp/contracts/independent-recall-discovery.md
+  - .aidp/contracts/mcp-control-plane.md
+  - .aidp/contracts/notifications-and-digests.md
+  - .aidp/contracts/runtime-migrations-and-derived-state.md
+  - .aidp/contracts/test-access-and-fixtures.md
+  - .aidp/contracts/universal-selection-profiles.md
+  - .aidp/contracts/universal-task-engine.md
+  - .aidp/contracts/zero-shot-interest-filtering.md
 setup_mode:
   enabled_until_core_is_initialized: true
   implementation_forbidden_while_uninitialized: true
+  truthful_exit_requires:
+    initialized_true: true
+    placeholder_flag_false: true
+    work_workflow_mode_not_setup: true
+    setup_requirements_satisfied: true
   initialization_requires:
-    - real_project_name
-    - real_commands_or_explicit_proof_gaps
-    - real_blueprint_content
-    - real_engineering_content
-    - real_work_state
-    - placeholders_removed_or_replaced
+  - real_project_name
+  - real_commands_or_explicit_proof_gaps
+  - real_blueprint_content
+  - real_engineering_content
+  - real_work_state
+  - placeholders_removed_or_replaced
 proof_contours:
   fast_gate: smallest honest local proof
-  structural_gate: boundary- or refactor-sensitive proof
+  structural_gate: boundary or refactor-sensitive proof
   release_gate: releasable build or promotion proof
   delivery_gate: packaging, deployment, migration, or environment delivery proof
   runtime_smoke_gate: minimal real runtime proof
-runtime_facts:
-  zero_shot_filtering:
-    deep_contract: docs/contracts/zero-shot-interest-filtering.md
-    profile_evolution_contract: docs/contracts/universal-selection-profiles.md
-    stage1_tables:
-      - canonical_documents
-      - document_observations
-    stage1_identity_rule: canonical_document_id_reuses_canonical_article_doc_id
-    stage2_tables:
-      - story_clusters
-      - story_cluster_members
-      - verification_results
-    stage2_runtime_owner: services/workers/app/main.py::process_cluster
-    stage3_tables:
-      - interest_filter_results
-    stage3_runtime_owners:
-      - services/workers/app/main.py::process_match_criteria
-      - services/workers/app/main.py::process_match_interests
-      - services/workers/app/main.py::process_llm_review
-    stage4_tables:
-      - final_selection_results
-    stage4_runtime_owners:
-      - services/workers/app/main.py::upsert_final_selection_result
-      - services/workers/app/main.py::upsert_system_feed_result
-      - services/api/app/main.py::editorial_content_select_sql
-    stage6_operator_surfaces:
-      - services/api/app/main.py::get_article
-  universal_selection_profiles:
-    deep_contract: docs/contracts/universal-selection-profiles.md
-    stage1_tables:
-      - selection_profiles
-    stage1_runtime_owners:
-      - apps/admin/src/lib/server/admin-templates.ts::syncInterestTemplateSelectionProfile
-      - apps/admin/src/pages/bff/admin/templates.ts::POST
-    stage1_compatibility_sources:
-      - interest_templates
-      - criteria
-    stage2_runtime_owners:
-      - services/workers/app/selection_profiles.py::coerce_selection_profile_runtime
-      - services/workers/app/main.py::process_match_criteria
-    stage2_behavior:
-      - profile_backed_gray_zone_defaults_to_hold
-      - llm_review_optional_only_by_profile_policy
-      - legacy_criteria_without_profile_keep_always_review_fallback
-    stage3_runtime_owners:
-      - services/workers/app/final_selection.py::summarize_final_selection_result
-      - services/workers/app/main.py::upsert_final_selection_result
-      - services/workers/app/main.py::upsert_system_feed_result
-    stage3_behavior:
-      - final_selection_distinguishes_llm_review_pending_from_hold
-      - profile_backed_hold_projects_as_filtered_out_compatibility
-      - legacy_profileless_gray_zone_can_still_project_pending_llm
-    stage4_explain_surfaces:
-      - services/api/app/main.py::get_article_explain
-      - services/api/app/main.py::get_content_item_explain
-      - services/api/app/main.py::list_system_interests
-      - services/api/app/main.py::get_system_interest
-      - services/api/app/main.py::build_selection_explain_payload
-      - apps/admin/src/pages/articles.astro
-      - apps/admin/src/pages/articles/[docId].astro
-      - apps/admin/src/pages/resources.astro
-      - apps/admin/src/pages/resources/[resourceId].astro
-      - apps/admin/src/pages/templates/interests.astro
-      - apps/admin/src/pages/templates/interests/new.astro
-      - apps/admin/src/pages/templates/interests/[interestTemplateId]/edit.astro
-    stage4_shared_helper: apps/admin/src/lib/server/operator-surfaces.ts
-    stage4_behavior:
-      - explain_surfaces_expose_selection_reason_and_counts
-      - operator_surfaces_translate_hold_vs_pending_review_without_fixed_taxonomy
-      - api_explain_payloads_expose_generic_selection_diagnostics
-      - system_interest_authoring_surfaces_expose_profile_policy_summary
-    stage5_runtime_owners:
-      - services/workers/app/main.py::read_active_selection_profile_snapshot
-      - services/workers/app/main.py::process_reindex
-      - services/api/app/main.py::list_reindex_jobs
-      - services/api/app/main.py::get_article
-      - services/api/app/main.py::list_articles
-      - apps/admin/src/pages/reindex.astro
-      - apps/admin/src/lib/server/live-updates.ts::mapReindexJob
-      - apps/admin/src/lib/server/operator-surfaces.ts::resolveArticleOperatorState
-    stage5_backfill_proof_command: pnpm test:reindex-backfill:compose
-    stage5_behavior:
-      - backfill_and_repair_results_record_selection_profile_snapshot
-      - maintenance_reindex_reads_project_selection_profile_summary
-      - maintenance_reindex_reads_project_structured_selection_profile_snapshot
-      - article_operator_reads_project_generic_selection_payloads
-      - compatibility_only_selection_state_is_normalized
-    stage3_filter_scopes:
-      - system_criterion
-      - user_interest
-    stage3_technical_filter_states:
-      - passed
-      - filtered_out
-    stage3_semantic_decisions:
-      - match
-      - no_match
-      - gray_zone
-      - not_evaluated
-    verification_states:
-      - weak
-      - medium
-      - strong
-      - conflicting
-    stage4_final_decisions:
-      - selected
-      - rejected
-      - gray_zone
-    current_compatibility_truth:
-      article_storage: articles
-      legacy_story_clusters: event_clusters
-      final_selection_gate: final_selection_results
-      legacy_system_feed_projection: system_feed_results
-  user_digests:
-    immediate_channels:
-      - web_push
-      - telegram
-    digest_recipient_channel_type: email_digest
-    digest_settings_table: user_digest_settings
-    digest_delivery_log_table: digest_delivery_log
-    scheduler_enabled_env: WORKER_ENABLE_USER_DIGEST_SCHEDULER
-    poll_interval_env: WORKER_USER_DIGEST_POLL_INTERVAL_SECONDS
-  article_llm_review:
-    scope: system_interest_gray_zone_criteria_only
-    enabled_env: LLM_REVIEW_ENABLED
-    monthly_budget_env: LLM_REVIEW_MONTHLY_BUDGET_CENTS
-    post_budget_policy_env: LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE
-    budget_source_of_truth: llm_review_log.cost_estimate_usd
-    budget_scope_filter: criterion
-    monthly_budget_window: utc_calendar_month
-    post_budget_policy:
-      "1": accept_gray_zone_as_relevant
-      "0": reject_gray_zone_as_irrelevant
-  discovery:
-    architecture: graph_first_registry_driven
-    namespace: /maintenance/discovery/*
-    deep_contract: docs/contracts/discovery-agent.md
-    enabled_default: false
-    schema_drift_prerepair_migration: 0026a_discovery_schema_drift_prerepair.sql
-    schema_drift_repair_migration: 0030_discovery_schema_drift_repair.sql
-    schema_drift_residual_repair_migration: 0036_discovery_schema_residual_repair.sql
-    migrations_smoke_scope: discovery_core_tables_indexes_columns_constraints
-    source_quality_signal_source: generic_channel_quality
-    downstream_selection_dependency: removed
-    search_provider_default: ddgs
-    search_stub_supported: true
-    profile_policy_table: discovery_policy_profiles
-    mission_profile_snapshot_columns:
-      - discovery_missions.profile_id
-      - discovery_missions.applied_profile_version
-      - discovery_missions.applied_policy_json
-      - discovery_recall_missions.profile_id
-      - discovery_recall_missions.applied_profile_version
-      - discovery_recall_missions.applied_policy_json
-    class_registry_table: discovery_hypothesis_classes
-    mission_planning_state: discovery_missions.interest_graph
-    operator_surfaces: dual_path_mission_fit_generic_quality_recall_backlog_promotion_profile_explainability
-    candidate_review_default: manual
-    feedback_re_evaluation_loop: true
-    source_registration_path: postgresql_plus_outbox_source_channel_sync
-    admin_operator_smoke_command: pnpm test:discovery:admin:compose
-    ddgs_defaults:
-      backend: auto
-      region: us-en
-      safesearch: moderate
-    llm_provider: gemini
-    llm_model_env: DISCOVERY_GEMINI_MODEL
-    llm_key_env: DISCOVERY_GEMINI_API_KEY
-    llm_base_url_env: DISCOVERY_GEMINI_BASE_URL
-    tariff_envs:
-      input: DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD
-      output: DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD
-    monthly_budget_env: DISCOVERY_MONTHLY_BUDGET_CENTS
-    monthly_budget_window: utc_calendar_month
-  independent_recall_discovery:
-    deep_contract: docs/contracts/independent-recall-discovery.md
-    stage1_tables:
-      - discovery_source_quality_snapshots
-    stage2_tables:
-      - discovery_recall_missions
-      - discovery_recall_candidates
-    stage1_runtime_owners:
-      - services/workers/app/source_scoring.py::compute_source_recall_quality_snapshot
-      - services/workers/app/discovery_orchestrator.py::execute_hypotheses
-      - services/workers/app/discovery_orchestrator.py::re_evaluate_sources
-      - services/api/app/main.py::list_discovery_source_quality_snapshots
-    stage2_runtime_owners:
-      - services/api/app/main.py::list_discovery_recall_missions
-      - services/api/app/main.py::create_discovery_recall_mission
-      - services/api/app/main.py::list_discovery_recall_candidates
-      - services/api/app/main.py::create_discovery_recall_candidate
-    stage3_runtime_owners:
-      - services/workers/app/discovery_orchestrator.py::acquire_recall_missions
-      - services/api/app/main.py::request_discovery_recall_mission_acquisition
-    stage4_runtime_owners:
-      - services/api/app/main.py::promote_discovery_recall_candidate
-    stage5_runtime_owners:
-      - services/api/app/main.py::get_discovery_summary
-      - services/api/app/main.py::discovery_source_profile_select_sql
-      - apps/admin/src/lib/server/operator-surfaces.ts::resolveDiscoveryOperatorSummary
-      - apps/admin/src/lib/server/operator-surfaces.ts::resolveDiscoverySourceQuality
-      - apps/admin/src/pages/discovery.astro
-      - apps/admin/src/pages/help.astro
-    stage1_read_routes:
-      - /maintenance/discovery/source-quality-snapshots
-      - /maintenance/discovery/source-quality-snapshots/{snapshot_id}
-    stage2_read_write_routes:
-      - /maintenance/discovery/recall-missions
-      - /maintenance/discovery/recall-missions/{recall_mission_id}
-      - /maintenance/discovery/recall-candidates
-      - /maintenance/discovery/recall-candidates/{recall_candidate_id}
-    stage3_action_routes:
-      - /maintenance/discovery/recall-missions/{recall_mission_id}/acquire
-    stage4_action_routes:
-      - /maintenance/discovery/recall-candidates/{recall_candidate_id}/promote
-    current_scope: shipped_dual_path_discovery_with_bounded_recall_promotion
-    mission_planning_owner_unchanged: discovery_missions.interest_graph
-    promotion_owners:
-      - discovery_candidates_manual_review_into_source_channels
-      - discovery_recall_candidates_bounded_promotion_into_source_channels
-  enrichment:
-    enabled_default: true
-    feed_parser: extractus
-    supported_formats:
-      - rss2
-      - rss1
-      - atom
-      - jsonfeed
-    sequence_trigger: article.ingest.requested
-    sequence_first_task: enrichment.article_extract
-    fetchers_internal_endpoint: /internal/enrichment/articles/{doc_id}
-    maintenance_retry_endpoint: /maintenance/articles/{doc_id}/enrichment/retry
-    per_channel_default_enabled: true
-    per_channel_default_min_body_length: 500
-    api_manual_retry_requires_redis: true
-  unified_ingress:
-    common_downstream_trigger: article.ingest.requested
-    provider_specific_logic_must_end_before: article.ingest.requested
-    allowed_pre_handoff_triggers:
-      - resource.ingest.requested
-    provider_native_product_read_models_allowed: false
-    shared_downstream_truth_owners:
-      - articles
-      - canonical_documents
-      - document_observations
-      - story_clusters
-      - verification_results
-      - interest_filter_results
-      - final_selection_results
-  rss_ingress:
-    provider_type_remains: rss
-    deep_contract: docs/contracts/feed-ingress-adapters.md
-    adapter_strategy_config_field: source_channels.config_json.adapterStrategy
-    max_entry_age_config_field: source_channels.config_json.maxEntryAgeHours
-    inferred_strategies:
-      reddit_search_rss: reddit.com search.rss
-      hn_comments_feed: hnrss.org
-      google_news_rss: news.google.com /rss/
-    aggregator_default_max_entry_age_hours: 168
-    article_provenance_field: articles.raw_payload_json.feedAdapter
-    local_adapter_smoke_command: pnpm test:feed-ingress-adapters:smoke
-  sequence_runtime:
-    worker_sequence_runner_concurrency_env: WORKER_SEQUENCE_RUNNER_CONCURRENCY
-    worker_sequence_runner_lock_duration_env: WORKER_SEQUENCE_RUNNER_LOCK_DURATION_MS
-    worker_sequence_runner_stalled_interval_env: WORKER_SEQUENCE_RUNNER_STALLED_INTERVAL_MS
-    python_fallback_default: 1
-    local_compose_default: 4
-    admin_operator_surface:
-      page: apps/admin/src/pages/automation.astro
-      bff: apps/admin/src/pages/bff/admin/automation.ts
-    operator_smoke_command: node infra/scripts/test-automation-admin-flow.mjs
-  mcp_control_plane:
-    deep_contract: docs/contracts/mcp-control-plane.md
-    remote_path: /mcp
-    admin_operator_surface:
-      page: apps/admin/src/pages/automation/mcp.astro
-      bff: apps/admin/src/pages/bff/admin/mcp-tokens.ts
-    primary_auth_model: admin_issued_bearer_token
-    browser_cookie_reuse_allowed: false
-    canonical_compose_smoke_command: pnpm test:mcp:compose
-  web_ingestion:
-    website_provider_enabled: true
-    deep_contract: docs/contracts/browser-assisted-websites.md
-    resource_table: web_resources
-    crawl_policy_cache_table: crawl_policy_cache
-    sequence_trigger: resource.ingest.requested
-    sequence_first_task: enrichment.resource_extract
-    fetchers_internal_endpoint: /internal/enrichment/resources/{resource_id}
-    website_probe_internal_endpoint: /internal/discovery/websites/probe
-    hidden_feed_auto_conversion: false
-    browser_runtime_owner: services/fetchers
-    browser_fallback_enabled_default: false
-    browser_header_injection: same_origin_route_interception_only
-    browser_assistance_scope: public_js_heavy_and_soft_anti_bot_only
-    accepted_resource_handoff_owner: services/fetchers/src/resource-enrichment.ts::ensureProjectedArticle
-    accepted_resource_handoff_target: articles_plus_article.ingest.requested
-    legacy_projection_replay_owner: services/fetchers/src/cli/replay-website-projections.ts
-    legacy_projection_replay_selector: projection_error_equals_legacy_resource_only_without_common_handoff
-    resource_only_product_read_models: false
-    acquisition_fairness_controls:
-      - FETCHERS_RSS_CONCURRENCY
-      - FETCHERS_WEBSITE_CONCURRENCY
-    unsupported_browser_challenges:
-      - login
-      - captcha
-      - cloudflare_js_challenge
-      - unsupported_block
-  source_channel_admin:
-    operator_ready_provider_types:
-      - rss
-      - website
-      - api
-      - email_imap
-    non_baseline_provider_types:
-      - youtube
-  source_channel_auth:
-    storage_table: source_channels.auth_config_json
-    supported_operator_surfaces:
-      - rss
-      - website
-    supported_mode: static_authorization_header_only
-    read_model_summary_field: has_authorization_header
-    secrets_in_config_json_allowed: false
-    website_application_scope: same_origin_only
 engineering_defaults:
   preserve_behavior_unless_intentionally_changed: true
   keep_boundaries_clean: true
@@ -573,4 +352,11 @@ test_access:
   ad_hoc_persistent_test_entities_forbidden: true
   persistent_test_artifacts_must_be_tracked: true
   cleanup_status_must_be_visible_for_stateful_testing: true
-  recommended_deep_contract: docs/contracts/test-access-and-fixtures.md
+  recommended_deep_contract: .aidp/contracts/test-access-and-fixtures.md
+history_sync:
+  required: true
+  completed_detail_must_leave_work_doc_by_end_of_sync_cycle: true
+  handoff_forbidden_if_archive_sync_pending_without_note: true
+  archive_index_recommended_for_long_running_projects: true
+operator_safety:
+  operator_safety_doc_included: true

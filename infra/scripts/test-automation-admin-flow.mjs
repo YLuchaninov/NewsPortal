@@ -315,7 +315,6 @@ async function main() {
   const adminEmail = selectAdminEmail(readAllowlistEntries(env), runId);
   const adminBaseUrl = "http://127.0.0.1:4322";
   const automationUrl = `${adminBaseUrl}/automation`;
-  let workerStopped = false;
 
   await ensureComposeStack();
   await ensureFirebasePasswordUser(firebaseApiKey, adminEmail, adminPassword);
@@ -402,7 +401,6 @@ async function main() {
 
   log("Stopping the worker so the new run remains cancellable.");
   runCompose("stop", "worker");
-  workerStopped = true;
 
   log("Requesting a pending sequence run through the admin surface.");
   const runResult = await postForm(
@@ -492,7 +490,6 @@ async function main() {
 
   log("Restarting the worker after the cancellable-run proof.");
   runCompose("up", "-d", "worker");
-  workerStopped = false;
 
   console.log(
     JSON.stringify(

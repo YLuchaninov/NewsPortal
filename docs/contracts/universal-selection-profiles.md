@@ -22,7 +22,7 @@
 - operator-tunable profile vocabulary без fixed actor/content taxonomies;
 - optional-only LLM escalation policy.
 
-Эта truth переживет один stage и будет общей для runtime, migrations, admin/operator surfaces, explain vocabulary и backfill discipline, поэтому ее нельзя держать только в `docs/work.md`.
+Эта truth переживет один stage и будет общей для runtime, migrations, admin/operator surfaces, explain vocabulary и backfill discipline, поэтому ее нельзя держать только в `.aidp/work.md`.
 
 ## Relationship to Existing Zero-Shot Contract
 
@@ -214,17 +214,17 @@ Explain surfaces must favor human-readable reasoning over opaque raw scores.
 
 ## Doc sync rules
 
-- `docs/blueprint.md`
+- `.aidp/blueprint.md`
   - may mention this contract as the next durable semantics layer for the selection lane, but must not claim shipped profile runtime before later stages land.
-- `docs/engineering.md`
+- `.aidp/engineering.md`
   - should record that universal selection semantics must stay profile-driven and must not regress into hidden domain-specific engine truth.
-- `docs/verification.md`
+- `.aidp/verification.md`
   - should define stage-level proof for this capability, starting with the design-contract stage.
 - `.aidp/os.yaml`
   - should include this contract in machine-canonical delivery/deep-contract facts.
-- `docs/work.md`
+- `.aidp/work.md`
   - carries active stage status, proof, and next step for this capability.
-- `docs/history.md`
+- `.aidp/history.md`
   - archives completed stages once they are no longer live.
 
 ## Minimum proof expectations
@@ -234,15 +234,15 @@ Explain surfaces must favor human-readable reasoning over opaque raw scores.
   - sync of this contract plus touched truth layers;
   - targeted consistency proof such as `git diff --check --` and reference checks.
 - Later implementation stages:
-  - must follow `docs/verification.md` and strengthen proof as schema/runtime/admin surfaces move.
+  - must follow `.aidp/verification.md` and strengthen proof as schema/runtime/admin surfaces move.
 
 ## Related files
 
 - `docs/contracts/zero-shot-interest-filtering.md`
 - `docs/contracts/content-model.md`
-- `docs/blueprint.md`
-- `docs/engineering.md`
-- `docs/verification.md`
+- `.aidp/blueprint.md`
+- `.aidp/engineering.md`
+- `.aidp/verification.md`
 - `.aidp/os.yaml`
 - `services/workers/app/main.py`
 - `services/workers/app/scoring.py`

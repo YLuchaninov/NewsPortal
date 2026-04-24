@@ -22,7 +22,7 @@
 - explain/admin/operator model;
 - proof contour для backfill, compatibility и final cutover.
 
-Эту truth нельзя надежно держать только в `docs/work.md` или размывать по временным заметкам.
+Эту truth нельзя надежно держать только в `.aidp/work.md` или размывать по временным заметкам.
 
 ## In scope
 
@@ -35,7 +35,7 @@
   - final selection read model;
   - compatibility and backfill strategy;
   - admin/API/observability/explain surfaces.
-- rules for how `docs/blueprint.md`, `docs/engineering.md`, `docs/verification.md`, `.aidp/os.yaml`, `docs/work.md`, and `docs/history.md` should be synced during the cutover.
+- rules for how `.aidp/blueprint.md`, `.aidp/engineering.md`, `.aidp/verification.md`, `.aidp/os.yaml`, `.aidp/work.md`, and `.aidp/history.md` should be synced during the cutover.
 
 ## Out of scope
 
@@ -46,7 +46,7 @@
 
 ## Current baseline truth
 
-Пока capability не shipped, действующей runtime truth остается текущая architecture из `docs/blueprint.md`:
+Пока capability не shipped, действующей runtime truth остается текущая architecture из `.aidp/blueprint.md`:
 
 - discovery planning остается graph-first и interest-centric;
 - `articles` и related rows остаются действующей raw/editorial runtime model;
@@ -133,7 +133,7 @@ The cutover must introduce or explicitly map the following durable responsibilit
 ### `STAGE-0-ZERO-SHOT-FILTERING-DESIGN-CONTRACT`
 
 - produce this contract, stage map, migration boundaries, proof contour, and doc-sync rules;
-- do not rewrite `docs/blueprint.md` as if the target architecture were already live.
+- do not rewrite `.aidp/blueprint.md` as if the target architecture were already live.
 
 ### `STAGE-1-CANONICAL-DOCUMENT-AND-OBSERVATION-LAYER`
 
@@ -189,17 +189,17 @@ The cutover must introduce or explicitly map the following durable responsibilit
 
 ## Doc sync rules
 
-- `docs/blueprint.md`
+- `.aidp/blueprint.md`
   - update only when a stage ships and durable current runtime truth actually changed.
-- `docs/engineering.md`
+- `.aidp/engineering.md`
   - update when ownership/boundary/refactor discipline changes durably.
-- `docs/verification.md`
+- `.aidp/verification.md`
   - update when proof contour or close-gate expectations change durably.
 - `.aidp/os.yaml`
   - update when machine-canonical commands, facts, or required contract docs change.
-- `docs/work.md`
+- `.aidp/work.md`
   - carries live capability planning, active stage, proof, risks, and handoff.
-- `docs/history.md`
+- `.aidp/history.md`
   - archives completed stages and cutover decisions once they are no longer live.
 
 ## Runtime and delivery considerations
@@ -214,14 +214,14 @@ The cutover must introduce or explicitly map the following durable responsibilit
 - hidden re-coupling of source discovery to final selection truth;
 - early semantic filtering that drops observations before canonicalization;
 - per-copy expensive processing that defeats the cost model in duplicate-heavy corpora;
-- writing future target behavior into `docs/blueprint.md` before the code/runtime actually ships;
+- writing future target behavior into `.aidp/blueprint.md` before the code/runtime actually ships;
 - compatibility layers becoming accidental permanent truth.
 
 ## Minimum proof expectations
 
 - Stage-0:
   - required-read-order reload;
-  - contract doc sync in `docs/contracts/README.md`, `docs/work.md`, and other touched truth layers;
+  - contract doc sync in `docs/contracts/README.md`, `.aidp/work.md`, and other touched truth layers;
   - targeted consistency proof such as `git diff --check` and/or `rg` checks for references.
 - Shipped `STAGE-4-FINAL-SELECTION-READ-MODEL-CUTOVER`:
   - requires `pnpm test:migrations:smoke`, `pnpm unit_tests`, `pnpm typecheck`, and `pnpm test:cluster-match-notify:compose`;
@@ -236,15 +236,15 @@ The cutover must introduce or explicitly map the following durable responsibilit
   - must explicitly prove that historical repair rebuilds additive stage-2/3/4 rows and keeps compatibility `system_feed_results` aligned without retro-notifications;
   - if a previously green discovery compose proof later fails on compose-schema drift outside the declared zero-shot write scope, record that residual separately instead of misreporting it as a stage-7 regression.
 - Implementation stages:
-  - must follow `docs/verification.md` and strengthen proof as schema/runtime boundaries move.
+  - must follow `.aidp/verification.md` and strengthen proof as schema/runtime boundaries move.
 - Capability closeout:
   - requires deterministic compose proof for the end-to-end path from ingest through canonicalization, clustering, verification, interest filtering, final selection, and historical repair visibility.
 
 ## Related files
 
-- `docs/blueprint.md`
-- `docs/engineering.md`
-- `docs/verification.md`
+- `.aidp/blueprint.md`
+- `.aidp/engineering.md`
+- `.aidp/verification.md`
 - `.aidp/os.yaml`
 - `docs/contracts/content-model.md`
 - `docs/contracts/discovery-agent.md`

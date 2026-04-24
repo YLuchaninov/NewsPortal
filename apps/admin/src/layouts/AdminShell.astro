@@ -356,7 +356,9 @@ const desktopNavSections = ADMIN_NAV_SECTIONS.map((group) => ({
         applySidebarMode(nextMode);
         try {
           window.localStorage.setItem(sidebarStorageKey, nextMode);
-        } catch {}
+        } catch {
+          return;
+        }
       });
 
       btn?.addEventListener("click", () => overlay?.classList.remove("hidden"));

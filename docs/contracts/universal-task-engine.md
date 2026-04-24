@@ -9,7 +9,7 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 ## Почему нужен отдельный contract doc
 
 - Подсистема меняет сразу data model, worker orchestration, relay handoff shape и maintenance API.
-- Миграция растянута на несколько stages; truth нельзя надежно держать только в `docs/blueprint.md` и `docs/work.md`.
+- Миграция растянута на несколько stages; truth нельзя надежно держать только в `.aidp/blueprint.md` и `.aidp/work.md`.
 - К этой подсистеме придется регулярно возвращаться из разных чатов и work items.
 
 ## In scope
@@ -263,8 +263,8 @@ Universal Task Engine вводит sequence-based execution model для NewsPor
 
 - `NEW_ARCHITECTURE.md`
 - `docs/contracts/discovery-agent.md`
-- `docs/work.md`
-- `docs/blueprint.md`
+- `.aidp/work.md`
+- `.aidp/blueprint.md`
 - `packages/contracts/src/queue.ts`
 - `database/migrations/0010_sequence_engine_foundation.sql`
 - `services/workers/app/task_engine/`

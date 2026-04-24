@@ -151,11 +151,6 @@ function normalizeOptionalText(value) {
   return normalized || null;
 }
 
-function asNumber(value, fallback = 0) {
-  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function asInt(value, fallback = 0) {
   const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -163,10 +158,6 @@ function asInt(value, fallback = 0) {
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
-}
-
-function asObject(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 async function sendRequest(url, { method = "GET", headers = {}, body = "", timeoutMs = 10000 } = {}) {

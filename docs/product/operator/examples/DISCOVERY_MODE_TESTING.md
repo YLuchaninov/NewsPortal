@@ -593,8 +593,8 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 
 Source of truth для этих настроек остается в runtime case-pack layer:
 
-- [`infra/scripts/lib/discovery-live-example-cases.mjs`](./infra/scripts/lib/discovery-live-example-cases.mjs)
-- [`infra/scripts/lib/discovery-live-proof-profiles.mjs`](./infra/scripts/lib/discovery-live-proof-profiles.mjs)
+- [`infra/scripts/lib/discovery-live-example-cases.mjs`](../../../../infra/scripts/lib/discovery-live-example-cases.mjs)
+- [`infra/scripts/lib/discovery-live-proof-profiles.mjs`](../../../../infra/scripts/lib/discovery-live-proof-profiles.mjs)
 
 Canonical single-run proof command:
 

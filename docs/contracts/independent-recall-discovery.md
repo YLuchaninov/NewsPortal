@@ -155,19 +155,19 @@ The cutover must introduce or explicitly map the following durable responsibilit
 
 ## Doc sync rules
 
-- [docs/blueprint.md](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+- [.aidp/blueprint.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/blueprint.md)
   - update only when a stage ships and current runtime truth changes durably.
 - [docs/contracts/discovery-agent.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/discovery-agent.md)
   - keep truthful current graph-first runtime contract until later stages actually demote it.
-- [docs/engineering.md](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md)
+- [.aidp/engineering.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/engineering.md)
   - update when additive recall boundaries or engineering discipline change durably.
-- [docs/verification.md](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+- [.aidp/verification.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/verification.md)
   - update when new minimum proof for recall-first stages becomes durable.
 - [.aidp/os.yaml](/Users/user/Documents/workspace/my/NewsPortal/.aidp/os.yaml)
   - update when the new contract becomes required context or new machine-canonical runtime facts exist.
-- [docs/work.md](/Users/user/Documents/workspace/my/NewsPortal/docs/work.md)
+- [.aidp/work.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/work.md)
   - carry the active stage, proof state, and handoff.
-- [docs/history.md](/Users/user/Documents/workspace/my/NewsPortal/docs/history.md)
+- [.aidp/history.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/history.md)
   - archive completed stages and the capability once no truthful live next stage remains.
 
 ## Failure modes

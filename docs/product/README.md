@@ -40,6 +40,6 @@
 
 - Канонические product-doc пути теперь живут только под `docs/product/**`.
 - Канонический полный product blueprint живет в `docs/product/architecture/product-blueprint.md`.
-- `docs/blueprint.md` остается только runtime-facing shell для agent/runtime core.
+- `.aidp/blueprint.md` остается только runtime-facing shell для agent/runtime core.
 - В корне репозитория product-stub файлы больше не поддерживаются: root product entrypoint остается только `README.md`.
 - Compatibility stubs сохранены только на legacy Markdown путях внутри `docs/`, где это помогает мягкой миграции.

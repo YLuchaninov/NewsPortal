@@ -330,12 +330,6 @@ async function captureBaselineSnapshot(pool, startedAt) {
   };
 }
 
-function parseJsonArtifactPath(output) {
-  const matches = [...String(output).matchAll(/Wrote JSON evidence to (.+\.json)/g)];
-  const last = matches.at(-1);
-  return last ? last[1].trim() : "";
-}
-
 function extractRegisteredChannelIds(parsed) {
   const channelIds = new Set();
   for (const caseRun of Array.isArray(parsed.caseRuns) ? parsed.caseRuns : []) {
@@ -617,7 +611,7 @@ async function main() {
     clearCachedAdminPool();
 
     log("Running live discovery harness for non-regression proof.");
-    const harness = runCommand("node", ["infra/scripts/test-live-discovery-examples.mjs"], {
+    runCommand("node", ["infra/scripts/test-live-discovery-examples.mjs"], {
       env: {
         DISCOVERY_ENABLED: "1",
         DISCOVERY_EXAMPLES_SKIP_PREFLIGHT: "1",

@@ -13,9 +13,9 @@
 ## Как использовать contract docs
 
 - Contract doc становится обязательным контекстом только тогда, когда active work touches соответствующую subsystem.
-- Contract doc не заменяет `docs/blueprint.md`, `docs/engineering.md` или `docs/verification.md`; он дополняет их на более глубоком уровне.
+- Contract doc не заменяет `.aidp/blueprint.md`, `.aidp/engineering.md` или `.aidp/verification.md`; он дополняет их на более глубоком уровне.
 - Если subsystem truth меняется durable образом, обновляй contract doc вместе с остальными truth layers.
-- Если временный deep design doc переживает один stage/capability arc, его durable meaning должен быть перенесен либо в `docs/history.md`, либо в стабильный contract doc.
+- Если временный deep design doc переживает один stage/capability arc, его durable meaning должен быть перенесен либо в `.aidp/history.md`, либо в стабильный contract doc.
 
 ## Naming guidance
 

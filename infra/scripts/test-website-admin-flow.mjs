@@ -786,7 +786,7 @@ async function main() {
   await ensureComposeStack();
   const fixtureServer = await startFixtureServer(runId);
 
-  let adminCookie = null;
+  let adminCookie;
   try {
     await ensureFirebasePasswordUser(firebaseApiKey, adminEmail, adminPassword);
 

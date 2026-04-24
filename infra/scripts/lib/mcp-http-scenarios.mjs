@@ -1,8 +1,6 @@
 import {
-  adminBaseUrl,
   mcpBaseUrl,
   extractFirstObjectRow,
-  getJson,
   postJson,
   readIdentifier,
   waitFor,
@@ -989,7 +987,7 @@ async function scenarioDiscoveryOperatorFlows(harness) {
   };
 }
 
-function buildReadToolCalls(harness) {
+function buildReadToolCalls() {
   return [
     { name: "admin.summary.get", args: {} },
     { name: "system_interests.list", args: { page: 1, pageSize: 20 } },
@@ -1028,7 +1026,7 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
   let articleResidualSummary = null;
   let webResourceList = null;
 
-  for (const call of buildReadToolCalls(harness)) {
+  for (const call of buildReadToolCalls()) {
     const output = await harness.mcpToolCall(token, call.name, call.args);
     listResults[call.name] = output;
     if (call.name === "articles.list") {

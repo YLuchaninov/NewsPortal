@@ -451,7 +451,7 @@ Before closing a manual test cycle, check whether you created temporary artifact
 - `web_push` subscriptions or notification channels
 - Telegram channels bound to a temporary chat id
 
-If the artifact existed only for the current run, remove it or record the residue in `docs/work.md` during an active implementation item.
+If the artifact existed only for the current run, remove it or record the residue in `.aidp/work.md` during an active implementation item.
 
 ## Truthful Residual Gaps
 

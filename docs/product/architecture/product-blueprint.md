@@ -5,7 +5,7 @@
 Он описывает продуктовую архитектурную truth и не используется как runtime-core shell для агентной разработки.
 Runtime-facing compact shell теперь живет в:
 
-- [`docs/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+- [`.aidp/blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/blueprint.md)
 
 Ниже сохраняется полный long-form product blueprint.
 

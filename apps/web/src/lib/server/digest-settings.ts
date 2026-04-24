@@ -151,7 +151,7 @@ function computeNextDigestRunAt(input: {
   }
 
   const baseCandidate = toUtcDate(nextParts);
-  let nextDate = baseCandidate;
+  let nextDate: Date;
   if (input.cadence === "daily") {
     nextDate = new Date(baseCandidate.getTime() + 24 * 60 * 60 * 1000);
   } else if (input.cadence === "every_3_days") {

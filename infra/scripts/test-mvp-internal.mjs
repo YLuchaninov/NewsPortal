@@ -575,24 +575,6 @@ function countSuppressions(env, { docId, interestId = null }) {
   );
 }
 
-function latestSuppressionReason(env, { docId, interestId = null }) {
-  const filters = [`doc_id = ${sqlLiteral(docId)}`];
-  if (interestId) {
-    filters.push(`interest_id = ${sqlLiteral(interestId)}`);
-  }
-  const value = queryPostgres(
-    env,
-    `
-      select reason
-      from notification_suppression
-      where ${filters.join("\n        and ")}
-      order by created_at desc
-      limit 1;
-    `
-  );
-  return value || null;
-}
-
 function normalizeMailMessages(payload) {
   if (Array.isArray(payload)) {
     return payload;

@@ -40,7 +40,7 @@ function runSingleHarness(iteration, runId) {
     },
     stdio: ["ignore", "inherit", "inherit"],
   });
-  let jsonPath = "";
+  let jsonPath;
   try {
     const pointer = JSON.parse(readFileSync(pointerPath, "utf8"));
     jsonPath = String(pointer?.jsonPath ?? "").trim();

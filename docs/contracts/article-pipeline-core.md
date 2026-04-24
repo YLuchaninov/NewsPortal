@@ -13,7 +13,7 @@
 
 Этот документ не заменяет:
 
-- [docs/blueprint.md](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
+- [.aidp/blueprint.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/blueprint.md)
 - [docs/contracts/zero-shot-interest-filtering.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/zero-shot-interest-filtering.md)
 - [docs/contracts/universal-selection-profiles.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/universal-selection-profiles.md)
 
@@ -237,7 +237,7 @@
 3. проверку, что `final_selection_results` остается primary selection truth;
 4. проверку, что article-level provenance не потеряна;
 5. read-only live evidence, если изменение касается runtime behavior на текущей БД;
-6. sync `docs/work.md` и всех затронутых truth layers.
+6. sync `.aidp/work.md` и всех затронутых truth layers.
 
 ## Минимальный forensic checklist перед risky changes
 
@@ -274,9 +274,9 @@
 
 ## Related files
 
-- [docs/blueprint.md](/Users/user/Documents/workspace/my/NewsPortal/docs/blueprint.md)
-- [docs/engineering.md](/Users/user/Documents/workspace/my/NewsPortal/docs/engineering.md)
-- [docs/verification.md](/Users/user/Documents/workspace/my/NewsPortal/docs/verification.md)
+- [.aidp/blueprint.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/blueprint.md)
+- [.aidp/engineering.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/engineering.md)
+- [.aidp/verification.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/verification.md)
 - [docs/contracts/zero-shot-interest-filtering.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/zero-shot-interest-filtering.md)
 - [docs/contracts/universal-selection-profiles.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/universal-selection-profiles.md)
 

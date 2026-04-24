@@ -378,7 +378,6 @@ function resolveResourcePreviewHref(resourceId: string): string {
                   <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No resources on this page. Try another page of results.</td>
                 </tr>
               ) : resources.items.map((resource) => {
-                const resourceHref = appPath(`/resources/${encodeURIComponent(String(resource.resource_id ?? ""))}`);
                 const previewHref = resolveResourcePreviewHref(String(resource.resource_id ?? ""));
                 const projectedArticleHref = resource.projected_article_id
                   ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)

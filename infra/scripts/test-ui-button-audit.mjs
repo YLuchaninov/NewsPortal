@@ -1380,7 +1380,6 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   await openPage(page, "/articles");
   const blockButton = page.getByRole("button", { name: /Block|Unblock/ }).first();
   const initialBlockLabel = String((await blockButton.textContent()) ?? "").trim();
-  const firstArticleTitle = String((await page.locator("tbody a").first().textContent()) ?? "").trim();
   if (/Block/.test(initialBlockLabel)) {
     await clickConfirmAction(page, blockButton, "Block article");
     await clickConfirmAction(page, page.getByRole("button", { name: /Unblock/ }).first(), "Unblock article");
@@ -1425,7 +1424,7 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   await createSequenceForm.locator('input[name="title"]').fill(`UI audit sequence ${runId}`);
   await createSequenceForm
     .locator('textarea[name="taskGraph"]')
-    .fill('[{\"key\":\"normalize\",\"module\":\"article.normalize\",\"options\":{}}]');
+    .fill('[{"key":"normalize","module":"article.normalize","options":{}}]');
   await createSequenceForm.getByRole("button", { name: "Create sequence" }).click();
   await page.getByText(`UI audit sequence ${runId}`, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
   result.checked.push("admin:/automation create sequence");

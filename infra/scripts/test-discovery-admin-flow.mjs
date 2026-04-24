@@ -431,10 +431,10 @@ async function main() {
   const discoveryPath = "/discovery";
 
   let candidateId = "";
-  let sourceProfileId = "";
-  let recallCandidateId = "";
-  let recallMissionId = "";
-  let profileId = "";
+  let sourceProfileId;
+  let recallCandidateId;
+  let recallMissionId;
+  let profileId;
   let deletableProfileId = "";
   let deletableMissionId = "";
   let deletableClassKey = "";
