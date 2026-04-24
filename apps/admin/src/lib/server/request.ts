@@ -1,10 +1,7 @@
-export async function readRequestPayload(request: Request): Promise<Record<string, FormDataEntryValue>> {
+export async function readRequestPayload(request: Request): Promise<Record<string, unknown>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const payload = (await request.json()) as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.entries(payload).map(([key, value]) => [key, String(value ?? "")])
-    );
+    return (await request.json()) as Record<string, unknown>;
   }
 
   const formData = await request.formData();

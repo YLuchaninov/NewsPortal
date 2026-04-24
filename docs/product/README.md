@@ -8,6 +8,8 @@
   Повседневная работа в админке, источники, правила, статьи, кластеры и обслуживание.
 - [Manual MVP Runbook](./operator/manual-mvp-runbook.md)
   Полный локальный walkthrough с bootstrap, проверками, cleanup и optional delivery/discovery lanes.
+- [Local Product Testing](./operator/local-product-testing.md)
+  Текущий internal product testing contour без Telegram/email/API ingestion lanes, с core/full evidence commands.
 - [Example Bundles](./operator/examples/EXAMPLES.md)
   Готовые RSS/template-конфигурации для типовых продуктовых сценариев.
 - [Discovery Testing Handbook](./operator/examples/DISCOVERY_MODE_TESTING.md)

@@ -107,6 +107,9 @@ commands:
   unit_tests_ts: pnpm unit_tests:ts
   unit_tests_py: pnpm unit_tests:py
   integration_tests: pnpm integration_tests
+  product_local_core: pnpm test:product:local:core
+  product_local_full: pnpm test:product:local:full
+  product_local_cleanup: pnpm test:product:local:cleanup
   smoke: pnpm test:mvp:internal
   relay_tests: pnpm test:relay
   relay_compose: pnpm test:relay:compose

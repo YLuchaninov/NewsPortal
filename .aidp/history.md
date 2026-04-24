@@ -199,3 +199,53 @@
   - broad live-provider gates outside MVP internal smoke were not requested in this item.
 - Follow-up created: none.
 - Archived on: 2026-04-24
+
+### PRODUCT-LOCAL-TEST-CONTOUR-2026-04-24 — Local product testing contour without parked ingestion lanes
+
+- Archive outcome: completed
+- Kind: Sweep
+- Финальный status: archived
+- Parent capability: Runtime delivery / Operator product testing
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил реализовать локальный internal product testing plan без Telegram ingestion, inbound Email IMAP ingestion и API source ingestion.
+- Что изменилось:
+  - added root scripts `pnpm test:product:local:core`, `pnpm test:product:local:full` and `pnpm test:product:local:cleanup`;
+  - added `infra/scripts/test-product-local.mjs` for env preflight, command orchestration and `/tmp/newsportal-product-local-<mode>-<runId>.json|md` evidence artifacts;
+  - narrowed `pnpm test:website:admin:compose` so mandatory acceptance covers website/resources and no longer blocks on API source or inbound Email IMAP ingestion;
+  - documented the current contour in `docs/product/operator/local-product-testing.md`, README/operator docs and AIDP proof map;
+  - kept local `email_digest` delivery via Mailpit in scope because it is outbound delivery, not inbound email ingestion.
+- Выполненный proof:
+  - `node --check infra/scripts/test-product-local.mjs`;
+  - `node --check infra/scripts/test-website-admin-flow.mjs`;
+  - targeted ESLint for changed harnesses;
+  - `pnpm test:product:local:cleanup`;
+  - `node infra/scripts/test-product-local.mjs --mode=core --preflight-only`;
+  - `node infra/scripts/test-product-local.mjs --mode=full --preflight-only`;
+  - `pnpm lint:ts`;
+  - `pnpm test:cluster-match-notify:compose` passed after isolating the phase4 smoke criterion from unrelated system criteria;
+  - `pnpm test:web:ui-audit` passed after stabilizing the admin article moderation/retry surface;
+  - `pnpm test:product:local:core` passed with deterministic/stateful/browser evidence;
+  - escalated `pnpm test:product:local:full` passed with discovery, live website matrix and live MCP HTTP evidence;
+  - `pnpm test:product:local:cleanup` passed and `pnpm dev:mvp:internal:down` stopped the remaining compose stack.
+- Evidence artifacts:
+  - `/tmp/newsportal-product-local-core-6fd0a54c.json|md`;
+  - `/tmp/newsportal-product-local-full-00f25bc1.json|md`;
+  - `/tmp/newsportal-product-local-cleanup-b0d39c46.json|md`;
+  - `/tmp/newsportal-product-local-core-ea611ff8.json|md`;
+  - `/tmp/newsportal-product-local-full-6d7fccc5.json|md`;
+  - `/tmp/newsportal-product-local-cleanup-c8548794.json|md`;
+  - supporting live artifacts include `/tmp/newsportal-mcp-http-deterministic-950488cc-92bd-4905-a066-9b6628ea427f.json|md`, `/tmp/newsportal-live-discovery-yield-proof-27b4010b.json|md`, `/tmp/newsportal-live-website-matrix-baseline-f242b232-3048-43e8-af5c-1e483063c680.json` and `/tmp/newsportal-mcp-http-live-5779c04a-13d6-4310-aa73-b24a50be1e94.json|md`.
+- Issues found and fixed during proof:
+  - deterministic MCP discovery scenario now seeds a mission-scoped candidate when needed instead of depending on stale global candidates;
+  - phase4 worker smoke now temporarily isolates its own criterion so unrelated active criteria cannot turn a matched article into a gray-zone hold and suppress `article.criteria.matched`;
+  - browser UI audit now uses RSS/website-only channel import data, current user-interest selectors, stable recent-failures article moderation/retry coverage, and scopes discovery action buttons to the dedicated discovery admin proof;
+  - admin/browser BFF request handling now preserves JSON request bodies, handles boolean reindex flags, and avoids treating JSON requests as HTML navigation;
+  - React/Astro hydration/runtime issues found by browser proof were fixed with UTC date formatting, a defined workspace pane label data attribute and client-safe automation helpers;
+  - API discovery feedback now normalizes blank optional UUID strings to `null`.
+- Оставшиеся risks/gaps:
+  - live-provider proof remains environment/time dependent; the successful full run classified upstream captcha/403/unsupported blocks in the website matrix as truthful live evidence rather than deterministic regressions;
+  - Telegram ingestion, inbound Email IMAP ingestion, API source ingestion and `youtube` remain parked/future lanes;
+  - production deploy and release/package proof remain undeclared repository gaps.
+- Follow-up created: none.
+- Archived on: 2026-04-24

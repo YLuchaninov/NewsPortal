@@ -261,6 +261,7 @@ const paneResizeInstructionsId = `${paneContentId}-resize-instructions`;
   data-admin-pane-root
   data-admin-pane="open"
   data-admin-pane-id={paneId}
+  data-admin-pane-label={paneLabel}
   data-admin-pane-default-width={String(defaultWidth)}
   data-admin-pane-min-width={String(minWidth)}
   data-admin-pane-max-width={String(maxWidth)}
@@ -431,6 +432,7 @@ const paneResizeInstructionsId = `${paneContentId}-resize-instructions`;
       root.dataset.adminPaneMinMainWidth ?? "720",
       10
     );
+    const paneLabel = root.dataset.adminPaneLabel ?? "workspace";
 
     const collapseButton = root.querySelector("[data-admin-pane-collapse]");
     const openButton = root.querySelector("[data-admin-pane-open]");

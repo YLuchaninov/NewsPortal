@@ -441,6 +441,35 @@ async function clickAndWaitForToggle(locator, labels) {
   return { initial, expected };
 }
 
+async function readJsonResponse(response) {
+  return await response.json().catch(async () => ({
+    body: await response.text().catch(() => ""),
+  }));
+}
+
+async function waitForAdminAutomationPost(page, action) {
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().includes("/bff/admin/automation") &&
+        candidate.request().method() === "POST",
+      { timeout: 30000 }
+    ),
+    action(),
+  ]);
+  const payload = await readJsonResponse(response);
+  if (!response.ok()) {
+    throw new Error(
+      `Automation BFF returned ${response.status()}: ${JSON.stringify(payload)}`
+    );
+  }
+  return {
+    payload,
+    status: response.status(),
+    url: response.url(),
+  };
+}
+
 async function resolveCardByText(page, text) {
   const heading = page.getByText(text, { exact: true }).first();
   await heading.waitFor({ state: "visible", timeout: 10000 });
@@ -453,38 +482,6 @@ async function resolveTableRowByText(page, text) {
   const cell = page.getByText(text, { exact: true }).first();
   await cell.waitFor({ state: "visible", timeout: 10000 });
   return cell.locator("xpath=ancestor::tr[1]");
-}
-
-async function resolveDetailsByText(page, text) {
-  const cell = page.getByText(text, { exact: true }).first();
-  await cell.waitFor({ state: "visible", timeout: 10000 });
-  return cell.locator("xpath=ancestor::details[1]");
-}
-
-async function resolveArticleByText(page, text) {
-  const cell = page.getByText(text, { exact: true }).first();
-  await cell.waitFor({ state: "visible", timeout: 10000 });
-  return cell.locator("xpath=ancestor::article[1]");
-}
-
-async function ensureDetailsOpen(detailsLocator) {
-  const isOpen = await detailsLocator.evaluate((node) => node instanceof HTMLDetailsElement && node.open);
-  if (!isOpen) {
-    await detailsLocator.locator("summary").first().click();
-    await waitFor(
-      "details open state",
-      async () => detailsLocator.evaluate((node) => node instanceof HTMLDetailsElement && node.open),
-      (open) => open === true
-    );
-  }
-}
-
-async function resolveDiscoveryRowByTitle(page, title) {
-  const heading = page.getByText(title, { exact: true });
-  await heading.waitFor({ state: "visible", timeout: 10000 });
-  return heading.locator(
-    'xpath=ancestor::div[contains(@class, "px-5") and contains(@class, "py-4")][1]'
-  );
 }
 
 async function openPage(page, urlOrPath) {
@@ -1014,6 +1011,15 @@ async function seedAdminFixtures(env, adminCookie, runId) {
     `
   ));
   assert.ok(articleDocId);
+  queryPostgres(
+    env,
+    `
+      update articles
+      set enrichment_state = 'failed',
+          updated_at = now()
+      where doc_id = ${sqlLiteral(articleDocId)};
+    `
+  );
 
   const resourceId = firstResultLine(queryPostgres(
     env,
@@ -1082,10 +1088,16 @@ async function auditWebButtons(page, runId, scenario, result) {
   });
   result.checked.push("web:/content mark seen/unread");
 
-  await clickAndWaitForToggle(page.getByRole("button", { name: /Save|Unsave/ }).first(), {
+  const contentSaveToggle = await clickAndWaitForToggle(page.getByRole("button", { name: /Save|Unsave/ }).first(), {
     on: "Save",
     off: "Unsave",
   });
+  if (contentSaveToggle.expected === "Save") {
+    await clickAndWaitForToggle(page.getByRole("button", { name: /Save|Unsave/ }).first(), {
+      on: "Save",
+      off: "Unsave",
+    });
+  }
   result.checked.push("web:/content save");
 
   await clickAndWaitForToggle(page.getByRole("button", { name: /Follow story|Following/ }).first(), {
@@ -1285,7 +1297,7 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   result.checked.push("admin:/templates/llm delete");
 
   log("Admin: channel create/edit/import/list buttons.");
-  await openPage(page, "/channels/new");
+  await openPage(page, "/channels/new?providerType=rss");
   await page.locator('input[name="name"]').fill(`UI audit browser channel ${runId}`);
   await page.locator('input[name="fetchUrl"]').fill(
     `http://web:4321/internal-mvp-feed.xml?run=${encodeURIComponent(`browser-new-${runId}`)}`
@@ -1305,10 +1317,36 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   await page.getByRole("button", { name: "Load example" }).click();
   await page.getByRole("button", { name: "Validate" }).click();
   const jsonArea = page.locator("textarea").first();
-  const currentJson = await jsonArea.inputValue();
-  await jsonArea.fill(currentJson.replaceAll("Example", `Audit ${runId}`));
-  await page.getByRole("button", { name: "Import JSON" }).click();
-  result.checked.push("admin:/channels/import load example/validate/import");
+  await jsonArea.fill(
+    JSON.stringify(
+      [
+        {
+          providerType: "rss",
+          name: `Audit RSS ${runId}`,
+          fetchUrl: `http://web:4321/internal-mvp-feed.xml?run=${encodeURIComponent(`audit-import-rss-${runId}`)}`,
+          language: "en",
+          isActive: true,
+          pollIntervalSeconds: 1800,
+        },
+        {
+          providerType: "website",
+          name: `Audit Website ${runId}`,
+          fetchUrl: `http://web:4321/internal-mvp-site?run=${encodeURIComponent(`audit-import-website-${runId}`)}`,
+          language: "en",
+          isActive: true,
+          pollIntervalSeconds: 1800,
+        },
+      ],
+      null,
+      2
+    )
+  );
+  await Promise.all([
+    page.waitForURL(/\/channels\/import.*flash_status=/u, { timeout: 30000 }),
+    page.getByRole("button", { name: "Import JSON" }).click(),
+  ]);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  result.checked.push("admin:/channels/import load example/validate/import rss+website");
 
   await openPage(page, "/channels");
   await page.getByRole("spinbutton", { name: "Base interval (seconds)" }).fill("1800");
@@ -1338,8 +1376,15 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   log("Admin: user-interests buttons.");
   await openPage(page, "/user-interests");
   await page.locator('input[name="userId"]').fill(webScenario.targetUserId);
-  await page.getByRole("button", { name: "Find user" }).click();
+  await Promise.all([
+    page.waitForURL(/\/user-interests\?.*userId=/u, { timeout: 15000 }),
+    page.getByRole("button", { name: "Find user" }).click(),
+  ]);
   await page.waitForLoadState("networkidle").catch(() => {});
+  await openPage(
+    page,
+    `/user-interests?userId=${encodeURIComponent(webScenario.targetUserId)}&mode=create`
+  );
   await page.locator('textarea[name="description"]').first().fill(`Admin managed interest ${runId}`);
   await page.getByRole("button", { name: "Create user interest" }).click();
   await page.getByText(`Admin managed interest ${runId}`, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
@@ -1347,16 +1392,22 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
 
   const createdAdminInterestDescription = `Admin managed interest ${runId}`;
   const updatedAdminInterestDescription = `Admin managed interest updated ${runId}`;
-  const adminInterestRow = await resolveDetailsByText(page, createdAdminInterestDescription);
-  await ensureDetailsOpen(adminInterestRow);
-  await adminInterestRow.locator('textarea[name="description"]').fill(updatedAdminInterestDescription);
-  await adminInterestRow.getByRole("button", { name: "Save changes" }).click();
+  const createdAdminInterestLink = page
+    .getByText(createdAdminInterestDescription, { exact: true })
+    .first()
+    .locator("xpath=ancestor::a[1]");
+  await Promise.all([
+    page.waitForURL(/\/user-interests\?.*selected=/u, { timeout: 15000 }),
+    createdAdminInterestLink.click(),
+  ]);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  const userInterestEditorForm = page.locator('form[action*="/bff/admin/user-interests/"]').first();
+  await userInterestEditorForm.locator('textarea[name="description"]').fill(updatedAdminInterestDescription);
+  await userInterestEditorForm.getByRole("button", { name: "Save changes" }).click();
   await page.getByText(updatedAdminInterestDescription, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
   result.checked.push("admin:/user-interests save");
 
-  const updatedAdminInterestRow = await resolveDetailsByText(page, updatedAdminInterestDescription);
-  await ensureDetailsOpen(updatedAdminInterestRow);
-  await updatedAdminInterestRow.getByRole("button", { name: "Clone" }).click();
+  await userInterestEditorForm.getByRole("button", { name: "Clone" }).click();
   await waitFor(
     "cloned admin interest",
     async () => page.getByText(updatedAdminInterestDescription, { exact: true }).count(),
@@ -1364,20 +1415,15 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   );
   result.checked.push("admin:/user-interests clone");
 
-  const clonedAdminInterestRow = page
-    .getByText(updatedAdminInterestDescription, { exact: true })
-    .nth(1)
-    .locator('xpath=ancestor::details[1]');
-  await ensureDetailsOpen(clonedAdminInterestRow);
   await clickConfirmAction(
     page,
-    clonedAdminInterestRow.getByRole("button", { name: "Delete" }).first(),
+    page.getByRole("button", { name: "Delete" }).first(),
     "Delete interest"
   );
   result.checked.push("admin:/user-interests delete");
 
   log("Admin: article moderation and retry buttons.");
-  await openPage(page, "/articles");
+  await openPage(page, `/articles?view=recent-failures&selected=${encodeURIComponent(fixtures.articleDocId)}`);
   const blockButton = page.getByRole("button", { name: /Block|Unblock/ }).first();
   const initialBlockLabel = String((await blockButton.textContent()) ?? "").trim();
   if (/Block/.test(initialBlockLabel)) {
@@ -1390,9 +1436,7 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   }
   result.checked.push("admin:/articles block/unblock");
 
-  const articleHref = await page.locator("tbody a").first().getAttribute("href");
-  assert.ok(articleHref);
-  await openPage(page, articleHref);
+  await openPage(page, `/articles/${encodeURIComponent(fixtures.articleDocId)}`);
   await page.getByRole("button", { name: "Retry enrichment" }).click();
   result.checked.push("admin:/articles/:id retry enrichment");
 
@@ -1418,122 +1462,44 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
 
   log("Admin: automation buttons.");
   await openPage(page, "/automation");
-  const createSequenceForm = page
-    .getByRole("button", { name: "Create sequence" })
-    .locator("xpath=ancestor::form[1]");
-  await createSequenceForm.locator('input[name="title"]').fill(`UI audit sequence ${runId}`);
-  await createSequenceForm
-    .locator('textarea[name="taskGraph"]')
-    .fill('[{"key":"normalize","module":"article.normalize","options":{}}]');
-  await createSequenceForm.getByRole("button", { name: "Create sequence" }).click();
-  await page.getByText(`UI audit sequence ${runId}`, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
-  result.checked.push("admin:/automation create sequence");
+  await Promise.all([
+    page.waitForURL(/\/automation\/[0-9a-f-]+$/u, { waitUntil: "domcontentloaded", timeout: 30000 }),
+    waitForAdminAutomationPost(page, () =>
+      page.getByRole("button", { name: "Blank Linear Workflow" }).click()
+    ),
+  ]);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  const automationEditorUrl = page.url();
+  result.checked.push("admin:/automation blank workflow create");
 
-  const createdSequenceTitle = `UI audit sequence ${runId}`;
-  const updatedSequenceTitle = `UI audit sequence updated ${runId}`;
-  const sequenceCard = await resolveArticleByText(page, createdSequenceTitle);
-  await sequenceCard.locator('input[name="title"]').fill(updatedSequenceTitle);
-  await sequenceCard.getByRole("button", { name: "Save sequence" }).click();
-  await page.getByText(updatedSequenceTitle, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
-  result.checked.push("admin:/automation save sequence");
+  await page.getByRole("button", { name: "Run Now" }).click();
+  await Promise.all([
+    page.waitForURL(/\/automation\/[0-9a-f-]+\/executions$/u, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    }),
+    page.getByRole("button", { name: "Request Run" }).click(),
+  ]);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  result.checked.push("admin:/automation request run");
 
-  const updatedSequenceCard = await resolveArticleByText(page, updatedSequenceTitle);
-  await updatedSequenceCard.getByRole("button", { name: "Run now" }).click();
-  result.checked.push("admin:/automation run now");
+  await openPage(page, automationEditorUrl);
+  page.once("dialog", (dialog) => {
+    void dialog.accept();
+  });
+  await Promise.all([
+    page.waitForURL(/\/automation(?:\?.*)?$/u, { waitUntil: "domcontentloaded", timeout: 30000 }),
+    page.getByRole("button", { name: "Archive" }).click(),
+  ]);
+  result.checked.push("admin:/automation archive workflow");
 
-  await updatedSequenceCard.getByRole("button", { name: "Archive" }).click();
-  result.checked.push("admin:/automation archive sequence");
-
-  const cancelRunButton = page.getByRole("button", { name: "Cancel run" }).first();
-  if ((await cancelRunButton.count()) > 0) {
-    await cancelRunButton.click();
-    result.checked.push("admin:/automation cancel run");
-  } else {
-    result.notApplicable.push("admin:/automation cancel run not rendered for current run state");
-  }
-
-  log("Admin: discovery buttons.");
+  log("Admin: discovery smoke.");
   await openPage(page, "/discovery?tab=missions");
-  const createMissionForm = page
-    .getByRole("button", { name: "Create mission" })
-    .locator("xpath=ancestor::form[1]");
-  await createMissionForm.locator('input[name="title"]').fill(`UI browser mission ${runId}`);
-  await createMissionForm.locator('textarea[name="description"]').fill("UI browser mission");
-  await createMissionForm.locator('textarea[name="seedTopics"]').fill("browser");
-  await createMissionForm.getByRole("button", { name: "Create mission" }).click();
-  await page.getByText(`UI browser mission ${runId}`, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
-  result.checked.push("admin:/discovery mission create");
-
-  const missionRow = await resolveDiscoveryRowByTitle(page, `UI browser mission ${runId}`);
-  await missionRow.getByRole("button", { name: "Compile graph" }).click();
-  await missionRow.getByRole("button", { name: "Run mission" }).click();
-  await missionRow.locator('input[name="budgetCents"]').fill("1");
-  await missionRow.getByRole("button", { name: "Save mission" }).click();
-  result.checked.push("admin:/discovery mission compile/run/save");
-
-  const seededMissionRow = await resolveDiscoveryRowByTitle(page, `UI audit mission ${runId}`);
-  await clickConfirmAction(page, seededMissionRow.getByRole("button", { name: /^Archive$/ }).first(), "Archive mission");
-  await clickConfirmAction(page, seededMissionRow.getByRole("button", { name: /^Activate$/ }).first(), "Reactivate mission");
-  result.checked.push("admin:/discovery mission archive/activate");
-
-  const deleteMissionRow = await resolveDiscoveryRowByTitle(page, `UI audit delete mission ${runId}`);
-  await clickConfirmAction(page, deleteMissionRow.getByRole("button", { name: /^Delete$/ }).first(), "Delete mission");
-  result.checked.push("admin:/discovery mission delete");
-
-  await openPage(page, "/discovery?tab=classes");
-  const createClassForm = page
-    .getByRole("button", { name: "Create class" })
-    .locator("xpath=ancestor::form[1]");
-  await createClassForm.locator('input[name="classKey"]').fill(`ui_browser_${runId}`);
-  await createClassForm.locator('input[name="displayName"]').fill(`UI browser class ${runId}`);
-  await createClassForm.locator('input[name="sortOrder"]').fill("-999");
-  await createClassForm.getByRole("button", { name: "Create class" }).click();
-  await page.getByText(`UI browser class ${runId}`, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
-  result.checked.push("admin:/discovery class create");
-
-  const classRow = await resolveDiscoveryRowByTitle(page, `UI browser class ${runId}`);
-  await classRow.locator('input[name="sortOrder"]').fill("1");
-  await classRow.getByRole("button", { name: "Save class" }).click();
-  result.checked.push("admin:/discovery class save");
-
-  const seededClassRow = await resolveDiscoveryRowByTitle(page, `UI audit class ${runId}`);
-  await clickConfirmAction(page, seededClassRow.getByRole("button", { name: /^Archive$/ }).first(), "Archive class");
-  await clickConfirmAction(page, seededClassRow.getByRole("button", { name: /^Activate$/ }).first(), "Reactivate class");
-  result.checked.push("admin:/discovery class archive/activate");
-
-  const deleteClassRow = await resolveDiscoveryRowByTitle(page, `UI audit delete class ${runId}`);
-  await clickConfirmAction(page, deleteClassRow.getByRole("button", { name: /^Delete$/ }).first(), "Delete class");
-  result.checked.push("admin:/discovery class delete");
-
-  await openPage(page, "/discovery?tab=candidates");
-  const approveRow = await resolveDiscoveryRowByTitle(page, `UI audit candidate ${runId}`);
-  await approveRow.getByRole("button", { name: "Approve" }).click();
-  const rejectRow = await resolveDiscoveryRowByTitle(page, `UI audit reject candidate ${runId}`);
-  await rejectRow.locator('input[name="rejectionReason"]').fill("browser reject");
-  await rejectRow.getByRole("button", { name: "Reject" }).click();
-  result.checked.push("admin:/discovery candidate approve/reject");
-
-  await openPage(page, `/discovery?tab=feedback&portfolioMissionId=${encodeURIComponent(fixtures.missionId)}`);
-  const feedbackSection = page
-    .getByRole("heading", { name: "Submit feedback" })
-    .locator("xpath=ancestor::section[1]");
-  if ((await feedbackSection.count()) > 0) {
-    await feedbackSection.locator('textarea[name="notes"]').fill("browser feedback");
-    await feedbackSection.getByRole("button", { name: "Record feedback" }).click();
-    await page.waitForLoadState("networkidle").catch(() => {});
-    result.checked.push("admin:/discovery feedback submit");
-  } else {
-    result.skipped.push({
-      route: "/discovery?tab=feedback",
-      action: "feedback submit",
-      reason: "feedback submit button was not surfaced on the current local data shape",
-    });
-  }
-  const reevaluateButton = page.getByRole("button", { name: "Re-evaluate mission" }).first();
-  if ((await reevaluateButton.count()) > 0) {
-    await reevaluateButton.click();
-    result.checked.push("admin:/discovery re-evaluate mission");
-  }
+  result.skipped.push({
+    route: "/discovery",
+    action: "discovery action buttons",
+    reason: "covered by test:discovery:admin:compose in the full local product contour",
+  });
 
   await openPage(page, "/templates");
   result.notApplicable.push("admin:/templates no button actions rendered");

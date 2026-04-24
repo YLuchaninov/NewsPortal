@@ -31,6 +31,9 @@
 ### Integration/smoke proof
 
 - Canonical full local acceptance alias: `pnpm integration_tests`
+- Local product core contour without parked Telegram/email/API ingestion: `pnpm test:product:local:core`
+- Local product full contour with discovery/live-provider evidence: `pnpm test:product:local:full`
+- Local product cleanup checklist artifact: `pnpm test:product:local:cleanup`
 - Internal MVP smoke path: `pnpm test:mvp:internal`
 - Scaffold sanity: `pnpm check:scaffold`
 - Relay local proof: `pnpm test:relay`
@@ -40,7 +43,7 @@
 - RSS ingest compose smoke: `pnpm test:ingest:compose`
 - RSS ingest multi/soak: `pnpm test:ingest:multi:compose`, `pnpm test:ingest:soak:compose`
 - Website compose smoke: `pnpm test:website:compose`
-- Website admin/operator flow: `pnpm test:website:admin:compose`
+- Website admin/operator flow: `pnpm test:website:admin:compose`; mandatory scope is current RSS/website contour, while API source ingestion, inbound Email IMAP ingestion and Telegram ingestion are parked unless a separate item opens them.
 - Automation admin/operator flow: `pnpm test:automation:admin:compose`
 - Website live matrix: `pnpm test:website:matrix:compose`
 - Web viewport proof: `pnpm test:web:viewports`

@@ -5,7 +5,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Sele
 import {
   isSequenceRunCancellable,
   isSequenceRunRetryable,
-} from "../lib/server/automation";
+} from "../lib/automation-workspace";
 import {
   ADMIN_LIVE_UPDATES_EVENT,
   isAdminLiveSurfaceSnapshot,
@@ -55,6 +55,7 @@ function formatTimestamp(value: unknown): string {
     return String(value);
   }
   return parsed.toLocaleString("en-US", {
+    timeZone: "UTC",
     month: "short",
     day: "numeric",
     hour: "numeric",

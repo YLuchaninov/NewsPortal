@@ -35,6 +35,7 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 - [Product Blueprint](docs/product/architecture/product-blueprint.md)
 - [Operator Guide](docs/product/operator/HOW_TO_USE.md)
 - [Manual MVP Runbook](docs/product/operator/manual-mvp-runbook.md)
+- [Local Product Testing](docs/product/operator/local-product-testing.md)
 - [Example Bundles](docs/product/operator/examples/EXAMPLES.md)
 - [MCP Operator Docs](docs/product/operator/mcp/README.md)
 - [Architecture Overview](docs/product/architecture/architecture-overview.md)
@@ -231,7 +232,8 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 - Пользователь без `user_interests` все равно видит system-selected collection; baseline notifications пока остаются personalization-lane contract, а не отдельным system alert path.
 - `web` keeps `/` as the global system-selected collection and exposes a separate `/matches` surface for per-user personalized matches.
 - Successful user-interest create/update/clone flows now compile first and then queue a scoped `repair` replay for historical system-selected content, without resending retro notifications.
-- Umbrella `pnpm integration_tests` acceptance все еще остается RSS-first ingest path, но website lane теперь имеет отдельные deterministic proofs через `pnpm test:website:compose` и `pnpm test:website:admin:compose`; отдельный admin/operator CRUD proof для `website`, `api`, и `email_imap` source flows также входит в `pnpm test:website:admin:compose`.
+- Umbrella `pnpm integration_tests` acceptance все еще остается RSS-first ingest path, но website lane теперь имеет отдельные deterministic proofs через `pnpm test:website:compose` и `pnpm test:website:admin:compose`; текущий internal product contour intentionally keeps `api`, `email_imap` и Telegram ingestion parked outside mandatory acceptance.
+- Root product-local evidence commands now exist: `pnpm test:product:local:core`, `pnpm test:product:local:full` and `pnpm test:product:local:cleanup`. They write `/tmp/newsportal-product-local-<mode>-<runId>.json|md`.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
 - `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
 - Admin surface показывает provider-agnostic scheduling health, append-only fetch history, website resource browse/detail observability via `/admin/resources`, и LLM usage/budget rollups; read-model API дополнена `/maintenance/fetch-runs`, `/maintenance/llm-reviews`, `/maintenance/llm-usage-summary`, `/maintenance/llm-budget-summary` и `/maintenance/web-resources*`.
@@ -243,7 +245,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 
 Для ручного MVP прогона теперь есть консистентный baseline:
 
-- admin умеет создавать `rss`, `website`, `api` и `email_imap` sources, а website lane теперь дает `/admin/resources` browse/detail для projected и resource-only `web_resources`;
+- admin product testing сейчас фокусируется на `rss` и `website` sources; `api`, inbound `email_imap` and Telegram ingestion are parked for this local contour, while website lane gives `/admin/resources` browse/detail for projected and resource-only `web_resources`;
 - browser-assisted website handling for public JS-heavy sites is available as an opt-in website-channel setting via `browserFallbackEnabled`; cheap static modes remain default and browser provenance should surface on `/admin/resources`;
 - provider-wide scheduling patch позволяет массово назначать `fast=300`, `normal=900`, `slow=3600`, `daily=86400`, `three_day=259200`;
 - fetchers сохраняют `source_channel_runtime_state` и append-only `channel_fetch_runs`, поэтому overdue/adaptive/failed каналы видны отдельно от `source_channels.last_*`;
@@ -266,7 +268,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 
 - фактический browser receipt для `web_push` остается manual-only proof item;
 - repo не содержит канонического списка real RSS feeds, только импортный template; реальные feed URLs оператор подставляет сам.
-- current committed admin/operator source CRUD supports `rss`, `website`, `api`, and `email_imap` onboarding; `youtube` ingest остается future-ready и пока не входит в operator-ready часть этого manual baseline.
+- current mandatory product testing covers `rss` and `website` onboarding; `api`, inbound `email_imap`, Telegram ingestion and `youtube` are parked/future lanes for this cycle.
 
 ## Targeted Smokes
 

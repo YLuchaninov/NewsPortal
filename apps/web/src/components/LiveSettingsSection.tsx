@@ -58,6 +58,7 @@ function formatTimestamp(value: unknown): string {
   return Number.isNaN(date.getTime())
     ? String(value)
     : date.toLocaleString("en-US", {
+        timeZone: "UTC",
         month: "short",
         day: "numeric",
         hour: "numeric",

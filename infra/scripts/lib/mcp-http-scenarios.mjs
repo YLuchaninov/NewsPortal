@@ -168,6 +168,243 @@ function pushEvidence(evidence, label, details) {
   });
 }
 
+function sqlLiteral(value) {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function firstResultLine(output) {
+  return String(output ?? "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)[0] ?? "";
+}
+
+async function seedSyntheticDiscoveryCandidate(harness, { missionId, classKey }) {
+  const suffix = harness.runId.slice(0, 8);
+  const hypothesisId = firstResultLine(
+    await harness.queryPostgres(`
+      insert into discovery_hypotheses (
+        mission_id,
+        class_key,
+        tactic_key,
+        search_query,
+        target_urls,
+        target_provider_type,
+        generation_context,
+        expected_value,
+        status
+      )
+      values (
+        ${sqlLiteral(missionId)},
+        ${sqlLiteral(classKey)},
+        ${sqlLiteral("mcp_deterministic_fallback")},
+        ${sqlLiteral(`site:${suffix} deterministic discovery candidate`)},
+        array[${sqlLiteral(`https://mcp-${suffix}.example.test/source`)}]::text[],
+        'website',
+        '{"source":"mcp-deterministic-fallback"}'::jsonb,
+        ${sqlLiteral("deterministic candidate fallback")},
+        'pending'
+      )
+      returning hypothesis_id::text;
+    `)
+  );
+  assert(hypothesisId, "Failed to seed deterministic discovery hypothesis.");
+
+  const candidateId = firstResultLine(
+    await harness.queryPostgres(`
+      insert into discovery_candidates (
+        hypothesis_id,
+        mission_id,
+        url,
+        final_url,
+        title,
+        description,
+        provider_type,
+        is_valid,
+        relevance_score,
+        evaluation_json,
+        llm_assessment,
+        sample_data,
+        status,
+        rejection_reason
+      )
+      values (
+        ${sqlLiteral(hypothesisId)},
+        ${sqlLiteral(missionId)},
+        ${sqlLiteral(`https://mcp-${suffix}.example.test/source`)},
+        ${sqlLiteral(`https://mcp-${suffix}.example.test/source`)},
+        ${sqlLiteral(`MCP deterministic candidate ${suffix}`)},
+        ${sqlLiteral("Synthetic candidate seeded when the live discovery run produces no deterministic candidate rows.")},
+        'website',
+        true,
+        0.91,
+        '{"quality_signal_source":"mcp_deterministic_fallback","normalizedReasonBucket":"below_auto_approval_threshold","reviewScore":0.91}'::jsonb,
+        '{}'::jsonb,
+        '[]'::jsonb,
+        'pending',
+        null
+      )
+      returning candidate_id::text;
+    `)
+  );
+  assert(candidateId, "Failed to seed deterministic discovery candidate.");
+
+  const sourceProfileId = firstResultLine(
+    await harness.queryPostgres(`
+      insert into discovery_source_profiles (
+        candidate_id,
+        canonical_domain,
+        source_type,
+        org_name,
+        country,
+        languages,
+        ownership_transparency,
+        author_accountability,
+        source_linking_quality,
+        historical_stability,
+        technical_quality,
+        spam_signals,
+        trust_score,
+        extraction_data
+      )
+      values (
+        ${sqlLiteral(candidateId)},
+        ${sqlLiteral(`mcp-${suffix}.example.test`)},
+        'news_site',
+        ${sqlLiteral(`MCP Deterministic Org ${suffix}`)},
+        'US',
+        array['en']::text[],
+        0.72,
+        0.68,
+        0.64,
+        0.7,
+        0.76,
+        0.08,
+        0.74,
+        '{"source":"mcp-deterministic-fallback"}'::jsonb
+      )
+      returning source_profile_id::text;
+    `)
+  );
+  assert(sourceProfileId, "Failed to seed deterministic discovery source profile.");
+
+  await harness.queryPostgres(`
+    update discovery_candidates
+    set source_profile_id = ${sqlLiteral(sourceProfileId)}
+    where candidate_id = ${sqlLiteral(candidateId)};
+  `);
+
+  await harness.queryPostgres(`
+    insert into discovery_source_quality_snapshots (
+      source_profile_id,
+      channel_id,
+      snapshot_reason,
+      trust_score,
+      extraction_quality_score,
+      stability_score,
+      independence_score,
+      freshness_score,
+      lead_time_score,
+      yield_score,
+      duplication_score,
+      recall_score,
+      scoring_breakdown
+    )
+    values (
+      ${sqlLiteral(sourceProfileId)},
+      null,
+      'mcp_deterministic_fallback',
+      0.74,
+      0.76,
+      0.7,
+      0.69,
+      0.66,
+      0.62,
+      0.71,
+      0.12,
+      0.73,
+      '{"metricSource":"mcp_deterministic_fallback"}'::jsonb
+    )
+    on conflict (source_profile_id)
+    do update
+    set
+      snapshot_reason = excluded.snapshot_reason,
+      trust_score = excluded.trust_score,
+      extraction_quality_score = excluded.extraction_quality_score,
+      stability_score = excluded.stability_score,
+      independence_score = excluded.independence_score,
+      freshness_score = excluded.freshness_score,
+      lead_time_score = excluded.lead_time_score,
+      yield_score = excluded.yield_score,
+      duplication_score = excluded.duplication_score,
+      recall_score = excluded.recall_score,
+      scoring_breakdown = excluded.scoring_breakdown,
+      scored_at = now(),
+      updated_at = now();
+  `);
+
+  await harness.queryPostgres(`
+    insert into discovery_source_interest_scores (
+      source_profile_id,
+      channel_id,
+      mission_id,
+      topic_coverage,
+      specificity,
+      audience_fit,
+      evidence_depth,
+      signal_to_noise,
+      fit_score,
+      novelty_score,
+      lead_time_score,
+      yield_score,
+      duplication_score,
+      contextual_score,
+      role_labels,
+      scoring_breakdown
+    )
+    values (
+      ${sqlLiteral(sourceProfileId)},
+      null,
+      ${sqlLiteral(missionId)},
+      0.74,
+      0.68,
+      0.7,
+      0.66,
+      0.64,
+      0.75,
+      0.55,
+      0.62,
+      0.71,
+      0.12,
+      0.77,
+      array['regional_watch']::text[],
+      '{"metricSource":"mcp_deterministic_fallback"}'::jsonb
+    )
+    on conflict (mission_id, source_profile_id)
+    do update
+    set
+      contextual_score = excluded.contextual_score,
+      topic_coverage = excluded.topic_coverage,
+      fit_score = excluded.fit_score,
+      yield_score = excluded.yield_score,
+      lead_time_score = excluded.lead_time_score,
+      duplication_score = excluded.duplication_score,
+      role_labels = excluded.role_labels,
+      scoring_breakdown = excluded.scoring_breakdown,
+      scored_at = now(),
+      updated_at = now();
+  `);
+
+  return {
+    candidateId,
+    hypothesisId,
+    sourceProfileId,
+  };
+}
+
 async function scenarioAuthAndTokenLifecycle(harness) {
   const evidence = [];
   const html = await harness.assertAdminHtml([
@@ -783,7 +1020,11 @@ async function scenarioDiscoveryOperatorFlows(harness) {
     pageSize: 20,
   });
   if (readRows(candidateList).length === 0) {
+    const seeded = await seedSyntheticDiscoveryCandidate(harness, { missionId, classKey });
+    harness.rememberEntity("sourceProfileId", seeded.sourceProfileId);
+    pushEvidence(evidence, "discovery-deterministic-fallback", seeded);
     candidateList = await harness.mcpToolCall(token, "discovery.candidates.list", {
+      missionId,
       page: 1,
       pageSize: 20,
     });
@@ -882,14 +1123,15 @@ async function scenarioDiscoveryOperatorFlows(harness) {
   const promotedChannelId = String(promoted.registered_channel_id ?? promoted.registeredChannelId ?? "");
   assert(promotedChannelId, "Recall candidate promotion must register a channel.");
   harness.rememberEntity("promotedChannelId", promotedChannelId);
-  harness.rememberEntity(
-    "sourceProfileId",
-    String(promoted.source_profile_id ?? promoted.sourceProfileId ?? "")
-  );
+  const promotedSourceProfileId = String(promoted.source_profile_id ?? promoted.sourceProfileId ?? "").trim();
+  if (promotedSourceProfileId) {
+    harness.rememberEntity("sourceProfileId", promotedSourceProfileId);
+  }
 
   await harness.mcpToolCall(token, "discovery.feedback.create", {
     payload: {
       missionId,
+      candidateId,
       sourceProfileId: harness.getEntity("sourceProfileId"),
       feedbackType: "valuable_source",
       feedbackValue: "keep",

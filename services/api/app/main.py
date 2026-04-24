@@ -4780,6 +4780,9 @@ def list_discovery_feedback_page(
 
 
 def create_discovery_feedback(payload: DiscoveryFeedbackCreatePayload) -> dict[str, Any]:
+    mission_id = str(payload.mission_id or "").strip() or None
+    candidate_id = str(payload.candidate_id or "").strip() or None
+    source_profile_id = str(payload.source_profile_id or "").strip() or None
     with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -4797,9 +4800,9 @@ def create_discovery_feedback(payload: DiscoveryFeedbackCreatePayload) -> dict[s
                 returning feedback_event_id::text as feedback_event_id
                 """,
                 (
-                    payload.mission_id,
-                    payload.candidate_id,
-                    payload.source_profile_id,
+                    mission_id,
+                    candidate_id,
+                    source_profile_id,
                     payload.feedback_type,
                     payload.feedback_value,
                     payload.notes,

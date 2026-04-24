@@ -44,7 +44,14 @@ function resolveRedirectBaseUrl(request: Request): URL {
 }
 
 export function requestPrefersHtmlNavigation(request: Request): boolean {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return false;
+  }
   const accept = request.headers.get("accept") ?? "";
+  if (accept.includes("application/json")) {
+    return false;
+  }
   const secFetchMode = request.headers.get("sec-fetch-mode") ?? "";
   return accept.includes("text/html") || secFetchMode === "navigate";
 }

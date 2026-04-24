@@ -90,6 +90,16 @@ const DEFAULT_VIEWPORT: Viewport = {
 const X_GAP = 280;
 const Y_BASE = 160;
 const X_START = 120;
+const CANCELLABLE_SEQUENCE_RUN_STATUSES = new Set(["pending"]);
+const RETRYABLE_SEQUENCE_RUN_STATUSES = new Set(["failed"]);
+
+export function isSequenceRunCancellable(status: unknown): boolean {
+  return CANCELLABLE_SEQUENCE_RUN_STATUSES.has(String(status ?? "").trim());
+}
+
+export function isSequenceRunRetryable(status: unknown): boolean {
+  return RETRYABLE_SEQUENCE_RUN_STATUSES.has(String(status ?? "").trim());
+}
 
 export const AUTOMATION_TEMPLATES: AutomationTemplateDescriptor[] = [
   {

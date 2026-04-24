@@ -66,6 +66,7 @@ function formatTimestamp(value: unknown): string {
     return String(value);
   }
   return parsed.toLocaleString("en-US", {
+    timeZone: "UTC",
     month: "short",
     day: "numeric",
     hour: "numeric",

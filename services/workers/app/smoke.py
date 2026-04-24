@@ -918,6 +918,50 @@ async def ensure_criterion_fixture() -> str:
     return str(criterion_id)
 
 
+async def isolate_phase4_criterion_scope(criterion_id: str) -> list[tuple[str, bool]]:
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    select criterion_id::text as criterion_id, enabled
+                    from criteria
+                    where criterion_id <> %s
+                    """,
+                    (criterion_id,),
+                )
+                rows = await cursor.fetchall()
+                await cursor.execute(
+                    """
+                    update criteria
+                    set enabled = false, updated_at = now()
+                    where criterion_id <> %s
+                      and enabled = true
+                    """,
+                    (criterion_id,),
+                )
+    return [(str(row["criterion_id"]), bool(row["enabled"])) for row in rows]
+
+
+async def restore_phase4_criterion_scope(
+    previous_states: list[tuple[str, bool]],
+) -> None:
+    if not previous_states:
+        return
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                for row_criterion_id, was_enabled in previous_states:
+                    await cursor.execute(
+                        """
+                        update criteria
+                        set enabled = %s, updated_at = now()
+                        where criterion_id = %s
+                        """,
+                        (was_enabled, row_criterion_id),
+                    )
+
+
 async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
     channel_id = str(uuid.uuid4())
     doc_id = str(uuid.uuid4())
@@ -2639,6 +2683,7 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         "",
     )
 
+    criterion_scope = await isolate_phase4_criterion_scope(criterion_id)
     await ensure_outbox_event(
         event_id=normalized_event_id,
         event_type="article.normalized",
@@ -2657,10 +2702,13 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
-    criterion_result = await process_match_criteria(
-        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
-        "",
-    )
+    try:
+        criterion_result = await process_match_criteria(
+            FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
+            "",
+        )
+    finally:
+        await restore_phase4_criterion_scope(criterion_scope)
     criteria_matched_event_id = await fetch_latest_article_event_id(
         doc_id,
         "article.criteria.matched",
@@ -2740,6 +2788,7 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         FakeJob({"eventId": criterion_event_id, "criterionId": criterion_id, "version": 3}),
         "",
     )
+    criterion_scope = await isolate_phase4_criterion_scope(criterion_id)
     await ensure_outbox_event(
         event_id=normalized_event_id,
         event_type="article.normalized",
@@ -2758,10 +2807,13 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
-    await process_match_criteria(
-        FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
-        "",
-    )
+    try:
+        await process_match_criteria(
+            FakeJob({"eventId": embedded_event_id, "docId": doc_id, "version": 1}),
+            "",
+        )
+    finally:
+        await restore_phase4_criterion_scope(criterion_scope)
     criteria_matched_event_id = await fetch_latest_article_event_id(
         doc_id,
         "article.criteria.matched",

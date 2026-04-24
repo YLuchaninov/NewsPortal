@@ -19,9 +19,9 @@ import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
-function readBooleanField(value: FormDataEntryValue | undefined): boolean {
+function readBooleanField(value: unknown): boolean {
   if (typeof value !== "string") {
-    return false;
+    return value === true;
   }
   const normalized = value.trim().toLowerCase();
   return normalized === "on" || normalized === "true" || normalized === "1" || normalized === "yes";

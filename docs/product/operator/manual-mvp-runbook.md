@@ -27,18 +27,19 @@
 - canonical local compose baseline;
 - anonymous user flow в `web`;
 - allowlisted admin sign-in;
-- RSS, website, API, and Email IMAP ingest as operator-ready source paths;
+- RSS and website ingest as the current internal product-testing source paths;
 - system-selected collection, `/matches`, content detail, reactions, notification history, notification feedback, preferences, interests и notification-channel setup;
 - admin channels, automation/outbox tooling, templates, moderation, user interests, reindex/backfill и article enrichment retry;
 - public read API;
 - local `email_digest` через Mailpit;
 - optional local `web_push`;
-- optional Telegram delivery smoke;
+- optional Telegram delivery smoke, parked outside the required local product-testing contour;
 - explicit cleanup/reset guidance.
 
 Этот runbook не делает вид, что уже покрывает все code-present surfaces:
 
 - `youtube` ingest присутствует в architecture truth, но в текущем committed admin/operator surface все еще нет first-class CRUD flow для него.
+- API source ingestion, inbound Email IMAP ingestion and Telegram ingestion are parked for the current internal local product testing contour. They should not be treated as blocking findings unless a separate active item opens them.
 - Discovery живет в репозитории, но остается отдельным opt-in capability и не считается частью canonical safe-by-default MVP manual baseline.
 
 ## Coverage Matrix
@@ -46,17 +47,17 @@
 | Surface | Status in current repo | How to verify manually |
 | --- | --- | --- |
 | `web` anonymous bootstrap, system-selected collection, `/matches`, interests, settings, notification history, notification feedback, reactions | operator-ready | sections `Web flow`, `Delivery checks`, and `Public API checks` |
-| `admin` sign-in, dashboard, RSS/website/API/Email IMAP channels, website resource observability, automation/outbox tooling, templates, moderation, reindex, user interests | operator-ready | sections `Admin flow`, `Automation and outbox`, and `Moderation and repair` |
+| `admin` sign-in, dashboard, RSS/website channels, website resource observability, automation/outbox tooling, templates, moderation, reindex, user interests | operator-ready for current product contour | sections `Admin flow`, `Automation and outbox`, and `Moderation and repair` |
 | RSS ingest | operator-ready | sections `Fixture channels` and `Admin flow` |
 | Website ingest | operator-ready with dedicated create/edit flow plus `/resources` browse/detail follow-through; public JS-heavy sites may use opt-in browser fallback | sections `Admin flow`, `Website channels and hard sites`, and `Public API checks` |
-| API ingest | operator-ready with dedicated create/edit flow plus explicit payload-field mapping and optional static auth header | section `Admin flow` |
-| Email IMAP ingest | operator-ready with dedicated create/edit flow plus password-preserving edit semantics | section `Admin flow` |
+| API source ingest | parked for current internal product testing | do not include in mandatory local contour |
+| Email IMAP ingest | parked for current internal product testing | do not include in mandatory local contour |
 | Automation / sequence and outbox operator tooling | operator-ready | section `Automation and outbox` |
 | Content detail and enrichment retry | operator-ready | section `Moderation and repair` |
 | Public API read surfaces | operator-ready | section `Public API checks` |
 | Email digest via Mailpit | operator-ready | section `Delivery checks` |
 | `web_push` receipt | optional, manual-only | section `Optional web push` |
-| Telegram delivery | optional, manual-only | section `Optional Telegram` |
+| Telegram delivery | optional/manual and not required for current contour | section `Optional Telegram` |
 | Discovery | optional, disabled by default | section `Optional discovery` |
 | `youtube` source ingest | code-present, not operator-ready from current admin baseline | treat as a follow-up gap, not as a silent part of this run |
 
@@ -220,8 +221,6 @@ If you want to pre-clean a large candidate list, use your own validation helper 
 4. Open `/channels` and either:
    - create one RSS channel manually, or
    - create one website channel manually, or
-   - create one API channel manually, or
-   - create one Email IMAP channel manually, or
    - bulk import the deterministic local fixture bundle / your real RSS bundle, making sure every JSON row includes the correct `providerType`.
 5. For a protected RSS or website source, use the `Authorization header` field only when static fetcher auth is enough:
    - enter the full raw header value such as `Bearer ...` or `Basic ...`
@@ -257,8 +256,9 @@ If you want to pre-clean a large candidate list, use your own validation helper 
 
 Truthful current limitation:
 
-- admin channel CRUD is operator-ready for `rss`, `website`, `api`, and `email_imap`.
-- `youtube` remains a backend/runtime-capable provider type, but it still needs a dedicated operator create/edit flow.
+- current mandatory internal product testing covers `rss` and `website` channel flows.
+- API source ingestion, inbound Email IMAP ingestion, Telegram ingestion and `youtube` are parked/future lanes for this cycle.
+- local `email_digest` remains in scope because it is outbound delivery through Mailpit, not inbound Email IMAP ingestion.
 
 ## Automation and outbox
 
@@ -459,7 +459,8 @@ These are still real after this runbook:
 
 - umbrella automated acceptance remains RSS-first;
 - dedicated website operator acceptance now exists separately via `pnpm test:website:admin:compose`, and that smoke now self-bootstraps the compose baseline instead of requiring a manual restart after `pnpm integration_tests`;
-- dedicated admin/operator proof for `website`, `api`, and `email_imap` source CRUD now lives in `pnpm test:website:admin:compose`, while sequence/outbox operator tooling lives in `node infra/scripts/test-automation-admin-flow.mjs`;
+- dedicated admin/operator proof for current `website` source CRUD and resources lives in `pnpm test:website:admin:compose`; `api`, inbound `email_imap` and Telegram ingestion are parked outside the mandatory contour;
+- sequence/outbox operator tooling lives in `node infra/scripts/test-automation-admin-flow.mjs`;
 - browser receipt for `web_push` remains manual-only;
 - `youtube` remains code-present but outside the committed admin/operator baseline;
 - the repo does not ship a canonical real external RSS bundle;
