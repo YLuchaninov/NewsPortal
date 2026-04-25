@@ -4,11 +4,11 @@
 
 Он не заменяет:
 
-- [`docs/product/architecture/product-blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/product-blueprint.md)
-- [`.aidp/contracts/zero-shot-interest-filtering.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/zero-shot-interest-filtering.md)
-- [`.aidp/contracts/universal-selection-profiles.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/universal-selection-profiles.md)
-- [`.aidp/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/discovery-agent.md)
-- [`.aidp/contracts/independent-recall-discovery.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/independent-recall-discovery.md)
+- [`docs/product/architecture/product-blueprint.md`](./product-blueprint.md)
+- [`.aidp/contracts/zero-shot-interest-filtering.md`](../../../.aidp/contracts/zero-shot-interest-filtering.md)
+- [`.aidp/contracts/universal-selection-profiles.md`](../../../.aidp/contracts/universal-selection-profiles.md)
+- [`.aidp/contracts/discovery-agent.md`](../../../.aidp/contracts/discovery-agent.md)
+- [`.aidp/contracts/independent-recall-discovery.md`](../../../.aidp/contracts/independent-recall-discovery.md)
 
 Его задача другая: быстро показать, как все реально работает вместе.
 
@@ -312,12 +312,12 @@ flowchart LR
 Для деталей:
 
 - полный blueprint:
-  [`docs/product/architecture/product-blueprint.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/architecture/product-blueprint.md)
+  [`docs/product/architecture/product-blueprint.md`](./product-blueprint.md)
 - zero-shot pipeline contract:
-  [`.aidp/contracts/zero-shot-interest-filtering.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/zero-shot-interest-filtering.md)
+  [`.aidp/contracts/zero-shot-interest-filtering.md`](../../../.aidp/contracts/zero-shot-interest-filtering.md)
 - universal selection profiles:
-  [`.aidp/contracts/universal-selection-profiles.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/universal-selection-profiles.md)
+  [`.aidp/contracts/universal-selection-profiles.md`](../../../.aidp/contracts/universal-selection-profiles.md)
 - adaptive discovery:
-  [`.aidp/contracts/discovery-agent.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/discovery-agent.md)
+  [`.aidp/contracts/discovery-agent.md`](../../../.aidp/contracts/discovery-agent.md)
 - independent recall discovery:
-  [`.aidp/contracts/independent-recall-discovery.md`](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/independent-recall-discovery.md)
+  [`.aidp/contracts/independent-recall-discovery.md`](../../../.aidp/contracts/independent-recall-discovery.md)

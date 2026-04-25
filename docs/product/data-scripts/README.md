@@ -4,22 +4,22 @@
 
 ## Что находится в каталоге
 
-- [`it_news.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/it_news.json)
+- [`it_news.json`](./it_news.json)
   Пример набора RSS-каналов по IT/news domain.
-- [`outsource.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource.json)
+- [`outsource.json`](./outsource.json)
   Большой source bundle для outsourcing-oriented corpus discovery/import.
-- [`outsource_cleaned_balanced_tenders_and_company_signals.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource_cleaned_balanced_tenders_and_company_signals.json)
+- [`outsource_cleaned_balanced_tenders_and_company_signals.json`](./outsource_cleaned_balanced_tenders_and_company_signals.json)
   Более узкий и очищенный source bundle для tenders/company-signal monitoring.
-- [`web.bulk-import.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/web.bulk-import.json)
+- [`web.bulk-import.json`](./web.bulk-import.json)
   Derived website-only shared bulk-import bundle with explicit `providerType: "website"` on every row.
-- [`outsource_balanced_templates.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource_balanced_templates.md)
-  Focused outsourcing-only companion к Example C в [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/EXAMPLES.md), если нужен короткий one-scenario cheat sheet без остальных built-in examples.
-- [`outsource_balanced_templates.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource_balanced_templates.json)
-  Legacy/reference asset для ручного сравнения или переноса значений в админку. Не используется кодом как runtime truth и не заменяет Example C в [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/EXAMPLES.md).
+- [`outsource_balanced_templates.md`](./outsource_balanced_templates.md)
+  Focused outsourcing-only companion к Example C в [`EXAMPLES.md`](../operator/examples/EXAMPLES.md), если нужен короткий one-scenario cheat sheet без остальных built-in examples.
+- [`outsource_balanced_templates.json`](./outsource_balanced_templates.json)
+  Legacy/reference asset для ручного сравнения или переноса значений в админку. Не используется кодом как runtime truth и не заменяет Example C в [`EXAMPLES.md`](../operator/examples/EXAMPLES.md).
 
 ## Важное различие
 
-Для built-in example bundles primary human-facing source теперь должен быть [`EXAMPLES.md`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/EXAMPLES.md). Файлы в этом каталоге помогают узкому use case или ручному переносу, но не должны переопределять тот walkthrough.
+Для built-in example bundles primary human-facing source теперь должен быть [`EXAMPLES.md`](../operator/examples/EXAMPLES.md). Файлы в этом каталоге помогают узкому use case или ручному переносу, но не должны переопределять тот walkthrough.
 
 Эти JSON-файлы не являются global runtime config системы.
 
@@ -38,7 +38,7 @@
 
 ## Channel bundle schema
 
-Файлы [`it_news.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/it_news.json), [`outsource.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource.json), [`outsource_cleaned_balanced_tenders_and_company_signals.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource_cleaned_balanced_tenders_and_company_signals.json) и [`web.bulk-import.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/web.bulk-import.json) содержат массивы channel-import rows.
+Файлы [`it_news.json`](./it_news.json), [`outsource.json`](./outsource.json), [`outsource_cleaned_balanced_tenders_and_company_signals.json`](./outsource_cleaned_balanced_tenders_and_company_signals.json) и [`web.bulk-import.json`](./web.bulk-import.json) содержат массивы channel-import rows.
 
 Shared admin bulk import now requires row-level `providerType` on every JSON row. The importer no longer infers provider mode from the screen or from a top-level bulk setting, so example bundles in this directory should keep `providerType` explicit even when every row belongs to the same provider family.
 
@@ -81,7 +81,7 @@ Shared admin bulk import now requires row-level `providerType` on every JSON row
 
 ## Template bundle schema
 
-[`outsource_balanced_templates.json`](/Users/user/Documents/workspace/my/NewsPortal/docs/product/data-scripts/outsource_balanced_templates.json) может содержать:
+[`outsource_balanced_templates.json`](./outsource_balanced_templates.json) может содержать:
 
 - `interest_templates`
 - `llm_templates`

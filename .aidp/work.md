@@ -15,14 +15,14 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: old `docs/contracts/*` удалены после переноса runtime truth в `.aidp/contracts/*`; no active work remains.
+- Почему сейчас: repository cleanup repair/sweep approved by the operator and applied; no ordinary feature work is active.
 
 ## Проверки закрытия route
 
 - `.aidp/os.yaml` initialization flag: true
 - `.aidp/os.yaml` placeholder flag: false
 - Setup route: закрыт 2026-04-24
-- Repair route: закрыт 2026-04-24
+- Repair route: закрыт 2026-04-25 after live-state/docs cleanup repair
 - Current route: `normal`
 
 ## Текущая память
@@ -32,7 +32,7 @@
 - Canonical AIDP runtime truth lives in `.aidp/*`; root/tool router files must remain thin.
 - Product/reference docs remain under `docs/product`; runtime-agent contracts live under `.aidp/contracts/*`.
 - Stateful proof must follow `.aidp/contracts/test-access-and-fixtures.md`.
-- Старые contract materials проверены, перенесены в `.aidp/contracts/*` and then дополнены source-code-owned contracts for auth/session, notifications/digests and runtime/migrations/indexes.
+- Old duplicate `docs/contracts/*` were migrated into `.aidp/contracts/*` and deleted from `docs/`.
 
 ## Планирование capabilities
 
@@ -57,11 +57,10 @@ None.
 
 ### Согласованность worktree
 
-- Worktree status: mixed
-- Alignment note: current dirty tree is explained by completed AIDP bootstrap/repair, product/reference docs cleanup, root proof aliases, lint-fix changes discovered by the requested gates, completed product-local test contour implementation, and completed `docs/contracts` deletion.
-- Scope warning: `.codex/config.toml` remains pre-existing/unowned by this AIDP work; do not revert it without explicit user request.
-- Legacy docs note: product/reference docs were kept as reference material and cleaned from stale old runtime-doc links; legacy runtime docs deletion remains part of the bootstrap migration state.
-- Required action before ordinary implementation: create a new active item with scope, allowed paths, risk and proof.
+- Worktree status: dirty until the current cleanup changes are staged/committed.
+- Alignment note: dirty tree is expected and limited to the approved repository cleanup sweep: `.aidp/work.md`, `.aidp/history.md`, product-doc link/status cleanup, plus ignored local cache deletion and empty untracked source-directory removal.
+- Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
+- Required action before ordinary implementation: finish review/stage/commit of this cleanup, or update this section if further cleanup is requested.
 
 ### Активные риски
 
@@ -76,27 +75,18 @@ None.
 
 ### Наблюдения этой сессии
 
-- Active item `PRODUCT-LOCAL-TEST-CONTOUR-2026-04-24` opened to implement the requested local internal product testing contour without Telegram/email/API ingestion lanes.
-- Implemented product-local root scripts: `pnpm test:product:local:core`, `pnpm test:product:local:full`, `pnpm test:product:local:cleanup`.
-- Added `infra/scripts/test-product-local.mjs` to run env preflight, command orchestration and `/tmp/newsportal-product-local-<mode>-<runId>.json|md` evidence artifacts.
-- Narrowed `pnpm test:website:admin:compose` to mandatory website/resources acceptance only; API source ingestion, inbound Email IMAP ingestion and Telegram ingestion are now parked for this contour.
-- Added `docs/product/operator/local-product-testing.md` and updated operator docs/README/AIDP proof map to state current RSS/website focus and parked lanes.
-- Root scripts, package-level scripts, tests, smoke harnesses, compose files and source-code boundaries were audited and consolidated into `.aidp/os.yaml` and `.aidp/verification.md`.
-- Product/reference docs were kept under `docs/` and cleaned so local markdown links point to existing repository files.
-- User confirmed old `docs/contracts/*` should be deleted; files and empty directory were removed, and surviving product docs link to `.aidp/contracts/*`.
-- Initial `pnpm lint` failed on 43 lint issues across Astro/admin pages, infra proof scripts and fetcher code; minimal behavior-preserving fixes restored the gate.
-- `pnpm typecheck` completed with zero errors; Astro reported existing hint/deprecation notices only.
-- `pnpm unit_tests` completed successfully: TS 245/245 and Python 265/265.
-- `pnpm test:mvp:internal` completed successfully, including compose startup, migrations, relay phases, RSS ingest, worker smoke path, browser-style auth checks, admin flows, fresh ingest and cleanup.
+- User approved applying the read-only cleanup audit findings after asking what else should be cleaned.
+- AIDP repair was required because `.aidp/work.md` claimed a mixed/dirty worktree while Git was clean before this cleanup pass.
+- Product docs had stale absolute local links and two stale status/path claims: `docs/data_scripts` and an old in-flight website-ingestion delta.
+- Local markdown link proof also surfaced broken example links to the root README; those were fixed to use the correct relative depth.
+- Empty untracked source directories existed under `apps/admin/src/lib/auth`, `apps/web/src/lib/auth` and `apps/web/src/pages/article`.
+- Ignored local cache artifacts existed: `.DS_Store`, `.pytest_cache`, `.ruff_cache` and Python `__pycache__` directories.
 
 ### Подтверждено для консолидации
 
-- AIDP setup and repair are complete -> `.aidp/os.yaml`, `.aidp/work.md`, `.aidp/history.md`.
-- Tool-facing router files must stay thin and Russian-readable -> root `AGENTS.md` and `.aidp/adapters/*`.
-- Stateful test model is required durable runtime context -> `.aidp/contracts/test-access-and-fixtures.md`.
-- Deep contracts and source-code-owned boundaries are consolidated -> `.aidp/contracts/*`, `.aidp/blueprint.md`, `.aidp/engineering.md`, `.aidp/verification.md`, `.aidp/os.yaml`.
-- Architecture quality bar and proof checklist are consolidated -> `.aidp/engineering.md` and `.aidp/verification.md`.
-- Verification proof surface coverage is consolidated -> `.aidp/os.yaml`, `.aidp/verification.md` and root `package.json` proof aliases.
+- AIDP setup remains complete -> `.aidp/os.yaml` still has `initialized: true` and `project.placeholder_values_present: false`.
+- Repository cleanup repair/sweep completed -> `.aidp/work.md` and `.aidp/history.md`.
+- Product docs keep product/reference role and must not reintroduce old `docs/contracts/*` runtime truth.
 
 ### Parked / latent items
 
@@ -104,43 +94,38 @@ None.
 
 ### Память попыток
 
-- Сработало, с evidence: docs local markdown link check passed for 36 files; `pnpm lint`; `pnpm typecheck`; `pnpm unit_tests`; `pnpm test:mvp:internal`.
-- Пробовали и не сработало: first `pnpm lint` failed on 43 lint issues; fixes were applied and the command passed on rerun.
-- Еще не выполнялось: broad integration/live-provider gates outside the requested MVP internal smoke; production deploy and package/release proof because no such root commands are declared.
-- Product-local proof executed this session: `node --check infra/scripts/test-product-local.mjs`; `node --check infra/scripts/test-website-admin-flow.mjs`; targeted ESLint for changed harnesses; `pnpm test:product:local:cleanup`; `node infra/scripts/test-product-local.mjs --mode=core --preflight-only`; `node infra/scripts/test-product-local.mjs --mode=full --preflight-only`; `pnpm lint:ts`.
-- Product-local evidence artifacts from implementation proof: `/tmp/newsportal-product-local-core-6fd0a54c.json|md`, `/tmp/newsportal-product-local-full-00f25bc1.json|md`, `/tmp/newsportal-product-local-cleanup-b0d39c46.json|md`.
-- Product-local full proof executed after follow-up test request: `pnpm test:product:local:core` passed with artifact `/tmp/newsportal-product-local-core-ea611ff8.json|md`; escalated `pnpm test:product:local:full` passed with artifact `/tmp/newsportal-product-local-full-6d7fccc5.json|md`; `pnpm test:product:local:cleanup` passed with artifact `/tmp/newsportal-product-local-cleanup-c8548794.json|md`; `pnpm dev:mvp:internal:down` stopped the remaining compose stack.
-- Product-local fixes from full proof: isolated phase4 smoke criteria so unrelated system criteria cannot block `article.criteria.matched`; stabilized admin article UI audit by forcing a recent-failures article surface; preserved parked ingestion lanes while still testing outbound Mailpit email digest delivery.
-- First non-escalated `pnpm test:product:local:full` was invalid because sandbox blocked localhost sockets, Docker socket and DNS; rerun with escalated permissions passed.
+- Сработало, с evidence: `git status --porcelain` was empty before apply phase; old `docs/contracts/` directory was absent; targeted stale-path audit identified only cleanup candidates.
+- Сработало, с evidence: local markdown link check passed for 52 docs/.aidp markdown files after product-doc link cleanup.
+- Сработало, с evidence: `.aidp/os.yaml` parsed successfully after cleanup.
+- Не выполнялось: runtime product gates, because this cleanup did not change application code, migrations, service contracts or root scripts.
 
 ### Следующее рекомендуемое действие
 
-- Следующий шаг: wait for the operator’s next product/code request and create a fresh active item before implementation.
-- Почему это следующее: no active work remains after deleting old duplicate contract docs.
+- Следующий шаг: review and commit the cleanup sweep, then create a fresh active item before any ordinary product/code implementation.
+- Почему это следующее: current dirty tree is intentional cleanup output, not an ongoing feature item.
 
 ### Статус archive sync
 
 - Completed item или capability awaiting archive sync: none
 - Почему еще live: n/a
 - Требуемое archive action: none
-- Expected archive destination/index label: latest completed item archived as `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25`.
+- Expected archive destination/index label: latest cleanup item archived as `REPO-CLEANUP-2026-04-25`.
 
 ### Test artifacts and cleanup state
 
-- Users created: temporary anonymous/user/admin identities during `pnpm test:mvp:internal`; harness reported cleanup of the allowlisted Firebase admin identity.
-- Subscriptions or device registrations: test notification/digest channels created inside the disposable compose database.
-- Tokens / keys / credentials issued: temporary test credentials only inside the MVP harness flow.
-- External registrations or webhooks: none recorded beyond Firebase test identity lifecycle used by the harness.
-- Seeded or imported data: disposable compose PostgreSQL data created by migrations, seeds and MVP smoke.
-- Cleanup status: `pnpm test:mvp:internal` stopped compose.dev and removed PostgreSQL/Redis volumes; final product-local proof wrote `/tmp/newsportal-product-local-*` evidence artifacts, `pnpm test:product:local:cleanup` passed, and `pnpm dev:mvp:internal:down` stopped the remaining compose stack after the full contour.
-- Residual cleanup note: temporary AIDP release package folder is absent.
+- Users created: none in this cleanup pass.
+- Subscriptions or device registrations: none.
+- Tokens / keys / credentials issued: none.
+- External registrations or webhooks: none.
+- Seeded or imported data: none.
+- Cleanup status: removed only targeted low-risk local artifacts (`.DS_Store`, `.pytest_cache`, `.ruff_cache`, Python `__pycache__`) and empty untracked source directories; left `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other potentially useful local runtime/build artifacts in place.
 
 ## Handoff state
 
-- Current item status: no active item.
-- Уже доказано: AIDP runtime core initialized/repaired; contracts migrated; source audit, architecture hardening, verification coverage, docs cleanup and requested gates complete.
-- Еще не доказано или blocked: production deploy/package proof unavailable because commands are not declared; Telegram ingestion, inbound Email IMAP ingestion, API source ingestion and `youtube` remain parked/future lanes.
-- Scope/coordination warning для следующего агента: dirty worktree contains completed AIDP/docs/proof changes plus pre-existing `.codex/config.toml`; do not revert unrelated changes.
+- Current item status: no active item; cleanup sweep completed but not yet staged/committed.
+- Уже доказано: AIDP runtime core remains initialized; contracts live under `.aidp/contracts/*`; old duplicate `docs/contracts/*` is absent; product-doc links/status claims were cleaned; local cache cleanup was targeted.
+- Еще не доказано или blocked: production deploy/package proof unavailable because commands are not declared; no runtime gates were run for this doc/local-artifact cleanup.
+- Scope/coordination warning для следующего агента: current dirty tree should contain only this cleanup sweep; do not broaden cleanup with `git clean -fdX` unless the operator explicitly asks for destructive local artifact removal.
 
 ### Недавно изменено
 
@@ -149,10 +134,10 @@ None.
 - 2026-04-24 — Migrated old deep contracts into `.aidp/contracts/*` and added source-code-owned contracts.
 - 2026-04-24 — Completed architecture engineering hardening with quality bar, no-god-object rules, magic-constant rules and architecture proof checklist.
 - 2026-04-24 — Completed verification surface coverage audit and added root aliases for existing automation, website matrix and UI audit harnesses.
-- 2026-04-24 — Cleaned product/reference docs from stale old runtime-doc links and fixed one broken discovery example link.
 - 2026-04-24 — Fixed lint failures surfaced by final proof and passed lint, typecheck, unit tests and MVP internal smoke.
 - 2026-04-24 — Implemented and executed local product testing contour without Telegram/email/API ingestion lanes; `core` and escalated `full` passed with evidence artifacts, and compose stack was stopped after proof.
 - 2026-04-25 — Deleted old duplicate `docs/contracts/*` after redirecting surviving product-doc links to `.aidp/contracts/*`.
+- 2026-04-25 — Applied repository cleanup repair/sweep for stale AIDP live state, stale product-doc paths/status, absolute local doc links, empty source dirs and low-risk local cache artifacts.
 
 ## Active work index
 

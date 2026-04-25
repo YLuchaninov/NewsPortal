@@ -22,10 +22,10 @@ Explicitly out of scope:
 
 ### Code paths reviewed
 
-- [services/fetchers/src/fetchers.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts)
-- [services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts)
-- [services/fetchers/src/resource-enrichment.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts)
-- [.aidp/contracts/browser-assisted-websites.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/browser-assisted-websites.md)
+- [services/fetchers/src/fetchers.ts](../../../services/fetchers/src/fetchers.ts)
+- [services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts)
+- [services/fetchers/src/resource-enrichment.ts](../../../services/fetchers/src/resource-enrichment.ts)
+- [.aidp/contracts/browser-assisted-websites.md](../../../.aidp/contracts/browser-assisted-websites.md)
 
 ### Local proof executed on 2026-04-15
 
@@ -49,7 +49,7 @@ Explicitly out of scope:
 
 ### 1. Channel polling and ownership
 
-The `website` provider is polled by `FetcherService.pollWebsiteChannel(...)` in [services/fetchers/src/fetchers.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts). The fetcher keeps per-channel advisory leasing before poll execution, so the same website channel is not processed concurrently across poll loops or manual runs ([services/fetchers/src/fetchers.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts):424-499).
+The `website` provider is polled by `FetcherService.pollWebsiteChannel(...)` in [services/fetchers/src/fetchers.ts](../../../services/fetchers/src/fetchers.ts). The fetcher keeps per-channel advisory leasing before poll execution, so the same website channel is not processed concurrently across poll loops or manual runs ([services/fetchers/src/fetchers.ts](../../../services/fetchers/src/fetchers.ts):424-499).
 
 This is a strong design choice:
 
@@ -66,7 +66,7 @@ Before discovery, the website path builds runtime crawl policy through `CrawlPol
 - fetches and caches `robots.txt`;
 - extracts sitemap URLs and homepage feed hints;
 - fetches `llms.txt` as additive metadata;
-- uses DB-backed cache plus advisory transaction locking for same-domain policy refresh ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):1030-1135).
+- uses DB-backed cache plus advisory transaction locking for same-domain policy refresh ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):1030-1135).
 
 This is operationally sound and keeps crawl policy explicit.
 
@@ -92,7 +92,7 @@ Static discovery is intentionally cheap-first and mode-based:
 - `inline_data`
 - `download`
 
-Mode selection is done by `selectWebsiteDiscoveryModes(...)` ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):861-882). The full discovery loop is assembled in `discoverWebsiteResources(...)` and `probeWebsitesForDiscovery(...)` ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):2015-2302).
+Mode selection is done by `selectWebsiteDiscoveryModes(...)` ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):861-882). The full discovery loop is assembled in `discoverWebsiteResources(...)` and `probeWebsitesForDiscovery(...)` ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):2015-2302).
 
 Why this is strong:
 
@@ -119,7 +119,7 @@ Each discovered URL is converted into a `DiscoveredWebsiteResource` through:
 - URL/path heuristics via `inferResourceKindsFromUrl(...)`;
 - optional structured-type hints from JSON-LD;
 - repeated-card/pagination/download heuristics;
-- dedupe by normalized URL with best-confidence merge behavior ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):429-558,498-543,904-953).
+- dedupe by normalized URL with best-confidence merge behavior ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):429-558,498-543,904-953).
 
 This is effective enough for a bounded generic system, but it is the most brittle part of the website path.
 
@@ -145,7 +145,7 @@ The website path uses three cursor styles:
 - `lastmod`
 - `set_diff`
 
-Resources are filtered against stored cursors before persistence, and cursor updates are written after a successful poll ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):702-726,2260-2302).
+Resources are filtered against stored cursors before persistence, and cursor updates are written after a successful poll ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):702-726,2260-2302).
 
 This is a good bounded strategy for heterogeneous website sources because many sites do not expose reliable validators. It also explains why the website subsystem can stay generic without per-site state machines.
 
@@ -162,7 +162,7 @@ Browser escalation is guarded by `shouldAttemptBrowserAssistedDiscovery(...)`:
 - only if `browserFallbackEnabled=true`;
 - immediately when a challenge hint exists;
 - or when static discovery found nothing;
-- or for JS-heavy pages with very low static yield ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):884-902).
+- or for JS-heavy pages with very low static yield ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):884-902).
 
 This matches the right architecture for public-site scraping.
 
@@ -190,7 +190,7 @@ Verdict: `keep`, but `measure more`
 Auth injection is handled through:
 
 - `buildWebsiteRequestHeaders(...)` for direct requests;
-- `buildBrowserRouteHeaders(...)` for browser-routed requests ([services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts):962-997).
+- `buildBrowserRouteHeaders(...)` for browser-routed requests ([services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts):962-997).
 
 The logic is correctly scoped:
 
@@ -209,7 +209,7 @@ After discovery, `ResourceEnrichmentService.extractResource(...)` fetches the re
 - keeps files/documents in the resource lane;
 - extracts summary/links/attributes for listing/entity/document kinds;
 - applies full article extraction only for resolved `editorial` resources;
-- projects editorial resources into `articles` ([services/fetchers/src/resource-enrichment.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts):460-720).
+- projects editorial resources into `articles` ([services/fetchers/src/resource-enrichment.ts](../../../services/fetchers/src/resource-enrichment.ts):460-720).
 
 Proof-backed behavior:
 
@@ -228,7 +228,7 @@ Verdict: `keep`
 
 ### Current usage
 
-`@extractus/article-extractor` is already used in the website path, but only inside resource enrichment for resources that have already resolved to `editorial` ([services/fetchers/src/resource-enrichment.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts):573-627).
+`@extractus/article-extractor` is already used in the website path, but only inside resource enrichment for resources that have already resolved to `editorial` ([services/fetchers/src/resource-enrichment.ts](../../../services/fetchers/src/resource-enrichment.ts):573-627).
 
 It is not used:
 
@@ -406,4 +406,4 @@ What should not change right now:
 
 - There is no dedicated metric pack yet for static-only yield vs browser-assisted incremental yield on a larger real-world portfolio; current confidence comes from deterministic local smokes plus code inspection.
 - There is no explicit body-uplift report yet quantifying how much website editorial enrichment improves already fetched HTML across a representative corpus.
-- The current worktree contains an in-flight delta in [services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts) that improves login-gate detection and large-sitemap safety; that delta is positive, but it should still be treated as in-flight context until committed and re-proved as shipped truth.
+- Login-gate detection and large-sitemap safety should be judged from the committed state of [services/fetchers/src/web-ingestion.ts](../../../services/fetchers/src/web-ingestion.ts) and the current website proof gates, not from any old in-flight worktree delta.

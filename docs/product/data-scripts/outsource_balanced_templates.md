@@ -15,7 +15,7 @@
 - primary operator-facing source for the built-in outsourcing example теперь живет в `EXAMPLES.md` -> Example C;
 - runtime truth живет в админке и БД;
 - код системы не должен читать этот `.md` напрямую;
-- JSON-файлы в `docs/data_scripts` могут оставаться reference-asset'ами, но не считаются канонической runtime-конфигурацией.
+- JSON-файлы в `docs/product/data-scripts` могут оставаться reference-asset'ами, но не считаются канонической runtime-конфигурацией.
 
 ## Цель конфигурации
 

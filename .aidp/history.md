@@ -277,3 +277,34 @@
   - production deploy and release/package proof remain undeclared repository gaps.
 - Follow-up created: none.
 - Archived on: 2026-04-24
+
+### REPO-CLEANUP-2026-04-25 — Repository cleanup repair/sweep
+
+- Archive outcome: completed
+- Kind: Sweep
+- Финальный status: archived
+- Parent capability: Repository hygiene / AIDP repair
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил проверить весь репозиторий на оставшуюся чистку, затем разрешил применить найденные cleanup-пункты.
+- Что изменилось:
+  - repaired `.aidp/work.md`, which still described a mixed/dirty worktree after the repository had already become clean;
+  - cleaned stale product-doc references to old local paths and obsolete worktree status claims;
+  - converted product-doc links away from machine-specific absolute repo-root targets;
+  - fixed broken product example links to the root `README.md`;
+  - removed empty untracked source directories from `apps/admin` and `apps/web`;
+  - removed only low-risk ignored local cache artifacts: `.DS_Store`, `.pytest_cache`, `.ruff_cache` and Python `__pycache__`.
+- Выполненный proof:
+  - pre-apply `git status --porcelain` was empty;
+  - `docs/contracts/` was absent;
+  - local markdown link check passed for 52 docs/.aidp markdown files after link cleanup;
+  - `.aidp/os.yaml` parsed successfully after cleanup;
+  - targeted stale-path searches confirmed no live product-doc references to old `docs/contracts`, old root runtime docs or `docs/data_scripts` remained.
+- Cleanup:
+  - intentionally left `.env.*`, `.idea`, `node_modules`, `.astro`, `dist`, `data/models`, `data/snapshots` and other potentially useful local runtime/build artifacts in place;
+  - did not run broad `git clean -fdX`.
+- Оставшиеся risks/gaps:
+  - current cleanup changes remain unstaged/uncommitted until the operator commits or discards them;
+  - runtime product gates were not run because no product code, migrations, root scripts or service contracts changed.
+- Follow-up created: none.
+- Archived on: 2026-04-25

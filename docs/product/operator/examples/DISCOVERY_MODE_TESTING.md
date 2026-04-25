@@ -6,7 +6,7 @@
 >
 > **Что этот документ не покрывает полностью:** полный MVP runbook, общий bootstrap всего продукта, uncontrolled live-internet rollout, stealth scraping, login-required discovery targets, и operator-ready onboarding для discovery provider types `api`, `email_imap` и `youtube`.
 >
-> **Перед началом:** держите рядом [HOW_TO_USE.md](../HOW_TO_USE.md), [README.md](../../../README.md), [EXAMPLES.md](./EXAMPLES.md) и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md).
+> **Перед началом:** держите рядом [HOW_TO_USE.md](../HOW_TO_USE.md), [README.md](../../../../README.md), [EXAMPLES.md](./EXAMPLES.md) и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md).
 >
 > **Как понять, что сценарий пройден успешно:** выбранный discovery lane дает ожидаемые evidence surfaces в `/admin/discovery`, `/maintenance/discovery/*` и repo-owned proof-командах без смешивания graph-first missions, recall backlog и promotion state.
 

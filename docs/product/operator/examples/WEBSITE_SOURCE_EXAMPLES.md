@@ -15,7 +15,7 @@
 Перед началом полезно держать рядом:
 
 - [HOW_TO_USE.md](../HOW_TO_USE.md)
-- [README.md](../../../README.md)
+- [README.md](../../../../README.md)
 - [Manual MVP Runbook](../manual-mvp-runbook.md)
 - [WEBSITE_SOURCES_TESTING.md](./WEBSITE_SOURCES_TESTING.md)
 

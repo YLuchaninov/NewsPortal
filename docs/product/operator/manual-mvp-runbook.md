@@ -18,7 +18,7 @@
 - не смешать repeatable local fixture flow с code-present, но пока не operator-ready зонами;
 - корректно завершить прогон и cleanup/reset state.
 
-Для stateful fixture discipline и cleanup truth также сверяйся с [.aidp/contracts/test-access-and-fixtures.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/test-access-and-fixtures.md).
+Для stateful fixture discipline и cleanup truth также сверяйся с [.aidp/contracts/test-access-and-fixtures.md](../../../.aidp/contracts/test-access-and-fixtures.md).
 
 ## Scope
 
@@ -68,7 +68,7 @@ Required local baseline:
 1. `pnpm install`
 2. Docker Compose access
 3. `.env.dev` copied from `.env.example`
-4. Firebase auth setup completed via [firebase_setup.md](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/setup/firebase_setup.md)
+4. Firebase auth setup completed via [firebase_setup.md](./setup/firebase_setup.md)
 
 Required envs for the canonical local MVP path:
 
@@ -101,7 +101,7 @@ Optional envs for extra manual surfaces:
 
 ### Firebase
 
-Use [firebase_setup.md](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/setup/firebase_setup.md). The current repo needs only:
+Use [firebase_setup.md](./setup/firebase_setup.md). The current repo needs only:
 
 - `Anonymous` sign-in for end users
 - `Email/Password` sign-in for admins
@@ -209,7 +209,7 @@ Recommended import payload shape:
 
 ### Option B: Real external RSS feeds
 
-Use [infra/scripts/manual-rss-bundle.template.json](/Users/user/Documents/workspace/my/NewsPortal/infra/scripts/manual-rss-bundle.template.json) and replace the placeholder URLs with real feeds. Keep `"providerType": "rss"` on every row; the shared bulk importer now requires row-level `providerType` instead of guessing from the screen mode.
+Use [infra/scripts/manual-rss-bundle.template.json](../../../infra/scripts/manual-rss-bundle.template.json) and replace the placeholder URLs with real feeds. Keep `"providerType": "rss"` on every row; the shared bulk importer now requires row-level `providerType` instead of guessing from the screen mode.
 
 If you want to pre-clean a large candidate list, use your own validation helper or spreadsheet workflow. The repo does not currently ship a canonical validator script for real-feed bundles.
 
@@ -250,7 +250,7 @@ If you want to pre-clean a large candidate list, use your own validation helper 
    - projected editorial rows with article links
    - resource-only entity/document rows that stay visible even without article projection
    - detail drilldown for at least one specific resource
-    - if you want a dedicated website-only checklist instead of the broader MVP runbook, continue with [WEBSITE_SOURCES_TESTING.md](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md)
+    - if you want a dedicated website-only checklist instead of the broader MVP runbook, continue with [WEBSITE_SOURCES_TESTING.md](./examples/WEBSITE_SOURCES_TESTING.md)
 11. Confirm the dashboard shows the system-selected collection summary plus operational cards.
 12. Open the editorial item list and confirm per-item reaction counters are visible.
 
@@ -279,7 +279,7 @@ Truthful current limitation:
 
 Use this section only when you intentionally verify the website lane.
 
-If you want a dedicated operator-only walkthrough for this subsystem, use [WEBSITE_SOURCES_TESTING.md](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md). The checklist below stays as the compact MVP-runbook version.
+If you want a dedicated operator-only walkthrough for this subsystem, use [WEBSITE_SOURCES_TESTING.md](./examples/WEBSITE_SOURCES_TESTING.md). The checklist below stays as the compact MVP-runbook version.
 
 1. Create a public or static-header-authenticated `website` channel from a homepage/section/sitemap source that does not require interactive login.
 2. If the source requires header auth, fill `Authorization header` with the full raw value; the fetcher will reuse it only for same-origin requests.
@@ -404,7 +404,7 @@ Discovery is not part of the canonical safe-by-default MVP path.
 
 Only test it if you intentionally opt in:
 
-1. Follow the discovery env/bootstrap section in [README.md](/Users/user/Documents/workspace/my/NewsPortal/README.md) and use [DISCOVERY_MODE_TESTING.md](/Users/user/Documents/workspace/my/NewsPortal/docs/product/operator/examples/DISCOVERY_MODE_TESTING.md) as the dedicated operator handbook for this subsystem.
+1. Follow the discovery env/bootstrap section in [README.md](../../../README.md) and use [DISCOVERY_MODE_TESTING.md](./examples/DISCOVERY_MODE_TESTING.md) as the dedicated operator handbook for this subsystem.
 2. Enable `DISCOVERY_ENABLED=1`.
 3. Run `pnpm test:discovery-enabled:compose` before trusting a live manual run.
 4. Run `pnpm test:discovery:examples:compose` if you want the shipped Example B/C profile-backed proof lane and the emitted `manualReplaySettings` that can then be replayed through the discovery overview and focused routes under `/admin/discovery`.

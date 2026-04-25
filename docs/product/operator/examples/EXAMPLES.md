@@ -6,7 +6,7 @@
 >
 > **Что этот документ не покрывает полностью:** полный `.env.dev` bootstrap, весь manual MVP runbook, полный website/hard-site operator pass и live-internet edge cases вне bounded local setup.
 >
-> **Перед началом:** прочитайте [HOW_TO_USE.md](../HOW_TO_USE.md) для общего админ-потока, [README.md](../../../README.md) для discovery/runtime env и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) для полного MVP walkthrough.
+> **Перед началом:** прочитайте [HOW_TO_USE.md](../HOW_TO_USE.md) для общего админ-потока, [README.md](../../../../README.md) для discovery/runtime env и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) для полного MVP walkthrough.
 >
 > **Как понять, что пример применен успешно:** каналы импортированы, rules созданы, `interest_centroids` переиндексирован, а в `Articles`, `Clusters` и `Observability` видно ожидаемое наполнение без необходимости гадать, какой doc теперь канонический.
 
@@ -2888,6 +2888,6 @@ pnpm test:discovery:examples:compose
 
 > 📖 **Связанные документы:**
 > - [HOW_TO_USE.md](../HOW_TO_USE.md) — полное руководство по администрированию NewsPortal
-> - [README.md](../../../README.md) — runtime env, discovery enable и smoke/proof команды
+> - [README.md](../../../../README.md) — runtime env, discovery enable и smoke/proof команды
 > - [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) — полный local MVP walkthrough, cleanup/reset, optional discovery и website verification
 > - Раздел **Help & Guide** в боковом меню админки — встроенный справочник на английском языке
