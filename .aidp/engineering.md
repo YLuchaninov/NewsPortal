@@ -193,7 +193,7 @@ Persistent artifacts created by proof must be removed or recorded in `.aidp/work
 
 ## Deep contract discipline
 
-If a subsystem requires more detail than this compact core can hold, create or update a file under `.aidp/contracts/`. Current product/reference contracts under `docs/contracts/` may be used as observations, but runtime-agent canon should be migrated into `.aidp/contracts/` when it becomes required for active work.
+If a subsystem requires more detail than this compact core can hold, create or update a file under `.aidp/contracts/`. Do not recreate durable subsystem contracts under `docs/`; product docs may link to `.aidp/contracts/*` when they need to point at runtime truth.
 
 ## Proof expectations по типу engineering change
 

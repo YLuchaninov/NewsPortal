@@ -18,7 +18,7 @@
 - не смешать repeatable local fixture flow с code-present, но пока не operator-ready зонами;
 - корректно завершить прогон и cleanup/reset state.
 
-Для stateful fixture discipline и cleanup truth также сверяйся с [docs/contracts/test-access-and-fixtures.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/test-access-and-fixtures.md).
+Для stateful fixture discipline и cleanup truth также сверяйся с [.aidp/contracts/test-access-and-fixtures.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/test-access-and-fixtures.md).
 
 ## Scope
 

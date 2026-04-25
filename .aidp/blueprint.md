@@ -162,7 +162,7 @@ Durable capability lines that often need staged work:
 - `.aidp/contracts/universal-task-engine.md`
 - `.aidp/contracts/zero-shot-interest-filtering.md`
 
-Long-form product contracts may still exist under `docs/contracts/` as product/reference material. AIDP runtime-agent contract truth for these subsystems now lives under `.aidp/contracts/`.
+Old long-form product contracts from `docs/contracts/` were migrated into `.aidp/contracts/*` and then deleted from `docs/` to avoid a second source of truth.
 
 ## Когда обновлять
 

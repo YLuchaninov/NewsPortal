@@ -25,7 +25,7 @@ Explicitly out of scope:
 - [services/fetchers/src/fetchers.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/fetchers.ts)
 - [services/fetchers/src/web-ingestion.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/web-ingestion.ts)
 - [services/fetchers/src/resource-enrichment.ts](/Users/user/Documents/workspace/my/NewsPortal/services/fetchers/src/resource-enrichment.ts)
-- [docs/contracts/browser-assisted-websites.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/browser-assisted-websites.md)
+- [.aidp/contracts/browser-assisted-websites.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/browser-assisted-websites.md)
 
 ### Local proof executed on 2026-04-15
 

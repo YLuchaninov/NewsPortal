@@ -4,8 +4,8 @@
 
 ## Свежесть live state
 
-- Последняя проверка этого файла по worktree reality: 2026-04-24
-- Последняя проверка blockers/dependencies: 2026-04-24
+- Последняя проверка этого файла по worktree reality: 2026-04-25
+- Последняя проверка blockers/dependencies: 2026-04-25
 - Следующая revalidation для blocked items: n/a
 
 ## Текущий режим
@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: AIDP setup/repair, contract migration, source audit, architecture hardening, verification coverage audit, product-doc cleanup and requested proof gates завершены; ordinary work can start only after a new active item is declared.
+- Почему сейчас: old `docs/contracts/*` удалены после переноса runtime truth в `.aidp/contracts/*`; no active work remains.
 
 ## Проверки закрытия route
 
@@ -30,7 +30,7 @@
 - NewsPortal — pnpm polyglot monorepo with Astro web/admin, FastAPI API, Node fetchers/relay/MCP, Python workers/ML/indexer, PostgreSQL, Redis/BullMQ and Docker Compose local baseline.
 - PostgreSQL is durable business truth; Redis/BullMQ, HNSW, snapshots, queues and cache are derived/runtime state.
 - Canonical AIDP runtime truth lives in `.aidp/*`; root/tool router files must remain thin.
-- Product/reference docs remain under `docs/product` and `docs/contracts`; runtime-agent contracts live under `.aidp/contracts/*`.
+- Product/reference docs remain under `docs/product`; runtime-agent contracts live under `.aidp/contracts/*`.
 - Stateful proof must follow `.aidp/contracts/test-access-and-fixtures.md`.
 - Старые contract materials проверены, перенесены в `.aidp/contracts/*` and then дополнены source-code-owned contracts for auth/session, notifications/digests and runtime/migrations/indexes.
 
@@ -58,7 +58,7 @@ None.
 ### Согласованность worktree
 
 - Worktree status: mixed
-- Alignment note: current dirty tree is explained by completed AIDP bootstrap/repair, product/reference docs cleanup, root proof aliases, lint-fix changes discovered by the requested gates, and completed product-local test contour implementation.
+- Alignment note: current dirty tree is explained by completed AIDP bootstrap/repair, product/reference docs cleanup, root proof aliases, lint-fix changes discovered by the requested gates, completed product-local test contour implementation, and completed `docs/contracts` deletion.
 - Scope warning: `.codex/config.toml` remains pre-existing/unowned by this AIDP work; do not revert it without explicit user request.
 - Legacy docs note: product/reference docs were kept as reference material and cleaned from stale old runtime-doc links; legacy runtime docs deletion remains part of the bootstrap migration state.
 - Required action before ordinary implementation: create a new active item with scope, allowed paths, risk and proof.
@@ -83,6 +83,7 @@ None.
 - Added `docs/product/operator/local-product-testing.md` and updated operator docs/README/AIDP proof map to state current RSS/website focus and parked lanes.
 - Root scripts, package-level scripts, tests, smoke harnesses, compose files and source-code boundaries were audited and consolidated into `.aidp/os.yaml` and `.aidp/verification.md`.
 - Product/reference docs were kept under `docs/` and cleaned so local markdown links point to existing repository files.
+- User confirmed old `docs/contracts/*` should be deleted; files and empty directory were removed, and surviving product docs link to `.aidp/contracts/*`.
 - Initial `pnpm lint` failed on 43 lint issues across Astro/admin pages, infra proof scripts and fetcher code; minimal behavior-preserving fixes restored the gate.
 - `pnpm typecheck` completed with zero errors; Astro reported existing hint/deprecation notices only.
 - `pnpm unit_tests` completed successfully: TS 245/245 and Python 265/265.
@@ -115,14 +116,14 @@ None.
 ### Следующее рекомендуемое действие
 
 - Следующий шаг: wait for the operator’s next product/code request and create a fresh active item before implementation.
-- Почему это следующее: no active work remains after product-local testing contour implementation.
+- Почему это следующее: no active work remains after deleting old duplicate contract docs.
 
 ### Статус archive sync
 
 - Completed item или capability awaiting archive sync: none
 - Почему еще live: n/a
 - Требуемое archive action: none
-- Expected archive destination/index label: latest completed item archived as `PRODUCT-LOCAL-TEST-CONTOUR-2026-04-24`.
+- Expected archive destination/index label: latest completed item archived as `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25`.
 
 ### Test artifacts and cleanup state
 
@@ -151,6 +152,7 @@ None.
 - 2026-04-24 — Cleaned product/reference docs from stale old runtime-doc links and fixed one broken discovery example link.
 - 2026-04-24 — Fixed lint failures surfaced by final proof and passed lint, typecheck, unit tests and MVP internal smoke.
 - 2026-04-24 — Implemented and executed local product testing contour without Telegram/email/API ingestion lanes; `core` and escalated `full` passed with evidence artifacts, and compose stack was stopped after proof.
+- 2026-04-25 — Deleted old duplicate `docs/contracts/*` after redirecting surviving product-doc links to `.aidp/contracts/*`.
 
 ## Active work index
 

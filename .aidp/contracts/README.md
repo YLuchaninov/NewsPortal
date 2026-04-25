@@ -15,7 +15,7 @@
 - Contract doc обязателен только для active work, который трогает соответствующую subsystem.
 - Contract doc дополняет `.aidp/blueprint.md`, `.aidp/engineering.md` и `.aidp/verification.md`, но не заменяет их.
 - Если durable subsystem truth меняется, обновляй contract doc и другие owner-файлы только по их ответственности.
-- Product/reference contracts under `docs/contracts/` можно читать как проверяемые наблюдения. Они не являются AIDP runtime canon, пока нужная truth не перенесена сюда.
+- Не создавай параллельные durable subsystem contracts под `docs/`; product docs may link here when they need runtime truth.
 
 ## Текущие AIDP contracts
 
@@ -35,8 +35,8 @@
 - `.aidp/contracts/zero-shot-interest-filtering.md` — canonical documents, observations, verification, interest filters, final selection and compatibility cutover.
 - `.aidp/contracts/SUBSYSTEM-CONTRACT-TEMPLATE.md` — русскоязычный шаблон для новых deep contracts.
 
-## Связь со старыми `docs/contracts/`
+## Связь со старыми contract docs
 
-Durable runtime truth из старых `docs/contracts/*` перенесена в `.aidp/contracts/*` 2026-04-24. Старые docs можно читать как product/reference evidence, но AIDP-агентный runtime contract теперь находится здесь.
+Durable runtime truth из старых `docs/contracts/*` перенесена в `.aidp/contracts/*` 2026-04-24. Старые duplicate docs удалены из `docs/`, чтобы не поддерживать второй источник правды.
 
-Если старый product doc и `.aidp/contracts/*` расходятся, сначала сверяйся с текущим кодом/миграциями/тестами, затем обновляй правильный owner-файл.
+Если product doc и `.aidp/contracts/*` расходятся, сначала сверяйся с текущим кодом/миграциями/тестами, затем обновляй правильный owner-файл.

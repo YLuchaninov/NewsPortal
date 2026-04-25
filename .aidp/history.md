@@ -4,7 +4,7 @@
 
 ## Свежесть архива
 
-- Последняя проверка архива: 2026-04-24
+- Последняя проверка архива: 2026-04-25
 - Проверил: Codex
 - Следующий trigger пересмотра: завершение нового work item/capability или обнаружение stale live detail в `.aidp/work.md`.
 
@@ -23,6 +23,7 @@
 - `AIDP-ARCH-ENGINEERING-2026-04-24` — усиление architecture engineering quality bar.
 - `AIDP-VERIFICATION-COVERAGE-2026-04-24` — аудит и закрепление test/proof surfaces.
 - `AIDP-FINAL-PROOF-DOCS-2026-04-24` — финальная чистка product/reference docs, lint fixes and requested proof gates.
+- `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25` — удаление старых duplicate `docs/contracts/*` после переноса canonical truth в `.aidp/contracts/*`.
 
 ## Завершенные items
 
@@ -75,10 +76,37 @@
   - выполнен repository search по ключевым surfaces: `final_selection_results`, `selection_profiles`, `discovery_recall_*`, `q.sequence`, MCP tokens/tools, browser fallback, feed adapters;
   - `os.yaml` успешно parsed через Ruby YAML.
 - Оставшиеся risks/gaps:
-  - product/reference docs under `docs/contracts/*` still exist as old reference material and may be deleted/rewired only under a separate docs cleanup item;
+  - product/reference docs under `docs/contracts/*` were later deleted in `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25`;
   - runtime/product gates were not executed because repair changed AIDP docs only.
 - Follow-up created: none.
 - Archived on: 2026-04-24
+
+### AIDP-DOCS-CONTRACTS-DELETE-2026-04-25 — Удаление старых docs contracts
+
+- Archive outcome: completed
+- Kind: Patch
+- Финальный status: archived
+- Parent capability: C-DOCS-CONTRACTS-REMOVE
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь подтвердил, что старые contract docs в `docs/contracts/*` больше не нужны после переноса runtime truth в `.aidp/contracts/*`, и попросил удалить их.
+- Что изменилось:
+  - удалены `docs/contracts/*` and empty `docs/contracts/` directory;
+  - surviving product docs now link to `.aidp/contracts/*`;
+  - `.aidp/blueprint.md`, `.aidp/engineering.md`, `.aidp/verification.md` and `.aidp/contracts/README.md` no longer present `docs/contracts/*` as a current reference source;
+  - `.aidp/work.md` returned to no-active-item state.
+- Выполненный proof:
+  - `find docs/contracts -maxdepth 1 -type f` returned no files before the directory was removed;
+  - docs local markdown link check passed for 24 remaining markdown files under `docs/`;
+  - targeted search found no live markdown links to `/docs/contracts/` or `docs/contracts/*.md`;
+  - `test ! -e docs/contracts` passed;
+  - `.aidp/os.yaml` parsed successfully through Ruby YAML;
+  - `git diff --check` passed.
+- Оставшиеся risks/gaps:
+  - historical archive entries still mention `docs/contracts/*` where they describe the previous migration path; those are history, not runtime truth;
+  - canonical runtime contracts now live only under `.aidp/contracts/*`.
+- Follow-up created: none.
+- Archived on: 2026-04-25
 
 ### AIDP-SOURCE-AUDIT-2026-04-24 — Source-code audit пропущенной runtime truth
 

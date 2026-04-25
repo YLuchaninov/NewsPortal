@@ -187,6 +187,6 @@ For any environment:
 
 ## 6. Where the repo truth lives
 
-- MCP contract: [docs/contracts/mcp-control-plane.md](/Users/user/Documents/workspace/my/NewsPortal/docs/contracts/mcp-control-plane.md)
+- MCP contract: [.aidp/contracts/mcp-control-plane.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/contracts/mcp-control-plane.md)
 - Proof commands: [.aidp/verification.md](/Users/user/Documents/workspace/my/NewsPortal/.aidp/verification.md)
 - Admin token UI: [apps/admin/src/pages/automation/mcp.astro](/Users/user/Documents/workspace/my/NewsPortal/apps/admin/src/pages/automation/mcp.astro)
