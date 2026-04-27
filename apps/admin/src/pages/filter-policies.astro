@@ -1,0 +1,277 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/",
+});
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const policies = await sdk.listContentFilterPoliciesPage<Record<string, unknown>>({
+  page: 1,
+  pageSize: 50,
+});
+const previews = await Promise.all(
+  policies.items.map(async (policy) => {
+    try {
+      return await sdk.previewContentFilterPolicy<Record<string, unknown>>(
+        String(policy.filter_policy_id ?? ""),
+        {}
+      );
+    } catch {
+      return null;
+    }
+  })
+);
+const pagePaths = {
+  dashboard: appPath("/"),
+  analysis: appPath("/analysis"),
+};
+const policyBffPath = appPath("/bff/admin/content-filter-policies");
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+
+function formatPolicyJson(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "{}";
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+const defaultPolicyJson = JSON.stringify(
+  {
+    dateFallback: ["source_lastmod_at", "discovered_at", "ingested_at"],
+    onPass: "keep",
+    onFail: "reject",
+    rules: [
+      {
+        key: "not_older_than_3_months",
+        field: "published_at",
+        op: "gte_relative",
+        value: { amount: 3, unit: "months" },
+      },
+    ],
+  },
+  null,
+  2
+);
+const policyModes = ["disabled", "observe", "dry_run", "hold", "enforce"];
+const policyCombiners = ["all", "any", "priority_first"];
+const policyViews = policies.items.map((policy, index) => {
+  const preview = previews[index];
+  const currentResults = preview?.currentResults && typeof preview.currentResults === "object"
+    ? preview.currentResults as Record<string, unknown>
+    : null;
+  return {
+    id: String(policy.filter_policy_id ?? ""),
+    key: String(policy.policy_key ?? ""),
+    title: String(policy.title ?? policy.policy_key ?? "Policy"),
+    description: String(policy.description ?? ""),
+    mode: String(policy.mode ?? "dry_run"),
+    combiner: String(policy.combiner ?? "all"),
+    version: String(policy.version ?? 1),
+    priority: String(policy.priority ?? 100),
+    isActive: Boolean(policy.is_active),
+    policyJson: formatPolicyJson(policy.policy_json),
+    impact: currentResults
+      ? `${String(currentResults.result_count ?? 0)} results · ${String(currentResults.passed_count ?? 0)} pass · ${String(currentResults.failed_count ?? 0)} fail`
+      : null,
+  };
+});
+---
+
+<AdminShell title="Filter Policies — Admin" session={session} flash={flash} activeNav="analysis">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={pagePaths.analysis} class="hover:text-foreground">Analysis</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Filter policies</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Content gate</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Filter policies</h1>
+    </section>
+
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 class="text-base font-semibold">Create policy</h2>
+      <p class="mt-1 text-sm text-muted-foreground">
+        Rules can use relative dates or persisted labels such as sentiment and taxonomy.
+      </p>
+      <form method="post" action={policyBffPath} class="mt-4 grid gap-4">
+        <input type="hidden" name="intent" value="create" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <div class="grid gap-3 lg:grid-cols-2">
+          <label class="grid gap-1.5 text-sm font-medium">
+            Policy key
+            <input name="policyKey" required placeholder="fresh_enterprise_news_gate" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Title
+            <input name="title" required placeholder="Fresh enterprise news gate" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+        </div>
+        <label class="grid gap-1.5 text-sm font-medium">
+          Description
+          <input name="description" placeholder="Dry-run policy for recent relevant content" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+        </label>
+        <div class="grid gap-3 lg:grid-cols-4">
+          <label class="grid gap-1.5 text-sm font-medium">
+            Mode
+            <select name="mode" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              <option value="dry_run">dry_run</option>
+              <option value="observe">observe</option>
+              <option value="hold">hold</option>
+              <option value="disabled">disabled</option>
+              <option value="enforce">enforce</option>
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Combiner
+            <select name="combiner" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              <option value="all">all</option>
+              <option value="any">any</option>
+              <option value="priority_first">priority_first</option>
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Priority
+            <input name="priority" type="number" value="100" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="flex items-center gap-2 self-end rounded-md border border-border p-2 text-sm">
+            <input name="isActive" type="checkbox" value="true" checked class="h-4 w-4 rounded border-input" />
+            Active
+          </label>
+        </div>
+        <label class="grid gap-1.5 text-sm font-medium">
+          Policy JSON
+          <textarea name="policyJson" rows="10" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{defaultPolicyJson}</textarea>
+        </label>
+        <label class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <input name="confirmEnforce" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
+          <span class="space-y-1">
+            <span class="block text-sm font-medium">Confirm enforce mode</span>
+            <span class="block text-xs text-muted-foreground">Required only when saving a policy with mode `enforce`.</span>
+          </span>
+        </label>
+        <AdminConfirmSubmitButton
+          title="Create filter policy"
+          description="Create a content filter policy. Dry-run and observe modes record decisions without hiding content."
+          triggerLabel="Create policy"
+          confirmLabel="Save policy"
+          client:load
+        />
+      </form>
+    </section>
+
+    <section class="rounded-2xl border border-border bg-card shadow-sm">
+      <div class="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <span>Policy</span>
+        <span>Mode</span>
+        <span>Version</span>
+      </div>
+      <div class="divide-y divide-border">
+        {policyViews.map((policy) => (
+          <div class="space-y-4 px-4 py-5 text-sm">
+            <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3">
+              <div>
+                <p class="font-medium">{policy.title}</p>
+                <p class="mt-1 text-xs text-muted-foreground">{policy.key}</p>
+                {policy.impact && (
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    persisted impact: {policy.impact}
+                  </p>
+                )}
+              </div>
+              <span class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                {policy.mode}
+              </span>
+              <span class="text-muted-foreground">v{policy.version}</span>
+            </div>
+            <form method="post" action={policyBffPath} class="grid gap-3 rounded-lg border border-border/70 p-3">
+              <input type="hidden" name="intent" value="update" />
+              <input type="hidden" name="filterPolicyId" value={policy.id} />
+              <input type="hidden" name="redirectTo" value={currentPath} />
+              <div class="grid gap-3 lg:grid-cols-2">
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Title
+                  <input name="title" value={policy.title} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Description
+                  <input name="description" value={policy.description} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+              </div>
+              <div class="grid gap-3 lg:grid-cols-4">
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Mode
+                  <select name="mode" class="h-8 rounded-md border border-input bg-transparent px-2 text-sm">
+                    {policyModes.map((mode) => (
+                      <option value={mode} selected={policy.mode === mode}>{mode}</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Combiner
+                  <select name="combiner" class="h-8 rounded-md border border-input bg-transparent px-2 text-sm">
+                    {policyCombiners.map((combiner) => (
+                      <option value={combiner} selected={policy.combiner === combiner}>{combiner}</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Priority
+                  <input name="priority" type="number" value={policy.priority} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+                <label class="flex items-center gap-2 self-end rounded-md border border-border p-2 text-xs">
+                  <input name="isActive" type="checkbox" value="true" checked={policy.isActive} class="h-4 w-4 rounded border-input" />
+                  Active
+                </label>
+              </div>
+              <label class="grid gap-1.5 text-xs font-medium">
+                Policy JSON
+                <textarea name="policyJson" rows="8" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{policy.policyJson}</textarea>
+              </label>
+              <label class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-2 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
+                <input name="confirmEnforce" type="checkbox" value="true" class="h-4 w-4 rounded border-input" />
+                Confirm enforce mode
+              </label>
+              <div>
+                <AdminConfirmSubmitButton
+                  title="Update filter policy"
+                  description="Changes to mode, combiner or policy JSON create a new policy version and deactivate the previous version."
+                  triggerLabel="Update policy"
+                  confirmLabel="Save version"
+                  client:load
+                />
+              </div>
+            </form>
+          </div>
+        ))}
+        {policies.items.length === 0 && <p class="px-4 py-6 text-sm text-muted-foreground">No policies yet.</p>}
+      </div>
+    </section>
+  </div>
+</AdminShell>

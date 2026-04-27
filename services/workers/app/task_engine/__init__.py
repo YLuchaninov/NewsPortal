@@ -1,4 +1,8 @@
 from .context import ContextManager
+from .content_analysis_plugins import (
+    CONTENT_ANALYSIS_PLUGIN_CLASSES,
+    register_content_analysis_plugins,
+)
 from .dispatch import (
     build_redis_connection_options as build_sequence_redis_connection_options,
     build_redis_url as build_sequence_redis_url,
@@ -58,7 +62,10 @@ from .scheduler import (
 
 
 BUILTIN_PLUGIN_CLASSES = (
-    PIPELINE_BUILTIN_PLUGIN_CLASSES + DISCOVERY_ENRICHMENT_PLUGIN_CLASSES + ORCHESTRATOR_PLUGIN_CLASSES
+    PIPELINE_BUILTIN_PLUGIN_CLASSES
+    + CONTENT_ANALYSIS_PLUGIN_CLASSES
+    + DISCOVERY_ENRICHMENT_PLUGIN_CLASSES
+    + ORCHESTRATOR_PLUGIN_CLASSES
 )
 
 
@@ -67,6 +74,7 @@ def register_builtin_plugins(
 ) -> TaskPluginRegistry:
     target_registry = registry or TASK_REGISTRY
     register_core_pipeline_plugins(target_registry)
+    register_content_analysis_plugins(target_registry)
     register_maintenance_plugins(target_registry)
     register_discovery_plugins(target_registry)
     register_utility_plugins(target_registry)
@@ -77,6 +85,7 @@ def register_builtin_plugins(
 __all__ = [
     "BUILTIN_PLUGIN_CLASSES",
     "CORE_PIPELINE_PLUGIN_CLASSES",
+    "CONTENT_ANALYSIS_PLUGIN_CLASSES",
     "CronExpression",
     "ContextManager",
     "build_sequence_redis_connection_options",
@@ -96,6 +105,7 @@ __all__ = [
     "SequenceCronRepository",
     "SequenceCronScheduler",
     "register_builtin_plugins",
+    "register_content_analysis_plugins",
     "register_core_pipeline_plugins",
     "register_discovery_enrichment_plugins",
     "register_discovery_plugins",

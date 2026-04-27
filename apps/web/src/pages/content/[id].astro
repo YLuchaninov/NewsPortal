@@ -140,6 +140,16 @@ const sourceLabel = String(contentItem.source_name ?? contentItem.channel_name ?
 const authorLabel = String(contentItem.author_name ?? "").trim();
 const documents = toObjectList(contentItem.documents_json);
 const linksOut = toObjectList(contentItem.links_out_json);
+const analysisSummary =
+  contentItem.analysis_summary && typeof contentItem.analysis_summary === "object"
+    ? (contentItem.analysis_summary as Record<string, unknown>)
+    : {};
+const analysisEntities = Array.isArray(analysisSummary.entities)
+  ? (analysisSummary.entities as Record<string, unknown>[])
+  : [];
+const analysisLabels = Array.isArray(analysisSummary.labels)
+  ? (analysisSummary.labels as Record<string, unknown>[])
+  : [];
 ---
 
 <Shell
@@ -231,6 +241,24 @@ const linksOut = toObjectList(contentItem.links_out_json);
           loading="eager"
         />
       </figure>
+    )}
+
+    {(analysisEntities.length > 0 || analysisLabels.length > 0) && (
+      <section class="rounded-[1.5rem] border border-border bg-card p-5 shadow-sm">
+        <h2 class="text-base font-semibold">Signals</h2>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {analysisEntities.slice(0, 10).map((entity) => (
+            <span class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+              {String(entity.entity_text ?? "")}
+            </span>
+          ))}
+          {analysisLabels.slice(0, 6).map((label) => (
+            <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+              {String(label.label_name ?? label.label_key ?? "")}
+            </span>
+          ))}
+        </div>
+      </section>
     )}
 
     <section class="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm">

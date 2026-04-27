@@ -1,0 +1,374 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/",
+});
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const policies = await sdk.listContentAnalysisPoliciesPage<Record<string, unknown>>({
+  page: 1,
+  pageSize: 80,
+});
+const pagePaths = {
+  dashboard: appPath("/"),
+  analysis: appPath("/analysis"),
+};
+const policyBffPath = appPath("/bff/admin/content-analysis-policies");
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+
+function formatConfigJson(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "{}";
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+const defaultConfigJson = JSON.stringify({
+  templateKey: "job_or_buyer_signal_v1",
+  maxTextChars: 50000,
+  allowHighCardinalityLabels: false,
+  instructions: "Extract only facts explicitly supported by the source text.",
+  entityTypes: [
+    {
+      type: "job_opening",
+      fields: [
+        { key: "company", type: "string", project: ["entity"] },
+        { key: "role", type: "string", project: [] },
+        { key: "location", type: "string", project: ["entity"] },
+        { key: "remote", type: "boolean", project: ["label"] },
+        { key: "tech_stack", type: "string[]", project: ["label"] },
+        { key: "posted_at", type: "date", project: [] },
+      ],
+    },
+    {
+      type: "buyer_intent",
+      fields: [
+        { key: "company", type: "string", project: ["entity"] },
+        { key: "need", type: "string", project: [] },
+        { key: "intent_strength", type: "enum", values: ["low", "medium", "high"], project: ["label"] },
+        { key: "deadline", type: "date", project: [] },
+      ],
+    },
+  ],
+}, null, 2);
+const structuredPresets = [
+  {
+    title: "Job opening extraction",
+    json: JSON.stringify({
+      templateKey: "job_opening_v1",
+      maxTextChars: 50000,
+      allowHighCardinalityLabels: false,
+      instructions: "Extract job openings only when the source explicitly describes a role being hired for.",
+      entityTypes: [
+        {
+          type: "job_opening",
+          fields: [
+            { key: "company", type: "string", project: ["entity"] },
+            { key: "role", type: "string", project: [] },
+            { key: "location", type: "string", project: ["entity"] },
+            { key: "remote", type: "boolean", project: ["label"] },
+            { key: "tech_stack", type: "string[]", project: ["label"] },
+            { key: "posted_at", type: "date", project: [] },
+          ],
+        },
+      ],
+    }, null, 2),
+  },
+  {
+    title: "Buyer intent extraction",
+    json: JSON.stringify({
+      templateKey: "buyer_intent_v1",
+      maxTextChars: 50000,
+      allowHighCardinalityLabels: false,
+      instructions: "Extract buyer intent only when the source explicitly describes a company need, procurement signal, migration, RFP or outsourcing request.",
+      entityTypes: [
+        {
+          type: "buyer_intent",
+          fields: [
+            { key: "company", type: "string", project: ["entity"] },
+            { key: "need", type: "string", project: [] },
+            { key: "intent_strength", type: "enum", values: ["low", "medium", "high"], project: ["label"] },
+            { key: "deadline", type: "date", project: [] },
+          ],
+        },
+      ],
+    }, null, 2),
+  },
+];
+const modules = ["ner", "sentiment", "category", "system_interest_label", "content_filter", "cluster_summary", "structured_extraction"];
+const modes = ["disabled", "observe", "dry_run", "hold", "enforce"];
+const failurePolicies = ["skip", "hold", "reject", "fail_run"];
+const policyViews = policies.items.map((policy) => ({
+  id: String(policy.policy_id ?? ""),
+  key: String(policy.policy_key ?? ""),
+  title: String(policy.title ?? policy.policy_key ?? "Policy"),
+  description: String(policy.description ?? ""),
+  module: String(policy.module ?? "ner"),
+  enabled: Boolean(policy.enabled),
+  mode: String(policy.mode ?? "observe"),
+  provider: String(policy.provider ?? ""),
+  modelKey: String(policy.model_key ?? ""),
+  modelVersion: String(policy.model_version ?? ""),
+  configJson: formatConfigJson(policy.config_json),
+  failurePolicy: String(policy.failure_policy ?? "skip"),
+  priority: String(policy.priority ?? 100),
+  version: String(policy.version ?? 1),
+  isActive: Boolean(policy.is_active),
+}));
+---
+
+<AdminShell title="Analysis Policies — Admin" session={session} flash={flash} activeNav="analysis">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={pagePaths.analysis} class="hover:text-foreground">Analysis</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Analysis policies</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Content analysis</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Analysis policies</h1>
+    </section>
+
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 class="text-base font-semibold">Create analysis policy</h2>
+      <form method="post" action={policyBffPath} class="mt-4 grid gap-4">
+        <input type="hidden" name="intent" value="create" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <div class="grid gap-3 lg:grid-cols-2">
+          <label class="grid gap-1.5 text-sm font-medium">
+            Policy key
+            <input name="policyKey" required placeholder="custom_sentiment_observe" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Title
+            <input name="title" required placeholder="Custom sentiment observe" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+        </div>
+        <label class="grid gap-1.5 text-sm font-medium">
+          Description
+          <input name="description" placeholder="Operator-owned analysis policy" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+        </label>
+        <div class="grid gap-3 lg:grid-cols-4">
+          <label class="grid gap-1.5 text-sm font-medium">
+            Module
+            <select name="module" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              {modules.map((module) => <option value={module}>{module}</option>)}
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Mode
+            <select name="mode" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              <option value="observe">observe</option>
+              <option value="dry_run">dry_run</option>
+              <option value="hold">hold</option>
+              <option value="disabled">disabled</option>
+              <option value="enforce">enforce</option>
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Failure policy
+            <select name="failurePolicy" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              {failurePolicies.map((policy) => <option value={policy}>{policy}</option>)}
+            </select>
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Priority
+            <input name="priority" type="number" value="100" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+        </div>
+        <div class="grid gap-3 lg:grid-cols-3">
+          <label class="grid gap-1.5 text-sm font-medium">
+            Provider
+            <input name="provider" placeholder="newsportal" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Model key
+            <input name="modelKey" placeholder="lexicon-sentiment-v1" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1.5 text-sm font-medium">
+            Model version
+            <input name="modelVersion" placeholder="1" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label class="flex items-center gap-2 rounded-md border border-border p-2 text-sm">
+            <input name="enabled" type="checkbox" value="true" checked class="h-4 w-4 rounded border-input" />
+            Enabled
+          </label>
+          <label class="flex items-center gap-2 rounded-md border border-border p-2 text-sm">
+            <input name="isActive" type="checkbox" value="true" checked class="h-4 w-4 rounded border-input" />
+            Active
+          </label>
+        </div>
+        <label class="grid gap-1.5 text-sm font-medium">
+          Config JSON
+          <textarea name="configJson" rows="8" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{defaultConfigJson}</textarea>
+        </label>
+        <div class="rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+          Structured extraction policies with provider <code>gemini</code> can call an LLM. Use scoped policies and explicit backfills for this module.
+        </div>
+        <div class="grid gap-3 lg:grid-cols-2">
+          {structuredPresets.map((preset) => (
+            <details class="rounded-md border border-border p-3 text-sm">
+              <summary class="cursor-pointer font-medium">{preset.title}</summary>
+              <textarea readonly rows="10" class="mt-3 w-full rounded-md border border-input bg-muted/40 px-3 py-2 font-mono text-xs">{preset.json}</textarea>
+            </details>
+          ))}
+        </div>
+        <label class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+          <input name="confirmEnforce" type="checkbox" value="true" class="h-4 w-4 rounded border-input" />
+          Confirm enforce mode
+        </label>
+        <AdminConfirmSubmitButton
+          title="Create analysis policy"
+          description="Create a content analysis policy. Runtime providers are unchanged until a declared stage consumes custom configs."
+          triggerLabel="Create policy"
+          confirmLabel="Save policy"
+          client:load
+        />
+      </form>
+    </section>
+
+    <section class="rounded-2xl border border-border bg-card shadow-sm">
+      <div class="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <span>Policy</span>
+        <span>Module</span>
+        <span>Version</span>
+      </div>
+      <div class="divide-y divide-border">
+        {policyViews.map((policy) => (
+          <div class="space-y-4 px-4 py-5 text-sm">
+            <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3">
+              <div>
+                <p class="font-medium">{policy.title}</p>
+                <p class="mt-1 text-xs text-muted-foreground">{policy.key}</p>
+              </div>
+              <span class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                {policy.module}
+              </span>
+              <span class="text-muted-foreground">v{policy.version}</span>
+            </div>
+            <form method="post" action={policyBffPath} class="grid gap-3 rounded-lg border border-border/70 p-3">
+              <input type="hidden" name="intent" value="update" />
+              <input type="hidden" name="policyId" value={policy.id} />
+              <input type="hidden" name="redirectTo" value={currentPath} />
+              <div class="grid gap-3 lg:grid-cols-2">
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Title
+                  <input name="title" value={policy.title} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Description
+                  <input name="description" value={policy.description} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+              </div>
+              <div class="grid gap-3 lg:grid-cols-4">
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Module
+                  <select name="module" class="h-8 rounded-md border border-input bg-transparent px-2 text-sm">
+                    {modules.map((module) => (
+                      <option value={module} selected={policy.module === module}>{module}</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Mode
+                  <select name="mode" class="h-8 rounded-md border border-input bg-transparent px-2 text-sm">
+                    {modes.map((mode) => (
+                      <option value={mode} selected={policy.mode === mode}>{mode}</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Failure policy
+                  <select name="failurePolicy" class="h-8 rounded-md border border-input bg-transparent px-2 text-sm">
+                    {failurePolicies.map((failurePolicy) => (
+                      <option value={failurePolicy} selected={policy.failurePolicy === failurePolicy}>{failurePolicy}</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Priority
+                  <input name="priority" type="number" value={policy.priority} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+              </div>
+              <div class="grid gap-3 lg:grid-cols-3">
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Provider
+                  <input name="provider" value={policy.provider} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Model key
+                  <input name="modelKey" value={policy.modelKey} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+                <label class="grid gap-1.5 text-xs font-medium">
+                  Model version
+                  <input name="modelVersion" value={policy.modelVersion} class="h-8 rounded-md border border-input bg-transparent px-2 text-sm" />
+                </label>
+              </div>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <label class="flex items-center gap-2 rounded-md border border-border p-2 text-xs">
+                  <input name="enabled" type="checkbox" value="true" checked={policy.enabled} class="h-4 w-4 rounded border-input" />
+                  Enabled
+                </label>
+                <label class="flex items-center gap-2 rounded-md border border-border p-2 text-xs">
+                  <input name="isActive" type="checkbox" value="true" checked={policy.isActive} class="h-4 w-4 rounded border-input" />
+                  Active
+                </label>
+              </div>
+              <label class="grid gap-1.5 text-xs font-medium">
+                Config JSON
+                <textarea name="configJson" rows="7" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{policy.configJson}</textarea>
+              </label>
+              {policy.module === "structured_extraction" && (
+                <div class="rounded-md border border-amber-200 bg-amber-50/60 p-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+                  Provider <code>gemini</code> can call an LLM; broad replay should request this module explicitly.
+                </div>
+              )}
+              <label class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-2 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
+                <input name="confirmEnforce" type="checkbox" value="true" class="h-4 w-4 rounded border-input" />
+                Confirm enforce mode
+              </label>
+              <div>
+                <AdminConfirmSubmitButton
+                  title="Update analysis policy"
+                  description="Runtime-significant changes create a new policy version and deactivate the previous version."
+                  triggerLabel="Update policy"
+                  confirmLabel="Save version"
+                  client:load
+                />
+              </div>
+            </form>
+          </div>
+        ))}
+        {policies.items.length === 0 && <p class="px-4 py-6 text-sm text-muted-foreground">No analysis policies yet.</p>}
+      </div>
+    </section>
+  </div>
+</AdminShell>

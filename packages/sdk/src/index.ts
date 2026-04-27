@@ -26,6 +26,43 @@ type WebResourceListQuery = PaginationQuery & {
   extractionState?: string;
   projection?: string;
   resourceKind?: string;
+  entityType?: string;
+  entityText?: string;
+  entityNormalizedKey?: string;
+  labelType?: string;
+  labelKey?: string;
+  contentFilterPassed?: boolean;
+  contentFilterDecision?: string;
+};
+type ContentAnalysisListQuery = PaginationQuery & {
+  subjectType?: string;
+  subjectId?: string;
+  analysisType?: string;
+  status?: string;
+};
+type ContentAnalysisPolicyListQuery = PaginationQuery & {
+  module?: string;
+};
+type ContentEntityListQuery = PaginationQuery & {
+  subjectType?: string;
+  subjectId?: string;
+  entityType?: string;
+  entityText?: string;
+  normalizedKey?: string;
+};
+type ContentLabelListQuery = PaginationQuery & {
+  subjectType?: string;
+  subjectId?: string;
+  labelType?: string;
+  labelKey?: string;
+  decision?: string;
+};
+type ContentFilterResultListQuery = PaginationQuery & {
+  subjectType?: string;
+  subjectId?: string;
+  policyKey?: string;
+  decision?: string;
+  passed?: boolean;
 };
 type DiscoveryClassListQuery = PaginationQuery & { status?: string };
 type DiscoveryProfileListQuery = PaginationQuery & { status?: string };
@@ -256,9 +293,93 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         extractionState: params?.extractionState,
         projection: params?.projection,
         resourceKind: params?.resourceKind,
+        entityType: params?.entityType,
+        entityText: params?.entityText,
+        entityNormalizedKey: params?.entityNormalizedKey,
+        labelType: params?.labelType,
+        labelKey: params?.labelKey,
+        contentFilterPassed: params?.contentFilterPassed,
+        contentFilterDecision: params?.contentFilterDecision,
       }),
     getWebResource: <T>(resourceId: string) =>
       getJson<T>(`/maintenance/web-resources/${encodeURIComponent(resourceId)}`),
+    listContentAnalysisResultsPage: <T>(params?: ContentAnalysisListQuery) =>
+      getPaginated<T>("/maintenance/content-analysis", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        subjectType: params?.subjectType,
+        subjectId: params?.subjectId,
+        analysisType: params?.analysisType,
+        status: params?.status,
+      }),
+    getContentAnalysisResult: <T>(analysisId: string) =>
+      getJson<T>(`/maintenance/content-analysis/${encodeURIComponent(analysisId)}`),
+    requestContentAnalysisBackfill: <T>(payload?: unknown) =>
+      postJson<T>("/maintenance/content-analysis/backfill", payload ?? {}),
+    listContentAnalysisPoliciesPage: <T>(params?: ContentAnalysisPolicyListQuery) =>
+      getPaginated<T>("/maintenance/content-analysis-policies", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        module: params?.module,
+      }),
+    getContentAnalysisPolicy: <T>(policyId: string) =>
+      getJson<T>(`/maintenance/content-analysis-policies/${encodeURIComponent(policyId)}`),
+    createContentAnalysisPolicy: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/content-analysis-policies", payload),
+    updateContentAnalysisPolicy: <T>(policyId: string, payload: unknown) =>
+      patchJson<T>(
+        `/maintenance/content-analysis-policies/${encodeURIComponent(policyId)}`,
+        payload
+      ),
+    listContentEntitiesPage: <T>(params?: ContentEntityListQuery) =>
+      getPaginated<T>("/maintenance/content-entities", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        subjectType: params?.subjectType,
+        subjectId: params?.subjectId,
+        entityType: params?.entityType,
+        entityText: params?.entityText,
+        normalizedKey: params?.normalizedKey,
+      }),
+    listContentLabelsPage: <T>(params?: ContentLabelListQuery) =>
+      getPaginated<T>("/maintenance/content-labels", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        subjectType: params?.subjectType,
+        subjectId: params?.subjectId,
+        labelType: params?.labelType,
+        labelKey: params?.labelKey,
+        decision: params?.decision,
+      }),
+    listContentFilterPoliciesPage: <T>(params?: PaginationQuery) =>
+      getPaginated<T>("/maintenance/content-filter-policies", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+      }),
+    getContentFilterPolicy: <T>(filterPolicyId: string) =>
+      getJson<T>(`/maintenance/content-filter-policies/${encodeURIComponent(filterPolicyId)}`),
+    createContentFilterPolicy: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/content-filter-policies", payload),
+    updateContentFilterPolicy: <T>(filterPolicyId: string, payload: unknown) =>
+      patchJson<T>(
+        `/maintenance/content-filter-policies/${encodeURIComponent(filterPolicyId)}`,
+        payload
+      ),
+    previewContentFilterPolicy: <T>(filterPolicyId: string, payload?: unknown) =>
+      postJson<T>(
+        `/maintenance/content-filter-policies/${encodeURIComponent(filterPolicyId)}/preview`,
+        payload ?? {}
+      ),
+    listContentFilterResultsPage: <T>(params?: ContentFilterResultListQuery) =>
+      getPaginated<T>("/maintenance/content-filter-results", {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        subjectType: params?.subjectType,
+        subjectId: params?.subjectId,
+        policyKey: params?.policyKey,
+        decision: params?.decision,
+        passed: params?.passed,
+      }),
     listClusters: <T>() => getJson<T>("/clusters"),
     listClustersPage: <T>(params?: PaginationQuery) =>
       getPaginated<T>("/clusters", {

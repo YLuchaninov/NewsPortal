@@ -121,6 +121,20 @@ const selectionDiagnostics = resolveArticleSelectionDiagnostics(
   { selection_diagnostics: article.selection_diagnostics },
   article
 );
+const analysisSummary =
+  article.analysis_summary && typeof article.analysis_summary === "object"
+    ? (article.analysis_summary as Record<string, unknown>)
+    : {};
+const analysisEntities = Array.isArray(analysisSummary.entities)
+  ? (analysisSummary.entities as Record<string, unknown>[])
+  : [];
+const analysisLabels = Array.isArray(analysisSummary.labels)
+  ? (analysisSummary.labels as Record<string, unknown>[])
+  : [];
+const analysisFilter =
+  analysisSummary.contentFilter && typeof analysisSummary.contentFilter === "object"
+    ? (analysisSummary.contentFilter as Record<string, unknown>)
+    : null;
 
 const finalSelectionColor: Record<string, string> = {
   selected: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
@@ -270,6 +284,30 @@ const verificationColor: Record<string, string> = {
         {operatorGuidance.summary}
       </div>
     </div>
+
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-semibold">Analysis</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {analysisEntities.length} entities · {analysisLabels.length} labels
+          </p>
+        </div>
+        {analysisFilter && (
+          <span class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+            gate:{String(analysisFilter.decision ?? "pending")}
+          </span>
+        )}
+      </div>
+      <div class="mt-4 flex flex-wrap gap-2">
+        {analysisEntities.slice(0, 16).map((entity) => (
+          <span class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+            {String(entity.entity_type ?? "ENTITY")} · {String(entity.entity_text ?? "")}
+          </span>
+        ))}
+        {analysisEntities.length === 0 && <p class="text-sm text-muted-foreground">No persisted entities yet.</p>}
+      </div>
+    </section>
 
     <div class="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
       <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">

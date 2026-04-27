@@ -2,6 +2,8 @@
 
 Этот contract обязателен, когда работа меняет public content/read surfaces, system-selected collection, user matches или mapping между article/resource storage и public content items.
 
+Если работа добавляет `analysis_summary`, entities, labels or content filter projections к public/admin/API content responses, также читай `.aidp/contracts/content-analysis-and-gating.md`.
+
 ## Назначение
 
 NewsPortal больше не должен мыслить public surface как "только статьи". Public/domain слой использует universal content vocabulary, а legacy table names остаются implementation detail.
@@ -30,6 +32,12 @@ NewsPortal больше не должен мыслить public surface как "
 - `/content-items/{content_item_id}` — content item detail.
 - `/content-items/{content_item_id}/explain` — explain/debug projection.
 - `/users/{user_id}/matches` — personalized matches after system selection.
+
+## Analysis projections
+
+- `analysis_summary` is an optional compact read projection for detail responses.
+- Entities, labels and filter results remain separately queryable analysis data; they do not change the public content vocabulary by themselves.
+- User-facing content UI may show lightweight signals from analysis, but visibility must still follow system-selected/personalization contracts unless an explicit gate-enforce stage changes that behavior.
 
 ## Legacy/internal names
 

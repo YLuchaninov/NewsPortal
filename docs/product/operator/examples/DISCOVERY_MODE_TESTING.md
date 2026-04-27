@@ -37,10 +37,11 @@
 6. [Как читать dual-path discovery без путаницы](#6-как-читать-dual-path-discovery-без-путаницы)
 7. [Troubleshooting и честные non-regressions](#7-troubleshooting-и-честные-non-regressions)
 8. [Канонический proof для этой зоны](#8-канонический-proof-для-этой-зоны)
-9. [Proof-backed Discovery Profiles для Example B и Example C](#9-proof-backed-discovery-profiles-для-example-b-и-example-c)
+9. [Proof-backed Discovery Profiles для Example A, Example B и Example C](#9-proof-backed-discovery-profiles-для-example-a-example-b-и-example-c)
    - [9.1. Как использовать proof-backed profiles](#91-как-использовать-proof-backed-profiles)
-   - [9.2. Example B — Proof-backed Discovery Profile](#92-example-b--proof-backed-discovery-profile)
-   - [9.3. Example C — Proof-backed Discovery Profile](#93-example-c--proof-backed-discovery-profile)
+   - [9.2. Example A — Proof-backed Discovery Profile](#92-example-a--proof-backed-discovery-profile)
+   - [9.3. Example B — Proof-backed Discovery Profile](#93-example-b--proof-backed-discovery-profile)
+   - [9.4. Example C — Proof-backed Discovery Profile](#94-example-c--proof-backed-discovery-profile)
 10. [FAQ по discovery mode](#10-faq-по-discovery-mode)
 
 ---
@@ -568,7 +569,7 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 2. `pnpm test:discovery:admin:compose`
    Доказывает operator/admin graph-first flow плюс bounded recall seeding/promotion acceptance.
 3. `pnpm test:discovery:examples:compose`
-   Доказывает profile-backed Example B/C single-run flow, materialize-ит reusable `discovery_policy_profiles` и пишет canonical `manualReplaySettings` в artifact.
+   Доказывает profile-backed Example A/B/C single-run flow, materialize-ит reusable `discovery_policy_profiles` и пишет canonical `manualReplaySettings` в artifact.
 4. Manual read checks:
    - `/maintenance/discovery/summary`
    - `/maintenance/discovery/costs/summary`
@@ -581,15 +582,15 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
 - `pnpm test:discovery:admin:compose`
   это operator acceptance про admin/control-plane lifecycle, candidate review, feedback, re-evaluation и recall promotion shape
 - `pnpm test:discovery:examples:compose`
-  это profile-backed Example B/C proof и source of truth для operator-replayable discovery settings из этого handbook
+  это profile-backed Example A/B/C proof и source of truth для operator-replayable discovery settings из этого handbook
 
 Они дополняют друг друга, а не заменяют.
 
 ---
 
-## 9. Proof-backed Discovery Profiles для Example B и Example C
+## 9. Proof-backed Discovery Profiles для Example A, Example B и Example C
 
-Эта секция фиксирует exact operator-facing settings для двух shipped proof cohorts.
+Эта секция фиксирует exact operator-facing settings для трех shipped proof cohorts.
 
 Source of truth для этих настроек остается в runtime case-pack layer:
 
@@ -621,12 +622,13 @@ Current freshest synced profile-backed proof artifacts:
 - общий `runtimeVerdict = pass`
 - общий `yieldVerdict = pass`
 - `nonRegressionVerdict = pass` на свежем wrapper-proof
-- latest single-run `b41de125` дал `yield pass` для обоих required packs
+- latest previously recorded single-run `b41de125` дал `yield pass` для тогдашних required B/C packs; свежие runs теперь должны включать Example A/B/C
 - final multi-run gate `a59832ca` тоже завершился `pass`:
+  - `Example A` теперь покрывается repo-owned single-run profile proof и baseline-channel evidence
   - `Example B` прошел `3/3`
   - `Example C` прошел `3/3`
 
-Это значит, что настройки ниже уже являются canonical manual replay baseline и одновременно закрытым `good yield` proof contour для обоих required packs на текущем DDGS-first baseline.
+Это значит, что настройки ниже уже являются canonical manual replay baseline; `pnpm test:discovery:examples:compose` теперь валидирует Example A/B/C, а bounded multi-run yield gate остается good-yield контуром для профилей, включенных в текущий yield-wrapper.
 
 ### 9.1. Как использовать proof-backed profiles
 
@@ -650,7 +652,38 @@ Manual replay pattern:
    - `/maintenance/discovery/costs/summary`
    - artifact `manualReplaySettings`
 
-### 9.2. Example B — Proof-backed Discovery Profile
+### 9.2. Example A — Proof-backed Discovery Profile
+
+Когда использовать:
+
+- если вы расширяете `Example A — Агрегатор вакансий (Job Board)`;
+- если вам нужен job-listing-first discovery baseline;
+- если вы хотите проверить seeded job-board RSS, graph lane и recall lane на источниках с реальными вакансиями.
+
+Stable profile identity:
+
+- `profileKey = example_a_job_board_proof`
+- `displayName = Example A — Job Board Proof`
+- `packClass = job_listing_like`
+- for manual replay always trust the `manualReplaySettings` from your own fresh artifact
+
+Graph/recall intent:
+
+- preferred source families: recurring RSS/job-board feeds and listing/editorial sources with concrete software hiring signals;
+- preferred benchmark domains: `hnrss.org`, `weworkremotely.com`, `remoteok.com`, `dev.to`, `news.google.com`;
+- positive keywords: `hiring`, `jobs`, `remote`, `software engineer`, `developer`, `vacancy`, `career opportunity`;
+- hard noise: `layoff`, `hiring freeze`, `salary report`, `resume tips`, `interview guide`, `career advice`, `market analysis`, `directory`, `listicle`;
+- baseline proof requires at least one successful fetch from `Hacker News — Ask HN: Who is hiring?`, `We Work Remotely — Programming`, or `RemoteOK — Remote Jobs Feed`.
+
+Canonical proof expectation:
+
+```sh
+pnpm test:discovery:examples:compose
+```
+
+The emitted artifact should list `example_a_job_board` under `enabledCasePacks.runtime`, with `profileKey = example_a_job_board_proof`, `runtimeVerdict = pass`, `yieldVerdict = pass` unless only classified upstream residuals are present, and separate `baselineEvidence` beside discovery evidence.
+
+### 9.3. Example B — Proof-backed Discovery Profile
 
 Когда использовать:
 
@@ -878,7 +911,7 @@ Current truthful note:
 - this profile is proof-backed and operator-replayable today;
 - latest authoritative single-run and multi-run proofs both ended `yield pass` for Example B, so this profile is now both a canonical manual replay baseline and a closed good-yield profile on the current DDGS-first contour.
 
-### 9.3. Example C — Proof-backed Discovery Profile
+### 9.4. Example C — Proof-backed Discovery Profile
 
 Когда использовать:
 

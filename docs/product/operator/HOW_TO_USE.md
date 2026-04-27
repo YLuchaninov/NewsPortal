@@ -34,6 +34,7 @@
    - [5.7. Положительные и отрицательные прототипы — зачем они нужны](#57-положительные-и-отрицательные-прототипы--зачем-они-нужны)
    - [5.8. Как создать шаблон интересов — пошаговая инструкция](#58-как-создать-шаблон-интересов--пошаговая-инструкция)
    - [5.9. Примеры готовых шаблонов интересов](#59-примеры-готовых-шаблонов-интересов)
+   - [5.10. Analysis и Filter Policies](#510-analysis-и-filter-policies)
 6. [Статьи (Articles) — модерация контента](#6-статьи-articles--модерация-контента)
 7. [Кластеры (Clusters) — группировка событий](#7-кластеры-clusters--группировка-событий)
 8. [Переиндексация (Reindex) — обслуживание системы](#8-переиндексация-reindex--обслуживание-системы)
@@ -578,6 +579,35 @@ NFT marketplace launches celebrity collection
 Ethereum completes major network upgrade
 Crypto mining company opens new facility in Texas
 ```
+
+### 5.10. Analysis и Filter Policies
+
+> 📍 **Где это:** боковое меню → **Rules** → **Analysis** и **Filter Policies**
+
+Analysis — это слой наблюдаемого анализа контента. Он сохраняет извлеченные сущности, sentiment/tone/risk signals, taxonomy categories, story-cluster summaries, structured extraction results, системные метки интересов и результаты дополнительных фильтров в базе данных, чтобы оператор мог проверять, почему объект выглядит релевантным или спорным.
+
+Что смотреть:
+
+| Экран | Что показывает |
+|---|---|
+| **Analysis** | Последние analysis results, найденные entities, labels и gate decisions |
+| **Analysis Policies** | Настройки analysis modules: NER, sentiment, categories, cluster summaries, structured extraction templates и projection policies |
+| **Filter Policies** | Настроенные политики финальной фильтрации, их режим и версию |
+| **Article / Resource detail** | Краткую `analysis_summary`: entities, labels и последний gate result |
+
+Текущая безопасная политика по умолчанию — `default_recent_content_gate`. Она проверяет, что публикация не старше трех месяцев, но работает в режиме `dry_run`: результат записывается и виден оператору, но сам по себе не скрывает контент из пользовательского feed.
+
+На экране **Analysis** можно поставить backfill job для уже сохраненных articles/resources/story clusters. Такой job по умолчанию пишет NER, sentiment, categories, cluster summaries, labels и gate results для старого контента, показывает прогресс среди maintenance jobs и не отправляет retro notifications. `structured_extraction` запускается только при явном выборе, потому что активная Gemini policy может вызвать LLM.
+
+На экране **Filter Policies** можно создать или обновить policy. Если меняются `mode`, `combiner` или `policy_json`, система создает новую версию policy, чтобы старые gate results оставались объяснимыми относительно своей версии.
+
+На экране **Analysis Policies** можно создать или обновить policy для analysis module. Изменения runtime-значимых полей (`module`, `enabled`, `mode`, provider/model fields, `config_json`, `failure_policy`) создают новую версию policy. Локальный deterministic runtime использует только безопасные настройки `config_json`: например `maxTextChars`, `entityTypeAllowlist`, дополнительные sentiment terms, taxonomy terms и параметры projection для system-interest labels. Для `structured_extraction` `config_json` является extraction template: `templateKey`, `instructions`, `allowHighCardinalityLabels`, `entityTypes` и fields с `project: ["entity", "label"]`; при активной policy provider `gemini` вызывается только через явный module request или явную sequence-настройку. Свободный текст не проецируется в `content_labels` без `allowHighCardinalityLabels: true`.
+
+`content_filter_results` является owner-table для gate decisions. Соответствующая запись `content_analysis_results` с type `content_filter` — только summary/projection snapshot для единого analysis view.
+
+Policy может ссылаться не только на время публикации, но и на сохраненные labels или structured extraction fields. Например, rule с `op: "has_label"` и `value: { "labelType": "sentiment", "labelKey": "negative", "minScore": 0.2 }` позволяет отправлять негативные материалы в `needs_review`, а `op: "has_extracted_field"` с `value: { "entityType": "job_opening", "fieldKey": "remote", "value": true }` позволяет отбирать remote-вакансии в `dry_run` режиме.
+
+Для настройки через MCP используйте токен с нужными правами и tools `content_analysis.*`, `content_analysis_policies.*`, `content_entities.*`, `content_labels.*`, `content_filter_policies.*` и `content_filter_results.*`. Backfill доступен через `content_analysis.backfill.request`. Изменение policy в `enforce` должно быть отдельным осознанным шагом: такой режим предназначен для подтвержденного rollout, а не для случайного включения.
 
 ---
 

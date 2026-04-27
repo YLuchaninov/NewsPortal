@@ -1,5 +1,6 @@
 export * from "./article";
 export * from "./content";
+export * from "./content-analysis";
 export * from "./auth";
 export * from "./health";
 export * from "./pagination";

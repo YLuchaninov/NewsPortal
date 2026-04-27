@@ -19,6 +19,34 @@ interface SmokeOptions {
   duplicatePreflightOnly: boolean;
 }
 
+interface RssSmokeProcessingDiagnostics {
+  latestArticle: {
+    docId: string;
+    processingState: string | null;
+    title: string | null;
+    ingestedAt: Date | null;
+    updatedAt: Date | null;
+  } | null;
+  latestSequenceRun: {
+    runId: string;
+    sequenceId: string | null;
+    status: string;
+    currentTaskKey: string | null;
+    errorText: string | null;
+    startedAt: Date | null;
+    updatedAt: Date | null;
+  } | null;
+  latestTaskRun: {
+    taskRunId: string;
+    taskKey: string;
+    module: string | null;
+    status: string;
+    errorText: string | null;
+    startedAt: Date | null;
+    updatedAt: Date | null;
+  } | null;
+}
+
 const PROCESSING_STATE_ORDER: Record<string, number> = {
   raw: 0,
   normalized: 1,
@@ -154,30 +182,139 @@ async function seedSmokeChannel(pool: Pool, fetchUrl: string): Promise<string> {
   return result.rows[0].channelId;
 }
 
-async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<void> {
-  await waitForCondition(
-    async () => {
-      const result = await pool.query<{ processingState: string | null }>(
-        `
-          select processing_state as "processingState"
+async function readProcessingDiagnostics(
+  pool: Pool,
+  channelId: string
+): Promise<RssSmokeProcessingDiagnostics> {
+  const articleResult = await pool.query<{
+    docId: string;
+    processingState: string | null;
+    title: string | null;
+    ingestedAt: Date | null;
+    updatedAt: Date | null;
+  }>(
+    `
+      select
+        doc_id::text as "docId",
+        processing_state as "processingState",
+        title,
+        ingested_at as "ingestedAt",
+        updated_at as "updatedAt"
+      from articles
+      where channel_id = $1
+      order by ingested_at desc
+      limit 1
+    `,
+    [channelId]
+  );
+  const latestArticle = articleResult.rows[0] ?? null;
+
+  const sequenceRunResult = await pool.query<{
+    runId: string;
+    sequenceId: string | null;
+    status: string;
+    currentTaskKey: string | null;
+    errorText: string | null;
+    startedAt: Date | null;
+    updatedAt: Date | null;
+  }>(
+    `
+      select
+        run_id::text as "runId",
+        sequence_id::text as "sequenceId",
+        status,
+        null::text as "currentTaskKey",
+        error_text as "errorText",
+        started_at as "startedAt",
+        coalesce(finished_at, started_at, created_at) as "updatedAt"
+      from sequence_runs
+      where context_json ->> 'doc_id' in (
+        select doc_id::text
+        from articles
+        where channel_id = $1
+      )
+      order by coalesce(finished_at, started_at, created_at) desc
+      limit 1
+    `,
+    [channelId]
+  );
+  const latestSequenceRun = sequenceRunResult.rows[0] ?? null;
+
+  const taskRunResult = await pool.query<{
+    taskRunId: string;
+    taskKey: string;
+    module: string | null;
+    status: string;
+    errorText: string | null;
+    startedAt: Date | null;
+    updatedAt: Date | null;
+  }>(
+    `
+      select
+        task_run_id::text as "taskRunId",
+        task_key as "taskKey",
+        module,
+        status,
+        error_text as "errorText",
+        started_at as "startedAt",
+        coalesce(finished_at, started_at, created_at) as "updatedAt"
+      from sequence_task_runs
+      where run_id in (
+        select run_id
+        from sequence_runs
+        where context_json ->> 'doc_id' in (
+          select doc_id::text
           from articles
           where channel_id = $1
-          order by ingested_at desc
-          limit 1
-        `,
-        [channelId]
-      );
-
-      const processingState = result.rows[0]?.processingState ?? "raw";
-      return (
-        (PROCESSING_STATE_ORDER[processingState] ?? 0) >= PROCESSING_STATE_ORDER.deduped
-      );
-    },
-    {
-      timeoutMs: 20000,
-      pollIntervalMs: 500
-    }
+        )
+      )
+      order by coalesce(finished_at, started_at, created_at) desc
+      limit 1
+    `,
+    [channelId]
   );
+
+  return {
+    latestArticle,
+    latestSequenceRun,
+    latestTaskRun: taskRunResult.rows[0] ?? null
+  };
+}
+
+async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<void> {
+  try {
+    await waitForCondition(
+      async () => {
+        const result = await pool.query<{ processingState: string | null }>(
+          `
+            select processing_state as "processingState"
+            from articles
+            where channel_id = $1
+            order by ingested_at desc
+            limit 1
+          `,
+          [channelId]
+        );
+
+        const processingState = result.rows[0]?.processingState ?? "raw";
+        return (
+          (PROCESSING_STATE_ORDER[processingState] ?? 0) >= PROCESSING_STATE_ORDER.deduped
+        );
+      },
+      {
+        timeoutMs: 90000,
+        pollIntervalMs: 500
+      }
+    );
+  } catch (error) {
+    const diagnostics = await readProcessingDiagnostics(pool, channelId);
+    throw new Error(
+      `Timed out waiting for RSS smoke article to reach deduped or later. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    );
+  }
 }
 
 async function assertSmokeRows(

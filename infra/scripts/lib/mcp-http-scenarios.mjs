@@ -1,186 +1,36 @@
 import {
   mcpBaseUrl,
-  extractFirstObjectRow,
   postJson,
   readIdentifier,
   waitFor,
 } from "./mcp-http-testkit.mjs";
+import { randomUUID } from "node:crypto";
 import {
   assertFullShippedCoverage,
   buildMcpDocParityMatrix,
 } from "./mcp-http-doc-parity.mjs";
-
-export const DETERMINISTIC_SCENARIO_ORDER = [
-  "auth-and-token-lifecycle",
-  "protocol-discovery",
-  "template-interest-channel-flows",
-  "sequence-operator-flows",
-  "discovery-operator-flows",
-  "read-only-operator-needs",
-  "negative-scope-and-destructive-policy",
-  "request-log-and-audit-evidence",
-  "doc-parity-matrix",
-];
-
-export const DETERMINISTIC_SCENARIO_GROUPS = {
-  auth: ["auth-and-token-lifecycle"],
-  reads: ["protocol-discovery", "read-only-operator-needs", "doc-parity-matrix"],
-  writes: [
-    "template-interest-channel-flows",
-    "sequence-operator-flows",
-    "discovery-operator-flows",
-    "negative-scope-and-destructive-policy",
-    "request-log-and-audit-evidence",
-  ],
-  discovery: ["discovery-operator-flows", "read-only-operator-needs", "doc-parity-matrix"],
-};
-
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-
-function readJsonRpcErrorMessage(payload) {
-  return String(payload?.error?.message ?? payload?.error ?? "").trim();
-}
-
-function assertClientError(response, label) {
-  assert(
-    Number(response?.status ?? 0) >= 400 && Number(response?.status ?? 0) < 500,
-    `${label} should fail with a 4xx client error, got ${response?.status ?? "unknown"}.`
-  );
-}
-
-function normalizeStatus(value) {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-function hasContentArray(result) {
-  return Array.isArray(result?.result?.contents) && result.result.contents.length > 0;
-}
-
-function buildPromptArguments(name, runId) {
-  switch (name) {
-    case "operator.session.start":
-      return {
-        objective: `review article residual diagnostics ${runId}`,
-        domain: "article diagnostics",
-      };
-    case "sequences.session.plan":
-      return {
-        objective: `review deterministic sequence flows ${runId}`,
-      };
-    case "discovery.session.plan":
-      return {
-        objective: `review deterministic discovery flows ${runId}`,
-      };
-    case "system_interests.session.plan":
-      return {
-        topic: `operator residual tuning ${runId}`,
-      };
-    case "llm_templates.session.plan":
-      return {
-        templateIntent: `improve residual explainability guidance ${runId}`,
-      };
-    case "channels.session.plan":
-      return {
-        source: `deterministic source ${runId}`,
-      };
-    case "observability.session.plan":
-      return {
-        question: `why did deterministic MCP coverage change for ${runId}`,
-      };
-    case "system_interest.create":
-      return {
-        topic: `MCP operator monitoring ${runId}`,
-        audience: "operators",
-      };
-    case "system_interest.polish":
-      return {
-        interestName: `Operator interest ${runId}`,
-        residualPattern: "semantic_rejected repeated across explainable article residuals",
-      };
-    case "llm_template.tune":
-      return {
-        templateName: `Operator template ${runId}`,
-        residualPattern: "llm_review_pending repeated in gray-zone article residuals",
-      };
-    case "discovery.profile.tune":
-      return {
-        profileName: `Operator profile ${runId}`,
-        residualPattern: "gray_zone_hold repeated after recall-style candidate recovery",
-      };
-    case "discovery.mission.review":
-      return {
-        missionTitle: `Review live mission ${runId}`,
-        goal: "find net-new high-signal sources",
-      };
-    case "sequence.draft":
-      return {
-        objective: `validate deterministic MCP matrix ${runId}`,
-      };
-    case "cleanup.guidance":
-      return {
-        scope: `deterministic MCP HTTP proof ${runId}`,
-      };
-    default:
-      return {};
-  }
-}
-
-function readRows(payload) {
-  const row = extractFirstObjectRow(payload);
-  if (!row) {
-    return [];
-  }
-  const arrays = [];
-  const visit = (value) => {
-    if (!value || typeof value !== "object") {
-      return;
-    }
-    if (Array.isArray(value)) {
-      if (value.every((entry) => entry && typeof entry === "object" && !Array.isArray(entry))) {
-        arrays.push(value);
-      }
-      for (const entry of value) {
-        visit(entry);
-      }
-      return;
-    }
-    for (const nested of Object.values(value)) {
-      visit(nested);
-    }
-  };
-  visit(payload);
-  return arrays[0] ?? [];
-}
-
-function readFirstRow(payload) {
-  const rows = readRows(payload);
-  return rows[0] ?? null;
-}
-
-function pushEvidence(evidence, label, details) {
-  evidence.push({
-    label,
-    details,
-  });
-}
-
-function sqlLiteral(value) {
-  if (value === null || value === undefined) {
-    return "null";
-  }
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function firstResultLine(output) {
-  return String(output ?? "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean)[0] ?? "";
-}
+export {
+  DETERMINISTIC_SCENARIO_GROUPS,
+  DETERMINISTIC_SCENARIO_ORDER,
+} from "./mcp-http-scenario-catalog.mjs";
+import {
+  DETERMINISTIC_SCENARIO_GROUPS,
+  DETERMINISTIC_SCENARIO_ORDER,
+} from "./mcp-http-scenario-catalog.mjs";
+import {
+  assert,
+  assertClientError,
+  buildPromptArguments,
+  extractFirstObjectRow,
+  firstResultLine,
+  hasContentArray,
+  normalizeStatus,
+  pushEvidence,
+  readFirstRow,
+  readJsonRpcErrorMessage,
+  readRows,
+  sqlLiteral,
+} from "./mcp-http-scenario-utils.mjs";
 
 async function seedSyntheticDiscoveryCandidate(harness, { missionId, classKey }) {
   const suffix = harness.runId.slice(0, 8);
@@ -402,6 +252,267 @@ async function seedSyntheticDiscoveryCandidate(harness, { missionId, classKey })
     candidateId,
     hypothesisId,
     sourceProfileId,
+  };
+}
+
+async function seedContentAnalysisCanaryRows(harness) {
+  const subjectId = randomUUID();
+  const runKey = harness.runId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const provider = "mcp-canary";
+  const sourceHash = `mcp-${runKey}`;
+  const analysisIds = {};
+  for (const analysisType of ["ner", "sentiment", "category", "system_interest_label", "content_filter"]) {
+    analysisIds[analysisType] = firstResultLine(
+      await harness.queryPostgres(`
+        insert into content_analysis_results (
+          subject_type,
+          subject_id,
+          analysis_type,
+          provider,
+          model_key,
+          model_version,
+          status,
+          result_json,
+          confidence,
+          source_hash
+        )
+        values (
+          'article',
+          ${sqlLiteral(subjectId)},
+          ${sqlLiteral(analysisType)},
+          ${sqlLiteral(provider)},
+          ${sqlLiteral(`${analysisType}-canary-v1`)},
+          '1',
+          'completed',
+          ${sqlLiteral(JSON.stringify({ source: "mcp-http-deterministic", analysisType }))}::jsonb,
+          0.91,
+          ${sqlLiteral(`${sourceHash}-${analysisType}`)}
+        )
+        returning analysis_id::text;
+      `)
+    );
+    assert(analysisIds[analysisType], `Failed to seed ${analysisType} content analysis canary.`);
+  }
+
+  await harness.queryPostgres(`
+    insert into content_entities (
+      subject_type,
+      subject_id,
+      entity_text,
+      normalized_key,
+      entity_type,
+      salience,
+      confidence,
+      mention_count,
+      mentions_json,
+      provider,
+      model_key,
+      analysis_id
+    )
+    values
+      ('article', ${sqlLiteral(subjectId)}, 'OpenAI', 'openai', 'ORG', 0.9, 0.95, 1, '[{"offset":0,"length":6}]'::jsonb, ${sqlLiteral(provider)}, 'ner-canary-v1', ${sqlLiteral(analysisIds.ner)}),
+      ('article', ${sqlLiteral(subjectId)}, 'Warsaw', 'warsaw', 'GPE', 0.7, 0.9, 1, '[{"offset":12,"length":6}]'::jsonb, ${sqlLiteral(provider)}, 'ner-canary-v1', ${sqlLiteral(analysisIds.ner)})
+    on conflict do nothing;
+  `);
+
+  await harness.queryPostgres(`
+    insert into content_labels (
+      subject_type,
+      subject_id,
+      label_type,
+      label_key,
+      label_name,
+      decision,
+      score,
+      confidence,
+      explain_json,
+      analysis_id
+    )
+    values
+      ('article', ${sqlLiteral(subjectId)}, 'taxonomy', 'ai', 'AI', 'match', 0.88, 0.9, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.category)}),
+      ('article', ${sqlLiteral(subjectId)}, 'sentiment', 'positive', 'Positive', 'match', 0.72, 0.86, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
+      ('article', ${sqlLiteral(subjectId)}, 'tone', 'neutral', 'Neutral', 'match', 0.67, 0.8, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
+      ('article', ${sqlLiteral(subjectId)}, 'risk', 'low', 'Low risk', 'match', 0.2, 0.78, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
+      ('article', ${sqlLiteral(subjectId)}, 'system_interest', 'mcp_canary_interest', 'MCP Canary Interest', 'match', 0.81, 0.84, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.system_interest_label)})
+    on conflict do nothing;
+  `);
+
+  await harness.queryPostgres(`
+    insert into content_filter_results (
+      subject_type,
+      subject_id,
+      policy_key,
+      policy_version,
+      mode,
+      decision,
+      passed,
+      score,
+      matched_rules_json,
+      failed_rules_json,
+      explain_json
+    )
+    values (
+      'article',
+      ${sqlLiteral(subjectId)},
+      ${sqlLiteral(`mcp_canary_filter_${runKey}`)},
+      1,
+      'dry_run',
+      'keep',
+      true,
+      0.82,
+      '[{"rule":"canary"}]'::jsonb,
+      '[]'::jsonb,
+      '{"source":"mcp-canary"}'::jsonb
+    )
+    on conflict do nothing;
+  `);
+
+  harness.addCleanup("delete-content-analysis-canary-rows", async () => {
+    await harness.queryPostgres(`
+      delete from content_filter_results where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_labels where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_entities where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_analysis_results where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_filter_policies where policy_key = ${sqlLiteral(`mcp_canary_filter_policy_${runKey}`)};
+      delete from content_analysis_policies where policy_key = ${sqlLiteral(`mcp_canary_analysis_policy_${runKey}`)};
+      delete from content_analysis_policies where policy_key = ${sqlLiteral(`mcp_canary_structured_extraction_${runKey}`)};
+    `);
+  });
+
+  return {
+    subjectId,
+    analysisIds,
+    filterPolicyKey: `mcp_canary_filter_${runKey}`,
+    policyKeySuffix: runKey,
+  };
+}
+
+async function seedReadOnlyContentCanaryRows(harness) {
+  const suffix = harness.runId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const channelId = firstResultLine(
+    await harness.queryPostgres(`
+      insert into source_channels (
+        provider_type,
+        name,
+        external_id,
+        fetch_url,
+        homepage_url,
+        language,
+        is_active
+      )
+      values (
+        'rss',
+        ${sqlLiteral(`MCP read canary channel ${suffix}`)},
+        ${sqlLiteral(`mcp-read-canary-${suffix}`)},
+        ${sqlLiteral(`https://example.com/${suffix}/read-canary.xml`)},
+        'https://example.com',
+        'en',
+        true
+      )
+      on conflict (provider_type, external_id)
+      where external_id is not null
+      do update set name = excluded.name, is_active = true, updated_at = now()
+      returning channel_id::text;
+    `)
+  );
+  assert(channelId, "Failed to seed MCP read canary channel.");
+
+  const docId = firstResultLine(
+    await harness.queryPostgres(`
+      insert into articles (
+        channel_id,
+        source_article_id,
+        url,
+        published_at,
+        title,
+        lead,
+        body,
+        lang,
+        processing_state,
+        normalized_at,
+        deduped_at,
+        raw_payload_json
+      )
+      values (
+        ${sqlLiteral(channelId)},
+        ${sqlLiteral(`mcp-read-canary-${suffix}`)},
+        ${sqlLiteral(`https://example.com/${suffix}/article`)},
+        now(),
+        ${sqlLiteral(`MCP read canary article ${suffix}`)},
+        'Deterministic MCP read canary lead.',
+        'Deterministic MCP read canary body with enough text for read and explain paths.',
+        'en',
+        'deduped',
+        now(),
+        now(),
+        '{"source":"mcp-read-canary"}'::jsonb
+      )
+      on conflict (channel_id, source_article_id)
+      where source_article_id is not null
+      do update
+      set title = excluded.title, updated_at = now()
+      returning doc_id::text;
+    `)
+  );
+  assert(docId, "Failed to seed MCP read canary article.");
+
+  const resourceId = firstResultLine(
+    await harness.queryPostgres(`
+      insert into web_resources (
+        channel_id,
+        external_resource_id,
+        url,
+        normalized_url,
+        final_url,
+        resource_kind,
+        discovery_source,
+        title,
+        summary,
+        body,
+        lang,
+        extraction_state,
+        classification_json,
+        attributes_json,
+        raw_payload_json
+      )
+      values (
+        ${sqlLiteral(channelId)},
+        ${sqlLiteral(`mcp-read-canary-resource-${suffix}`)},
+        ${sqlLiteral(`https://example.com/${suffix}/resource`)},
+        ${sqlLiteral(`https://example.com/${suffix}/resource`)},
+        ${sqlLiteral(`https://example.com/${suffix}/resource`)},
+        'editorial',
+        'website',
+        ${sqlLiteral(`MCP read canary resource ${suffix}`)},
+        'Deterministic MCP read canary resource summary.',
+        'Deterministic MCP read canary resource body.',
+        'en',
+        'enriched',
+        '{"kind":"editorial"}'::jsonb,
+        '{"source":"mcp-read-canary"}'::jsonb,
+        '{"source":"mcp-read-canary"}'::jsonb
+      )
+      on conflict (channel_id, external_resource_id)
+      do update
+      set title = excluded.title, updated_at = now()
+      returning resource_id::text;
+    `)
+  );
+  assert(resourceId, "Failed to seed MCP read canary web resource.");
+
+  harness.addCleanup("delete-read-only-content-canary-rows", async () => {
+    await harness.queryPostgres(`
+      delete from web_resources where resource_id = ${sqlLiteral(resourceId)};
+      delete from articles where doc_id = ${sqlLiteral(docId)};
+      delete from source_channels where channel_id = ${sqlLiteral(channelId)};
+    `);
+  });
+
+  return {
+    channelId,
+    docId,
+    contentItemId: `editorial:${docId}`,
+    resourceId,
   };
 }
 
@@ -1258,9 +1369,214 @@ function buildReadToolCalls() {
   ];
 }
 
+async function scenarioContentAnalysisOperatorFlows(harness) {
+  const evidence = [];
+  const token = harness.tokens.automation.token;
+  const canary = await seedContentAnalysisCanaryRows(harness);
+  const analysisId = canary.analysisIds.ner;
+
+  const analysisList = await harness.mcpToolCall(token, "content_analysis.list", {
+    page: 1,
+    pageSize: 20,
+    subjectType: "article",
+    subjectId: canary.subjectId,
+  });
+  assert(readRows(analysisList).length > 0, "content_analysis.list should expose seeded canary rows.");
+  await harness.mcpToolCall(token, "content_analysis.read", { analysisId });
+
+  const entityList = await harness.mcpToolCall(token, "content_entities.list", {
+    page: 1,
+    pageSize: 20,
+    subjectType: "article",
+    subjectId: canary.subjectId,
+  });
+  assert(readRows(entityList).length > 0, "content_entities.list should expose seeded canary entities.");
+
+  const labelList = await harness.mcpToolCall(token, "content_labels.list", {
+    page: 1,
+    pageSize: 20,
+    subjectType: "article",
+    subjectId: canary.subjectId,
+  });
+  assert(readRows(labelList).length > 0, "content_labels.list should expose seeded canary labels.");
+
+  const filterResults = await harness.mcpToolCall(token, "content_filter_results.list", {
+    page: 1,
+    pageSize: 20,
+    subjectType: "article",
+    subjectId: canary.subjectId,
+  });
+  assert(readRows(filterResults).length > 0, "content_filter_results.list should expose seeded dry-run canary results.");
+
+  await harness.mcpToolCall(token, "content_analysis_policies.list", {
+    page: 1,
+    pageSize: 20,
+    module: "ner",
+  });
+  await harness.mcpToolCall(token, "content_analysis_policies.list", {
+    page: 1,
+    pageSize: 20,
+    module: "structured_extraction",
+  });
+  const analysisPolicy = await harness.mcpToolCall(token, "content_analysis_policies.create", {
+    payload: {
+      policyKey: `mcp_canary_analysis_policy_${canary.policyKeySuffix}`,
+      title: `MCP Canary Analysis Policy ${harness.runId}`,
+      description: "Inactive deterministic MCP content-analysis policy canary.",
+      scopeType: "manual",
+      module: "ner",
+      enabled: false,
+      mode: "observe",
+      provider: "unsupported-canary",
+      modelKey: "no-dispatch-canary",
+      modelVersion: "1",
+      configJson: {
+        maxTextChars: 50000,
+        canary: true,
+      },
+      failurePolicy: "skip",
+      priority: 997,
+      version: 1,
+      isActive: false,
+    },
+  });
+  const policyId = readIdentifier(analysisPolicy, ["policy_id", "policyId"]);
+  assert(policyId, "content_analysis_policies.create must return policy id.");
+  await harness.mcpToolCall(token, "content_analysis_policies.read", { policyId });
+  await harness.mcpToolCall(token, "content_analysis_policies.update", {
+    policyId,
+    payload: {
+      title: `MCP Canary Analysis Policy ${harness.runId} updated`,
+      description: "Updated inactive deterministic MCP content-analysis policy canary.",
+      isActive: false,
+      priority: 998,
+    },
+  });
+  await harness.mcpToolCall(token, "content_analysis_policies.read", { policyId });
+
+  const structuredPolicy = await harness.mcpToolCall(token, "content_analysis_policies.create", {
+    payload: {
+      policyKey: `mcp_canary_structured_extraction_${canary.policyKeySuffix}`,
+      title: `MCP Canary Structured Extraction ${harness.runId}`,
+      description: "Inactive configurable structured extraction template canary.",
+      scopeType: "manual",
+      module: "structured_extraction",
+      enabled: false,
+      mode: "observe",
+      provider: "gemini",
+      modelKey: "gemini-canary-no-dispatch",
+      modelVersion: "1",
+      configJson: {
+        templateKey: "mcp_canary_structured_extraction",
+        maxTextChars: 50000,
+        instructions: "Extract only facts explicitly supported by source text.",
+        entityTypes: [
+          {
+            type: "job_opening",
+            fields: [
+              { key: "company", type: "string", project: ["entity", "label"] },
+              { key: "role", type: "string", project: ["label"] },
+            ],
+          },
+        ],
+      },
+      failurePolicy: "skip",
+      priority: 996,
+      version: 1,
+      isActive: false,
+    },
+  });
+  const structuredPolicyId = readIdentifier(structuredPolicy, ["policy_id", "policyId"]);
+  assert(structuredPolicyId, "content_analysis_policies.create must return structured extraction policy id.");
+  await harness.mcpToolCall(token, "content_analysis_policies.read", { policyId: structuredPolicyId });
+  await harness.mcpToolCall(token, "content_analysis_policies.update", {
+    policyId: structuredPolicyId,
+    payload: {
+      title: `MCP Canary Structured Extraction ${harness.runId} updated`,
+      isActive: false,
+      priority: 999,
+    },
+  });
+
+  await harness.mcpToolCall(token, "content_filter_policies.list", {
+    page: 1,
+    pageSize: 20,
+  });
+  const filterPolicy = await harness.mcpToolCall(token, "content_filter_policies.create", {
+    payload: {
+      policyKey: `mcp_canary_filter_policy_${canary.policyKeySuffix}`,
+      title: `MCP Canary Filter Policy ${harness.runId}`,
+      description: "Inactive dry-run deterministic MCP content-filter policy canary.",
+      scopeType: "manual",
+      mode: "dry_run",
+      combiner: "all",
+      policyJson: {
+        rules: [
+          {
+            type: "label_required",
+            labelType: "taxonomy",
+            labelKey: "ai",
+          },
+        ],
+      },
+      version: 1,
+      isActive: false,
+      priority: 997,
+    },
+  });
+  const filterPolicyId = readIdentifier(filterPolicy, ["filter_policy_id", "filterPolicyId"]);
+  assert(filterPolicyId, "content_filter_policies.create must return filter policy id.");
+  await harness.mcpToolCall(token, "content_filter_policies.read", { filterPolicyId });
+  await harness.mcpToolCall(token, "content_filter_policies.update", {
+    filterPolicyId,
+    payload: {
+      title: `MCP Canary Filter Policy ${harness.runId} updated`,
+      description: "Updated inactive dry-run deterministic MCP content-filter policy canary.",
+      isActive: false,
+      priority: 998,
+    },
+  });
+  await harness.mcpToolCall(token, "content_filter_policies.read", { filterPolicyId });
+  const preview = await harness.mcpToolCall(token, "content_filter_policies.preview", {
+    filterPolicyId,
+    payload: {
+      limit: 1,
+    },
+  });
+  assert(preview && typeof preview === "object", "content_filter_policies.preview should return an object.");
+
+  const backfill = await harness.mcpToolCall(token, "content_analysis.backfill.request", {
+    payload: {
+      subjectTypes: ["article"],
+      modules: ["ner", "structured_extraction"],
+      missingOnly: true,
+      batchSize: 1,
+      maxTextChars: 50000,
+    },
+  });
+  const reindexJobId = readIdentifier(backfill, ["reindexJobId", "reindex_job_id"]);
+  assert(reindexJobId, "content_analysis.backfill.request must return reindexJobId.");
+
+  pushEvidence(evidence, "content-analysis-canary", {
+    subjectId: canary.subjectId,
+    analysisId,
+    policyId,
+    structuredPolicyId,
+    filterPolicyId,
+    reindexJobId,
+  });
+
+  return {
+    key: "content-analysis-operator-flows",
+    summary: "Covered content-analysis reads, inactive policy writes, dry-run filter preview/results, and backfill queueing through HTTP MCP.",
+    evidence,
+  };
+}
+
 async function scenarioReadOnlyOperatorNeeds(harness) {
   const evidence = [];
   const token = harness.tokens.analyst.token;
+  const readOnlyCanary = await seedReadOnlyContentCanaryRows(harness);
   const results = [];
   const listResults = {};
   let articleList = null;
@@ -1386,7 +1702,8 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
   }
 
   const firstWebResource = readFirstRow(webResourceList ?? {});
-  const resourceId = readIdentifier(firstWebResource, ["resource_id", "resourceId"]);
+  const resourceId =
+    readIdentifier(firstWebResource, ["resource_id", "resourceId"]) || readOnlyCanary.resourceId;
   if (resourceId) {
     await harness.mcpToolCall(token, "web_resources.read", {
       resourceId,
@@ -1394,7 +1711,7 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
   }
 
   const firstArticle = readFirstRow(articleList ?? {});
-  const articleDocId = readIdentifier(firstArticle, ["doc_id", "docId"]);
+  const articleDocId = readIdentifier(firstArticle, ["doc_id", "docId"]) || readOnlyCanary.docId;
   if (articleDocId) {
     await harness.mcpToolCall(token, "articles.read", {
       docId: articleDocId,
@@ -1405,7 +1722,8 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
   }
 
   const firstContentItem = readFirstRow(contentItemList ?? {});
-  const contentItemId = readIdentifier(firstContentItem, ["content_item_id", "contentItemId"]);
+  const contentItemId =
+    readIdentifier(firstContentItem, ["content_item_id", "contentItemId"]) || readOnlyCanary.contentItemId;
   if (contentItemId) {
     await harness.mcpToolCall(token, "content_items.read", {
       contentItemId,
@@ -1711,7 +2029,10 @@ async function scenarioRequestLogAndAuditEvidence(harness) {
       'discovery_profile',
       'discovery_mission',
       'discovery_hypothesis_class',
-      'discovery_recall_candidate'
+      'discovery_recall_candidate',
+      'content_analysis_policy',
+      'content_filter_policy',
+      'reindex_job'
     )
     order by created_at desc
     limit 60
@@ -1779,6 +2100,7 @@ export const DETERMINISTIC_SCENARIOS = {
   "template-interest-channel-flows": scenarioTemplateInterestChannelFlows,
   "sequence-operator-flows": scenarioSequenceOperatorFlows,
   "discovery-operator-flows": scenarioDiscoveryOperatorFlows,
+  "content-analysis-operator-flows": scenarioContentAnalysisOperatorFlows,
   "read-only-operator-needs": scenarioReadOnlyOperatorNeeds,
   "negative-scope-and-destructive-policy": scenarioNegativeScopeAndDestructivePolicy,
   "request-log-and-audit-evidence": scenarioRequestLogAndAuditEvidence,

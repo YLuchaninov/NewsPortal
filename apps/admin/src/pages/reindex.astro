@@ -44,8 +44,13 @@ function readProgressLabel(job: ReindexRow): string | null {
   if (!progress || typeof progress !== "object") {
     return null;
   }
-  const processed = Number((progress as Record<string, unknown>).processedArticles ?? NaN);
-  const total = Number((progress as Record<string, unknown>).totalArticles ?? NaN);
+  const progressRecord = progress as Record<string, unknown>;
+  const processed = Number(
+    progressRecord.processedArticles ?? progressRecord.processedContentItems ?? NaN
+  );
+  const total = Number(
+    progressRecord.totalArticles ?? progressRecord.totalContentItems ?? NaN
+  );
   if (!Number.isFinite(processed) || !Number.isFinite(total) || total <= 0) {
     return null;
   }
@@ -114,8 +119,12 @@ const initialJobs = {
     const progress = optionsJson && typeof optionsJson === "object"
       ? ((optionsJson as Record<string, unknown>).progress as Record<string, unknown> | undefined)
       : undefined;
-    const processedArticles = progress ? Number(progress.processedArticles ?? NaN) : NaN;
-    const totalArticles = progress ? Number(progress.totalArticles ?? NaN) : NaN;
+    const processedArticles = progress
+      ? Number(progress.processedArticles ?? progress.processedContentItems ?? NaN)
+      : NaN;
+    const totalArticles = progress
+      ? Number(progress.totalArticles ?? progress.totalContentItems ?? NaN)
+      : NaN;
     return {
       reindexJobId: String(job.reindex_job_id ?? ""),
       indexName: String(job.index_name ?? "—"),

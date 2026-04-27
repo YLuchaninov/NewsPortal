@@ -105,6 +105,13 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
         icon: "users",
         summary: "On-behalf per-user matching and compile-aware targeting.",
       },
+      {
+        href: "/analysis",
+        label: "Analysis",
+        key: "analysis",
+        icon: "activity",
+        summary: "Content analysis results, entities, labels, and gate policies.",
+      },
     ],
   },
   {

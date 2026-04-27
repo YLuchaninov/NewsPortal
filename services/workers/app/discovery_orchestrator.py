@@ -1,22 +1,51 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import datetime
+from decimal import Decimal
 from math import sqrt
 from typing import Any
-from urllib.parse import urlparse
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
+from .discovery_candidate_evaluation import (
+    assessment_map as _candidate_assessment_map,
+    candidate_rows_from_context as _candidate_rows_from_context,
+)
+from .discovery_cost_helpers import (
+    meta_cost_usd as _meta_cost_usd,
+    meta_input_tokens as _meta_input_tokens,
+    meta_output_tokens as _meta_output_tokens,
+    meta_request_count as _meta_request_count,
+    should_log_external_call as _should_log_external_call,
+)
 from .discovery_policy import (
     build_policy_review,
     classify_pre_probe_negative,
     normalize_runtime_discovery_policy,
+)
+from .discovery_recall_runtime import (
+    canonical_origin_url as _canonical_origin_url,
+    looks_like_feed_candidate_url as _looks_like_feed_candidate_url,
+    normalize_domain_seed as _normalize_domain_seed,
+    probe_failure_rows as _probe_failure_rows,
+    recall_candidate_rows_from_probe_results as _recall_candidate_rows_from_probe_results,
+)
+from .discovery_runtime_settings import (
+    DEFAULT_DISCOVERY_CRON as _DEFAULT_DISCOVERY_CRON,
+    USD_TO_CENTS as _USD_TO_CENTS,
+    DiscoverySettings,
+    coerce_discovery_cost_usd,
+    discovery_cost_usd_to_cents,
+    discovery_month_start_utc,
+    load_discovery_settings as _load_discovery_settings,
+    mission_budget_exhausted as _mission_budget_exhausted,
+    monthly_quota_reached as _monthly_quota_reached,
+    read_int_env,
+    read_optional_probability_env,
+    read_text_env,
 )
 from .source_scoring import (
     build_gap_filling_hypotheses,
@@ -40,9 +69,10 @@ from .task_engine.repository import PostgresSequenceRepository, build_database_u
 DISCOVERY_ORCHESTRATOR_SEQUENCE_ID = "0a8e8ec5-6cab-4d8b-9c28-0a1d6245bf17"
 DISCOVERY_RSS_PIPELINE_SEQUENCE_ID = "1cb1bfec-d42b-4607-a8f0-8e3f671f0978"
 DISCOVERY_WEBSITE_PIPELINE_SEQUENCE_ID = "c7e0a3a2-8f0c-4a76-bf35-fd7d1f44774d"
-DEFAULT_DISCOVERY_CRON = "0 */6 * * *"
-_ZERO_USD = Decimal("0")
-_USD_TO_CENTS = Decimal("100")
+DEFAULT_DISCOVERY_CRON = _DEFAULT_DISCOVERY_CRON
+_read_int_env = read_int_env
+_read_optional_probability_env = read_optional_probability_env
+_read_text_env = read_text_env
 DEFAULT_DISCOVERY_PROVIDER_TYPES = ["rss", "website", "api", "email_imap", "youtube"]
 DISCOVERY_QUERY_FAMILY_TERMS = {
     "official_blog": "official blog",
@@ -73,98 +103,8 @@ LEAD_SIGNAL_QUERY_FAMILIES = {
 }
 
 
-def _read_int_env(name: str, default: int) -> int:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-    try:
-        return max(0, int(raw_value))
-    except ValueError:
-        return default
-
-
-def _read_optional_probability_env(name: str) -> float | None:
-    raw_value = os.getenv(name)
-    if raw_value is None or not raw_value.strip():
-        return None
-    try:
-        parsed = float(raw_value)
-    except ValueError:
-        return None
-    if parsed < 0 or parsed > 1:
-        return None
-    return parsed
-
-
-def _read_text_env(primary_name: str, fallback_name: str, default: str) -> str:
-    primary = os.getenv(primary_name)
-    if primary is not None and primary.strip():
-        return primary.strip()
-    fallback = os.getenv(fallback_name)
-    if fallback is not None and fallback.strip():
-        return fallback.strip()
-    return default
-
-
-def coerce_discovery_cost_usd(value: Any) -> Decimal:
-    if value is None:
-        return _ZERO_USD
-    if isinstance(value, Decimal):
-        return value if value >= _ZERO_USD else _ZERO_USD
-    try:
-        parsed = Decimal(str(value).strip())
-    except (InvalidOperation, AttributeError):
-        return _ZERO_USD
-    return parsed if parsed >= _ZERO_USD else _ZERO_USD
-
-
-def discovery_cost_usd_to_cents(value: Any) -> int:
-    normalized = coerce_discovery_cost_usd(value)
-    return int((normalized * _USD_TO_CENTS).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-
-
-def discovery_month_start_utc(now: datetime | None = None) -> datetime:
-    current = now.astimezone(timezone.utc) if now is not None else datetime.now(timezone.utc)
-    return current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-
-@dataclass(frozen=True)
-class DiscoverySettings:
-    cron: str = DEFAULT_DISCOVERY_CRON
-    default_budget_cents: int = 500
-    default_auto_approve_threshold: float | None = None
-    max_hypotheses_per_run: int = 20
-    default_max_sources: int = 20
-    search_provider: str = "ddgs"
-    monthly_budget_cents: int = 0
-    ddgs_backend: str = "auto"
-    ddgs_region: str = "us-en"
-    ddgs_safesearch: str = "moderate"
-    llm_provider: str = "gemini"
-    llm_model: str = "gemini-2.0-flash"
-
-
 def load_discovery_settings() -> DiscoverySettings:
-    return DiscoverySettings(
-        cron=os.getenv("DISCOVERY_CRON", DEFAULT_DISCOVERY_CRON).strip() or DEFAULT_DISCOVERY_CRON,
-        default_budget_cents=_read_int_env("DISCOVERY_BUDGET_CENTS_DEFAULT", 500),
-        default_auto_approve_threshold=_read_optional_probability_env(
-            "DISCOVERY_AUTO_APPROVE_THRESHOLD"
-        ),
-        max_hypotheses_per_run=max(1, _read_int_env("DISCOVERY_MAX_HYPOTHESES_PER_RUN", 20)),
-        default_max_sources=max(1, _read_int_env("DISCOVERY_MAX_SOURCES_DEFAULT", 20)),
-        search_provider=(os.getenv("DISCOVERY_SEARCH_PROVIDER", "ddgs").strip() or "ddgs"),
-        monthly_budget_cents=_read_int_env("DISCOVERY_MONTHLY_BUDGET_CENTS", 0),
-        ddgs_backend=os.getenv("DISCOVERY_DDGS_BACKEND", "auto").strip() or "auto",
-        ddgs_region=os.getenv("DISCOVERY_DDGS_REGION", "us-en").strip() or "us-en",
-        ddgs_safesearch=os.getenv("DISCOVERY_DDGS_SAFESEARCH", "moderate").strip() or "moderate",
-        llm_provider="gemini",
-        llm_model=_read_text_env(
-            "DISCOVERY_GEMINI_MODEL",
-            "GEMINI_MODEL",
-            "gemini-2.0-flash",
-        ),
-    )
+    return _load_discovery_settings()
 
 
 def _normalize_text_list(value: Any) -> list[str]:
@@ -212,52 +152,8 @@ def _coerce_mapping_list(value: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _meta_request_count(meta: dict[str, Any]) -> int:
-    try:
-        return max(0, int(meta.get("request_count") or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _meta_input_tokens(meta: dict[str, Any]) -> int | None:
-    try:
-        parsed = int(meta.get("prompt_tokens"))
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed >= 0 else None
-
-
-def _meta_output_tokens(meta: dict[str, Any]) -> int | None:
-    try:
-        parsed = int(meta.get("completion_tokens"))
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed >= 0 else None
-
-
-def _meta_cost_usd(meta: dict[str, Any]) -> Decimal:
-    return coerce_discovery_cost_usd(meta.get("cost_usd"))
-
-
-def _should_log_external_call(meta: dict[str, Any]) -> bool:
-    return (
-        _meta_request_count(meta) > 0
-        or _meta_cost_usd(meta) > _ZERO_USD
-        or _meta_input_tokens(meta) is not None
-        or _meta_output_tokens(meta) is not None
-    )
-
-
-def _monthly_quota_reached(*, settings: DiscoverySettings, month_to_date_cost_usd: Decimal) -> bool:
-    if settings.monthly_budget_cents <= 0:
-        return False
-    return month_to_date_cost_usd >= (Decimal(settings.monthly_budget_cents) / _USD_TO_CENTS)
-
-
-def _mission_budget_exhausted(*, budget_cents: int, spent_usd: Decimal) -> bool:
-    if budget_cents <= 0:
-        return False
-    return spent_usd >= (Decimal(budget_cents) / _USD_TO_CENTS)
+def _assessment_map(llm_analysis: Any) -> dict[str, dict[str, Any]]:
+    return _candidate_assessment_map(llm_analysis)
 
 
 def _validate_interest_graph(candidate: Any) -> dict[str, Any]:
@@ -2625,152 +2521,6 @@ async def compile_interest_graph_for_mission(
     return graph
 
 
-def _assessment_map(llm_analysis: Any) -> dict[str, dict[str, Any]]:
-    mapping: dict[str, dict[str, Any]] = {}
-    for item in _coerce_mapping_list(llm_analysis):
-        source_url = item.get("source_url") or item.get("url")
-        if isinstance(source_url, str) and source_url.strip():
-            mapping[source_url.strip()] = dict(item)
-    return mapping
-
-
-def _candidate_rows_from_context(
-    *,
-    mission_id: str,
-    hypothesis_id: str,
-    provider_type: str,
-    context: dict[str, Any],
-    existing_source_channels: dict[str, str],
-) -> list[dict[str, Any]]:
-    scored_sources = {
-        str(item.get("source_url") or ""): dict(item)
-        for item in _coerce_mapping_list(context.get("scored_sources"))
-    }
-    sampled_content = {
-        str(item.get("source_url") or ""): dict(item)
-        for item in _coerce_mapping_list(context.get("sampled_content"))
-    }
-    llm_assessments = _assessment_map(context.get("llm_analysis"))
-    search_meta = dict(context.get("search_meta") or {}) if isinstance(context.get("search_meta"), dict) else {}
-    base_rows = context.get("probed_feeds") if provider_type == "rss" else context.get("probed_websites")
-    if not isinstance(base_rows, list):
-        return []
-
-    candidates: list[dict[str, Any]] = []
-    for row in base_rows:
-        if not isinstance(row, dict):
-            continue
-        source_url = str(
-            row.get("feed_url")
-            or row.get("url")
-            or row.get("final_url")
-            or ""
-        ).strip()
-        if not source_url:
-            continue
-        scored = scored_sources.get(source_url, {})
-        llm = llm_assessments.get(source_url, {})
-        discovered_feed_urls = row.get("discovered_feed_urls") or row.get("hidden_rss_urls") or []
-        classification = row.get("classification") if isinstance(row.get("classification"), dict) else {}
-        capabilities = row.get("capabilities") if isinstance(row.get("capabilities"), dict) else {}
-        browser_assisted_recommended = bool(row.get("browser_assisted_recommended"))
-        challenge_kind = str(row.get("challenge_kind") or "").strip() or None
-        effective_url = source_url
-        effective_provider = provider_type
-        normalized = normalize_url(effective_url)
-        existing_channel_id = existing_source_channels.get(normalized)
-        status = "duplicate" if existing_channel_id else "pending"
-        candidates.append(
-            {
-                "mission_id": mission_id,
-                "hypothesis_id": hypothesis_id,
-                "url": effective_url,
-                "final_url": str(row.get("final_url") or source_url or effective_url),
-                "title": str(row.get("feed_title") or row.get("title") or ""),
-                "description": str(llm.get("reasoning") or ""),
-                "provider_type": effective_provider,
-                "is_valid": bool(
-                    row.get(
-                        "is_valid_rss",
-                        False if row.get("error_text") else True,
-                    )
-                ),
-                "relevance_score": clamp_score(
-                    llm.get("relevance")
-                    or scored.get("relevance_score")
-                    or 0.0
-                ),
-                "evaluation_json": {
-                    "matched_terms": scored.get("matched_terms") or [],
-                    "passes_threshold": bool(scored.get("passes_threshold", False)),
-                    "search_provider": str(search_meta.get("provider") or ""),
-                    "classification": classification,
-                    "capabilities": capabilities,
-                    "discovered_feed_urls": [
-                        item for item in discovered_feed_urls if isinstance(item, str) and item.strip()
-                    ],
-                    "browser_assisted_recommended": browser_assisted_recommended,
-                    "challenge_kind": challenge_kind,
-                },
-                "llm_assessment": llm,
-                "sample_data": (
-                    row.get("sample_entries")
-                    or row.get("sample_resources")
-                    or row.get("sample_articles")
-                    or sampled_content.get(source_url, {}).get("articles")
-                    or []
-                ),
-                "status": status,
-                "registered_channel_id": existing_channel_id,
-                "rejection_reason": "already_known_source" if status == "duplicate" else None,
-            }
-        )
-    return candidates
-
-
-def _canonical_origin_url(url: str) -> str:
-    raw = str(url or "").strip()
-    if not raw:
-        return ""
-    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
-    hostname = (parsed.netloc or parsed.path or "").strip().lower()
-    if not hostname:
-        return ""
-    return f"{parsed.scheme or 'https'}://{hostname}"
-
-
-def _looks_like_feed_candidate_url(url: str) -> bool:
-    raw = str(url or "").strip()
-    if not raw:
-        return False
-    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
-    hostname = (parsed.netloc or parsed.path or "").lower()
-    path = (parsed.path or "").lower()
-    query = (parsed.query or "").lower()
-    candidate = " ".join(part for part in (hostname, path, query) if part)
-    feed_hints = (
-        "feed",
-        "feeds",
-        "rss",
-        "atom",
-        ".xml",
-        "feedburner",
-    )
-    return any(hint in candidate for hint in feed_hints)
-
-
-def _normalize_domain_seed(value: Any) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    if "://" in raw:
-        return canonical_domain(raw)
-    candidate = raw.lower().strip().strip("/")
-    if candidate.startswith("www."):
-        candidate = candidate[4:]
-    return candidate
-
-
 def _build_recall_search_plans(
     *,
     mission: dict[str, Any],
@@ -2911,131 +2661,6 @@ def _seed_probe_targets_for_recall_mission(
                 },
             )
     return targets
-
-
-def _recall_candidate_rows_from_probe_results(
-    *,
-    recall_mission_id: str,
-    provider_type: str,
-    probe_rows: list[dict[str, Any]],
-    probe_targets: dict[str, dict[str, Any]],
-    existing_source_channels: dict[str, str],
-) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    for row in probe_rows:
-        if not isinstance(row, dict):
-            continue
-        probe_input_url = str(row.get("url") or row.get("feed_url") or row.get("final_url") or "").strip()
-        resolved_url = str(
-            row.get("feed_url")
-            or row.get("final_url")
-            or row.get("url")
-            or ""
-        ).strip()
-        candidate_url = (
-            _canonical_origin_url(resolved_url or probe_input_url)
-            if provider_type == "website"
-            else (resolved_url or probe_input_url)
-        )
-        if not candidate_url:
-            continue
-        canonical_domain_value = canonical_domain(candidate_url)
-        if canonical_domain_value == "unknown":
-            continue
-        target_meta = probe_targets.get(normalize_url(probe_input_url)) or probe_targets.get(
-            normalize_url(candidate_url)
-        ) or {}
-        sample_data = (
-            row.get("sample_entries")
-            or row.get("sample_resources")
-            or row.get("sample_articles")
-            or []
-        )
-        is_valid = bool(
-            row.get("is_valid_rss")
-            if provider_type == "rss"
-            else not row.get("error_text")
-        )
-        existing_channel_id = existing_source_channels.get(normalize_url(candidate_url))
-        status = "duplicate" if existing_channel_id else (
-            "pending" if is_valid else "rejected"
-        )
-        rejection_reason = None
-        if status == "duplicate":
-            rejection_reason = "already_known_source"
-        elif not is_valid:
-            rejection_reason = "invalid_feed" if provider_type == "rss" else "probe_failed"
-        discovered_feed_urls = row.get("discovered_feed_urls") or row.get("hidden_rss_urls") or []
-        evaluation_json = {
-            "classification": row.get("classification") if isinstance(row.get("classification"), dict) else {},
-            "capabilities": row.get("capabilities") if isinstance(row.get("capabilities"), dict) else {},
-            "discovered_feed_urls": [
-                item for item in discovered_feed_urls if isinstance(item, str) and item.strip()
-            ],
-            "browser_assisted_recommended": bool(row.get("browser_assisted_recommended")),
-            "challenge_kind": str(row.get("challenge_kind") or "").strip() or None,
-            "error_text": str(row.get("error_text") or "").strip() or None,
-            "is_valid": is_valid,
-            "sample_data": sample_data if isinstance(sample_data, list) else [],
-            "probe_input_url": probe_input_url or candidate_url,
-            "seed_type": target_meta.get("seed_type"),
-            "seed_value": target_meta.get("seed_value"),
-            "search_query": target_meta.get("search_query"),
-            "search_provider": target_meta.get("search_provider"),
-            "search_result_title": target_meta.get("search_result_title"),
-            "search_snippet": target_meta.get("search_snippet"),
-            "query_family": target_meta.get("query_family"),
-        }
-        title = str(row.get("feed_title") or row.get("title") or target_meta.get("search_result_title") or "")
-        description = str(
-            target_meta.get("search_snippet")
-            or row.get("error_text")
-            or ""
-        )
-        candidates.append(
-            {
-                "recall_mission_id": recall_mission_id,
-                "canonical_domain": canonical_domain_value,
-                "url": candidate_url,
-                "final_url": str(row.get("final_url") or resolved_url or candidate_url),
-                "title": title,
-                "description": description,
-                "provider_type": provider_type,
-                "status": status,
-                "registered_channel_id": existing_channel_id,
-                "quality_signal_source": target_meta.get("quality_signal_source") or "recall_acquisition",
-                "evaluation_json": evaluation_json,
-                "rejection_reason": rejection_reason,
-                "created_by": "independent_recall:agent",
-            }
-        )
-    return candidates
-
-
-def _probe_failure_rows(
-    *,
-    provider_type: str,
-    probe_urls: list[str],
-    error_text: str,
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    normalized_error_text = str(error_text or "").strip() or "probe_failed"
-    for probe_url in probe_urls:
-        if not isinstance(probe_url, str) or not probe_url.strip():
-            continue
-        row: dict[str, Any] = {
-            "url": probe_url,
-            "error_text": normalized_error_text,
-        }
-        if provider_type == "rss":
-            row["feed_url"] = probe_url
-            row["is_valid_rss"] = False
-            row["sample_entries"] = []
-        else:
-            row["final_url"] = probe_url
-            row["sample_resources"] = []
-        rows.append(row)
-    return rows
 
 
 async def plan_hypotheses(

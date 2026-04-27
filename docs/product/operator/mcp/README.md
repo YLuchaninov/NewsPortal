@@ -15,6 +15,7 @@ Use it when you need to:
 - connect a real MCP client to NewsPortal;
 - issue a NewsPortal MCP token and wire it into a client config;
 - smoke-test `GET /mcp` and JSON-RPC calls directly over HTTP;
+- inspect, configure and replay content analysis evidence through `content_analysis.*`, `content_analysis_policies.*`, `content_analysis.backfill.request`, `content_entities.*`, `content_labels.*`, `content_filter_policies.*` and `content_filter_results.*`; default backfill modules include `ner`, `sentiment`, `category`, `cluster_summary`, `system_interest_labels` and `content_filter`; `structured_extraction` is available as an explicit opt-in module because active Gemini-backed templates can call an LLM; local analysis policies tune bounded deterministic `config_json` keys;
 - understand which checks are local-only and which ones are safe for shared or remote environments.
 
 ## What lives here

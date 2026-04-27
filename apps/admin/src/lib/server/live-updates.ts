@@ -271,8 +271,12 @@ function readProgressValues(job: JsonRecord): {
 } {
   const options = asRecord(job.options_json);
   const progress = asRecord(options.progress);
-  const processedArticles = Number(progress.processedArticles ?? NaN);
-  const totalArticles = Number(progress.totalArticles ?? NaN);
+  const processedArticles = Number(
+    progress.processedArticles ?? progress.processedContentItems ?? NaN
+  );
+  const totalArticles = Number(
+    progress.totalArticles ?? progress.totalContentItems ?? NaN
+  );
 
   if (
     !Number.isFinite(processedArticles) ||

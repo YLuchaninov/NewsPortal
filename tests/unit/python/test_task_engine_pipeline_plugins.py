@@ -1,9 +1,45 @@
 import http.client
 import io
+import sys
+import types
 import unittest
 from typing import Any
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
+
+
+def _install_content_analysis_import_stubs() -> None:
+    if "psycopg" not in sys.modules:
+        psycopg_stub = types.ModuleType("psycopg")
+
+        class _Connection:
+            def __class_getitem__(cls, _item):
+                return cls
+
+        psycopg_stub.Connection = _Connection
+        psycopg_stub.connect = lambda *args, **kwargs: None
+        sys.modules["psycopg"] = psycopg_stub
+
+    if "psycopg.rows" not in sys.modules:
+        psycopg_rows_stub = types.ModuleType("psycopg.rows")
+        psycopg_rows_stub.dict_row = object()
+        sys.modules["psycopg.rows"] = psycopg_rows_stub
+
+    if "psycopg.types" not in sys.modules:
+        sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
+
+    if "psycopg.types.json" not in sys.modules:
+        psycopg_json_stub = types.ModuleType("psycopg.types.json")
+
+        class _Json:
+            def __init__(self, value):
+                self.value = value
+
+        psycopg_json_stub.Json = _Json
+        sys.modules["psycopg.types.json"] = psycopg_json_stub
+
+
+_install_content_analysis_import_stubs()
 
 from services.workers.app.task_engine import TaskPluginRegistry, register_builtin_plugins
 from services.workers.app.task_engine.exceptions import TaskExecutionError
@@ -51,6 +87,13 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
                 "article.match_interests",
                 "article.normalize",
                 "article.notify",
+                "content.filter_gate",
+                "content.category_classify",
+                "content.cluster_summary_project",
+                "content.ner_extract",
+                "content.sentiment_analyze",
+                "content.structured_extract",
+                "content.system_interest_label_project",
                 "enrichment.article_extract",
                 "enrichment.resource_extract",
                 "discovery.content_sampler",

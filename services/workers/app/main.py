@@ -2,32 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import html
 import json
 import logging
-import os
-import re
-import signal
+import os as os
 import sys
-import unicodedata
 import uuid
 from collections.abc import Mapping, Sequence
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import urlparse
 
 SERVICES_ROOT = Path(__file__).resolve().parents[2]
 if str(SERVICES_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICES_ROOT))
 
 import psycopg
-import redis
-from bullmq import Job, Worker
-from psycopg.rows import dict_row
+from bullmq import Job
 from psycopg.types.json import Json
 
 from indexer.app import InterestCentroidIndexer, load_indexer_config
@@ -41,16 +33,16 @@ from ml.app import (
 )
 from .delivery import dispatch_channel_message
 from .canonical_documents import sync_article_canonical_document
-from .digests import (
-    DigestItem,
-    build_digest_subject,
-    coerce_digest_cadence,
-    coerce_digest_send_hour,
-    coerce_digest_send_minute,
-    compute_next_digest_run_at,
-    render_digest_html,
-    render_digest_text,
-    validate_timezone_name,
+from .content_analysis import (
+    DEFAULT_CONTENT_FILTER_POLICY_KEY,
+    load_content_subject,
+    persist_category_analysis,
+    persist_cluster_summary_analysis,
+    persist_content_filter_result,
+    persist_ner_analysis,
+    persist_sentiment_analysis,
+    persist_structured_extraction_analysis,
+    project_system_interest_labels,
 )
 from .final_selection import (
     apply_document_candidate_signal_uplift,
@@ -64,15 +56,83 @@ from .interest_filters import (
     upsert_interest_filter_result,
 )
 from .gemini import review_with_gemini
-from .lexical import build_lexical_tsquery
-from .notification_preferences import (
-    is_channel_enabled_by_preferences,
-    normalize_notification_preferences,
+from .llm_budget import (
+    build_llm_budget_gate_explain,
+    get_llm_review_monthly_quota_snapshot,
+    resolve_criterion_gray_zone_runtime_resolution,
+)
+from .notification_preferences import is_channel_enabled_by_preferences
+from .notification_runtime import (
+    compute_novelty_score,
+    fetch_recent_notification_history,
+    fetch_user_notification_channels,
+    fetch_user_notification_preferences,
+    insert_notification_log_row,
+    insert_notification_suppression,
+    process_due_scheduled_digests,
+    process_queued_manual_digests,
+    update_notification_delivery_status,
 )
 from .prompting import render_llm_prompt_template
 from .reindex_backfill import (
     HistoricalBackfillDependencies,
     replay_historical_articles as replay_historical_articles_with_snapshot,
+)
+from .runtime_config import (
+    legacy_queue_consumers_enabled,
+    sequence_cron_poll_interval_seconds,
+    sequence_cron_scheduler_enabled,
+    sequence_runner_concurrency,
+    sequence_runner_enabled,
+    sequence_runner_lock_duration_ms,
+    sequence_runner_stalled_interval_ms,
+    user_digest_poll_interval_seconds,
+    user_digest_scheduler_enabled,
+)
+from .runtime_db import (
+    build_redis_connection_options,
+    check_database,
+    check_redis,
+    open_connection,
+)
+from .article_lifecycle import (
+    compute_exact_hash,
+    compute_simhash64,
+    derive_lead,
+    detect_language,
+    extract_raw_rss_payload,
+    find_exact_duplicate_candidate,
+    find_near_duplicate_candidate,
+    normalize_text,
+    resolve_canonical_doc_id,
+    resolve_family_id,
+)
+from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
+from .runtime_values import (
+    coerce_bool,
+    coerce_optional_string,
+    coerce_positive_int,
+)
+from .selection_runtime import (
+    passes_allowed_content_kind,
+    passes_hard_filters,
+)
+from .vector_registry import (
+    compute_lexical_score,
+    fetch_article_features_row,
+    fetch_article_vectors,
+    fetch_embedding_vectors_by_ids,
+    mark_interest_hnsw_dirty,
+    resolve_interest_hnsw_label,
+    update_criterion_compile_status,
+    update_interest_compile_status,
+    upsert_article_features,
+    upsert_article_vector_registry,
+    upsert_criterion_compiled_row,
+    upsert_embedding_registry,
+    upsert_event_vector_registry,
+    upsert_interest_compiled_row,
+    upsert_interest_vector_registry,
 )
 from .scoring import (
     compute_cluster_same_event_score,
@@ -85,11 +145,8 @@ from .scoring import (
     decide_criterion,
     decide_interest,
     hours_between,
-    is_major_update,
-    normalize_fts_score,
     overlap_ratio,
     parse_datetime,
-    place_match_score,
     semantic_prototype_score,
 )
 from .selection_profiles import (
@@ -108,57 +165,50 @@ from .task_engine import (
     SequenceRunJobProcessor,
 )
 from .task_engine.adapters import build_live_discovery_runtime, discovery_enabled
+from .worker_bootstrap import (
+    build_worker_error_handler,
+    run_user_digest_scheduler_until_stopped as run_user_digest_scheduler_runtime,
+    run_workers as run_worker_runtime,
+)
+from .worker_queues import (
+    ARTICLE_CLUSTERED_EVENT,
+    ARTICLE_CRITERIA_MATCHED_EVENT,
+    ARTICLE_EMBEDDED_EVENT,
+    ARTICLE_INTERESTS_MATCHED_EVENT,
+    ARTICLE_NORMALIZED_EVENT,
+    CLUSTER_CONSUMER,
+    CLUSTER_QUEUE,
+    CRITERIA_MATCH_CONSUMER,
+    CRITERIA_MATCH_QUEUE,
+    CRITERION_COMPILE_CONSUMER,
+    CRITERION_COMPILE_QUEUE,
+    DEDUP_CONSUMER,
+    DEDUP_QUEUE,
+    EMBED_CONSUMER,
+    EMBED_QUEUE,
+    EVENT_CLUSTER_CENTROIDS_INDEX_NAME,
+    FEEDBACK_INGEST_CONSUMER,
+    FEEDBACK_INGEST_QUEUE,
+    INTEREST_CENTROIDS_INDEX_NAME,
+    INTEREST_COMPILE_CONSUMER,
+    INTEREST_COMPILE_QUEUE,
+    INTEREST_MATCH_CONSUMER,
+    INTEREST_MATCH_QUEUE,
+    LLM_REVIEW_CONSUMER,
+    LLM_REVIEW_QUEUE,
+    LLM_REVIEW_REQUESTED_EVENT,
+    NORMALIZE_CONSUMER,
+    NORMALIZE_QUEUE,
+    NOTIFY_CONSUMER,
+    NOTIFY_QUEUE,
+    PROCESSING_STATE_ORDER,
+    REINDEX_CONSUMER,
+    REINDEX_QUEUE,
+    REINDEX_REQUESTED_EVENT,
+    SEQUENCE_QUEUE,
+)
 
 LOGGER = logging.getLogger("newsportal.workers")
-
-NORMALIZE_QUEUE = "q.normalize"
-DEDUP_QUEUE = "q.dedup"
-EMBED_QUEUE = "q.embed"
-CLUSTER_QUEUE = "q.cluster"
-CRITERIA_MATCH_QUEUE = "q.match.criteria"
-INTEREST_MATCH_QUEUE = "q.match.interests"
-NOTIFY_QUEUE = "q.notify"
-LLM_REVIEW_QUEUE = "q.llm.review"
-FEEDBACK_INGEST_QUEUE = "q.feedback.ingest"
-REINDEX_QUEUE = "q.reindex"
-INTEREST_COMPILE_QUEUE = "q.interest.compile"
-CRITERION_COMPILE_QUEUE = "q.criterion.compile"
-SEQUENCE_QUEUE = "q.sequence"
-
-NORMALIZE_CONSUMER = "worker.normalize"
-DEDUP_CONSUMER = "worker.dedup"
-EMBED_CONSUMER = "worker.embed"
-CLUSTER_CONSUMER = "worker.cluster"
-CRITERIA_MATCH_CONSUMER = "worker.match.criteria"
-INTEREST_MATCH_CONSUMER = "worker.match.interests"
-NOTIFY_CONSUMER = "worker.notify"
-LLM_REVIEW_CONSUMER = "worker.llm.review"
-FEEDBACK_INGEST_CONSUMER = "worker.feedback.ingest"
-REINDEX_CONSUMER = "worker.reindex"
-INTEREST_COMPILE_CONSUMER = "worker.interest.compile"
-CRITERION_COMPILE_CONSUMER = "worker.criterion.compile"
-
-ARTICLE_NORMALIZED_EVENT = "article.normalized"
-ARTICLE_EMBEDDED_EVENT = "article.embedded"
-ARTICLE_CLUSTERED_EVENT = "article.clustered"
-ARTICLE_CRITERIA_MATCHED_EVENT = "article.criteria.matched"
-ARTICLE_INTERESTS_MATCHED_EVENT = "article.interests.matched"
-LLM_REVIEW_REQUESTED_EVENT = "llm.review.requested"
-REINDEX_REQUESTED_EVENT = "reindex.requested"
-INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
-EVENT_CLUSTER_CENTROIDS_INDEX_NAME = "event_cluster_centroids"
-_ZERO_USD = Decimal("0")
-_USD_TO_CENTS = Decimal("100")
-
-PROCESSING_STATE_ORDER = {
-    "raw": 0,
-    "normalized": 1,
-    "deduped": 2,
-    "embedded": 3,
-    "clustered": 4,
-    "matched": 5,
-    "notified": 6,
-}
 
 EMBEDDING_PROVIDER = load_embedding_provider()
 FEATURE_EXTRACTOR = HeuristicArticleFeatureExtractor()
@@ -167,393 +217,11 @@ CRITERION_COMPILER = CriterionBaselineCompiler()
 INTEREST_INDEXER = InterestCentroidIndexer(load_indexer_config())
 
 
-def build_database_url() -> str:
-    if os.getenv("DATABASE_URL"):
-        return os.environ["DATABASE_URL"]
-
-    user = os.getenv("POSTGRES_USER", "newsportal")
-    password = os.getenv("POSTGRES_PASSWORD", "newsportal")
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv(
-        "POSTGRES_PORT",
-        "55432" if host in {"127.0.0.1", "localhost"} else "5432",
-    )
-    database = os.getenv("POSTGRES_DB", "newsportal")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
-
-
-def build_redis_url() -> str:
-    if os.getenv("REDIS_URL"):
-        return os.environ["REDIS_URL"]
-
-    host = os.getenv("REDIS_HOST", "127.0.0.1")
-    port = os.getenv(
-        "REDIS_PORT",
-        "56379" if host in {"127.0.0.1", "localhost"} else "6379",
-    )
-    return f"redis://{host}:{port}"
-
-
-def build_redis_connection_options() -> dict[str, Any]:
-    parsed = urlparse(build_redis_url())
-    return {
-        "host": parsed.hostname or "127.0.0.1",
-        "port": parsed.port or 6379,
-        "db": int(parsed.path.lstrip("/") or "0"),
-    }
-
-
-def check_database() -> None:
-    with psycopg.connect(build_database_url()) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("select 1")
-
-
-def check_redis() -> None:
-    client = redis.Redis.from_url(build_redis_url())
-    try:
-        client.ping()
-    finally:
-        client.close()
-
-
-def env_flag(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def legacy_queue_consumers_enabled() -> bool:
-    return env_flag("WORKER_ENABLE_LEGACY_QUEUE_CONSUMERS", default=False)
-
-
-def sequence_runner_enabled() -> bool:
-    return env_flag("WORKER_ENABLE_SEQUENCE_RUNNER", default=True)
-
-
-def sequence_cron_scheduler_enabled() -> bool:
-    return env_flag("WORKER_ENABLE_SEQUENCE_CRON_SCHEDULER", default=True)
-
-
-def sequence_runner_concurrency() -> int:
-    raw_value = os.getenv("WORKER_SEQUENCE_RUNNER_CONCURRENCY", "1")
-    try:
-        return max(1, int(raw_value))
-    except ValueError:
-        return 1
-
-
-def sequence_runner_lock_duration_ms() -> int:
-    raw_value = os.getenv("WORKER_SEQUENCE_RUNNER_LOCK_DURATION_MS", "300000")
-    try:
-        return max(30000, int(raw_value))
-    except ValueError:
-        return 300000
-
-
-def sequence_runner_stalled_interval_ms() -> int:
-    raw_value = os.getenv("WORKER_SEQUENCE_RUNNER_STALLED_INTERVAL_MS")
-    if raw_value is None:
-        return sequence_runner_lock_duration_ms()
-    try:
-        return max(30000, int(raw_value))
-    except ValueError:
-        return sequence_runner_lock_duration_ms()
-
-
-def sequence_cron_poll_interval_seconds() -> float:
-    raw_value = os.getenv("WORKER_SEQUENCE_CRON_POLL_INTERVAL_SECONDS", "30")
-    try:
-        return max(1.0, float(raw_value))
-    except ValueError:
-        return 30.0
-
-
-def user_digest_scheduler_enabled() -> bool:
-    return env_flag("WORKER_ENABLE_USER_DIGEST_SCHEDULER", default=True)
-
-
-def user_digest_poll_interval_seconds() -> float:
-    raw_value = os.getenv("WORKER_USER_DIGEST_POLL_INTERVAL_SECONDS", "60")
-    try:
-        return max(5.0, float(raw_value))
-    except ValueError:
-        return 60.0
-
-
-def coerce_llm_cost_usd(value: Any) -> Decimal:
-    if value is None:
-        return _ZERO_USD
-    if isinstance(value, Decimal):
-        return value if value >= _ZERO_USD else _ZERO_USD
-    try:
-        parsed = Decimal(str(value).strip())
-    except (InvalidOperation, AttributeError):
-        return _ZERO_USD
-    return parsed if parsed >= _ZERO_USD else _ZERO_USD
-
-
-def llm_cost_usd_to_cents(value: Any) -> int:
-    normalized = coerce_llm_cost_usd(value)
-    return int((normalized * _USD_TO_CENTS).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-
-
-def llm_review_month_start_utc(now: datetime | None = None) -> datetime:
-    current = now.astimezone(timezone.utc) if now is not None else datetime.now(timezone.utc)
-    return current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-
-def llm_review_enabled() -> bool:
-    return env_flag("LLM_REVIEW_ENABLED", default=True)
-
-
-def llm_review_monthly_budget_cents() -> int:
-    raw_value = os.getenv("LLM_REVIEW_MONTHLY_BUDGET_CENTS", "0")
-    try:
-        return max(0, int(raw_value))
-    except ValueError:
-        return 0
-
-
-def llm_review_accept_gray_zone_on_budget_exhaustion() -> bool:
-    return env_flag("LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE", default=False)
-
-
-async def get_llm_review_monthly_quota_snapshot(
-    cursor: psycopg.AsyncCursor[Any],
-) -> dict[str, Any]:
-    month_start = llm_review_month_start_utc()
-    await cursor.execute(
-        """
-        select
-          coalesce(sum(cost_estimate_usd), 0) as month_to_date_cost_usd
-        from llm_review_log
-        where created_at >= %s
-          and scope = 'criterion'
-        """,
-        (month_start,),
-    )
-    row = await cursor.fetchone() or {}
-    month_to_date_cost_usd = coerce_llm_cost_usd(row.get("month_to_date_cost_usd"))
-    budget_cents = llm_review_monthly_budget_cents()
-    budget_usd = Decimal(budget_cents) / _USD_TO_CENTS
-    quota_enabled = budget_cents > 0
-    monthly_quota_reached = quota_enabled and month_to_date_cost_usd >= budget_usd
-    remaining_cents = (
-        llm_cost_usd_to_cents(max(budget_usd - month_to_date_cost_usd, Decimal("0")))
-        if quota_enabled
-        else None
-    )
-    return {
-        "enabled": llm_review_enabled(),
-        "monthlyBudgetCents": budget_cents,
-        "monthToDateCostUsd": float(month_to_date_cost_usd),
-        "monthToDateCostCents": llm_cost_usd_to_cents(month_to_date_cost_usd),
-        "remainingMonthlyBudgetCents": remaining_cents,
-        "monthlyQuotaReached": monthly_quota_reached,
-        "acceptGrayZoneOnBudgetExhaustion": llm_review_accept_gray_zone_on_budget_exhaustion(),
-        "monthStart": month_start,
-    }
-
-
-def resolve_criterion_gray_zone_runtime_resolution(
-    quota_snapshot: Mapping[str, Any],
-    *,
-    preserve_candidate_gray_zone: bool = False,
-) -> dict[str, Any] | None:
-    if not bool(quota_snapshot.get("enabled", True)):
-        if preserve_candidate_gray_zone:
-            return {
-                "reason": "llm_review_disabled",
-                "policy": "hold_candidate_recovery_gray_zone",
-                "providerDecision": "hold",
-                "finalDecision": "gray_zone",
-            }
-        return {
-            "reason": "llm_review_disabled",
-            "policy": "reject_gray_zone",
-            "providerDecision": "reject",
-            "finalDecision": "irrelevant",
-        }
-    if not bool(quota_snapshot.get("monthlyQuotaReached")):
-        return None
-    accept_gray_zone = bool(quota_snapshot.get("acceptGrayZoneOnBudgetExhaustion"))
-    if preserve_candidate_gray_zone:
-        return {
-            "reason": "monthly_budget_exhausted",
-            "policy": "hold_candidate_recovery_gray_zone",
-            "providerDecision": "hold",
-            "finalDecision": "gray_zone",
-        }
-    return {
-        "reason": "monthly_budget_exhausted",
-        "policy": "accept_gray_zone" if accept_gray_zone else "reject_gray_zone",
-        "providerDecision": "approve" if accept_gray_zone else "reject",
-        "finalDecision": "relevant" if accept_gray_zone else "irrelevant",
-    }
-
-
-def build_llm_budget_gate_explain(
-    *,
-    quota_snapshot: Mapping[str, Any],
-    resolution: Mapping[str, Any],
-) -> dict[str, Any]:
-    month_start = quota_snapshot.get("monthStart")
-    return {
-        "reason": str(resolution.get("reason") or ""),
-        "policy": str(resolution.get("policy") or ""),
-        "enabled": bool(quota_snapshot.get("enabled", True)),
-        "monthlyQuotaReached": bool(quota_snapshot.get("monthlyQuotaReached")),
-        "acceptGrayZoneOnBudgetExhaustion": bool(
-            quota_snapshot.get("acceptGrayZoneOnBudgetExhaustion")
-        ),
-        "monthStartUtc": (
-            month_start.isoformat() if hasattr(month_start, "isoformat") else str(month_start or "")
-        ),
-        "monthToDateCostCents": int(quota_snapshot.get("monthToDateCostCents") or 0),
-        "budgetCents": int(quota_snapshot.get("monthlyBudgetCents") or 0),
-        "remainingMonthlyBudgetCents": quota_snapshot.get("remainingMonthlyBudgetCents"),
-    }
-
-
 def suppress_downstream_outbox(job: Job) -> bool:
     job_data = job.data if isinstance(job.data, Mapping) else {}
     return coerce_bool(job_data.get("suppressDownstreamOutbox")) or coerce_bool(
         job_data.get("sequenceRuntime")
     )
-
-
-def strip_html(value: str) -> str:
-    without_scripts = re.sub(r"<script[\s\S]*?</script>", " ", value, flags=re.IGNORECASE)
-    without_styles = re.sub(r"<style[\s\S]*?</style>", " ", without_scripts, flags=re.IGNORECASE)
-    return re.sub(r"<[^>]+>", " ", without_styles)
-
-
-def normalize_text(value: str) -> str:
-    unescaped = html.unescape(value)
-    nfkc = unicodedata.normalize("NFKC", unescaped)
-    stripped = strip_html(nfkc)
-    return re.sub(r"\s+", " ", stripped).strip()
-
-
-def derive_lead(summary_source: str, body_source: str) -> str:
-    summary = normalize_text(summary_source)
-    if summary:
-        return summary
-
-    body = normalize_text(body_source)
-    if not body:
-        return ""
-
-    sentences = re.split(r"(?<=[.!?])\s+", body)
-    return " ".join(sentences[:3]).strip()
-
-
-def detect_language(text: str, existing_hint: str | None) -> tuple[str | None, float | None]:
-    if existing_hint:
-        normalized = existing_hint.lower()
-        if normalized.startswith("uk"):
-            return ("uk", 0.9)
-        if normalized.startswith("en"):
-            return ("en", 0.9)
-        return (normalized[:8], 0.6)
-
-    lowered = text.lower()
-    if any(character in lowered for character in ("і", "ї", "є", "ґ")):
-        return ("uk", 0.7)
-    if re.search(r"[а-яё]", lowered):
-        return ("uk", 0.45)
-    if re.search(r"[a-z]", lowered):
-        return ("en", 0.45)
-    return (None, None)
-
-
-def compute_exact_hash(title: str, lead: str, body: str) -> str:
-    payload = "\n".join((title, lead, body)).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
-
-
-def stable_hash64(token: str) -> int:
-    digest = hashlib.sha256(token.encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "big", signed=False)
-
-
-def to_signed_int64(value: int) -> int:
-    if value >= (1 << 63):
-        return value - (1 << 64)
-    return value
-
-
-def to_unsigned_int64(value: int) -> int:
-    if value < 0:
-        return value + (1 << 64)
-    return value
-
-
-def compute_simhash64(text: str) -> int:
-    tokens = re.findall(r"[0-9A-Za-zА-Яа-яЁёІіЇїЄєҐґ-]{2,}", text.lower())
-    if not tokens:
-        return 0
-
-    weights = [0] * 64
-    for token in tokens:
-        hashed = stable_hash64(token)
-        for bit_index in range(64):
-            if hashed & (1 << bit_index):
-                weights[bit_index] += 1
-            else:
-                weights[bit_index] -= 1
-
-    result = 0
-    for bit_index, weight in enumerate(weights):
-        if weight >= 0:
-            result |= 1 << bit_index
-
-    return to_signed_int64(result)
-
-
-def hamming_distance64(left: int, right: int) -> int:
-    return (to_unsigned_int64(left) ^ to_unsigned_int64(right)).bit_count()
-
-
-def coerce_positive_int(value: Any, fallback: int = 1) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return fallback
-    return parsed if parsed > 0 else fallback
-
-
-def coerce_nullable_positive_int(value: Any) -> int | None:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 0 else None
-
-
-def coerce_bool(value: Any, fallback: bool = False) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        normalized = value.strip().casefold()
-        if normalized in {"1", "true", "yes", "on"}:
-            return True
-        if normalized in {"0", "false", "no", "off"}:
-            return False
-    return fallback
-
-
-def coerce_optional_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    if not normalized or normalized == "None":
-        return None
-    return normalized
 
 
 def advance_processing_state(current_state: str | None, target_state: str) -> str:
@@ -571,33 +239,6 @@ def compute_content_hash(value: Any) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
-
-
-def make_json_safe(value: Any) -> Any:
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value
-    if isinstance(value, uuid.UUID):
-        return str(value)
-    if hasattr(value, "isoformat"):
-        try:
-            return value.isoformat()
-        except TypeError:
-            pass
-    if isinstance(value, Mapping):
-        return {
-            str(key): make_json_safe(raw_value)
-            for key, raw_value in value.items()
-        }
-    if isinstance(value, (list, tuple, set)):
-        return [make_json_safe(item) for item in value]
-    return str(value)
-
-
-async def open_connection() -> psycopg.AsyncConnection[Any]:
-    return await psycopg.AsyncConnection.connect(
-        build_database_url(),
-        row_factory=dict_row,
-    )
 
 
 async def is_event_processed(
@@ -763,847 +404,6 @@ async def fetch_criterion_for_update(
     if criterion is None:
         raise ValueError(f"Criterion {criterion_id} was not found.")
     return criterion
-
-
-def extract_raw_rss_payload(article: dict[str, Any]) -> tuple[str, str, str]:
-    raw_payload = article.get("raw_payload_json") or {}
-    entry_payload = raw_payload.get("entry") if isinstance(raw_payload, dict) else {}
-    rss_payload = raw_payload.get("rss") if isinstance(raw_payload, dict) else {}
-    if not isinstance(entry_payload, dict):
-        entry_payload = {}
-    if not isinstance(rss_payload, dict):
-        rss_payload = {}
-
-    title_source = str(article.get("title") or entry_payload.get("title") or rss_payload.get("title") or "")
-    summary_source = str(
-        article.get("extracted_description")
-        or entry_payload.get("description")
-        or rss_payload.get("description")
-        or article.get("lead")
-        or ""
-    )
-    content_source = str(
-        article.get("full_content_html")
-        or entry_payload.get("contentEncoded")
-        or rss_payload.get("contentEncoded")
-        or article.get("body")
-        or ""
-    )
-    return (title_source, summary_source, content_source)
-
-
-async def upsert_article_features(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: uuid.UUID,
-    *,
-    numbers: Sequence[str],
-    short_tokens: Sequence[str],
-    places: Sequence[str],
-    entities: Sequence[str],
-    search_vector_version: int,
-    feature_version: int,
-) -> None:
-    await cursor.execute(
-        """
-        insert into article_features (
-          doc_id,
-          numbers,
-          short_tokens,
-          places,
-          entities,
-          search_vector_version,
-          feature_version
-        )
-        values (%s, %s, %s, %s, %s, %s, %s)
-        on conflict (doc_id) do update
-        set
-          numbers = excluded.numbers,
-          short_tokens = excluded.short_tokens,
-          places = excluded.places,
-          entities = excluded.entities,
-          search_vector_version = excluded.search_vector_version,
-          feature_version = excluded.feature_version,
-          updated_at = now()
-        """,
-        (
-            doc_id,
-            list(numbers),
-            list(short_tokens),
-            list(places),
-            list(entities),
-            search_vector_version,
-            feature_version,
-        ),
-    )
-
-
-async def upsert_embedding_registry(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    entity_type: str,
-    entity_id: uuid.UUID,
-    vector_type: str,
-    model_key: str,
-    vector_version: int,
-    vector: Sequence[float],
-    content_hash: str,
-) -> str:
-    safe_vector = [float(value) for value in vector]
-    await cursor.execute(
-        """
-        select embedding_id::text as embedding_id
-        from embedding_registry
-        where entity_type = %s
-          and entity_id = %s
-          and vector_type = %s
-          and content_hash = %s
-        limit 1
-        """,
-        (entity_type, entity_id, vector_type, content_hash),
-    )
-    existing = await cursor.fetchone()
-
-    if existing is None:
-        await cursor.execute(
-            """
-            insert into embedding_registry (
-              entity_type,
-              entity_id,
-              vector_type,
-              model_key,
-              vector_version,
-              dimensions,
-              embedding_json,
-              content_hash,
-              is_active
-            )
-            values (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, true)
-            returning embedding_id::text as embedding_id
-            """,
-            (
-                entity_type,
-                entity_id,
-                vector_type,
-                model_key,
-                vector_version,
-                len(safe_vector),
-                Json(safe_vector),
-                content_hash,
-            ),
-        )
-        existing = await cursor.fetchone()
-    else:
-        await cursor.execute(
-            """
-            update embedding_registry
-            set
-              model_key = %s,
-              vector_version = %s,
-              dimensions = %s,
-              embedding_json = %s::jsonb,
-              is_active = true,
-              updated_at = now()
-            where embedding_id = %s
-            """,
-            (
-                model_key,
-                vector_version,
-                len(safe_vector),
-                Json(safe_vector),
-                existing["embedding_id"],
-            ),
-        )
-
-    embedding_id = str(existing["embedding_id"])
-    await cursor.execute(
-        """
-        update embedding_registry
-        set
-          is_active = (embedding_id = %s::uuid),
-          updated_at = case when embedding_id = %s::uuid then now() else updated_at end
-        where entity_type = %s
-          and entity_id = %s
-          and vector_type = %s
-        """,
-        (
-            embedding_id,
-            embedding_id,
-            entity_type,
-            entity_id,
-            vector_type,
-        ),
-    )
-    return embedding_id
-
-
-async def upsert_article_vector_registry(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    doc_id: uuid.UUID,
-    vector_type: str,
-    embedding_id: str,
-    vector_version: int,
-) -> None:
-    await cursor.execute(
-        """
-        insert into article_vector_registry (
-          doc_id,
-          vector_type,
-          embedding_id,
-          vector_version,
-          is_active,
-          updated_at
-        )
-        values (%s, %s, %s, %s, true, now())
-        on conflict (doc_id, vector_type, vector_version) do update
-        set
-          embedding_id = excluded.embedding_id,
-          is_active = true,
-          updated_at = now()
-        """,
-        (doc_id, vector_type, embedding_id, vector_version),
-    )
-
-
-async def upsert_event_vector_registry(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    entity_type: str,
-    entity_id: uuid.UUID,
-    vector_type: str,
-    embedding_id: str,
-    vector_version: int,
-    hnsw_index_name: str | None = None,
-    hnsw_label: int | None = None,
-) -> None:
-    await cursor.execute(
-        """
-        insert into event_vector_registry (
-          entity_type,
-          entity_id,
-          vector_type,
-          embedding_id,
-          hnsw_index_name,
-          hnsw_label,
-          vector_version,
-          is_active,
-          updated_at
-        )
-        values (%s, %s, %s, %s, %s, %s, %s, true, now())
-        on conflict (entity_type, entity_id, vector_type, vector_version) do update
-        set
-          embedding_id = excluded.embedding_id,
-          hnsw_index_name = excluded.hnsw_index_name,
-          hnsw_label = excluded.hnsw_label,
-          is_active = true,
-          updated_at = now()
-        """,
-        (
-            entity_type,
-            entity_id,
-            vector_type,
-            embedding_id,
-            hnsw_index_name,
-            hnsw_label,
-            vector_version,
-        ),
-    )
-
-
-async def upsert_interest_vector_registry(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    interest_id: uuid.UUID,
-    vector_type: str,
-    embedding_id: str,
-    vector_version: int,
-    hnsw_index_name: str | None = None,
-    hnsw_label: int | None = None,
-) -> None:
-    await cursor.execute(
-        """
-        update interest_vector_registry
-        set
-          is_active = false,
-          updated_at = now()
-        where interest_id = %s
-          and vector_type = %s
-          and vector_version <> %s
-          and is_active = true
-        """,
-        (interest_id, vector_type, vector_version),
-    )
-    await cursor.execute(
-        """
-        insert into interest_vector_registry (
-          interest_id,
-          vector_type,
-          embedding_id,
-          hnsw_index_name,
-          hnsw_label,
-          vector_version,
-          is_active,
-          updated_at
-        )
-        values (%s, %s, %s, %s, %s, %s, true, now())
-        on conflict (interest_id, vector_type, vector_version) do update
-        set
-          embedding_id = excluded.embedding_id,
-          hnsw_index_name = excluded.hnsw_index_name,
-          hnsw_label = excluded.hnsw_label,
-          is_active = true,
-          updated_at = now()
-        """,
-        (
-            interest_id,
-            vector_type,
-            embedding_id,
-            hnsw_index_name,
-            hnsw_label,
-            vector_version,
-        ),
-    )
-
-
-async def resolve_interest_hnsw_label(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    interest_id: uuid.UUID,
-    model_key: str,
-    dimensions: int,
-) -> int:
-    await cursor.execute(
-        """
-        select hnsw_label
-        from interest_vector_registry
-        where interest_id = %s
-          and vector_type = 'centroid'
-          and hnsw_label is not null
-        order by updated_at desc
-        limit 1
-        """,
-        (interest_id,),
-    )
-    existing_label = await cursor.fetchone()
-    if existing_label is not None and existing_label["hnsw_label"] is not None:
-        return int(existing_label["hnsw_label"])
-
-    await cursor.execute(
-        """
-        select last_assigned_label
-        from hnsw_registry
-        where index_name = %s
-        for update
-        """,
-        (INTEREST_CENTROIDS_INDEX_NAME,),
-    )
-    registry_row = await cursor.fetchone()
-    if registry_row is None:
-        await cursor.execute(
-            """
-            insert into hnsw_registry (
-              index_name,
-              model_key,
-              dimensions,
-              vector_version,
-              entry_count,
-              last_assigned_label,
-              is_dirty,
-              metadata_json,
-              created_at,
-              updated_at
-            )
-            values (%s, %s, %s, 1, 0, 1, true, '{}'::jsonb, now(), now())
-            """,
-            (
-                INTEREST_CENTROIDS_INDEX_NAME,
-                model_key,
-                dimensions,
-            ),
-        )
-        return 1
-
-    next_label = int(registry_row["last_assigned_label"] or 0) + 1
-    await cursor.execute(
-        """
-        update hnsw_registry
-        set
-          last_assigned_label = %s,
-          model_key = %s,
-          dimensions = %s,
-          is_dirty = true,
-          updated_at = now()
-        where index_name = %s
-        """,
-        (
-            next_label,
-            model_key,
-            dimensions,
-            INTEREST_CENTROIDS_INDEX_NAME,
-        ),
-    )
-    return next_label
-
-
-async def mark_interest_hnsw_dirty(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    model_key: str,
-    dimensions: int,
-) -> None:
-    await cursor.execute(
-        """
-        insert into hnsw_registry (
-          index_name,
-          model_key,
-          dimensions,
-          vector_version,
-          entry_count,
-          last_assigned_label,
-          is_dirty,
-          metadata_json,
-          created_at,
-          updated_at
-        )
-        values (
-          %s,
-          %s,
-          %s,
-          1,
-          0,
-          0,
-          true,
-          '{}'::jsonb,
-          now(),
-          now()
-        )
-        on conflict (index_name) do update
-        set
-          model_key = excluded.model_key,
-          dimensions = excluded.dimensions,
-          is_dirty = true,
-          updated_at = now()
-        """,
-        (
-            INTEREST_CENTROIDS_INDEX_NAME,
-            model_key,
-            dimensions,
-        ),
-    )
-
-
-async def upsert_interest_compiled_row(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    interest_id: uuid.UUID,
-    source_version: int,
-    compile_status: str,
-    source_snapshot_json: dict[str, Any],
-    compiled_json: dict[str, Any],
-    centroid_embedding_id: str | None,
-    error_text: str | None,
-) -> None:
-    compiled_at = "now()" if compile_status == "compiled" else "null"
-    await cursor.execute(
-        f"""
-        insert into user_interests_compiled (
-          interest_id,
-          source_version,
-          compile_status,
-          source_snapshot_json,
-          compiled_json,
-          centroid_embedding_id,
-          compiled_at,
-          error_text,
-          created_at,
-          updated_at
-        )
-        values (%s, %s, %s, %s::jsonb, %s::jsonb, %s, {compiled_at}, %s, now(), now())
-        on conflict (interest_id) do update
-        set
-          source_version = excluded.source_version,
-          compile_status = excluded.compile_status,
-          source_snapshot_json = excluded.source_snapshot_json,
-          compiled_json = excluded.compiled_json,
-          centroid_embedding_id = excluded.centroid_embedding_id,
-          compiled_at = excluded.compiled_at,
-          error_text = excluded.error_text,
-          updated_at = now()
-        """,
-        (
-            interest_id,
-            source_version,
-            compile_status,
-            Json(make_json_safe(source_snapshot_json)),
-            Json(make_json_safe(compiled_json)),
-            centroid_embedding_id,
-            error_text,
-        ),
-    )
-
-
-async def upsert_criterion_compiled_row(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    criterion_id: uuid.UUID,
-    source_version: int,
-    compile_status: str,
-    source_snapshot_json: dict[str, Any],
-    compiled_json: dict[str, Any],
-    centroid_embedding_id: str | None,
-    error_text: str | None,
-) -> None:
-    compiled_at = "now()" if compile_status == "compiled" else "null"
-    await cursor.execute(
-        f"""
-        insert into criteria_compiled (
-          criterion_id,
-          source_version,
-          compile_status,
-          source_snapshot_json,
-          compiled_json,
-          centroid_embedding_id,
-          compiled_at,
-          error_text,
-          created_at,
-          updated_at
-        )
-        values (%s, %s, %s, %s::jsonb, %s::jsonb, %s, {compiled_at}, %s, now(), now())
-        on conflict (criterion_id) do update
-        set
-          source_version = excluded.source_version,
-          compile_status = excluded.compile_status,
-          source_snapshot_json = excluded.source_snapshot_json,
-          compiled_json = excluded.compiled_json,
-          centroid_embedding_id = excluded.centroid_embedding_id,
-          compiled_at = excluded.compiled_at,
-          error_text = excluded.error_text,
-          updated_at = now()
-        """,
-        (
-            criterion_id,
-            source_version,
-            compile_status,
-            Json(make_json_safe(source_snapshot_json)),
-            Json(make_json_safe(compiled_json)),
-            centroid_embedding_id,
-            error_text,
-        ),
-    )
-
-
-async def update_interest_compile_status(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    interest_id: uuid.UUID,
-    compiled: bool,
-    compile_status: str,
-) -> None:
-    await cursor.execute(
-        """
-        update user_interests
-        set
-          compiled = %s,
-          compile_status = %s,
-          updated_at = now()
-        where interest_id = %s
-        """,
-        (compiled, compile_status, interest_id),
-    )
-
-
-async def update_criterion_compile_status(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    criterion_id: uuid.UUID,
-    compiled: bool,
-    compile_status: str,
-) -> None:
-    await cursor.execute(
-        """
-        update criteria
-        set
-          compiled = %s,
-          compile_status = %s,
-          updated_at = now()
-        where criterion_id = %s
-        """,
-        (compiled, compile_status, criterion_id),
-    )
-
-
-def coerce_text_list(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, tuple):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except json.JSONDecodeError:
-            return [value.strip()] if value.strip() else []
-        return coerce_text_list(decoded)
-    return []
-
-
-def coerce_json_object(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except json.JSONDecodeError:
-            return {}
-        return decoded if isinstance(decoded, dict) else {}
-    return {}
-
-
-async def fetch_article_features_row(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: uuid.UUID,
-) -> dict[str, list[str]]:
-    await cursor.execute(
-        """
-        select numbers, short_tokens, places, entities
-        from article_features
-        where doc_id = %s
-        """,
-        (doc_id,),
-    )
-    row = await cursor.fetchone()
-    if row is None:
-        return {
-            "numbers": [],
-            "short_tokens": [],
-            "places": [],
-            "entities": [],
-        }
-    return {
-        "numbers": coerce_text_list(row.get("numbers")),
-        "short_tokens": coerce_text_list(row.get("short_tokens")),
-        "places": coerce_text_list(row.get("places")),
-        "entities": coerce_text_list(row.get("entities")),
-    }
-
-
-async def fetch_article_vectors(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: uuid.UUID,
-) -> dict[str, list[float]]:
-    await cursor.execute(
-        """
-        select
-          avr.vector_type,
-          er.embedding_json
-        from article_vector_registry avr
-        join embedding_registry er on er.embedding_id = avr.embedding_id
-        where avr.doc_id = %s
-          and avr.is_active = true
-          and er.is_active = true
-        """,
-        (doc_id,),
-    )
-    rows = await cursor.fetchall()
-    result: dict[str, list[float]] = {}
-    for row in rows:
-        result[str(row["vector_type"])] = [float(value) for value in row["embedding_json"]]
-    return result
-
-
-async def fetch_embedding_vectors_by_ids(
-    cursor: psycopg.AsyncCursor[Any],
-    embedding_ids: Sequence[str],
-) -> list[list[float]]:
-    if not embedding_ids:
-        return []
-
-    await cursor.execute(
-        """
-        select embedding_id::text as embedding_id, embedding_json
-        from embedding_registry
-        where embedding_id = any(%s::uuid[])
-        order by array_position(%s::uuid[], embedding_id)
-        """,
-        (list(embedding_ids), list(embedding_ids)),
-    )
-    rows = await cursor.fetchall()
-    vectors: list[list[float]] = []
-    for row in rows:
-        vectors.append([float(value) for value in row["embedding_json"]])
-    return vectors
-
-
-async def compute_lexical_score(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: uuid.UUID,
-    lexical_query: str,
-) -> float:
-    tsquery = build_lexical_tsquery(lexical_query)
-    if not tsquery:
-        return 0.0
-
-    await cursor.execute(
-        """
-        select
-          ts_rank_cd(
-            search_vector,
-            to_tsquery('simple', %s)
-          ) as score
-        from articles
-        where doc_id = %s
-        """,
-        (tsquery, doc_id),
-    )
-    row = await cursor.fetchone()
-    raw_score = float(row["score"] or 0.0) if row else 0.0
-    return normalize_fts_score(raw_score)
-
-
-def passes_allowed_content_kind(
-    *,
-    article: Mapping[str, Any],
-    allowed_content_kinds: Sequence[str],
-) -> tuple[bool, str]:
-    article_content_kind = str(article.get("content_kind") or "editorial").strip() or "editorial"
-    normalized_allowed = {
-        str(value).strip()
-        for value in allowed_content_kinds
-        if str(value).strip()
-    }
-    if not normalized_allowed:
-        return (True, article_content_kind)
-    return (article_content_kind in normalized_allowed, article_content_kind)
-
-
-_WRAPPER_DIRECTORY_TITLE_FRAGMENTS = (
-    "search results",
-    "freelance jobs",
-    "remote jobs",
-    "jobs online",
-    "work remote & earn online",
-    "employment",
-    "talent network",
-    "browse jobs",
-)
-
-_WRAPPER_DIRECTORY_BODY_FRAGMENTS = (
-    "browse by category",
-    "hire freelancers",
-    "find work",
-    "search buyers can",
-    "search freelancers to request a proposal",
-    "freelancers can search projects to quote on",
-    "top freelancers",
-    "talent network",
-    "work remote & earn online",
-    "jobs online",
-)
-
-_DIRECT_REQUEST_TITLE_FRAGMENTS = (
-    "looking for",
-    "need ",
-    "seeking ",
-    "request for",
-    "rfp",
-    "quote",
-    "proposals",
-    "fixed price",
-    "open for proposals",
-    "vendor selection",
-    "implementation partner",
-    "migration partner",
-    "take over",
-    "continue development",
-    "support takeover",
-)
-
-
-def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
-    title_and_lead = " ".join(
-        str(article.get(field) or "")
-        for field in ("title", "lead")
-    ).casefold()
-    article_text = " ".join(
-        str(article.get(field) or "")
-        for field in ("title", "lead", "body")
-    ).casefold()
-    if any(fragment in title_and_lead for fragment in _DIRECT_REQUEST_TITLE_FRAGMENTS):
-        return False
-
-    title_hits = [
-        fragment for fragment in _WRAPPER_DIRECTORY_TITLE_FRAGMENTS if fragment in title_and_lead
-    ]
-    if "search results" in title_hits:
-        return True
-
-    body_hit_count = sum(
-        1 for fragment in _WRAPPER_DIRECTORY_BODY_FRAGMENTS if fragment in article_text
-    )
-    return bool(title_hits) and body_hit_count >= 2
-
-
-def passes_hard_filters(
-    *,
-    article: Mapping[str, Any],
-    article_features: Mapping[str, Sequence[str]],
-    hard_constraints: Mapping[str, Any],
-) -> tuple[bool, list[str], bool]:
-    reasons: list[str] = []
-    article_lang = str(article.get("lang") or "").strip().lower()
-    article_text = " ".join(
-        str(article.get(field) or "")
-        for field in ("title", "lead", "body")
-    ).casefold()
-    allowed_languages = {value.casefold() for value in coerce_text_list(hard_constraints.get("languages_allowed"))}
-    if allowed_languages and article_lang and article_lang not in allowed_languages:
-        reasons.append("language")
-
-    time_window_hours = coerce_nullable_positive_int(hard_constraints.get("time_window_hours"))
-    published_at = parse_datetime(article.get("published_at"))
-    now = datetime.now(timezone.utc)
-    within_window = (
-        True
-        if time_window_hours is None
-        else published_at is not None and hours_between(now, published_at) <= time_window_hours
-    )
-    if not within_window:
-        reasons.append("time_window")
-
-    must_have_terms = coerce_text_list(hard_constraints.get("must_have_terms"))
-    if must_have_terms and not any(
-        value.casefold() in article_text for value in must_have_terms
-    ):
-        reasons.append("must_have_any")
-
-    for value in coerce_text_list(hard_constraints.get("must_not_have_terms")):
-        if value.casefold() in article_text:
-            reasons.append(f"must_not:{value}")
-
-    target_places = coerce_text_list(hard_constraints.get("places"))
-    if target_places and place_match_score(article_features.get("places", []), target_places) <= 0.0:
-        reasons.append("places")
-
-    required_short_tokens = {value.casefold() for value in coerce_text_list(hard_constraints.get("short_tokens_required"))}
-    article_short_tokens = {
-        value.casefold()
-        for value in coerce_text_list(article_features.get("short_tokens"))
-    }
-    if required_short_tokens and not required_short_tokens.issubset(article_short_tokens):
-        reasons.append("short_tokens_required")
-
-    forbidden_short_tokens = {
-        value.casefold()
-        for value in coerce_text_list(hard_constraints.get("short_tokens_forbidden"))
-    }
-    if forbidden_short_tokens & article_short_tokens:
-        reasons.append("short_tokens_forbidden")
-
-    if has_wrapper_directory_noise(article):
-        reasons.append("wrapper_directory_noise")
-
-    return (len(reasons) == 0, reasons, within_window)
 
 
 async def upsert_system_feed_result(
@@ -2659,796 +1459,6 @@ async def create_or_update_cluster(
             vector_version=vector_version,
         )
     return cluster_id, is_new_cluster
-
-
-async def fetch_recent_notification_history(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    interest_id: uuid.UUID,
-    cluster_id: uuid.UUID | None,
-    family_id: uuid.UUID | None,
-) -> list[dict[str, Any]]:
-    await cursor.execute(
-        """
-        select
-          notification_id,
-          status,
-          created_at,
-          doc_id,
-          event_cluster_id,
-          interest_id
-        from notification_log
-        where user_id = %s
-          and (
-            interest_id = %s
-            or (%s::uuid is not null and event_cluster_id = %s::uuid)
-            or (%s::uuid is not null and doc_id in (
-              select doc_id from articles where family_id = %s::uuid
-            ))
-          )
-          and created_at >= now() - interval '24 hours'
-        order by created_at desc
-        limit 20
-        """,
-        (user_id, interest_id, cluster_id, cluster_id, family_id, family_id),
-    )
-    return list(await cursor.fetchall())
-
-
-async def compute_novelty_score(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    interest_id: uuid.UUID,
-    cluster_id: uuid.UUID | None,
-    family_id: uuid.UUID | None,
-    article_features: Mapping[str, Sequence[str]],
-) -> tuple[float, bool]:
-    history = await fetch_recent_notification_history(
-        cursor,
-        user_id=user_id,
-        interest_id=interest_id,
-        cluster_id=cluster_id,
-        family_id=family_id,
-    )
-    if not history:
-        return 1.0, False
-
-    if cluster_id is None:
-        return 0.0, False
-
-    await cursor.execute(
-        """
-        select
-          ec.top_entities,
-          ec.top_places
-        from event_clusters ec
-        where ec.cluster_id = %s
-        """,
-        (cluster_id,),
-    )
-    cluster_row = await cursor.fetchone()
-    if cluster_row is None:
-        return 0.0, False
-
-    major_update = is_major_update(
-        existing_entities=coerce_text_list(cluster_row.get("top_entities")),
-        existing_places=coerce_text_list(cluster_row.get("top_places")),
-        existing_numbers=[],
-        incoming_entities=coerce_text_list(article_features.get("entities")),
-        incoming_places=coerce_text_list(article_features.get("places")),
-        incoming_numbers=coerce_text_list(article_features.get("numbers")),
-    )
-    if major_update:
-        return 0.4, True
-    return 0.0, False
-
-
-async def fetch_user_notification_channels(
-    cursor: psycopg.AsyncCursor[Any],
-    user_id: uuid.UUID,
-) -> list[dict[str, Any]]:
-    await cursor.execute(
-        """
-        select
-          channel_binding_id::text as channel_binding_id,
-          channel_type,
-          is_enabled,
-          config_json,
-          verified_at
-        from user_notification_channels
-        where user_id = %s
-          and is_enabled = true
-          and channel_type in ('web_push', 'telegram')
-        order by channel_type, created_at
-        """,
-        (user_id,),
-    )
-    return list(await cursor.fetchall())
-
-
-async def fetch_user_notification_preferences(
-    cursor: psycopg.AsyncCursor[Any],
-    user_id: uuid.UUID,
-) -> dict[str, bool]:
-    await cursor.execute(
-        """
-        select notification_preferences
-        from user_profiles
-        where user_id = %s
-        limit 1
-        """,
-        (user_id,),
-    )
-    row = await cursor.fetchone()
-    preferences = row.get("notification_preferences") if row else {}
-    return normalize_notification_preferences(preferences if isinstance(preferences, dict) else None)
-
-
-async def insert_notification_log_row(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    interest_id: uuid.UUID | None,
-    doc_id: uuid.UUID,
-    cluster_id: uuid.UUID | None,
-    channel_type: str,
-    status: str,
-    title: str,
-    body: str,
-    decision_reason: str,
-    delivery_payload_json: dict[str, Any],
-) -> uuid.UUID:
-    await cursor.execute(
-        """
-        insert into notification_log (
-          user_id,
-          interest_id,
-          doc_id,
-          event_cluster_id,
-          channel_type,
-          status,
-          title,
-          body,
-          decision_reason,
-          delivery_payload_json
-        )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-        returning notification_id
-        """,
-        (
-            user_id,
-            interest_id,
-            doc_id,
-            cluster_id,
-            channel_type,
-            status,
-            title,
-            body,
-            decision_reason,
-            Json(make_json_safe(delivery_payload_json)),
-        ),
-    )
-    row = await cursor.fetchone()
-    return row["notification_id"]
-
-
-async def update_notification_delivery_status(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    notification_id: uuid.UUID,
-    status: str,
-    delivery_payload_json: dict[str, Any],
-) -> None:
-    await cursor.execute(
-        """
-        update notification_log
-        set
-          status = %s,
-          delivery_payload_json = %s::jsonb,
-          sent_at = case when %s = 'sent' then coalesce(sent_at, now()) else sent_at end,
-          updated_at = now()
-        where notification_id = %s
-        """,
-        (
-            status,
-            Json(make_json_safe(delivery_payload_json)),
-            status,
-            notification_id,
-        ),
-    )
-
-
-async def fetch_user_digest_channel(
-    cursor: psycopg.AsyncCursor[Any],
-    user_id: uuid.UUID,
-) -> dict[str, Any] | None:
-    await cursor.execute(
-        """
-        select
-          channel_binding_id::text as channel_binding_id,
-          config_json,
-          verified_at
-        from user_notification_channels
-        where user_id = %s
-          and channel_type = 'email_digest'
-          and is_enabled = true
-        order by created_at desc
-        limit 1
-        """,
-        (user_id,),
-    )
-    return await cursor.fetchone()
-
-
-async def insert_digest_delivery_log_row(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    digest_kind: str,
-    cadence: str | None,
-    status: str,
-    recipient_email: str,
-    subject: str,
-    body_text: str,
-    body_html: str,
-    metadata_json: dict[str, Any] | None = None,
-    error_text: str | None = None,
-) -> uuid.UUID:
-    await cursor.execute(
-        """
-        insert into digest_delivery_log (
-          user_id,
-          digest_kind,
-          cadence,
-          status,
-          recipient_email,
-          subject,
-          body_text,
-          body_html,
-          metadata_json,
-          error_text
-        )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
-        returning digest_delivery_id
-        """,
-        (
-            user_id,
-            digest_kind,
-            cadence,
-            status,
-            recipient_email,
-            subject,
-            body_text,
-            body_html,
-            Json(make_json_safe(metadata_json or {})),
-            error_text,
-        ),
-    )
-    row = await cursor.fetchone()
-    return row["digest_delivery_id"]
-
-
-async def upsert_digest_delivery_items(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    digest_delivery_id: uuid.UUID,
-    content_item_ids: Sequence[str],
-) -> None:
-    for index, content_item_id in enumerate(content_item_ids):
-        await cursor.execute(
-            """
-            insert into digest_delivery_items (
-              digest_delivery_id,
-              item_position,
-              content_item_id
-            )
-            values (%s, %s, %s)
-            on conflict (digest_delivery_id, item_position) do update
-            set content_item_id = excluded.content_item_id
-            """,
-            (digest_delivery_id, index, content_item_id),
-        )
-
-
-async def update_digest_delivery_status(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    digest_delivery_id: uuid.UUID,
-    status: str,
-    error_text: str | None = None,
-) -> None:
-    await cursor.execute(
-        """
-        update digest_delivery_log
-        set
-          status = %s,
-          error_text = %s,
-          sent_at = case
-            when %s = 'sent' then coalesce(sent_at, now())
-            else sent_at
-          end,
-          updated_at = now()
-        where digest_delivery_id = %s
-        """,
-        (status, error_text, status, digest_delivery_id),
-    )
-
-
-async def update_user_digest_settings_runtime_state(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    next_run_at: datetime | None,
-    last_sent_at: datetime | None = None,
-    last_delivery_status: str | None = None,
-    last_delivery_error: str | None = None,
-) -> None:
-    await cursor.execute(
-        """
-        update user_digest_settings
-        set
-          next_run_at = %s,
-          last_sent_at = coalesce(%s, last_sent_at),
-          last_delivery_status = %s,
-          last_delivery_error = %s,
-          updated_at = now()
-        where user_id = %s
-        """,
-        (
-            next_run_at,
-            last_sent_at,
-            last_delivery_status,
-            last_delivery_error,
-            user_id,
-        ),
-    )
-
-
-async def fetch_queued_manual_digest_rows(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    limit: int = 10,
-) -> list[dict[str, Any]]:
-    await cursor.execute(
-        """
-        select
-          digest_delivery_id,
-          user_id,
-          recipient_email,
-          subject,
-          body_text,
-          body_html
-        from digest_delivery_log
-        where digest_kind = 'manual_saved'
-          and status = 'queued'
-        order by requested_at asc
-        limit %s
-        """,
-        (limit,),
-    )
-    return list(await cursor.fetchall())
-
-
-async def fetch_due_digest_settings_rows(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    limit: int = 10,
-) -> list[dict[str, Any]]:
-    await cursor.execute(
-        """
-        select
-          uds.user_id,
-          uds.is_enabled,
-          uds.cadence,
-          uds.send_hour,
-          uds.send_minute,
-          uds.timezone,
-          uds.skip_if_empty,
-          uds.next_run_at,
-          uds.last_sent_at,
-          uds.last_delivery_status,
-          uds.last_delivery_error
-        from user_digest_settings uds
-        where uds.is_enabled = true
-          and (uds.next_run_at is null or uds.next_run_at <= now())
-        order by coalesce(uds.next_run_at, uds.created_at) asc
-        limit %s
-        """,
-        (limit,),
-    )
-    return list(await cursor.fetchall())
-
-
-async def fetch_scheduled_digest_items(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    since_at: datetime | None,
-    until_at: datetime,
-) -> list[DigestItem]:
-    await cursor.execute(
-        """
-        with ranked_matches as (
-          select
-            'editorial:' || a.doc_id::text as content_item_id,
-            a.title,
-            a.url,
-            a.lead,
-            coalesce(a.extracted_source_name, sc.name) as source_name,
-            coalesce(a.published_at, a.ingested_at)::text as published_at,
-            row_number() over (
-              partition by coalesce(a.canonical_doc_id, a.doc_id)
-              order by
-                a.published_at desc nulls last,
-                a.ingested_at desc,
-                a.doc_id
-            ) as family_rank
-          from interest_match_results imr
-          join articles a on a.doc_id = imr.doc_id
-          join source_channels sc on sc.channel_id = a.channel_id
-          left join final_selection_results fsr on fsr.doc_id = a.doc_id
-          left join system_feed_results sfr on sfr.doc_id = a.doc_id
-          where imr.user_id = %s
-            and imr.decision = 'notify'
-            and imr.created_at <= %s
-            and (%s::timestamptz is null or imr.created_at > %s::timestamptz)
-            and a.visibility_state = 'visible'
-            and (
-              case
-                when fsr.doc_id is not null then coalesce(fsr.is_selected, false)
-                else coalesce(sfr.eligible_for_feed, false)
-              end
-            ) = true
-        )
-        select
-          content_item_id,
-          title,
-          url,
-          lead,
-          source_name,
-          published_at
-        from ranked_matches
-        where family_rank = 1
-        order by published_at desc nulls last, content_item_id
-        """,
-        (user_id, until_at, since_at, since_at),
-    )
-    rows = await cursor.fetchall()
-    return [
-        DigestItem(
-            content_item_id=str(row.get("content_item_id") or ""),
-            title=str(row.get("title") or "Untitled article"),
-            url=str(row.get("url") or "").strip() or None,
-            summary=str(row.get("lead") or "").strip() or None,
-            source_name=str(row.get("source_name") or "").strip() or None,
-            published_at=str(row.get("published_at") or "").strip() or None,
-        )
-        for row in rows
-        if str(row.get("content_item_id") or "").strip()
-    ]
-
-
-async def process_queued_manual_digests() -> None:
-    connection = await open_connection()
-    async with connection:
-        async with connection.transaction():
-            async with connection.cursor() as cursor:
-                rows = await fetch_queued_manual_digest_rows(cursor)
-                for row in rows:
-                    digest_delivery_id = row["digest_delivery_id"]
-                    recipient_email = str(row.get("recipient_email") or "").strip()
-                    if not recipient_email:
-                        await update_digest_delivery_status(
-                            cursor,
-                            digest_delivery_id=digest_delivery_id,
-                            status="failed",
-                            error_text="Recipient email is missing.",
-                        )
-                        continue
-
-                    attempt = dispatch_channel_message(
-                        "email_digest",
-                        {"email": recipient_email},
-                        str(row.get("subject") or "Saved digest"),
-                        str(row.get("body_text") or ""),
-                        body_html=str(row.get("body_html") or "").strip() or None,
-                    )
-                    await update_digest_delivery_status(
-                        cursor,
-                        digest_delivery_id=digest_delivery_id,
-                        status=attempt.status,
-                        error_text=None if attempt.status == "sent" else attempt.detail,
-                    )
-
-
-async def process_due_scheduled_digests() -> None:
-    now = datetime.now(timezone.utc)
-    connection = await open_connection()
-    async with connection:
-        async with connection.transaction():
-            async with connection.cursor() as cursor:
-                rows = await fetch_due_digest_settings_rows(cursor)
-                for row in rows:
-                    user_id = row["user_id"]
-                    cadence = coerce_digest_cadence(row.get("cadence"))
-                    send_hour = coerce_digest_send_hour(row.get("send_hour"))
-                    send_minute = coerce_digest_send_minute(row.get("send_minute"))
-                    timezone_name = str(row.get("timezone") or "").strip()
-                    next_run_at = parse_datetime(row.get("next_run_at"))
-                    last_sent_at = parse_datetime(row.get("last_sent_at"))
-                    skip_if_empty = bool(row.get("skip_if_empty", True))
-
-                    try:
-                        validated_timezone = validate_timezone_name(timezone_name)
-                    except ValueError as error:
-                        await update_user_digest_settings_runtime_state(
-                            cursor,
-                            user_id=user_id,
-                            next_run_at=None,
-                            last_delivery_status="failed",
-                            last_delivery_error=str(error),
-                        )
-                        continue
-
-                    if next_run_at is None:
-                        initialized_next_run = compute_next_digest_run_at(
-                            now=now,
-                            cadence=cadence,
-                            timezone_name=validated_timezone,
-                            send_hour=send_hour,
-                            send_minute=send_minute,
-                        )
-                        await update_user_digest_settings_runtime_state(
-                            cursor,
-                            user_id=user_id,
-                            next_run_at=initialized_next_run,
-                            last_delivery_status="queued",
-                            last_delivery_error=None,
-                        )
-                        continue
-
-                    recipient_channel = await fetch_user_digest_channel(cursor, user_id)
-                    recipient_email = (
-                        str(
-                            (
-                                recipient_channel.get("config_json")
-                                if recipient_channel and isinstance(recipient_channel.get("config_json"), dict)
-                                else {}
-                            ).get("email")
-                            or ""
-                        ).strip()
-                    )
-                    next_scheduled_run = compute_next_digest_run_at(
-                        now=now,
-                        cadence=cadence,
-                        timezone_name=validated_timezone,
-                        send_hour=send_hour,
-                        send_minute=send_minute,
-                        base_run_at=next_run_at,
-                    )
-
-                    if not recipient_email:
-                        await update_user_digest_settings_runtime_state(
-                            cursor,
-                            user_id=user_id,
-                            next_run_at=next_scheduled_run,
-                            last_delivery_status="failed",
-                            last_delivery_error="Connected digest email is missing.",
-                        )
-                        continue
-
-                    run_cutoff = now
-                    items = await fetch_scheduled_digest_items(
-                        cursor,
-                        user_id=user_id,
-                        since_at=last_sent_at,
-                        until_at=run_cutoff,
-                    )
-                    subject = build_digest_subject(
-                        digest_kind="scheduled_matches",
-                        item_count=len(items),
-                        cadence=cadence,
-                    )
-
-                    if not items and skip_if_empty:
-                        await insert_digest_delivery_log_row(
-                            cursor,
-                            user_id=user_id,
-                            digest_kind="scheduled_matches",
-                            cadence=cadence,
-                            status="skipped_empty",
-                            recipient_email=recipient_email,
-                            subject=subject,
-                            body_text="",
-                            body_html="",
-                            metadata_json={
-                                "itemCount": 0,
-                                "skipIfEmpty": True,
-                            },
-                        )
-                        await update_user_digest_settings_runtime_state(
-                            cursor,
-                            user_id=user_id,
-                            next_run_at=next_scheduled_run,
-                            last_delivery_status="skipped_empty",
-                            last_delivery_error=None,
-                        )
-                        continue
-
-                    intro = (
-                        "New personalized matches from the system-selected collection since your last successful digest."
-                    )
-                    body_text = render_digest_text(
-                        heading=subject,
-                        intro=intro,
-                        items=items,
-                    )
-                    body_html = render_digest_html(
-                        heading=subject,
-                        intro=intro,
-                        items=items,
-                    )
-                    digest_delivery_id = await insert_digest_delivery_log_row(
-                        cursor,
-                        user_id=user_id,
-                        digest_kind="scheduled_matches",
-                        cadence=cadence,
-                        status="queued",
-                        recipient_email=recipient_email,
-                        subject=subject,
-                        body_text=body_text,
-                        body_html=body_html,
-                        metadata_json={
-                            "itemCount": len(items),
-                            "scheduledRunAt": next_run_at.isoformat(),
-                            "windowEnd": run_cutoff.isoformat(),
-                            "windowStart": last_sent_at.isoformat() if last_sent_at else None,
-                        },
-                    )
-                    await upsert_digest_delivery_items(
-                        cursor,
-                        digest_delivery_id=digest_delivery_id,
-                        content_item_ids=[item.content_item_id for item in items],
-                    )
-                    attempt = dispatch_channel_message(
-                        "email_digest",
-                        {"email": recipient_email},
-                        subject,
-                        body_text,
-                        body_html=body_html,
-                    )
-                    await update_digest_delivery_status(
-                        cursor,
-                        digest_delivery_id=digest_delivery_id,
-                        status=attempt.status,
-                        error_text=None if attempt.status == "sent" else attempt.detail,
-                    )
-                    if attempt.status == "sent":
-                        await update_user_digest_settings_runtime_state(
-                            cursor,
-                            user_id=user_id,
-                            next_run_at=next_scheduled_run,
-                            last_sent_at=run_cutoff,
-                            last_delivery_status="sent",
-                            last_delivery_error=None,
-                        )
-                    else:
-                        await update_user_digest_settings_runtime_state(
-                            cursor,
-                            user_id=user_id,
-                            next_run_at=now + timedelta(minutes=15),
-                            last_delivery_status="failed",
-                            last_delivery_error=attempt.detail,
-                        )
-
-
-async def insert_notification_suppression(
-    cursor: psycopg.AsyncCursor[Any],
-    *,
-    user_id: uuid.UUID,
-    interest_id: uuid.UUID | None,
-    notification_id: uuid.UUID | None,
-    doc_id: uuid.UUID | None,
-    family_id: uuid.UUID | None,
-    cluster_id: uuid.UUID | None,
-    reason: str,
-) -> None:
-    await cursor.execute(
-        """
-        insert into notification_suppression (
-          user_id,
-          interest_id,
-          notification_id,
-          doc_id,
-          family_id,
-          event_cluster_id,
-          reason
-        )
-        values (%s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            user_id,
-            interest_id,
-            notification_id,
-            doc_id,
-            family_id,
-            cluster_id,
-            reason,
-        ),
-    )
-
-
-async def find_exact_duplicate_candidate(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: uuid.UUID,
-    exact_hash: str,
-) -> dict[str, Any] | None:
-    await cursor.execute(
-        """
-        select
-          doc_id,
-          canonical_doc_id,
-          family_id,
-          ingested_at
-        from articles
-        where
-          doc_id <> %s
-          and exact_hash = %s
-          and processing_state in ('normalized', 'deduped', 'embedded', 'clustered', 'matched', 'notified')
-          and ingested_at >= now() - interval '7 days'
-        order by ingested_at, doc_id
-        limit 1
-        """,
-        (doc_id, exact_hash),
-    )
-    return await cursor.fetchone()
-
-
-async def find_near_duplicate_candidate(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: uuid.UUID,
-    simhash64: int,
-) -> dict[str, Any] | None:
-    await cursor.execute(
-        """
-        select
-          doc_id,
-          canonical_doc_id,
-          family_id,
-          simhash64,
-          ingested_at
-        from articles
-        where
-          doc_id <> %s
-          and simhash64 is not null
-          and processing_state in ('normalized', 'deduped', 'embedded', 'clustered', 'matched', 'notified')
-          and ingested_at >= now() - interval '7 days'
-        order by ingested_at desc
-        limit 200
-        """,
-        (doc_id,),
-    )
-    candidates = await cursor.fetchall()
-
-    best_candidate: dict[str, Any] | None = None
-    best_distance = 64
-    for candidate in candidates:
-        distance = hamming_distance64(simhash64, int(candidate["simhash64"]))
-        if distance <= 3 and distance < best_distance:
-            best_candidate = candidate
-            best_distance = distance
-
-    return best_candidate
-
-
-def resolve_canonical_doc_id(candidate: dict[str, Any]) -> uuid.UUID:
-    return candidate.get("canonical_doc_id") or candidate["doc_id"]
-
-
-def resolve_family_id(candidate: dict[str, Any]) -> uuid.UUID:
-    return candidate.get("family_id") or resolve_canonical_doc_id(candidate)
 
 
 async def process_normalize(job: Job, _job_token: str) -> dict[str, Any]:
@@ -5525,6 +3535,545 @@ async def replay_historical_articles(
     )
 
 
+CONTENT_ANALYSIS_BACKFILL_MODULES = {
+    "ner",
+    "sentiment",
+    "category",
+    "cluster_summary",
+    "structured_extraction",
+    "system_interest_labels",
+    "content_filter",
+}
+DEFAULT_CONTENT_ANALYSIS_BACKFILL_MODULES = CONTENT_ANALYSIS_BACKFILL_MODULES.difference(
+    {"structured_extraction"}
+)
+CONTENT_ANALYSIS_BACKFILL_SUBJECT_TYPES = {"article", "web_resource", "story_cluster"}
+
+
+def normalize_content_analysis_backfill_modules(value: Any) -> set[str]:
+    requested = set(coerce_text_list(value))
+    if not requested:
+        return set(DEFAULT_CONTENT_ANALYSIS_BACKFILL_MODULES)
+    return requested.intersection(CONTENT_ANALYSIS_BACKFILL_MODULES) or set(
+        DEFAULT_CONTENT_ANALYSIS_BACKFILL_MODULES
+    )
+
+
+def normalize_content_analysis_backfill_subject_types(value: Any) -> list[str]:
+    requested = [
+        item
+        for item in coerce_text_list(value)
+        if item in CONTENT_ANALYSIS_BACKFILL_SUBJECT_TYPES
+    ]
+    return requested or ["article", "web_resource", "story_cluster"]
+
+
+def build_content_analysis_backfill_progress_patch(
+    *,
+    processed_items: int,
+    total_items: int,
+) -> dict[str, Any]:
+    return {
+        "progress": {
+            "processedContentItems": processed_items,
+            "totalContentItems": total_items,
+        }
+    }
+
+
+def build_content_analysis_missing_clause(
+    *,
+    subject_type: str,
+    modules: set[str],
+    policy_key: str,
+    alias: str,
+) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if "ner" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_analysis_results car
+              where car.subject_type = %s
+                and car.subject_id = {alias}
+                and car.analysis_type = 'ner'
+                and car.status = 'completed'
+            )
+            """
+        )
+        params.append(subject_type)
+    if "sentiment" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_analysis_results car
+              where car.subject_type = %s
+                and car.subject_id = {alias}
+                and car.analysis_type = 'sentiment'
+                and car.status = 'completed'
+            )
+            """
+        )
+        params.append(subject_type)
+    if "category" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_analysis_results car
+              where car.subject_type = %s
+                and car.subject_id = {alias}
+                and car.analysis_type = 'category'
+                and car.status = 'completed'
+            )
+            """
+        )
+        params.append(subject_type)
+    if subject_type != "story_cluster" and "structured_extraction" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_analysis_results car
+              where car.subject_type = %s
+                and car.subject_id = {alias}
+                and car.analysis_type = 'structured_extraction'
+                and car.status = 'completed'
+            )
+            """
+        )
+        params.append(subject_type)
+    if subject_type == "story_cluster" and "cluster_summary" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_analysis_results car
+              where car.subject_type = 'story_cluster'
+                and car.subject_id = {alias}
+                and car.analysis_type = 'cluster_summary'
+                and car.status = 'completed'
+            )
+            """
+        )
+    if subject_type == "article" and "system_interest_labels" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_labels cl
+              where cl.subject_type = 'article'
+                and cl.subject_id = {alias}
+                and cl.label_type = 'system_interest'
+            )
+            """
+        )
+    if "content_filter" in modules:
+        clauses.append(
+            f"""
+            not exists (
+              select 1
+              from content_filter_results cfr
+              where cfr.subject_type = %s
+                and cfr.subject_id = {alias}
+                and cfr.policy_key = %s
+            )
+            """
+        )
+        params.extend([subject_type, policy_key])
+    if not clauses:
+        return "", []
+    return f"and ({' or '.join(clauses)})", params
+
+
+async def count_content_analysis_backfill_targets(
+    *,
+    subject_type: str,
+    modules: set[str],
+    missing_only: bool,
+    policy_key: str,
+    subject_ids: Sequence[str] | None = None,
+) -> int:
+    subject_filter_clause = ""
+    subject_filter_params: list[Any] = []
+    if subject_type == "article":
+        if subject_ids:
+            subject_filter_clause = "and a.doc_id = any(%s::uuid[])"
+            subject_filter_params.append(list(subject_ids))
+        missing_clause, missing_params = (
+            build_content_analysis_missing_clause(
+                subject_type=subject_type,
+                modules=modules,
+                policy_key=policy_key,
+                alias="a.doc_id",
+            )
+            if missing_only
+            else ("", [])
+        )
+        sql = f"""
+            select count(*)::int as total
+            from articles a
+            where coalesce(a.visibility_state, 'visible') != 'blocked'
+              and coalesce(a.title, '') || coalesce(a.lead, '') || coalesce(a.body, '') <> ''
+              {subject_filter_clause}
+              {missing_clause}
+        """
+    elif subject_type == "web_resource":
+        resource_modules = modules.difference({"system_interest_labels"})
+        if not resource_modules:
+            return 0
+        if subject_ids:
+            subject_filter_clause = "and wr.resource_id = any(%s::uuid[])"
+            subject_filter_params.append(list(subject_ids))
+        missing_clause, missing_params = (
+            build_content_analysis_missing_clause(
+                subject_type=subject_type,
+                modules=resource_modules,
+                policy_key=policy_key,
+                alias="wr.resource_id",
+            )
+            if missing_only
+            else ("", [])
+        )
+        sql = f"""
+            select count(*)::int as total
+            from web_resources wr
+            where coalesce(wr.title, '') || coalesce(wr.summary, '') || coalesce(wr.body, '') <> ''
+              {subject_filter_clause}
+              {missing_clause}
+        """
+    elif subject_type == "story_cluster":
+        cluster_modules = modules.intersection({"cluster_summary"})
+        if not cluster_modules:
+            return 0
+        if subject_ids:
+            subject_filter_clause = "and sc.story_cluster_id = any(%s::uuid[])"
+            subject_filter_params.append(list(subject_ids))
+        missing_clause, missing_params = (
+            build_content_analysis_missing_clause(
+                subject_type=subject_type,
+                modules=cluster_modules,
+                policy_key=policy_key,
+                alias="sc.story_cluster_id",
+            )
+            if missing_only
+            else ("", [])
+        )
+        sql = f"""
+            select count(*)::int as total
+            from story_clusters sc
+            where sc.canonical_document_count > 0
+              {subject_filter_clause}
+              {missing_clause}
+        """
+    else:
+        return 0
+
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(sql, tuple([*subject_filter_params, *missing_params]))
+            row = await cursor.fetchone()
+    return int(row["total"] or 0) if row else 0
+
+
+async def list_content_analysis_backfill_targets(
+    *,
+    subject_type: str,
+    modules: set[str],
+    missing_only: bool,
+    policy_key: str,
+    batch_size: int,
+    after_subject_id: str | None,
+    subject_ids: Sequence[str] | None = None,
+) -> list[str]:
+    after_clause = ""
+    after_params: list[Any] = []
+    subject_filter_clause = ""
+    subject_filter_params: list[Any] = []
+    if subject_type == "article":
+        if subject_ids:
+            subject_filter_clause = "and a.doc_id = any(%s::uuid[])"
+            subject_filter_params.append(list(subject_ids))
+        if after_subject_id:
+            after_clause = "and a.doc_id::text > %s"
+            after_params.append(after_subject_id)
+        missing_clause, missing_params = (
+            build_content_analysis_missing_clause(
+                subject_type=subject_type,
+                modules=modules,
+                policy_key=policy_key,
+                alias="a.doc_id",
+            )
+            if missing_only
+            else ("", [])
+        )
+        sql = f"""
+            select a.doc_id::text as subject_id
+            from articles a
+            where coalesce(a.visibility_state, 'visible') != 'blocked'
+              and coalesce(a.title, '') || coalesce(a.lead, '') || coalesce(a.body, '') <> ''
+              {subject_filter_clause}
+              {after_clause}
+              {missing_clause}
+            order by a.doc_id::text asc
+            limit %s
+        """
+    elif subject_type == "web_resource":
+        resource_modules = modules.difference({"system_interest_labels"})
+        if not resource_modules:
+            return []
+        if subject_ids:
+            subject_filter_clause = "and wr.resource_id = any(%s::uuid[])"
+            subject_filter_params.append(list(subject_ids))
+        if after_subject_id:
+            after_clause = "and wr.resource_id::text > %s"
+            after_params.append(after_subject_id)
+        missing_clause, missing_params = (
+            build_content_analysis_missing_clause(
+                subject_type=subject_type,
+                modules=resource_modules,
+                policy_key=policy_key,
+                alias="wr.resource_id",
+            )
+            if missing_only
+            else ("", [])
+        )
+        sql = f"""
+            select wr.resource_id::text as subject_id
+            from web_resources wr
+            where coalesce(wr.title, '') || coalesce(wr.summary, '') || coalesce(wr.body, '') <> ''
+              {subject_filter_clause}
+              {after_clause}
+              {missing_clause}
+            order by wr.resource_id::text asc
+            limit %s
+        """
+    elif subject_type == "story_cluster":
+        cluster_modules = modules.intersection({"cluster_summary"})
+        if not cluster_modules:
+            return []
+        if subject_ids:
+            subject_filter_clause = "and sc.story_cluster_id = any(%s::uuid[])"
+            subject_filter_params.append(list(subject_ids))
+        if after_subject_id:
+            after_clause = "and sc.story_cluster_id::text > %s"
+            after_params.append(after_subject_id)
+        missing_clause, missing_params = (
+            build_content_analysis_missing_clause(
+                subject_type=subject_type,
+                modules=cluster_modules,
+                policy_key=policy_key,
+                alias="sc.story_cluster_id",
+            )
+            if missing_only
+            else ("", [])
+        )
+        sql = f"""
+            select sc.story_cluster_id::text as subject_id
+            from story_clusters sc
+            where sc.canonical_document_count > 0
+              {subject_filter_clause}
+              {after_clause}
+              {missing_clause}
+            order by sc.story_cluster_id::text asc
+            limit %s
+        """
+    else:
+        return []
+
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                sql,
+                tuple([*subject_filter_params, *after_params, *missing_params, batch_size]),
+            )
+            rows = list(await cursor.fetchall())
+    return [str(row["subject_id"]) for row in rows]
+
+
+async def replay_content_analysis_subject(
+    *,
+    subject_type: str,
+    subject_id: str,
+    modules: set[str],
+    policy_key: str,
+    max_text_chars: int,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {"subjectType": subject_type, "subjectId": subject_id}
+    subject = await asyncio.to_thread(load_content_subject, subject_type, subject_id)
+    if subject is None:
+        return {**result, "skipped": True, "reason": "subject_not_found"}
+    if subject_type != "story_cluster" and "ner" in modules:
+        result["ner"] = await asyncio.to_thread(
+            persist_ner_analysis,
+            subject,
+            max_text_chars=max_text_chars,
+        )
+    if subject_type != "story_cluster" and "sentiment" in modules:
+        result["sentiment"] = await asyncio.to_thread(
+            persist_sentiment_analysis,
+            subject,
+            max_text_chars=max_text_chars,
+        )
+    if subject_type != "story_cluster" and "category" in modules:
+        result["category"] = await asyncio.to_thread(
+            persist_category_analysis,
+            subject,
+            max_text_chars=max_text_chars,
+        )
+    if subject_type != "story_cluster" and "structured_extraction" in modules:
+        result["structuredExtraction"] = await asyncio.to_thread(
+            persist_structured_extraction_analysis,
+            subject,
+            max_text_chars=max_text_chars,
+        )
+    if subject_type == "article" and "system_interest_labels" in modules:
+        result["systemInterestLabels"] = await asyncio.to_thread(
+            project_system_interest_labels,
+            subject_id,
+        )
+    if subject_type != "story_cluster" and "content_filter" in modules:
+        result["contentFilter"] = await asyncio.to_thread(
+            persist_content_filter_result,
+            subject_type,
+            subject_id,
+            policy_key=policy_key,
+        )
+    if subject_type == "story_cluster" and "cluster_summary" in modules:
+        result["clusterSummary"] = await asyncio.to_thread(
+            persist_cluster_summary_analysis,
+            subject_id,
+        )
+    return result
+
+
+async def replay_content_analysis(
+    *,
+    reindex_job_id: str,
+    batch_size: int,
+    subject_types: list[str],
+    modules: set[str],
+    missing_only: bool,
+    policy_key: str,
+    max_text_chars: int,
+    subject_ids: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    requested_subject_ids = list(subject_ids or [])
+
+    total_items = 0
+    for subject_type in subject_types:
+        total_items += await count_content_analysis_backfill_targets(
+            subject_type=subject_type,
+            modules=modules,
+            missing_only=missing_only,
+            policy_key=policy_key,
+            subject_ids=requested_subject_ids or None,
+        )
+
+    processed_items = 0
+    failed_items = 0
+    skipped_items = 0
+    ner_entities = 0
+    sentiment_labels = 0
+    category_labels = 0
+    cluster_summaries = 0
+    labels = 0
+    filter_results = 0
+    errors: list[dict[str, Any]] = []
+    await update_reindex_job_options(
+        reindex_job_id,
+        build_content_analysis_backfill_progress_patch(
+            processed_items=processed_items,
+            total_items=total_items,
+        ),
+    )
+
+    for subject_type in subject_types:
+        last_subject_id: str | None = None
+        while True:
+            batch_subject_ids = await list_content_analysis_backfill_targets(
+                subject_type=subject_type,
+                modules=modules,
+                missing_only=missing_only,
+                policy_key=policy_key,
+                batch_size=batch_size,
+                after_subject_id=last_subject_id,
+                subject_ids=requested_subject_ids or None,
+            )
+            if not batch_subject_ids:
+                break
+            for subject_id in batch_subject_ids:
+                last_subject_id = subject_id
+                try:
+                    replay_result = await replay_content_analysis_subject(
+                        subject_type=subject_type,
+                        subject_id=subject_id,
+                        modules=modules,
+                        policy_key=policy_key,
+                        max_text_chars=max_text_chars,
+                    )
+                    if replay_result.get("skipped"):
+                        skipped_items += 1
+                    ner_result = replay_result.get("ner")
+                    if isinstance(ner_result, Mapping):
+                        ner_entities += int(ner_result.get("entityCount") or 0)
+                    sentiment_result = replay_result.get("sentiment")
+                    if isinstance(sentiment_result, Mapping):
+                        sentiment_labels += int(sentiment_result.get("labelCount") or 0)
+                    category_result = replay_result.get("category")
+                    if isinstance(category_result, Mapping):
+                        category_labels += int(category_result.get("labelCount") or 0)
+                    if isinstance(replay_result.get("clusterSummary"), Mapping):
+                        cluster_summaries += 1
+                    label_result = replay_result.get("systemInterestLabels")
+                    if isinstance(label_result, Mapping):
+                        labels += int(label_result.get("labelCount") or 0)
+                    if "contentFilter" in replay_result:
+                        filter_results += 1
+                except Exception as error:
+                    failed_items += 1
+                    if len(errors) < 20:
+                        errors.append(
+                            {
+                                "subjectType": subject_type,
+                                "subjectId": subject_id,
+                                "error": str(error),
+                            }
+                        )
+                processed_items += 1
+            await update_reindex_job_options(
+                reindex_job_id,
+                build_content_analysis_backfill_progress_patch(
+                    processed_items=processed_items,
+                    total_items=total_items,
+                ),
+            )
+
+    return {
+        "mode": "content_analysis_backfill",
+        "processedContentItems": processed_items,
+        "totalContentItems": total_items,
+        "failedContentItems": failed_items,
+        "skippedContentItems": skipped_items,
+        "nerEntityCount": ner_entities,
+        "sentimentLabelCount": sentiment_labels,
+        "taxonomyLabelCount": category_labels,
+        "clusterSummaryCount": cluster_summaries,
+        "systemInterestLabelCount": labels,
+        "contentFilterResultCount": filter_results,
+        "subjectTypes": subject_types,
+        "modules": sorted(modules),
+        "missingOnly": missing_only,
+        "policyKey": policy_key,
+        "maxTextChars": max_text_chars,
+        "retroNotifications": "skipped",
+        "errors": errors,
+    }
+
+
 async def read_active_selection_profile_snapshot() -> dict[str, Any]:
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
@@ -5676,6 +4225,12 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
                 "status": "skipped",
                 "reason": "repair_job_skips_rebuild",
             }
+        elif job_kind == "content_analysis":
+            result["rebuild"] = {
+                "indexName": index_name,
+                "status": "skipped",
+                "reason": "content_analysis_job_skips_index_rebuild",
+            }
         else:
             raise ValueError(f"Unsupported reindex job kind: {job_kind}")
 
@@ -5702,6 +4257,31 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
                 result["backfill"]["selectionProfileSnapshot"] = (
                     selection_profile_snapshot
                 )
+        if job_kind == "content_analysis":
+            batch_size = min(max(coerce_positive_int(job_options.get("batchSize"), 100), 1), 500)
+            modules = normalize_content_analysis_backfill_modules(job_options.get("modules"))
+            subject_types = normalize_content_analysis_backfill_subject_types(
+                job_options.get("subjectTypes")
+            )
+            missing_only = coerce_bool(job_options.get("missingOnly"), True)
+            policy_key = (
+                coerce_optional_string(job_options.get("policyKey"))
+                or DEFAULT_CONTENT_FILTER_POLICY_KEY
+            )
+            max_text_chars = min(
+                max(coerce_positive_int(job_options.get("maxTextChars"), 50_000), 1_000),
+                250_000,
+            )
+            result["contentAnalysis"] = await replay_content_analysis(
+                reindex_job_id=reindex_job_id,
+                batch_size=batch_size,
+                subject_types=subject_types,
+                modules=modules,
+                missing_only=missing_only,
+                policy_key=policy_key,
+                max_text_chars=max_text_chars,
+                subject_ids=coerce_text_list(job_options.get("subjectIds")) or None,
+            )
     except Exception as error:
         async with await open_connection() as connection:
             async with connection.transaction():
@@ -6148,260 +4728,62 @@ async def process_criterion_compile(job: Job, _job_token: str) -> dict[str, Any]
     }
 
 
-def on_worker_error(label: str):
-    def handler(*args: Any) -> None:
-        LOGGER.error("%s worker event: %s", label, args)
+def build_worker_runtime_deps() -> dict[str, Any]:
+    return {
+        "CLUSTER_QUEUE": CLUSTER_QUEUE,
+        "CRITERIA_MATCH_QUEUE": CRITERIA_MATCH_QUEUE,
+        "CRITERION_COMPILE_QUEUE": CRITERION_COMPILE_QUEUE,
+        "DEDUP_QUEUE": DEDUP_QUEUE,
+        "EMBED_QUEUE": EMBED_QUEUE,
+        "FEEDBACK_INGEST_QUEUE": FEEDBACK_INGEST_QUEUE,
+        "INTEREST_COMPILE_QUEUE": INTEREST_COMPILE_QUEUE,
+        "INTEREST_MATCH_QUEUE": INTEREST_MATCH_QUEUE,
+        "LLM_REVIEW_QUEUE": LLM_REVIEW_QUEUE,
+        "NORMALIZE_QUEUE": NORMALIZE_QUEUE,
+        "NOTIFY_QUEUE": NOTIFY_QUEUE,
+        "REINDEX_QUEUE": REINDEX_QUEUE,
+        "SEQUENCE_QUEUE": SEQUENCE_QUEUE,
+        "PostgresSequenceRepository": PostgresSequenceRepository,
+        "SequenceCronScheduler": SequenceCronScheduler,
+        "SequenceRunJobProcessor": SequenceRunJobProcessor,
+        "build_redis_connection_options": build_redis_connection_options,
+        "enqueue_sequence_run_job_async": enqueue_sequence_run_job_async,
+        "legacy_queue_consumers_enabled": legacy_queue_consumers_enabled,
+        "process_cluster": process_cluster,
+        "process_criterion_compile": process_criterion_compile,
+        "process_dedup": process_dedup,
+        "process_due_scheduled_digests": process_due_scheduled_digests,
+        "process_embed": process_embed,
+        "process_feedback_ingest": process_feedback_ingest,
+        "process_interest_compile": process_interest_compile,
+        "process_llm_review": process_llm_review,
+        "process_match_criteria": process_match_criteria,
+        "process_match_interests": process_match_interests,
+        "process_normalize": process_normalize,
+        "process_notify": process_notify,
+        "process_queued_manual_digests": process_queued_manual_digests,
+        "process_reindex": process_reindex,
+        "sequence_cron_poll_interval_seconds": sequence_cron_poll_interval_seconds,
+        "sequence_cron_scheduler_enabled": sequence_cron_scheduler_enabled,
+        "sequence_runner_concurrency": sequence_runner_concurrency,
+        "sequence_runner_enabled": sequence_runner_enabled,
+        "sequence_runner_lock_duration_ms": sequence_runner_lock_duration_ms,
+        "sequence_runner_stalled_interval_ms": sequence_runner_stalled_interval_ms,
+        "user_digest_poll_interval_seconds": user_digest_poll_interval_seconds,
+        "user_digest_scheduler_enabled": user_digest_scheduler_enabled,
+    }
 
-    return handler
+
+def on_worker_error(label: str):
+    return build_worker_error_handler(label, LOGGER)
 
 
 async def run_user_digest_scheduler_until_stopped(stop_event: asyncio.Event) -> None:
-    poll_interval = user_digest_poll_interval_seconds()
-    while not stop_event.is_set():
-        try:
-            await process_queued_manual_digests()
-            await process_due_scheduled_digests()
-        except Exception as error:  # pragma: no cover - runtime/env dependent
-            LOGGER.error("User digest scheduler poll failed: %s", error)
-
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=poll_interval)
-        except TimeoutError:
-            continue
+    await run_user_digest_scheduler_runtime(stop_event, build_worker_runtime_deps(), LOGGER)
 
 
 async def run_workers() -> None:
-    enable_legacy_queue_consumers = legacy_queue_consumers_enabled()
-    enable_sequence_runner = sequence_runner_enabled()
-    enable_sequence_cron_scheduler = sequence_cron_scheduler_enabled()
-    enable_user_digest_scheduler = user_digest_scheduler_enabled()
-    legacy_workers: list[tuple[str, str, Worker]] = []
-    if enable_legacy_queue_consumers:
-        legacy_workers = [
-            (
-                "normalize",
-                NORMALIZE_QUEUE,
-                Worker(
-                    NORMALIZE_QUEUE,
-                    process_normalize,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 4,
-                    },
-                ),
-            ),
-            (
-                "dedup",
-                DEDUP_QUEUE,
-                Worker(
-                    DEDUP_QUEUE,
-                    process_dedup,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 4,
-                    },
-                ),
-            ),
-            (
-                "embed",
-                EMBED_QUEUE,
-                Worker(
-                    EMBED_QUEUE,
-                    process_embed,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "cluster",
-                CLUSTER_QUEUE,
-                Worker(
-                    CLUSTER_QUEUE,
-                    process_cluster,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "match.criteria",
-                CRITERIA_MATCH_QUEUE,
-                Worker(
-                    CRITERIA_MATCH_QUEUE,
-                    process_match_criteria,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "match.interests",
-                INTEREST_MATCH_QUEUE,
-                Worker(
-                    INTEREST_MATCH_QUEUE,
-                    process_match_interests,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "notify",
-                NOTIFY_QUEUE,
-                Worker(
-                    NOTIFY_QUEUE,
-                    process_notify,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "llm.review",
-                LLM_REVIEW_QUEUE,
-                Worker(
-                    LLM_REVIEW_QUEUE,
-                    process_llm_review,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 1,
-                    },
-                ),
-            ),
-            (
-                "feedback.ingest",
-                FEEDBACK_INGEST_QUEUE,
-                Worker(
-                    FEEDBACK_INGEST_QUEUE,
-                    process_feedback_ingest,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "reindex",
-                REINDEX_QUEUE,
-                Worker(
-                    REINDEX_QUEUE,
-                    process_reindex,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 1,
-                    },
-                ),
-            ),
-            (
-                "interest.compile",
-                INTEREST_COMPILE_QUEUE,
-                Worker(
-                    INTEREST_COMPILE_QUEUE,
-                    process_interest_compile,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-            (
-                "criterion.compile",
-                CRITERION_COMPILE_QUEUE,
-                Worker(
-                    CRITERION_COMPILE_QUEUE,
-                    process_criterion_compile,
-                    {
-                        "connection": build_redis_connection_options(),
-                        "concurrency": 2,
-                    },
-                ),
-            ),
-        ]
-    sequence_worker: Worker | None = None
-    if enable_sequence_runner:
-        sequence_repository = PostgresSequenceRepository()
-        sequence_job_processor = SequenceRunJobProcessor(repository=sequence_repository)
-
-        async def process_sequence_queue_job(job: Job, _job_token: str) -> dict[str, Any]:
-            payload = job.data if isinstance(job.data, Mapping) else {}
-            return await sequence_job_processor.handle_payload(payload)
-
-        sequence_worker = Worker(
-            SEQUENCE_QUEUE,
-            process_sequence_queue_job,
-            {
-                "connection": build_redis_connection_options(),
-                "concurrency": sequence_runner_concurrency(),
-                "lockDuration": sequence_runner_lock_duration_ms(),
-                "stalledInterval": sequence_runner_stalled_interval_ms(),
-            },
-        )
-
-    for label, _queue_name, worker in legacy_workers:
-        worker.on("failed", on_worker_error(label))
-    if sequence_worker is not None:
-        sequence_worker.on("failed", on_worker_error("sequence"))
-
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-
-    for signame in ("SIGINT", "SIGTERM"):
-        signum = getattr(signal, signame)
-        loop.add_signal_handler(signum, stop_event.set)
-
-    sequence_scheduler_task: asyncio.Task[None] | None = None
-    if enable_sequence_cron_scheduler:
-        sequence_repository = PostgresSequenceRepository()
-        sequence_scheduler = SequenceCronScheduler(
-            repository=sequence_repository,
-            enqueue_run=enqueue_sequence_run_job_async,
-            poll_interval_seconds=sequence_cron_poll_interval_seconds(),
-        )
-        sequence_scheduler_task = asyncio.create_task(
-            sequence_scheduler.run_until_stopped(stop_event)
-        )
-    user_digest_scheduler_task: asyncio.Task[None] | None = None
-    if enable_user_digest_scheduler:
-        user_digest_scheduler_task = asyncio.create_task(
-            run_user_digest_scheduler_until_stopped(stop_event)
-        )
-
-    consumed_queues = [queue_name for _label, queue_name, _worker in legacy_workers]
-    if sequence_worker is not None:
-        consumed_queues.append(SEQUENCE_QUEUE)
-
-    LOGGER.info(
-        "Workers booted. Consuming %s.",
-        ", ".join(consumed_queues) if consumed_queues else "<none>",
-    )
-    if enable_sequence_cron_scheduler:
-        LOGGER.info(
-            "Sequence cron scheduler enabled with poll interval %.1fs.",
-            sequence_cron_poll_interval_seconds(),
-        )
-    if enable_user_digest_scheduler:
-        LOGGER.info(
-            "User digest scheduler enabled with poll interval %.1fs.",
-            user_digest_poll_interval_seconds(),
-        )
-    if enable_legacy_queue_consumers:
-        LOGGER.warning("Legacy queue consumers are enabled alongside sequence runtime.")
-    await stop_event.wait()
-    LOGGER.info("Worker shutdown requested. Closing BullMQ consumers.")
-    if sequence_scheduler_task is not None:
-        await sequence_scheduler_task
-    if user_digest_scheduler_task is not None:
-        await user_digest_scheduler_task
-    for _label, _queue_name, worker in legacy_workers:
-        await worker.close()
-    if sequence_worker is not None:
-        await sequence_worker.close()
+    await run_worker_runtime(build_worker_runtime_deps(), LOGGER)
 
 
 def main() -> None:

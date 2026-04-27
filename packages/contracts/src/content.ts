@@ -66,4 +66,5 @@ export interface ContentItemDetail extends ContentItemPreview {
   channel_name?: string | null;
   media_assets?: unknown[];
   enrichment_debug?: Record<string, unknown> | null;
+  analysis_summary?: Record<string, unknown> | null;
 }

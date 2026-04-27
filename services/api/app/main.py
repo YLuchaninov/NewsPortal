@@ -6,13 +6,43 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Literal, Mapping
-from urllib.parse import urlparse
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from psycopg.rows import dict_row
 
+from services.api.app.database import (
+    build_database_url,
+    check_database,
+    query_all,
+    query_one,
+)
+from services.api.app import channel_adapters as _channel_adapters
+from services.api.app import content_query as _content_query
+from services.api.app import discovery_payloads as _discovery_payloads
+from services.api.app import json_read_model as _json_read_model
+from services.api.app import reindex_read_model as _reindex_read_model
+from services.api.app.pagination import build_paginated_response, resolve_pagination
+from services.api.app.routes.catalog_routes import register_catalog_routes
+from services.api.app.routes.content_analysis_routes import register_content_analysis_routes
+from services.api.app.routes.content_routes import register_content_routes
+from services.api.app.routes.discovery_routes import register_discovery_routes
+from services.api.app.routes.observability_routes import register_observability_routes
+from services.api.app.routes.sequence_routes import register_sequence_routes
+from services.api.app.discovery_selects import (
+    discovery_mission_select_sql,
+    discovery_recall_mission_select_sql,
+    discovery_policy_profile_select_sql,
+    discovery_class_select_sql,
+    discovery_candidate_select_sql,
+    discovery_recall_candidate_select_sql,
+    discovery_hypothesis_select_sql,
+    discovery_source_profile_select_sql,
+    discovery_source_quality_snapshot_select_sql,
+    discovery_source_interest_score_select_sql,
+    discovery_feedback_select_sql,
+)
 from services.workers.app.discovery_orchestrator import (
     DISCOVERY_ORCHESTRATOR_SEQUENCE_ID,
     DiscoveryCoordinatorRepository,
@@ -54,10 +84,10 @@ DISCOVERY_CANDIDATE_STATUSES = {"pending", "approved", "rejected", "auto_approve
 DISCOVERY_RECALL_CANDIDATE_STATUSES = {"pending", "shortlisted", "rejected", "duplicate"}
 DISCOVERY_HYPOTHESIS_STATUSES = {"pending", "running", "completed", "failed", "skipped"}
 DISCOVERY_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
-DISCOVERY_PROFILE_PROVIDER_TYPES = {"rss", "website"}
+DISCOVERY_PROFILE_PROVIDER_TYPES = _discovery_payloads.DISCOVERY_PROFILE_PROVIDER_TYPES
 CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
 WEB_RESOURCE_EXTRACTION_STATES = {"pending", "enriched", "skipped", "failed"}
-WEB_CONTENT_LIST_SORTS = {"latest", "oldest", "title_asc", "title_desc"}
+WEB_CONTENT_LIST_SORTS = _content_query.WEB_CONTENT_LIST_SORTS
 WEB_RESOURCE_KINDS = {
     "editorial",
     "listing",
@@ -68,26 +98,84 @@ WEB_RESOURCE_KINDS = {
     "unknown",
 }
 WEB_RESOURCE_PROJECTION_FILTERS = {"all", "projected", "resource_only"}
+CONTENT_ANALYSIS_SUBJECT_TYPES = {
+    "article",
+    "web_resource",
+    "canonical_document",
+    "story_cluster",
+}
+CONTENT_ANALYSIS_TYPES = {
+    "ner",
+    "sentiment",
+    "entity_sentiment",
+    "category",
+    "system_interest_label",
+    "content_filter",
+    "cluster_summary",
+    "structured_extraction",
+}
+CONTENT_ANALYSIS_STATUSES = {"pending", "completed", "failed", "skipped"}
+CONTENT_ANALYSIS_MODES = {"disabled", "observe", "dry_run", "hold", "enforce"}
+CONTENT_ANALYSIS_POLICY_MODULES = {
+    "ner",
+    "sentiment",
+    "category",
+    "system_interest_label",
+    "content_filter",
+    "cluster_summary",
+    "clustering",
+    "structured_extraction",
+}
+CONTENT_ANALYSIS_POLICY_FAILURE_POLICIES = {"skip", "hold", "reject", "fail_run"}
+CONTENT_ANALYSIS_POLICY_SCOPE_TYPES = {"global", "source_channel", "system_interest", "sequence", "manual"}
+CONTENT_FILTER_DECISIONS = {"keep", "reject", "hold", "needs_review"}
 _ZERO_USD = Decimal("0")
 _USD_TO_CENTS = Decimal("100")
 
+infer_feed_ingress_adapter_strategy = _channel_adapters.infer_feed_ingress_adapter_strategy
+default_max_entry_age_hours_for_adapter = _channel_adapters.default_max_entry_age_hours_for_adapter
+resolve_feed_ingress_adapter_strategy = _channel_adapters.resolve_feed_ingress_adapter_strategy
+resolve_feed_ingress_max_entry_age_hours = (
+    _channel_adapters.resolve_feed_ingress_max_entry_age_hours
+)
+with_resolved_channel_adapter_fields = _channel_adapters.with_resolved_channel_adapter_fields
+is_fastapi_param_default = _content_query.is_fastapi_param_default
+normalize_web_content_list_sort = _content_query.normalize_web_content_list_sort
+normalize_web_content_search_query = _content_query.normalize_web_content_search_query
+normalize_optional_query_string = _content_query.normalize_optional_query_string
+build_web_content_search_pattern = _content_query.build_web_content_search_pattern
+build_web_content_search_clause = _content_query.build_web_content_search_clause
+build_web_content_order_clause = _content_query.build_web_content_order_clause
+strip_web_content_internal_fields = _content_query.strip_web_content_internal_fields
+as_json_object = _json_read_model.as_json_object
+as_json_int = _json_read_model.as_json_int
+as_json_bool = _json_read_model.as_json_bool
+as_json_str = _json_read_model.as_json_str
+build_reindex_selection_profile_payload = (
+    _reindex_read_model.build_reindex_selection_profile_payload
+)
+apply_reindex_selection_profile_payload = (
+    _reindex_read_model.apply_reindex_selection_profile_payload
+)
+_normalize_string_list = _discovery_payloads.normalize_string_list
+_normalize_optional_text = _discovery_payloads.normalize_optional_text
+_normalize_optional_float = _discovery_payloads.normalize_optional_float
+_normalize_optional_positive_int = _discovery_payloads.normalize_optional_positive_int
+_normalize_discovery_diversity_caps = _discovery_payloads.normalize_discovery_diversity_caps
+normalize_discovery_graph_policy = _discovery_payloads.normalize_discovery_graph_policy
+normalize_discovery_recall_policy = _discovery_payloads.normalize_discovery_recall_policy
+normalize_discovery_yield_benchmark = _discovery_payloads.normalize_discovery_yield_benchmark
+build_discovery_profile_payload = _discovery_payloads.build_discovery_profile_payload
+parse_discovery_profile_json = _discovery_payloads.parse_discovery_profile_json
+
+
+def normalize_optional_query_bool(value: Any) -> bool | None:
+    if value is None or is_fastapi_param_default(value):
+        return None
+    return bool(value)
+
 if discovery_enabled():
     configure_discovery_runtime(build_live_discovery_runtime())
-
-
-def build_database_url() -> str:
-    if os.getenv("DATABASE_URL"):
-        return os.environ["DATABASE_URL"]
-
-    user = os.getenv("POSTGRES_USER", "newsportal")
-    password = os.getenv("POSTGRES_PASSWORD", "newsportal")
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv(
-        "POSTGRES_PORT",
-        "55432" if host in {"127.0.0.1", "localhost"} else "5432",
-    )
-    database = os.getenv("POSTGRES_DB", "newsportal")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -135,156 +223,6 @@ def llm_review_accept_gray_zone_on_budget_exhaustion() -> bool:
     return env_flag("LLM_REVIEW_BUDGET_EXHAUST_ACCEPT_GRAY_ZONE", default=False)
 
 
-def query_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(sql, params)
-            return [dict(row) for row in cursor.fetchall()]
-
-
-def query_one(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-    rows = query_all(sql, params)
-    return rows[0] if rows else None
-
-
-def _normalize_string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for entry in value:
-        item = str(entry or "").strip()
-        if not item or item in seen:
-            continue
-        normalized.append(item)
-        seen.add(item)
-    return normalized
-
-
-def _normalize_optional_text(value: Any) -> str | None:
-    normalized = str(value or "").strip()
-    return normalized or None
-
-
-def _normalize_optional_float(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed >= 0 else None
-
-
-def _normalize_optional_positive_int(value: Any) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 0 else None
-
-
-def _normalize_discovery_diversity_caps(value: Any) -> dict[str, Any]:
-    source = value if isinstance(value, Mapping) else {}
-    caps: dict[str, Any] = {}
-    max_per_source_family = _normalize_optional_positive_int(source.get("maxPerSourceFamily"))
-    max_per_domain = _normalize_optional_positive_int(source.get("maxPerDomain"))
-    if max_per_source_family is not None:
-        caps["maxPerSourceFamily"] = max_per_source_family
-    if max_per_domain is not None:
-        caps["maxPerDomain"] = max_per_domain
-    return caps
-
-
-def normalize_discovery_graph_policy(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    source = value if isinstance(value, Mapping) else {}
-    provider_types = [
-        provider
-        for provider in _normalize_string_list(source.get("providerTypes"))
-        if provider in DISCOVERY_PROFILE_PROVIDER_TYPES
-    ]
-    return {
-        "providerTypes": provider_types or ["rss", "website"],
-        "supportedWebsiteKinds": _normalize_string_list(source.get("supportedWebsiteKinds")),
-        "preferredDomains": _normalize_string_list(source.get("preferredDomains")),
-        "blockedDomains": _normalize_string_list(
-            source.get("blockedDomains") or source.get("negativeDomains")
-        ),
-        "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
-        "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
-        "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
-        "expectedSourceShapes": _normalize_string_list(source.get("expectedSourceShapes")),
-        "allowedSourceFamilies": _normalize_string_list(source.get("allowedSourceFamilies")),
-        "disfavoredSourceFamilies": _normalize_string_list(source.get("disfavoredSourceFamilies")),
-        "usefulnessHints": _normalize_string_list(source.get("usefulnessHints")),
-        "diversityCaps": _normalize_discovery_diversity_caps(source.get("diversityCaps")),
-        "minRssReviewScore": _normalize_optional_float(source.get("minRssReviewScore")),
-        "minWebsiteReviewScore": _normalize_optional_float(source.get("minWebsiteReviewScore")),
-        "advancedPromptInstructions": _normalize_optional_text(
-            source.get("advancedPromptInstructions")
-        ),
-    }
-
-
-def normalize_discovery_recall_policy(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    source = value if isinstance(value, Mapping) else {}
-    provider_types = [
-        provider
-        for provider in _normalize_string_list(source.get("providerTypes"))
-        if provider in DISCOVERY_PROFILE_PROVIDER_TYPES
-    ]
-    return {
-        "providerTypes": provider_types or ["rss", "website"],
-        "supportedWebsiteKinds": _normalize_string_list(source.get("supportedWebsiteKinds")),
-        "preferredDomains": _normalize_string_list(source.get("preferredDomains")),
-        "blockedDomains": _normalize_string_list(
-            source.get("blockedDomains") or source.get("negativeDomains")
-        ),
-        "positiveKeywords": _normalize_string_list(source.get("positiveKeywords")),
-        "negativeKeywords": _normalize_string_list(source.get("negativeKeywords")),
-        "preferredTactics": _normalize_string_list(source.get("preferredTactics")),
-        "expectedSourceShapes": _normalize_string_list(source.get("expectedSourceShapes")),
-        "allowedSourceFamilies": _normalize_string_list(source.get("allowedSourceFamilies")),
-        "disfavoredSourceFamilies": _normalize_string_list(source.get("disfavoredSourceFamilies")),
-        "usefulnessHints": _normalize_string_list(source.get("usefulnessHints")),
-        "diversityCaps": _normalize_discovery_diversity_caps(source.get("diversityCaps")),
-        "minPromotionScore": _normalize_optional_float(source.get("minPromotionScore")),
-        "advancedPromptInstructions": _normalize_optional_text(
-            source.get("advancedPromptInstructions")
-        ),
-    }
-
-
-def normalize_discovery_yield_benchmark(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    source = value if isinstance(value, Mapping) else {}
-    return {
-        "domains": _normalize_string_list(source.get("domains")),
-        "titleKeywords": _normalize_string_list(source.get("titleKeywords")),
-        "tacticKeywords": _normalize_string_list(source.get("tacticKeywords")),
-    }
-
-
-def build_discovery_profile_payload(
-    *,
-    graph_policy_json: Mapping[str, Any] | None,
-    recall_policy_json: Mapping[str, Any] | None,
-    yield_benchmark_json: Mapping[str, Any] | None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    return (
-        normalize_discovery_graph_policy(graph_policy_json),
-        normalize_discovery_recall_policy(recall_policy_json),
-        normalize_discovery_yield_benchmark(yield_benchmark_json),
-    )
-
-
-def parse_discovery_profile_json(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return dict(value)
-    return {}
-
-
 def normalize_system_interest_selection_profile_payload(
     template: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -323,72 +261,6 @@ def normalize_system_interest_selection_profile_payload(
         "negativeGroupCount": negative_group_count,
     }
     return normalized
-
-
-def infer_feed_ingress_adapter_strategy(fetch_url: str | None) -> str:
-    if not fetch_url:
-        return "generic"
-
-    try:
-        parsed = urlparse(fetch_url)
-    except ValueError:
-        return "generic"
-
-    hostname = (parsed.hostname or "").lower()
-    pathname = (parsed.path or "").lower()
-
-    if hostname.endswith("reddit.com") and "search.rss" in pathname:
-        return "reddit_search_rss"
-    if hostname == "hnrss.org":
-        return "hn_comments_feed"
-    if hostname == "news.google.com" and pathname.startswith("/rss/"):
-        return "google_news_rss"
-    return "generic"
-
-
-def default_max_entry_age_hours_for_adapter(strategy: str) -> int | None:
-    if strategy in {"reddit_search_rss", "hn_comments_feed", "google_news_rss"}:
-        return 168
-    return None
-
-
-def resolve_feed_ingress_adapter_strategy(fetch_url: str | None, config_json: Any) -> str:
-    explicit_strategy = None
-    if isinstance(config_json, dict):
-        candidate = config_json.get("adapterStrategy")
-        if isinstance(candidate, str) and candidate.strip():
-            explicit_strategy = candidate.strip()
-
-    return explicit_strategy or infer_feed_ingress_adapter_strategy(fetch_url)
-
-
-def resolve_feed_ingress_max_entry_age_hours(fetch_url: str | None, config_json: Any) -> int | None:
-    if isinstance(config_json, dict):
-        candidate = config_json.get("maxEntryAgeHours")
-        if isinstance(candidate, int) and candidate > 0:
-            return candidate
-
-    return default_max_entry_age_hours_for_adapter(
-        resolve_feed_ingress_adapter_strategy(fetch_url, config_json)
-    )
-
-
-def with_resolved_channel_adapter_fields(channel: dict[str, Any]) -> dict[str, Any]:
-    channel["resolved_adapter_strategy"] = resolve_feed_ingress_adapter_strategy(
-        str(channel.get("fetch_url") or ""),
-        channel.get("config_json"),
-    )
-    channel["resolved_max_entry_age_hours"] = resolve_feed_ingress_max_entry_age_hours(
-        str(channel.get("fetch_url") or ""),
-        channel.get("config_json"),
-    )
-    return channel
-
-
-def check_database() -> None:
-    with psycopg.connect(build_database_url()) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("select 1")
 
 
 def processed_article_clause(alias: str = "a") -> str:
@@ -555,183 +427,9 @@ def article_preview_projection(
     """
 
 
-def build_paginated_response(
-    items: list[dict[str, Any]], page: int, page_size: int, total: int
-) -> dict[str, Any]:
-    total_pages = (total + page_size - 1) // page_size if total else 0
-    return {
-        "items": items,
-        "page": page,
-        "pageSize": page_size,
-        "total": total,
-        "totalPages": total_pages,
-        "hasNext": page < total_pages,
-        "hasPrev": page > 1,
-    }
-
-
-def resolve_pagination(
-    page: int | None, page_size: int | None, default_page_size: int
-) -> tuple[bool, int, int, int]:
-    paginate = page is not None or page_size is not None
-    resolved_page = page if page is not None else 1
-    resolved_page_size = page_size if page_size is not None else default_page_size
-    offset = (resolved_page - 1) * resolved_page_size
-    return paginate, resolved_page, resolved_page_size, offset
-
-
 def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
     row = query_one(sql, params)
     return int(row["total"]) if row and row.get("total") is not None else 0
-
-
-def normalize_web_content_list_sort(value: str | None) -> str:
-    if not isinstance(value, str):
-        return "latest"
-    normalized = str(value or "").strip().lower()
-    if normalized in WEB_CONTENT_LIST_SORTS:
-        return normalized
-    return "latest"
-
-
-def normalize_web_content_search_query(value: str | None) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def normalize_optional_query_string(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def build_web_content_search_pattern(query: str) -> str:
-    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
-
-
-def build_web_content_search_clause(
-    query: str | None,
-    *,
-    alias: str,
-) -> tuple[str, tuple[Any, ...]]:
-    if query is None:
-        return "", ()
-    return (
-        f"where coalesce({alias}._search_text, '') ilike %s escape '\\'",
-        (build_web_content_search_pattern(query),),
-    )
-
-
-def build_web_content_order_clause(sort: str, *, alias: str) -> str:
-    if sort == "oldest":
-        return (
-            f"order by {alias}.published_at asc nulls last, "
-            f"{alias}.ingested_at asc nulls last, {alias}.content_item_id"
-        )
-    if sort == "title_asc":
-        return (
-            f"order by {alias}._normalized_title asc nulls last, "
-            f"{alias}.published_at desc nulls last, "
-            f"{alias}.ingested_at desc nulls last, {alias}.content_item_id"
-        )
-    if sort == "title_desc":
-        return (
-            f"order by {alias}._normalized_title desc nulls last, "
-            f"{alias}.published_at desc nulls last, "
-            f"{alias}.ingested_at desc nulls last, {alias}.content_item_id"
-        )
-    return (
-        f"order by {alias}.published_at desc nulls last, "
-        f"{alias}.ingested_at desc nulls last, {alias}.content_item_id"
-    )
-
-
-def strip_web_content_internal_fields(
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        {key: value for key, value in row.items() if not key.startswith("_")}
-        for row in rows
-    ]
-
-
-def as_json_object(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def as_json_int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
-def as_json_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
-def as_json_str(value: Any) -> str | None:
-    normalized = str(value or "").strip()
-    return normalized or None
-
-
-def build_reindex_selection_profile_payload(
-    job_like: Mapping[str, Any],
-) -> dict[str, Any] | None:
-    snapshot = as_json_object(
-        as_json_object(as_json_object(job_like.get("result_json")).get("backfill")).get(
-            "selectionProfileSnapshot"
-        )
-    )
-    if not snapshot:
-        return None
-
-    active_profiles = as_json_int(snapshot.get("activeProfiles"))
-    total_profiles = as_json_int(snapshot.get("totalProfiles"))
-    compatibility_profiles = as_json_int(snapshot.get("compatibilityProfiles"))
-    templates_with_profiles = as_json_int(snapshot.get("templatesWithProfiles"))
-    max_version = as_json_int(snapshot.get("maxVersion"))
-
-    parts: list[str] = []
-    if total_profiles > 0 or active_profiles > 0:
-        parts.append(f"{active_profiles}/{total_profiles} active")
-    if compatibility_profiles > 0:
-        parts.append(f"{compatibility_profiles} compatibility")
-    if templates_with_profiles > 0:
-        parts.append(f"{templates_with_profiles} template-bound")
-    if max_version > 0:
-        parts.append(f"max v{max_version}")
-
-    return {
-        "activeProfiles": active_profiles,
-        "totalProfiles": total_profiles,
-        "compatibilityProfiles": compatibility_profiles,
-        "templatesWithProfiles": templates_with_profiles,
-        "maxVersion": max_version,
-        "summary": " | ".join(parts) if parts else None,
-    }
-
-
-def apply_reindex_selection_profile_payload(
-    job_like: Mapping[str, Any],
-) -> dict[str, Any]:
-    payload = dict(job_like)
-    selection_profile_snapshot = build_reindex_selection_profile_payload(job_like)
-    payload["selection_profile_snapshot"] = selection_profile_snapshot
-    payload["selection_profile_summary"] = (
-        selection_profile_snapshot.get("summary")
-        if isinstance(selection_profile_snapshot, dict)
-        else None
-    )
-    return payload
 
 
 def build_selection_explain_payload(
@@ -1710,6 +1408,386 @@ class ArticleEnrichmentRetryPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requested_by: str | None = Field(default=None, alias="requestedBy")
+
+
+class ContentAnalysisPolicyPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    policy_key: str = Field(alias="policyKey")
+    title: str
+    description: str | None = None
+    scope_type: Literal["global", "source_channel", "system_interest", "sequence", "manual"] = Field(
+        default="global",
+        alias="scopeType",
+    )
+    scope_id: str | None = Field(default=None, alias="scopeId")
+    module: Literal[
+        "ner",
+        "sentiment",
+        "category",
+        "system_interest_label",
+        "content_filter",
+        "cluster_summary",
+        "clustering",
+        "structured_extraction",
+    ]
+    enabled: bool = True
+    mode: Literal["disabled", "observe", "dry_run", "hold", "enforce"] = "observe"
+    provider: str | None = None
+    model_key: str | None = Field(default=None, alias="modelKey")
+    model_version: str | None = Field(default=None, alias="modelVersion")
+    config_json: dict[str, Any] = Field(default_factory=dict, alias="configJson")
+    failure_policy: Literal["skip", "hold", "reject", "fail_run"] = Field(default="skip", alias="failurePolicy")
+    priority: int = 100
+    version: int = 1
+    is_active: bool = Field(default=True, alias="isActive")
+
+
+class ContentAnalysisPolicyUpdatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    description: str | None = None
+    module: Literal[
+        "ner",
+        "sentiment",
+        "category",
+        "system_interest_label",
+        "content_filter",
+        "cluster_summary",
+        "clustering",
+        "structured_extraction",
+    ] | None = None
+    enabled: bool | None = None
+    mode: Literal["disabled", "observe", "dry_run", "hold", "enforce"] | None = None
+    provider: str | None = None
+    model_key: str | None = Field(default=None, alias="modelKey")
+    model_version: str | None = Field(default=None, alias="modelVersion")
+    config_json: dict[str, Any] | None = Field(default=None, alias="configJson")
+    failure_policy: Literal["skip", "hold", "reject", "fail_run"] | None = Field(default=None, alias="failurePolicy")
+    is_active: bool | None = Field(default=None, alias="isActive")
+    priority: int | None = None
+
+
+class ContentFilterPolicyPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    policy_key: str = Field(alias="policyKey")
+    title: str
+    description: str | None = None
+    scope_type: str = Field(default="global", alias="scopeType")
+    scope_id: str | None = Field(default=None, alias="scopeId")
+    mode: Literal["disabled", "observe", "dry_run", "hold", "enforce"] = "dry_run"
+    combiner: Literal["all", "any", "priority_first"] = "all"
+    policy_json: dict[str, Any] = Field(alias="policyJson")
+    version: int = 1
+    is_active: bool = Field(default=True, alias="isActive")
+    priority: int = 100
+
+
+class ContentFilterPolicyUpdatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    description: str | None = None
+    mode: Literal["disabled", "observe", "dry_run", "hold", "enforce"] | None = None
+    combiner: Literal["all", "any", "priority_first"] | None = None
+    policy_json: dict[str, Any] | None = Field(default=None, alias="policyJson")
+    is_active: bool | None = Field(default=None, alias="isActive")
+    priority: int | None = None
+
+
+class ContentAnalysisBackfillPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    subject_types: list[Literal["article", "web_resource", "story_cluster"]] = Field(
+        default_factory=lambda: ["article", "web_resource", "story_cluster"],
+        alias="subjectTypes",
+    )
+    modules: list[
+        Literal[
+            "ner",
+            "sentiment",
+            "category",
+            "cluster_summary",
+            "system_interest_labels",
+            "content_filter",
+            "structured_extraction",
+        ]
+    ] = Field(
+        default_factory=lambda: [
+            "ner",
+            "sentiment",
+            "category",
+            "cluster_summary",
+            "system_interest_labels",
+            "content_filter",
+        ],
+    )
+    missing_only: bool = Field(default=True, alias="missingOnly")
+    policy_key: str = Field(default="default_recent_content_gate", alias="policyKey")
+    batch_size: int = Field(default=100, ge=1, le=500, alias="batchSize")
+    max_text_chars: int = Field(default=50_000, ge=1_000, le=250_000, alias="maxTextChars")
+    requested_by_user_id: str | None = Field(default=None, alias="requestedByUserId")
+    subject_ids: list[str] = Field(default_factory=list, alias="subjectIds")
+
+
+def normalize_content_analysis_subject_type(value: str) -> str:
+    normalized = str(value or "").strip()
+    if normalized not in CONTENT_ANALYSIS_SUBJECT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported content analysis subject type.")
+    return normalized
+
+
+def normalize_content_analysis_type(value: str | None) -> str | None:
+    if value is None or is_fastapi_param_default(value):
+        return None
+    normalized = str(value or "").strip()
+    if normalized and normalized not in CONTENT_ANALYSIS_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported content analysis type.")
+    return normalized or None
+
+
+def normalize_content_analysis_status(value: str | None) -> str | None:
+    if value is None or is_fastapi_param_default(value):
+        return None
+    normalized = str(value or "").strip()
+    if normalized and normalized not in CONTENT_ANALYSIS_STATUSES:
+        raise HTTPException(status_code=400, detail="Unsupported content analysis status.")
+    return normalized or None
+
+
+def normalize_content_filter_decision(value: str | None) -> str | None:
+    if value is None or is_fastapi_param_default(value):
+        return None
+    normalized = str(value or "").strip()
+    if normalized and normalized not in CONTENT_FILTER_DECISIONS:
+        raise HTTPException(status_code=400, detail="Unsupported content filter decision.")
+    return normalized or None
+
+
+def normalize_content_analysis_subject_id(value: str | None) -> str | None:
+    if value is None or is_fastapi_param_default(value):
+        return None
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    try:
+        uuid.UUID(normalized)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="subjectId must be a UUID.") from error
+    return normalized
+
+
+def load_content_analysis_summary(
+    *,
+    subject_type: str,
+    subject_id: str,
+) -> dict[str, Any]:
+    resolved_subject_type = normalize_content_analysis_subject_type(subject_type)
+    try:
+        resolved_subject_id = normalize_content_analysis_subject_id(subject_id)
+    except HTTPException:
+        return {
+            "subjectType": resolved_subject_type,
+            "subjectId": str(subject_id),
+            "latestResults": [],
+            "entities": [],
+            "labels": [],
+            "contentFilter": None,
+        }
+    if resolved_subject_id is None:
+        raise HTTPException(status_code=400, detail="subjectId is required.")
+    latest_results = query_all(
+        """
+        select distinct on (analysis_type)
+          analysis_id::text as analysis_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          analysis_type,
+          provider,
+          model_key,
+          model_version,
+          language,
+          status,
+          result_json,
+          confidence,
+          source_hash,
+          error_text,
+          created_at,
+          updated_at
+        from content_analysis_results
+        where subject_type = %s
+          and subject_id = %s
+        order by analysis_type, updated_at desc
+        """,
+        (resolved_subject_type, resolved_subject_id),
+    )
+    entities = query_all(
+        """
+        select
+          entity_id::text as entity_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          entity_text,
+          normalized_key,
+          entity_type,
+          salience,
+          confidence,
+          mention_count,
+          mentions_json,
+          provider,
+          model_key,
+          analysis_id::text as analysis_id,
+          created_at
+        from content_entities
+        where subject_type = %s
+          and subject_id = %s
+        order by mention_count desc, confidence desc nulls last, entity_text
+        limit 50
+        """,
+        (resolved_subject_type, resolved_subject_id),
+    )
+    labels = query_all(
+        """
+        select
+          label_id::text as label_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          label_type,
+          label_key,
+          label_name,
+          decision,
+          score,
+          confidence,
+          explain_json,
+          analysis_id::text as analysis_id,
+          created_at
+        from content_labels
+        where subject_type = %s
+          and subject_id = %s
+        order by label_type, score desc nulls last, label_key
+        limit 50
+        """,
+        (resolved_subject_type, resolved_subject_id),
+    )
+    content_filter = query_one(
+        """
+        select
+          filter_result_id::text as filter_result_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          filter_policy_id::text as filter_policy_id,
+          policy_key,
+          policy_version,
+          mode,
+          decision,
+          passed,
+          score,
+          matched_rules_json,
+          failed_rules_json,
+          explain_json,
+          created_at,
+          updated_at
+        from content_filter_results
+        where subject_type = %s
+          and subject_id = %s
+        order by updated_at desc
+        limit 1
+        """,
+        (resolved_subject_type, resolved_subject_id),
+    )
+    return {
+        "subjectType": resolved_subject_type,
+        "subjectId": resolved_subject_id,
+        "latestResults": latest_results,
+        "entities": entities,
+        "labels": labels,
+        "contentFilter": content_filter,
+    }
+
+
+def build_content_analysis_filter_clause(
+    *,
+    subject_alias: str,
+    subject_type: str,
+    entity_type: str | None = None,
+    entity_text: str | None = None,
+    entity_normalized_key: str | None = None,
+    label_type: str | None = None,
+    label_key: str | None = None,
+    content_filter_passed: bool | None = None,
+    content_filter_decision: str | None = None,
+) -> tuple[list[str], list[Any]]:
+    entity_type = normalize_optional_query_string(entity_type)
+    entity_text = normalize_optional_query_string(entity_text)
+    entity_normalized_key = normalize_optional_query_string(entity_normalized_key)
+    label_type = normalize_optional_query_string(label_type)
+    label_key = normalize_optional_query_string(label_key)
+    content_filter_passed = normalize_optional_query_bool(content_filter_passed)
+    content_filter_decision = normalize_content_filter_decision(content_filter_decision)
+    filters: list[str] = []
+    params: list[Any] = []
+    if entity_type or entity_text or entity_normalized_key:
+        entity_clauses = [
+            "ce.subject_type = %s",
+            f"ce.subject_id = {subject_alias}",
+        ]
+        entity_params: list[Any] = [subject_type]
+        if entity_type:
+            entity_clauses.append("ce.entity_type = %s")
+            entity_params.append(entity_type)
+        if entity_text:
+            entity_clauses.append("ce.entity_text ilike %s")
+            entity_params.append(f"%{entity_text}%")
+        if entity_normalized_key:
+            entity_clauses.append("ce.normalized_key = %s")
+            entity_params.append(entity_normalized_key)
+        filters.append(
+            f"exists (select 1 from content_entities ce where {' and '.join(entity_clauses)})"
+        )
+        params.extend(entity_params)
+    if label_type or label_key:
+        label_clauses = [
+            "cl.subject_type = %s",
+            f"cl.subject_id = {subject_alias}",
+        ]
+        label_params: list[Any] = [subject_type]
+        if label_type:
+            label_clauses.append("cl.label_type = %s")
+            label_params.append(label_type)
+        if label_key:
+            label_clauses.append("cl.label_key = %s")
+            label_params.append(label_key)
+        filters.append(
+            f"exists (select 1 from content_labels cl where {' and '.join(label_clauses)})"
+        )
+        params.extend(label_params)
+    if content_filter_passed is not None or content_filter_decision:
+        filter_clauses = [
+            "cfr.subject_type = %s",
+            f"cfr.subject_id = {subject_alias}",
+        ]
+        filter_params: list[Any] = [subject_type]
+        if content_filter_passed is not None:
+            filter_clauses.append("cfr.passed = %s")
+            filter_params.append(content_filter_passed)
+        if content_filter_decision:
+            filter_clauses.append("cfr.decision = %s")
+            filter_params.append(content_filter_decision)
+        filters.append(
+            f"exists (select 1 from content_filter_results cfr where {' and '.join(filter_clauses)})"
+        )
+        params.extend(filter_params)
+    return filters, params
 
 
 class DiscoveryMissionCreatePayload(BaseModel):
@@ -2732,381 +2810,133 @@ def raise_sequence_http_exception(error: Exception) -> None:
     raise error
 
 
-def discovery_mission_select_sql() -> str:
-    return """
-        select
-          m.mission_id::text as mission_id,
-          m.title,
-          m.description,
-          m.source_kind,
-          m.source_ref_id::text as source_ref_id,
-          m.seed_topics,
-          m.seed_languages,
-          m.seed_regions,
-          m.target_provider_types,
-          m.interest_graph,
-          m.interest_graph_status,
-          m.interest_graph_version,
-          m.interest_graph_compiled_at,
-          m.interest_graph_error_text,
-          m.max_hypotheses,
-          m.max_sources,
-          m.budget_cents,
-          m.spent_cents,
-          m.status,
-          m.priority,
-          m.run_count,
-          m.last_run_at,
-          m.profile_id::text as profile_id,
-          m.applied_profile_version,
-          m.applied_policy_json,
-          p.profile_key,
-          p.display_name as profile_display_name,
-          p.status as profile_status,
-          p.version as profile_current_version,
-          m.latest_portfolio_snapshot_id::text as latest_portfolio_snapshot_id,
-          (
-            select summary_json
-            from discovery_portfolio_snapshots dps
-            where dps.snapshot_id = m.latest_portfolio_snapshot_id
-          ) as latest_portfolio_summary,
-          m.created_by,
-          m.created_at,
-          m.updated_at
-        from discovery_missions m
-        left join discovery_policy_profiles p on p.profile_id = m.profile_id
-    """
+def list_sequences(
+    limit: int = 20,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    return list_sequences_page(limit=limit, page=page, page_size=page_size)
 
 
-def discovery_recall_mission_select_sql() -> str:
-    return """
-        select
-          rm.recall_mission_id::text as recall_mission_id,
-          rm.title,
-          rm.description,
-          rm.mission_kind,
-          rm.seed_domains,
-          rm.seed_urls,
-          rm.seed_queries,
-          rm.target_provider_types,
-          rm.scope_json,
-          rm.status,
-          rm.max_candidates,
-          rm.profile_id::text as profile_id,
-          rm.applied_profile_version,
-          rm.applied_policy_json,
-          p.profile_key,
-          p.display_name as profile_display_name,
-          p.status as profile_status,
-          p.version as profile_current_version,
-          rm.created_by,
-          rm.created_at,
-          rm.updated_at
-        from discovery_recall_missions rm
-        left join discovery_policy_profiles p on p.profile_id = rm.profile_id
-    """
+def get_sequence(sequence_id: str) -> dict[str, Any]:
+    try:
+        return get_sequence_definition(sequence_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_policy_profile_select_sql() -> str:
-    return """
-        select
-          p.profile_id::text as profile_id,
-          p.profile_key,
-          p.display_name,
-          p.description,
-          p.status,
-          p.graph_policy_json,
-          p.recall_policy_json,
-          p.yield_benchmark_json,
-          p.version,
-          p.created_by,
-          p.created_at,
-          p.updated_at,
-          (
-            select count(*)::int
-            from discovery_missions m
-            where m.profile_id = p.profile_id
-          ) as mission_count,
-          (
-            select count(*)::int
-            from discovery_recall_missions rm
-            where rm.profile_id = p.profile_id
-          ) as recall_mission_count
-        from discovery_policy_profiles p
-    """
+def create_sequence(payload: SequenceCreatePayload) -> dict[str, Any]:
+    try:
+        return create_sequence_definition(payload)
+    except (
+        SequenceConflictError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_class_select_sql() -> str:
-    return """
-        select
-          class_key,
-          display_name,
-          description,
-          status,
-          generation_backend,
-          default_provider_types,
-          prompt_instructions,
-          seed_rules_json,
-          max_per_mission,
-          sort_order,
-          config_json,
-          created_at,
-          updated_at
-        from discovery_hypothesis_classes
-    """
+def update_sequence(
+    sequence_id: str,
+    payload: SequenceUpdatePayload,
+) -> dict[str, Any]:
+    try:
+        return update_sequence_definition(sequence_id, payload)
+    except (
+        SequenceConflictError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_candidate_select_sql() -> str:
-    return """
-        select
-          c.candidate_id::text as candidate_id,
-          c.hypothesis_id::text as hypothesis_id,
-          c.mission_id::text as mission_id,
-          c.source_profile_id::text as source_profile_id,
-          c.url,
-          c.final_url,
-          c.title,
-          c.description,
-          c.provider_type,
-          c.is_valid,
-          c.relevance_score,
-          c.evaluation_json,
-          c.llm_assessment,
-          c.sample_data,
-          c.status,
-          c.rejection_reason,
-          c.registered_channel_id::text as registered_channel_id,
-          c.reviewed_by,
-          c.reviewed_at,
-          c.created_at,
-          m.title as mission_title,
-          m.profile_id::text as profile_id,
-          m.applied_profile_version,
-          m.applied_policy_json,
-          p.profile_key,
-          p.display_name as profile_display_name,
-          h.class_key,
-          h.tactic_key,
-          h.search_query,
-          sp.canonical_domain,
-          sp.source_type,
-          sp.trust_score
-        from discovery_candidates c
-        join discovery_missions m on m.mission_id = c.mission_id
-        join discovery_hypotheses h on h.hypothesis_id = c.hypothesis_id
-        left join discovery_policy_profiles p on p.profile_id = m.profile_id
-        left join discovery_source_profiles sp on sp.source_profile_id = c.source_profile_id
-    """
+def delete_sequence(sequence_id: str) -> dict[str, Any]:
+    try:
+        return archive_sequence_definition(sequence_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_recall_candidate_select_sql() -> str:
-    return """
-        select
-          rc.recall_candidate_id::text as recall_candidate_id,
-          rc.recall_mission_id::text as recall_mission_id,
-          rc.source_profile_id::text as source_profile_id,
-          rc.canonical_domain,
-          rc.url,
-          rc.final_url,
-          rc.title,
-          rc.description,
-          rc.provider_type,
-          rc.status,
-          rc.quality_signal_source,
-          rc.evaluation_json,
-          rc.rejection_reason,
-          rc.registered_channel_id::text as registered_channel_id,
-          rc.created_by,
-          rc.reviewed_by,
-          rc.reviewed_at,
-          rc.created_at,
-          rc.updated_at,
-          rm.title as recall_mission_title,
-          rm.mission_kind,
-          rm.profile_id::text as profile_id,
-          rm.applied_profile_version,
-          rm.applied_policy_json,
-          p.profile_key,
-          p.display_name as profile_display_name,
-          coalesce(sp.channel_id, rc.registered_channel_id)::text as channel_id,
-          sp.source_type,
-          sp.trust_score,
-          sqs.snapshot_id::text as source_quality_snapshot_id,
-          sqs.snapshot_reason as source_quality_snapshot_reason,
-          sqs.recall_score as source_quality_recall_score,
-          sqs.scoring_breakdown as source_quality_scoring_breakdown,
-          sqs.scored_at as source_quality_scored_at
-        from discovery_recall_candidates rc
-        join discovery_recall_missions rm on rm.recall_mission_id = rc.recall_mission_id
-        left join discovery_policy_profiles p on p.profile_id = rm.profile_id
-        left join discovery_source_profiles sp on sp.source_profile_id = rc.source_profile_id
-        left join lateral (
-          select
-            snapshot_id,
-            snapshot_reason,
-            recall_score,
-            scoring_breakdown,
-            scored_at
-          from discovery_source_quality_snapshots sqs
-          where sqs.source_profile_id = rc.source_profile_id
-          order by sqs.scored_at desc, sqs.updated_at desc, sqs.created_at desc
-          limit 1
-        ) sqs on true
-    """
+def get_sequence_plugins() -> list[dict[str, Any]]:
+    return list_sequence_plugins()
 
 
-def discovery_hypothesis_select_sql() -> str:
-    return """
-        select
-          h.hypothesis_id::text as hypothesis_id,
-          h.mission_id::text as mission_id,
-          h.class_key,
-          h.tactic_key,
-          h.search_query,
-          h.target_urls,
-          h.target_provider_type,
-          h.generation_context,
-          h.expected_value,
-          h.status,
-          h.sequence_run_id::text as sequence_run_id,
-          h.sources_found,
-          h.sources_approved,
-          h.effectiveness,
-          h.execution_cost_cents,
-          h.execution_cost_usd,
-          h.error_text,
-          h.started_at,
-          h.finished_at,
-          h.created_at,
-          m.title as mission_title
-        from discovery_hypotheses h
-        join discovery_missions m on m.mission_id = h.mission_id
-    """
+def get_agent_sequence_tools() -> dict[str, Any]:
+    return list_agent_sequence_tools()
 
 
-def discovery_source_profile_select_sql() -> str:
-    return """
-        select
-          sp.source_profile_id::text as source_profile_id,
-          sp.candidate_id::text as candidate_id,
-          sp.channel_id::text as channel_id,
-          sp.canonical_domain,
-          sp.source_type,
-          sp.org_name,
-          sp.country,
-          sp.languages,
-          sp.ownership_transparency,
-          sp.author_accountability,
-          sp.source_linking_quality,
-          sp.historical_stability,
-          sp.technical_quality,
-          sp.spam_signals,
-          sp.trust_score,
-          sp.extraction_data,
-          sqs.snapshot_id::text as latest_source_quality_snapshot_id,
-          sqs.snapshot_reason as latest_source_quality_snapshot_reason,
-          sqs.recall_score as latest_source_quality_recall_score,
-          sqs.yield_score as latest_source_quality_yield_score,
-          sqs.lead_time_score as latest_source_quality_lead_time_score,
-          sqs.duplication_score as latest_source_quality_duplication_score,
-          sqs.scoring_breakdown as latest_source_quality_scoring_breakdown,
-          sqs.scored_at as latest_source_quality_scored_at,
-          sp.created_at,
-          sp.updated_at
-        from discovery_source_profiles sp
-        left join lateral (
-          select
-            snapshot_id,
-            snapshot_reason,
-            recall_score,
-            yield_score,
-            lead_time_score,
-            duplication_score,
-            scoring_breakdown,
-            scored_at
-          from discovery_source_quality_snapshots sqs
-          where sqs.source_profile_id = sp.source_profile_id
-          order by sqs.scored_at desc, sqs.updated_at desc, sqs.created_at desc
-          limit 1
-        ) sqs on true
-    """
+def create_agent_sequence(payload: AgentSequenceCreatePayload) -> dict[str, Any]:
+    try:
+        return create_agent_sequence_request(payload)
+    except (
+        SequenceConflictError,
+        SequenceDispatchError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_source_quality_snapshot_select_sql() -> str:
-    return """
-        select
-          sqs.snapshot_id::text as snapshot_id,
-          sqs.source_profile_id::text as source_profile_id,
-          sqs.channel_id::text as channel_id,
-          sqs.snapshot_reason,
-          sqs.trust_score,
-          sqs.extraction_quality_score,
-          sqs.stability_score,
-          sqs.independence_score,
-          sqs.freshness_score,
-          sqs.lead_time_score,
-          sqs.yield_score,
-          sqs.duplication_score,
-          sqs.recall_score,
-          sqs.scoring_breakdown,
-          sqs.scoring_period_days,
-          sqs.scored_at,
-          sqs.created_at,
-          sqs.updated_at,
-          sp.canonical_domain,
-          sp.source_type
-        from discovery_source_quality_snapshots sqs
-        join discovery_source_profiles sp on sp.source_profile_id = sqs.source_profile_id
-    """
+def request_sequence_run(
+    sequence_id: str,
+    payload: SequenceManualRunPayload,
+) -> dict[str, Any]:
+    try:
+        return create_sequence_run_request(sequence_id, payload)
+    except (
+        SequenceConflictError,
+        SequenceDispatchError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_source_interest_score_select_sql() -> str:
-    return """
-        select
-          sis.score_id::text as score_id,
-          sis.source_profile_id::text as source_profile_id,
-          sis.channel_id::text as channel_id,
-          sis.mission_id::text as mission_id,
-          sis.topic_coverage,
-          sis.specificity,
-          sis.audience_fit,
-          sis.evidence_depth,
-          sis.signal_to_noise,
-          sis.fit_score,
-          sis.novelty_score,
-          sis.lead_time_score,
-          sis.yield_score,
-          sis.duplication_score,
-          sis.contextual_score,
-          sis.role_labels,
-          sis.scoring_breakdown,
-          sis.scoring_period_days,
-          sis.scored_at,
-          sis.created_at,
-          sis.updated_at,
-          m.title as mission_title,
-          sp.canonical_domain,
-          sp.trust_score
-        from discovery_source_interest_scores sis
-        join discovery_missions m on m.mission_id = sis.mission_id
-        join discovery_source_profiles sp on sp.source_profile_id = sis.source_profile_id
-    """
+def get_sequence_run_status(run_id: str) -> dict[str, Any]:
+    try:
+        return get_sequence_run(run_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
 
 
-def discovery_feedback_select_sql() -> str:
-    return """
-        select
-          dfe.feedback_event_id::text as feedback_event_id,
-          dfe.mission_id::text as mission_id,
-          dfe.candidate_id::text as candidate_id,
-          dfe.source_profile_id::text as source_profile_id,
-          dfe.feedback_type,
-          dfe.feedback_value,
-          dfe.notes,
-          dfe.created_by,
-          dfe.created_at
-        from discovery_feedback_events dfe
-    """
+def get_sequence_run_task_runs(run_id: str) -> list[dict[str, Any]]:
+    try:
+        return list_sequence_task_runs(run_id)
+    except SequenceNotFoundError as error:
+        raise_sequence_http_exception(error)
+
+
+def cancel_sequence_run(
+    run_id: str,
+    payload: SequenceCancelPayload | None = None,
+) -> dict[str, Any]:
+    try:
+        return cancel_sequence_run_request(
+            run_id,
+            reason=payload.reason if payload is not None else None,
+        )
+    except (
+        SequenceConflictError,
+        SequenceNotFoundError,
+    ) as error:
+        raise_sequence_http_exception(error)
+
+
+def retry_sequence_run(
+    run_id: str,
+    payload: SequenceRetryRunPayload | None = None,
+) -> dict[str, Any]:
+    try:
+        return retry_sequence_run_request(
+            run_id,
+            payload or SequenceRetryRunPayload(),
+        )
+    except (
+        SequenceConflictError,
+        SequenceDispatchError,
+        SequenceNotFoundError,
+        SequenceValidationError,
+    ) as error:
+        raise_sequence_http_exception(error)
 
 
 def list_discovery_missions_page(
@@ -5044,12 +4874,30 @@ def health() -> dict[str, object]:
     }
 
 
-@app.get("/maintenance/articles")
 def list_articles(
     limit: int = Query(default=20, ge=1, le=100),
+    entity_type: str | None = Query(default=None, alias="entityType"),
+    entity_text: str | None = Query(default=None, alias="entityText"),
+    entity_normalized_key: str | None = Query(default=None, alias="entityNormalizedKey"),
+    label_type: str | None = Query(default=None, alias="labelType"),
+    label_key: str | None = Query(default=None, alias="labelKey"),
+    content_filter_passed: bool | None = Query(default=None, alias="contentFilterPassed"),
+    content_filter_decision: str | None = Query(default=None, alias="contentFilterDecision"),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
 ) -> dict[str, Any] | list[dict[str, Any]]:
+    filters, params = build_content_analysis_filter_clause(
+        subject_alias="a.doc_id",
+        subject_type="article",
+        entity_type=entity_type,
+        entity_text=entity_text,
+        entity_normalized_key=entity_normalized_key,
+        label_type=label_type,
+        label_key=label_key,
+        content_filter_passed=content_filter_passed,
+        content_filter_decision=normalize_content_filter_decision(content_filter_decision),
+    )
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
     article_select = f"""
         select
           a.doc_id,
@@ -5098,6 +4946,7 @@ def list_articles(
         {system_feed_join_clause("a", "sfr")}
         {primary_media_join_clause("a", "pma")}
         left join article_reaction_stats ars on ars.doc_id = a.doc_id
+        {where_clause}
         order by a.published_at desc nulls last, a.ingested_at desc
     """
     paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
@@ -5109,18 +4958,22 @@ def list_articles(
         return [apply_article_selection_payload(row) for row in rows]
 
     if not paginate:
-        return with_article_selection_payload(query_all(f"{article_select}\nlimit %s", (limit,)))
+        return with_article_selection_payload(
+            query_all(f"{article_select}\nlimit %s", tuple([*params, limit]))
+        )
 
     total = query_count(
-        """
+        f"""
         select count(*)::int as total
-        from articles
-        """
+        from articles a
+        {where_clause}
+        """,
+        tuple(params),
     )
     items = with_article_selection_payload(
         query_all(
             f"{article_select}\nlimit %s\noffset %s",
-            (resolved_page_size, offset),
+            tuple([*params, resolved_page_size, offset]),
         )
     )
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
@@ -5396,7 +5249,6 @@ def summarize_article_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, 
     }
 
 
-@app.get("/maintenance/articles/residuals")
 def list_article_residuals(
     downstream_loss_bucket: str | None = Query(default=None, alias="downstreamLossBucket"),
     selection_blocker_stage: str | None = Query(default=None, alias="selectionBlockerStage"),
@@ -5444,7 +5296,6 @@ def list_article_residuals(
     return build_paginated_response(filtered_rows[offset : offset + page_size], page, page_size, len(filtered_rows))
 
 
-@app.get("/maintenance/articles/residuals/summary")
 def summarize_article_residuals(
     downstream_loss_bucket: str | None = Query(default=None, alias="downstreamLossBucket"),
     selection_blocker_stage: str | None = Query(default=None, alias="selectionBlockerStage"),
@@ -5540,7 +5391,6 @@ def list_system_selected_content_items_page(
     return build_paginated_response(items, page, page_size, total)
 
 
-@app.get("/collections/system-selected")
 def list_system_selected_content_items(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
@@ -5555,7 +5405,6 @@ def list_system_selected_content_items(
     )
 
 
-@app.get("/content-items")
 def list_content_items(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
@@ -5619,10 +5468,13 @@ def get_resource_content_item(resource_id: str) -> dict[str, Any]:
     )
     if resource is None:
         raise HTTPException(status_code=404, detail="Content item not found.")
+    resource["analysis_summary"] = load_content_analysis_summary(
+        subject_type="web_resource",
+        subject_id=resource_id,
+    )
     return resource
 
 
-@app.get("/content-items/{content_item_id}")
 def get_content_item(content_item_id: str) -> dict[str, Any]:
     origin_type, origin_id = parse_content_item_id(content_item_id)
     if origin_type == "editorial":
@@ -5636,11 +5488,14 @@ def get_content_item(content_item_id: str) -> dict[str, Any]:
         article.update(content_item)
         article["summary"] = article.get("summary") or article.get("lead")
         article["body_html"] = article.get("body_html") or article.get("full_content_html")
+        article["analysis_summary"] = load_content_analysis_summary(
+            subject_type="article",
+            subject_id=origin_id,
+        )
         return article
     return get_resource_content_item(origin_id)
 
 
-@app.get("/content-items/{content_item_id}/explain")
 def get_content_item_explain(content_item_id: str) -> dict[str, Any]:
     origin_type, origin_id = parse_content_item_id(content_item_id)
     content_item = get_content_item(content_item_id)
@@ -5761,6 +5616,13 @@ def list_web_resources_page(
     extraction_state: str | None = None,
     projection: str = "all",
     resource_kind: str | None = None,
+    entity_type: str | None = None,
+    entity_text: str | None = None,
+    entity_normalized_key: str | None = None,
+    label_type: str | None = None,
+    label_key: str | None = None,
+    content_filter_passed: bool | None = None,
+    content_filter_decision: str | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
     if extraction_state and extraction_state not in WEB_RESOURCE_EXTRACTION_STATES:
         raise HTTPException(status_code=422, detail="Unsupported web resource extractionState.")
@@ -5784,6 +5646,19 @@ def list_web_resources_page(
         resource_filters.append("wr.projected_article_id is not null")
     elif projection == "resource_only":
         resource_filters.append("wr.projected_article_id is null")
+    analysis_filters, analysis_params = build_content_analysis_filter_clause(
+        subject_alias="wr.resource_id",
+        subject_type="web_resource",
+        entity_type=entity_type,
+        entity_text=entity_text,
+        entity_normalized_key=entity_normalized_key,
+        label_type=label_type,
+        label_key=label_key,
+        content_filter_passed=content_filter_passed,
+        content_filter_decision=normalize_content_filter_decision(content_filter_decision),
+    )
+    resource_filters.extend(analysis_filters)
+    params.extend(analysis_params)
 
     where_clause = f"where {' and '.join(resource_filters)}" if resource_filters else ""
     content_item_ready_expr = "false"
@@ -5877,13 +5752,19 @@ def list_web_resources_page(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/maintenance/web-resources")
 def list_web_resources(
     limit: int = Query(default=20, ge=1, le=200),
     channel_id: str | None = Query(default=None, alias="channelId"),
     extraction_state: str | None = Query(default=None, alias="extractionState"),
     projection: str = Query(default="all"),
     resource_kind: str | None = Query(default=None, alias="resourceKind"),
+    entity_type: str | None = Query(default=None, alias="entityType"),
+    entity_text: str | None = Query(default=None, alias="entityText"),
+    entity_normalized_key: str | None = Query(default=None, alias="entityNormalizedKey"),
+    label_type: str | None = Query(default=None, alias="labelType"),
+    label_key: str | None = Query(default=None, alias="labelKey"),
+    content_filter_passed: bool | None = Query(default=None, alias="contentFilterPassed"),
+    content_filter_decision: str | None = Query(default=None, alias="contentFilterDecision"),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
 ) -> dict[str, Any] | list[dict[str, Any]]:
@@ -5895,10 +5776,16 @@ def list_web_resources(
         extraction_state=extraction_state,
         projection=projection,
         resource_kind=resource_kind,
+        entity_type=entity_type,
+        entity_text=entity_text,
+        entity_normalized_key=entity_normalized_key,
+        label_type=label_type,
+        label_key=label_key,
+        content_filter_passed=content_filter_passed,
+        content_filter_decision=content_filter_decision,
     )
 
 
-@app.get("/maintenance/web-resources/{resource_id}")
 def get_web_resource(resource_id: str) -> dict[str, Any]:
     content_item_ready_expr = "false"
     resource = query_one(
@@ -6011,15 +5898,19 @@ def get_web_resource(resource_id: str) -> dict[str, Any]:
             """,
             (projected_article_id,),
         )
-    return apply_resource_selection_payload(
+    resource = apply_resource_selection_payload(
         resource,
         interest_filter_results=interest_filter_results,
         llm_reviews=llm_reviews,
         notifications=notifications,
     )
+    resource["analysis_summary"] = load_content_analysis_summary(
+        subject_type="web_resource",
+        subject_id=resource_id,
+    )
+    return resource
 
 
-@app.get("/maintenance/articles/{doc_id}")
 def get_article(doc_id: str) -> dict[str, Any]:
     article = query_one(
         """
@@ -6157,10 +6048,13 @@ def get_article(doc_id: str) -> dict[str, Any]:
         "extracted_source_name": article.get("extracted_source_name"),
         "raw_payload_json": article.get("raw_payload_json"),
     }
+    article["analysis_summary"] = load_content_analysis_summary(
+        subject_type="article",
+        subject_id=doc_id,
+    )
     return article
 
 
-@app.get("/maintenance/articles/{doc_id}/explain")
 def get_article_explain(doc_id: str) -> dict[str, Any]:
     article = get_article(doc_id)
     canonical_document_id = article.get("canonical_document_id")
@@ -6301,7 +6195,6 @@ def get_article_explain(doc_id: str) -> dict[str, Any]:
     }
 
 
-@app.get("/dashboard/summary")
 def get_dashboard_summary() -> dict[str, Any]:
     family_expr = canonical_article_family_expr("a")
     counts = query_one(
@@ -6407,7 +6300,6 @@ def get_dashboard_summary() -> dict[str, Any]:
     }
 
 
-@app.get("/channels")
 def list_channels(
     provider_type: str | None = Query(default=None, alias="providerType"),
     page: int | None = Query(default=None, ge=1),
@@ -6549,7 +6441,6 @@ def list_channels(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/channels/{channel_id}")
 def get_channel(channel_id: str) -> dict[str, Any]:
     channel = query_one(
         """
@@ -6636,7 +6527,6 @@ def get_channel(channel_id: str) -> dict[str, Any]:
     return with_resolved_channel_adapter_fields(channel)
 
 
-@app.get("/clusters")
 def list_clusters(
     limit: int = Query(default=20, ge=1, le=100),
     page: int | None = Query(default=None, ge=1),
@@ -6672,7 +6562,6 @@ def list_clusters(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/users/{user_id}/interests")
 def list_user_interests(
     user_id: str,
     page: int | None = Query(default=None, ge=1),
@@ -6710,7 +6599,6 @@ def list_user_interests(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/users/{user_id}/matches")
 def list_user_matches(
     user_id: str,
     limit: int = Query(default=20, ge=1, le=100),
@@ -6864,7 +6752,6 @@ def list_user_matches(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/users/{user_id}/notifications")
 def list_user_notifications(
     user_id: str,
     limit: int = Query(default=20, ge=1, le=100),
@@ -6902,7 +6789,6 @@ def list_user_notifications(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/templates/llm")
 def list_llm_templates(
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
@@ -6931,7 +6817,6 @@ def list_llm_templates(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/templates/llm/{prompt_template_id}")
 def get_llm_template(prompt_template_id: str) -> dict[str, Any]:
     template = query_one(
         """
@@ -6946,7 +6831,6 @@ def get_llm_template(prompt_template_id: str) -> dict[str, Any]:
     return template
 
 
-@app.get("/system-interests")
 def list_system_interests(
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
@@ -7014,7 +6898,6 @@ def list_system_interests(
     )
 
 
-@app.get("/system-interests/{interest_template_id}")
 def get_system_interest(interest_template_id: str) -> dict[str, Any]:
     template = query_one(
         """
@@ -7057,7 +6940,6 @@ def get_system_interest(interest_template_id: str) -> dict[str, Any]:
     return normalize_system_interest_selection_profile_payload(template)
 
 
-@app.get("/maintenance/reindex-jobs")
 def list_reindex_jobs(
     limit: int = Query(default=20, ge=1, le=100),
     page: int | None = Query(default=None, ge=1),
@@ -7089,63 +6971,893 @@ def list_reindex_jobs(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/maintenance/sequences")
-def list_sequences(
-    limit: int = Query(default=20, ge=1, le=100),
+def list_content_analysis_results(
+    subject_type: str | None = Query(default=None, alias="subjectType"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    analysis_type: str | None = Query(default=None, alias="analysisType"),
+    status: str | None = Query(default=None),
     page: int | None = Query(default=None, ge=1),
-    page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
-) -> dict[str, Any] | list[dict[str, Any]]:
-    return list_sequences_page(limit=limit, page=page, page_size=page_size)
-
-
-@app.get("/maintenance/sequences/{sequence_id}")
-def get_sequence(sequence_id: str) -> dict[str, Any]:
-    try:
-        return get_sequence_definition(sequence_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
-
-
-@app.post("/maintenance/sequences", status_code=201)
-def create_sequence(payload: SequenceCreatePayload) -> dict[str, Any]:
-    try:
-        return create_sequence_definition(payload)
-    except (
-        SequenceConflictError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
-
-
-@app.patch("/maintenance/sequences/{sequence_id}")
-def update_sequence(
-    sequence_id: str,
-    payload: SequenceUpdatePayload,
+    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
 ) -> dict[str, Any]:
-    try:
-        return update_sequence_definition(sequence_id, payload)
-    except (
-        SequenceConflictError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    filters: list[str] = []
+    params: list[Any] = []
+    if subject_type:
+        filters.append("subject_type = %s")
+        params.append(normalize_content_analysis_subject_type(subject_type))
+    resolved_subject_id = normalize_content_analysis_subject_id(subject_id)
+    if resolved_subject_id:
+        filters.append("subject_id = %s")
+        params.append(resolved_subject_id)
+    resolved_analysis_type = normalize_content_analysis_type(analysis_type)
+    if resolved_analysis_type:
+        filters.append("analysis_type = %s")
+        params.append(resolved_analysis_type)
+    resolved_status = normalize_content_analysis_status(status)
+    if resolved_status:
+        filters.append("status = %s")
+        params.append(resolved_status)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, 20
+    )
+    total = query_count(f"select count(*)::int as total from content_analysis_results {where_clause}", tuple(params))
+    items = query_all(
+        f"""
+        select
+          analysis_id::text as analysis_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          analysis_type,
+          provider,
+          model_key,
+          model_version,
+          language,
+          status,
+          result_json,
+          confidence,
+          source_hash,
+          error_text,
+          created_at,
+          updated_at
+        from content_analysis_results
+        {where_clause}
+        order by updated_at desc
+        limit %s
+        offset %s
+        """,
+        tuple([*params, resolved_page_size, offset]),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.delete("/maintenance/sequences/{sequence_id}")
-def delete_sequence(sequence_id: str) -> dict[str, Any]:
-    try:
-        return archive_sequence_definition(sequence_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
+def get_content_analysis_result(analysis_id: str) -> dict[str, Any]:
+    result = query_one(
+        """
+        select
+          analysis_id::text as analysis_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          analysis_type,
+          provider,
+          model_key,
+          model_version,
+          language,
+          status,
+          result_json,
+          confidence,
+          source_hash,
+          error_text,
+          created_at,
+          updated_at
+        from content_analysis_results
+        where analysis_id = %s
+        """,
+        (analysis_id,),
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Content analysis result not found.")
+    return result
 
 
-@app.get("/maintenance/sequence-plugins")
-def get_sequence_plugins() -> list[dict[str, Any]]:
-    return list_sequence_plugins()
+def request_content_analysis_backfill(
+    payload: ContentAnalysisBackfillPayload,
+) -> dict[str, Any]:
+    requested_by_user_id = normalize_content_analysis_subject_id(
+        payload.requested_by_user_id
+    )
+    reindex_job_id = str(uuid.uuid4())
+    event_id = str(uuid.uuid4())
+    options_json = {
+        "batchSize": payload.batch_size,
+        "retroNotifications": "skip",
+        "subjectTypes": payload.subject_types,
+        "modules": payload.modules,
+        "missingOnly": payload.missing_only,
+        "policyKey": payload.policy_key,
+        "maxTextChars": payload.max_text_chars,
+        "subjectIds": [
+            subject_id
+            for subject_id in (
+                normalize_content_analysis_subject_id(subject_id)
+                for subject_id in payload.subject_ids
+            )
+            if subject_id is not None
+        ],
+        "requestSource": "content_analysis_backfill",
+    }
+    with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+        with connection.transaction():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into reindex_jobs (
+                      reindex_job_id,
+                      index_name,
+                      job_kind,
+                      options_json,
+                      requested_by_user_id,
+                      status
+                    )
+                    values (%s, 'content_analysis', 'content_analysis', %s::jsonb, %s, 'queued')
+                    """,
+                    (
+                        reindex_job_id,
+                        dump_json_value(options_json, "options_json"),
+                        requested_by_user_id,
+                    ),
+                )
+                cursor.execute(
+                    """
+                    insert into outbox_events (
+                      event_id,
+                      event_type,
+                      aggregate_type,
+                      aggregate_id,
+                      payload_json
+                    )
+                    values (
+                      %s,
+                      'reindex.requested',
+                      'reindex_job',
+                      %s,
+                      %s::jsonb
+                    )
+                    """,
+                    (
+                        event_id,
+                        reindex_job_id,
+                        dump_json_value(
+                            {
+                                "eventId": event_id,
+                                "reindexJobId": reindex_job_id,
+                                "indexName": "content_analysis",
+                                "jobKind": "content_analysis",
+                                "version": 1,
+                            },
+                            "payload_json",
+                        ),
+                    ),
+                )
+    return {
+        "status": "queued",
+        "reindexJobId": reindex_job_id,
+        "jobKind": "content_analysis",
+        "options": options_json,
+    }
 
 
-@app.post("/maintenance/articles/{doc_id}/enrichment/retry", status_code=202)
+def list_content_entities(
+    subject_type: str | None = Query(default=None, alias="subjectType"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    entity_type: str | None = Query(default=None, alias="entityType"),
+    entity_text: str | None = Query(default=None, alias="entityText"),
+    normalized_key: str | None = Query(default=None, alias="normalizedKey"),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
+) -> dict[str, Any]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if subject_type:
+        filters.append("subject_type = %s")
+        params.append(normalize_content_analysis_subject_type(subject_type))
+    resolved_subject_id = normalize_content_analysis_subject_id(subject_id)
+    if resolved_subject_id:
+        filters.append("subject_id = %s")
+        params.append(resolved_subject_id)
+    if entity_type:
+        filters.append("entity_type = %s")
+        params.append(entity_type)
+    if entity_text:
+        filters.append("entity_text ilike %s")
+        params.append(f"%{entity_text}%")
+    if normalized_key:
+        filters.append("normalized_key = %s")
+        params.append(normalized_key)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, 20
+    )
+    total = query_count(f"select count(*)::int as total from content_entities {where_clause}", tuple(params))
+    items = query_all(
+        f"""
+        select
+          entity_id::text as entity_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          entity_text,
+          normalized_key,
+          entity_type,
+          salience,
+          confidence,
+          mention_count,
+          mentions_json,
+          provider,
+          model_key,
+          analysis_id::text as analysis_id,
+          created_at
+        from content_entities
+        {where_clause}
+        order by created_at desc
+        limit %s
+        offset %s
+        """,
+        tuple([*params, resolved_page_size, offset]),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+def list_content_labels(
+    subject_type: str | None = Query(default=None, alias="subjectType"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    label_type: str | None = Query(default=None, alias="labelType"),
+    label_key: str | None = Query(default=None, alias="labelKey"),
+    decision: str | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
+) -> dict[str, Any]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if subject_type:
+        filters.append("subject_type = %s")
+        params.append(normalize_content_analysis_subject_type(subject_type))
+    resolved_subject_id = normalize_content_analysis_subject_id(subject_id)
+    if resolved_subject_id:
+        filters.append("subject_id = %s")
+        params.append(resolved_subject_id)
+    if label_type:
+        filters.append("label_type = %s")
+        params.append(label_type)
+    if label_key:
+        filters.append("label_key = %s")
+        params.append(label_key)
+    if decision:
+        filters.append("decision = %s")
+        params.append(decision)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, 20
+    )
+    total = query_count(f"select count(*)::int as total from content_labels {where_clause}", tuple(params))
+    items = query_all(
+        f"""
+        select
+          label_id::text as label_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          label_type,
+          label_key,
+          label_name,
+          decision,
+          score,
+          confidence,
+          explain_json,
+          analysis_id::text as analysis_id,
+          created_at
+        from content_labels
+        {where_clause}
+        order by created_at desc
+        limit %s
+        offset %s
+        """,
+        tuple([*params, resolved_page_size, offset]),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+def list_content_analysis_policies(
+    module: str | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
+) -> dict[str, Any]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if module:
+        normalized_module = str(module or "").strip()
+        if normalized_module not in CONTENT_ANALYSIS_POLICY_MODULES:
+            raise HTTPException(status_code=400, detail="Unsupported content analysis policy module.")
+        if normalized_module == "cluster_summary":
+            filters.append("module = any(%s)")
+            params.append(["cluster_summary", "clustering"])
+        else:
+            filters.append("module = %s")
+            params.append(normalized_module)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, 20
+    )
+    total = query_count(f"select count(*)::int as total from content_analysis_policies {where_clause}", tuple(params))
+    items = query_all(
+        f"""
+        select
+          policy_id::text as policy_id,
+          policy_key,
+          title,
+          description,
+          scope_type,
+          scope_id::text as scope_id,
+          module,
+          enabled,
+          mode,
+          provider,
+          model_key,
+          model_version,
+          config_json,
+          failure_policy,
+          priority,
+          version,
+          is_active,
+          created_at,
+          updated_at
+        from content_analysis_policies
+        {where_clause}
+        order by is_active desc, priority asc, updated_at desc
+        limit %s
+        offset %s
+        """,
+        tuple([*params, resolved_page_size, offset]),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+def get_content_analysis_policy(policy_id: str) -> dict[str, Any]:
+    policy = query_one(
+        """
+        select
+          policy_id::text as policy_id,
+          policy_key,
+          title,
+          description,
+          scope_type,
+          scope_id::text as scope_id,
+          module,
+          enabled,
+          mode,
+          provider,
+          model_key,
+          model_version,
+          config_json,
+          failure_policy,
+          priority,
+          version,
+          is_active,
+          created_at,
+          updated_at
+        from content_analysis_policies
+        where policy_id = %s
+        """,
+        (policy_id,),
+    )
+    if policy is None:
+        raise HTTPException(status_code=404, detail="Content analysis policy not found.")
+    return policy
+
+
+def create_content_analysis_policy(payload: ContentAnalysisPolicyPayload) -> dict[str, Any]:
+    row = query_one(
+        """
+        insert into content_analysis_policies (
+          policy_key,
+          title,
+          description,
+          scope_type,
+          scope_id,
+          module,
+          enabled,
+          mode,
+          provider,
+          model_key,
+          model_version,
+          config_json,
+          failure_policy,
+          priority,
+          version,
+          is_active
+        )
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+        returning policy_id::text as policy_id
+        """,
+        (
+            payload.policy_key,
+            payload.title,
+            payload.description,
+            payload.scope_type,
+            payload.scope_id,
+            payload.module,
+            payload.enabled,
+            payload.mode,
+            payload.provider,
+            payload.model_key,
+            payload.model_version,
+            json.dumps(payload.config_json),
+            payload.failure_policy,
+            payload.priority,
+            payload.version,
+            payload.is_active,
+        ),
+    )
+    if row is None:
+        raise HTTPException(status_code=500, detail="Content analysis policy was not created.")
+    return get_content_analysis_policy(str(row["policy_id"]))
+
+
+def update_content_analysis_policy(
+    policy_id: str,
+    payload: ContentAnalysisPolicyUpdatePayload,
+) -> dict[str, Any]:
+    current = get_content_analysis_policy(policy_id)
+    updated = {
+        "title": payload.title if payload.title is not None else current["title"],
+        "description": (
+            payload.description if payload.description is not None else current["description"]
+        ),
+        "module": payload.module if payload.module is not None else current["module"],
+        "enabled": payload.enabled if payload.enabled is not None else current["enabled"],
+        "mode": payload.mode if payload.mode is not None else current["mode"],
+        "provider": payload.provider if payload.provider is not None else current["provider"],
+        "model_key": payload.model_key if payload.model_key is not None else current["model_key"],
+        "model_version": (
+            payload.model_version if payload.model_version is not None else current["model_version"]
+        ),
+        "config_json": (
+            payload.config_json if payload.config_json is not None else current["config_json"]
+        ),
+        "failure_policy": (
+            payload.failure_policy if payload.failure_policy is not None else current["failure_policy"]
+        ),
+        "is_active": (
+            payload.is_active if payload.is_active is not None else current["is_active"]
+        ),
+        "priority": payload.priority if payload.priority is not None else current["priority"],
+    }
+    versioned_change = any(
+        value is not None
+        for value in (
+            payload.module,
+            payload.enabled,
+            payload.mode,
+            payload.provider,
+            payload.model_key,
+            payload.model_version,
+            payload.config_json,
+            payload.failure_policy,
+        )
+    )
+    if versioned_change:
+        with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        update content_analysis_policies
+                        set is_active = false, updated_at = now()
+                        where policy_id = %s
+                        """,
+                        (policy_id,),
+                    )
+                    cursor.execute(
+                        """
+                        insert into content_analysis_policies (
+                          policy_key,
+                          title,
+                          description,
+                          scope_type,
+                          scope_id,
+                          module,
+                          enabled,
+                          mode,
+                          provider,
+                          model_key,
+                          model_version,
+                          config_json,
+                          failure_policy,
+                          priority,
+                          version,
+                          is_active
+                        )
+                        select
+                          policy_key,
+                          %s,
+                          %s,
+                          scope_type,
+                          scope_id,
+                          %s,
+                          %s,
+                          %s,
+                          %s,
+                          %s,
+                          %s,
+                          %s::jsonb,
+                          %s,
+                          %s,
+                          (
+                            select coalesce(max(version), 0) + 1
+                            from content_analysis_policies
+                            where policy_key = %s
+                          ),
+                          %s
+                        from content_analysis_policies
+                        where policy_id = %s
+                        returning policy_id::text as policy_id
+                        """,
+                        (
+                            updated["title"],
+                            updated["description"],
+                            updated["module"],
+                            updated["enabled"],
+                            updated["mode"],
+                            updated["provider"],
+                            updated["model_key"],
+                            updated["model_version"],
+                            json.dumps(updated["config_json"]),
+                            updated["failure_policy"],
+                            updated["priority"],
+                            current["policy_key"],
+                            updated["is_active"],
+                            policy_id,
+                        ),
+                    )
+                    row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=500, detail="Content analysis policy was not updated.")
+        return get_content_analysis_policy(str(row["policy_id"]))
+    query_one(
+        """
+        update content_analysis_policies
+        set
+          title = %s,
+          description = %s,
+          is_active = %s,
+          priority = %s,
+          updated_at = now()
+        where policy_id = %s
+        returning policy_id
+        """,
+        (
+            updated["title"],
+            updated["description"],
+            updated["is_active"],
+            updated["priority"],
+            policy_id,
+        ),
+    )
+    return get_content_analysis_policy(policy_id)
+
+
+def list_content_filter_policies(
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
+) -> dict[str, Any]:
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, 20
+    )
+    total = query_count("select count(*)::int as total from content_filter_policies")
+    items = query_all(
+        """
+        select
+          filter_policy_id::text as filter_policy_id,
+          policy_key,
+          title,
+          description,
+          scope_type,
+          scope_id::text as scope_id,
+          mode,
+          combiner,
+          policy_json,
+          version,
+          is_active,
+          priority,
+          created_at,
+          updated_at
+        from content_filter_policies
+        order by is_active desc, priority asc, updated_at desc
+        limit %s
+        offset %s
+        """,
+        (resolved_page_size, offset),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
+def get_content_filter_policy(filter_policy_id: str) -> dict[str, Any]:
+    policy = query_one(
+        """
+        select
+          filter_policy_id::text as filter_policy_id,
+          policy_key,
+          title,
+          description,
+          scope_type,
+          scope_id::text as scope_id,
+          mode,
+          combiner,
+          policy_json,
+          version,
+          is_active,
+          priority,
+          created_at,
+          updated_at
+        from content_filter_policies
+        where filter_policy_id = %s
+        """,
+        (filter_policy_id,),
+    )
+    if policy is None:
+        raise HTTPException(status_code=404, detail="Content filter policy not found.")
+    return policy
+
+
+def create_content_filter_policy(payload: ContentFilterPolicyPayload) -> dict[str, Any]:
+    row = query_one(
+        """
+        insert into content_filter_policies (
+          policy_key,
+          title,
+          description,
+          scope_type,
+          scope_id,
+          mode,
+          combiner,
+          policy_json,
+          version,
+          is_active,
+          priority
+        )
+        values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+        returning filter_policy_id::text as filter_policy_id
+        """,
+        (
+            payload.policy_key,
+            payload.title,
+            payload.description,
+            payload.scope_type,
+            payload.scope_id,
+            payload.mode,
+            payload.combiner,
+            json.dumps(payload.policy_json),
+            payload.version,
+            payload.is_active,
+            payload.priority,
+        ),
+    )
+    if row is None:
+        raise HTTPException(status_code=500, detail="Content filter policy was not created.")
+    return get_content_filter_policy(str(row["filter_policy_id"]))
+
+
+def update_content_filter_policy(
+    filter_policy_id: str,
+    payload: ContentFilterPolicyUpdatePayload,
+) -> dict[str, Any]:
+    current = get_content_filter_policy(filter_policy_id)
+    updated = {
+        "title": payload.title if payload.title is not None else current["title"],
+        "description": (
+            payload.description if payload.description is not None else current["description"]
+        ),
+        "mode": payload.mode if payload.mode is not None else current["mode"],
+        "combiner": payload.combiner if payload.combiner is not None else current["combiner"],
+        "policy_json": (
+            payload.policy_json if payload.policy_json is not None else current["policy_json"]
+        ),
+        "is_active": (
+            payload.is_active if payload.is_active is not None else current["is_active"]
+        ),
+        "priority": payload.priority if payload.priority is not None else current["priority"],
+    }
+    if payload.mode is not None or payload.combiner is not None or payload.policy_json is not None:
+        with psycopg.connect(build_database_url(), row_factory=dict_row) as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        update content_filter_policies
+                        set is_active = false, updated_at = now()
+                        where filter_policy_id = %s
+                        """,
+                        (filter_policy_id,),
+                    )
+                    cursor.execute(
+                        """
+                        insert into content_filter_policies (
+                          policy_key,
+                          title,
+                          description,
+                          scope_type,
+                          scope_id,
+                          mode,
+                          combiner,
+                          policy_json,
+                          version,
+                          is_active,
+                          priority
+                        )
+                        select
+                          policy_key,
+                          %s,
+                          %s,
+                          scope_type,
+                          scope_id,
+                          %s,
+                          %s,
+                          %s::jsonb,
+                          (
+                            select coalesce(max(version), 0) + 1
+                            from content_filter_policies
+                            where policy_key = %s
+                          ),
+                          %s,
+                          %s
+                        from content_filter_policies
+                        where filter_policy_id = %s
+                        returning filter_policy_id::text as filter_policy_id
+                        """,
+                        (
+                            updated["title"],
+                            updated["description"],
+                            updated["mode"],
+                            updated["combiner"],
+                            json.dumps(updated["policy_json"]),
+                            current["policy_key"],
+                            updated["is_active"],
+                            updated["priority"],
+                            filter_policy_id,
+                        ),
+                    )
+                    row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=500, detail="Content filter policy was not updated.")
+        return get_content_filter_policy(str(row["filter_policy_id"]))
+    query_one(
+        """
+        update content_filter_policies
+        set
+          title = %s,
+          description = %s,
+          mode = %s,
+          combiner = %s,
+          policy_json = %s::jsonb,
+          is_active = %s,
+          priority = %s,
+          updated_at = now()
+        where filter_policy_id = %s
+        returning filter_policy_id
+        """,
+        (
+            updated["title"],
+            updated["description"],
+            updated["mode"],
+            updated["combiner"],
+            json.dumps(updated["policy_json"]),
+            updated["is_active"],
+            updated["priority"],
+            filter_policy_id,
+        ),
+    )
+    return get_content_filter_policy(filter_policy_id)
+
+
+def preview_content_filter_policy(filter_policy_id: str) -> dict[str, Any]:
+    policy = get_content_filter_policy(filter_policy_id)
+    current_results = query_one(
+        """
+        select
+          count(*)::int as result_count,
+          count(*) filter (where passed)::int as passed_count,
+          count(*) filter (where not passed)::int as failed_count
+        from content_filter_results
+        where policy_key = %s
+          and policy_version = %s
+        """,
+        (policy["policy_key"], policy["version"]),
+    ) or {"result_count": 0, "passed_count": 0, "failed_count": 0}
+    recent_selected = query_count(
+        """
+        select count(*)::int as total
+        from final_selection_results
+        where is_selected = true
+        """
+    )
+    return {
+        "policy": policy,
+        "currentResults": current_results,
+        "selectedContentCount": recent_selected,
+        "mode": policy["mode"],
+        "previewOnly": True,
+    }
+
+
+def list_content_filter_results(
+    subject_type: str | None = Query(default=None, alias="subjectType"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    policy_key: str | None = Query(default=None, alias="policyKey"),
+    decision: str | None = Query(default=None),
+    passed: bool | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
+) -> dict[str, Any]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if subject_type:
+        filters.append("subject_type = %s")
+        params.append(normalize_content_analysis_subject_type(subject_type))
+    resolved_subject_id = normalize_content_analysis_subject_id(subject_id)
+    if resolved_subject_id:
+        filters.append("subject_id = %s")
+        params.append(resolved_subject_id)
+    if policy_key:
+        filters.append("policy_key = %s")
+        params.append(policy_key)
+    resolved_decision = normalize_content_filter_decision(decision)
+    if resolved_decision:
+        filters.append("decision = %s")
+        params.append(resolved_decision)
+    if passed is not None:
+        filters.append("passed = %s")
+        params.append(passed)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination(
+        page, page_size, 20
+    )
+    total = query_count(f"select count(*)::int as total from content_filter_results {where_clause}", tuple(params))
+    items = query_all(
+        f"""
+        select
+          filter_result_id::text as filter_result_id,
+          subject_type,
+          subject_id::text as subject_id,
+          canonical_document_id::text as canonical_document_id,
+          source_channel_id::text as source_channel_id,
+          filter_policy_id::text as filter_policy_id,
+          policy_key,
+          policy_version,
+          mode,
+          decision,
+          passed,
+          score,
+          matched_rules_json,
+          failed_rules_json,
+          explain_json,
+          created_at,
+          updated_at
+        from content_filter_results
+        {where_clause}
+        order by updated_at desc
+        limit %s
+        offset %s
+        """,
+        tuple([*params, resolved_page_size, offset]),
+    )
+    return build_paginated_response(items, resolved_page, resolved_page_size, total)
+
+
 def request_article_enrichment_retry_route(
     doc_id: str,
     payload: ArticleEnrichmentRetryPayload | None = None,
@@ -7164,7 +7876,6 @@ def request_article_enrichment_retry_route(
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/content-items/{content_item_id}/enrichment/retry", status_code=202)
 def request_content_item_enrichment_retry_route(
     content_item_id: str,
     payload: ArticleEnrichmentRetryPayload | None = None,
@@ -7178,12 +7889,10 @@ def request_content_item_enrichment_retry_route(
     return request_article_enrichment_retry_route(origin_id, payload)
 
 
-@app.get("/maintenance/discovery/summary")
 def get_discovery_summary_route() -> dict[str, Any]:
     return get_discovery_summary()
 
 
-@app.get("/maintenance/discovery/classes")
 def list_discovery_classes(
     limit: int = Query(default=20, ge=1, le=100),
     status: str | None = Query(default=None),
@@ -7195,7 +7904,6 @@ def list_discovery_classes(
     return list_discovery_classes_page(limit=limit, page=page, page_size=page_size, status=status)
 
 
-@app.post("/maintenance/discovery/classes", status_code=201)
 def create_discovery_class_route(payload: DiscoveryHypothesisClassCreatePayload) -> dict[str, Any]:
     try:
         return create_discovery_class(payload)
@@ -7203,7 +7911,6 @@ def create_discovery_class_route(payload: DiscoveryHypothesisClassCreatePayload)
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/classes/{class_key}")
 def get_discovery_class_route(class_key: str) -> dict[str, Any]:
     try:
         return get_discovery_class(class_key)
@@ -7211,7 +7918,6 @@ def get_discovery_class_route(class_key: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.patch("/maintenance/discovery/classes/{class_key}")
 def update_discovery_class_route(
     class_key: str,
     payload: DiscoveryHypothesisClassUpdatePayload,
@@ -7222,7 +7928,6 @@ def update_discovery_class_route(
         raise_sequence_http_exception(error)
 
 
-@app.delete("/maintenance/discovery/classes/{class_key}")
 def delete_discovery_class_route(class_key: str) -> dict[str, Any]:
     try:
         return delete_discovery_class(class_key)
@@ -7230,7 +7935,6 @@ def delete_discovery_class_route(class_key: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/missions")
 def list_discovery_missions(
     limit: int = Query(default=20, ge=1, le=100),
     status: str | None = Query(default=None),
@@ -7242,7 +7946,6 @@ def list_discovery_missions(
     return list_discovery_missions_page(limit=limit, page=page, page_size=page_size, status=status)
 
 
-@app.get("/maintenance/discovery/profiles")
 def list_discovery_policy_profiles(
     limit: int = Query(default=20, ge=1, le=100),
     status: str | None = Query(default=None),
@@ -7262,7 +7965,6 @@ def list_discovery_policy_profiles(
     )
 
 
-@app.post("/maintenance/discovery/profiles", status_code=201)
 def create_discovery_policy_profile_route(
     payload: DiscoveryPolicyProfileCreatePayload,
 ) -> dict[str, Any]:
@@ -7272,7 +7974,6 @@ def create_discovery_policy_profile_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/profiles/{profile_id}")
 def get_discovery_policy_profile_route(profile_id: str) -> dict[str, Any]:
     try:
         return get_discovery_policy_profile(profile_id)
@@ -7280,7 +7981,6 @@ def get_discovery_policy_profile_route(profile_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.patch("/maintenance/discovery/profiles/{profile_id}")
 def update_discovery_policy_profile_route(
     profile_id: str,
     payload: DiscoveryPolicyProfileUpdatePayload,
@@ -7291,7 +7991,6 @@ def update_discovery_policy_profile_route(
         raise_sequence_http_exception(error)
 
 
-@app.delete("/maintenance/discovery/profiles/{profile_id}")
 def delete_discovery_policy_profile_route(profile_id: str) -> dict[str, Any]:
     try:
         return delete_discovery_policy_profile(profile_id)
@@ -7299,12 +7998,10 @@ def delete_discovery_policy_profile_route(profile_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/discovery/missions", status_code=201)
 def create_discovery_mission_route(payload: DiscoveryMissionCreatePayload) -> dict[str, Any]:
     return create_discovery_mission(payload)
 
 
-@app.get("/maintenance/discovery/recall-missions")
 def list_discovery_recall_missions(
     limit: int = Query(default=20, ge=1, le=100),
     status: str | None = Query(default=None),
@@ -7331,14 +8028,12 @@ def list_discovery_recall_missions(
     )
 
 
-@app.post("/maintenance/discovery/recall-missions", status_code=201)
 def create_discovery_recall_mission_route(
     payload: DiscoveryRecallMissionCreatePayload,
 ) -> dict[str, Any]:
     return create_discovery_recall_mission(payload)
 
 
-@app.get("/maintenance/discovery/recall-missions/{recall_mission_id}")
 def get_discovery_recall_mission_route(recall_mission_id: str) -> dict[str, Any]:
     try:
         return get_discovery_recall_mission(recall_mission_id)
@@ -7346,7 +8041,6 @@ def get_discovery_recall_mission_route(recall_mission_id: str) -> dict[str, Any]
         raise_sequence_http_exception(error)
 
 
-@app.patch("/maintenance/discovery/recall-missions/{recall_mission_id}")
 def update_discovery_recall_mission_route(
     recall_mission_id: str,
     payload: DiscoveryRecallMissionUpdatePayload,
@@ -7357,7 +8051,6 @@ def update_discovery_recall_mission_route(
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/discovery/recall-missions/{recall_mission_id}/acquire")
 async def request_discovery_recall_mission_acquisition_route(
     recall_mission_id: str,
 ) -> dict[str, Any]:
@@ -7367,7 +8060,6 @@ async def request_discovery_recall_mission_acquisition_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/missions/{mission_id}")
 def get_discovery_mission_route(mission_id: str) -> dict[str, Any]:
     try:
         return get_discovery_mission(mission_id)
@@ -7375,7 +8067,6 @@ def get_discovery_mission_route(mission_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.patch("/maintenance/discovery/missions/{mission_id}")
 def update_discovery_mission_route(
     mission_id: str,
     payload: DiscoveryMissionUpdatePayload,
@@ -7386,7 +8077,6 @@ def update_discovery_mission_route(
         raise_sequence_http_exception(error)
 
 
-@app.delete("/maintenance/discovery/missions/{mission_id}")
 def delete_discovery_mission_route(mission_id: str) -> dict[str, Any]:
     try:
         return delete_discovery_mission(mission_id)
@@ -7394,7 +8084,6 @@ def delete_discovery_mission_route(mission_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/discovery/missions/{mission_id}/compile-graph")
 async def compile_discovery_mission_graph_route(mission_id: str) -> dict[str, Any]:
     try:
         return await compile_discovery_mission_graph(mission_id)
@@ -7402,7 +8091,6 @@ async def compile_discovery_mission_graph_route(mission_id: str) -> dict[str, An
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/discovery/missions/{mission_id}/run", status_code=202)
 def request_discovery_mission_run_route(
     mission_id: str,
     payload: DiscoveryMissionRunPayload | None = None,
@@ -7421,7 +8109,6 @@ def request_discovery_mission_run_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/candidates")
 def list_discovery_candidates(
     limit: int = Query(default=50, ge=1, le=200),
     mission_id: str | None = Query(default=None, alias="missionId"),
@@ -7444,7 +8131,6 @@ def list_discovery_candidates(
     )
 
 
-@app.get("/maintenance/discovery/recall-candidates")
 def list_discovery_recall_candidates(
     limit: int = Query(default=50, ge=1, le=200),
     recall_mission_id: str | None = Query(default=None, alias="recallMissionId"),
@@ -7475,7 +8161,6 @@ def list_discovery_recall_candidates(
     )
 
 
-@app.post("/maintenance/discovery/recall-candidates", status_code=201)
 def create_discovery_recall_candidate_route(
     payload: DiscoveryRecallCandidateCreatePayload,
 ) -> dict[str, Any]:
@@ -7485,7 +8170,6 @@ def create_discovery_recall_candidate_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/recall-candidates/{recall_candidate_id}")
 def get_discovery_recall_candidate_route(recall_candidate_id: str) -> dict[str, Any]:
     try:
         return get_discovery_recall_candidate(recall_candidate_id)
@@ -7493,7 +8177,6 @@ def get_discovery_recall_candidate_route(recall_candidate_id: str) -> dict[str, 
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/discovery/recall-candidates/{recall_candidate_id}/promote")
 def promote_discovery_recall_candidate_route(
     recall_candidate_id: str,
     payload: DiscoveryRecallCandidatePromotePayload | None = None,
@@ -7511,7 +8194,6 @@ def promote_discovery_recall_candidate_route(
         raise_sequence_http_exception(error)
 
 
-@app.patch("/maintenance/discovery/recall-candidates/{recall_candidate_id}")
 def update_discovery_recall_candidate_route(
     recall_candidate_id: str,
     payload: DiscoveryRecallCandidateUpdatePayload,
@@ -7522,7 +8204,6 @@ def update_discovery_recall_candidate_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/candidates/{candidate_id}")
 def get_discovery_candidate_route(candidate_id: str) -> dict[str, Any]:
     try:
         return get_discovery_candidate(candidate_id)
@@ -7530,7 +8211,6 @@ def get_discovery_candidate_route(candidate_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.patch("/maintenance/discovery/candidates/{candidate_id}")
 def update_discovery_candidate_route(
     candidate_id: str,
     payload: DiscoveryCandidateUpdatePayload,
@@ -7541,7 +8221,6 @@ def update_discovery_candidate_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/hypotheses")
 def list_discovery_hypotheses(
     limit: int = Query(default=50, ge=1, le=200),
     mission_id: str | None = Query(default=None, alias="missionId"),
@@ -7560,7 +8239,6 @@ def list_discovery_hypotheses(
     )
 
 
-@app.get("/maintenance/discovery/hypotheses/{hypothesis_id}")
 def get_discovery_hypothesis_route(hypothesis_id: str) -> dict[str, Any]:
     try:
         return get_discovery_hypothesis(hypothesis_id)
@@ -7568,7 +8246,6 @@ def get_discovery_hypothesis_route(hypothesis_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/source-profiles")
 def list_discovery_source_profiles(
     limit: int = Query(default=50, ge=1, le=200),
     min_trust_score: float | None = Query(default=None, alias="minTrustScore"),
@@ -7585,7 +8262,6 @@ def list_discovery_source_profiles(
     )
 
 
-@app.get("/maintenance/discovery/source-profiles/{source_profile_id}")
 def get_discovery_source_profile_route(source_profile_id: str) -> dict[str, Any]:
     try:
         return get_discovery_source_profile(source_profile_id)
@@ -7593,7 +8269,6 @@ def get_discovery_source_profile_route(source_profile_id: str) -> dict[str, Any]
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/source-quality-snapshots")
 def list_discovery_source_quality_snapshots(
     limit: int = Query(default=50, ge=1, le=200),
     channel_id: str | None = Query(default=None, alias="channelId"),
@@ -7610,7 +8285,6 @@ def list_discovery_source_quality_snapshots(
     )
 
 
-@app.get("/maintenance/discovery/source-quality-snapshots/{snapshot_id}")
 def get_discovery_source_quality_snapshot_route(snapshot_id: str) -> dict[str, Any]:
     try:
         return get_discovery_source_quality_snapshot(snapshot_id)
@@ -7618,7 +8292,6 @@ def get_discovery_source_quality_snapshot_route(snapshot_id: str) -> dict[str, A
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/source-interest-scores")
 def list_discovery_source_interest_scores(
     limit: int = Query(default=50, ge=1, le=200),
     mission_id: str | None = Query(default=None, alias="missionId"),
@@ -7637,7 +8310,6 @@ def list_discovery_source_interest_scores(
     )
 
 
-@app.get("/maintenance/discovery/source-interest-scores/{score_id}")
 def get_discovery_source_interest_score_route(score_id: str) -> dict[str, Any]:
     try:
         return get_discovery_source_interest_score(score_id)
@@ -7645,7 +8317,6 @@ def get_discovery_source_interest_score_route(score_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/missions/{mission_id}/portfolio")
 def get_discovery_portfolio_snapshot_route(mission_id: str) -> dict[str, Any]:
     try:
         return get_discovery_portfolio_snapshot(mission_id)
@@ -7653,7 +8324,6 @@ def get_discovery_portfolio_snapshot_route(mission_id: str) -> dict[str, Any]:
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/feedback")
 def list_discovery_feedback(
     limit: int = Query(default=50, ge=1, le=200),
     mission_id: str | None = Query(default=None, alias="missionId"),
@@ -7668,7 +8338,6 @@ def list_discovery_feedback(
     )
 
 
-@app.post("/maintenance/discovery/feedback", status_code=201)
 def create_discovery_feedback_route(payload: DiscoveryFeedbackCreatePayload) -> dict[str, Any]:
     try:
         return create_discovery_feedback(payload)
@@ -7676,7 +8345,6 @@ def create_discovery_feedback_route(payload: DiscoveryFeedbackCreatePayload) -> 
         raise_sequence_http_exception(error)
 
 
-@app.post("/maintenance/discovery/re-evaluate")
 async def re_evaluate_discovery_sources_route(
     payload: DiscoveryReEvaluatePayload | None = None,
 ) -> dict[str, Any]:
@@ -7690,30 +8358,10 @@ async def re_evaluate_discovery_sources_route(
         raise_sequence_http_exception(error)
 
 
-@app.get("/maintenance/discovery/costs/summary")
 def get_discovery_cost_summary_route() -> dict[str, Any]:
     return get_discovery_cost_summary()
 
 
-@app.get("/maintenance/agent/sequence-tools")
-def get_agent_sequence_tools() -> dict[str, Any]:
-    return list_agent_sequence_tools()
-
-
-@app.post("/maintenance/agent/sequences", status_code=201)
-def create_agent_sequence(payload: AgentSequenceCreatePayload) -> dict[str, Any]:
-    try:
-        return create_agent_sequence_request(payload)
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
-
-
-@app.get("/maintenance/fetch-runs")
 def list_fetch_runs(
     limit: int = Query(default=50, ge=1, le=200),
     channel_id: str | None = Query(default=None),
@@ -7759,7 +8407,6 @@ def list_fetch_runs(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/maintenance/llm-reviews")
 def list_llm_reviews(
     limit: int = Query(default=50, ge=1, le=200),
     page: int | None = Query(default=None, ge=1),
@@ -7792,7 +8439,6 @@ def list_llm_reviews(
     return build_paginated_response(items, resolved_page, resolved_page_size, total)
 
 
-@app.get("/maintenance/llm-usage-summary")
 def get_llm_usage_summary() -> dict[str, Any]:
     rows = query_all(
         """
@@ -7872,12 +8518,10 @@ def get_llm_budget_summary() -> dict[str, Any]:
     }
 
 
-@app.get("/maintenance/llm-budget-summary")
 def get_maintenance_llm_budget_summary() -> dict[str, Any]:
     return get_llm_budget_summary()
 
 
-@app.get("/maintenance/outbox")
 def list_outbox_events(limit: int = Query(default=50, ge=1, le=200)) -> list[dict[str, Any]]:
     return query_all(
         """
@@ -7890,69 +8534,9 @@ def list_outbox_events(limit: int = Query(default=50, ge=1, le=200)) -> list[dic
     )
 
 
-@app.post("/maintenance/sequences/{sequence_id}/runs", status_code=202)
-def request_sequence_run(
-    sequence_id: str,
-    payload: SequenceManualRunPayload,
-) -> dict[str, Any]:
-    try:
-        return create_sequence_run_request(sequence_id, payload)
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
-
-
-@app.get("/maintenance/sequence-runs/{run_id}")
-def get_sequence_run_status(run_id: str) -> dict[str, Any]:
-    try:
-        return get_sequence_run(run_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
-
-
-@app.get("/maintenance/sequence-runs/{run_id}/task-runs")
-def get_sequence_run_task_runs(run_id: str) -> list[dict[str, Any]]:
-    try:
-        return list_sequence_task_runs(run_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
-
-
-@app.post("/maintenance/sequence-runs/{run_id}/cancel")
-def cancel_sequence_run(
-    run_id: str,
-    payload: SequenceCancelPayload | None = None,
-) -> dict[str, Any]:
-    try:
-        return cancel_sequence_run_request(
-            run_id,
-            reason=payload.reason if payload is not None else None,
-        )
-    except (
-        SequenceConflictError,
-        SequenceNotFoundError,
-    ) as error:
-        raise_sequence_http_exception(error)
-
-
-@app.post("/maintenance/sequence-runs/{run_id}/retry", status_code=202)
-def retry_sequence_run(
-    run_id: str,
-    payload: SequenceRetryRunPayload | None = None,
-) -> dict[str, Any]:
-    try:
-        return retry_sequence_run_request(
-            run_id,
-            payload or SequenceRetryRunPayload(),
-        )
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+register_content_routes(app, globals())
+register_catalog_routes(app, globals())
+register_sequence_routes(app, globals())
+register_content_analysis_routes(app, globals())
+register_discovery_routes(app, globals())
+register_observability_routes(app, globals())

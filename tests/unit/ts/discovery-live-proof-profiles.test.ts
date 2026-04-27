@@ -12,9 +12,22 @@ import {
 
 const exampleB = DISCOVERY_RUNTIME_CASE_PACKS.find((item) => item.key === "example_b_dev_news");
 const exampleC = DISCOVERY_RUNTIME_CASE_PACKS.find((item) => item.key === "example_c_outsourcing");
+const exampleA = DISCOVERY_RUNTIME_CASE_PACKS.find((item) => item.key === "example_a_job_board");
 
 test("proof profile payload is derived from case-pack truth", () => {
+  assert.ok(exampleA);
   assert.ok(exampleB);
+
+  const exampleAProfileMeta = getCaseProofProfile(exampleA!);
+  const exampleAPayload = buildDiscoveryProfilePayload(exampleA!);
+  assert.equal(exampleAProfileMeta.profileKey, "example_a_job_board_proof");
+  assert.equal(exampleAProfileMeta.displayName, "Example A — Job Board Proof");
+  assert.equal(exampleAPayload.profileKey, "example_a_job_board_proof");
+  assert.equal(exampleAPayload.status, "active");
+  assert.deepEqual(exampleAPayload.graphPolicyJson.supportedWebsiteKinds, ["editorial", "listing"]);
+  assert.ok(exampleAPayload.graphPolicyJson.preferredDomains.includes("weworkremotely.com"));
+  assert.ok(exampleAPayload.graphPolicyJson.blockedDomains.includes("feedspot.com"));
+  assert.ok(exampleAPayload.yieldBenchmarkJson.domains.includes("remoteok.com"));
 
   const profileMeta = getCaseProofProfile(exampleB!);
   const payload = buildDiscoveryProfilePayload(exampleB!);
@@ -32,7 +45,23 @@ test("proof profile payload is derived from case-pack truth", () => {
 });
 
 test("profile-backed mission payloads keep seeds mission-owned while attaching profile linkage", () => {
+  assert.ok(exampleA);
   assert.ok(exampleC);
+
+  const exampleAGraphPayload = buildProfileBackedGraphMissionPayload(
+    exampleA!,
+    "run-abc",
+    "profile-job"
+  );
+  const exampleARecallPayload = buildProfileBackedRecallMissionPayload(
+    exampleA!,
+    "run-abc",
+    "profile-job"
+  );
+  assert.equal(exampleAGraphPayload.profileId, "profile-job");
+  assert.equal(exampleARecallPayload.profileId, "profile-job");
+  assert.ok(exampleAGraphPayload.seedTopics.includes("remote developer jobs rss"));
+  assert.ok(exampleARecallPayload.seedQueries.includes("software engineer vacancies rss"));
 
   const profilePayload = buildDiscoveryProfilePayload(exampleC!);
 

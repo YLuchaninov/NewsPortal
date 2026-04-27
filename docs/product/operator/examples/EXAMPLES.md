@@ -2594,8 +2594,9 @@ Discovery в NewsPortal не заменяет готовые bundles из это
 
 Если вам нужен отдельный operator-facing handbook именно по discovery testing, а не короткая привязка discovery к bundles A/B/C, используйте [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md). Этот раздел остается discovery tie-in для example bundles, а не полным end-to-end guide по `/admin/discovery`.
 
-Для `Example B` и `Example C` proof-backed reusable discovery settings теперь intentionally живут только в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md):
+Для `Example A`, `Example B` и `Example C` proof-backed reusable discovery settings теперь intentionally живут только в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md):
 
+- `Example A — Proof-backed Discovery Profile`
 - `Example B — Proof-backed Discovery Profile`
 - `Example C — Proof-backed Discovery Profile`
 
@@ -2735,7 +2736,7 @@ pnpm test:discovery-enabled:compose
 
 Для полного operator-testing walkthrough после этого bounded enable шага переходите в [DISCOVERY_MODE_TESTING.md](./DISCOVERY_MODE_TESTING.md): там отдельно разобраны graph-first mission flow, independent recall flow, promoted-vs-duplicate outcomes и canonical proof contour для этой зоны.
 
-Если нужен exact manual replay для proof-backed Example B/C discovery, используйте в первую очередь:
+Если нужен exact manual replay для proof-backed Example A/B/C discovery, используйте в первую очередь:
 
 ```sh
 pnpm test:discovery:examples:compose
@@ -2748,6 +2749,13 @@ pnpm test:discovery:examples:compose
 Ниже приведен практический mapping, чтобы discovery искал источники под те же сценарии, что и bundles выше.
 
 #### Для примера A — Job Board
+
+Repo-owned proof profile для этого сценария:
+
+- `profileKey = example_a_job_board_proof`
+- `displayName = Example A — Job Board Proof`
+- `packClass = job_listing_like`
+- `pnpm test:discovery:examples:compose` валидирует этот профиль вместе с Example B/C и отдельно пишет baseline-channel evidence по seeded job-board RSS.
 
 Создайте mission примерно с такими seed inputs:
 

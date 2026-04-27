@@ -13,6 +13,7 @@ Universal Task Engine is the sequence-based execution model for NewsPortal: decl
   `outbox_events -> relay sequence lookup -> sequence_runs -> q.sequence -> TaskGraph plugins/legacy handler adapters`.
 - Active default sequences are seeded/activated by migrations `0011` and `0012`.
 - Discovery and enrichment use the same engine through later migrations.
+- Content analysis plugins may extend default sequences with persisted analysis steps such as `content.ner_extract`, `content.system_interest_label_project` and `content.filter_gate`; their durable truth lives in PostgreSQL analysis/gate tables.
 - Direct fallback queue fanout remains only for non-sequence events such as `foundation.smoke.requested` and `source.channel.sync.requested`.
 - Legacy intermediate article events are compatibility constants and not default fallback fanout.
 

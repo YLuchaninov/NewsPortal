@@ -1,16 +1,38 @@
 import type { Pool } from "pg";
 
 import {
-  parseSourceChannelAuthConfig,
   parseWebsiteChannelConfig,
-  RESOURCE_KINDS,
-  resolveSourceChannelAuthorizationHeader,
   type ResourceKind,
   type WebsiteChannelConfig
 } from "@newsportal/contracts";
 
 import { parseFeed } from "./feed-parser";
 import { canonicalizeUrl, collapseWhitespace, decodeHtmlEntities, stripHtmlTags } from "./rss";
+import {
+  classifyResourceCandidate,
+  inferResourceKindsFromUrl,
+} from "./web-ingestion-classification";
+import {
+  buildBrowserRouteHeaders,
+  buildWebsiteRequestHeaders,
+  hasAuthorizationHeaderConfigured,
+  type WebsiteAuthContext,
+} from "./web-ingestion-headers";
+import {
+  crawlDelayForUserAgent,
+  extractSitemapUrlsFromRobots,
+  isAllowedByRobots,
+} from "./web-ingestion-robots";
+
+export {
+  classifyResourceCandidate,
+  inferResourceKindsFromUrl,
+} from "./web-ingestion-classification";
+export {
+  buildBrowserRouteHeaders,
+  buildWebsiteRequestHeaders,
+} from "./web-ingestion-headers";
+export { isAllowedByRobots, parseRobotsTxt } from "./web-ingestion-robots";
 
 const MAX_SITEMAP_DEPTH = 3;
 const MAX_SITEMAP_FETCHES = 10;
@@ -19,7 +41,6 @@ const SET_DIFF_CURSOR_LIMIT = 200;
 const JSON_URL_CANDIDATE_LIMIT = 300;
 const DEFAULT_PROBE_SAMPLE_COUNT = 5;
 const SAME_SITE_PROTOCOLS = new Set(["http:", "https:"]);
-const DATE_PATH_PATTERN = /\/20\d{2}\/\d{2}\/\d{2}\//;
 const DOWNLOAD_EXTENSION_PATTERN = /\.(pdf|csv|xlsx|xls|json|xml|zip)(?:$|\?)/i;
 const FEED_HINT_PATTERN = /(rss|atom|feed)(?:\.xml)?(?:$|\?)/i;
 const CAPTCHA_PATTERN = /\b(captcha|recaptcha|hcaptcha|cf-turnstile|turnstile)\b/i;
@@ -207,16 +228,6 @@ export interface DiscoveryWebsiteProbeResult {
   challenge_kind: WebsiteChallengeKind | null;
 }
 
-interface ParsedRobotsGroup {
-  agents: string[];
-  rules: Array<{ kind: "allow" | "disallow"; pattern: string }>;
-  crawlDelaySeconds: number | null;
-}
-
-interface ParsedRobotsPolicy {
-  groups: ParsedRobotsGroup[];
-}
-
 export interface RuntimeCrawlPolicy {
   domain: string;
   sitemapUrls: string[];
@@ -231,11 +242,6 @@ export interface RuntimeCrawlPolicy {
   conditionalRequestHits: WebsiteConditionalRequestHits;
   isAllowed: (rawUrl: string, userAgent: string) => boolean;
   crawlDelaySeconds: (userAgent: string) => number | null;
-}
-
-interface WebsiteAuthContext {
-  channelUrl: string;
-  authConfig: unknown;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -670,262 +676,6 @@ function extractDownloadUrls(
   return Array.from(new Set(urls));
 }
 
-function pathContainsSegment(pathname: string, segments: readonly string[]): boolean {
-  const expression = new RegExp(
-    `(?:^|/)(?:${segments.map((segment) => escapeRegExp(segment)).join("|")})(?:/|$)`,
-    "i"
-  );
-  return expression.test(pathname);
-}
-
-function inferResourceKindsFromPath(pathname: string): ResourceKind[] {
-  const lowerPath = pathname.toLowerCase();
-  const segments = lowerPath.split("/").filter(Boolean);
-  const depth = segments.length;
-  const lastSegment = segments.at(-1) ?? "";
-  const collectionEditorialSegments = new Set([
-    "changelog",
-    "release-notes",
-    "release-note",
-    "announcements",
-    "announcement",
-    "press-releases",
-    "press-release",
-    "newsroom",
-    "updates",
-    "update"
-  ]);
-  const editorialSegments = new Set([
-    "news",
-    "blog",
-    "blogs",
-    "article",
-    "articles",
-    "story",
-    "stories",
-    "post",
-    "posts"
-  ]);
-  if (DOWNLOAD_EXTENSION_PATTERN.test(lowerPath)) {
-    if (/\.(csv|xlsx|xls|json|xml|zip)(?:$|\?)/i.test(lowerPath)) {
-      return ["data_file"];
-    }
-    return ["document"];
-  }
-  if (pathContainsSegment(lowerPath, [
-    "changelog",
-    "release-notes",
-    "release-note",
-    "announcements",
-    "announcement",
-    "press-releases",
-    "press-release",
-    "newsroom",
-    "updates",
-    "update"
-  ])) {
-    if (
-      DATE_PATH_PATTERN.test(lowerPath) ||
-      (depth >= 2 && !collectionEditorialSegments.has(lastSegment)) ||
-      /-\d{4,}$/.test(lastSegment)
-    ) {
-      return ["editorial"];
-    }
-    return ["listing"];
-  }
-  if (pathContainsSegment(lowerPath, [
-    "search",
-    "category",
-    "categories",
-    "tag",
-    "tags",
-    "browse",
-    "archive",
-    "archives",
-    "list",
-    "lists",
-    "directory",
-    "directories"
-  ])) {
-    return ["listing"];
-  }
-  if (pathContainsSegment(lowerPath, [
-    "news",
-    "blog",
-    "blogs",
-    "article",
-    "articles",
-    "story",
-    "stories",
-    "post",
-    "posts"
-  ])) {
-    if (
-      DATE_PATH_PATTERN.test(lowerPath) ||
-      (depth >= 2 && !editorialSegments.has(lastSegment)) ||
-      /[-_][a-z0-9]{5,}/i.test(lastSegment)
-    ) {
-      return ["editorial"];
-    }
-    return ["listing"];
-  }
-  if (pathContainsSegment(lowerPath, [
-    "product",
-    "products",
-    "job",
-    "jobs",
-    "dataset",
-    "datasets",
-    "company",
-    "companies",
-    "profile",
-    "profiles",
-    "person",
-    "people",
-    "detail",
-    "details"
-  ])) {
-    return ["entity"];
-  }
-  if (DATE_PATH_PATTERN.test(lowerPath)) {
-    return ["editorial"];
-  }
-  return ["unknown"];
-}
-
-export function inferResourceKindsFromUrl(rawUrl: string): ResourceKind[] {
-  try {
-    return inferResourceKindsFromPath(new URL(rawUrl).pathname);
-  } catch {
-    return ["unknown"];
-  }
-}
-
-export function classifyResourceCandidate(input: {
-  url: string;
-  title?: string | null;
-  summary?: string | null;
-  hintedKinds?: readonly ResourceKind[];
-  overrideKinds?: readonly ResourceKind[];
-  structuredTypes?: readonly string[];
-  hasRepeatedCards?: boolean;
-  hasPagination?: boolean;
-  hasDownloads?: boolean;
-  publishedAtHint?: string | null;
-  discoverySource?: string | null;
-}): { kind: ResourceKind; confidence: number; reasons: string[] } {
-  const scores = new Map<ResourceKind, number>(RESOURCE_KINDS.map((kind) => [kind, 0]));
-  const reasons: string[] = [];
-  const titleText = normalizeText(input.title ?? "");
-  const summaryText = normalizeText(input.summary ?? "");
-  const combinedText = `${titleText} ${summaryText}`.trim();
-  const hintedKinds = (input.hintedKinds ?? []).filter((kind) => kind !== "unknown");
-  const editorialHinted = hintedKinds.includes("editorial");
-  const listingHinted = hintedKinds.includes("listing");
-  const hasEditorialStructuredType = (input.structuredTypes ?? []).some((structuredType) =>
-    /(newsarticle|article|blogposting)/i.test(structuredType)
-  );
-  const detailLikeEditorialSignals =
-    editorialHinted &&
-    !listingHinted &&
-    (Boolean(input.publishedAtHint) ||
-      titleText.length >= 24 ||
-      summaryText.length >= 80 ||
-      hasEditorialStructuredType);
-  for (const kind of hintedKinds) {
-    scores.set(kind, (scores.get(kind) ?? 0) + 3);
-    reasons.push(`hint:${kind}`);
-  }
-  for (const kind of (input.overrideKinds ?? []).filter((candidate) => candidate !== "unknown")) {
-    scores.set(kind, (scores.get(kind) ?? 0) + 5);
-    reasons.push(`override:${kind}`);
-  }
-
-  for (const structuredType of input.structuredTypes ?? []) {
-    const normalized = structuredType.toLowerCase();
-    if (/(newsarticle|article|blogposting)/.test(normalized)) {
-      scores.set("editorial", (scores.get("editorial") ?? 0) + 4);
-      reasons.push(`structured:${structuredType}`);
-    }
-    if (/(itemlist|collectionpage|searchresultspage)/.test(normalized)) {
-      scores.set("listing", (scores.get("listing") ?? 0) + 4);
-      reasons.push(`structured:${structuredType}`);
-    }
-    if (/(product|dataset|jobposting|organization|person)/.test(normalized)) {
-      scores.set("entity", (scores.get("entity") ?? 0) + 4);
-      reasons.push(`structured:${structuredType}`);
-    }
-  }
-
-  if (input.hasRepeatedCards) {
-    scores.set("listing", (scores.get("listing") ?? 0) + (detailLikeEditorialSignals ? 1 : 3));
-    reasons.push(detailLikeEditorialSignals ? "layout:repeated_cards_ambient" : "layout:repeated_cards");
-  }
-  if (input.hasPagination) {
-    scores.set("listing", (scores.get("listing") ?? 0) + (detailLikeEditorialSignals ? 1 : 2));
-    reasons.push(detailLikeEditorialSignals ? "layout:pagination_ambient" : "layout:pagination");
-  }
-  if (input.hasDownloads) {
-    scores.set("document", (scores.get("document") ?? 0) + 1);
-    scores.set("data_file", (scores.get("data_file") ?? 0) + 1);
-    reasons.push("layout:downloads");
-  }
-  if (editorialHinted && !listingHinted && titleText.length >= 24) {
-    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
-    reasons.push("path:editorial_detail");
-  }
-  if (input.publishedAtHint) {
-    scores.set("editorial", (scores.get("editorial") ?? 0) + 3);
-    reasons.push("signal:published_at");
-  }
-  if (titleText.length >= 24 && summaryText.length >= 80) {
-    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
-    reasons.push("signal:title_summary");
-  }
-  if (
-    input.discoverySource === "collection_page" &&
-    input.hasRepeatedCards &&
-    titleText.length >= 20 &&
-    (Boolean(input.publishedAtHint) || summaryText.length >= 80)
-  ) {
-    scores.set("editorial", (scores.get("editorial") ?? 0) + 3);
-    reasons.push("collection:article_card");
-  }
-  if (/\b(press release|announc(?:e|es|ing)|statement|policy update|launch(?:es|ed)?|introduc(?:e|es|ed)|what'?s new)\b/i.test(combinedText)) {
-    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
-    reasons.push("text:editorial");
-  }
-  if (/\b(changelog|release notes|release note|all updates|latest news|archive)\b/i.test(combinedText)) {
-    scores.set("listing", (scores.get("listing") ?? 0) + 2);
-    reasons.push("text:listing");
-  }
-  if (/\b(procurement|tender|request for proposal|rfp|invitation to bid|bid notice|call for tender)\b/i.test(combinedText)) {
-    scores.set("listing", (scores.get("listing") ?? 0) + 2);
-    scores.set("document", (scores.get("document") ?? 0) + 1);
-    reasons.push("text:procurement");
-  }
-  if (
-    detailLikeEditorialSignals &&
-    input.discoverySource !== "collection_page" &&
-    (Boolean(input.publishedAtHint) || summaryText.length >= 80)
-  ) {
-    scores.set("editorial", (scores.get("editorial") ?? 0) + 2);
-    reasons.push("detail:editorial_page");
-  }
-
-  const candidates = Array.from(scores.entries()).sort((left, right) => right[1] - left[1]);
-  const top = candidates[0] ?? ["unknown", 0];
-  const second = candidates[1] ?? ["unknown", 0];
-  const kind = (top[0] as ResourceKind) || "unknown";
-  const margin = Math.max(0, top[1] - second[1]);
-  const confidence = top[1] <= 0 ? 0.2 : Math.min(0.95, 0.35 + margin * 0.15 + top[1] * 0.05);
-  return {
-    kind: confidence < 0.45 ? "unknown" : kind,
-    confidence: Number(confidence.toFixed(2)),
-    reasons: reasons.slice(0, 6)
-  };
-}
-
 function dedupeResources(resources: readonly DiscoveredWebsiteResource[]): DiscoveredWebsiteResource[] {
   const seen = new Map<string, DiscoveredWebsiteResource>();
   for (const resource of resources) {
@@ -1199,146 +949,6 @@ function matchesCursor(resource: DiscoveredWebsiteResource, cursors: Record<stri
   return seenUrls.has(resource.normalizedUrl);
 }
 
-function parseCrawlDelay(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null;
-  }
-  return parsed;
-}
-
-export function parseRobotsTxt(body: string): ParsedRobotsPolicy {
-  const groups: ParsedRobotsGroup[] = [];
-  let current: ParsedRobotsGroup | null = null;
-
-  for (const rawLine of body.split(/\r?\n/)) {
-    const commentIndex = rawLine.indexOf("#");
-    const line = (commentIndex >= 0 ? rawLine.slice(0, commentIndex) : rawLine).trim();
-    if (!line) {
-      current = null;
-      continue;
-    }
-
-    const separatorIndex = line.indexOf(":");
-    if (separatorIndex < 0) {
-      continue;
-    }
-
-    const directive = line.slice(0, separatorIndex).trim().toLowerCase();
-    const value = line.slice(separatorIndex + 1).trim();
-    if (directive === "user-agent") {
-      if (!current) {
-        current = {
-          agents: [],
-          rules: [],
-          crawlDelaySeconds: null
-        };
-        groups.push(current);
-      }
-      current.agents.push(value.toLowerCase());
-      continue;
-    }
-    if (!current) {
-      continue;
-    }
-    if (directive === "allow" || directive === "disallow") {
-      current.rules.push({
-        kind: directive,
-        pattern: value || "/"
-      });
-      continue;
-    }
-    if (directive === "crawl-delay") {
-      current.crawlDelaySeconds = parseCrawlDelay(value);
-    }
-  }
-
-  return { groups };
-}
-
-function ruleMatches(pathname: string, pattern: string): boolean {
-  const anchored = pattern.endsWith("$");
-  const normalizedPattern = anchored ? pattern.slice(0, -1) : pattern;
-  const expression = new RegExp(
-    `^${normalizedPattern.split("*").map(escapeRegExp).join(".*")}${anchored ? "$" : ""}`
-  );
-  return expression.test(pathname);
-}
-
-function findMatchingGroup(policy: ParsedRobotsPolicy, userAgent: string): ParsedRobotsGroup | null {
-  const normalizedAgent = userAgent.trim().toLowerCase();
-  let bestMatch: ParsedRobotsGroup | null = null;
-  let bestLength = -1;
-
-  for (const group of policy.groups) {
-    for (const agent of group.agents) {
-      if (agent === "*" || normalizedAgent.startsWith(agent)) {
-        const length = agent === "*" ? 0 : agent.length;
-        if (length > bestLength) {
-          bestMatch = group;
-          bestLength = length;
-        }
-      }
-    }
-  }
-
-  return bestMatch;
-}
-
-export function isAllowedByRobots(body: string | null, rawUrl: string, userAgent: string): boolean {
-  if (!body) {
-    return true;
-  }
-  const group = findMatchingGroup(parseRobotsTxt(body), userAgent);
-  if (!group) {
-    return true;
-  }
-
-  const pathname = new URL(rawUrl).pathname || "/";
-  const matches = group.rules
-    .filter((rule) => ruleMatches(pathname, rule.pattern))
-    .sort((left, right) => right.pattern.length - left.pattern.length);
-  if (matches.length === 0) {
-    return true;
-  }
-  if (matches.length > 1 && matches[0].pattern.length === matches[1].pattern.length) {
-    if (matches[0].kind === "allow" || matches[1].kind === "allow") {
-      return true;
-    }
-  }
-  return matches[0]?.kind !== "disallow";
-}
-
-function crawlDelayForUserAgent(body: string | null, userAgent: string): number | null {
-  if (!body) {
-    return null;
-  }
-  const group = findMatchingGroup(parseRobotsTxt(body), userAgent);
-  return group?.crawlDelaySeconds ?? null;
-}
-
-function extractSitemapUrlsFromRobots(body: string | null, baseUrl: string): string[] {
-  if (!body) {
-    return [];
-  }
-  const urls: string[] = [];
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!/^sitemap:/i.test(line)) {
-      continue;
-    }
-    const value = line.slice(line.indexOf(":") + 1).trim();
-    const normalizedUrl = normalizeUrl(value, baseUrl);
-    if (normalizedUrl) {
-      urls.push(normalizedUrl);
-    }
-  }
-  return Array.from(new Set(urls));
-}
-
 export function selectWebsiteDiscoveryModes(
   capabilities: WebsiteCapabilities,
   config: WebsiteChannelConfig
@@ -1507,49 +1117,6 @@ function resourceFromUrl(
     classification,
     rawSignals: options.rawSignals ?? {}
   };
-}
-
-function hasAuthorizationHeaderConfigured(authContext?: WebsiteAuthContext): boolean {
-  return Boolean(
-    authContext && parseSourceChannelAuthConfig(authContext.authConfig).authorizationHeader
-  );
-}
-
-export function buildWebsiteRequestHeaders(input: {
-  requestUrl: string;
-  channelUrl: string | null | undefined;
-  authConfig: unknown;
-  headers?: HeadersInit;
-}): Headers {
-  const requestHeaders = new Headers(input.headers);
-  const authorizationHeader = resolveSourceChannelAuthorizationHeader(
-    input.requestUrl,
-    input.channelUrl,
-    input.authConfig
-  );
-  if (authorizationHeader) {
-    requestHeaders.set("authorization", authorizationHeader);
-  }
-  return requestHeaders;
-}
-
-export function buildBrowserRouteHeaders(input: {
-  requestUrl: string;
-  channelUrl: string | null | undefined;
-  authConfig: unknown;
-  headers?: Record<string, string>;
-}): Record<string, string> {
-  const normalizedHeaders = buildWebsiteRequestHeaders({
-    requestUrl: input.requestUrl,
-    channelUrl: input.channelUrl,
-    authConfig: input.authConfig,
-    headers: input.headers
-  });
-  const serializedHeaders: Record<string, string> = {};
-  normalizedHeaders.forEach((value, key) => {
-    serializedHeaders[key] = value;
-  });
-  return serializedHeaders;
 }
 
 async function fetchTextWithAuth(

@@ -2,6 +2,8 @@
 
 Этот contract обязателен, когда работа трогает ingest-to-selection pipeline: `article.ingest.requested`, `resource.ingest.requested`, observations, canonical documents, story clusters, verification, semantic filters, final selection, LLM review reuse or compatibility projections.
 
+Если работа добавляет persisted NER/entities, labels or post-selection content gates, также читай `.aidp/contracts/content-analysis-and-gating.md`.
+
 ## Назначение
 
 Защитить уже shipped article/selection pipeline от случайного дрейфа: ingest, canonicalization, verification, semantic filtering, final selection and compatibility projections должны оставаться разделенными слоями.
@@ -15,6 +17,7 @@
 - `interest_filter_results` own technical/semantic filtering truth.
 - `final_selection_results` is primary internal selection truth.
 - `system_feed_results` is bounded compatibility projection only.
+- `content_analysis_results`, `content_entities`, `content_labels` and `content_filter_results` are analysis/gating projections and must not replace selection ownership unless a separate enforce stage explicitly changes read paths.
 
 ## Canonical reuse
 

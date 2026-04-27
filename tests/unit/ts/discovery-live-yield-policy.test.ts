@@ -22,13 +22,28 @@ import {
 
 const exampleB = DISCOVERY_RUNTIME_CASE_PACKS.find((item) => item.key === "example_b_dev_news");
 const exampleC = DISCOVERY_RUNTIME_CASE_PACKS.find((item) => item.key === "example_c_outsourcing");
+const exampleA = DISCOVERY_RUNTIME_CASE_PACKS.find((item) => item.key === "example_a_job_board");
 const genericLongTail = DISCOVERY_VALIDATION_CASE_PACKS.find(
   (item) => item.key === "generic_long_tail_exploratory"
 );
 
 test("benchmark matcher recognizes benchmark-like candidates per case", () => {
+  assert.ok(exampleA);
   assert.ok(exampleB);
   assert.ok(exampleC);
+
+  assert.equal(
+    isBenchmarkLikeCandidate(
+      {
+        provider_type: "rss",
+        url: "https://remoteok.com/remote-jobs.rss",
+        title: "Remote software engineer jobs and developer vacancies",
+        evaluation_json: { classification: { kind: "listing" } },
+      },
+      exampleA!
+    ),
+    true
+  );
 
   assert.equal(
     isBenchmarkLikeCandidate(
@@ -58,8 +73,41 @@ test("benchmark matcher recognizes benchmark-like candidates per case", () => {
 });
 
 test("case-specific graph policy rejects noise and keeps benchmark-like candidates approvable", () => {
+  assert.ok(exampleA);
   assert.ok(exampleB);
   assert.ok(exampleC);
+
+  const exampleAApprove = classifyGraphCandidate(
+    {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.78,
+      url: "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+      title: "Remote software engineer jobs and developer vacancies",
+      search_query: "remote developer jobs rss",
+      tactic_key: "remote developer jobs rss",
+      evaluation_json: { classification: { kind: "listing" } },
+    },
+    exampleA!,
+    DISCOVERY_LIVE_DEFAULTS
+  );
+  assert.equal(exampleAApprove.decision, "approvable");
+
+  const exampleAReject = classifyGraphCandidate(
+    {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.95,
+      url: "https://career.example.com/feed.xml",
+      title: "Resume tips and interview guide for software engineers",
+      search_query: "software engineering jobs feed",
+      tactic_key: "career advice",
+      evaluation_json: { classification: { kind: "editorial" } },
+    },
+    exampleA!,
+    DISCOVERY_LIVE_DEFAULTS
+  );
+  assert.equal(exampleAReject.decision, "rejected");
 
   const exampleBApprove = classifyGraphCandidate(
     {
@@ -181,17 +229,21 @@ test("case policy can allow non-editorial website kinds for procurement portals"
 });
 
 test("calibration fixtures meet the default agreement threshold", () => {
+  assert.ok(exampleA);
   assert.ok(exampleB);
   assert.ok(exampleC);
   assert.ok(genericLongTail);
 
+  const exampleACalibration = evaluateCalibration(exampleA!, DISCOVERY_LIVE_DEFAULTS);
   const exampleBCalibration = evaluateCalibration(exampleB!, DISCOVERY_LIVE_DEFAULTS);
   const exampleCCalibration = evaluateCalibration(exampleC!, DISCOVERY_LIVE_DEFAULTS);
   const genericCalibration = evaluateCalibration(genericLongTail!, DISCOVERY_LIVE_DEFAULTS);
 
+  assert.equal(exampleACalibration.passed, true);
   assert.equal(exampleBCalibration.passed, true);
   assert.equal(exampleCCalibration.passed, true);
   assert.equal(genericCalibration.passed, true);
+  assert.ok(exampleACalibration.agreementRatio >= 0.8);
   assert.ok(exampleBCalibration.agreementRatio >= 0.8);
   assert.ok(exampleCCalibration.agreementRatio >= 0.8);
   assert.ok(genericCalibration.agreementRatio >= 0.8);
@@ -263,6 +315,76 @@ test("run and multi-run verdicts separate runtime failure from weak yield", () =
   assert.equal(multiRun.runtimeVerdict, "pass");
   assert.equal(multiRun.yieldVerdict, "weak");
   assert.equal(multiRun.finalVerdict, "yield_weak");
+});
+
+test("case verdicts can require baseline fetch evidence for job-board proof", () => {
+  assert.ok(exampleA);
+
+  const withoutBaselineFetch = determineCaseVerdicts(
+    exampleA!,
+    {
+      graphLane: { mission: { mission_id: "m1" }, candidates: [] },
+      recallLane: { mission: { recall_mission_id: "r1" }, candidates: [] },
+      baselineEvidence: [
+        {
+          channelId: "channel-a",
+          fetchRuns: [],
+          articles: [{ docId: "doc-a" }],
+          interestFilterResults: [],
+          finalSelection: { total: 0, selected: 0 },
+        },
+      ],
+      downstreamEvidence: [
+        {
+          channelId: "channel-a",
+          fetchRuns: [],
+          articles: [{ docId: "doc-a" }],
+          interestFilterResults: [],
+          finalSelection: { total: 0, selected: 0 },
+        },
+      ],
+      coverageMatrix: exampleA!.interestNames.map((interestName) => ({
+        interestName,
+        status: "source_onboarded_no_match_yet",
+      })),
+    },
+    DISCOVERY_LIVE_DEFAULTS
+  );
+  assert.equal(withoutBaselineFetch.runtimeVerdict, "pass");
+  assert.equal(withoutBaselineFetch.yieldVerdict, "weak");
+  assert.equal(withoutBaselineFetch.rootCauseClassification, "downstream_ingest_problem");
+
+  const withBaselineFetch = determineCaseVerdicts(
+    exampleA!,
+    {
+      graphLane: { mission: { mission_id: "m1" }, candidates: [] },
+      recallLane: { mission: { recall_mission_id: "r1" }, candidates: [] },
+      baselineEvidence: [
+        {
+          channelId: "channel-a",
+          fetchRuns: [{ outcomeKind: "new_content", httpStatus: 200 }],
+          articles: [{ docId: "doc-a" }],
+          interestFilterResults: [],
+          finalSelection: { total: 0, selected: 0 },
+        },
+      ],
+      downstreamEvidence: [
+        {
+          channelId: "channel-a",
+          fetchRuns: [{ outcomeKind: "new_content", httpStatus: 200 }],
+          articles: [{ docId: "doc-a" }],
+          interestFilterResults: [],
+          finalSelection: { total: 0, selected: 0 },
+        },
+      ],
+      coverageMatrix: exampleA!.interestNames.map((interestName) => ({
+        interestName,
+        status: "source_onboarded_no_match_yet",
+      })),
+    },
+    DISCOVERY_LIVE_DEFAULTS
+  );
+  assert.equal(withBaselineFetch.yieldVerdict, "pass");
 });
 
 test("root-cause classification stays generic across case packs", () => {

@@ -43,7 +43,7 @@ MCP control plane adds a remote HTTP operator surface for AI clients and automat
 
 ## Tool/resource contract
 
-Tool names are explicit/namespaced, including `admin.summary.get`, `system_interests.*`, `llm_templates.*`, `channels.*`, `articles.*`, `content_items.*`, `discovery.*`, `sequences.*`, `web_resources.*`, `fetch_runs.*`, `llm_budget.summary`.
+Tool names are explicit/namespaced, including `admin.summary.get`, `system_interests.*`, `llm_templates.*`, `channels.*`, `articles.*`, `content_items.*`, `content_analysis.*`, `content_entities.*`, `content_labels.*`, `content_filter_policies.*`, `content_filter_results.*`, `discovery.*`, `sequences.*`, `web_resources.*`, `fetch_runs.*`, `llm_budget.summary`.
 
 Resources use `newsportal://` and should return high-signal operator context, not raw DB dumps. Prompts provide guidance only and do not gain write authority.
 

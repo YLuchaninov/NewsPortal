@@ -517,6 +517,21 @@ function hasFinalSelectionEvidence(row) {
   return asNumber(asObject(row.finalSelection).total, 0) > 0;
 }
 
+function hasSuccessfulFetchRun(row) {
+  return asArray(row.fetchRuns).some((run) => {
+    const outcome = normalizeText(run.outcomeKind ?? run.outcome_kind).toLowerCase();
+    const status = asNumber(run.httpStatus ?? run.http_status, 0);
+    const errorText = normalizeText(run.errorText ?? run.error_text);
+    return !errorText && (
+      outcome === "success"
+      || outcome === "new_content"
+      || outcome === "no_change"
+      || outcome === "duplicate_only"
+      || (status >= 200 && status < 400)
+    );
+  });
+}
+
 function buildNormalizedReasonBuckets(rejectedCandidates, allCandidates, coverageMatrix) {
   const counts = new Map(
     NORMALIZED_YIELD_REASON_BUCKETS.map((key) => [key, 0])
@@ -652,6 +667,7 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
     ),
   ];
   const downstreamEvidence = asArray(caseRun.downstreamEvidence);
+  const baselineEvidence = asArray(caseRun.baselineEvidence ?? caseRun.baselineLane?.evidence);
   const channelsWithDownstreamEvidence = downstreamEvidence.filter(hasDownstreamEvidence);
   const channelsWithFetchRuns = downstreamEvidence.filter(hasFetchRunEvidence);
   const channelsWithArticles = downstreamEvidence.filter(hasArticleEvidence);
@@ -692,6 +708,11 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
       10
     ) || 1
   );
+  const minimumBaselineSuccessfulFetches = Math.max(
+    0,
+    Number.parseInt(String(caseAcceptance.minBaselineSuccessfulFetches ?? 0), 10) || 0
+  );
+  const baselineSuccessfulFetches = baselineEvidence.filter(hasSuccessfulFetchRun).length;
 
   return {
     candidatesFound: allCandidates.length,
@@ -711,6 +732,9 @@ export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
       (row) => normalizeText(row.status) === "covered_downstream"
     ).length,
     minimumChannelsWithDownstreamEvidence: minimumChannels,
+    baselineChannelsPolled: baselineEvidence.length,
+    baselineSuccessfulFetches,
+    minimumBaselineSuccessfulFetches,
     normalizedReasonBuckets,
     stageLossBuckets,
     productivityBuckets,
@@ -743,6 +767,9 @@ export function classifyCaseRootCause(caseDefinition, caseRun, defaults) {
   const yieldSummary = caseRun?.yieldSummary ?? buildCaseYieldSummary(caseDefinition, caseRun, defaults);
   const minimumChannels = asNumber(yieldSummary.minimumChannelsWithDownstreamEvidence, 1);
 
+  if (yieldSummary.baselineSuccessfulFetches < asNumber(yieldSummary.minimumBaselineSuccessfulFetches, 0)) {
+    return "downstream_ingest_problem";
+  }
   if (yieldSummary.channelsWithDownstreamEvidence >= minimumChannels) {
     return "yield_pass";
   }
@@ -799,6 +826,7 @@ export function determineCaseVerdicts(caseDefinition, caseRun, defaults) {
     runtimeVerdict === "fail"
       ? "fail"
       : yieldSummary.channelsWithDownstreamEvidence >= yieldSummary.minimumChannelsWithDownstreamEvidence
+        && yieldSummary.baselineSuccessfulFetches >= yieldSummary.minimumBaselineSuccessfulFetches
         ? "pass"
         : "weak";
   const status =

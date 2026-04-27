@@ -185,9 +185,14 @@ def _estimate_cost_usd(
     return round(input_cost + output_cost, 6)
 
 
-def review_with_gemini(prompt: str) -> GeminiReviewResult:
+def review_with_gemini(
+    prompt: str,
+    *,
+    model_override: str | None = None,
+    temperature: float = 0.1,
+) -> GeminiReviewResult:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+    model = (model_override or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")).strip() or "gemini-2.0-flash"
     base_url = (
         os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
         .rstrip("/")
@@ -216,7 +221,7 @@ def review_with_gemini(prompt: str) -> GeminiReviewResult:
             }
         ],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": temperature,
             "responseMimeType": "application/json",
         },
     }

@@ -28,6 +28,7 @@ import {
   evaluateCalibration,
   summarizeAggregateRootCauses,
 } from "./lib/discovery-live-yield-policy.mjs";
+import { formatDiscoveryEvidenceMarkdown } from "./lib/discovery-live-report-format.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -56,6 +57,13 @@ const STACK_SERVICES = [
 const API_BASE_URL = "http://127.0.0.1:8000";
 const ADMIN_BASE_URL = "http://127.0.0.1:4322";
 const DISCOVERY_ORCHESTRATOR_SEQUENCE_ID = "0a8e8ec5-6cab-4d8b-9c28-0a1d6245bf17";
+const CONTENT_ANALYSIS_PROCESSED_ARTICLE_STATES = new Set([
+  "deduped",
+  "embedded",
+  "clustered",
+  "matched",
+  "notified",
+]);
 let runtimeDependenciesPromise;
 
 function log(message) {
@@ -288,13 +296,17 @@ async function patchJson(url, payload, { timeoutMs = 30000 } = {}) {
   return parseJsonResponse(response.text, response);
 }
 
-async function waitFor(label, producer, predicate, { timeoutMs, intervalMs }) {
+async function waitFor(label, producer, predicate, { timeoutMs, intervalMs, describeLastValue = null }) {
   const startedAt = Date.now();
   let lastError = null;
+  let lastValue = null;
+  let hasLastValue = false;
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const value = await producer();
+      lastValue = value;
+      hasLastValue = true;
       if (predicate(value)) {
         return value;
       }
@@ -305,7 +317,11 @@ async function waitFor(label, producer, predicate, { timeoutMs, intervalMs }) {
   }
 
   const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
-  throw new Error(`Timed out waiting for ${label}.${reason}`);
+  const snapshot =
+    hasLastValue && typeof describeLastValue === "function"
+      ? ` Last snapshot: ${describeLastValue(lastValue)}`
+      : "";
+  throw new Error(`Timed out waiting for ${label}.${reason}${snapshot}`);
 }
 
 async function waitForHttpHealth(label, url) {
@@ -516,6 +532,7 @@ async function readPreconditionState(pool) {
   const channelResult = await pool.query(
     `
       select
+        channel_id::text as channel_id,
         name,
         provider_type,
         is_active
@@ -1002,6 +1019,55 @@ async function triggerChannelPolls(channelIds) {
   return results;
 }
 
+async function resolveChannelsByName(pool, channelNames) {
+  const names = asArray(channelNames).map((name) => normalizeText(name)).filter(Boolean);
+  if (names.length === 0) {
+    return [];
+  }
+  const result = await pool.query(
+    `
+      select
+        channel_id::text as channel_id,
+        name,
+        fetch_url,
+        provider_type,
+        is_active
+      from source_channels
+      where name = any($1::text[])
+      order by name
+    `,
+    [names]
+  );
+  const rowsByName = new Map(result.rows.map((row) => [normalizeText(row.name), row]));
+  return names.map((name) => rowsByName.get(name) ?? {
+    channel_id: null,
+    name,
+    fetch_url: null,
+    provider_type: null,
+    is_active: false,
+    missing: true,
+  });
+}
+
+function hasSuccessfulFetchRun(fetchRuns) {
+  return asArray(fetchRuns).some((run) => {
+    const outcome = normalizeText(run.outcomeKind ?? run.outcome_kind).toLowerCase();
+    const status = Number(run.httpStatus ?? run.http_status ?? 0);
+    const errorText = normalizeText(run.errorText ?? run.error_text);
+    return !errorText && (
+      outcome === "success"
+      || outcome === "new_content"
+      || outcome === "no_change"
+      || outcome === "duplicate_only"
+      || (status >= 200 && status < 400)
+    );
+  });
+}
+
+function contentAnalysisStatusIsPassing(status) {
+  return status === "passed" || status === "not_applicable";
+}
+
 async function readChannelEvidence(pool, channelId, startedAtIso, interestNames) {
   const fetchRunsResult = await pool.query(
     `
@@ -1152,6 +1218,383 @@ async function waitForChannelEvidence(pool, channelId, startedAtIso, interestNam
       intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
     }
   );
+}
+
+async function readContentAnalysisEvidence(pool, downstreamRows, startedAtIso) {
+  const candidateArticleIds = [
+    ...new Set(
+      asArray(downstreamRows)
+        .flatMap((row) => asArray(row.articles).map((article) => normalizeText(article.docId)))
+        .filter(Boolean)
+    ),
+  ];
+  if (candidateArticleIds.length === 0) {
+    return {
+      status: "not_applicable",
+      reason: "no_article_subjects_in_proof_window",
+      sampledSubjectIds: [],
+      sampledStoryClusterIds: [],
+      candidateSubjectCount: 0,
+      sampledSubjectCount: 0,
+      sampledStoryClusterCount: 0,
+      requiredAnalysisTypes: ["ner", "sentiment", "category", "system_interest_label", "content_filter"],
+      analysisTypeCounts: {},
+      entityTypeCounts: {},
+      labelTypeCounts: {},
+      filterModes: {},
+      filterDecisions: {},
+    };
+  }
+
+  const articleStateResult = await pool.query(
+    `
+      select processing_state, count(*)::int as count
+      from articles
+      where doc_id = any($1::uuid[])
+      group by processing_state
+      order by processing_state
+    `,
+    [candidateArticleIds]
+  );
+  const articleStateCounts = Object.fromEntries(
+    articleStateResult.rows.map((row) => [normalizeText(row.processing_state), asInt(row.count, 0)])
+  );
+  const processedArticleResult = await pool.query(
+    `
+      select doc_id::text as doc_id
+      from articles
+      where
+        doc_id = any($1::uuid[])
+        and processing_state = any($2::text[])
+      order by updated_at desc
+    `,
+    [candidateArticleIds, [...CONTENT_ANALYSIS_PROCESSED_ARTICLE_STATES]]
+  );
+  const articleIds = processedArticleResult.rows
+    .map((row) => normalizeText(row.doc_id))
+    .filter(Boolean);
+  if (articleIds.length === 0) {
+    return {
+      status: "not_applicable",
+      reason: "no_processed_article_subjects_in_proof_window",
+      sampledSubjectIds: [],
+      sampledStoryClusterIds: [],
+      candidateSubjectCount: candidateArticleIds.length,
+      sampledSubjectCount: 0,
+      sampledStoryClusterCount: 0,
+      articleStateCounts,
+      requiredAnalysisTypes: ["ner", "sentiment", "category", "system_interest_label", "content_filter"],
+      analysisTypeCounts: {},
+      entityTypeCounts: {},
+      labelTypeCounts: {},
+      filterModes: {},
+      filterDecisions: {},
+    };
+  }
+
+  const storyClusterResult = await pool.query(
+    `
+      select distinct story_cluster_id
+      from story_cluster_members
+      where canonical_document_id = any($1::uuid[])
+    `,
+    [articleIds]
+  );
+  const storyClusterIds = storyClusterResult.rows
+    .map((row) => normalizeText(row.story_cluster_id))
+    .filter(Boolean);
+
+  const analysisResult = await pool.query(
+    `
+      select analysis_type, subject_type, count(*)::int as count
+      from content_analysis_results
+      where
+        updated_at >= $3::timestamptz
+        and (
+          (subject_type = 'article' and subject_id = any($1::uuid[]))
+          or (subject_type = 'story_cluster' and subject_id = any($2::uuid[]))
+        )
+      group by analysis_type, subject_type
+      order by analysis_type, subject_type
+    `,
+    [articleIds, storyClusterIds, startedAtIso]
+  );
+  const entityResult = await pool.query(
+    `
+      select entity_type, count(*)::int as count
+      from content_entities
+      where
+        subject_type = 'article'
+        and subject_id = any($1::uuid[])
+        and created_at >= $2::timestamptz
+      group by entity_type
+      order by entity_type
+    `,
+    [articleIds, startedAtIso]
+  );
+  const labelResult = await pool.query(
+    `
+      select label_type, count(*)::int as count
+      from content_labels
+      where
+        subject_type = 'article'
+        and subject_id = any($1::uuid[])
+        and created_at >= $2::timestamptz
+      group by label_type
+      order by label_type
+    `,
+    [articleIds, startedAtIso]
+  );
+  const filterResult = await pool.query(
+    `
+      select subject_type, mode, decision, count(*)::int as count
+      from content_filter_results
+      where
+        updated_at >= $3::timestamptz
+        and (
+          (subject_type = 'article' and subject_id = any($1::uuid[]))
+          or (subject_type = 'story_cluster' and subject_id = any($2::uuid[]))
+        )
+      group by subject_type, mode, decision
+      order by subject_type, mode, decision
+    `,
+    [articleIds, storyClusterIds, startedAtIso]
+  );
+
+  const analysisTypeCounts = {};
+  const analysisSubjectTypeCounts = {};
+  for (const row of analysisResult.rows) {
+    const analysisType = normalizeText(row.analysis_type);
+    const subjectType = normalizeText(row.subject_type);
+    const count = asInt(row.count, 0);
+    analysisTypeCounts[analysisType] = (analysisTypeCounts[analysisType] ?? 0) + count;
+    analysisSubjectTypeCounts[`${subjectType}:${analysisType}`] =
+      (analysisSubjectTypeCounts[`${subjectType}:${analysisType}`] ?? 0) + count;
+  }
+  const entityTypeCounts = Object.fromEntries(
+    entityResult.rows.map((row) => [normalizeText(row.entity_type), asInt(row.count, 0)])
+  );
+  const labelTypeCounts = Object.fromEntries(
+    labelResult.rows.map((row) => [normalizeText(row.label_type), asInt(row.count, 0)])
+  );
+  const filterModes = {};
+  const filterDecisions = {};
+  const filterSubjectTypeCounts = {};
+  for (const row of filterResult.rows) {
+    const subjectType = normalizeText(row.subject_type);
+    const mode = normalizeText(row.mode);
+    const decision = normalizeText(row.decision);
+    filterModes[mode] = (filterModes[mode] ?? 0) + asInt(row.count, 0);
+    filterDecisions[decision] = (filterDecisions[decision] ?? 0) + asInt(row.count, 0);
+    filterSubjectTypeCounts[subjectType] = (filterSubjectTypeCounts[subjectType] ?? 0) + asInt(row.count, 0);
+  }
+
+  const requiredAnalysisTypes = ["ner", "sentiment", "category", "system_interest_label", "content_filter"];
+  const missingAnalysisTypes = requiredAnalysisTypes.filter(
+    (analysisType) => asInt(analysisTypeCounts[analysisType], 0) <= 0
+  );
+  const allowedEntityTypes = ["ORG", "PERSON", "GPE", "DATE"];
+  const entitySignalPresent = allowedEntityTypes.some((entityType) => asInt(entityTypeCounts[entityType], 0) > 0);
+  const labelSignalPresent = ["taxonomy", "sentiment", "tone", "risk", "system_interest"].some(
+    (labelType) => asInt(labelTypeCounts[labelType], 0) > 0
+  );
+  const filterDryRunOnly =
+    Object.keys(filterModes).length > 0
+    && Object.keys(filterModes).every((mode) => mode === "dry_run");
+  const failures = [
+    ...missingAnalysisTypes.map((analysisType) => `missing analysis ${analysisType}`),
+    ...(entitySignalPresent ? [] : ["missing ORG/PERSON/GPE/DATE entity evidence"]),
+    ...(labelSignalPresent ? [] : ["missing taxonomy/sentiment/tone/risk/system_interest label evidence"]),
+    ...(filterDryRunOnly ? [] : ["missing dry_run-only content filter evidence"]),
+  ];
+
+  return {
+    status: failures.length === 0 ? "passed" : "failed",
+    failures,
+    sampledSubjectIds: articleIds.slice(0, 20),
+    sampledStoryClusterIds: storyClusterIds.slice(0, 20),
+    candidateSubjectCount: candidateArticleIds.length,
+    sampledSubjectCount: articleIds.length,
+    sampledStoryClusterCount: storyClusterIds.length,
+    articleStateCounts,
+    requiredAnalysisTypes,
+    analysisTypeCounts,
+    analysisSubjectTypeCounts,
+    entityTypeCounts,
+    labelTypeCounts,
+    filterModes,
+    filterDecisions,
+    filterSubjectTypeCounts,
+  };
+}
+
+async function waitForContentAnalysisEvidence(pool, downstreamRows, startedAtIso) {
+  return waitFor(
+    "content-analysis evidence for sampled proof subjects",
+    async () => readContentAnalysisEvidence(pool, downstreamRows, startedAtIso),
+    (snapshot) => contentAnalysisStatusIsPassing(snapshot.status),
+    {
+      timeoutMs: 300000,
+      intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
+      describeLastValue: (snapshot) =>
+        JSON.stringify({
+          status: snapshot.status,
+          failures: snapshot.failures ?? [],
+          candidateSubjectCount: snapshot.candidateSubjectCount ?? 0,
+          sampledSubjectCount: snapshot.sampledSubjectCount ?? 0,
+          sampledStoryClusterCount: snapshot.sampledStoryClusterCount ?? 0,
+          articleStateCounts: snapshot.articleStateCounts ?? {},
+          analysisTypeCounts: snapshot.analysisTypeCounts ?? {},
+          entityTypeCounts: snapshot.entityTypeCounts ?? {},
+          labelTypeCounts: snapshot.labelTypeCounts ?? {},
+          filterModes: snapshot.filterModes ?? {},
+          filterSubjectTypeCounts: snapshot.filterSubjectTypeCounts ?? {},
+        }),
+    }
+  );
+}
+
+function collectCandidateArticleIds(downstreamRows) {
+  return [
+    ...new Set(
+      asArray(downstreamRows)
+        .flatMap((row) => asArray(row.articles).map((article) => normalizeText(article.docId)))
+        .filter(Boolean)
+    ),
+  ];
+}
+
+async function requestContentFilterBackfill(pool, downstreamRows) {
+  const subjectIds = collectCandidateArticleIds(downstreamRows).slice(0, 100);
+  if (subjectIds.length === 0) {
+    return {
+      status: "skipped",
+      reason: "no_article_subjects_in_proof_window",
+      subjectCount: 0,
+    };
+  }
+
+  const queued = await postJson(
+    `${API_BASE_URL}/maintenance/content-analysis/backfill`,
+    {
+      subjectTypes: ["article"],
+      modules: ["content_filter"],
+      missingOnly: true,
+      policyKey: "default_recent_content_gate",
+      subjectIds,
+      batchSize: Math.min(100, Math.max(1, subjectIds.length)),
+      maxTextChars: 50000,
+      requestedByUserId: null,
+    },
+    { timeoutMs: 30000 }
+  );
+  const reindexJobId = normalizeText(queued?.reindexJobId);
+  if (!reindexJobId) {
+    throw new Error("Content-filter backfill request did not return a reindexJobId.");
+  }
+
+  const completed = await waitFor(
+    `completed content-filter backfill job ${reindexJobId}`,
+    async () => {
+      const result = await pool.query(
+        `
+          select status, error_text, options_json
+          from reindex_jobs
+          where reindex_job_id = $1::uuid
+        `,
+        [reindexJobId]
+      );
+      return result.rows[0] ?? null;
+    },
+    (row) => row?.status === "completed" || row?.status === "failed",
+    {
+      timeoutMs: 300000,
+      intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
+      describeLastValue: (row) =>
+        JSON.stringify({
+          status: row?.status ?? "missing",
+          errorText: row?.error_text ?? null,
+          options: row?.options_json ?? null,
+        }),
+    }
+  );
+
+  if (completed.status === "failed") {
+    throw new Error(
+      `Content-filter backfill job ${reindexJobId} failed: ${completed.error_text || "unknown error"}`
+    );
+  }
+
+  return {
+    reindexJobId,
+    status: completed.status,
+    subjectCount: subjectIds.length,
+    options: completed.options_json ?? null,
+  };
+}
+
+async function runBaselineLane(pool, caseDefinition, startedAtIso) {
+  const channelNames = asArray(caseDefinition.baselineProofChannelNames).length > 0
+    ? caseDefinition.baselineProofChannelNames
+    : asArray(caseDefinition.baselineChannelNames).slice(0, 3);
+  const resolvedChannels = await resolveChannelsByName(pool, channelNames);
+  const channelIds = resolvedChannels
+    .filter((row) => row.channel_id && row.is_active === true)
+    .map((row) => row.channel_id);
+  const triggerPolls = await triggerChannelPolls(channelIds);
+  const evidence = [];
+  for (const channel of resolvedChannels) {
+    if (!channel.channel_id || channel.is_active !== true) {
+      evidence.push({
+        channelId: channel.channel_id,
+        channelName: channel.name,
+        error: "baseline channel missing or inactive",
+        fetchRuns: [],
+        articles: [],
+        interestFilterResults: [],
+        finalSelection: { total: 0, selected: 0 },
+        systemFeed: { total: 0, eligible: 0 },
+        outboxEvents: [],
+        coveredInterests: [],
+      });
+      continue;
+    }
+    try {
+      const row = await waitForChannelEvidence(
+        pool,
+        channel.channel_id,
+        startedAtIso,
+        caseDefinition.interestNames
+      );
+      evidence.push({
+        ...row,
+        channelName: channel.name,
+        lane: "baseline",
+      });
+    } catch (error) {
+      evidence.push({
+        channelId: channel.channel_id,
+        channelName: channel.name,
+        lane: "baseline",
+        error: error instanceof Error ? error.message : String(error),
+        fetchRuns: [],
+        articles: [],
+        interestFilterResults: [],
+        finalSelection: { total: 0, selected: 0 },
+        systemFeed: { total: 0, eligible: 0 },
+        outboxEvents: [],
+        coveredInterests: [],
+      });
+    }
+  }
+  const successfulFetches = evidence.filter((row) => hasSuccessfulFetchRun(row.fetchRuns)).length;
+  return {
+    requestedChannelNames: channelNames,
+    resolvedChannels,
+    triggerPolls,
+    evidence,
+    successfulFetches,
+  };
 }
 
 async function runGraphLane(pool, caseDefinition, startedAtIso, materializedProfile) {
@@ -1586,13 +2029,14 @@ function buildCoverageMatrix(caseDefinition, downstreamRows, graphLane, recallLa
 async function runCase(pool, caseDefinition, startedAtIso) {
   log(`Running live discovery case ${caseDefinition.shortLabel}.`);
   const materializedProfile = await upsertDiscoveryProfile(caseDefinition);
+  const baselineLane = await runBaselineLane(pool, caseDefinition, startedAtIso);
   const graphLane = await runGraphLane(pool, caseDefinition, startedAtIso, materializedProfile);
   const recallLane = await runRecallLane(caseDefinition, startedAtIso, materializedProfile);
   const channelIds = [
     ...new Set([...graphLane.approvedChannelIds, ...recallLane.promotedChannelIds].filter(Boolean)),
   ];
   const triggerPolls = await triggerChannelPolls(channelIds);
-  const downstreamEvidence = [];
+  const discoveryEvidence = [];
   for (const channelId of channelIds) {
     try {
       const evidence = await waitForChannelEvidence(
@@ -1601,10 +2045,14 @@ async function runCase(pool, caseDefinition, startedAtIso) {
         startedAtIso,
         caseDefinition.interestNames
       );
-      downstreamEvidence.push(evidence);
+      discoveryEvidence.push({
+        ...evidence,
+        lane: "discovery",
+      });
     } catch (error) {
-      downstreamEvidence.push({
+      discoveryEvidence.push({
         channelId,
+        lane: "discovery",
         error: error instanceof Error ? error.message : String(error),
         fetchRuns: [],
         articles: [],
@@ -1616,6 +2064,13 @@ async function runCase(pool, caseDefinition, startedAtIso) {
       });
     }
   }
+  const downstreamEvidence = [...baselineLane.evidence, ...discoveryEvidence];
+  const contentAnalysisBackfill = await requestContentFilterBackfill(pool, downstreamEvidence);
+  const contentAnalysisEvidence = await waitForContentAnalysisEvidence(
+    pool,
+    downstreamEvidence,
+    startedAtIso
+  );
 
   const coverageMatrix = buildCoverageMatrix(
     caseDefinition,
@@ -1629,6 +2084,7 @@ async function runCase(pool, caseDefinition, startedAtIso) {
     {
       graphLane,
       recallLane,
+      baselineLane,
       downstreamEvidence,
       coverageMatrix,
     },
@@ -1647,8 +2103,14 @@ async function runCase(pool, caseDefinition, startedAtIso) {
     }),
     graphLane,
     recallLane,
-    triggerPolls,
+    baselineLane,
+    triggerPolls: [...baselineLane.triggerPolls, ...triggerPolls],
+    discoveryTriggerPolls: triggerPolls,
+    baselineEvidence: baselineLane.evidence,
+    discoveryEvidence,
     downstreamEvidence,
+    contentAnalysisBackfill,
+    contentAnalysisEvidence,
     coverageMatrix,
     status: verdicts.status,
     candidateCount,
@@ -1660,170 +2122,6 @@ async function runCase(pool, caseDefinition, startedAtIso) {
     rootCauseClassification: verdicts.rootCauseClassification,
     residuals: [...graphLane.residuals, ...recallLane.residuals],
   };
-}
-
-function formatInterestTable(rows) {
-  const header = ["| Interest | Status |", "| --- | --- |"];
-  for (const row of rows) {
-    header.push(`| ${row.interestName} | ${row.status} |`);
-  }
-  return header.join("\n");
-}
-
-function formatCaseMarkdown(caseRun) {
-  const approvedOrPromoted = [
-    ...caseRun.graphLane.candidates.filter((item) => item.decision === "approved"),
-    ...caseRun.recallLane.candidates.filter(
-      (item) => item.decision === "promoted" || item.decision === "duplicate"
-    ),
-  ];
-  const downstreamSummary = caseRun.downstreamEvidence
-    .map((evidence) => {
-      const filterRows = evidence.interestFilterResults?.length ?? 0;
-      const finalSelected = evidence.finalSelection?.selected ?? 0;
-      const systemEligible = evidence.systemFeed?.eligible ?? 0;
-      return `- ${evidence.channelId}: filters=${filterRows}, selected=${finalSelected}, eligible=${systemEligible}`;
-    })
-    .join("\n");
-
-  return [
-    `## ${caseRun.label}`,
-    ``,
-    `Status: \`${caseRun.status}\``,
-    `Runtime verdict: \`${caseRun.runtimeVerdict}\``,
-    `Yield verdict: \`${caseRun.yieldVerdict}\``,
-    `Pack class: \`${caseRun.packClass}\``,
-    `Root cause: \`${caseRun.rootCauseClassification}\``,
-    ``,
-    `Manual replay profile: \`${caseRun.manualReplaySettings?.profile?.profileKey || "n/a"}\` · ${caseRun.manualReplaySettings?.profile?.displayName || "n/a"} · applied graph v${caseRun.manualReplaySettings?.graphMission?.appliedProfileVersion ?? "—"} · applied recall v${caseRun.manualReplaySettings?.recallMission?.appliedProfileVersion ?? "—"}`,
-    ``,
-    `Approved/promoted channels: ${approvedOrPromoted.length}`,
-    `Yield summary: reviewed=${caseRun.yieldSummary.candidatesReviewed}, benchmark_like=${caseRun.yieldSummary.benchmarkLikeCandidatesFound}, approved_or_promoted=${caseRun.yieldSummary.candidatesApprovedOrPromoted}, onboarded=${caseRun.yieldSummary.channelsOnboarded}, downstream=${caseRun.yieldSummary.channelsWithDownstreamEvidence}, covered_interests=${caseRun.yieldSummary.interestsCoveredDownstream}`,
-    `Evidence funnel: fetch_runs=${caseRun.yieldSummary.channelsWithFetchRuns}, articles=${caseRun.yieldSummary.channelsWithArticles}, interest_filters=${caseRun.yieldSummary.channelsWithInterestFilterResults}, final_selection=${caseRun.yieldSummary.channelsWithFinalSelectionResults}`,
-    ``,
-    approvedOrPromoted.length > 0
-      ? approvedOrPromoted
-          .map((row) => `- ${row.title || row.url} -> ${row.registeredChannelId || "no_channel_id"}`)
-          .join("\n")
-      : "- none",
-    ``,
-    `Per-interest coverage`,
-    ``,
-    formatInterestTable(caseRun.coverageMatrix),
-    ``,
-    `Downstream evidence`,
-    ``,
-    downstreamSummary || "- none",
-    ``,
-    `Weak-yield reasons`,
-    ``,
-    Object.keys(caseRun.yieldSummary.weakYieldReasons).length > 0
-      ? Object.entries(caseRun.yieldSummary.weakYieldReasons)
-          .map(([key, count]) => `- ${key}: ${count}`)
-          .join("\n")
-      : "- none",
-    ``,
-    `Normalized reason buckets`,
-    ``,
-    Object.entries(caseRun.yieldSummary.normalizedReasonBuckets ?? {})
-      .map(([key, count]) => `- ${key}: ${count}`)
-      .join("\n"),
-    ``,
-    `Stage loss buckets`,
-    ``,
-    Object.entries(caseRun.yieldSummary.stageLossBuckets ?? {})
-      .map(([key, count]) => `- ${key}: ${count}`)
-      .join("\n"),
-    ``,
-    `Productivity buckets`,
-    ``,
-    Object.entries(caseRun.yieldSummary.productivityBuckets ?? {})
-      .map(([key, count]) => `- ${key}: ${count}`)
-      .join("\n"),
-    ``,
-    `Top rejected domains`,
-    ``,
-    caseRun.yieldSummary.topRejectedDomains.length > 0
-      ? caseRun.yieldSummary.topRejectedDomains
-          .map((item) => `- ${item.domain}: ${item.count}`)
-          .join("\n")
-      : "- none",
-    ``,
-    `Top rejected tactics`,
-    ``,
-    caseRun.yieldSummary.topRejectedTactics.length > 0
-      ? caseRun.yieldSummary.topRejectedTactics
-          .map((item) => `- ${item.tactic}: ${item.count}`)
-          .join("\n")
-      : "- none",
-    ``,
-    `Benchmark-like candidates`,
-    ``,
-    `- found: ${caseRun.yieldSummary.benchmarkLikeCandidatesFound}`,
-    `- rejected: ${caseRun.yieldSummary.benchmarkLikeCandidatesRejected}`,
-    ...Object.entries(caseRun.yieldSummary.benchmarkLikeRejectedReasons).map(
-      ([key, count]) => `- ${key}: ${count}`
-    ),
-    ``,
-    `Manual replay settings`,
-    ``,
-    `- profile key: ${caseRun.manualReplaySettings?.profile?.profileKey || "n/a"}`,
-    `- profile display name: ${caseRun.manualReplaySettings?.profile?.displayName || "n/a"}`,
-    `- graph preferred domains: ${(caseRun.manualReplaySettings?.graphPolicy?.preferredDomains ?? []).join(", ") || "—"}`,
-    `- graph blocked domains: ${(caseRun.manualReplaySettings?.graphPolicy?.blockedDomains ?? []).join(", ") || "—"}`,
-    `- recall preferred domains: ${(caseRun.manualReplaySettings?.recallPolicy?.preferredDomains ?? []).join(", ") || "—"}`,
-    `- recall blocked domains: ${(caseRun.manualReplaySettings?.recallPolicy?.blockedDomains ?? []).join(", ") || "—"}`,
-    `- benchmark domains: ${(caseRun.manualReplaySettings?.yieldBenchmark?.domains ?? []).join(", ") || "—"}`,
-    `- graph seed topics: ${(caseRun.manualReplaySettings?.graphMission?.seedTopics ?? []).join(" | ") || "—"}`,
-    `- recall seed queries: ${(caseRun.manualReplaySettings?.recallMission?.seedQueries ?? []).join(" | ") || "—"}`,
-    ``,
-  ].join("\n");
-}
-
-function formatEvidenceMarkdown(report) {
-  return [
-    `# Live Discovery Case Pack Evidence`,
-    ``,
-    `Run id: \`${report.runId}\``,
-    `Started at: \`${report.startedAt}\``,
-    `Runtime verdict: \`${report.runtimeVerdict}\``,
-    `Yield verdict: \`${report.yieldVerdict}\``,
-    `Final verdict: \`${report.finalVerdict}\``,
-    ``,
-    `## Preflight`,
-    ``,
-    `- DDGS-only guard: \`${report.ddgsOnlyGuard.status}\``,
-    `- Preconditions: ${
-      report.preconditions.every((item) => item.status === "passed") ? "`passed`" : "`failed`"
-    }`,
-    `- Proof commands: ${
-      report.preflight.every((item) => preflightStatusSucceeded(item.status)) ? "`passed`" : "`failed`"
-    }`,
-    `- Calibration: \`${report.calibrationPassed ? "passed" : "failed"}\``,
-    `- Runtime case packs: ${report.enabledCasePacks.runtime.map((item) => `\`${item.shortLabel}\``).join(", ") || "none"}`,
-    `- Validation case packs: ${report.enabledCasePacks.validation.map((item) => `\`${item.shortLabel}\``).join(", ") || "none"}`,
-    ``,
-    ...report.preflight.map((item) => {
-      const suffix = item.reason ? ` (${item.reason})` : "";
-      return `- ${item.name}: \`${item.status}\`${suffix}`;
-    }),
-    ``,
-    `## Calibration`,
-    ``,
-    ...report.calibration.map(
-      (item) =>
-        `- ${item.label}: \`${item.passed ? "passed" : "failed"}\` (${item.matched}/${item.total}, agreement=${item.agreementRatio.toFixed(2)}, min=${item.minimumAgreement.toFixed(2)})`
-    ),
-    ``,
-    `## Aggregate Root Causes`,
-    ``,
-    `- Dominant root cause: \`${report.aggregateYieldDiagnostics?.dominantRootCause || "n/a"}\``,
-    ...Object.entries(report.aggregateYieldDiagnostics?.counts ?? {}).map(
-      ([key, count]) => `- ${key}: ${count}`
-    ),
-    ``,
-    ...report.caseRuns.map((caseRun) => formatCaseMarkdown(caseRun)),
-  ].join("\n");
 }
 
 async function main() {
@@ -1905,13 +2203,13 @@ async function main() {
       report.runtimeVerdict = "fail";
       report.yieldVerdict = "fail";
       report.finalVerdict = "precondition_failed";
-      return;
+      throw new Error("Discovery live example preconditions failed.");
     }
     if (report.preflight.some((item) => !preflightStatusSucceeded(item.status))) {
       report.runtimeVerdict = "fail";
       report.yieldVerdict = "fail";
       report.finalVerdict = "fail";
-      return;
+      throw new Error("Discovery live example preflight failed.");
     }
 
     for (const caseDefinition of DISCOVERY_RUNTIME_CASE_PACKS) {
@@ -1944,7 +2242,7 @@ async function main() {
       await pool.end().catch(() => undefined);
     }
     await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-    await writeFile(mdPath, `${formatEvidenceMarkdown(report)}\n`, "utf8");
+    await writeFile(mdPath, `${formatDiscoveryEvidenceMarkdown(report)}\n`, "utf8");
     const artifactPointerPath = String(process.env.DISCOVERY_EXAMPLES_ARTIFACT_POINTER_FILE ?? "").trim();
     if (artifactPointerPath) {
       await writeFile(

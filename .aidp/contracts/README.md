@@ -22,6 +22,7 @@
 - `.aidp/contracts/article-pipeline-core.md` — ingest-to-selection ownership, canonical reuse, final-selection truth, compatibility projections and reset/preserve discipline.
 - `.aidp/contracts/auth-session-boundary.md` — Firebase web/admin identity, local PostgreSQL roles, cookies, allowlist and nginx `/admin` boundary.
 - `.aidp/contracts/browser-assisted-websites.md` — JS-heavy website fallback, fetchers-owned browser runtime, auth header safety, provenance and hard-site proof.
+- `.aidp/contracts/content-analysis-and-gating.md` — persisted content analysis, NER/entities, labels, content filter policies, gate results, admin/API/MCP analysis surfaces and safe enforce rollout rules.
 - `.aidp/contracts/content-model.md` — public universal content vocabulary, content items, content kinds, system-selected collection and user-match layering.
 - `.aidp/contracts/discovery-agent.md` — graph-first plus bounded recall discovery control plane, policy profiles, source scoring, portfolio, feedback and safe runtime flags.
 - `.aidp/contracts/feed-ingress-adapters.md` — aggregator-aware RSS/Atom adapter strategies, max-entry-age gating, canonical URL normalization and provenance.

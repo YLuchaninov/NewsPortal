@@ -1,0 +1,264 @@
+---
+import { readRuntimeConfig } from "@newsportal/config";
+import { createNewsPortalSdk } from "@newsportal/sdk";
+import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+
+export const prerender = false;
+
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/",
+});
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const [analysis, entities, labels, policies, filterResults, reindexJobs] = await Promise.all([
+  sdk.listContentAnalysisResultsPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),
+  sdk.listContentEntitiesPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),
+  sdk.listContentLabelsPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),
+  sdk.listContentFilterPoliciesPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),
+  sdk.listContentFilterResultsPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),
+  sdk.listReindexJobsPage<Record<string, unknown>>({ page: 1, pageSize: 8 }),
+]);
+
+const pagePaths = {
+  dashboard: appPath("/"),
+  analysisPolicies: appPath("/analysis-policies"),
+  filterPolicies: appPath("/filter-policies"),
+};
+const backfillBffPath = appPath("/bff/admin/content-analysis");
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const contentAnalysisJobs = reindexJobs.items.filter(
+  (job) => String(job.job_kind ?? "") === "content_analysis"
+);
+const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
+  const options = job.options_json && typeof job.options_json === "object"
+    ? job.options_json as Record<string, unknown>
+    : {};
+  const progress = options.progress && typeof options.progress === "object"
+    ? options.progress as Record<string, unknown>
+    : {};
+  const processed = Number(progress.processedContentItems ?? NaN);
+  const total = Number(progress.totalContentItems ?? NaN);
+  const progressLabel = Number.isFinite(processed) && Number.isFinite(total) && total > 0
+    ? `${processed}/${total} content items`
+    : String(job.reindex_job_id ?? "").slice(0, 8);
+  return {
+    id: String(job.reindex_job_id ?? ""),
+    status: String(job.status ?? "queued"),
+    timestamp: formatTimestamp(job.updated_at ?? job.requested_at),
+    progressLabel,
+  };
+});
+
+function formatTimestamp(rawValue: unknown): string {
+  if (!rawValue) return "—";
+  const date = new Date(String(rawValue));
+  if (Number.isNaN(date.getTime())) return String(rawValue);
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+---
+
+<AdminShell title="Analysis — Admin" session={session} flash={flash} activeNav="analysis">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="text-foreground font-medium">Analysis</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <a
+      href={pagePaths.analysisPolicies}
+      class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+    >
+      Analysis policies
+    </a>
+    <a
+      href={pagePaths.filterPolicies}
+      class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
+    >
+      Filter policies
+    </a>
+  </Fragment>
+
+  <div class="space-y-6">
+    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Content analysis</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Analysis layer</h1>
+      <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-xs text-muted-foreground">Results</p>
+          <p class="mt-2 text-3xl font-semibold">{analysis.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-xs text-muted-foreground">Entities</p>
+          <p class="mt-2 text-3xl font-semibold">{entities.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-xs text-muted-foreground">Labels</p>
+          <p class="mt-2 text-3xl font-semibold">{labels.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-xs text-muted-foreground">Policies</p>
+          <p class="mt-2 text-3xl font-semibold">{policies.total}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-xs text-muted-foreground">Gate results</p>
+          <p class="mt-2 text-3xl font-semibold">{filterResults.total}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
+      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 class="text-base font-semibold">Backfill existing content</h2>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Queue replay for stored articles and web resources. The job writes analysis evidence and skips retro notifications.
+        </p>
+        <form method="post" action={backfillBffPath} class="mt-4 grid gap-4">
+          <input type="hidden" name="redirectTo" value={currentPath} />
+          <div class="grid gap-2 sm:grid-cols-3">
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="subjectArticle" value="true" checked class="h-4 w-4 rounded border-input" />
+              Articles
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="subjectWebResource" value="true" checked class="h-4 w-4 rounded border-input" />
+              Web resources
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="subjectStoryCluster" value="true" checked class="h-4 w-4 rounded border-input" />
+              Story clusters
+            </label>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleNer" value="true" checked class="h-4 w-4 rounded border-input" />
+              NER
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleSentiment" value="true" checked class="h-4 w-4 rounded border-input" />
+              Sentiment
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleCategory" value="true" checked class="h-4 w-4 rounded border-input" />
+              Categories
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleClusterSummary" value="true" checked class="h-4 w-4 rounded border-input" />
+              Clusters
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleStructuredExtraction" value="true" class="h-4 w-4 rounded border-input" />
+              Structured
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleLabels" value="true" checked class="h-4 w-4 rounded border-input" />
+              Labels
+            </label>
+            <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+              <input type="checkbox" name="moduleGate" value="true" checked class="h-4 w-4 rounded border-input" />
+              Gate
+            </label>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Structured extraction is unchecked by default because active Gemini policies can call an LLM.
+          </p>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <label class="grid gap-1.5 text-sm font-medium">
+              Policy key
+              <input name="policyKey" value="default_recent_content_gate" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+            </label>
+            <label class="grid gap-1.5 text-sm font-medium">
+              Batch size
+              <input name="batchSize" type="number" min="1" max="500" value="100" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+            </label>
+            <label class="grid gap-1.5 text-sm font-medium">
+              Max chars
+              <input name="maxTextChars" type="number" min="1000" max="250000" value="50000" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+            </label>
+          </div>
+          <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
+            <input name="missingOnly" type="checkbox" value="true" checked class="mt-0.5 h-4 w-4 rounded border-input" />
+            <span class="space-y-1">
+              <span class="block text-sm font-medium">Only missing analysis</span>
+              <span class="block text-xs text-muted-foreground">Keeps replay idempotent and avoids rewriting subjects that already have the selected analysis.</span>
+            </span>
+          </label>
+          <AdminConfirmSubmitButton
+            title="Queue content analysis backfill"
+            description="This queues a worker job that writes local analysis, cluster summaries, labels and dry-run gate results for existing content. Structured extraction is opt-in because it can call an LLM. The job does not send retro notifications."
+            triggerLabel="Queue backfill"
+            confirmLabel="Start backfill"
+            client:load
+          />
+        </form>
+      </div>
+
+      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 class="text-base font-semibold">Recent backfill jobs</h2>
+        <div class="mt-4 divide-y divide-border">
+          {contentAnalysisJobViews.map((job) => (
+            <div class="py-3 text-sm">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium">{job.status}</span>
+                <span class="text-xs text-muted-foreground">{job.timestamp}</span>
+              </div>
+              <p class="mt-1 text-xs text-muted-foreground">{job.progressLabel}</p>
+            </div>
+          ))}
+          {contentAnalysisJobViews.length === 0 && <p class="py-4 text-sm text-muted-foreground">No content-analysis backfill jobs yet.</p>}
+        </div>
+      </div>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-2">
+      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 class="text-base font-semibold">Recent analysis</h2>
+        <div class="mt-4 divide-y divide-border">
+          {analysis.items.map((item) => (
+            <a href={appPath(`/analysis?subject=${String(item.subject_id ?? "")}`)} class="block py-3 text-sm">
+              <span class="font-medium">{String(item.analysis_type ?? "analysis")}</span>
+              <span class="ml-2 text-muted-foreground">{String(item.subject_type ?? "subject")}:{String(item.subject_id ?? "").slice(0, 8)}</span>
+              <span class="float-right text-xs text-muted-foreground">{formatTimestamp(item.updated_at)}</span>
+            </a>
+          ))}
+          {analysis.items.length === 0 && <p class="py-4 text-sm text-muted-foreground">No analysis results yet.</p>}
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 class="text-base font-semibold">Recent entities</h2>
+        <div class="mt-4 flex flex-wrap gap-2">
+          {entities.items.map((entity) => (
+            <span class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+              {String(entity.entity_type ?? "ENTITY")} · {String(entity.entity_text ?? "")}
+            </span>
+          ))}
+          {entities.items.length === 0 && <p class="text-sm text-muted-foreground">No entities yet.</p>}
+        </div>
+      </div>
+    </section>
+  </div>
+</AdminShell>

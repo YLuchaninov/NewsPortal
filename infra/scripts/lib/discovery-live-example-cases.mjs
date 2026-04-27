@@ -1,3 +1,242 @@
+const exampleAGraphCalibration = [
+  {
+    label: "HN hiring rss",
+    lane: "graph",
+    expectedVerdict: "approve",
+    candidate: {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.78,
+      url: "https://hnrss.org/show?q=hiring",
+      title: "Ask HN: Who is hiring? remote developer jobs",
+      search_query: "software engineering jobs feed",
+      tactic_key: "remote developer jobs rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+  {
+    label: "We Work Remotely programming rss",
+    lane: "graph",
+    expectedVerdict: "approve",
+    candidate: {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.79,
+      url: "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+      title: "Remote software engineer vacancies and programming jobs",
+      search_query: "remote developer jobs rss",
+      tactic_key: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+  {
+    label: "RemoteOK rss",
+    lane: "graph",
+    expectedVerdict: "approve",
+    candidate: {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.76,
+      url: "https://remoteok.com/remote-jobs.rss",
+      title: "Remote developer jobs and software engineer openings",
+      search_query: "programming job board rss",
+      tactic_key: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+  {
+    label: "Google News hiring feed",
+    lane: "graph",
+    expectedVerdict: "approve",
+    candidate: {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.77,
+      url: "https://news.google.com/rss/search?q=tech+hiring+jobs",
+      title: "Tech hiring jobs and startup vacancies",
+      search_query: "startup hiring rss",
+      tactic_key: "hiring news rss",
+      evaluation_json: {
+        classification: { kind: "editorial" },
+      },
+    },
+  },
+  {
+    label: "Layoff noise",
+    lane: "graph",
+    expectedVerdict: "reject",
+    candidate: {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.94,
+      url: "https://example.com/layoffs.xml",
+      title: "Tech layoffs and hiring freeze market analysis",
+      search_query: "software engineering jobs feed",
+      tactic_key: "remote developer jobs rss",
+      evaluation_json: {
+        classification: { kind: "editorial" },
+      },
+    },
+  },
+  {
+    label: "Career advice noise",
+    lane: "graph",
+    expectedVerdict: "reject",
+    candidate: {
+      provider_type: "rss",
+      is_valid: true,
+      relevance_score: 0.88,
+      url: "https://career.example.com/feed.xml",
+      title: "Resume tips and interview guide for software engineers",
+      search_query: "software engineering jobs feed",
+      tactic_key: "career advice",
+      evaluation_json: {
+        classification: { kind: "editorial" },
+      },
+    },
+  },
+  {
+    label: "Job directory listicle",
+    lane: "graph",
+    expectedVerdict: "reject",
+    candidate: {
+      provider_type: "website",
+      is_valid: true,
+      relevance_score: 0.86,
+      url: "https://best-jobs.example.com/",
+      title: "Top remote job boards directory and listicle",
+      search_query: "programming job board rss",
+      tactic_key: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+  {
+    label: "Browser assisted job board",
+    lane: "graph",
+    expectedVerdict: "residual",
+    candidate: {
+      provider_type: "website",
+      is_valid: true,
+      relevance_score: 0.95,
+      url: "https://jobs.example.com/software-engineer",
+      title: "Remote developer jobs and software engineer openings",
+      search_query: "remote developer jobs rss",
+      tactic_key: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+        browser_assisted_recommended: true,
+      },
+    },
+  },
+  {
+    label: "Challenge gated job board",
+    lane: "graph",
+    expectedVerdict: "residual",
+    candidate: {
+      provider_type: "website",
+      is_valid: true,
+      relevance_score: 0.93,
+      url: "https://secure-jobs.example.com/",
+      title: "Software engineer vacancies and developer openings",
+      search_query: "startup hiring rss",
+      tactic_key: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+        challenge_kind: "captcha",
+      },
+    },
+  },
+  {
+    label: "Invalid jobs feed",
+    lane: "graph",
+    expectedVerdict: "reject",
+    candidate: {
+      provider_type: "rss",
+      is_valid: false,
+      relevance_score: 0.82,
+      url: "https://invalid.example.com/jobs.xml",
+      title: "Broken software jobs feed",
+      search_query: "software engineering jobs feed",
+      tactic_key: "remote developer jobs rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+];
+
+const exampleARecallCalibration = [
+  {
+    label: "RemoteOK recall",
+    lane: "recall",
+    expectedVerdict: "approve",
+    candidate: {
+      provider_type: "rss",
+      source_quality_recall_score: 0.42,
+      url: "https://remoteok.com/remote-jobs.rss",
+      title: "Remote software engineer jobs feed",
+      quality_signal_source: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+  {
+    label: "WWR recall",
+    lane: "recall",
+    expectedVerdict: "approve",
+    candidate: {
+      provider_type: "rss",
+      source_quality_recall_score: 0.38,
+      url: "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+      title: "Remote programming jobs and developer vacancies",
+      quality_signal_source: "software engineering jobs feed",
+      evaluation_json: {
+        classification: { kind: "listing" },
+      },
+    },
+  },
+  {
+    label: "Career advice recall",
+    lane: "recall",
+    expectedVerdict: "reject",
+    candidate: {
+      provider_type: "website",
+      source_quality_recall_score: 0.72,
+      url: "https://career.example.com/software-engineer-interview-guide",
+      title: "Interview guide, resume tips, and career advice",
+      quality_signal_source: "remote developer jobs rss",
+      evaluation_json: {
+        classification: { kind: "editorial" },
+      },
+    },
+  },
+  {
+    label: "Residual recall",
+    lane: "recall",
+    expectedVerdict: "residual",
+    candidate: {
+      provider_type: "website",
+      source_quality_recall_score: 0.74,
+      url: "https://jobs.example.com/",
+      title: "Remote developer vacancies",
+      quality_signal_source: "remote job board rss",
+      evaluation_json: {
+        classification: { kind: "listing" },
+        browser_assisted_recommended: true,
+      },
+    },
+  },
+];
+
 const exampleBGraphCalibration = [
   {
     label: "InfoQ editorial rss",
@@ -478,6 +717,223 @@ const exampleCRecallCalibration = [
 
 export const DISCOVERY_LIVE_CASES = [
   {
+    key: "example_a_job_board",
+    label: "Example A — Агрегатор вакансий (Job Board)",
+    shortLabel: "Example A",
+    proofProfile: {
+      profileKey: "example_a_job_board_proof",
+      displayName: "Example A — Job Board Proof",
+      description:
+        "Proof-backed reusable discovery profile for Example A job-board graph and recall automation.",
+    },
+    interestNames: [
+      "Backend Engineering Jobs",
+      "Frontend & React Jobs",
+      "AI & Machine Learning Positions",
+      "Remote Work Opportunities",
+      "DevOps & SRE Roles",
+      "Product & Project Management Roles",
+      "Data Engineering Jobs",
+      "Startup Hiring & Founding Teams",
+    ],
+    baselineChannelNames: [
+      "Hacker News — Ask HN: Who is hiring?",
+      "We Work Remotely — Programming",
+      "We Work Remotely — DevOps & Sysadmin",
+      "We Work Remotely — Management & Finance",
+      "We Work Remotely — Design",
+      "RemoteOK — Remote Jobs Feed",
+      "Stack Overflow Jobs — Blog",
+      "GitHub Blog — Engineering",
+      "LinkedIn News — Tech Industry (Google News search)",
+      "TechCrunch — Startups",
+      "VentureBeat",
+      "dev.to — Career Tag",
+      "dev.to — Hiring Tag",
+      "Indeed — Software Engineer RSS",
+    ],
+    baselineProofChannelNames: [
+      "Hacker News — Ask HN: Who is hiring?",
+      "We Work Remotely — Programming",
+      "RemoteOK — Remote Jobs Feed",
+    ],
+    yieldAcceptance: {
+      minChannelsWithDownstreamEvidence: 1,
+      minBaselineSuccessfulFetches: 1,
+    },
+    yieldBenchmark: {
+      domains: [
+        "hnrss.org",
+        "weworkremotely.com",
+        "remoteok.com",
+        "dev.to",
+        "news.google.com",
+      ],
+      titleKeywords: [
+        "hiring",
+        "jobs",
+        "remote",
+        "software engineer",
+        "developer",
+        "vacancy",
+        "career opportunity",
+      ],
+      tacticKeywords: [
+        "remote developer jobs rss",
+        "software engineering jobs feed",
+        "startup hiring rss",
+        "programming job board rss",
+      ],
+    },
+    graphPolicy: {
+      minRssReviewScore: 0.74,
+      minWebsiteReviewScore: 0.8,
+      supportedWebsiteKinds: ["editorial", "listing"],
+      preferredDomains: [
+        "hnrss.org",
+        "weworkremotely.com",
+        "remoteok.com",
+        "dev.to",
+        "news.google.com",
+      ],
+      negativeDomains: [
+        "feedspot.com",
+        "rssing.com",
+        "indeed-career-guide.example.com",
+        "best-jobs.example.com",
+      ],
+      preferredTactics: [
+        "remote developer jobs rss",
+        "software engineering jobs feed",
+        "startup hiring rss",
+        "programming job board rss",
+      ],
+      positiveKeywords: [
+        "hiring",
+        "jobs",
+        "remote",
+        "software engineer",
+        "developer",
+        "vacancy",
+        "career opportunity",
+        "opening",
+        "position",
+      ],
+      negativeKeywords: [
+        "layoff",
+        "hiring freeze",
+        "salary report",
+        "resume tips",
+        "interview guide",
+        "career advice",
+        "market analysis",
+        "directory",
+        "listicle",
+      ],
+    },
+    recallPolicy: {
+      minPromotionScore: 0.2,
+      supportedWebsiteKinds: ["editorial", "listing"],
+      preferredDomains: [
+        "hnrss.org",
+        "weworkremotely.com",
+        "remoteok.com",
+        "dev.to",
+        "news.google.com",
+      ],
+      negativeDomains: [
+        "feedspot.com",
+        "rssing.com",
+        "best-jobs.example.com",
+        "career.example.com",
+      ],
+      preferredTactics: [
+        "remote developer jobs rss",
+        "software engineering jobs feed",
+        "startup hiring rss",
+        "programming job board rss",
+      ],
+      preferredDomainBonus: 0.11,
+      positiveKeywordBonus: 0.06,
+      benchmarkBonus: 0.08,
+      positiveKeywords: [
+        "hiring",
+        "jobs",
+        "remote",
+        "software engineer",
+        "developer",
+        "vacancy",
+        "opening",
+      ],
+      negativeKeywords: [
+        "layoff",
+        "hiring freeze",
+        "salary report",
+        "resume tips",
+        "interview guide",
+        "career advice",
+        "market analysis",
+        "directory",
+        "listicle",
+      ],
+    },
+    calibrationSamples: [...exampleAGraphCalibration, ...exampleARecallCalibration],
+    graphMission: {
+      title: "LIVE Example A job-board source expansion",
+      description:
+        "Discover live rss and website sources for job-board listings aligned to Example A interests.",
+      seedTopics: [
+        "remote developer jobs rss",
+        "software engineering jobs feed",
+        "startup hiring rss",
+        "programming job board rss",
+      ],
+      seedLanguages: ["en"],
+      seedRegions: ["us", "eu"],
+      targetProviderTypes: ["rss", "website"],
+      maxHypotheses: 4,
+      maxSources: 12,
+      budgetCents: 250,
+      priority: 2,
+    },
+    graphClasses: [
+      {
+        classKey: "live_example_a_website",
+        displayName: "Live Example A Website",
+        description: "Deterministic listing/editorial job-board queries for bounded DDGS live tests.",
+        status: "active",
+        generationBackend: "graph_seed_only",
+        defaultProviderTypes: ["website"],
+        promptInstructions:
+          "Prefer recurring job-board feeds and company/job listing sources with concrete vacancies; avoid layoff coverage, hiring-freeze analysis, salary reports, interview guides, resume tips, directories, and SEO listicles.",
+        seedRulesJson: {
+          tactics: ["remote developer jobs rss", "software engineering jobs feed"],
+        },
+        maxPerMission: 2,
+        sortOrder: -200,
+        configJson: {
+          source: "infra:test-live-discovery-examples",
+          caseKey: "example_a_job_board",
+        },
+      },
+    ],
+    recallMission: {
+      title: "LIVE Example A neutral recall",
+      description:
+        "Bounded neutral recall acquisition for job-board rss and website sources.",
+      missionKind: "query_seed",
+      seedQueries: [
+        "remote developer jobs rss",
+        "software engineering jobs feed",
+        "startup hiring rss",
+        "programming job board rss",
+        "software engineer vacancies rss",
+      ],
+      targetProviderTypes: ["rss", "website"],
+      maxCandidates: 8,
+    },
+  },
+  {
     key: "example_b_dev_news",
     label: "Example B — IT-новости для разработчиков",
     shortLabel: "Example B",
@@ -514,6 +970,11 @@ export const DISCOVERY_LIVE_CASES = [
       "Changelog — Podcast & News",
       "Reuters — Technology",
       "BBC — Technology",
+    ],
+    baselineProofChannelNames: [
+      "Hacker News — Best Stories",
+      "InfoQ — All",
+      "GitHub Blog",
     ],
     yieldAcceptance: {
       minChannelsWithDownstreamEvidence: 1,
@@ -753,6 +1214,11 @@ export const DISCOVERY_LIVE_CASES = [
       "VentureBeat",
       "Reuters — Technology",
       "The New Stack",
+    ],
+    baselineProofChannelNames: [
+      "Google News — Software Development Outsourcing",
+      "Google News — Software Development RFP / Tender",
+      "TechCrunch — Startups",
     ],
     yieldAcceptance: {
       minChannelsWithDownstreamEvidence: 1,
@@ -1191,6 +1657,13 @@ const DISCOVERY_SYNTHETIC_VALIDATION_PACKS = [
 ];
 
 function addPackMetadata(caseDefinition) {
+  if (caseDefinition.key === "example_a_job_board") {
+    return {
+      ...caseDefinition,
+      packClass: "job_listing_like",
+      executionMode: "live_runtime",
+    };
+  }
   if (caseDefinition.key === "example_b_dev_news") {
     return {
       ...caseDefinition,

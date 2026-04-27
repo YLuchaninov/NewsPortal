@@ -100,6 +100,7 @@ export interface WebResourceDetail extends WebResourcePreview {
   child_resources_json?: unknown[] | null;
   raw_payload_json?: Record<string, unknown> | null;
   selection_diagnostics?: Record<string, unknown> | null;
+  analysis_summary?: Record<string, unknown> | null;
 }
 
 export interface SourceChannelSchedulePatch {

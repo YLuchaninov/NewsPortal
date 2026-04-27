@@ -117,6 +117,7 @@ export interface ArticleDetail extends ArticlePreview {
   enrichment_debug?: Record<string, unknown> | null;
   selection_diagnostics?: Record<string, unknown> | null;
   media_assets?: ArticleMediaAsset[];
+  analysis_summary?: Record<string, unknown> | null;
 }
 
 export interface ArticleEnrichmentResult {

@@ -248,6 +248,67 @@ class WorkerHardFilterTests(unittest.TestCase):
         self.assertNotIn("wrapper_directory_noise", reasons)
         self.assertTrue(within_window)
 
+    def test_content_analysis_backfill_defaults_are_safe(self) -> None:
+        self.assertEqual(
+            worker_main.normalize_content_analysis_backfill_subject_types(None),
+            ["article", "web_resource", "story_cluster"],
+        )
+        self.assertEqual(
+            worker_main.normalize_content_analysis_backfill_modules(None),
+            {
+                "ner",
+                "sentiment",
+                "category",
+                "cluster_summary",
+                "system_interest_labels",
+                "content_filter",
+            },
+        )
+        self.assertEqual(
+            worker_main.normalize_content_analysis_backfill_modules(["structured_extraction"]),
+            {"structured_extraction"},
+        )
+        self.assertEqual(
+            worker_main.build_content_analysis_backfill_progress_patch(
+                processed_items=3,
+                total_items=9,
+            ),
+            {"progress": {"processedContentItems": 3, "totalContentItems": 9}},
+        )
+
+    def test_content_analysis_missing_clause_tracks_policy_key_for_gate(self) -> None:
+        clause, params = worker_main.build_content_analysis_missing_clause(
+            subject_type="web_resource",
+            modules={"content_filter"},
+            policy_key="recent_gate",
+            alias="wr.resource_id",
+        )
+
+        self.assertIn("content_filter_results", clause)
+        self.assertEqual(params, ["web_resource", "recent_gate"])
+
+    def test_content_analysis_missing_clause_supports_story_cluster_summary(self) -> None:
+        clause, params = worker_main.build_content_analysis_missing_clause(
+            subject_type="story_cluster",
+            modules={"cluster_summary"},
+            policy_key="recent_gate",
+            alias="sc.story_cluster_id",
+        )
+
+        self.assertIn("analysis_type = 'cluster_summary'", clause)
+        self.assertEqual(params, [])
+
+    def test_content_analysis_missing_clause_supports_structured_extraction(self) -> None:
+        clause, params = worker_main.build_content_analysis_missing_clause(
+            subject_type="article",
+            modules={"structured_extraction"},
+            policy_key="recent_gate",
+            alias="a.doc_id",
+        )
+
+        self.assertIn("analysis_type = 'structured_extraction'", clause)
+        self.assertEqual(params, ["article"])
+
 
 if __name__ == "__main__":
     unittest.main()
