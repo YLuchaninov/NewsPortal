@@ -16,6 +16,11 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
+import {
+  parsePositivePage,
+  resolvePageHref,
+  resolveViewHref as resolveAdminViewHref,
+} from "../../lib/view-helpers";
 
 export const prerender = false;
 
@@ -33,18 +38,13 @@ const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: 
 const TEMPLATE_PAGE_SIZE = 8;
 type R = Record<string, unknown>;
 
-function parsePage(paramName: string): number {
-  const requestedPage = Number.parseInt(Astro.url.searchParams.get(paramName) ?? String(DEFAULT_PAGE), 10);
-  return Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
-}
-
 function fmt(v: unknown) {
   if (!v) return "—";
   const d = new Date(String(v));
   return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-const page = parsePage("page");
+const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const templates = await sdk.listLlmTemplatesPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
 const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
 const currentView = String(Astro.url.searchParams.get("view") ?? "active").trim() || "active";
@@ -79,24 +79,14 @@ const templateViews = [
 ] as const;
 
 function resolveListHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
+  return resolvePageHref(Astro.url, nextPage, { defaultPage: DEFAULT_PAGE });
 }
 
 function resolveViewHref(view: string): string {
-  const target = new URL(Astro.url);
-  target.searchParams.delete("page");
-  if (view === "active") {
-    target.searchParams.delete("view");
-  } else {
-    target.searchParams.set("view", view);
-  }
-  return `${target.pathname}${target.search}`;
+  return resolveAdminViewHref(Astro.url, view, {
+    defaultView: "active",
+    resetPageParam: "page",
+  });
 }
 ---
 

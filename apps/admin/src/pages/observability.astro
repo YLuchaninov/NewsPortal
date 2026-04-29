@@ -14,6 +14,11 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import {
+  parsePositivePage,
+  resolvePageHref,
+  resolveViewHref as resolveAdminViewHref,
+} from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -33,13 +38,9 @@ const LLM_REVIEWS_PAGE_SIZE = 25;
 const currentView = String(Astro.url.searchParams.get("view") ?? "fetch").trim() || "fetch";
 
 type R = Record<string, unknown>;
-function parsePage(paramName: string): number {
-  const requestedPage = Number.parseInt(Astro.url.searchParams.get(paramName) ?? String(DEFAULT_PAGE), 10);
-  return Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
-}
 
-const fetchPage = parsePage("fetchPage");
-const reviewPage = parsePage("reviewPage");
+const fetchPage = parsePositivePage(Astro.url, "fetchPage", DEFAULT_PAGE);
+const reviewPage = parsePositivePage(Astro.url, "reviewPage", DEFAULT_PAGE);
 const [fetchRuns, llmReviews, llmUsageSummary, llmBudgetSummary] = await Promise.all([
   sdk.listFetchRunsPage<R>({ page: fetchPage, pageSize: FETCH_RUNS_PAGE_SIZE }),
   sdk.listLlmReviewsPage<R>({ page: reviewPage, pageSize: LLM_REVIEWS_PAGE_SIZE }),
@@ -153,23 +154,14 @@ function fmtD(v: unknown, decimals = 2): string {
 }
 
 function resolveTableHref(paramName: string, nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete(paramName);
-  } else {
-    target.searchParams.set(paramName, String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
+  return resolvePageHref(Astro.url, nextPage, {
+    pageParam: paramName,
+    defaultPage: DEFAULT_PAGE,
+  });
 }
 
 function resolveViewHref(view: string): string {
-  const target = new URL(Astro.url);
-  if (view === "fetch") {
-    target.searchParams.delete("view");
-  } else {
-    target.searchParams.set("view", view);
-  }
-  return `${target.pathname}${target.search}`;
+  return resolveAdminViewHref(Astro.url, view, { defaultView: "fetch" });
 }
 ---
 

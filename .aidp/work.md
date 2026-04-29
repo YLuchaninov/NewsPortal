@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; admin automation editor client-helper consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; admin page pagination/view-href helper consolidation for template and observability surfaces is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin automation editor client-helper consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md` and `apps/admin/src/components/automation-editor-workspace-model.ts`; no automation editor UI layout, graph behavior, server write payloads, route behavior, runtime service code or visual redesign were changed.
+- Worktree status: clean after committing admin page pagination/view-href helper consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/observability.astro`; query-string behavior remains equivalent and no copy, layout, server writes, runtime service code or visual redesign were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice before broader admin view-helper cleanup.
+- Required action before ordinary implementation: open the next scoped slice before broader admin/public web view-helper cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-23
+
+- Kind: Stage
+- Status: completed
+- In scope: add parameterized admin helpers for positive page parsing, page hrefs and view hrefs; replace duplicated local helpers in `templates/interests.astro`, `templates/llm.astro` and `observability.astro`.
+- Out of scope: broader route/query behavior changes, channel/article/resource/clusters pagination, public web helpers, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/observability.astro`.
+- Risk: medium, because query-string generation is user-visible navigation behavior; helpers must preserve default-view deletion and page reset semantics exactly.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted `rg` review that selected local helper copies were removed.
+- Acceptance criteria: selected pages import shared helpers; template `view=active` and observability `view=fetch` default deletion behavior is preserved; template view switches still reset `page`; table page params still delete at default page; no UI/layout/copy behavior changes.
+- Architecture note: affected concern is admin navigation helper consistency; stakeholder/consumer is admin/operator pages; tradeoff is a parameterized app-boundary helper instead of separate page-local copies.
+- Implemented, with evidence: added `parsePositivePage()`, `resolvePageHref()` and parameterized `resolveViewHref()` to `apps/admin/src/lib/view-helpers.ts`.
+- Implemented, with evidence: `templates/interests.astro`, `templates/llm.astro` and `observability.astro` now use the shared helpers while keeping local wrapper names for page readability.
+- Compatibility note: template view switches still delete `page`; template default `active` view and observability default `fetch` view still remove the `view` query param; page params still delete when navigating to the default page.
+- Scope note: no broader route/query behavior, channel/article/resource/clusters pagination, public web helpers, copy, layout, visual redesign, server writes or API/runtime code were changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: selected pages no longer contain local `parsePage` implementations; remaining local href wrappers delegate to shared query-string helpers.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-22
 
