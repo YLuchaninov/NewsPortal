@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; product/local and live-discovery proof command/env helper consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; Python worker unit-test import-stub consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing product/local and live-discovery proof command/env helper consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/test-live-discovery-yield-proof.mjs` and `infra/scripts/test-product-local.mjs`; no product test command list, discovery yield policy, scenario assertions, runtime service code, product endpoint behavior, UI visuals, auth semantics, queue/job names or persistent payloads were changed.
+- Worktree status: clean after committing Python worker unit-test import-stub consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `tests/unit/python/support/stubs.py`, `tests/unit/python/test_worker_hard_filters.py` and `tests/unit/python/test_interest_auto_repair.py`; no worker runtime code, test assertions, production imports, queue/job names, database behavior or persistent payloads were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice before broader admin UI/client helper or proof-harness cleanup.
+- Required action before ordinary implementation: open the next scoped slice before broader admin UI/client helper or shared view-helper cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-20
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared worker import-stub installer in `tests/unit/python/support/stubs.py` and replace duplicated psycopg/redis/bullmq/indexer/ml/delivery/gemini import-stub blocks in `test_worker_hard_filters.py` and `test_interest_auto_repair.py`.
+- Out of scope: worker runtime behavior, test assertion changes, fixture data changes, production module imports, API/admin/fetcher code, queue/job names, database behavior and persistent payload changes.
+- Allowed paths: `.aidp/work.md`, `tests/unit/python/support/stubs.py`, `tests/unit/python/test_worker_hard_filters.py` and `tests/unit/python/test_interest_auto_repair.py`.
+- Risk: medium, because these stubs affect import-time worker module loading, but the slice keeps test bodies and assertion data unchanged.
+- Required proof: `pnpm unit_tests:py`; `pnpm lint`; `git diff --check --`; targeted `rg` review that duplicated local worker import-stub blocks are removed from the two tests.
+- Acceptance criteria: both tests install the same shared worker import stubs; monkeypatch/import order remains compatible; no production code changes.
+- Architecture note: affected concern is test maintainability and fixture consistency; stakeholder/consumer is future agents extending worker tests; tradeoff is a focused worker-stub bundle rather than broad auto-installed global test magic.
+- Implemented, with evidence: added `install_worker_runtime_import_stubs()` in `tests/unit/python/support/stubs.py` for the repeated psycopg/redis/bullmq/indexer/ml/delivery/gemini import stubs.
+- Implemented, with evidence: `test_worker_hard_filters.py` and `test_interest_auto_repair.py` now call the shared worker stub installer before importing `services.workers.app.main`.
+- Compatibility note: kept test bodies, assertion data and monkeypatch targets unchanged; `install_psycopg_stub()` gained an optional `json_wrapper` argument while preserving the previous default behavior.
+- Scope note: no worker runtime code, test assertions, fixture data, production module imports, API/admin/fetcher code, queue/job names, database behavior or persistent payloads were changed.
+- Passed proof: `pnpm unit_tests:py` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: local duplicated worker import-stub blocks are removed from `test_worker_hard_filters.py` and `test_interest_auto_repair.py`.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-19
 
