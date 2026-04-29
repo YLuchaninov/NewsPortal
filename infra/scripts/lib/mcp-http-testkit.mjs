@@ -162,9 +162,10 @@ export function runCommand(command, args, options = {}) {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+    env: options.env ? { ...process.env, ...options.env } : process.env,
   });
 
-  if (result.status !== 0) {
+  if (result.status !== 0 && !options.allowFailure) {
     if (options.capture) {
       if (result.stdout) {
         process.stdout.write(result.stdout);
@@ -184,6 +185,7 @@ export function runCommand(command, args, options = {}) {
   }
 
   return {
+    status: result.status ?? 0,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };

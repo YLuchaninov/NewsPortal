@@ -1,25 +1,19 @@
-import http from "node:http";
-import https from "node:https";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 import { tsImport } from "tsx/esm/api";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
-const composeArgs = [
-  "compose",
-  "--env-file",
-  ".env.dev",
-  "-f",
-  "infra/docker/compose.yml",
-  "-f",
-  "infra/docker/compose.dev.yml",
-];
+import {
+  readEnvFile,
+  repoRoot,
+  runCommand,
+  runCompose,
+  runComposeCapture,
+  waitForHttpHealth,
+} from "./lib/mcp-http-testkit.mjs";
+
 const stackServices = [
   "postgres",
   "redis",
@@ -51,57 +45,6 @@ function log(message) {
   console.log(`[discovery-nonregression] ${message}`);
 }
 
-function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-    env: options.env ? { ...process.env, ...options.env } : process.env,
-  });
-  if (result.status !== 0 && !options.allowFailure) {
-    if (options.capture) {
-      if (result.stdout) {
-        process.stdout.write(result.stdout);
-      }
-      if (result.stderr) {
-        process.stderr.write(result.stderr);
-      }
-    }
-    const error = new Error(
-      `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
-    );
-    error.stdout = result.stdout ?? "";
-    error.stderr = result.stderr ?? "";
-    throw error;
-  }
-  return {
-    status: result.status ?? 0,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
-}
-
-function runCompose(...args) {
-  return runCommand("docker", [...composeArgs, ...args], { capture: true });
-}
-
-async function readEnvFile(relativePath) {
-  const content = await readFile(path.join(repoRoot, relativePath), "utf8");
-  return Object.fromEntries(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex < 0) {
-          return [line, ""];
-        }
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      })
-  );
-}
-
 function applyEnv(env) {
   for (const [key, value] of Object.entries(env)) {
     if (!(key in process.env)) {
@@ -126,75 +69,6 @@ async function loadRuntimeDependencies() {
   return runtimeDependenciesPromise;
 }
 
-async function sendRequest(url, { timeoutMs = 10000 } = {}) {
-  const target = new URL(url);
-  const client = target.protocol === "https:" ? https : http;
-  return new Promise((resolve, reject) => {
-    const request = client.request(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || (target.protocol === "https:" ? 443 : 80),
-        path: `${target.pathname}${target.search}`,
-        method: "GET",
-        headers: {
-          Connection: "close",
-        },
-      },
-      (response) => {
-        let text = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          text += chunk;
-        });
-        response.on("end", () => {
-          resolve({
-            status: response.statusCode ?? 0,
-            text,
-          });
-        });
-      }
-    );
-    request.on("error", reject);
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error(`Timed out waiting for ${url}.`));
-    });
-    request.end();
-  });
-}
-
-async function waitFor(label, producer, predicate, { timeoutMs = 60000, intervalMs = 1500 } = {}) {
-  const startedAt = Date.now();
-  let lastError = null;
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const value = await producer();
-      if (predicate(value)) {
-        return value;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
-  throw new Error(`Timed out waiting for ${label}.${reason}`);
-}
-
-async function waitForHttpHealth(label, url) {
-  await waitFor(
-    `${label} health`,
-    async () => {
-      const response = await sendRequest(url, { timeoutMs: 5000 });
-      if (response.status !== 200) {
-        throw new Error(`${label} responded with ${response.status}.`);
-      }
-      return true;
-    },
-    Boolean
-  );
-}
-
 function parseEnvOutput(text) {
   return Object.fromEntries(
     String(text)
@@ -212,7 +86,7 @@ function parseEnvOutput(text) {
 }
 
 function assertComposeDiscoveryEnv(serviceName) {
-  const result = runCompose("exec", "-T", serviceName, "env");
+  const result = runComposeCapture("exec", "-T", serviceName, "env");
   const env = parseEnvOutput(result.stdout);
   const failures = [];
   if (String(env.DISCOVERY_ENABLED ?? "").trim() !== "1") {
@@ -236,8 +110,8 @@ function assertComposeDiscoveryEnv(serviceName) {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is running before baseline snapshot.");
-  runCommand("docker", [...composeArgs, "down", "--remove-orphans"]);
-  runCommand("docker", [...composeArgs, "up", "--build", "-d", "--force-recreate", ...stackServices]);
+  runCompose("down", "--remove-orphans");
+  runCompose("up", "--build", "-d", "--force-recreate", ...stackServices);
   await Promise.all([
     waitForHttpHealth("api", "http://127.0.0.1:8000/health"),
     waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health"),

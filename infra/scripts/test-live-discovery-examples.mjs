@@ -1,11 +1,8 @@
-import http from "node:http";
-import https from "node:https";
 import { randomUUID } from "node:crypto";
-import { writeFile, readFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
 import {
@@ -29,18 +26,15 @@ import {
   summarizeAggregateRootCauses,
 } from "./lib/discovery-live-yield-policy.mjs";
 import { formatDiscoveryEvidenceMarkdown } from "./lib/discovery-live-report-format.mjs";
-
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
-const composeArgs = [
-  "compose",
-  "--env-file",
-  ".env.dev",
-  "-f",
-  "infra/docker/compose.yml",
-  "-f",
-  "infra/docker/compose.dev.yml",
-];
+import {
+  composeArgs,
+  readEnvFile,
+  runCommand,
+  runCompose,
+  runComposeCapture,
+  sendRequest,
+  waitForHttpHealth,
+} from "./lib/mcp-http-testkit.mjs";
 const STACK_SERVICES = [
   "postgres",
   "redis",
@@ -76,58 +70,6 @@ function preflightStatusSucceeded(status) {
 
 function shouldSkipStackReset() {
   return String(process.env.DISCOVERY_EXAMPLES_SKIP_STACK_RESET ?? "").trim() === "1";
-}
-
-function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-  });
-
-  if (result.status !== 0 && !options.allowFailure) {
-    if (options.capture) {
-      if (result.stdout) {
-        process.stdout.write(result.stdout);
-      }
-      if (result.stderr) {
-        process.stderr.write(result.stderr);
-      }
-    }
-    const error = new Error(
-      `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
-    );
-    error.stdout = result.stdout ?? "";
-    error.stderr = result.stderr ?? "";
-    throw error;
-  }
-
-  return {
-    status: result.status ?? 0,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
-}
-
-function runCompose(...args) {
-  return runCommand("docker", [...composeArgs, ...args], { capture: true });
-}
-
-async function readEnvFile(relativePath) {
-  const content = await readFile(path.join(repoRoot, relativePath), "utf8");
-  return Object.fromEntries(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex < 0) {
-          return [line, ""];
-        }
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      })
-  );
 }
 
 function applyEnv(env) {
@@ -166,51 +108,6 @@ function asInt(value, fallback = 0) {
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
-}
-
-async function sendRequest(url, { method = "GET", headers = {}, body = "", timeoutMs = 10000 } = {}) {
-  const target = new URL(url);
-  const client = target.protocol === "https:" ? https : http;
-
-  return new Promise((resolve, reject) => {
-    const request = client.request(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || (target.protocol === "https:" ? 443 : 80),
-        path: `${target.pathname}${target.search}`,
-        method,
-        headers: {
-          Connection: "close",
-          ...headers,
-        },
-      },
-      (response) => {
-        let text = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          text += chunk;
-        });
-        response.on("end", () => {
-          resolve({
-            status: response.statusCode ?? 0,
-            statusText: response.statusMessage ?? "",
-            headers: response.headers,
-            text,
-          });
-        });
-      }
-    );
-
-    request.on("error", reject);
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error(`Timed out waiting for ${url}.`));
-    });
-    if (body) {
-      request.write(body);
-    }
-    request.end();
-  });
 }
 
 function parseJsonResponse(text, responseMeta) {
@@ -324,24 +221,6 @@ async function waitFor(label, producer, predicate, { timeoutMs, intervalMs, desc
   throw new Error(`Timed out waiting for ${label}.${reason}${snapshot}`);
 }
 
-async function waitForHttpHealth(label, url) {
-  await waitFor(
-    `${label} health`,
-    async () => {
-      const response = await sendRequest(url, { timeoutMs: 5000 });
-      if (response.status !== 200) {
-        throw new Error(`${label} responded with ${response.status}.`);
-      }
-      return true;
-    },
-    Boolean,
-    {
-      timeoutMs: 60000,
-      intervalMs: 1500,
-    }
-  );
-}
-
 function parseEnvOutput(text) {
   return Object.fromEntries(
     String(text)
@@ -359,7 +238,7 @@ function parseEnvOutput(text) {
 }
 
 function assertComposeDiscoveryEnv(serviceName) {
-  const result = runCompose("exec", "-T", serviceName, "env");
+  const result = runComposeCapture("exec", "-T", serviceName, "env");
   const env = parseEnvOutput(result.stdout);
   const failures = [];
   if (normalizeText(env.DISCOVERY_ENABLED) !== "1") {
@@ -383,8 +262,8 @@ function assertComposeDiscoveryEnv(serviceName) {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is running.");
-  runCommand("docker", [...composeArgs, "down", "--remove-orphans"]);
-  runCommand("docker", [...composeArgs, "up", "--build", "-d", "--force-recreate", ...STACK_SERVICES]);
+  runCompose("down", "--remove-orphans");
+  runCompose("up", "--build", "-d", "--force-recreate", ...STACK_SERVICES);
   await Promise.all([
     waitForHttpHealth("api", `${API_BASE_URL}/health`),
     waitForHttpHealth("admin", `${ADMIN_BASE_URL}/api/health`),

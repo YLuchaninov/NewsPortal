@@ -57,10 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: dirty with completed proof-harness consolidation ready to commit; expected dirty paths are `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-website-admin-flow.mjs`, `infra/scripts/test-rss-multi-flow.mjs`, `infra/scripts/test-discovery-admin-flow.mjs` and `infra/scripts/test-live-website-matrix.mjs`.
-- Alignment note: current changes explain themselves as proof-harness consolidation only; no runtime service, product endpoint, queue, payload, persistence, UI visual or source-channel behavior changes are in scope.
+- Worktree status: dirty with completed proof-harness stage 15 ready to commit; expected dirty paths are `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-discovery-pipeline-nonregression.mjs` and `infra/scripts/test-live-discovery-examples.mjs`.
+- Alignment note: current changes explain themselves as further proof-harness consolidation only; no runtime service, product endpoint, queue, payload, persistence, UI visual or source-channel behavior changes are in scope.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: commit completed stage 14, then open the next scoped AIDP item before continuing UI/admin cleanup.
+- Required action before ordinary implementation: commit completed stage 15, then open the next scoped AIDP item before continuing UI/admin cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-15
+
+- Kind: Stage
+- Status: completed
+- In scope: continue proof-harness cleanup for remaining discovery/live/MVP proof scripts by moving repeated compose/env/http/Firebase/admin helpers onto the shared `infra/scripts/lib/mcp-http-testkit.mjs` APIs.
+- Out of scope: scenario assertion changes, root script name changes, compose service definition changes, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth semantics, queue/job names, source-channel configs and persistent payload changes.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, and selected remaining `infra/scripts/test-*.mjs` proof scripts.
+- Risk: medium, because scripts coordinate stateful compose/live proofs, but the slice is harness-only and should preserve command names and scenario logic.
+- Required proof: `node --check` for changed scripts and shared testkit; `pnpm lint`; `git diff --check --`; targeted unit/static gates where appropriate; record compose/live proof residuals honestly if not run.
+- Acceptance criteria: another meaningful family of remaining proof scripts reuses shared helpers instead of local copies; no root command names or scenario assertions change; no runtime service code changes.
+- Architecture note: affected concern is verification maintainability and proof-script cohesion; stakeholder/consumer is future agents/operators running discovery/live/MVP gates; tradeoff is continuing to extend the focused shared testkit only when the helper is already repeated across scripts.
+- Implemented, with evidence: extended shared `runCommand` to preserve `status`, `env` overrides and `allowFailure` behavior needed by discovery harnesses.
+- Implemented, with evidence: moved duplicated command/env/compose/http health helpers out of `test-discovery-pipeline-nonregression.mjs`.
+- Implemented, with evidence: moved duplicated command/env/compose/http helpers out of `test-live-discovery-examples.mjs` while keeping its local detailed JSON error formatter, patch helper and snapshot-aware wait loop.
+- Scope note: no scenario assertions, root script names, compose service definitions, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth semantics, queue/job names, source-channel configs or persistent payloads were changed.
+- Residual note: remaining proof-script cleanup candidates include `test-mvp-internal.mjs`, `test-live-discovery-yield-proof.mjs`, viewport/UI audit Firebase helpers and `test-product-local.mjs` env parsing. These are separate follow-up stages because they have broader product-flow or reporting assumptions.
+- Passed proof: `node --check` passed for `infra/scripts/lib/mcp-http-testkit.mjs`, `test-discovery-pipeline-nonregression.mjs` and `test-live-discovery-examples.mjs`.
+- Passed proof: `pnpm lint` passed, including TS ESLint over `infra/scripts/**/*.{js,mjs}` and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Compose/live proof note: discovery compose/live gates were not executed in this harness-only slice because root commands and scenario assertions were preserved; run them when a later runtime/scenario behavior stage touches these flows.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-14
 
