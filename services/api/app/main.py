@@ -10,7 +10,6 @@ from psycopg.rows import dict_row
 
 from services.api.app.database import (
     build_database_url,
-    check_database,
     query_all,
     query_one,
 )
@@ -41,7 +40,6 @@ from services.api.app import discovery_selects as _discovery_selects
 from services.api.app import json_read_model as _json_read_model
 from services.api.app import llm_review_read_model as _llm_review_read_model
 from services.api.app import notification_read_model as _notification_read_model
-from services.api.app import observability_read_model as _observability_read_model
 from services.api.app import reindex_read_model as _reindex_read_model
 from services.api.app import sequence_commands as _sequence_commands
 from services.api.app import sequence_payloads as _sequence_payloads
@@ -90,6 +88,18 @@ from services.api.app.llm_review_budget import (
     llm_review_month_start_utc,
     llm_review_monthly_budget_cents,
 )
+from services.api.app.status_constants import (
+    DISCOVERY_CANDIDATE_STATUSES,
+    DISCOVERY_CLASS_STATUSES,
+    DISCOVERY_HYPOTHESIS_STATUSES,
+    DISCOVERY_MISSION_STATUSES,
+    DISCOVERY_PROFILE_STATUSES,
+    DISCOVERY_PROVIDER_TYPES,
+    DISCOVERY_RECALL_CANDIDATE_STATUSES,
+    DISCOVERY_RECALL_MISSION_KINDS,
+    DISCOVERY_RECALL_MISSION_STATUSES,
+    SEQUENCE_RUN_CANCELLABLE_STATUSES,
+)
 from services.workers.app.discovery_orchestrator import (
     DISCOVERY_ORCHESTRATOR_SEQUENCE_ID,
     DiscoveryCoordinatorRepository,
@@ -135,55 +145,6 @@ discovery_source_interest_score_select_sql = (
 )
 discovery_feedback_select_sql = _discovery_selects.discovery_feedback_select_sql
 
-SEQUENCE_DEFINITION_STATUSES = {"draft", "active", "archived"}
-SEQUENCE_RUN_CANCELLABLE_STATUSES = {"pending"}
-DISCOVERY_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed", "archived"}
-DISCOVERY_RECALL_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed"}
-DISCOVERY_RECALL_MISSION_KINDS = {"manual", "domain_seed", "query_seed"}
-DISCOVERY_CLASS_STATUSES = {"draft", "active", "archived"}
-DISCOVERY_PROFILE_STATUSES = {"draft", "active", "archived"}
-DISCOVERY_GRAPH_STATUSES = {"pending", "compiled", "failed"}
-DISCOVERY_CANDIDATE_STATUSES = {"pending", "approved", "rejected", "auto_approved", "duplicate"}
-DISCOVERY_RECALL_CANDIDATE_STATUSES = {"pending", "shortlisted", "rejected", "duplicate"}
-DISCOVERY_HYPOTHESIS_STATUSES = {"pending", "running", "completed", "failed", "skipped"}
-DISCOVERY_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
-DISCOVERY_PROFILE_PROVIDER_TYPES = _discovery_payloads.DISCOVERY_PROFILE_PROVIDER_TYPES
-CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
-WEB_RESOURCE_EXTRACTION_STATES = _web_resource_read_model.WEB_RESOURCE_EXTRACTION_STATES
-WEB_CONTENT_LIST_SORTS = _content_query.WEB_CONTENT_LIST_SORTS
-WEB_RESOURCE_KINDS = _web_resource_read_model.WEB_RESOURCE_KINDS
-WEB_RESOURCE_PROJECTION_FILTERS = _web_resource_read_model.WEB_RESOURCE_PROJECTION_FILTERS
-CONTENT_ANALYSIS_SUBJECT_TYPES = {
-    "article",
-    "web_resource",
-    "canonical_document",
-    "story_cluster",
-}
-CONTENT_ANALYSIS_TYPES = {
-    "ner",
-    "sentiment",
-    "entity_sentiment",
-    "category",
-    "system_interest_label",
-    "content_filter",
-    "cluster_summary",
-    "structured_extraction",
-}
-CONTENT_ANALYSIS_STATUSES = {"pending", "completed", "failed", "skipped"}
-CONTENT_ANALYSIS_MODES = {"disabled", "observe", "dry_run", "hold", "enforce"}
-CONTENT_ANALYSIS_POLICY_MODULES = {
-    "ner",
-    "sentiment",
-    "category",
-    "system_interest_label",
-    "content_filter",
-    "cluster_summary",
-    "clustering",
-    "structured_extraction",
-}
-CONTENT_ANALYSIS_POLICY_FAILURE_POLICIES = {"skip", "hold", "reject", "fail_run"}
-CONTENT_ANALYSIS_POLICY_SCOPE_TYPES = {"global", "source_channel", "system_interest", "sequence", "manual"}
-CONTENT_FILTER_DECISIONS = {"keep", "reject", "hold", "needs_review"}
 API_MAIN_COMPAT_EXPORTS = (
     build_content_item_id,
     build_fallback_selection_blocker_payload,
@@ -1644,18 +1605,6 @@ def get_discovery_cost_summary() -> dict[str, Any]:
 app = FastAPI(title="NewsPortal API MVP")
 
 
-@app.get("/health")
-def health() -> dict[str, object]:
-    check_database()
-    return {
-        "service": "api",
-        "status": "ok",
-        "checks": {
-            "database": "ok",
-        },
-    }
-
-
 def list_articles(
     limit: int = Query(default=20, ge=1, le=100),
     entity_type: str | None = Query(default=None, alias="entityType"),
@@ -2044,6 +1993,10 @@ def get_dashboard_summary() -> dict[str, Any]:
         query_one_func=query_one,
         get_llm_budget_summary_func=get_llm_budget_summary,
     )
+
+
+def get_llm_budget_summary() -> dict[str, Any]:
+    return _llm_review_read_model.get_llm_budget_summary(query_one_func=query_one)
 
 
 def list_channels(
@@ -2923,55 +2876,6 @@ async def re_evaluate_discovery_sources_route(
 
 def get_discovery_cost_summary_route() -> dict[str, Any]:
     return get_discovery_cost_summary()
-
-
-def list_fetch_runs(
-    limit: int = Query(default=50, ge=1, le=200),
-    channel_id: str | None = Query(default=None),
-    page: int | None = Query(default=None, ge=1),
-    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
-) -> dict[str, Any] | list[dict[str, Any]]:
-    return _observability_read_model.list_fetch_runs(
-        limit=limit,
-        channel_id=channel_id,
-        page=page,
-        page_size=page_size,
-        query_all_func=query_all,
-        query_count_func=query_count,
-    )
-
-
-def list_llm_reviews(
-    limit: int = Query(default=50, ge=1, le=200),
-    page: int | None = Query(default=None, ge=1),
-    page_size: int | None = Query(default=None, ge=1, le=200, alias="pageSize"),
-) -> dict[str, Any] | list[dict[str, Any]]:
-    return _llm_review_read_model.list_llm_reviews(
-        limit=limit,
-        page=page,
-        page_size=page_size,
-        query_all_func=query_all,
-        query_count_func=query_count,
-    )
-
-
-def get_llm_usage_summary() -> dict[str, Any]:
-    return _llm_review_read_model.get_llm_usage_summary(query_all_func=query_all)
-
-
-def get_llm_budget_summary() -> dict[str, Any]:
-    return _llm_review_read_model.get_llm_budget_summary(query_one_func=query_one)
-
-
-def get_maintenance_llm_budget_summary() -> dict[str, Any]:
-    return get_llm_budget_summary()
-
-
-def list_outbox_events(limit: int = Query(default=50, ge=1, le=200)) -> list[dict[str, Any]]:
-    return _observability_read_model.list_outbox_events(
-        limit=limit,
-        query_all_func=query_all,
-    )
 
 
 register_api_routes(app, globals())

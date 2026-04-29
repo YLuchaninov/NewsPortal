@@ -95,3 +95,51 @@ async def insert_outbox_event(
             Json(make_json_safe(payload)),
         ),
     )
+
+
+async def ensure_published_outbox_event(
+    *,
+    event_id: str,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    payload: dict[str, Any],
+) -> None:
+    from .runtime_db import open_connection
+
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    insert into outbox_events (
+                      event_id,
+                      event_type,
+                      aggregate_type,
+                      aggregate_id,
+                      payload_json,
+                      status,
+                      published_at,
+                      attempt_count,
+                      error_message
+                    )
+                    values (%s, %s, %s, %s, %s::jsonb, 'published', now(), 1, null)
+                    on conflict (event_id) do update
+                    set
+                      event_type = excluded.event_type,
+                      aggregate_type = excluded.aggregate_type,
+                      aggregate_id = excluded.aggregate_id,
+                      payload_json = excluded.payload_json,
+                      status = 'published',
+                      published_at = now(),
+                      attempt_count = greatest(outbox_events.attempt_count, 1),
+                      error_message = null
+                    """,
+                    (
+                        event_id,
+                        event_type,
+                        aggregate_type,
+                        aggregate_id,
+                        Json(make_json_safe(payload)),
+                    ),
+                )
