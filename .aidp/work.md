@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; MVP proof-harness consolidation is committed, static proof passed and the next unification slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; viewport/UI-audit proof auth-helper consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,32 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing MVP proof-harness consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs` and `infra/scripts/test-mvp-internal.mjs`; no scenario assertions, runtime service code, product endpoint behavior, UI visuals, auth semantics, queue/job names or persistent payloads were changed.
+- Worktree status: clean after committing viewport/UI-audit proof auth-helper consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs`; no viewport assertions, UI audit assertions, Playwright scenarios, runtime service code, product endpoint behavior, UI visuals, auth semantics, queue/job names or persistent payloads were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped AIDP item before continuing viewport/UI-audit or broader admin UI cleanup.
+- Required action before ordinary implementation: open the next scoped slice before broader admin UI/client helper or proof-harness cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-18
+
+- Kind: Stage
+- Status: completed
+- In scope: replace duplicated Firebase password-user bootstrap/sign-in/delete helpers in `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs` with the existing shared `infra/scripts/lib/mcp-http-testkit.mjs` helpers.
+- Out of scope: Playwright scenario changes, viewport assertions, UI button audit assertions, compose service definitions, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth/session semantics, queue/job names, source-channel configs and persistent payload changes.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs`, and `infra/scripts/lib/mcp-http-testkit.mjs` only if a compatibility adjustment is required.
+- Risk: medium, because these scripts run stateful browser/admin flows, but the intended change is helper reuse with unchanged call sites and scenario bodies.
+- Required proof: `node --check infra/scripts/test-web-viewports.mjs`; `node --check infra/scripts/test-ui-button-audit.mjs`; `node --check infra/scripts/lib/mcp-http-testkit.mjs` if touched; `pnpm lint`; `git diff --check --`; record compose proof residual honestly if not run.
+- Acceptance criteria: both scripts use the shared Firebase helper exports; scenario assertions, root command behavior and cleanup semantics remain compatible; no runtime service code changes.
+- Architecture note: affected concern is verification maintainability and proof-script cohesion; stakeholder/consumer is future agents/operators running `pnpm test:web:viewports` and `pnpm test:web:ui-audit`; tradeoff is consolidating only repeated auth fixture plumbing while leaving browser-flow assertions local.
+- Implemented, with evidence: `test-web-viewports.mjs` and `test-ui-button-audit.mjs` now import shared Firebase password-user bootstrap/delete helpers from `infra/scripts/lib/mcp-http-testkit.mjs`.
+- Implemented, with evidence: removed local duplicated Firebase sign-up/sign-in/delete helper blocks from both viewport/UI-audit proof scripts.
+- Compatibility note: shared `deleteFirebasePasswordUser` now preserves the prior cleanup contract by returning `false` when the proof identity is already absent and `true` after deletion; this also keeps the MVP proof cleanup log behavior compatible.
+- Scope note: no Playwright scenarios, viewport assertions, UI button audit assertions, compose service definitions, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth/session semantics, queue/job names, source-channel configs or persistent payloads were changed.
+- Passed proof: `node --check infra/scripts/test-web-viewports.mjs` passed.
+- Passed proof: `node --check infra/scripts/test-ui-button-audit.mjs` passed.
+- Passed proof: `node --check infra/scripts/lib/mcp-http-testkit.mjs` passed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over `infra/scripts/**/*.{js,mjs}` and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Compose proof note: `pnpm test:web:viewports` and `pnpm test:web:ui-audit` were not executed in this helper-only slice because scenario assertions and root command behavior were preserved; run the relevant compose gate when a later UI/runtime stage changes browser-flow behavior.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-17
 

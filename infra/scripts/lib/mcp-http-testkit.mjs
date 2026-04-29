@@ -618,7 +618,15 @@ export async function signInFirebasePasswordUser(apiKey, email, password) {
 
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(`Firebase password sign-in failed: ${payload?.error?.message ?? "unknown"}`);
+    const errorMessage = String(payload?.error?.message ?? "unknown");
+    if (
+      errorMessage === "EMAIL_NOT_FOUND" ||
+      errorMessage === "INVALID_LOGIN_CREDENTIALS" ||
+      errorMessage === "INVALID_PASSWORD"
+    ) {
+      return null;
+    }
+    throw new Error(`Firebase password sign-in failed: ${errorMessage}`);
   }
 
   return payload;
@@ -648,6 +656,9 @@ export async function ensureFirebasePasswordUser(apiKey, email, password) {
 
 export async function deleteFirebasePasswordUser(apiKey, email, password) {
   const session = await signInFirebasePasswordUser(apiKey, email, password);
+  if (!session?.idToken) {
+    return false;
+  }
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`, {
     method: "POST",
     headers: {
@@ -663,6 +674,7 @@ export async function deleteFirebasePasswordUser(apiKey, email, password) {
       `Firebase password user cleanup failed: ${payload?.error?.message ?? response.status}`
     );
   }
+  return true;
 }
 
 export async function signInAdmin(email, password) {
