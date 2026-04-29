@@ -31,6 +31,7 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
+import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -87,8 +88,7 @@ function defaultPollIntervalSeconds(providerType: string): number {
   return providerType === "website" ? 900 : 300;
 }
 
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const channels = await sdk.listChannelsPage<R>({
   page,
   pageSize: DEFAULT_PAGE_SIZE,

@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; public web client-section page parsing consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; admin list page parsing consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing public web client-section page parsing consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/pages/interests.astro` and `apps/web/src/pages/settings.astro`; no client component behavior, copy, layout, server writes, runtime service code or visual redesign were changed.
+- Worktree status: clean after committing admin list page parsing consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/reindex.astro` and `apps/admin/src/pages/automation.astro`; page param names and downstream SDK/live-update calls remain equivalent and no href generation, copy, layout, server writes, runtime service code or visual redesign were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice before broader shared view-helper cleanup.
+- Required action before ordinary implementation: open the next scoped slice before broader component decomposition.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-26
+
+- Kind: Stage
+- Status: completed
+- In scope: reuse admin `parsePositivePage()` for selected admin list pages that still manually parse positive page params.
+- Out of scope: href generation changes, selected-item query behavior, view switching, copy changes, layout changes, visual redesign, server writes, API/runtime code and SDK/live-update payload changes.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/reindex.astro` and `apps/admin/src/pages/automation.astro`.
+- Risk: low-medium, because page parsing feeds list/read model calls, but the formula and default-page behavior stay equivalent.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted `rg` review that selected local requested-page parsing is removed.
+- Acceptance criteria: selected pages use shared admin page parsing; `page` and `sequencePage` param names stay unchanged; no href/query generation or UI behavior changes.
+- Architecture note: affected concern is admin view helper consistency; stakeholder/consumer is admin/operator pages; tradeoff is consolidating only positive page parsing while leaving page-specific href behavior local.
+- Implemented, with evidence: `channels.astro`, `articles.astro`, `clusters.astro`, `resources.astro`, `reindex.astro` and `automation.astro` now reuse admin `parsePositivePage()`.
+- Compatibility note: `page` and `sequencePage` param names remain unchanged; SDK calls and live-update endpoint page values still receive the same positive integer/default behavior.
+- Scope note: no href generation, selected-item query behavior, view switching, copy, layout, visual redesign, server writes, API/runtime code or SDK/live-update payloads were changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: selected pages no longer contain local requested-page parsing.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-25
 

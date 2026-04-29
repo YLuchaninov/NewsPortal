@@ -17,7 +17,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
-import { formatTimestamp } from "../lib/view-helpers";
+import { formatTimestamp, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -39,8 +39,7 @@ const currentView = String(Astro.url.searchParams.get("view") ?? "needs-review")
 const selectedArticleId = String(Astro.url.searchParams.get("selected") ?? "").trim();
 
 type R = Record<string, unknown>;
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const articles = await sdk.listArticlesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE });
 const articleRows = articles.items.map((article) => {
   const operatorState = resolveArticleOperatorState(article);

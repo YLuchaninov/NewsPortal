@@ -12,6 +12,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -30,8 +31,7 @@ const pagePaths = { dashboard: appPath("/") };
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 
 type ReindexRow = Record<string, unknown>;
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const reindexJobs = await sdk.listReindexJobsPage<ReindexRow>({ page, pageSize: DEFAULT_PAGE_SIZE });
 const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=reindex&page=${page}&pageSize=${DEFAULT_PAGE_SIZE}`;
 

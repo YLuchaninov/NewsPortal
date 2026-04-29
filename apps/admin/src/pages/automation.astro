@@ -11,6 +11,7 @@ import {
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
 import { loadAutomationOverviewData } from "../lib/server/automation-workspace";
+import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -24,11 +25,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const requestedPage = Number.parseInt(
-  Astro.url.searchParams.get("sequencePage") ?? String(DEFAULT_PAGE),
-  10
-);
-const sequencePage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const sequencePage = parsePositivePage(Astro.url, "sequencePage", DEFAULT_PAGE);
 const data = await loadAutomationOverviewData({
   page: sequencePage,
   pageSize: 12,
