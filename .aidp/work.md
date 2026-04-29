@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 36 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 37 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing ChannelEditorForm RSS advanced field extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-rss-fields.tsx`; website/API/IMAP provider controls, common polling controls, form field names, default values, option lists, selected/resolved adapter semantics, copy, layout, visual design and server write behavior stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm IMAP advanced field extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-email-imap-fields.tsx`; IMAP basic credential/mailbox fields, website/API/RSS provider controls, common polling controls, form field names, default values, option lists, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-37
+
+- Kind: Stage
+- Status: completed
+- In scope: move IMAP advanced polling/enrichment controls from `ChannelEditorForm.tsx` into the focused `channel-editor-email-imap-fields.tsx` module.
+- Out of scope: IMAP basic credential/mailbox fields, website/API/RSS provider controls, common polling controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-email-imap-fields.tsx`.
+- Risk: medium, because IMAP polling/enrichment controls affect persisted mailbox ingest behavior, but the stage only moves existing markup and preserves field names/defaults/options.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that IMAP advanced field names, defaults, options and help text remain equivalent.
+- Acceptance criteria: IMAP advanced controls render equivalently from the IMAP module; `ChannelEditorForm.tsx` retains form composition; no payload or validation behavior changes.
+- Architecture note: affected concern is admin channel editor provider-family cohesion; stakeholder/consumer is admin/operator Email IMAP source-channel configuration; tradeoff is grouping IMAP provider controls in one focused module.
+- Implemented, with evidence: added `ChannelEditorEmailImapAdvancedFields` to `apps/admin/src/components/channel-editor-email-imap-fields.tsx` with maximum adaptive interval, max messages, enrichment and enrichment min body length controls.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now renders `ChannelEditorEmailImapAdvancedFields` in the IMAP advanced branch while keeping IMAP basic credential/mailbox fields in the existing component.
+- Scope note: IMAP basic credential/mailbox fields, website/API/RSS provider controls, common polling controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: IMAP advanced field names, defaults, options and help text remain equivalent in the IMAP module.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-36
 
