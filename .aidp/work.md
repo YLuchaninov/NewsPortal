@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; fetcher provider poller split is committed and selected compose fetcher proofs passed.
+- Почему сейчас: пользователь попросил продолжать по порядку; fetcher provider poller split is committed, selected compose proofs passed and local compose stack was cleaned up.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,10 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing `AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-13`; current dirty state should only come from this live-state proof note until it is committed.
+- Worktree status: clean after committing the fetcher provider split and compose proof notes.
 - Alignment note: committed fetcher provider split touched `services/fetchers/src/fetchers.ts` and focused provider poller modules for API, RSS, Website and Email IMAP.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: commit this AIDP proof note, then open the next scoped AIDP item before continuing proof-harness/UI/admin cleanup.
+- Required action before ordinary implementation: open the next scoped AIDP item before continuing proof-harness/UI/admin cleanup.
 
 ### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-13
 
@@ -82,6 +82,7 @@
 - Passed proof: `git diff --check --` passed.
 - Passed post-commit compose proof: `pnpm test:website:compose` passed for channel `79b3fa53-866f-4352-87c6-2a83f2290a27` after starting the local compose stack.
 - Passed post-commit compose proof: `pnpm test:hard-sites:compose` passed for channels `b2304f36-b91a-4ba7-9fdf-d0f6ad95bcf5` and `2c16dfc3-c8b5-4e15-9db0-059860053602`.
+- Cleanup proof: `pnpm dev:mvp:internal:down` completed and `docker ps --format '{{.Names}}'` returned no running project containers.
 
 ### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-12
 
