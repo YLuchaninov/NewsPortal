@@ -8,6 +8,7 @@ import {
   type DiscoveryPagedRecord,
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
+import { ADMIN_TABLE_HEADER_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   hypotheses: DiscoveryPagedRecord;
@@ -28,12 +29,12 @@ const { hypotheses, hypothesisItems, nextHref, prevHref } = Astro.props as Props
     <table class="admin-table w-full min-w-[1120px] text-sm">
       <thead>
         <tr class="border-b border-border bg-muted/30">
-          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mission</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Class</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Query</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Expected value</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Results</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cost</th>
+          <th class={ADMIN_TABLE_HEADER_CLASS}>Mission</th>
+          <th class={ADMIN_TABLE_HEADER_CLASS}>Class</th>
+          <th class={ADMIN_TABLE_HEADER_CLASS}>Query</th>
+          <th class={ADMIN_TABLE_HEADER_CLASS}>Expected value</th>
+          <th class={ADMIN_TABLE_HEADER_CLASS}>Results</th>
+          <th class={ADMIN_TABLE_HEADER_CLASS}>Cost</th>
         </tr>
       </thead>
       <tbody>

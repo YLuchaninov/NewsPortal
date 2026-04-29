@@ -27,6 +27,10 @@ import {
   formatAdminChannelProviderLabel,
   isAdminChannelProviderType,
 } from "../lib/channel-providers";
+import {
+  ADMIN_TABLE_ACTIONS_HEADER_CLASS,
+  ADMIN_TABLE_HEADER_CLASS,
+} from "../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -470,11 +474,11 @@ const visibleChannels = sourceChannels.filter((channel) => {
           <table class="admin-table w-full min-w-[1080px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Channel</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Health</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Schedule</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">History</th>
-                <th class="admin-table-actions-col px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Channel</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Health</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Schedule</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>History</th>
+                <th class={ADMIN_TABLE_ACTIONS_HEADER_CLASS}>Actions</th>
               </tr>
             </thead>
             <tbody>

@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: dirty with completed proof-harness stage 15 ready to commit; expected dirty paths are `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-discovery-pipeline-nonregression.mjs` and `infra/scripts/test-live-discovery-examples.mjs`.
-- Alignment note: current changes explain themselves as further proof-harness consolidation only; no runtime service, product endpoint, queue, payload, persistence, UI visual or source-channel behavior changes are in scope.
+- Worktree status: clean after committing admin UI class-primitive stage.
+- Alignment note: committed stage 16 touched only `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, selected admin Astro pages and `DiscoveryHypothesesTab.astro`.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: commit completed stage 15, then open the next scoped AIDP item before continuing UI/admin cleanup.
+- Required action before ordinary implementation: open the next scoped AIDP item before continuing broader admin UI cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-16
+
+- Kind: Stage
+- Status: completed
+- In scope: introduce a small internal admin UI class-constant module and replace repeated Astro table-header class strings in selected admin pages/components.
+- Out of scope: visual redesign, copy changes, layout changes, React component rewrites, form behavior, server writes, API/runtime code, route changes and broad class-string sweeps.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, and selected `apps/admin/src/pages/` or `apps/admin/src/components/discovery/` Astro files that only consume the constants.
+- Risk: low-medium, because Astro class binding must preserve exact class tokens; no behavior or visual changes are intended.
+- Required proof: `pnpm lint`; `pnpm typecheck`; `git diff --check --`; targeted `rg` review that replaced only identical class strings.
+- Acceptance criteria: repeated table header class strings are centralized for the first admin UI primitive slice; rendered classes remain identical; no copy/layout/behavior changes.
+- Architecture note: affected concern is admin UI maintainability and visual consistency; stakeholder/consumer is admin/operator pages; tradeoff is a very small class-token module instead of a broad design-system rewrite.
+- Implemented, with evidence: added `apps/admin/src/lib/admin-ui-classes.ts` with table header and actions header class constants.
+- Implemented, with evidence: replaced identical admin table header class strings in `channels.astro`, `resources.astro`, `templates/interests.astro`, `templates/llm.astro` and `DiscoveryHypothesesTab.astro`.
+- Scope note: no visual redesign, copy, layout, React component rewrites, form behavior, server writes, API/runtime code or routes were changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Residual note: broader admin UI primitive cleanup remains for repeated metric tiles, form field classes, buttons and page-section shells; those should be split by surface to avoid visual regression.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-15
 

@@ -12,6 +12,10 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
+import {
+  ADMIN_TABLE_ACTIONS_HEADER_CLASS,
+  ADMIN_TABLE_HEADER_CLASS,
+} from "../../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -214,12 +218,12 @@ function resolveLlmReviewMode(
           <table class="admin-table w-full min-w-[920px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">System interest</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Coverage</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Content kinds</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Priority</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Status</th>
-                <th class="admin-table-actions-col px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>System interest</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Coverage</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Content kinds</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Priority</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Status</th>
+                <th class={ADMIN_TABLE_ACTIONS_HEADER_CLASS}>Actions</th>
               </tr>
             </thead>
             <tbody>

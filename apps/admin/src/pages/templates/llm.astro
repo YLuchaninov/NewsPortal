@@ -12,6 +12,10 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
+import {
+  ADMIN_TABLE_ACTIONS_HEADER_CLASS,
+  ADMIN_TABLE_HEADER_CLASS,
+} from "../../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -188,11 +192,11 @@ function resolveViewHref(view: string): string {
           <table class="admin-table w-full min-w-[900px] text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/30">
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Template</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Scope</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Status</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Preview</th>
-                <th class="admin-table-actions-col px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Actions</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Template</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Scope</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Status</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Preview</th>
+                <th class={ADMIN_TABLE_ACTIONS_HEADER_CLASS}>Actions</th>
               </tr>
             </thead>
             <tbody>
