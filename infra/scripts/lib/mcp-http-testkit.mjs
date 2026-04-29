@@ -395,7 +395,7 @@ export async function sendRequest(
   });
 }
 
-function extractCookie(setCookies) {
+export function extractCookie(setCookies) {
   const cookie = Array.isArray(setCookies) ? setCookies[0] : setCookies;
   if (!cookie) {
     throw new Error("Expected Set-Cookie header but none was returned.");

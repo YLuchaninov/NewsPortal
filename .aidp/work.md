@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; fetcher provider poller split is committed, selected compose proofs passed and local compose stack was cleaned up.
+- Почему сейчас: пользователь попросил продолжать по порядку; MVP proof-harness consolidation is committed, static proof passed and the next unification slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin UI class-primitive stage.
-- Alignment note: committed stage 16 touched only `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, selected admin Astro pages and `DiscoveryHypothesesTab.astro`.
+- Worktree status: clean after committing MVP proof-harness consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs` and `infra/scripts/test-mvp-internal.mjs`; no scenario assertions, runtime service code, product endpoint behavior, UI visuals, auth semantics, queue/job names or persistent payloads were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped AIDP item before continuing broader admin UI cleanup.
+- Required action before ordinary implementation: open the next scoped AIDP item before continuing viewport/UI-audit or broader admin UI cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-17
+
+- Kind: Stage
+- Status: completed
+- In scope: move repeated command/env/http/admin allowlist/Firebase/compose helpers in `infra/scripts/test-mvp-internal.mjs` onto existing shared `infra/scripts/lib/mcp-http-testkit.mjs` APIs.
+- Out of scope: scenario assertion changes, root script name changes, compose service definition changes, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth/session semantics, queue/job names, source-channel configs and persistent payload changes.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/test-mvp-internal.mjs`, and `infra/scripts/lib/mcp-http-testkit.mjs` only if an already-repeated helper needs a compatible option.
+- Risk: medium-high, because `test-mvp-internal.mjs` covers broad product/auth/admin/web flows, but this slice is harness-only and must preserve the scenario body.
+- Required proof: `node --check infra/scripts/test-mvp-internal.mjs`; `node --check infra/scripts/lib/mcp-http-testkit.mjs` if touched; `pnpm lint`; `git diff --check --`; record compose proof residual honestly if not run.
+- Acceptance criteria: local duplicated proof-harness primitives are reduced; MVP scenario assertions and root command behavior remain unchanged; no runtime service code changes.
+- Architecture note: affected concern is verification maintainability; stakeholder/consumer is future agents/operators running `pnpm test:mvp:internal`; tradeoff is replacing only repeated harness plumbing while leaving broad product-flow assertions local.
+- Implemented, with evidence: moved `test-mvp-internal.mjs` command/env/http/form/json/admin allowlist/Firebase/compose helpers onto `infra/scripts/lib/mcp-http-testkit.mjs`.
+- Implemented, with evidence: exported shared `extractCookie` from `mcp-http-testkit.mjs` for browser-flow cookie assertions that still live in the MVP script.
+- Compatibility note: kept MVP-local redirect, flash, expired-cookie, Mailpit, SQL and product-flow assertion helpers in the script; kept the previous `waitFor` default of 180 seconds through a local wrapper around the shared helper.
+- Scope note: no scenario assertions, root script names, compose service definitions, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth/session semantics, queue/job names, source-channel configs or persistent payloads were changed.
+- Passed proof: `node --check infra/scripts/test-mvp-internal.mjs` passed.
+- Passed proof: `node --check infra/scripts/lib/mcp-http-testkit.mjs` passed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over `infra/scripts/**/*.{js,mjs}` and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Compose proof note: `pnpm test:mvp:internal` was not executed in this harness-only slice because root script behavior and scenario assertions were preserved; run it when a later product/runtime stage touches the MVP flow.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-16
 

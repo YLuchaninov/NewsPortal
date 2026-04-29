@@ -1,118 +1,29 @@
-import http from "node:http";
-import https from "node:https";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
-const composeArgs = [
-  "compose",
-  "--env-file",
-  ".env.dev",
-  "-f",
-  "infra/docker/compose.yml",
-  "-f",
-  "infra/docker/compose.dev.yml"
-];
+import {
+  assertHtmlContains,
+  deleteFirebasePasswordUser,
+  ensureFirebasePasswordUser,
+  extractCookie,
+  fetchJson,
+  postForm,
+  readAllowlistEntries,
+  readEnvFile,
+  requireConfigured,
+  runCommand,
+  runCompose,
+  runComposeCapture,
+  selectAdminEmail,
+  sendRequest,
+  waitFor as waitForShared,
+} from "./lib/mcp-http-testkit.mjs";
 
 function log(message) {
   console.log(`[mvp-internal] ${message}`);
 }
 
-function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit"
-  });
-
-  if (result.status !== 0) {
-    if (options.capture) {
-      if (result.stdout) {
-        process.stdout.write(result.stdout);
-      }
-      if (result.stderr) {
-        process.stderr.write(result.stderr);
-      }
-    }
-    throw new Error(
-      `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
-    );
-  }
-
-  return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? ""
-  };
-}
-
 function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-async function readEnvFile(relativePath) {
-  const content = await readFile(path.join(repoRoot, relativePath), "utf8");
-  return Object.fromEntries(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex < 0) {
-          return [line, ""];
-        }
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      })
-  );
-}
-
-function requireConfigured(env, key) {
-  const value = String(env[key] ?? "").trim();
-  if (!value || value === "replace-me") {
-    throw new Error(`.env.dev must set ${key} before pnpm test:mvp:internal can run.`);
-  }
-  return value;
-}
-
-function readAllowlistEntries(env) {
-  return String(env.ADMIN_ALLOWLIST_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function buildAdminAliasEmail(email, runId) {
-  const atIndex = email.lastIndexOf("@");
-  if (atIndex <= 0 || atIndex === email.length - 1) {
-    return email;
-  }
-
-  return `${email.slice(0, atIndex)}+internal-admin-${runId}${email.slice(atIndex)}`;
-}
-
-function selectAdminEmail(allowlistEntries, runId) {
-  const domainEntry = allowlistEntries.find((entry) => entry.startsWith("@"));
-  if (domainEntry) {
-    return `internal-admin-${runId}${domainEntry}`;
-  }
-
-  const explicitEmail = allowlistEntries[0];
-  if (!explicitEmail) {
-    throw new Error("ADMIN_ALLOWLIST_EMAILS must include at least one email or @domain entry.");
-  }
-  return buildAdminAliasEmail(explicitEmail, runId);
-}
-
-function extractCookie(setCookies) {
-  const cookie = Array.isArray(setCookies) ? setCookies[0] : setCookies;
-  if (!cookie) {
-    throw new Error("Expected Set-Cookie header but none was returned.");
-  }
-  return cookie.split(";")[0];
 }
 
 function readHeader(headers, name) {
@@ -186,21 +97,6 @@ function assertFlashRedirect(
   assertLocationSearchParams(location, searchParams);
 }
 
-async function assertHtmlContains(url, snippets, { cookie } = {}) {
-  const response = await sendRequest(url, {
-    headers: cookie ? { Cookie: cookie } : {}
-  });
-  if (response.status !== 200) {
-    throw new Error(`Expected ${url} to respond with 200, got ${response.status}.`);
-  }
-
-  for (const snippet of snippets) {
-    if (!response.text.includes(snippet)) {
-      throw new Error(`Expected HTML from ${url} to include ${snippet}.`);
-    }
-  }
-}
-
 async function assertHtmlDoesNotContain(url, snippets, { cookie } = {}) {
   const response = await sendRequest(url, {
     headers: cookie ? { Cookie: cookie } : {}
@@ -226,60 +122,6 @@ function assertExpiredCookie(response, cookieName) {
   }
 }
 
-function parseJsonResponse(text, responseMeta) {
-  const json = text ? JSON.parse(text) : null;
-  if (responseMeta.status < 200 || responseMeta.status >= 300) {
-    const message =
-      typeof json?.error === "string"
-        ? json.error
-        : `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
-    throw new Error(message);
-  }
-  return json;
-}
-
-async function sendRequest(url, { method = "GET", headers = {}, body = "" } = {}) {
-  const target = new URL(url);
-  const client = target.protocol === "https:" ? https : http;
-
-  return new Promise((resolve, reject) => {
-    const request = client.request(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || (target.protocol === "https:" ? 443 : 80),
-        path: `${target.pathname}${target.search}`,
-        method,
-        headers: {
-          Connection: "close",
-          ...headers
-        }
-      },
-      (response) => {
-        let text = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          text += chunk;
-        });
-        response.on("end", () => {
-          resolve({
-            status: response.statusCode ?? 0,
-            statusText: response.statusMessage ?? "",
-            headers: response.headers,
-            text
-          });
-        });
-      }
-    );
-
-    request.on("error", reject);
-    if (body) {
-      request.write(body);
-    }
-    request.end();
-  });
-}
-
 async function postBrowserForm(url, payload, { cookie } = {}) {
   const target = new URL(url);
   const body = new URLSearchParams(
@@ -301,151 +143,12 @@ async function postBrowserForm(url, payload, { cookie } = {}) {
   });
 }
 
-async function postForm(url, payload, { cookie } = {}) {
-  const target = new URL(url);
-  const body = new URLSearchParams(
-    Object.entries(payload).map(([key, value]) => [key, String(value)])
-  ).toString();
-  const response = await sendRequest(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      Origin: target.origin,
-      Referer: `${target.origin}/`,
-      ...(cookie ? { Cookie: cookie } : {}),
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Content-Length": Buffer.byteLength(body).toString()
-    },
-    body
-  });
-
-  return {
-    cookie: response.headers["set-cookie"] ? extractCookie(response.headers["set-cookie"]) : null,
-    json: parseJsonResponse(response.text, response)
-  };
-}
-
-async function fetchJson(url, { cookie } = {}) {
-  const response = await fetch(url, {
-    headers: cookie ? { cookie } : {}
-  });
-  return parseJsonResponse(await response.text(), response);
-}
-
 async function waitFor(label, producer, predicate, { timeoutMs = 180000, intervalMs = 2000 } = {}) {
-  const startedAt = Date.now();
-  let lastError = null;
-
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const value = await producer();
-      if (predicate(value)) {
-        return value;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-
-  const reason =
-    lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
-  throw new Error(`Timed out waiting for ${label}.${reason}`);
-}
-
-async function ensureFirebasePasswordUser(apiKey, email, password) {
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        returnSecureToken: true
-      })
-    }
-  );
-
-  const payload = await response.json();
-  if (!response.ok) {
-    const errorMessage = String(payload?.error?.message ?? "unknown");
-    if (errorMessage !== "EMAIL_EXISTS") {
-      throw new Error(`Firebase admin bootstrap failed: ${errorMessage}`);
-    }
-  }
-}
-
-async function signInFirebasePasswordUser(apiKey, email, password) {
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        returnSecureToken: true
-      })
-    }
-  );
-
-  const payload = await response.json();
-  if (!response.ok) {
-    const errorMessage = String(payload?.error?.message ?? "unknown");
-    if (
-      errorMessage === "EMAIL_NOT_FOUND" ||
-      errorMessage === "INVALID_LOGIN_CREDENTIALS" ||
-      errorMessage === "INVALID_PASSWORD"
-    ) {
-      return null;
-    }
-    throw new Error(`Firebase admin sign-in failed: ${errorMessage}`);
-  }
-
-  return payload;
-}
-
-async function deleteFirebasePasswordUser(apiKey, email, password) {
-  const session = await signInFirebasePasswordUser(apiKey, email, password);
-  if (!session?.idToken) {
-    return false;
-  }
-
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        idToken: session.idToken
-      })
-    }
-  );
-
-  const payload = await response.json();
-  if (!response.ok) {
-    const errorMessage = String(payload?.error?.message ?? "unknown");
-    throw new Error(`Firebase admin cleanup failed: ${errorMessage}`);
-  }
-
-  return true;
-}
-
-function runCompose(...args) {
-  runCommand("docker", [...composeArgs, ...args]);
+  return await waitForShared(label, producer, predicate, { timeoutMs, intervalMs });
 }
 
 function getComposeServiceContainerId(service) {
-  return runCommand("docker", [...composeArgs, "ps", "-q", service], {
-    capture: true
-  }).stdout.trim();
+  return runComposeCapture("ps", "-q", service).stdout.trim();
 }
 
 function getContainerHealthStatus(containerId) {
@@ -464,13 +167,7 @@ function getContainerHealthStatus(containerId) {
 }
 
 function fetchComposeJson(service, url) {
-  const result = runCommand(
-    "docker",
-    [...composeArgs, "exec", "-T", service, "wget", "-qO-", url],
-    {
-      capture: true
-    }
-  );
+  const result = runComposeCapture("exec", "-T", service, "wget", "-qO-", url);
   const text = result.stdout.trim();
 
   try {
@@ -481,27 +178,20 @@ function fetchComposeJson(service, url) {
 }
 
 function queryPostgres(env, sql) {
-  const result = runCommand(
-    "docker",
-    [
-      ...composeArgs,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      env.POSTGRES_USER || "newsportal",
-      "-d",
-      env.POSTGRES_DB || "newsportal",
-      "-At",
-      "-F",
-      "|",
-      "-c",
-      sql
-    ],
-    {
-      capture: true
-    }
+  const result = runComposeCapture(
+    "exec",
+    "-T",
+    "postgres",
+    "psql",
+    "-U",
+    env.POSTGRES_USER || "newsportal",
+    "-d",
+    env.POSTGRES_DB || "newsportal",
+    "-At",
+    "-F",
+    "|",
+    "-c",
+    sql
   );
   return result.stdout.trim();
 }
@@ -616,9 +306,13 @@ async function fetchMailMessages() {
 
 async function main() {
   const env = await readEnvFile(".env.dev");
-  const firebaseApiKey = requireConfigured(env, "FIREBASE_WEB_API_KEY");
+  const firebaseApiKey = requireConfigured(env, "FIREBASE_WEB_API_KEY", {
+    proofName: "pnpm test:mvp:internal",
+  });
   const allowlistEntries = readAllowlistEntries(env);
-  const emailDigestSmtpUrl = requireConfigured(env, "EMAIL_DIGEST_SMTP_URL");
+  const emailDigestSmtpUrl = requireConfigured(env, "EMAIL_DIGEST_SMTP_URL", {
+    proofName: "pnpm test:mvp:internal",
+  });
   if (!emailDigestSmtpUrl.includes("mailpit:1025")) {
     throw new Error(
       "EMAIL_DIGEST_SMTP_URL must point at the local mail sink (smtp://mailpit:1025) for the internal MVP test."
@@ -626,7 +320,9 @@ async function main() {
   }
 
   const runId = randomUUID().slice(0, 8);
-  const adminEmail = selectAdminEmail(allowlistEntries, runId);
+  const adminEmail = selectAdminEmail(allowlistEntries, runId, {
+    prefix: "internal-admin",
+  });
   const adminPassword = `NewsPortal!${runId}`;
   const notificationEmail = `internal-user-${runId}@example.test`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
