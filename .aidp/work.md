@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 30 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 31 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing ChannelEditorForm shared select/textarea class extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-form-model.ts`; field names, default values, option lists, section structure, copy, layout, visual design and server write behavior stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm presentational shell extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-form-parts.tsx`; field names, default values, option lists, provider-specific sections, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-31
+
+- Kind: Stage
+- Status: completed
+- In scope: add local presentational parts for channel editor overview cards, section shell and sticky actions; rewire `ChannelEditorForm.tsx` to use them.
+- Out of scope: form field names, default values, option lists, validation semantics, hidden fields, provider-specific control groups, submit/cancel destinations, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and new `apps/admin/src/components/channel-editor-form-parts.tsx`.
+- Risk: medium, because the sticky submit/cancel shell is user-facing, but the change only moves existing markup and keeps link href, submit label and default submit behavior equivalent.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that overview/section/action classes and labels remain equivalent.
+- Acceptance criteria: overview cards, major section shells and sticky actions render equivalently; provider-specific controls stay in the main form for later staged splits; no field/payload behavior changes.
+- Architecture note: affected concern is admin channel editor cohesion; stakeholder/consumer is admin/operator source-channel configuration; tradeoff is extracting local shells before provider-family component decomposition.
+- Implemented, with evidence: added `apps/admin/src/components/channel-editor-form-parts.tsx` with `ChannelEditorOverview`, `ChannelEditorSection` and `ChannelEditorActions`.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now delegates overview cards, basics/auth section shells and sticky form actions to local parts while leaving provider-specific controls in the main form.
+- Scope note: form field names, default values, option lists, validation semantics, hidden fields, provider-specific control groups, submit/cancel destinations, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: overview/section/action classes and labels remain equivalent, including `Back to channels`, submit label rendering and explicit submit button type.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-30
 

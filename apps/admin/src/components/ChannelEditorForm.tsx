@@ -9,6 +9,11 @@ import {
   type ChannelEditorFormValue,
   type ChannelProviderType,
 } from "./channel-editor-form-model";
+import {
+  ChannelEditorActions,
+  ChannelEditorOverview,
+  ChannelEditorSection,
+} from "./channel-editor-form-parts";
 
 export type { ChannelEditorFormValue, ChannelProviderType };
 
@@ -59,37 +64,33 @@ export function ChannelEditorForm({
       <input type="hidden" name="redirectTo" value={redirectTo} />
       {value.channelId && <input type="hidden" name="channelId" value={value.channelId} />}
 
-      <section className="rounded-2xl border border-border bg-background px-5 py-4">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { title: "Basics", body: "Identity, source URL, schedule, and active state." },
-            { title: "Auth", body: supportsAuthorizationHeader ? "Stored Authorization header when this source needs it." : "Credentials live in the mailbox section below." },
-            {
-              title: "Provider settings",
-              body: isWebsite
-                ? "Discovery modes, crawl budgets, and URL constraints."
-                : isApi
-                  ? "Payload mapping, request budgets, and enrichment."
-                  : isEmailImap
-                    ? "Mailbox connection, sender filter, and ingest limits."
-                    : "RSS adapter, enrichment thresholds, and feed-specific fetch controls.",
-            },
-            { title: "Advanced", body: "Collapsed by default for the noisiest provider-specific controls." },
-          ].map((item) => (
-            <div key={item.title} className="min-w-[180px] flex-1 rounded-2xl border border-border bg-card px-4 py-3">
-              <p className="text-sm font-medium text-foreground">{item.title}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{item.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <ChannelEditorOverview
+        items={[
+          { title: "Basics", body: "Identity, source URL, schedule, and active state." },
+          {
+            title: "Auth",
+            body: supportsAuthorizationHeader
+              ? "Stored Authorization header when this source needs it."
+              : "Credentials live in the mailbox section below.",
+          },
+          {
+            title: "Provider settings",
+            body: isWebsite
+              ? "Discovery modes, crawl budgets, and URL constraints."
+              : isApi
+                ? "Payload mapping, request budgets, and enrichment."
+                : isEmailImap
+                  ? "Mailbox connection, sender filter, and ingest limits."
+                  : "RSS adapter, enrichment thresholds, and feed-specific fetch controls.",
+          },
+          {
+            title: "Advanced",
+            body: "Collapsed by default for the noisiest provider-specific controls.",
+          },
+        ]}
+      />
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="mb-5">
-          <h2 className="text-base font-semibold text-foreground">{basicsTitle}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{basicsDescription}</p>
-        </div>
-
+      <ChannelEditorSection title={basicsTitle} description={basicsDescription}>
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
             label="Channel name"
@@ -323,15 +324,13 @@ export function ChannelEditorForm({
             </select>
           </FormField>
         </div>
-      </section>
+      </ChannelEditorSection>
 
       {supportsAuthorizationHeader && (
-        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="mb-5">
-            <h2 className="text-base font-semibold text-foreground">Source authorization</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{authorizationDescription}</p>
-          </div>
-
+        <ChannelEditorSection
+          title="Source authorization"
+          description={authorizationDescription}
+        >
           <div className="grid gap-4">
             <FormField
               label="Authorization header"
@@ -378,7 +377,7 @@ export function ChannelEditorForm({
               </div>
             )}
           </div>
-        </section>
+        </ChannelEditorSection>
       )}
 
       <details
@@ -1080,20 +1079,7 @@ export function ChannelEditorForm({
         )}
       </details>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
-        <a
-          href={cancelHref}
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent"
-        >
-          Back to channels
-        </a>
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          {submitLabel}
-        </button>
-      </div>
+      <ChannelEditorActions cancelHref={cancelHref} submitLabel={submitLabel} />
     </form>
   );
 }
