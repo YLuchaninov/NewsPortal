@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; admin list page parsing consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: stage 27 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin list page parsing consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/reindex.astro` and `apps/admin/src/pages/automation.astro`; page param names and downstream SDK/live-update calls remain equivalent and no href generation, copy, layout, server writes, runtime service code or visual redesign were changed.
+- Worktree status: clean after committing LiveSettingsSection model-helper decomposition.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-model.ts`; JSX, form controls, server write payloads, BFF paths, live-update behavior, copy, layout and visual design stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice before broader component decomposition.
+- Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-27
+
+- Kind: Stage
+- Status: completed
+- In scope: move `LiveSettingsSection.tsx` local view-model types and pure helpers (`buildPageHref`, `formatTimestamp`, `urlBase64ToUint8Array`, channel identifier, normalizers, time formatter, pagination and `readJson`) into a focused sibling model/helper module.
+- Out of scope: JSX structure, form controls, event handlers beyond import rewiring, server write payloads, BFF paths, live-update event semantics, copy changes, layout changes, visual redesign and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and new `apps/web/src/components/live-settings-section-model.ts`.
+- Risk: medium, because the helpers affect settings UI writes and pagination, but this stage only moves existing implementations and keeps call sites equivalent.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that moved helper bodies remain equivalent.
+- Acceptance criteria: `LiveSettingsSection.tsx` keeps component behavior and render output unchanged; helper code lives in the model module; no BFF payload or UI copy/layout changes.
+- Architecture note: affected concern is public web settings component cohesion; stakeholder/consumer is signed-in users managing preferences/channels; tradeoff is extracting pure support logic before splitting rendering/handlers in later stages.
+- Implemented, with evidence: added `apps/web/src/components/live-settings-section-model.ts` with the moved view-model props/types and pure helpers (`buildPageHref`, `formatTimestamp`, web-push key conversion, channel identifier, normalizers, time formatter, pagination and `readJson`).
+- Implemented, with evidence: `LiveSettingsSection.tsx` now imports those helpers/types from the sibling model module.
+- Scope note: JSX structure, form controls, server write payloads, BFF paths, live-update event semantics, copy, layout, visual redesign and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: moved helper bodies remain equivalent to the prior component-local implementations; component-local pure helper/type definitions were removed.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-26
 
