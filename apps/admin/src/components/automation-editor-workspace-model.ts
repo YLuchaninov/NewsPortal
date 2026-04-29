@@ -1,12 +1,14 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 
 import type { AutomationNodeData } from "../lib/automation-workspace";
-
-type JsonRecord = Record<string, unknown>;
+import {
+  postJson as postAdminJson,
+  readText as readAdminText,
+  type JsonRecord,
+} from "./admin-client-helpers";
 
 export function readText(value: unknown, fallback = ""): string {
-  const normalized = String(value ?? "").trim();
-  return normalized ? normalized : fallback;
+  return readAdminText(value, fallback);
 }
 
 export function readMaybeText(value: unknown): string | null {
@@ -34,21 +36,8 @@ export function statusClass(status: string): string {
   return "bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/20";
 }
 
-export async function postJson(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const json = (await response.json().catch(() => ({}))) as JsonRecord;
-  if (!response.ok) {
-    throw new Error(readText(json.error ?? json.detail, `Request failed with ${response.status}`));
-  }
-  return json;
+export async function postJson(path: string, payload: Record<string, unknown>): Promise<JsonRecord> {
+  return await postAdminJson(path, payload);
 }
 
 export function moduleToKey(module: string, existingKeys: string[]): string {

@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; admin page timestamp view-helper consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; admin automation editor client-helper consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin page timestamp view-helper consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/articles/[docId].astro` and `apps/admin/src/pages/resources/[resourceId].astro`; no route/query behavior, pagination, view switching, copy, layout, server writes, runtime service code or visual redesign were changed.
+- Worktree status: clean after committing admin automation editor client-helper consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md` and `apps/admin/src/components/automation-editor-workspace-model.ts`; no automation editor UI layout, graph behavior, server write payloads, route behavior, runtime service code or visual redesign were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice before broader admin UI/client helper or shared view-helper cleanup.
+- Required action before ordinary implementation: open the next scoped slice before broader admin view-helper cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-22
+
+- Kind: Stage
+- Status: completed
+- In scope: replace duplicated `readText` and `postJson` helper implementations in `apps/admin/src/components/automation-editor-workspace-model.ts` with wrappers/re-exports around `apps/admin/src/components/admin-client-helpers.ts`.
+- Out of scope: automation editor UI layout, graph behavior, task graph conversion, server write payloads, route behavior, API/runtime code, copy changes and visual redesign.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/automation-editor-workspace-model.ts`, and `apps/admin/src/components/admin-client-helpers.ts` only if compatibility requires it.
+- Risk: low-medium, because `postJson` handles server-write errors, but the implementation is already identical and used by sibling admin components.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted `rg` review that the local duplicate helper implementations are gone.
+- Acceptance criteria: automation editor imports remain compatible through the model module; default `readText(..., "")` behavior in the editor model is preserved; no payload/UI behavior changes.
+- Architecture note: affected concern is admin client helper consistency; stakeholder/consumer is admin automation/MCP UI; tradeoff is preserving the existing model-module import surface while centralizing shared HTTP/text helpers.
+- Implemented, with evidence: `automation-editor-workspace-model.ts` now wraps shared `readText` from `admin-client-helpers.ts` while preserving its previous default fallback of `""`.
+- Implemented, with evidence: `automation-editor-workspace-model.ts` now delegates `postJson` to the shared admin client helper and keeps the model-module export surface compatible for `AutomationEditorWorkspace.tsx`.
+- Scope note: no automation editor UI layout, graph behavior, task graph conversion, server write payloads, route behavior, API/runtime code, copy or visual redesign were changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: local duplicate fetch/json error handling implementation was removed from `automation-editor-workspace-model.ts`.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-21
 
