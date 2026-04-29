@@ -7,35 +7,38 @@ import {
   parseRssChannelConfig,
   resolveSourceChannelAuthorizationHeader,
   parseWebsiteChannelConfig,
-  type HealthResponse,
-  type NormalizedFetchOutcome
+  type HealthResponse
 } from "@newsportal/contracts";
 import { ImapFlow } from "imapflow";
 import type { Pool } from "pg";
 
+import { AsyncSemaphore } from "./async-semaphore";
 import type { FetchersConfig } from "./config";
-import { type ParsedFeed } from "./feed-parser";
-import { adaptFeedIngress, type AdaptedFeedEntry } from "./feed-ingress-adapters";
+import {
+  ChannelFetchError,
+  classifyHttpFailure,
+  classifyUnexpectedFailure,
+  deriveTimestampCursorValue,
+  getByPath,
+  normalizeExternalUrl,
+  normalizeWhitespace,
+  parseRetryAfterSeconds,
+  rawEmailToBody,
+} from "./fetcher-channel-helpers";
+import { adaptFeedIngress } from "./feed-ingress-adapters";
+import { buildRssPersistInput, buildWebsitePersistInput } from "./fetcher-persist-inputs";
 import {
   classifyDuplicatePreflightInputs,
   FetcherPersistenceRepository,
   type ChannelPollCompletion,
-  type CursorUpdateInput,
   type PersistArticleInput,
   type PersistResourceInput,
   type SourceChannelRow
 } from "./fetcher-persistence";
-import {
-  canonicalizeUrl,
-  collapseWhitespace,
-  decodeHtmlEntities,
-  stripHtmlTags
-} from "./rss";
 import { runWithConcurrency } from "./scheduler";
 import {
   CrawlPolicyCacheService,
-  discoverWebsiteResources,
-  type DiscoveredWebsiteResource
+  discoverWebsiteResources
 } from "./web-ingestion";
 
 interface FetcherState {
@@ -47,194 +50,6 @@ interface FetcherState {
   fetchedChannelCount: number;
   ingestedArticleCount: number;
   duplicateArticleCount: number;
-}
-
-class AsyncSemaphore {
-  private readonly waiting: Array<() => void> = [];
-  private available: number;
-
-  constructor(initialCapacity: number) {
-    this.available = Math.max(1, Math.floor(initialCapacity) || 1);
-  }
-
-  async acquire(): Promise<() => void> {
-    if (this.available > 0) {
-      this.available -= 1;
-      return () => this.release();
-    }
-
-    await new Promise<void>((resolve) => {
-      this.waiting.push(resolve);
-    });
-    this.available -= 1;
-    return () => this.release();
-  }
-
-  private release(): void {
-    this.available += 1;
-    const next = this.waiting.shift();
-    if (next) {
-      next();
-    }
-  }
-}
-
-class ChannelFetchError extends Error {
-  constructor(
-    message: string,
-    readonly completion: Omit<ChannelPollCompletion, "startedAt" | "finishedAt" | "cursorUpdates"> & {
-      cursorUpdates?: CursorUpdateInput[];
-    }
-  ) {
-    super(message);
-    this.name = "ChannelFetchError";
-  }
-}
-
-function normalizeWhitespace(value: string): string {
-  return collapseWhitespace(decodeHtmlEntities(value));
-}
-
-function derivePlaintextLead(summaryHtml: string, bodyHtml: string): string {
-  const summaryText = normalizeWhitespace(stripHtmlTags(summaryHtml));
-  if (summaryText) {
-    return summaryText;
-  }
-
-  const bodyText = normalizeWhitespace(stripHtmlTags(bodyHtml));
-  if (!bodyText) {
-    return "";
-  }
-
-  const sentences = bodyText.split(/(?<=[.!?])\s+/).slice(0, 3);
-  return collapseWhitespace(sentences.join(" "));
-}
-
-function derivePlaintextBody(contentHtml: string, summaryHtml: string): string {
-  const preferred = normalizeWhitespace(stripHtmlTags(contentHtml));
-  if (preferred) {
-    return preferred;
-  }
-
-  return normalizeWhitespace(stripHtmlTags(summaryHtml));
-}
-
-function pickLanguageHint(
-  channelLanguage: string | null,
-  feedLanguage: string | null
-): { lang: string | null; confidence: number | null } {
-  const rawHint = channelLanguage ?? feedLanguage;
-
-  if (!rawHint) {
-    return {
-      lang: null,
-      confidence: null
-    };
-  }
-
-  const normalized = rawHint.toLowerCase();
-  if (normalized.startsWith("uk")) {
-    return {
-      lang: "uk",
-      confidence: 0.8
-    };
-  }
-  if (normalized.startsWith("en")) {
-    return {
-      lang: "en",
-      confidence: 0.8
-    };
-  }
-
-  return {
-    lang: normalized.slice(0, 8),
-    confidence: 0.5
-  };
-}
-
-function deriveTimestampCursorValue(
-  latestPublishedAt: string | null,
-  responseLastModified: string | null,
-  fetchedAt: string
-): string {
-  return responseLastModified ?? latestPublishedAt ?? fetchedAt;
-}
-
-function getByPath(value: unknown, path: string): unknown {
-  if (!path.trim()) {
-    return value;
-  }
-
-  const segments = path.split(".").map((segment) => segment.trim()).filter(Boolean);
-  let current: unknown = value;
-  for (const segment of segments) {
-    if (current == null || typeof current !== "object" || Array.isArray(current)) {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
-
-function normalizeExternalUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return canonicalizeUrl(url);
-  }
-  return url;
-}
-
-function rawEmailToBody(rawSource: string): string {
-  const separatorIndex = rawSource.search(/\r?\n\r?\n/);
-  const body = separatorIndex >= 0 ? rawSource.slice(separatorIndex + 4) : rawSource;
-  const cleaned = body
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ");
-  return normalizeWhitespace(stripHtmlTags(cleaned));
-}
-
-function parseRetryAfterSeconds(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const numericValue = Number.parseInt(value, 10);
-  if (Number.isInteger(numericValue) && numericValue >= 0) {
-    return numericValue;
-  }
-
-  const dateValue = new Date(value);
-  if (Number.isNaN(dateValue.getTime())) {
-    return null;
-  }
-
-  return Math.max(0, Math.ceil((dateValue.getTime() - Date.now()) / 1000));
-}
-
-function classifyHttpFailure(status: number): NormalizedFetchOutcome {
-  if (status === 429) {
-    return "rate_limited";
-  }
-  if (status >= 500 || status === 408) {
-    return "transient_failure";
-  }
-  return "hard_failure";
-}
-
-function classifyUnexpectedFailure(message: string): NormalizedFetchOutcome {
-  const normalized = message.toLowerCase();
-  if (
-    normalized.includes("timeout") ||
-    normalized.includes("timed out") ||
-    normalized.includes("econn") ||
-    normalized.includes("socket") ||
-    normalized.includes("network")
-  ) {
-    return "transient_failure";
-  }
-  if (normalized.includes("rate limit") || normalized.includes("too many requests")) {
-    return "rate_limited";
-  }
-  return "hard_failure";
 }
 
 export { classifyDuplicatePreflightInputs };
@@ -519,7 +334,7 @@ class FetcherService {
       let invalidItemCount = 0;
       const inputs: PersistArticleInput[] = [];
       for (const item of items) {
-        const input = this.buildRssPersistInput(
+        const input = buildRssPersistInput(
           channel,
           adaptedFeed.parsedFeed,
           item,
@@ -704,7 +519,7 @@ class FetcherService {
       });
     }
     const fetchedAt = new Date().toISOString();
-    const inputs = resources.map((resource) => this.buildWebsitePersistInput(channel, resource, fetchedAt));
+    const inputs = resources.map((resource) => buildWebsitePersistInput(channel, resource, fetchedAt));
     const { ingestedCount, duplicateCount } = await this.persistWebsiteResourcesWithPreflight(
       channel.channelId,
       inputs
@@ -998,140 +813,6 @@ class FetcherService {
 
   private async loadCursorMap(channelId: string) {
     return this.persistence.loadCursorMap(channelId);
-  }
-
-  private buildRssPersistInput(
-    channel: SourceChannelRow,
-    parsedFeed: ParsedFeed,
-    item: AdaptedFeedEntry,
-    fetchedAt: string,
-    preferContentEncoded: boolean
-  ): PersistArticleInput | null {
-    if (!item.url) {
-      return null;
-    }
-
-    const canonicalUrl = canonicalizeUrl(item.url);
-    const externalArticleId = item.entry.guid?.trim() || canonicalUrl;
-    const publishedAt = item.publishedAt ?? new Date().toISOString();
-    const { lang, confidence } = pickLanguageHint(channel.language, parsedFeed.language);
-    const title = normalizeWhitespace(item.entry.title);
-    const lead = derivePlaintextLead(item.entry.summaryHtml, item.entry.contentHtml);
-    const body = preferContentEncoded
-      ? derivePlaintextBody(item.entry.contentHtml, item.entry.summaryHtml)
-      : derivePlaintextBody(item.entry.summaryHtml, item.entry.contentHtml);
-    return {
-      channel,
-      externalArticleId,
-      url: canonicalUrl,
-      publishedAt,
-      title,
-      lead,
-      body,
-      lang,
-      confidence,
-      rawPayload: {
-        fetcher: parsedFeed.fetcher,
-        fetchedAt,
-        feedAdapter: item.feedAdapter,
-        feed: {
-          format: parsedFeed.format,
-          title: parsedFeed.title,
-          language: parsedFeed.language,
-          description: parsedFeed.description,
-          generator: parsedFeed.generator,
-          publishedAt: parsedFeed.publishedAt
-        },
-        entry: {
-          guid: item.entry.guid,
-          title: item.entry.title,
-          link: item.entry.url,
-          description: item.entry.summaryHtml,
-          contentEncoded: item.entry.contentHtml,
-          publishedAt: item.entry.publishedAt,
-          rawXmlHash: item.entry.rawXmlHash,
-          enclosure: item.entry.enclosure,
-          mediaContentUrl: item.entry.mediaContentUrl,
-          categories: item.entry.categories
-        },
-        rss: {
-          guid: item.entry.guid,
-          title: item.entry.title,
-          link: item.entry.url,
-          description: item.entry.summaryHtml,
-          contentEncoded: item.entry.contentHtml,
-          publishedAt: item.entry.publishedAt,
-          rawXmlHash: item.entry.rawXmlHash,
-          enclosure: item.entry.enclosure,
-          mediaContentUrl: item.entry.mediaContentUrl,
-          categories: item.entry.categories,
-          feed: {
-            format: parsedFeed.format,
-            title: parsedFeed.title,
-            language: parsedFeed.language,
-            description: parsedFeed.description,
-            generator: parsedFeed.generator,
-            publishedAt: parsedFeed.publishedAt
-          }
-        }
-      }
-    };
-  }
-
-  private buildWebsitePersistInput(
-    channel: SourceChannelRow,
-    resource: DiscoveredWebsiteResource,
-    fetchedAt: string
-  ): PersistResourceInput {
-    return {
-      channel,
-      externalArticleId: resource.externalResourceId,
-      url: resource.normalizedUrl,
-      resourceKind: resource.classification.kind,
-      title: resource.title ?? "[Pending enrichment]",
-      summary: resource.summary ?? "",
-      publishedAt: resource.publishedAt,
-      modifiedAt: resource.modifiedAt,
-      freshnessMarkerType: resource.freshnessMarkerType,
-      freshnessMarkerValue: resource.freshnessMarkerValue,
-      discoverySource: resource.discoverySource,
-      classificationJson: {
-        kind: resource.classification.kind,
-        confidence: resource.classification.confidence,
-        reasons: resource.classification.reasons,
-        hintedKinds: resource.hintedKinds,
-        discovery: {
-          kind: resource.classification.kind,
-          confidence: resource.classification.confidence,
-          reasons: resource.classification.reasons,
-          hintedKinds: resource.hintedKinds,
-          discoverySource: resource.discoverySource,
-        },
-        resolved: {
-          kind: resource.classification.kind,
-          confidence: resource.classification.confidence,
-          reasonSource: "discovery",
-        },
-        transition: {
-          kindChanged: false,
-          fromKind: resource.classification.kind,
-          toKind: resource.classification.kind,
-          reasonSource: "discovery",
-        }
-      },
-      rawPayload: {
-        fetcher: `website_${resource.discoverySource}`,
-        fetchedAt,
-        discovery: {
-          parentUrl: resource.parentUrl,
-          freshnessMarkerType: resource.freshnessMarkerType,
-          freshnessMarkerValue: resource.freshnessMarkerValue,
-          hintedKinds: resource.hintedKinds,
-          classification: resource.classification,
-          rawSignals: resource.rawSignals
-        }
-      }
-    };
   }
 
   private async persistInputsWithPreflight(
