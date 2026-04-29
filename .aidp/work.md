@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: broad final proof completed for the architecture hardening follow-up capability, including repeated three-domain live examples/yield evidence plus MCP/Admin/product-local validation.
+- Почему сейчас: proven refactor/unification package split into focused commits; next broad refactor must open a new scoped AIDP item first.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,418 @@
 
 ### Согласованность worktree
 
-- Worktree status: dirty with completed but uncommitted ARCH-HARDENING-FOLLOWUP-BATCH-1 through ARCH-HARDENING-FOLLOWUP-BATCH-67 edits plus completed final proof AIDP state.
-- Alignment note: dirty tree is expected to remain limited to completed API batch files, completed worker processor extraction files, completed discovery graph-planning/execution/recall/evaluation/planning/repository extraction files, completed Batch 54 through Batch 56 repository mixin files, completed Batch 57 proof/fix edits, completed Batch 58 fetcher persistence files, completed Batch 59 fetcher persistence subrepository files, completed Batch 60 website-ingestion helper files, completed Batch 61 website-ingestion static discovery files, completed Batch 62 website-ingestion browser runtime files, completed Batch 63 website-ingestion policy/probe files, completed Batch 64 through Batch 67 admin discovery UI/component files, the Batch 64 UI audit harness fix and this completed final proof AIDP state.
+- Worktree status: expected clean after `AIDP-ENGINEERING-REQUIREMENTS-AND-API-STAGE-1` through `AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-7` were split into focused commits.
+- Alignment note: no dirty tracked state is expected before opening the next scoped AIDP item.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: none for the architecture hardening follow-up; broad final proof passed and stateful proof residue was cleaned.
+- Required action before ordinary implementation: open the next scoped AIDP item before any further broad refactor stage.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-7
+
+- Kind: Stage
+- Status: completed
+- In scope: behavior-preserving unification of repeated admin channel parsing helpers, admin client/view helpers, repeated admin UI class constants, proof-script harness helpers, Python unit dependency stubs and a safe fetchers provider-orchestration split.
+- Out of scope: visual redesign, public endpoint/payload/SDK changes, auth semantics changes, queue/job name changes, source-channel config changes, persistence/outbox semantics changes, production deploy/release gates and broad unrelated formatting.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/server/`, `apps/admin/src/components/`, selected `apps/admin/src/pages/` and `apps/admin/src/components/discovery/` class-constant replacements, selected `apps/web/src/` view helper replacements, `infra/scripts/`, `tests/unit/python/`, and `services/fetchers/src/`.
+- Risk: medium-high, because this crosses UI, proof scripts, test harnesses and fetcher orchestration, but each sub-slice must remain behavior-preserving and independently provable.
+- Required proof: `git diff --check --`; `pnpm unit_tests:ts`; `pnpm unit_tests:py`; `pnpm typecheck`; `pnpm lint`; targeted compose/UI gates only where touched harness/runtime behavior requires them.
+- Acceptance criteria: duplicated helper implementations are replaced by focused internal modules; provider-specific validation messages remain stable; `RssFetcherService` export compatibility remains; proof scripts keep the same root command names; no visual redesign or wire behavior changes.
+- Architecture note: affected concern is extensibility and cohesion for admin inputs, operator UI surfaces, proof harnesses, Python unit setup and fetcher provider orchestration; tradeoff is focused internal helper modules over a broad framework rewrite.
+- Implemented, with evidence: added `apps/admin/src/lib/server/source-channel-form.ts` and replaced duplicated RSS/API/Website channel form parsing, auth-header update and URL validation helpers while preserving provider-specific error prefixes.
+- Implemented, with evidence: added `apps/admin/src/components/admin-client-helpers.ts` and replaced duplicated `readText`, `readCount`, UTC timestamp, status-badge and JSON post helpers in automation/MCP React surfaces.
+- Implemented, with evidence: expanded `infra/scripts/lib/mcp-http-testkit.mjs` with configurable proof names and admin email prefixes, then moved `infra/scripts/test-automation-admin-flow.mjs` onto shared env/compose/http/Firebase helpers while preserving the root script.
+- Implemented, with evidence: added `tests/unit/python/support/stubs.py` and moved three repeated API unit-test psycopg bootstrap blocks onto `install_psycopg_stub`.
+- Implemented, with evidence: added `services/fetchers/src/fetcher-persist-inputs.ts` and moved pure RSS/website persist-input builders out of `services/fetchers/src/fetchers.ts` without changing provider polling flow or `RssFetcherService` compatibility.
+- Scope note: no public endpoint, payload, source-channel config, queue/job name, persistence/outbox semantic, visual redesign or compose command name changes were made in this slice.
+- Residual note: larger follow-up candidates remain for broad Astro class constants, remaining proof scripts, remaining Python test stubs and deeper fetcher provider poller modules.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm unit_tests:py` passed with 316 tests.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `node --check infra/scripts/test-automation-admin-flow.mjs` and `node --check infra/scripts/lib/mcp-http-testkit.mjs` passed.
+- Passed proof: `python -m compileall tests/unit/python/support tests/unit/python/test_api_channels.py tests/unit/python/test_api_user_interests.py tests/unit/python/test_api_discovery_management.py` passed.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-ADMIN-UI-STAGE-6B
+
+- Kind: Stage
+- Status: completed
+- In scope: continue admin UI decomposition by moving `AutomationEditorWorkspace` pure read helpers, status class helper, JSON post helper and task graph edge/reindex helpers into a focused model/helper module.
+- Out of scope: visual redesign, React Flow node rendering changes, workflow save/archive/run payload changes, BFF/server write changes, automation graph semantics changes, fetcher/API/worker refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx`, and a new focused automation editor helper module under `apps/admin/src/components/`.
+- Risk: low-medium, because helpers touch graph ordering and save/run errors, but this slice preserves function bodies and call sites.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: pure helper implementations no longer live inline in `AutomationEditorWorkspace.tsx`; React Flow node rendering, user controls and BFF payloads stay unchanged; no visual redesign.
+- Architecture note: affected concern is admin automation workspace cohesion; stakeholder/consumer is operators editing automation sequences; tradeoff is a helper module before deeper palette/inspector/canvas component extraction.
+- Implemented, with evidence: added `apps/admin/src/components/automation-editor-workspace-model.ts` for JSON-ish value readers, status class helper, `postJson`, `moduleToKey`, `buildEdges` and `reindexTaskNodes`.
+- Compatibility note: `AutomationEditorWorkspace.tsx` still owns React Flow node rendering, palette/inspector UI, save/archive/run handlers and BFF payload construction.
+- Scope note: no visual redesign, React Flow node rendering, workflow save/archive/run payload, BFF/server write, automation graph semantics, fetcher/API/worker or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-ADMIN-UI-STAGE-6A
+
+- Kind: Stage
+- Status: completed
+- In scope: begin admin UI decomposition by moving `ChannelEditorForm` provider flags, labels, descriptions, placeholders and small form helpers into a focused view-model module.
+- Out of scope: visual redesign, form field name changes, POST payload changes, BFF/server write changes, provider behavior changes, fetcher/API/worker refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx`, and a new focused channel editor view-model module under `apps/admin/src/components/`.
+- Risk: low-medium, because this moves visible copy and provider condition flags but should keep JSX, field names and default values stable.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: channel editor provider view-model logic no longer lives inline in `ChannelEditorForm.tsx`; component rendering and form field names stay unchanged; no visual redesign or server payload changes.
+- Architecture note: affected concern is admin UI component cohesion; stakeholder/consumer is channel create/edit admin operators; tradeoff is a typed view-model helper before deeper section component extraction.
+- Implemented, with evidence: added `apps/admin/src/components/channel-editor-form-model.ts` for `ChannelEditorForm` provider flags, labels, descriptions, placeholders, helper constants and exported form value types.
+- Compatibility note: `apps/admin/src/components/ChannelEditorForm.tsx` still exports `ChannelEditorFormValue` and `ChannelProviderType` through re-exports; JSX, form field names and submit/cancel behavior are unchanged.
+- Scope note: no visual redesign, form field name, POST payload, BFF/server write, provider behavior, fetcher/API/worker or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-5F
+
+- Kind: Stage
+- Status: completed
+- In scope: begin `services/fetchers/src/fetchers.ts` orchestration decomposition by moving shared channel helper functions and `ChannelFetchError` into a focused helper module.
+- Out of scope: polling flow changes, provider behavior changes, concurrency changes, persistence/preflight changes, queue/outbox changes, config parsing changes, API/admin/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/fetchers.ts`, and a new focused fetcher channel helper module under `services/fetchers/src/`.
+- Risk: low-medium, because helpers affect RSS/API/email normalization and fetch failure classification, but this slice preserves function bodies and call sites.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: shared helper/error implementations no longer live in `fetchers.ts`; existing provider polling methods import and use the same helper names; public `RssFetcherService` behavior and exports remain unchanged.
+- Architecture note: affected concern is fetcher service cohesion and provider orchestration readability; stakeholder/consumer is RSS/API/email/website polling and channel run diagnostics; tradeoff is one helper module before larger provider-flow extraction.
+- Implemented, with evidence: added `services/fetchers/src/fetcher-channel-helpers.ts` for `ChannelFetchError`, text/body/url helpers, path lookup, retry-after parsing and failure classification.
+- Compatibility note: `services/fetchers/src/fetchers.ts` still owns `FetcherService` and `RssFetcherService`; provider polling call sites import the same helper names.
+- Scope note: no polling flow, provider behavior, concurrency, persistence/preflight, queue/outbox, config parsing, API/admin/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only after restoring the remaining direct `canonicalizeUrl` import.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-5E
+
+- Kind: Stage
+- Status: completed
+- In scope: continue resource enrichment decomposition by moving resource load, stored projection replay conversion, extraction persistence SQL and projected article/outbox SQL from `services/fetchers/src/resource-enrichment.ts` into a focused persistence repository module.
+- Out of scope: SQL semantics changes, projection policy changes, article/outbox payload changes, extraction/classification/fetch policy changes, provider behavior changes, service API changes, queue changes, worker/API/admin/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/resource-enrichment.ts`, and a new focused resource enrichment persistence module under `services/fetchers/src/`.
+- Risk: medium-high, because the slice moves DB writes and article projection/outbox fanout, but it must preserve query text, payloads, public results and constructor behavior.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: resource load/persist/projected article SQL implementations no longer live in `resource-enrichment.ts`; `ResourceEnrichmentService` remains the public orchestration API; no persisted field, outbox event, projection decision or result-shape behavior changes.
+- Architecture note: affected concern is resource enrichment cohesion and PostgreSQL ownership; stakeholder/consumer is website projection replay, article ingestion fanout and resource admin surfaces; tradeoff is a focused repository module while keeping service orchestration stable.
+- Implemented, with evidence: added `services/fetchers/src/resource-enrichment-persistence.ts` owning resource load SQL, stored projection conversion, extraction persistence SQL and projected article/outbox SQL.
+- Compatibility note: `ResourceEnrichmentService` remains the public orchestration API and now delegates load/persist operations through `ResourceEnrichmentRepository`.
+- Scope note: no SQL semantics, projection policy, article/outbox payload, extraction/classification/fetch policy, provider behavior, service API, queue, worker/API/admin/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-5D
+
+- Kind: Stage
+- Status: completed
+- In scope: continue resource enrichment decomposition by moving projectability/body/projection-state decision helpers out of `services/fetchers/src/resource-enrichment.ts` into a focused projection helper module.
+- Out of scope: projection policy changes, article upsert SQL changes, observation/outbox behavior changes, extraction/classification/fetch policy changes, provider behavior changes, service API changes, queue changes, worker/API/admin/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/resource-enrichment.ts`, and a new focused projection helper module under `services/fetchers/src/`.
+- Risk: medium, because projection decisions control common article pipeline fanout, but this slice is a pure helper extraction with identical decision branches and error labels.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: projection decision helper implementations no longer live in `resource-enrichment.ts`; `ResourceEnrichmentService.persistExtraction` behavior and public result shape remain unchanged; no SQL/outbox/projection policy changes.
+- Architecture note: affected concern is resource enrichment cohesion and projection policy ownership; stakeholder/consumer is website resource projection replay and article-ingest outbox fanout; tradeoff is a typed helper input contract instead of using the service-private persistence shape directly.
+- Implemented, with evidence: moved projectability, projectable body and projection-state decision helpers into `services/fetchers/src/resource-enrichment-projection.ts`.
+- Compatibility note: `services/fetchers/src/resource-enrichment.ts` still owns `ResourceEnrichmentService`, `ExtractionPersistShape`, SQL persistence and outbox fanout; it now imports `resolveProjectionDecision` from the focused helper module.
+- Scope note: no projection policy branches, error labels, article upsert SQL, observation/outbox behavior, extraction/classification/fetch policy, provider behavior, service API, queue, worker/API/admin/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-5C
+
+- Kind: Stage
+- Status: completed
+- In scope: continue fetcher decomposition by extracting the duplicated `AsyncSemaphore` implementation from `services/fetchers/src/fetchers.ts`, `services/fetchers/src/enrichment.ts` and `services/fetchers/src/resource-enrichment.ts` into one focused fetcher utility module.
+- Out of scope: concurrency limit value changes, fetch policy changes, provider behavior changes, enrichment/projection/persistence SQL changes, service API changes, queue/outbox changes, worker/API/admin/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/fetchers.ts`, `services/fetchers/src/enrichment.ts`, `services/fetchers/src/resource-enrichment.ts`, and a new focused fetcher semaphore module under `services/fetchers/src/`.
+- Risk: low-medium, because the duplicated primitive gates fetcher/enrichment concurrency, but this slice keeps constructor and acquire/release semantics identical.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: only one `AsyncSemaphore` implementation exists in fetcher source; the three existing call sites import it; no runtime concurrency settings or fetch/enrichment behavior change.
+- Architecture note: affected concern is fetcher orchestration cohesion and shared utility ownership; stakeholder/consumer is RSS/website polling plus article/resource enrichment; tradeoff is one small shared utility module rather than three private duplicates.
+- Implemented, with evidence: added `services/fetchers/src/async-semaphore.ts` and replaced local `AsyncSemaphore` implementations in `services/fetchers/src/fetchers.ts`, `services/fetchers/src/enrichment.ts` and `services/fetchers/src/resource-enrichment.ts` with imports.
+- Scope note: no concurrency limit values, fetch policy, provider behavior, enrichment/projection/persistence SQL, service API, queue/outbox, worker/API/admin/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-5B
+
+- Kind: Stage
+- Status: completed
+- In scope: continue fetcher enrichment decomposition by moving resource classification/decision helpers out of `services/fetchers/src/resource-enrichment.ts` into a focused helper module while preserving existing exports from `resource-enrichment.ts`.
+- Out of scope: classification logic changes, fetch policy changes, provider behavior changes, projection/persistence SQL changes, service API changes, queue/outbox changes, worker/API/admin/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/resource-enrichment.ts`, and a new focused classification helper module under `services/fetchers/src/`.
+- Risk: medium, because resource classification affects website projection, but this slice is behavior-preserving extraction of already tested pure helpers.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: classification helper implementations no longer live in `resource-enrichment.ts`; `resolveEditorialExtractorDecision`, `buildWebsiteResourceClassificationJson` and `shouldRetainDiscoveryEditorialKind` remain import-compatible from `resource-enrichment.ts`; resource enrichment unit tests pass; no classification behavior changes.
+- Architecture note: affected concern is fetcher enrichment cohesion and classification helper ownership; stakeholder/consumer is website ingestion, projection replay and admin/resource tests; tradeoff is one focused helper module while preserving the public `resource-enrichment.ts` export surface.
+- Implemented, with evidence: moved classification and editorial decision helper implementations into `services/fetchers/src/resource-enrichment-classification.ts`.
+- Compatibility note: `services/fetchers/src/resource-enrichment.ts` still re-exports `resolveEditorialExtractorDecision`, `buildWebsiteResourceClassificationJson` and `shouldRetainDiscoveryEditorialKind`.
+- Scope note: no classification logic, fetch policy, provider behavior, projection/persistence SQL, service API, queue/outbox, worker/API/admin/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests, including resource-enrichment website tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-5A
+
+- Kind: Stage
+- Status: completed
+- In scope: begin fetcher enrichment decomposition by moving pure HTML/content extraction helpers out of `services/fetchers/src/resource-enrichment.ts` into a focused helper module while preserving all existing exports from `resource-enrichment.ts`.
+- Out of scope: fetch policy changes, provider behavior changes, projection/persistence SQL changes, resource classification behavior changes, service API changes, queue/outbox changes, worker/API/admin/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/resource-enrichment.ts`, and a new focused helper module under `services/fetchers/src/`.
+- Risk: medium, because resource enrichment feeds website projection and outbox fanout, but this slice is behavior-preserving extraction of pure helpers.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: HTML/content helper implementations no longer live in `resource-enrichment.ts`; `ResourceEnrichmentService` and exported helper functions remain import-compatible; website/resource enrichment unit tests pass; no persistence/projection/classification behavior changes.
+- Architecture note: affected concern is fetcher enrichment cohesion and parsing/helper ownership; stakeholder/consumer is website ingestion, projection replay and hard-sites proof; tradeoff is one focused helper module while keeping the public `resource-enrichment.ts` surface stable.
+- Implemented, with evidence: moved HTML/content helper implementations into `services/fetchers/src/resource-enrichment-extraction.ts` and imported them from `services/fetchers/src/resource-enrichment.ts`.
+- Scope note: no fetch policy, provider behavior, projection/persistence SQL, classification behavior, service API, queue/outbox, worker/API/admin/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests, including resource-enrichment website tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are deeper fetcher enrichment/projection/orchestration split, fetchers service orchestration, admin/web UI surfaces and proof-script modularity; these should be opened as separate AIDP items with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-WORKER-STAGE-4E
+
+- Kind: Stage
+- Status: completed
+- In scope: continue worker runtime decomposition by moving final-selection/system-feed/criterion-review write helper implementations out of `services/workers/app/main.py` while preserving `worker_main` imports, processor dependency wiring and monkeypatch behavior.
+- Out of scope: selection policy changes, LLM/provider behavior changes, queue/job name changes, job payload changes, DB schema changes, worker bootstrap changes, discovery/fetcher/API/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, and a new focused worker selection write repository module.
+- Risk: medium-high, because helpers update selection tables, interest filter results and outbox fanout, and existing tests patch several `worker_main` dependency names.
+- Required proof: `python -m compileall services/workers/app`; `python -m unittest tests.unit.python.test_interest_auto_repair`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: selection/system-feed/criterion-review write helper implementations live outside `main.py`; `services.workers.app.main` still exports `upsert_system_feed_result`, `find_reusable_criterion_llm_review`, `resolve_criterion_review_final_decision`, `persist_criterion_review_resolution`, `upsert_final_selection_result` and `should_dispatch_clustering`; existing monkeypatch tests keep working; no queue/job/DB behavior changes.
+- Architecture note: affected concern is worker main composition-root pressure and selection write ownership; stakeholder/consumer is criteria/LLM/cluster processors and tests that patch `worker_main`; tradeoff is dynamic compatibility resolution inside the new repository module.
+- Implemented, with evidence: moved `upsert_system_feed_result`, `find_reusable_criterion_llm_review`, `resolve_criterion_review_final_decision`, `persist_criterion_review_resolution`, `upsert_final_selection_result` and `should_dispatch_clustering` implementations into `services/workers/app/selection_write_repository.py` while `services.workers.app.main` still imports and exports those names.
+- Fixed compatibility, with evidence: `selection_write_repository.py` resolves default article, selection, filter, outbox and dispatch dependencies through `worker_main` at call time, preserving existing monkeypatch tests and legacy runtime behavior.
+- Scope note: no selection policy, LLM/provider behavior, queue names, job payloads, processor behavior, DB schema, worker bootstrap, API/admin/fetcher/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_interest_auto_repair` passed with 26 tests.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are fetcher enrichment/orchestration split, admin/web UI surfaces and proof-script modularity; these should be opened as separate AIDP items with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-WORKER-STAGE-4D
+
+- Kind: Stage
+- Status: completed
+- In scope: continue worker runtime decomposition by moving cluster vector/candidate/rebuild/create helper implementations out of `services/workers/app/main.py` while preserving `worker_main` imports and cluster processor dependency wiring.
+- Out of scope: clustering algorithm changes, vector semantics changes, queue/job name changes, job payload changes, DB schema changes, selection/final-selection pipeline extraction, worker bootstrap changes, discovery/fetcher/API/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, and a new focused worker cluster repository module.
+- Risk: medium, because cluster helpers touch vector registry, cluster membership state and embedding-provider model-key ownership.
+- Required proof: `python -m compileall services/workers/app`; `python -m unittest tests.unit.python.test_interest_auto_repair`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: cluster helper implementations live outside `main.py`; `services.workers.app.main` still exports `fetch_cluster_event_vector`, `load_recent_cluster_candidates`, `rebuild_cluster_state` and `create_or_update_cluster`; cluster processor dependency wiring and behavior stay unchanged.
+- Architecture note: affected concern is worker main composition-root pressure and cluster repository ownership; stakeholder/consumer is cluster processor and legacy imports from `worker_main`; tradeoff is dependency hooks for provider/vector helpers while keeping compatibility names in the legacy entrypoint.
+- Implemented, with evidence: moved `fetch_cluster_event_vector`, `load_recent_cluster_candidates`, `rebuild_cluster_state` and `create_or_update_cluster` implementations into `services/workers/app/cluster_repository.py` while `services.workers.app.main` still imports and exports those names.
+- Fixed compatibility, with evidence: `cluster_repository.py` resolves default vector/upsert/hash/mix/provider dependencies through `worker_main` at call time, preserving legacy patch/export behavior while avoiding duplicate provider initialization.
+- Scope note: no clustering algorithm, vector semantics, queue names, job payloads, processor behavior, DB schema, selection pipeline, API/admin/fetcher/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_interest_auto_repair` passed with 26 tests.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are deeper final-selection/LLM-review worker decomposition, fetcher enrichment/orchestration split, admin/web UI surfaces and proof-script modularity; these should be opened as separate AIDP items with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-WORKER-STAGE-4C
+
+- Kind: Stage
+- Status: completed
+- In scope: continue worker runtime decomposition by moving compiled criteria/interests and active prompt-template read helpers out of `services/workers/app/main.py` while preserving `worker_main` imports and dependency-injection call sites.
+- Out of scope: query semantics changes, queue/job name changes, job payload changes, processor behavior changes, DB schema changes, selection/final-selection pipeline extraction, worker bootstrap changes, discovery/fetcher/API/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, and a new focused worker matching read-model repository module.
+- Risk: low-medium, because criteria/interest match processors consume these helpers through dependency injection and legacy default paths still resolve through `worker_main`.
+- Required proof: `python -m compileall services/workers/app`; `python -m unittest tests.unit.python.test_interest_auto_repair`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: compiled criteria/interests and prompt-template read helper implementations live outside `main.py`; `services.workers.app.main` still exports `list_compiled_criteria`, `list_compiled_interests` and `find_prompt_template`; processor dependency wiring and public behavior stay unchanged.
+- Architecture note: affected concern is worker main composition-root pressure and matching read-model ownership; stakeholder/consumer is criteria/interest/LLM review processors and tests that import `worker_main`; tradeoff is adding a focused read-model module while keeping compatibility names in the legacy entrypoint.
+- Implemented, with evidence: moved `list_compiled_criteria`, `list_compiled_interests` and `find_prompt_template` implementations into `services/workers/app/matching_read_repository.py` while `services.workers.app.main` still imports and passes those names through processor dependency wiring.
+- Scope note: no query semantics, queue names, job payloads, processor behavior, DB schema, selection pipeline, API/admin/fetcher/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_interest_auto_repair` passed with 26 tests.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-WORKER-STAGE-4B
+
+- Kind: Stage
+- Status: completed
+- In scope: continue worker runtime decomposition by moving final-selection/system-feed selection-gate read helpers out of `services/workers/app/main.py` while preserving `worker_main` imports and monkeypatch behavior.
+- Out of scope: queue/job name changes, job payload changes, processor behavior changes, DB schema changes, final-selection write pipeline extraction, worker bootstrap changes, discovery/fetcher/API/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, and a new focused worker selection-gate repository module.
+- Risk: medium, because tests and legacy runtime modules patch `worker_main.fetch_final_selection_result_row` and `worker_main.fetch_system_feed_result_row`.
+- Required proof: `python -m compileall services/workers/app`; `python -m unittest tests.unit.python.test_interest_auto_repair`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: selection-gate read helper implementations live outside `main.py`; `services.workers.app.main` still exports `fetch_final_selection_result_row`, `fetch_system_feed_result_row`, `fetch_selection_gate_result_row` and `is_article_eligible_for_personalization`; existing monkeypatch tests keep working; no queue/job/DB behavior changes.
+- Architecture note: affected concern is worker main composition-root pressure and selection-gate read ownership; stakeholder/consumer is worker processors, reindex backfill and tests that patch `worker_main`; tradeoff is dynamic compatibility resolution inside the new repository module.
+- Implemented, with evidence: moved `fetch_final_selection_result_row`, `fetch_system_feed_result_row`, `fetch_selection_gate_result_row` and `is_article_eligible_for_personalization` implementations into `services/workers/app/selection_gate_repository.py` while `services.workers.app.main` still imports and exports those names.
+- Fixed compatibility, with evidence: the new repository module resolves default final/system feed/open-connection dependencies through `worker_main` at call time, preserving existing monkeypatch tests and legacy runtime behavior.
+- Fixed import-time dependency, with evidence: adjusted runtime-evaluated callable aliases to avoid requiring `psycopg.AsyncCursor` on minimal test stubs during full unit discovery.
+- Scope note: no queue names, job payloads, processor behavior, DB schema, selection write pipeline, API/admin/fetcher/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_interest_auto_repair` passed with 26 tests, covering the selection-gate monkeypatch path.
+- Proof correction note: the first full unit run exposed the runtime-evaluated `psycopg.AsyncCursor` type alias against a minimal test stub; after changing callable aliases to accept `Any`, the full suite passed.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are deeper worker runtime decomposition, fetcher enrichment/orchestration split, admin/web UI surfaces and proof-script modularity; these should be opened as separate AIDP items with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-WORKER-STAGE-4A
+
+- Kind: Stage
+- Status: completed
+- In scope: begin worker runtime decomposition by moving simple compile row-lock repository helpers and the published outbox helper out of `services/workers/app/main.py` while preserving imports from `worker_main` for tests and legacy runtime modules.
+- Out of scope: queue/job name changes, job payload changes, processor behavior changes, DB schema changes, selection/final-selection pipeline extraction, worker bootstrap changes, discovery/fetcher/API/UI refactors and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/worker_events.py`, and new focused worker repository helper modules.
+- Risk: medium, because worker main export ownership changes but legacy import/monkeypatch points must stay stable.
+- Required proof: `python -m compileall services/workers/app`; `python -m unittest tests.unit.python.test_interest_auto_repair`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: `ensure_published_outbox_event`, `fetch_interest_for_update` and `fetch_criterion_for_update` no longer have implementations in `main.py`; `services.workers.app.main` still exports those names; compile processors and reindex backfill compatibility modules keep working; no queue/job/DB behavior changes.
+- Architecture note: affected concern is worker main composition-root pressure; stakeholder/consumer is worker processors and existing unit tests that patch `worker_main`; tradeoff is adding focused helper modules while retaining compatibility names in the legacy entrypoint.
+- Implemented, with evidence: moved `fetch_interest_for_update` and `fetch_criterion_for_update` implementations into `services/workers/app/compile_repository.py` while `services.workers.app.main` still imports and exports both names.
+- Implemented, with evidence: moved `ensure_published_outbox_event` implementation into `services/workers/app/worker_events.py` while `services.workers.app.main` still imports and exposes the name through `WORKER_MAIN_COMPAT_EXPORTS`.
+- Fixed import-time dependency, with evidence: kept `runtime_db.open_connection` as a lazy import inside `ensure_published_outbox_event` so API unit imports do not require `redis` through `worker_events`.
+- Scope note: no queue names, job payloads, processor behavior, DB schema, API/admin/fetcher/UI or compose runtime behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_interest_auto_repair` passed with 26 tests, covering the `worker_main.fetch_interest_for_update` monkeypatch path.
+- Proof correction note: the first full unit run exposed the accidental import-time `runtime_db` dependency from `worker_events`; after moving `open_connection` to a lazy function import, the full suite passed.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are deeper worker runtime decomposition, fetcher enrichment/orchestration split, admin/web UI surfaces and proof-script modularity; these should be opened as separate AIDP items with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-DISCOVERY-STAGE-3C
+
+- Kind: Stage
+- Status: completed
+- In scope: continue discovery task-engine split by extracting remaining search, URL/RSS/website probe, content sampling and relevance scoring plugin families from `services/workers/app/task_engine/discovery_plugins.py` into focused family modules.
+- Out of scope: task graph behavior changes, task/option/output name changes, runtime adapter changes, DB schema changes, queue/job changes, API/admin/fetcher/UI refactors and worker runtime decomposition.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/task_engine/discovery_plugins.py`, and focused plugin-family modules under `services/workers/app/task_engine/`.
+- Risk: medium, because this completes the first plugin-family split while task names, registry exports and existing runtime patch-points must remain stable.
+- Required proof: `python -m compileall services/workers/app/task_engine`; `python -m unittest tests.unit.python.test_task_engine_discovery_plugins`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: concrete search/probe/sampling/scoring plugin classes live in focused modules; `DISCOVERY_PLUGIN_CLASSES`, `UTILITY_PLUGIN_CLASSES`, `ENRICHMENT_PLUGIN_CLASSES`, `DISCOVERY_ENRICHMENT_PLUGIN_CLASSES` and registration functions remain import-compatible; existing tests can still patch `services.workers.app.task_engine.discovery_plugins.get_discovery_runtime`; no task names, options or outputs change.
+- Architecture note: affected concern is discovery plugin cohesion and dependency direction; stakeholder/consumer is task graph authors and discovery runtime maintainers; tradeoff is more small plugin-family modules while keeping registry composition centralized.
+- Implemented, with evidence: extracted `WebSearchPlugin` into `services/workers/app/task_engine/discovery_search_plugins.py`.
+- Implemented, with evidence: extracted `UrlValidatorPlugin`, `RssProbePlugin` and `WebsiteProbePlugin` into `services/workers/app/task_engine/discovery_probe_plugins.py`.
+- Implemented, with evidence: extracted `ContentSamplerPlugin` into `services/workers/app/task_engine/discovery_sampling_plugins.py`.
+- Implemented, with evidence: extracted `RelevanceScorerPlugin` into `services/workers/app/task_engine/discovery_scoring_plugins.py`.
+- Implemented, with evidence: `services/workers/app/task_engine/discovery_plugins.py` reduced from 957 lines after Stage 3B to 81 lines and now acts as registry composition owner with a compatibility runtime wrapper.
+- Scope note: no task graph semantics, task names, plugin options, runtime adapter behavior, DB schema, queue/job, API/admin/fetcher/UI or dependency behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app/task_engine` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_task_engine_discovery_plugins` passed with 12 tests.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are worker runtime decomposition, fetcher enrichment/orchestration split, admin/web UI surfaces and proof-script modularity; these should be opened as separate AIDP items with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-DISCOVERY-STAGE-3B
+
+- Kind: Stage
+- Status: completed
+- In scope: continue discovery task-engine split by extracting LLM analyzer, source registration and utility storage plugin families from `services/workers/app/task_engine/discovery_plugins.py` into focused family modules.
+- Out of scope: task graph behavior changes, task/option/output name changes, runtime adapter changes, DB schema changes, queue/job changes, API/admin/fetcher/UI refactors, and search/probe/sampling/scoring family extraction.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/task_engine/discovery_plugins.py`, and focused plugin-family modules under `services/workers/app/task_engine/`.
+- Risk: medium, because plugin import topology changes while task names, registry exports and existing runtime patch-points must remain stable.
+- Required proof: `python -m compileall services/workers/app/task_engine`; `python -m unittest tests.unit.python.test_task_engine_discovery_plugins`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: `LlmAnalyzerPlugin`, `SourceRegistrarPlugin` and `DbStorePlugin` live in focused modules; `DISCOVERY_PLUGIN_CLASSES`, `UTILITY_PLUGIN_CLASSES`, `DISCOVERY_ENRICHMENT_PLUGIN_CLASSES` and registration functions remain import-compatible; existing tests can still patch `services.workers.app.task_engine.discovery_plugins.get_discovery_runtime`; no task names, options or outputs change.
+- Architecture note: affected concern is discovery plugin cohesion and dependency direction; stakeholder/consumer is task graph authors and discovery runtime maintainers; tradeoff is several small plugin-family modules while keeping registry composition centralized.
+- Implemented, with evidence: extracted `LlmAnalyzerPlugin` into `services/workers/app/task_engine/discovery_llm_plugins.py`.
+- Implemented, with evidence: extracted `SourceRegistrarPlugin` into `services/workers/app/task_engine/discovery_registration_plugins.py`.
+- Implemented, with evidence: extracted `DbStorePlugin` into `services/workers/app/task_engine/discovery_storage_plugins.py`.
+- Fixed compatibility, with evidence: extracted families resolve runtime through the registry owner so existing tests and legacy callers that patch `services.workers.app.task_engine.discovery_plugins.get_discovery_runtime` keep working.
+- Implemented, with evidence: `services/workers/app/task_engine/discovery_plugins.py` reduced from 1343 lines after Stage 3A to 957 lines; task names, plugin options, outputs and registry function names remain unchanged.
+- Scope note: no task graph semantics, task names, plugin options, runtime adapter behavior, DB schema, queue/job, API/admin/fetcher/UI or dependency behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app/task_engine` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_task_engine_discovery_plugins` passed with 12 tests.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REFACTORING-DISCOVERY-STAGE-3A
+
+- Kind: Stage
+- Status: completed
+- In scope: begin discovery task-engine split by extracting shared discovery plugin option/context helpers and the common `ContextTaskPlugin` base from `services/workers/app/task_engine/discovery_plugins.py` into a focused common module, plus the first low-risk enrichment plugin-family extraction.
+- Out of scope: task graph behavior changes, registry name changes, plugin option changes, runtime adapter changes, DB schema changes, queue/job changes, API/admin/fetcher/UI refactors and full discovery/search/probe/scoring/LLM plugin-family split.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/task_engine/discovery_plugins.py`, and new focused common module(s) under `services/workers/app/task_engine/`.
+- Risk: medium, because plugin import topology changes while task names, registry exports and runtime adapter calls must remain stable.
+- Required proof: `python -m compileall services/workers/app/task_engine`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: shared helper/base concerns no longer live in the plugin registry owner; enrichment plugin classes live in a focused family module; `DISCOVERY_PLUGIN_CLASSES`, `UTILITY_PLUGIN_CLASSES`, `ENRICHMENT_PLUGIN_CLASSES`, `DISCOVERY_ENRICHMENT_PLUGIN_CLASSES` and registration functions remain import-compatible; no task names, options or outputs change.
+- Architecture note: affected concern is discovery plugin cohesion and future plugin-family splitting; stakeholder/consumer is task graph authors and discovery runtime maintainers; tradeoff is one additional common module before splitting concrete plugin families.
+- Implemented, with evidence: extracted discovery plugin lookup/coercion/token/url helpers and the common `ContextTaskPlugin` base into `services/workers/app/task_engine/discovery_plugin_common.py`.
+- Implemented, with evidence: extracted `ArticleLoaderPlugin` and `ArticleEnricherPlugin` into `services/workers/app/task_engine/discovery_enrichment_plugins.py` while keeping `ENRICHMENT_PLUGIN_CLASSES` and registration exports owned by `services/workers/app/task_engine/discovery_plugins.py`.
+- Fixed compatibility, with evidence: enrichment plugins resolve runtime through the registry owner so existing tests and legacy callers that patch `services.workers.app.task_engine.discovery_plugins.get_discovery_runtime` keep working.
+- Implemented, with evidence: `services/workers/app/task_engine/discovery_plugins.py` reduced from 1907 lines before this slice to 1343 lines; task names, plugin options, outputs and registry function names remain unchanged.
+- Scope note: no task graph semantics, task names, plugin options, runtime adapter behavior, DB schema, queue/job, API/admin/fetcher/UI or dependency behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/workers/app/task_engine` passed.
+- Passed proof: targeted `python -m unittest tests.unit.python.test_task_engine_discovery_plugins` passed with 12 tests after preserving the runtime patch-point.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Capability continuation note: remaining high-pressure refactor areas are worker runtime decomposition, deeper discovery search/probe/scoring/LLM family splits, fetcher enrichment/orchestration split, admin/web UI surfaces and proof-script modularity; each should be opened as a separate AIDP item with targeted compose/stateful gates.
+
+### AIDP-ENGINEERING-REFACTORING-API-STAGE-2
+
+- Kind: Stage
+- Status: completed
+- In scope: continue behavior-preserving API decomposition by moving a cohesive observability/LLM-budget route-handler cluster out of `services/api/app/main.py` into the existing focused route module while preserving public routes and compatibility imports.
+- Out of scope: DB schema changes, route/path/payload changes, SDK changes, worker/fetcher/UI/proof-script refactors, dependency changes and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/routes/observability_routes.py`, and route registration files only if wiring requires it.
+- Risk: medium, because API route ownership changes but behavior should remain stable through compatibility imports and targeted proof.
+- Required proof: `python -m compileall services/api/app`; `python -m unittest discover -s tests/unit/python -p 'test_*.py'`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`.
+- Acceptance criteria: observability/LLM budget route handlers live in the focused route module; `main.py` compatibility names still exist for tests/legacy imports; public route paths and response ownership remain unchanged.
+- Architecture note: affected concern is API entrypoint cohesion; stakeholder/consumer is API maintainers and existing observability/LLM budget consumers; tradeoff is route module owning direct read-model dependencies instead of receiving every handler through `globals()`.
+- Implemented, with evidence: moved `/maintenance/fetch-runs`, `/maintenance/llm-reviews`, `/maintenance/llm-usage-summary`, `/maintenance/llm-budget-summary` and `/maintenance/outbox` handlers into `services/api/app/routes/observability_routes.py` while preserving route paths and response ownership.
+- Implemented, with evidence: preserved a thin `services/api/app/main.py` compatibility `get_llm_budget_summary()` wrapper for tests and legacy imports that monkeypatch `api_main.query_one`.
+- Implemented, with evidence: extracted discovery/sequence status constant ownership from `services/api/app/main.py` into `services/api/app/status_constants.py`, reducing entrypoint pressure without changing accepted status values.
+- Scope note: no public route/path/payload, SDK, DB schema, queue/event, worker/fetcher/UI/proof-script or dependency behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/api/app` passed.
+- Passed proof: targeted API unit tests for sequence management, reindex jobs and feed dedup passed with 26 tests.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests after rerun with loopback permission.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+
+### AIDP-ENGINEERING-REQUIREMENTS-AND-API-STAGE-1
+
+- Kind: Stage
+- Status: completed
+- In scope: correct stale AIDP worktree coherence; extend compact engineering/proof guidance with secure-by-design, supply-chain/release integrity, observability-as-contract, ADR/deprecation and dependency-direction rails; perform one narrow behavior-preserving API route decomposition slice.
+- Out of scope: broad worker/fetcher/UI/proof-script refactors, DB schema changes, public API payload/route changes, queue/event changes, dependency installs, release/deploy gates and visual redesign.
+- Allowed paths: `.aidp/work.md`, `.aidp/engineering.md`, `.aidp/verification.md`, `services/api/app/main.py`, `services/api/app/routes/__init__.py`, new focused files under `services/api/app/routes/` if required.
+- Risk: medium, because durable engineering rules change and the API entrypoint route wiring is touched, but product behavior and external contracts remain unchanged.
+- Required proof: `python -m compileall services/api/app`; `pnpm unit_tests:py`; `pnpm typecheck`; `git diff --check --`; owner-file consistency review. No compose smoke is required unless API route wiring proof exposes a runtime issue.
+- Acceptance criteria: AIDP worktree state matches repository reality; new engineering/proof rails are present in the correct owner files without duplicating blueprint; API `/health` route is registered through focused route wiring rather than inline entrypoint decoration; public route path and response shape stay stable.
+- Architecture note: affected concern is API entrypoint cohesion and AIDP engineering quality bar; stakeholder/consumer is future AI/human maintainers and existing API health consumers; tradeoff is a small additional route module for clearer composition-root ownership.
+- Implemented, with evidence: repaired stale AIDP worktree coherence by replacing the old dirty ARCH-HARDENING-FOLLOWUP note with the verified clean pre-stage state and current completed-stage dirty scope.
+- Implemented, with evidence: added compact engineering rails for secure-by-design/threat modeling, dependency and supply-chain discipline, observability-as-contract, architecture decisions/compatibility/deprecation and dependency direction/layering.
+- Implemented, with evidence: expanded verification expectations and the architecture proof checklist with security, supply-chain, observability, compatibility/deprecation and dependency-direction review.
+- Implemented, with evidence: moved API `/health` route registration from inline `services/api/app/main.py` decoration into `services/api/app/routes/health_routes.py` and registered it through `services/api/app/routes/__init__.py`, preserving path and response shape.
+- Scope note: no DB schema, queue/event, SDK, public payload, dependency, release/deploy, worker/fetcher/UI/proof-script or visual behavior changes were made in this slice.
+- Passed proof: `python -m compileall services/api/app` passed.
+- Passed proof: `python -m unittest discover -s tests/unit/python -p 'test_*.py'` passed with 316 tests after rerun with loopback permission; the first sandboxed attempt failed only because the Gemini test could not bind `127.0.0.1:0`.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `git diff --check --` passed.
+- Non-gate note: a direct bare-shell import probe for `services.api.app.main` could not run because the local Python environment lacks `psycopg`; this is not a new regression and was not part of the required proof.
+- Capability continuation note: remaining planned refactor stages for worker runtime, discovery plugins, fetcher enrichment/orchestration, admin/web UI surfaces and proof-script modularity are not implemented in this stage and should be opened as separate AIDP items.
 
 ### ARCH-HARDENING-FOLLOWUP-FINAL-PROOF-2026-04-29
 
