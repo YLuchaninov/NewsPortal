@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; latest IMAP provider poller extraction is complete and ready to commit.
+- Почему сейчас: пользователь попросил продолжать по порядку; fetcher provider poller split is committed and selected compose fetcher proofs passed.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,10 @@
 
 ### Согласованность worktree
 
-- Worktree status: expected dirty until `AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-13` is committed; dirty state is limited to the completed stage's allowed paths.
-- Alignment note: dirty state for this item is expected only in `.aidp/work.md`, `services/fetchers/src/fetchers.ts` and a focused fetcher Email IMAP provider poller module.
+- Worktree status: clean after committing `AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-13`; current dirty state should only come from this live-state proof note until it is committed.
+- Alignment note: committed fetcher provider split touched `services/fetchers/src/fetchers.ts` and focused provider poller modules for API, RSS, Website and Email IMAP.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: commit the completed Stage 13 package, then run selected compose fetcher proofs if local Docker state allows.
+- Required action before ordinary implementation: commit this AIDP proof note, then open the next scoped AIDP item before continuing proof-harness/UI/admin cleanup.
 
 ### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-13
 
@@ -80,6 +80,8 @@
 - Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
 - Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
 - Passed proof: `git diff --check --` passed.
+- Passed post-commit compose proof: `pnpm test:website:compose` passed for channel `79b3fa53-866f-4352-87c6-2a83f2290a27` after starting the local compose stack.
+- Passed post-commit compose proof: `pnpm test:hard-sites:compose` passed for channels `b2304f36-b91a-4ba7-9fdf-d0f6ad95bcf5` and `2c16dfc3-c8b5-4e15-9db0-059860053602`.
 
 ### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-12
 
