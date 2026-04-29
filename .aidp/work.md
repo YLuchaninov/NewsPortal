@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; viewport/UI-audit proof auth-helper consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; product/local and live-discovery proof command/env helper consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing viewport/UI-audit proof auth-helper consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs`; no viewport assertions, UI audit assertions, Playwright scenarios, runtime service code, product endpoint behavior, UI visuals, auth semantics, queue/job names or persistent payloads were changed.
+- Worktree status: clean after committing product/local and live-discovery proof command/env helper consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/test-live-discovery-yield-proof.mjs` and `infra/scripts/test-product-local.mjs`; no product test command list, discovery yield policy, scenario assertions, runtime service code, product endpoint behavior, UI visuals, auth semantics, queue/job names or persistent payloads were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice before broader admin UI/client helper or proof-harness cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-19
+
+- Kind: Stage
+- Status: completed
+- In scope: move remaining duplicated repo-root/command/env-file helper plumbing in `infra/scripts/test-live-discovery-yield-proof.mjs` and `infra/scripts/test-product-local.mjs` onto existing shared `infra/scripts/lib/mcp-http-testkit.mjs` exports.
+- Out of scope: product local command matrix changes, discovery yield policy changes, scenario assertion changes, root script name changes, compose service definition changes, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth/session semantics, queue/job names, source-channel configs and persistent payload changes.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/test-live-discovery-yield-proof.mjs`, `infra/scripts/test-product-local.mjs`, and `infra/scripts/lib/mcp-http-testkit.mjs` only if a compatibility adjustment is required.
+- Risk: medium, because the scripts orchestrate broad product/local and live discovery proofs, but this slice is import/helper consolidation with unchanged command lists and reports.
+- Required proof: `node --check infra/scripts/test-live-discovery-yield-proof.mjs`; `node --check infra/scripts/test-product-local.mjs`; `node --check infra/scripts/lib/mcp-http-testkit.mjs` if touched; `pnpm lint`; `git diff --check --`; record compose/live proof residual honestly if not run.
+- Acceptance criteria: both scripts reuse shared proof helper exports for duplicated plumbing where safe; command lists, report shapes and scenario bodies remain unchanged; no runtime service code changes.
+- Architecture note: affected concern is verification maintainability and proof-script cohesion; stakeholder/consumer is future agents/operators running product/local and discovery yield gates; tradeoff is consolidating only repeated harness plumbing while leaving broad proof orchestration local.
+- Implemented, with evidence: `test-live-discovery-yield-proof.mjs` now imports shared `repoRoot` and `runCommand` from `infra/scripts/lib/mcp-http-testkit.mjs`.
+- Implemented, with evidence: `test-product-local.mjs` now imports shared `repoRoot` and `readEnvFile`, while keeping its local product-command result reporting unchanged.
+- Scope note: no product local command matrix, discovery yield policy, scenario assertions, root script names, compose service definitions, product/runtime code, API/admin/fetcher/worker behavior, UI visuals, auth/session semantics, queue/job names, source-channel configs or persistent payloads were changed.
+- Passed proof: `node --check infra/scripts/test-live-discovery-yield-proof.mjs` passed.
+- Passed proof: `node --check infra/scripts/test-product-local.mjs` passed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over `infra/scripts/**/*.{js,mjs}` and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Compose/live proof note: product/local and live discovery proof commands were not executed in this helper-only slice because command lists, report shapes and scenario bodies were preserved; run the relevant stateful gate when a later runtime/scenario behavior stage touches these flows.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-18
 

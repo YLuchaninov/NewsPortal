@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import {
   DISCOVERY_LIVE_DEFAULTS,
@@ -14,25 +11,10 @@ import {
 } from "./lib/discovery-live-yield-report.mjs";
 import { runSingleDiscoveryExamplesHarness } from "./lib/discovery-live-yield-runner.mjs";
 import { determineMultiRunYieldProof } from "./lib/discovery-live-yield-policy.mjs";
-
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
+import { repoRoot, runCommand } from "./lib/mcp-http-testkit.mjs";
 
 function log(message) {
   console.log(`[live-discovery-yield-proof] ${message}`);
-}
-
-function runCommand(command, args) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: "inherit",
-  });
-  if (result.status !== 0) {
-    throw new Error(
-      `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
-    );
-  }
 }
 
 async function main() {

@@ -1,12 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import path from "node:path";
+import { writeFile } from "node:fs/promises";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
+import { readEnvFile, repoRoot } from "./lib/mcp-http-testkit.mjs";
 
 const CORE_COMMANDS = [
   command("lint", "deterministic", ["lint"]),
@@ -84,23 +81,6 @@ function parseArgs(argv) {
 
 function log(message) {
   console.log(`[product-local] ${message}`);
-}
-
-async function readEnvFile(relativePath) {
-  const content = await readFile(path.join(repoRoot, relativePath), "utf8");
-  return Object.fromEntries(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex < 0) {
-          return [line, ""];
-        }
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      })
-  );
 }
 
 function hasConfiguredValue(env, key) {
