@@ -1,29 +1,25 @@
-import http from "node:http";
-import https from "node:https";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
-import path from "node:path";
 import process from "node:process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import {
+  composeArgs,
+  fetchJson,
+  postForm,
+  readAllowlistEntries,
+  readEnvFile,
+  requireConfigured,
+  runCommand,
+  runCompose,
+  selectAdminEmail,
+  waitFor as waitForShared,
+  waitForHttpHealth,
+} from "./lib/mcp-http-testkit.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
 const requireFromFetchers = createRequire(
   new URL("../../services/fetchers/package.json", import.meta.url)
 );
 const { chromium } = requireFromFetchers("playwright");
 
-const composeArgs = [
-  "compose",
-  "--env-file",
-  ".env.dev",
-  "-f",
-  "infra/docker/compose.yml",
-  "-f",
-  "infra/docker/compose.dev.yml",
-];
 const STACK_SERVICES = [
   "postgres",
   "redis",
@@ -47,232 +43,27 @@ function log(message) {
   console.log(`[web-viewports] ${message}`);
 }
 
-function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+async function waitFor(label, producer, predicate, options = {}) {
+  return await waitForShared(label, producer, predicate, {
+    timeoutMs: 120000,
+    intervalMs: 1500,
+    ...options,
   });
-
-  if (result.status !== 0) {
-    if (options.capture) {
-      if (result.stdout) {
-        process.stdout.write(result.stdout);
-      }
-      if (result.stderr) {
-        process.stderr.write(result.stderr);
-      }
-    }
-    throw new Error(
-      `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
-    );
-  }
-
-  return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
-}
-
-function runCompose(...args) {
-  runCommand("docker", [...composeArgs, ...args]);
 }
 
 function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-async function readEnvFile(relativePath) {
-  const content = await readFile(path.join(repoRoot, relativePath), "utf8");
-  return Object.fromEntries(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex < 0) {
-          return [line, ""];
-        }
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      })
-  );
-}
-
-function requireConfigured(env, key) {
-  const value = String(process.env[key] ?? env[key] ?? "").trim();
-  if (!value || value === "replace-me") {
-    throw new Error(`.env.dev must set ${key} before web viewport smoke can run.`);
-  }
-  return value;
-}
-
-function readAllowlistEntries(env) {
-  return String(env.ADMIN_ALLOWLIST_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function buildAdminAliasEmail(email, runId) {
-  const atIndex = email.lastIndexOf("@");
-  if (atIndex <= 0 || atIndex === email.length - 1) {
-    return email;
-  }
-  return `${email.slice(0, atIndex)}+viewport-admin-${runId}${email.slice(atIndex)}`;
-}
-
-function selectAdminEmail(allowlistEntries, runId) {
-  const domainEntry = allowlistEntries.find((entry) => entry.startsWith("@"));
-  if (domainEntry) {
-    return `viewport-admin-${runId}${domainEntry}`;
-  }
-
-  const explicitEmail = allowlistEntries[0];
-  if (!explicitEmail) {
-    throw new Error("ADMIN_ALLOWLIST_EMAILS must include at least one email or @domain entry.");
-  }
-  return buildAdminAliasEmail(explicitEmail, runId);
-}
-
-function extractCookie(setCookies) {
-  const cookie = Array.isArray(setCookies) ? setCookies[0] : setCookies;
-  if (!cookie) {
-    throw new Error("Expected Set-Cookie header but none was returned.");
-  }
-  return cookie.split(";")[0];
-}
-
-function parseJsonResponse(text, responseMeta) {
-  const json = text ? JSON.parse(text) : null;
-  if (responseMeta.status < 200 || responseMeta.status >= 300) {
-    const message =
-      typeof json?.error === "string"
-        ? json.error
-        : `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
-    throw new Error(message);
-  }
-  return json;
-}
-
-async function sendRequest(url, { method = "GET", headers = {}, body = "", timeoutMs = 10000 } = {}) {
-  const target = new URL(url);
-  const client = target.protocol === "https:" ? https : http;
-
-  return new Promise((resolve, reject) => {
-    const request = client.request(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || (target.protocol === "https:" ? 443 : 80),
-        path: `${target.pathname}${target.search}`,
-        method,
-        headers: {
-          Connection: "close",
-          ...headers,
-        },
-      },
-      (response) => {
-        let text = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          text += chunk;
-        });
-        response.on("end", () => {
-          resolve({
-            status: response.statusCode ?? 0,
-            statusText: response.statusMessage ?? "",
-            headers: response.headers,
-            text,
-          });
-        });
-      }
-    );
-
-    request.on("error", reject);
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error(`Timed out waiting for ${url}.`));
-    });
-    if (body) {
-      request.write(body);
-    }
-    request.end();
-  });
-}
-
-async function postForm(url, payload, { cookie } = {}) {
-  const target = new URL(url);
-  const body = new URLSearchParams(
-    Object.entries(payload).map(([key, value]) => [key, String(value)])
-  ).toString();
-  const response = await sendRequest(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      Origin: target.origin,
-      Referer: `${target.origin}/`,
-      ...(cookie ? { Cookie: cookie } : {}),
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Content-Length": Buffer.byteLength(body).toString(),
-    },
-    body,
-    timeoutMs: 15000,
-  });
-
-  return {
-    cookie: response.headers["set-cookie"] ? extractCookie(response.headers["set-cookie"]) : null,
-    json: parseJsonResponse(response.text, response),
-  };
-}
-
-async function fetchJson(url, { cookie, timeoutMs } = {}) {
-  const response = await sendRequest(url, {
-    headers: cookie ? { Cookie: cookie } : {},
-    timeoutMs,
-  });
-  return parseJsonResponse(response.text, response);
-}
-
-async function waitFor(label, producer, predicate, { timeoutMs = 120000, intervalMs = 1500 } = {}) {
-  const startedAt = Date.now();
-  let lastError = null;
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const value = await producer();
-      if (predicate(value)) {
-        return value;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
-  throw new Error(`Timed out waiting for ${label}.${reason}`);
-}
-
-async function waitForHttpHealth(label, url) {
-  await waitFor(
-    `${label} health`,
-    async () => {
-      const response = await sendRequest(url);
-      if (response.status !== 200) {
-        throw new Error(`${label} responded with ${response.status}.`);
-      }
-      return true;
-    },
-    Boolean
-  );
-}
-
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for web viewport smoke.");
   runCompose("up", "-d", ...STACK_SERVICES);
+  const healthOptions = { timeoutMs: 120000, intervalMs: 1500 };
   await Promise.all([
-    waitForHttpHealth("api", "http://127.0.0.1:8000/health"),
-    waitForHttpHealth("web", "http://127.0.0.1:4321/api/health"),
-    waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health"),
-    waitForHttpHealth("nginx", "http://127.0.0.1:8080/health"),
+    waitForHttpHealth("api", "http://127.0.0.1:8000/health", healthOptions),
+    waitForHttpHealth("web", "http://127.0.0.1:4321/api/health", healthOptions),
+    waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health", healthOptions),
+    waitForHttpHealth("nginx", "http://127.0.0.1:8080/health", healthOptions),
   ]);
 }
 
@@ -608,10 +399,12 @@ async function runViewportScenario({
 
 async function main() {
   const env = await readEnvFile(".env.dev");
-  const firebaseApiKey = requireConfigured(env, "FIREBASE_WEB_API_KEY");
+  const firebaseApiKey = requireConfigured(env, "FIREBASE_WEB_API_KEY", {
+    proofName: "web viewport smoke",
+  });
   const runId = randomUUID().slice(0, 8);
   const allowlistEntries = readAllowlistEntries(env);
-  const adminEmail = selectAdminEmail(allowlistEntries, runId);
+  const adminEmail = selectAdminEmail(allowlistEntries, runId, { prefix: "viewport-admin" });
   const adminPassword = `NewsPortal!${runId}`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
   const interestDescription = "AI policy changes in the European Union and Poland";

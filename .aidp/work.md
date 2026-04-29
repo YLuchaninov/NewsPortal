@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; proven package split into focused commits, latest scoped Python stub unification sweep is complete and ready to commit.
+- Почему сейчас: пользователь попросил продолжать по порядку; latest proof-script harness unification slice is complete and ready to commit.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: expected dirty until `AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-8` is committed; dirty state is limited to the completed stage's allowed paths.
-- Alignment note: dirty state for this item is expected only in `.aidp/work.md`, selected `tests/unit/python/` files and `tests/unit/python/support/` helpers.
+- Worktree status: expected dirty until `AIDP-ENGINEERING-REFACTORING-PROOF-HARNESS-STAGE-9` is committed; dirty state is limited to the completed stage's allowed paths.
+- Alignment note: dirty state for this item is expected only in `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs`.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: commit the completed Stage 8 package, then open the next scoped AIDP item before continuing larger proof/UI/fetcher refactors.
+- Required action before ordinary implementation: commit the completed Stage 9 package, then open the next scoped AIDP item before continuing larger UI/fetcher refactors.
+
+### AIDP-ENGINEERING-REFACTORING-PROOF-HARNESS-STAGE-9
+
+- Kind: Stage
+- Status: completed
+- In scope: move duplicated command/env/http/wait/admin-email helpers from `test-web-viewports.mjs` and `test-ui-button-audit.mjs` onto `infra/scripts/lib/mcp-http-testkit.mjs`.
+- Out of scope: compose service list changes, Playwright scenario changes, fixture data changes, assertions changes, auth behavior changes, page interaction changes, root script name changes and runtime app behavior changes.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs`.
+- Risk: medium, because proof harness import order and helper defaults affect stateful UI proof scripts, but the slice only removes duplicated implementations and keeps call sites equivalent.
+- Required proof: `node --check infra/scripts/lib/mcp-http-testkit.mjs`; `node --check infra/scripts/test-web-viewports.mjs`; `node --check infra/scripts/test-ui-button-audit.mjs`; `pnpm lint`; `git diff --check --`.
+- Acceptance criteria: duplicated helper implementations disappear from selected UI proof scripts; shared helper APIs remain backward-compatible; compose command names, scenarios and assertions remain unchanged.
+- Implemented, with evidence: extended `infra/scripts/lib/mcp-http-testkit.mjs` with shared `fetchJson`, timeout-aware `postForm`, health-wait options and richer JSON error detail handling while keeping existing exports backward-compatible.
+- Implemented, with evidence: moved duplicated command/env/form/http/admin-email helper implementations out of `test-web-viewports.mjs` and `test-ui-button-audit.mjs` onto the shared proof testkit.
+- Compatibility note: selected UI scripts keep their root names, compose service lists, Playwright scenarios, seeded data, assertions and 120-second local wait defaults.
+- Scope note: no compose service list, Playwright scenario, fixture data, assertion, auth behavior, page interaction, root script name or runtime app behavior changes were made in this slice.
+- Residual note: `test-discovery-admin-flow.mjs`, `test-rss-multi-flow.mjs`, `test-website-admin-flow.mjs`, `test-live-website-matrix.mjs` and discovery/live proof families still have local helper duplication and should be handled as separate scoped stages.
+- Passed proof: `node --check infra/scripts/lib/mcp-http-testkit.mjs` passed.
+- Passed proof: `node --check infra/scripts/test-web-viewports.mjs` passed.
+- Passed proof: `node --check infra/scripts/test-ui-button-audit.mjs` passed.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-8
 

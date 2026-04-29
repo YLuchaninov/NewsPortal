@@ -216,12 +216,16 @@ export function requireConfigured(env, key, { proofName = "MCP HTTP proof" } = {
 export function parseJsonResponse(text, responseMeta) {
   const json = parseJsonPayload(text, responseMeta);
   if (responseMeta.status < 200 || responseMeta.status >= 300) {
-    const message =
-      typeof json?.error === "string"
-        ? json.error
-        : typeof json?.error?.message === "string"
-          ? json.error.message
-          : `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
+    let message = `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
+    if (typeof json?.error === "string") {
+      message = json.error;
+    } else if (typeof json?.error?.message === "string") {
+      message = json.error.message;
+    } else if (typeof json?.detail === "string") {
+      message = json.detail;
+    } else if (Array.isArray(json?.detail)) {
+      message = json.detail.join("; ");
+    }
     throw new Error(message);
   }
   return json;
@@ -388,7 +392,7 @@ function extractCookie(setCookies) {
   return cookie.split(";")[0];
 }
 
-export async function postForm(url, payload, { cookie } = {}) {
+export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {}) {
   const target = new URL(url);
   const body = new URLSearchParams(
     Object.entries(payload).map(([key, value]) => [key, String(value)])
@@ -404,7 +408,7 @@ export async function postForm(url, payload, { cookie } = {}) {
       "Content-Length": Buffer.byteLength(body).toString(),
     },
     body,
-    timeoutMs: 15000,
+    timeoutMs,
   });
 
   return {
@@ -477,6 +481,14 @@ export async function getJson(url, { cookie, bearerToken, expectStatus, timeoutM
   };
 }
 
+export async function fetchJson(url, { cookie, timeoutMs = 10000 } = {}) {
+  const response = await sendRequest(url, {
+    headers: cookie ? { Cookie: cookie } : {},
+    timeoutMs,
+  });
+  return parseJsonResponse(response.text, response);
+}
+
 export async function assertHtmlContains(url, snippets, { cookie } = {}) {
   const response = await sendRequest(url, {
     headers: cookie ? { Cookie: cookie } : {},
@@ -516,7 +528,7 @@ export async function waitFor(
   throw new Error(`Timed out waiting for ${label}.${reason}`);
 }
 
-export async function waitForHttpHealth(label, url) {
+export async function waitForHttpHealth(label, url, options = {}) {
   await waitFor(
     `${label} health`,
     async () => {
@@ -526,7 +538,8 @@ export async function waitForHttpHealth(label, url) {
       }
       return true;
     },
-    Boolean
+    Boolean,
+    options
   );
 }
 
