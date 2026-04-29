@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; latest proof-script harness unification slice is complete and ready to commit.
+- Почему сейчас: пользователь попросил продолжать по порядку; latest fetcher API provider poller extraction is complete and ready to commit.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: expected dirty until `AIDP-ENGINEERING-REFACTORING-PROOF-HARNESS-STAGE-9` is committed; dirty state is limited to the completed stage's allowed paths.
-- Alignment note: dirty state for this item is expected only in `.aidp/work.md`, `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs`.
+- Worktree status: expected dirty until `AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-10` is committed; dirty state is limited to the completed stage's allowed paths.
+- Alignment note: dirty state for this item is expected only in `.aidp/work.md`, `services/fetchers/src/fetchers.ts` and a focused fetcher API provider poller module.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: commit the completed Stage 9 package, then open the next scoped AIDP item before continuing larger UI/fetcher refactors.
+- Required action before ordinary implementation: commit the completed Stage 10 package, then open the next scoped AIDP item before extracting RSS/Website/IMAP provider pollers or continuing UI refactors.
+
+### AIDP-ENGINEERING-REFACTORING-FETCHER-STAGE-10
+
+- Kind: Stage
+- Status: completed
+- In scope: extract API source-channel provider polling from `services/fetchers/src/fetchers.ts` into a focused provider module using explicit dependency callbacks.
+- Out of scope: RSS/Website/IMAP provider extraction, queue/job name changes, persisted payload changes, source-channel config changes, channel completion behavior changes, duplicate preflight behavior changes, outbox behavior changes, API/admin/UI changes and compose runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/fetchers.ts`, and a new focused API provider poller module under `services/fetchers/src/`.
+- Risk: medium, because API polling writes article inputs and channel cursors, but this slice preserves the moved function body and delegates persistence/mark-success through existing service methods.
+- Required proof: `pnpm unit_tests:ts`; `pnpm typecheck`; `pnpm lint`; `git diff --check --`.
+- Acceptance criteria: API provider flow no longer lives inline in `fetchers.ts`; `FetcherService` still owns scheduling, leases, error handling, persistence repository and health state; public `RssFetcherService` export remains compatible; no wire/persisted behavior changes.
+- Implemented, with evidence: added `services/fetchers/src/fetcher-api-poller.ts` for API source-channel polling with explicit persistence and channel-success callbacks.
+- Implemented, with evidence: reduced `services/fetchers/src/fetchers.ts` from 851 to 745 lines while keeping `FetcherService` responsible for scheduling, leases, failure handling, repository ownership, state counters and `RssFetcherService` compatibility.
+- Scope note: no RSS/Website/IMAP provider extraction, queue/job name, persisted payload, source-channel config, channel completion, duplicate preflight, outbox, API/admin/UI or compose runtime behavior changes were made in this slice.
+- Residual note: RSS, Website and Email IMAP provider pollers remain in `fetchers.ts` and should be extracted as separate stages because they involve RSS adapter counters, crawl policy cache state and IMAP client lifecycle respectively.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
 
 ### AIDP-ENGINEERING-REFACTORING-PROOF-HARNESS-STAGE-9
 
