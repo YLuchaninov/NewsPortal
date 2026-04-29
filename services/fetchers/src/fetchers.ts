@@ -3,7 +3,6 @@ import { Buffer } from "node:buffer";
 import {
   createHealthResponse,
   parseEmailImapChannelConfig,
-  parseWebsiteChannelConfig,
   type HealthResponse
 } from "@newsportal/contracts";
 import { ImapFlow } from "imapflow";
@@ -13,13 +12,13 @@ import { AsyncSemaphore } from "./async-semaphore";
 import type { FetchersConfig } from "./config";
 import { pollApiProviderChannel } from "./fetcher-api-poller";
 import { pollRssProviderChannel } from "./fetcher-rss-poller";
+import { pollWebsiteProviderChannel } from "./fetcher-website-poller";
 import {
   ChannelFetchError,
   classifyUnexpectedFailure,
   normalizeWhitespace,
   rawEmailToBody,
 } from "./fetcher-channel-helpers";
-import { buildWebsitePersistInput } from "./fetcher-persist-inputs";
 import {
   classifyDuplicatePreflightInputs,
   FetcherPersistenceRepository,
@@ -29,10 +28,7 @@ import {
   type SourceChannelRow
 } from "./fetcher-persistence";
 import { runWithConcurrency } from "./scheduler";
-import {
-  CrawlPolicyCacheService,
-  discoverWebsiteResources
-} from "./web-ingestion";
+import { CrawlPolicyCacheService } from "./web-ingestion";
 
 interface FetcherState {
   isPolling: boolean;
@@ -231,142 +227,12 @@ class FetcherService {
   }
 
   private async pollWebsiteChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
-    if (!channel.fetchUrl) {
-      throw new ChannelFetchError(`Website channel ${channel.channelId} is missing fetchUrl.`, {
-        outcome: "hard_failure",
-        httpStatus: null,
-        retryAfterSeconds: null,
-        fetchedItemCount: 0,
-        newArticleCount: 0,
-        duplicateSuppressedCount: 0,
-        cursorChanged: false,
-        errorMessage: `Website channel ${channel.channelId} is missing fetchUrl.`
-      });
-    }
-
-    const websiteConfig = parseWebsiteChannelConfig(channel.configJson);
-    const cursors = await this.loadCursorMap(channel.channelId);
-    const policy = await this.crawlPolicyCache.getPolicy(
-      channel.fetchUrl,
-      websiteConfig.userAgent || this.config.defaultUserAgent,
-      websiteConfig.requestTimeoutMs,
-      {
-        channelUrl: channel.fetchUrl,
-        authConfig: channel.authConfigJson
-      }
-    );
-    if (!policy.isAllowed(channel.fetchUrl, websiteConfig.userAgent || this.config.defaultUserAgent)) {
-      const message = `Website crawl blocked by robots.txt for ${channel.channelId}.`;
-      throw new ChannelFetchError(message, {
-        outcome: "hard_failure",
-        httpStatus: 403,
-        retryAfterSeconds: null,
-        fetchedItemCount: 0,
-        newArticleCount: 0,
-        duplicateSuppressedCount: 0,
-        cursorChanged: false,
-        errorMessage: message
-      });
-    }
-
-    const {
-      resources,
-      cursorUpdates,
-      modes,
-      browserAttempt,
-      homepageStatus,
-      metrics,
-      policyState,
-    } = await discoverWebsiteResources({
-      channelUrl: channel.fetchUrl,
-      policy,
-      config: websiteConfig,
-      cursors,
-      authConfig: channel.authConfigJson
-    });
-    await this.crawlPolicyCache.persistConditionalState(
-      channel.fetchUrl,
-      policyState,
-      channel.authConfigJson == null
-        ? undefined
-        : {
-            channelUrl: channel.fetchUrl,
-            authConfig: channel.authConfigJson,
-          }
-    );
-    const providerMetricsJson: Record<string, unknown> = {
-      ...metrics,
-      modes,
-    };
-    const homepageConditionalStatus =
-      policyState.responseCache.homepage?.status ??
-      policyState.requestValidators.homepage?.httpStatus ??
-      null;
-    const authFailureStatus =
-      homepageStatus === 401 || homepageStatus === 403
-        ? homepageStatus
-        : homepageConditionalStatus === 401 || homepageConditionalStatus === 403
-          ? homepageConditionalStatus
-        : policy.httpStatus === 401 || policy.httpStatus === 403
-          ? policy.httpStatus
-          : null;
-    if (resources.length === 0 && authFailureStatus) {
-      const message = `Website fetch authentication failed for ${channel.channelId}: upstream returned ${authFailureStatus}. Check the channel Authorization header.`;
-      throw new ChannelFetchError(message, {
-        outcome: "hard_failure",
-        httpStatus: authFailureStatus,
-        retryAfterSeconds: null,
-        fetchedItemCount: 0,
-        newArticleCount: 0,
-        duplicateSuppressedCount: 0,
-        cursorChanged: false,
-        errorMessage: message,
-        providerMetricsJson,
-      });
-    }
-    if (resources.length === 0 && browserAttempt.challengeKind) {
-      const message = browserAttempt.attempted
-        ? `Website browser-assisted discovery stopped for ${channel.channelId}: unsupported ${browserAttempt.challengeKind}.`
-        : `Website discovery stopped for ${channel.channelId}: upstream presented unsupported ${browserAttempt.challengeKind}.`;
-      throw new ChannelFetchError(message, {
-        outcome: "hard_failure",
-        httpStatus: 403,
-        retryAfterSeconds: null,
-        fetchedItemCount: 0,
-        newArticleCount: 0,
-        duplicateSuppressedCount: 0,
-        cursorChanged: false,
-        errorMessage: message,
-        providerMetricsJson,
-      });
-    }
-    const fetchedAt = new Date().toISOString();
-    const inputs = resources.map((resource) => buildWebsitePersistInput(channel, resource, fetchedAt));
-    const { ingestedCount, duplicateCount } = await this.persistWebsiteResourcesWithPreflight(
-      channel.channelId,
-      inputs
-    );
-    await this.markChannelSuccess(channel, {
-      startedAt,
-      finishedAt: fetchedAt,
-      outcome: ingestedCount > 0 ? "new_content" : "no_change",
-      httpStatus: 200,
-      retryAfterSeconds: null,
-      fetchedItemCount: resources.length,
-      newArticleCount: ingestedCount,
-      duplicateSuppressedCount: duplicateCount,
-      cursorChanged: cursorUpdates.length > 0,
-      errorMessage: null,
-      providerMetricsJson,
-      cursorUpdates: cursorUpdates.map((cursorUpdate) => ({
-        cursorType: cursorUpdate.cursorType,
-        cursorValue: cursorUpdate.cursorValue,
-        cursorJson: {
-          ...cursorUpdate.cursorJson,
-          provider: "website",
-          modes
-        }
-      }))
+    await pollWebsiteProviderChannel(channel, startedAt, {
+      config: this.config,
+      crawlPolicyCache: this.crawlPolicyCache,
+      loadCursorMap: this.loadCursorMap.bind(this),
+      persistWebsiteResourcesWithPreflight: this.persistWebsiteResourcesWithPreflight.bind(this),
+      markChannelSuccess: this.markChannelSuccess.bind(this)
     });
   }
 
