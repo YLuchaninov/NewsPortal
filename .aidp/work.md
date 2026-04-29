@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 34 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 35 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing ChannelEditorForm API JSON mapping field extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-api-mapping-fields.tsx`; API request budget/enrichment fields, website/RSS/IMAP controls, field names, default values, copy, layout, visual design and server write behavior stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm API request/enrichment field extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-api-request-fields.tsx`; API JSON mapping fields, website/RSS/IMAP controls, field names, default values, option lists, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-35
+
+- Kind: Stage
+- Status: completed
+- In scope: move API request budget/enrichment/user-agent controls from `ChannelEditorForm.tsx` into `channel-editor-api-request-fields.tsx`.
+- Out of scope: API JSON mapping fields, website/RSS/IMAP provider controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and new `apps/admin/src/components/channel-editor-api-request-fields.tsx`.
+- Risk: medium, because these controls shape API polling/enrichment behavior, but the stage only moves existing markup and preserves field names/defaults/options.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that API request/enrichment field names, defaults, options and help text remain equivalent.
+- Acceptance criteria: API request/enrichment controls render equivalently from the new component; API mapping stays in its existing extracted component; no payload or validation behavior changes.
+- Architecture note: affected concern is admin channel editor provider-family cohesion; stakeholder/consumer is admin/operator API source-channel configuration; tradeoff is completing API provider split in two focused chunks.
+- Implemented, with evidence: added `apps/admin/src/components/channel-editor-api-request-fields.tsx` with API maximum adaptive interval, max items, request timeout, enrichment, enrichment min body length and user-agent controls.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now renders `ChannelEditorApiRequestFields` before the existing extracted `ChannelEditorApiMappingFields` in the API advanced branch.
+- Scope note: API JSON mapping fields, website/RSS/IMAP provider controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: API request/enrichment field names, defaults, options and help text remain equivalent in the new component.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-34
 
