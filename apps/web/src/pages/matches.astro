@@ -12,6 +12,7 @@ import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap } from "../lib/server/user-content-state";
+import { parsePositivePage, resolvePageHref as resolveWebPageHref } from "../lib/view-helpers";
 
 export const prerender = false;
 const WEB_CONTENT_SORT_OPTIONS: Array<{ value: WebContentListSort; label: string }> = [
@@ -52,8 +53,7 @@ const bffPaths = {
   contentState: resolvePageAppPath("../bff/content-state"),
 };
 
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? String(DEFAULT_PAGE), 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : DEFAULT_PAGE;
+const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const requestedQuery = Astro.url.searchParams.get("q") ?? "";
 const searchQuery = requestedQuery.trim();
 const requestedSort = Astro.url.searchParams.get("sort");
@@ -83,13 +83,7 @@ const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const clearFiltersHref = Astro.url.pathname;
 
 function resolvePageHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
+  return resolveWebPageHref(Astro.url, nextPage, DEFAULT_PAGE);
 }
 
 function readMatchNote(match: ContentItemPreview): string | null {

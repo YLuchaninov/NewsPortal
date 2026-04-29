@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; admin page pagination/view-href helper consolidation for template and observability surfaces is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; public web page pagination helper consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin page pagination/view-href helper consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/observability.astro`; query-string behavior remains equivalent and no copy, layout, server writes, runtime service code or visual redesign were changed.
+- Worktree status: clean after committing public web page pagination helper consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/lib/view-helpers.ts`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/saved.astro`, `apps/web/src/pages/following.astro`, `apps/web/src/pages/notifications.astro` and `apps/web/src/pages/matches.astro`; query-string behavior remains equivalent and no filters, copy, layout, server writes, runtime service code or visual redesign were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice before broader admin/public web view-helper cleanup.
+- Required action before ordinary implementation: open the next scoped slice before broader shared view-helper cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-24
+
+- Kind: Stage
+- Status: completed
+- In scope: add a small public web view-helper module for positive page parsing and `page` href generation, then replace duplicated local implementations in selected public web pages.
+- Out of scope: admin helpers, search/filter behavior, public web copy, layout changes, visual redesign, server writes, API/runtime code and non-page query semantics.
+- Allowed paths: `.aidp/work.md`, `apps/web/src/lib/view-helpers.ts`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/saved.astro`, `apps/web/src/pages/following.astro`, `apps/web/src/pages/notifications.astro` and `apps/web/src/pages/matches.astro`.
+- Risk: medium, because pagination hrefs are user-visible navigation behavior; helper output must preserve existing `page` deletion at the default page and preserve all unrelated query params.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted `rg` review that selected local `resolvePageHref` implementations are gone.
+- Acceptance criteria: selected web pages import shared helpers; default page parsing and href behavior remains equivalent; unrelated query params such as `q` and `sort` are preserved; no UI/layout/copy behavior changes.
+- Architecture note: affected concern is public web navigation helper consistency; stakeholder/consumer is signed-in public web users; tradeoff is a small app-boundary helper separate from admin navigation helpers.
+- Implemented, with evidence: added `apps/web/src/lib/view-helpers.ts` with public web `parsePositivePage()` and `resolvePageHref()` helpers.
+- Implemented, with evidence: `index.astro`, `saved.astro`, `following.astro`, `notifications.astro` and `matches.astro` now share page parsing and page href generation while preserving local template wrapper names.
+- Compatibility note: default page still deletes the `page` query param and unrelated query params such as `q` and `sort` are preserved through `new URL(Astro.url)`.
+- Scope note: no admin helpers, search/filter behavior, public web copy, layout, visual redesign, server writes, API/runtime code or non-page query semantics were changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: selected pages no longer contain local requested-page parsing; remaining local `resolvePageHref` wrappers delegate to the shared public web helper.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-23
 
