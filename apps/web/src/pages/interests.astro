@@ -5,6 +5,7 @@ import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { listUserInterestsForOwner } from "../lib/server/user-interests";
+import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -30,8 +31,7 @@ const bffPaths = {
 const INTERESTS_PAGE_SIZE = 6;
 
 type ViewRow = Record<string, unknown>;
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+const page = parsePositivePage(Astro.url, "page", 1);
 const [interests, profile] = await Promise.all([
   listUserInterestsForOwner(getPool(), session.userId),
   queryOne<ViewRow>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),

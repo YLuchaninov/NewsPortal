@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; public web page pagination helper consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; public web client-section page parsing consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing public web page pagination helper consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/lib/view-helpers.ts`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/saved.astro`, `apps/web/src/pages/following.astro`, `apps/web/src/pages/notifications.astro` and `apps/web/src/pages/matches.astro`; query-string behavior remains equivalent and no filters, copy, layout, server writes, runtime service code or visual redesign were changed.
+- Worktree status: clean after committing public web client-section page parsing consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/pages/interests.astro` and `apps/web/src/pages/settings.astro`; no client component behavior, copy, layout, server writes, runtime service code or visual redesign were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice before broader shared view-helper cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-25
+
+- Kind: Stage
+- Status: completed
+- In scope: reuse public web `parsePositivePage()` for `interests.astro` and `settings.astro` initial client-section page values.
+- Out of scope: client component behavior, pagination UI, BFF paths, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/web/src/pages/interests.astro` and `apps/web/src/pages/settings.astro`.
+- Risk: low-medium, because the parsed page is passed to client-loaded sections, but the parsing formula stays equivalent.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted `rg` review that selected local requested-page parsing is removed.
+- Acceptance criteria: selected pages use the shared public web parser; default/invalid page behavior remains `1`; no client component or BFF behavior changes.
+- Architecture note: affected concern is public web view helper consistency; stakeholder/consumer is signed-in public web users; tradeoff is extending the existing app-boundary helper without touching client component internals.
+- Implemented, with evidence: `interests.astro` and `settings.astro` now reuse `parsePositivePage()` from `apps/web/src/lib/view-helpers.ts` for initial client-section page values.
+- Compatibility note: default and invalid page behavior remains `1`.
+- Scope note: no client component behavior, pagination UI, BFF paths, copy, layout, visual redesign, server writes or API/runtime code were changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: selected pages no longer contain local requested-page parsing.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-24
 

@@ -6,6 +6,7 @@ import { getPool, queryOne, queryRows } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { loadDigestSettings } from "../lib/server/digest-settings";
+import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -33,8 +34,7 @@ const bffPaths = {
 };
 
 type ViewRow = Record<string, unknown>;
-const requestedPage = Number.parseInt(Astro.url.searchParams.get("page") ?? "1", 10);
-const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+const page = parsePositivePage(Astro.url, "page", 1);
 const [profile, configuredChannels, digestSettings] = await Promise.all([
   queryOne<ViewRow>(`select theme_preference, notification_preferences from user_profiles where user_id = $1`, [session.userId]),
   queryRows<ViewRow>(`
