@@ -49,3 +49,17 @@ def install_bullmq_stub(job_cls: type[Any], worker_cls: type[Any]) -> None:
         bullmq_stub.Job = job_cls
         bullmq_stub.Worker = worker_cls
         sys.modules["bullmq"] = bullmq_stub
+
+
+def install_gemini_stub() -> None:
+    if "services.workers.app.gemini" not in sys.modules:
+        gemini_stub = types.ModuleType("services.workers.app.gemini")
+        gemini_stub.review_with_gemini = lambda *args, **kwargs: None
+        gemini_stub.DEFAULT_PRICE_CARD = {
+            "default": {
+                "input_cost_per_million_tokens_usd": 0.10,
+                "output_cost_per_million_tokens_usd": 0.40,
+            }
+        }
+        gemini_stub.PRICE_CARD_VERSION = "test"
+        sys.modules["services.workers.app.gemini"] = gemini_stub

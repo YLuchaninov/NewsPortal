@@ -1,17 +1,9 @@
-import sys
-import types
 import unittest
 from unittest.mock import patch
 
-if "psycopg" not in sys.modules:
-    psycopg_stub = types.ModuleType("psycopg")
-    psycopg_stub.connect = lambda *args, **kwargs: None
-    sys.modules["psycopg"] = psycopg_stub
+from tests.unit.python.support.stubs import install_psycopg_stub
 
-if "psycopg.rows" not in sys.modules:
-    psycopg_rows_stub = types.ModuleType("psycopg.rows")
-    psycopg_rows_stub.dict_row = object()
-    sys.modules["psycopg.rows"] = psycopg_rows_stub
+install_psycopg_stub()
 
 from services.api.app import main as api_main
 

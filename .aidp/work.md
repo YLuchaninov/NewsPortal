@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: proven refactor/unification package split into focused commits; next broad refactor must open a new scoped AIDP item first.
+- Почему сейчас: пользователь попросил продолжать по порядку; proven package split into focused commits, latest scoped Python stub unification sweep is complete and ready to commit.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: expected clean after `AIDP-ENGINEERING-REQUIREMENTS-AND-API-STAGE-1` through `AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-7` were split into focused commits.
-- Alignment note: no dirty tracked state is expected before opening the next scoped AIDP item.
+- Worktree status: expected dirty until `AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-8` is committed; dirty state is limited to the completed stage's allowed paths.
+- Alignment note: dirty state for this item is expected only in `.aidp/work.md`, selected `tests/unit/python/` files and `tests/unit/python/support/` helpers.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped AIDP item before any further broad refactor stage.
+- Required action before ordinary implementation: commit the completed Stage 8 package, then open the next scoped AIDP item before continuing larger proof/UI/fetcher refactors.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-8
+
+- Kind: Sweep
+- Status: completed
+- In scope: continue low-risk unification by moving more repeated Python unit dependency stubs and selected proof-script harness helpers onto existing shared support modules.
+- Out of scope: compose scenario behavior changes, fixture lifecycle changes, broad UI class rewrites, fetcher provider poller extraction, API/worker/fetcher runtime behavior changes, public routes/payloads and dependency changes.
+- Allowed paths: `.aidp/work.md`, `tests/unit/python/support/`, selected `tests/unit/python/test_*.py`, `infra/scripts/lib/mcp-http-testkit.mjs`, and selected `infra/scripts/test-*.mjs` proof scripts.
+- Risk: medium, because test/proof harness import order matters, but behavior remains unchanged and proof is bounded.
+- Required proof: `python -m compileall tests/unit/python/support selected tests`; targeted `python -m unittest` for changed Python tests; `node --check` for changed proof scripts; `pnpm unit_tests:py`; `pnpm lint`; `git diff --check --`.
+- Acceptance criteria: more repeated dependency stubs disappear from tests/proof scripts; shared helper APIs remain backward-compatible; root proof script names and scenario assertions remain unchanged.
+- Implemented, with evidence: added `install_gemini_stub` to `tests/unit/python/support/stubs.py` and moved the duplicated Gemini module bootstrap out of sequence-management and zero-shot operator API tests.
+- Implemented, with evidence: moved additional repeated psycopg bootstrap blocks in API/discovery unit tests onto shared `install_psycopg_stub`.
+- Scope note: no compose proof script behavior, fixture lifecycle, runtime service behavior, public routes/payloads or dependency changes were made in this slice.
+- Residual note: deeper proof-script harness consolidation, broad admin UI class constants and fetcher provider poller extraction remain separate follow-up items.
+- Passed proof: `python -m compileall tests/unit/python/support selected tests` passed.
+- Passed proof: `python -m unittest tests.unit.python.test_api_sequence_management tests.unit.python.test_api_zero_shot_operator_surfaces` passed with 34 tests.
+- Passed proof: `pnpm unit_tests:py` passed with 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-7
 
