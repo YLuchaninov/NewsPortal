@@ -5,23 +5,30 @@ import {
   FEED_INGRESS_ADAPTER_STRATEGIES,
   normalizeMaxPollIntervalSeconds,
   parseRssChannelConfig,
-  parseSourceChannelAuthConfig,
   serializeSourceChannelAuthConfig,
   type FeedIngressAdapterStrategy,
   type RssChannelConfig
 } from "@newsportal/contracts";
 import type { Pool } from "pg";
 
+import {
+  createSourceChannelFormReader,
+  resolveNextAuthorizationHeader,
+  type AuthorizationHeaderUpdate
+} from "./source-channel-form";
+
 const DEFAULT_RSS_CONFIG = parseRssChannelConfig({});
 const DEFAULT_LANGUAGE = "en";
 const DEFAULT_POLL_INTERVAL_SECONDS = 300;
-
-type AuthorizationHeaderUpdateMode = "preserve" | "replace" | "clear" | "disabled";
-
-interface AuthorizationHeaderUpdate {
-  mode: AuthorizationHeaderUpdateMode;
-  authorizationHeader: string | null;
-}
+const {
+  readOptionalString,
+  readRequiredString,
+  readBoolean,
+  readPositiveInteger,
+  readOptionalPositiveInteger,
+  validateHttpUrl,
+  resolveAuthorizationHeaderUpdate
+} = createSourceChannelFormReader("RSS");
 
 export interface NormalizedRssAdminChannelInput {
   channelId?: string;
@@ -78,88 +85,6 @@ export interface DeleteOrArchiveRssChannelResult {
   articleCount: number;
 }
 
-function readOptionalString(value: unknown): string | null {
-  if (value == null) {
-    return null;
-  }
-
-  const normalized = String(value).trim();
-  return normalized ? normalized : null;
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  const normalized = readOptionalString(value);
-  if (!normalized) {
-    throw new Error(`RSS channel field "${fieldName}" is required.`);
-  }
-  return normalized;
-}
-
-function readBoolean(value: unknown, fallback: boolean, fieldName: string): boolean {
-  if (value == null || value === "") {
-    return fallback;
-  }
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  const normalized = String(value).trim().toLowerCase();
-  if (normalized === "true") {
-    return true;
-  }
-  if (normalized === "false") {
-    return false;
-  }
-
-  throw new Error(`RSS channel field "${fieldName}" must be a boolean.`);
-}
-
-function readPositiveInteger(value: unknown, fallback: number, fieldName: string): number {
-  if (value == null || value === "") {
-    return fallback;
-  }
-
-  const parsed =
-    typeof value === "number" && Number.isInteger(value) ? value : Number.parseInt(String(value), 10);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`RSS channel field "${fieldName}" must be a positive integer.`);
-  }
-
-  return parsed;
-}
-
-function readOptionalPositiveInteger(value: unknown, fieldName: string): number | null {
-  if (value == null || value === "") {
-    return null;
-  }
-
-  const parsed =
-    typeof value === "number" && Number.isInteger(value) ? value : Number.parseInt(String(value), 10);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`RSS channel field "${fieldName}" must be a positive integer.`);
-  }
-
-  return parsed;
-}
-
-function validateHttpUrl(rawUrl: string): string {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error('RSS channel field "fetchUrl" must be a valid absolute URL.');
-  }
-
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error('RSS channel field "fetchUrl" must use http or https.');
-  }
-
-  return parsed.toString();
-}
-
 function readOptionalFeedIngressAdapterStrategy(
   value: unknown,
   fieldName: string
@@ -203,52 +128,6 @@ function normalizeRssConfig(payload: Record<string, unknown>): RssChannelConfig 
     adapterStrategy: readOptionalFeedIngressAdapterStrategy(payload.adapterStrategy, "adapterStrategy"),
     maxEntryAgeHours: readOptionalPositiveInteger(payload.maxEntryAgeHours, "maxEntryAgeHours")
   });
-}
-
-function resolveAuthorizationHeaderUpdate(
-  payload: Record<string, unknown>,
-  isUpdate: boolean
-): AuthorizationHeaderUpdate {
-  const authorizationHeader = readOptionalString(payload.authorizationHeader);
-  const clearAuthorizationHeader = readBoolean(
-    payload.clearAuthorizationHeader,
-    false,
-    "clearAuthorizationHeader"
-  );
-
-  if (clearAuthorizationHeader) {
-    return {
-      mode: "clear",
-      authorizationHeader: null
-    };
-  }
-
-  if (authorizationHeader) {
-    return {
-      mode: "replace",
-      authorizationHeader
-    };
-  }
-
-  return {
-    mode: isUpdate ? "preserve" : "disabled",
-    authorizationHeader: null
-  };
-}
-
-function resolveNextAuthorizationHeader(
-  existingAuthConfigJson: unknown,
-  update: AuthorizationHeaderUpdate
-): string | null {
-  if (update.mode === "replace") {
-    return update.authorizationHeader;
-  }
-
-  if (update.mode === "clear" || update.mode === "disabled") {
-    return null;
-  }
-
-  return parseSourceChannelAuthConfig(existingAuthConfigJson).authorizationHeader;
 }
 
 export function parseRssAdminChannelInput(payload: Record<string, unknown>): NormalizedRssAdminChannelInput {

@@ -11,8 +11,14 @@ import {
   isAdminLiveSurfaceSnapshot,
   type AdminLiveUpdatesEventDetail,
 } from "../lib/live-updates";
-
-type JsonRecord = Record<string, unknown>;
+import {
+  automationStatusClass,
+  formatUtcTimestamp,
+  postJson,
+  readCount,
+  readText,
+  type JsonRecord,
+} from "./admin-client-helpers";
 
 interface RunsPageLike {
   items: JsonRecord[];
@@ -33,64 +39,6 @@ interface AutomationExecutionsBoardProps {
   editorHref: string;
   currentPath: string;
   outboxEvents: JsonRecord[];
-}
-
-function readText(value: unknown, fallback = "—"): string {
-  const normalized = String(value ?? "").trim();
-  return normalized ? normalized : fallback;
-}
-
-function readCount(value: unknown, fallback = 0): number {
-  const parsed =
-    typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatTimestamp(value: unknown): string {
-  if (!value) {
-    return "—";
-  }
-  const parsed = new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
-  return parsed.toLocaleString("en-US", {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function statusClass(status: string): string {
-  if (status === "completed") {
-    return "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20";
-  }
-  if (status === "failed") {
-    return "bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20";
-  }
-  if (status === "pending" || status === "running") {
-    return "bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/20";
-  }
-  return "bg-white/5 text-white/70 ring-1 ring-white/10";
-}
-
-async function postJson(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const json = (await response.json().catch(() => ({}))) as JsonRecord;
-  if (!response.ok) {
-    throw new Error(readText(json.error ?? json.detail, `Request failed with ${response.status}`));
-  }
-  return json;
 }
 
 export function AutomationExecutionsBoard({
@@ -277,10 +225,10 @@ export function AutomationExecutionsBoard({
                       <div>
                         <p className="font-medium text-foreground">{readText(run.trigger_type)}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {formatTimestamp(run.created_at)}
+                          {formatUtcTimestamp(run.created_at)}
                         </p>
                       </div>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(status)}`}>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${automationStatusClass(status)}`}>
                         {status}
                       </span>
                     </div>
@@ -316,12 +264,12 @@ export function AutomationExecutionsBoard({
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-lg font-semibold text-foreground">{readText(selectedRun.run_id)}</p>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(readText(selectedRun.status, ""))}`}>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${automationStatusClass(readText(selectedRun.status, ""))}`}>
                           {readText(selectedRun.status)}
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Created {formatTimestamp(selectedRun.created_at)} • Trigger {readText(selectedRun.trigger_type)}
+                        Created {formatUtcTimestamp(selectedRun.created_at)} • Trigger {readText(selectedRun.trigger_type)}
                       </p>
                       {readText(selectedRun.retry_of_run_id, "") && readText(selectedRun.retry_of_run_id, "") !== "—" && (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -358,12 +306,12 @@ export function AutomationExecutionsBoard({
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-medium text-foreground">{readText(taskRun.task_key)}</p>
-                                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(readText(taskRun.status, ""))}`}>
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${automationStatusClass(readText(taskRun.status, ""))}`}>
                                   {readText(taskRun.status)}
                                 </span>
                               </div>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {readText(taskRun.module)} • index {readText(taskRun.task_index)} • {formatTimestamp(taskRun.started_at)}
+                                {readText(taskRun.module)} • index {readText(taskRun.task_index)} • {formatUtcTimestamp(taskRun.started_at)}
                               </p>
                             </div>
                             <span className="text-xs text-muted-foreground">
@@ -402,7 +350,7 @@ export function AutomationExecutionsBoard({
                       <p className="font-medium text-foreground">{readText(event.event_type)}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{readText(event.aggregate_type)} • {readText(event.aggregate_id)}</p>
                     </div>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(readText(event.status, ""))}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${automationStatusClass(readText(event.status, ""))}`}>
                       {readText(event.status)}
                     </span>
                   </div>

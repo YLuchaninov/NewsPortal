@@ -8,36 +8,13 @@ import {
   instantiateAutomationTemplate,
   type AutomationPaletteGroup,
 } from "../lib/automation-workspace";
-
-type JsonRecord = Record<string, unknown>;
+import { postJson, readText } from "./admin-client-helpers";
 
 interface AutomationTemplateGalleryProps {
   automationBffPath: string;
   automationRootPath: string;
   currentUserId: string;
   paletteGroups: AutomationPaletteGroup[];
-}
-
-function readText(value: unknown, fallback = "—"): string {
-  const normalized = String(value ?? "").trim();
-  return normalized ? normalized : fallback;
-}
-
-async function postJson(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const json = (await response.json().catch(() => ({}))) as JsonRecord;
-  if (!response.ok) {
-    throw new Error(readText(json.error ?? json.detail, `Request failed with ${response.status}`));
-  }
-  return json;
 }
 
 export function AutomationTemplateGallery({

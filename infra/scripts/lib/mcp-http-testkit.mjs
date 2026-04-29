@@ -205,10 +205,10 @@ export async function readEnvFile(relativePath) {
   );
 }
 
-export function requireConfigured(env, key) {
+export function requireConfigured(env, key, { proofName = "MCP HTTP proof" } = {}) {
   const value = String(process.env[key] ?? env[key] ?? "").trim();
   if (!value || value === "replace-me") {
-    throw new Error(`.env.dev must set ${key} before MCP HTTP proof can run.`);
+    throw new Error(`.env.dev must set ${key} before ${proofName} can run.`);
   }
   return value;
 }
@@ -545,32 +545,32 @@ export async function ensureComposeStack(logger, { rebuild = true } = {}) {
   ]);
 }
 
-function readAllowlistEntries(env) {
+export function readAllowlistEntries(env) {
   return String(env.ADMIN_ALLOWLIST_EMAILS ?? "")
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
 }
 
-function buildAdminAliasEmail(email, runId) {
+export function buildAdminAliasEmail(email, runId, prefix = "mcp-admin") {
   const atIndex = email.lastIndexOf("@");
   if (atIndex <= 0 || atIndex === email.length - 1) {
     return email;
   }
-  return `${email.slice(0, atIndex)}+mcp-admin-${runId}${email.slice(atIndex)}`;
+  return `${email.slice(0, atIndex)}+${prefix}-${runId}${email.slice(atIndex)}`;
 }
 
-function selectAdminEmail(allowlistEntries, runId) {
+export function selectAdminEmail(allowlistEntries, runId, { prefix = "mcp-admin" } = {}) {
   const domainEntry = allowlistEntries.find((entry) => entry.startsWith("@"));
   if (domainEntry) {
-    return `mcp-admin-${runId}${domainEntry}`;
+    return `${prefix}-${runId}${domainEntry}`;
   }
 
   const explicitEmail = allowlistEntries[0];
   if (!explicitEmail) {
     throw new Error("ADMIN_ALLOWLIST_EMAILS must include at least one email or @domain entry.");
   }
-  return buildAdminAliasEmail(explicitEmail, runId);
+  return buildAdminAliasEmail(explicitEmail, runId, prefix);
 }
 
 export async function signInFirebasePasswordUser(apiKey, email, password) {

@@ -11,8 +11,14 @@ import {
   isAdminLiveSurfaceSnapshot,
   type AdminLiveUpdatesEventDetail,
 } from "../lib/live-updates";
-
-type JsonRecord = Record<string, unknown>;
+import {
+  automationStatusClass,
+  formatUtcTimestamp,
+  postJson,
+  readCount,
+  readText,
+  type JsonRecord,
+} from "./admin-client-helpers";
 
 interface SequenceRunsPageLike {
   items: JsonRecord[];
@@ -44,64 +50,6 @@ interface AutomationOverviewBoardProps {
   templatesHref: string;
   mcpTokensHref: string;
   currentUserId: string;
-}
-
-function readText(value: unknown, fallback = "—"): string {
-  const normalized = String(value ?? "").trim();
-  return normalized ? normalized : fallback;
-}
-
-function readCount(value: unknown, fallback = 0): number {
-  const parsed =
-    typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatTimestamp(value: unknown): string {
-  if (!value) {
-    return "—";
-  }
-  const parsed = new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
-  return parsed.toLocaleString("en-US", {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function statusClass(status: string): string {
-  if (status === "active" || status === "completed" || status === "published") {
-    return "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20";
-  }
-  if (status === "failed") {
-    return "bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20";
-  }
-  if (status === "pending" || status === "draft" || status === "running") {
-    return "bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/20";
-  }
-  return "bg-white/5 text-white/70 ring-1 ring-white/10";
-}
-
-async function postJson(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const json = (await response.json().catch(() => ({}))) as JsonRecord;
-  if (!response.ok) {
-    throw new Error(readText(json.error ?? json.detail, `Request failed with ${response.status}`));
-  }
-  return json;
 }
 
 export function AutomationOverviewBoard({
@@ -353,7 +301,7 @@ export function AutomationOverviewBoard({
                             {readText(sequence.title)}
                           </h3>
                           <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${automationStatusClass(
                               readText(sequence.status, "")
                             )}`}
                           >
@@ -451,7 +399,7 @@ export function AutomationOverviewBoard({
                       <div>
                         <p className="font-medium">{readText(run.sequence_title)}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {formatTimestamp(run.created_at)} • {readText(run.trigger_type)}
+                          {formatUtcTimestamp(run.created_at)} • {readText(run.trigger_type)}
                         </p>
                       </div>
                       <span className="rounded-full bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-300 ring-1 ring-rose-500/20">
@@ -501,7 +449,7 @@ export function AutomationOverviewBoard({
                         </p>
                       </div>
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${statusClass(
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${automationStatusClass(
                           readText(event.status, "")
                         )}`}
                       >
@@ -509,7 +457,7 @@ export function AutomationOverviewBoard({
                       </span>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">
-                      Attempts {readCount(event.attempt_count)} • Created {formatTimestamp(event.created_at)}
+                      Attempts {readCount(event.attempt_count)} • Created {formatUtcTimestamp(event.created_at)}
                     </p>
                   </div>
                 ))

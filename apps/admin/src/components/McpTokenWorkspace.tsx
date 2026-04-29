@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@newsportal/ui";
 
-type JsonRecord = Record<string, unknown>;
+import { formatUtcTimestamp, postJson, readText } from "./admin-client-helpers";
 
 export interface McpTokenRecord {
   tokenId: string;
@@ -21,45 +21,6 @@ interface McpTokenWorkspaceProps {
   mcpBffPath: string;
   initialTokens: McpTokenRecord[];
   scopeOptions: readonly string[];
-}
-
-function readText(value: unknown, fallback = "—"): string {
-  const normalized = String(value ?? "").trim();
-  return normalized ? normalized : fallback;
-}
-
-function formatTimestamp(value: string | null): string {
-  if (!value) {
-    return "—";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString("en-US", {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-async function postJson(path: string, payload: Record<string, unknown>) {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const json = (await response.json().catch(() => ({}))) as JsonRecord;
-  if (!response.ok) {
-    throw new Error(readText(json.error ?? json.detail, `Request failed with ${response.status}`));
-  }
-  return json;
 }
 
 export function McpTokenWorkspace({
@@ -294,9 +255,9 @@ export function McpTokenWorkspace({
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right text-xs text-muted-foreground">
-                      <p>Last used {formatTimestamp(token.lastUsedAt)}</p>
+                      <p>Last used {formatUtcTimestamp(token.lastUsedAt)}</p>
                       <p>{token.recentRequestCount} requests in the last 24h</p>
-                      <p>Expires {formatTimestamp(token.expiresAt)}</p>
+                      <p>Expires {formatUtcTimestamp(token.expiresAt)}</p>
                     </div>
                     {token.status === "active" && (
                       <Button
