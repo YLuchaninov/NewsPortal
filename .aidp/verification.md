@@ -2,7 +2,7 @@
 
 ## Свежесть
 
-- Последняя проверка по реальности репозитория: 2026-04-24
+- Последняя проверка по реальности репозитория: 2026-04-29
 - Проверил: Codex
 - Следующий trigger пересмотра: изменение root scripts, test harnesses, compose baseline, migration process или delivery proof.
 
@@ -125,6 +125,11 @@
 - UI interaction/layout changes: viewport proof and, for button/control regressions, `pnpm test:web:ui-audit`.
 - Article yield/enrichment changes: diagnostics/remediation commands are required when the active item changes yield policy or fixes existing production-like derived state.
 - Architecture-sensitive changes: explicit review against `.aidp/engineering.md` quality bar, especially god-object growth, magic constants, coupling/cohesion, scalability/backpressure, state-machine typing and observability.
+- Security-sensitive changes: explicit review of trust boundary, abuse case, authorization/scope behavior, secret leakage risk, audit behavior and denied/invalid-path proof.
+- Dependency/supply-chain changes: dependency owner and lockfile review, build input review and explicit release/deploy gap handling when no repository command exists.
+- Observability changes: proof that structured status, audit row, log context, metric/trace signal or explicit no-extra-observability rationale matches the touched runtime path.
+- Compatibility/deprecation changes: proof that compatibility adapters, old API shapes, route names, queue payloads, env names, SDK exports or MCP tools remain stable until the recorded removal trigger.
+- Dependency-direction changes: import/layering review against `.aidp/engineering.md`; cross-service imports require a declared boundary reason.
 
 ## Architecture proof checklist
 
@@ -136,6 +141,11 @@
 - Scale: loops, polling, batch work and external calls are bounded and observable.
 - Coupling: UI, BFF, API, worker, fetcher and relay layers do not learn unnecessary internals from each other.
 - State: statuses and modes are typed/narrowed, with transition behavior covered by proof.
+- Security: trust boundary, authorization, secret handling and denied/invalid behavior are explicit for sensitive paths.
+- Supply chain: dependency, lockfile, build input and release/rollback implications are reviewed when touched.
+- Observability: important runtime behavior has structured status, log context, metric/trace signal, audit row or an explicit rationale.
+- Compatibility: public contract preservation, deprecation window and removal trigger are explicit when old shapes remain.
+- Dependency direction: imports follow declared layer ownership; exceptions are narrow and justified.
 - Proof: selected gate matches blast radius; typecheck alone is not enough for architecture-sensitive behavior changes.
 
 ## Exit gate для setup и repair
@@ -197,6 +207,7 @@ Capability может считаться завершенной только п�
 - router files тонкие и не содержат второй source of truth;
 - active work state объясняет dirty worktree;
 - proof policy matches real scripts;
+- architecture proof checklist includes security, supply-chain, observability, compatibility and dependency-direction review for modern complex-system changes;
 - root test/proof/diagnostic scripts are represented in `.aidp/os.yaml` commands or explicitly treated as non-gate utilities;
 - deep contracts point into `.aidp/contracts/` for runtime-agent use;
 - old subsystem contracts formerly under `docs/contracts/*` are represented in `.aidp/contracts/*` or explicitly superseded/deleted;

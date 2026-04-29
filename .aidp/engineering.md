@@ -2,7 +2,7 @@
 
 ## Свежесть
 
-- Последняя проверка по реальности репозитория: 2026-04-24
+- Последняя проверка по реальности репозитория: 2026-04-29
 - Проверил: Codex
 - Следующий trigger пересмотра: изменение workspace/package structure, proof commands, runtime boundaries или stateful test model.
 
@@ -35,6 +35,70 @@ NewsPortal должен развиваться как профессиональ
 - operational clarity: retry, timeout, concurrency, batching, idempotency, health and telemetry decisions должны быть видимыми и проверяемыми.
 
 Архитектурное изменение непрофессионально, если оно делает код короче локально, но увеличивает hidden coupling, implicit state, unknown blast radius или future migration cost.
+
+## Secure-by-design и threat modeling
+
+Security является частью архитектуры, а не поздним checklist.
+
+Правила:
+
+- Work items that touch auth/session, admin writes, MCP, external providers, LLM/search, notification delivery, destructive actions, tokens/secrets or user-controlled content must name the trust boundary and abuse case before implementation.
+- Privileged or destructive flows must keep explicit authorization, scope, confirmation and audit behavior near the owner; do not hide them in generic helpers.
+- Secrets, tokens, cookies and service credentials must not cross into client bundles, logs, snapshots, fixtures or generated docs.
+- User/provider content that can render in web/admin surfaces must preserve validation/sanitization ownership and must not bypass existing BFF/API boundaries.
+- External callbacks, provider payloads and imported JSON should be parsed at the edge, normalized into narrow shapes and treated as untrusted until validated.
+- Security-sensitive behavior changes require proof that covers both the intended success path and a denied/invalid path.
+
+## Dependency, supply-chain and release integrity
+
+Dependency and build changes are architecture changes when they affect runtime trust, delivery or long-term maintainability.
+
+Правила:
+
+- New dependencies require an owner, runtime surface, reason-to-change, license/security review proportional to risk and proof that the existing workspace boundary is still respected.
+- Lockfile changes must be intentional and tied to the active item; do not mix broad dependency churn with unrelated feature or refactor work.
+- Generated artifacts, container images and bundled outputs are not source truth unless the active item explicitly changes release packaging policy.
+- Build/release integrity should stay ready for SBOM/provenance/SLSA-style evolution: keep build inputs explicit, avoid hidden download/codegen steps and record release proof gaps honestly.
+- Rollback/compatibility expectations must be explicit for migrations, env/config changes, public APIs, queue payloads, MCP tools and operator workflows.
+- Do not add a release/deploy gate to `.aidp/*` until the repository contains a real command or procedure for it; record the gap instead.
+
+## Observability-as-contract
+
+Observable behavior is part of the interface for async, operator and maintenance flows.
+
+Правила:
+
+- Important async/runtime paths should emit structured status with stable identifiers such as job id, run id, channel id, resource id, mission id, user id, provider type or correlation id where applicable.
+- Logs, metrics, traces or durable audit rows must answer the operator question "what happened, to which entity, why, and what can be retried" for non-trivial failures.
+- Error classification should preserve domain status and retryability; do not collapse timeout, auth, validation, rate-limit, budget and unsupported-state failures into the same generic bucket.
+- New polling loops, batch processors, external calls and background jobs must define their health/progress signal or an explicit no-extra-observability rationale.
+- Telemetry must not leak secrets, raw credentials, private tokens or excessive personal/provider payloads.
+
+## Architecture decisions, compatibility and deprecation
+
+Durable architecture decisions must be findable without chat history.
+
+Правила:
+
+- Significant decisions are recorded in the correct owner file: `.aidp/blueprint.md` for durable system truth, `.aidp/engineering.md` for discipline, `.aidp/verification.md` for proof policy, `.aidp/contracts/*` for subsystem contracts and `.aidp/work.md` for live scope/tradeoff.
+- Compatibility windows must be explicit when keeping old API shapes, route names, queue payloads, env names, DB projections, SDK exports or MCP tools.
+- Deprecation requires an owner, replacement path, proof expectation and removal trigger; do not leave "temporary" adapters without an exit condition.
+- Breaking changes across API/BFF/admin/MCP/queue/schema boundaries require an explicit architecture decision and targeted compatibility proof.
+- Refactors should preserve public behavior by default; behavior changes must be named as behavior changes.
+
+## Dependency direction and layering
+
+Imports should express architecture, not convenience.
+
+Правила:
+
+- Apps may depend on shared packages and their local server modules; shared packages must not import app code.
+- `packages/contracts` owns shared vocabulary and must remain low-level; it should not import runtime services, UI or app-specific modules.
+- `packages/control-plane` may orchestrate declared admin/MCP write flows, but it must not become a hidden database bypass for unrelated surfaces.
+- Node services (`fetchers`, `relay`, `mcp`) must not import each other's internal modules; shared cross-service vocabulary belongs in `packages/contracts`, `packages/config` or an explicit package boundary.
+- Python runtime services should keep `services/api`, `services/workers`, `services/ml` and `services/indexer` responsibilities visible; cross-imports must be narrow and justified by the active item.
+- UI components must not import database clients, service internals, server secrets or queue/runtime modules.
+- If an import direction feels convenient but crosses ownership, introduce a narrower interface, move vocabulary to the correct package, or keep the behavior local.
 
 ## Запрет god objects и god modules
 
@@ -106,6 +170,8 @@ Before implementation, strengthen design/proof if the work does any of these:
 - changes auth/session/authorization, notification delivery, discovery, selection, migrations or indexing;
 - makes a large file larger instead of extracting a cohesive responsibility;
 - introduces new env/config values;
+- introduces new dependency, lockfile, build, release or rollback behavior;
+- changes observability, audit, telemetry, security posture, compatibility window or deprecation policy;
 - introduces new shared helpers or abstractions;
 - changes data ownership between PostgreSQL, Redis, HNSW, cache, queues or generated artifacts.
 
@@ -131,6 +197,7 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 - Fetchers own acquisition and raw/resource persistence, not downstream selection semantics.
 - API read/maintenance surfaces should expose materialized PostgreSQL truth rather than recompute hidden business logic per request.
 - Derived state must remain reconstructable from PostgreSQL or declared source inputs.
+- Import direction must match the dependency-direction rules above; do not use cross-service imports to avoid creating a proper contract.
 
 ## TypeScript discipline
 
@@ -139,6 +206,7 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 - Preserve strict TypeScript expectations from `tsconfig.base.json`.
 - Keep shared contract exports stable and typed when other services consume them.
 - Use existing UI primitives in `packages/ui` for product screens; avoid raw browser-default controls where the app already has a design-system primitive.
+- Keep package imports aligned with workspace ownership: UI primitives stay presentation-focused, contracts stay runtime-neutral, and SDK/control-plane exports stay stable for consumers.
 
 ## Python discipline
 
@@ -147,6 +215,7 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 - Worker smoke helpers may create deterministic fixtures, but cleanup or residual tracking is part of the work.
 - Prefer explicit SQL and data-shape handling over hidden global state.
 - For indexing/rebuild tools, treat HNSW/snapshot outputs as derived artifacts.
+- Cross-service imports from Python code must remain narrow and justified; shared ML/compiler behavior belongs in `services/ml`, while API routes and worker processors keep separate runtime concerns.
 
 ## Database and migrations
 
@@ -203,12 +272,19 @@ If a subsystem requires more detail than this compact core can hold, create or u
 - Migration/schema change: migration smoke plus affected read/write path proof.
 - Compose/delivery change: compose startup or relevant service health proof.
 - Discovery/browser/external integration change: bounded compose smoke plus explicit residual gap review.
+- Security-sensitive change: targeted success and denial proof plus audit/secret-leak review.
+- Dependency/build/release-integrity change: static proof plus dependency/lockfile review; release/deploy gaps remain explicit unless real commands exist.
+- Observability/audit change: targeted proof that status, error classification or durable audit behavior is emitted on the relevant path.
+- Compatibility/deprecation change: proof that old and new contract shapes behave as declared until the removal trigger.
 
 ## Запрещенные shortcuts
 
 - Дублировать SQL/write behavior across admin, MCP, API and scripts without a shared boundary reason.
 - Treating generated output as primary source truth.
 - Adding broad env surface without documenting proof and safe defaults.
+- Adding dependencies or lockfile churn without declared owner and review.
+- Creating cross-service imports that bypass `packages/contracts`, `packages/config`, `packages/control-plane` or a declared server module.
+- Removing compatibility adapters without a recorded deprecation/removal trigger.
 - Leaving hidden persistent test residue.
 - Depending on chat memory for repository truth.
 - Updating product docs while leaving `.aidp/*` stale when runtime-agent truth changed.
