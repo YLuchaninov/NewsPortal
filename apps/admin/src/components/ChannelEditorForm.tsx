@@ -21,7 +21,10 @@ import {
   ChannelEditorSection,
 } from "./channel-editor-form-parts";
 import { ChannelEditorRssFields } from "./channel-editor-rss-fields";
-import { ChannelEditorWebsiteDiscoveryFields } from "./channel-editor-website-discovery-fields";
+import {
+  ChannelEditorWebsiteCrawlFields,
+  ChannelEditorWebsiteDiscoveryFields,
+} from "./channel-editor-website-discovery-fields";
 
 export type { ChannelEditorFormValue, ChannelProviderType };
 
@@ -305,100 +308,10 @@ export function ChannelEditorForm({
 
         {isWebsite ? (
           <>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <FormField
-                label="Maximum adaptive interval (seconds)"
-                name="channel-max-poll-interval"
-                helpText="Upper bound for adaptive backoff when the site stays quiet."
-                helpWide
-              >
-                <Input
-                  id="channel-max-poll-interval"
-                  name="maxPollIntervalSeconds"
-                  type="number"
-                  min={30}
-                  defaultValue={String(value.maxPollIntervalSeconds)}
-                  className={inputClassName}
-                />
-              </FormField>
-
-              <FormField
-                label="Max resources per poll"
-                name="channel-max-resources"
-                helpText="Caps how many discovered resources are persisted from one website polling pass."
-              >
-                <Input
-                  id="channel-max-resources"
-                  name="maxResourcesPerPoll"
-                  type="number"
-                  min={1}
-                  defaultValue={String(value.maxResourcesPerPoll ?? 50)}
-                  className={inputClassName}
-                />
-              </FormField>
-
-              <FormField
-                label="Request timeout (ms)"
-                name="channel-timeout"
-                helpText="How long the fetcher waits for one network request before treating it as failed."
-                helpWide
-              >
-                <Input
-                  id="channel-timeout"
-                  name="requestTimeoutMs"
-                  type="number"
-                  min={1000}
-                  defaultValue={String(value.requestTimeoutMs ?? 10000)}
-                  className={inputClassName}
-                />
-              </FormField>
-
-              <FormField
-                label="Total poll timeout (ms)"
-                name="channel-total-timeout"
-                helpText="Safety ceiling for the whole website discovery pass."
-                helpWide
-              >
-                <Input
-                  id="channel-total-timeout"
-                  name="totalPollTimeoutMs"
-                  type="number"
-                  min={1000}
-                  defaultValue={String(value.totalPollTimeoutMs ?? 30000)}
-                  className={inputClassName}
-                />
-              </FormField>
-
-              <FormField
-                label="Crawl delay (ms)"
-                name="channel-crawl-delay"
-                helpText="Minimum delay between same-site requests from this channel, in addition to robots.txt guidance."
-                helpWide
-              >
-                <Input
-                  id="channel-crawl-delay"
-                  name="crawlDelayMs"
-                  type="number"
-                  min={1}
-                  defaultValue={String(value.crawlDelayMs ?? 1000)}
-                  className={inputClassName}
-                />
-              </FormField>
-
-              <FormField
-                label="User agent"
-                name="channel-user-agent"
-                helpText="Custom request identity sent during capability probing and discovery."
-                helpWide
-              >
-                <Input
-                  id="channel-user-agent"
-                  name="userAgent"
-                  defaultValue={value.userAgent ?? ""}
-                  className={inputClassName}
-                />
-              </FormField>
-            </div>
+            <ChannelEditorWebsiteCrawlFields
+              value={value}
+              inputClassName={inputClassName}
+            />
 
             <ChannelEditorWebsiteDiscoveryFields
               value={value}

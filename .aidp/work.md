@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 37 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 38 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing ChannelEditorForm IMAP advanced field extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-email-imap-fields.tsx`; IMAP basic credential/mailbox fields, website/API/RSS provider controls, common polling controls, form field names, default values, option lists, copy, layout, visual design and server write behavior stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm website crawl-budget field extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-website-discovery-fields.tsx`; website discovery toggles/textareas, API/RSS/IMAP provider controls, common polling controls, form field names, default values, option lists, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-38
+
+- Kind: Stage
+- Status: completed
+- In scope: move website crawl-budget/request controls from `ChannelEditorForm.tsx` into the focused `channel-editor-website-discovery-fields.tsx` module.
+- Out of scope: website discovery toggles/textareas, API/RSS/IMAP provider controls, common polling controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-website-discovery-fields.tsx`.
+- Risk: medium, because website crawl budget controls affect provider runtime behavior, but the stage only moves existing markup and preserves field names/defaults.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that website crawl-budget field names, defaults and help text remain equivalent.
+- Acceptance criteria: website crawl-budget/request controls render equivalently from the website module; discovery controls remain in the same module; no payload or validation behavior changes.
+- Architecture note: affected concern is admin channel editor provider-family cohesion; stakeholder/consumer is admin/operator website source-channel configuration; tradeoff is grouping website provider controls while preserving compatibility.
+- Implemented, with evidence: added `ChannelEditorWebsiteCrawlFields` to `apps/admin/src/components/channel-editor-website-discovery-fields.tsx` with maximum adaptive interval, max resources, request timeout, total poll timeout, crawl delay and user-agent controls.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now renders `ChannelEditorWebsiteCrawlFields` before the existing `ChannelEditorWebsiteDiscoveryFields` in the website advanced branch.
+- Scope note: website discovery toggles/textareas, API/RSS/IMAP provider controls, common polling controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: website crawl-budget field names, defaults and help text remain equivalent in the website module.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-37
 
