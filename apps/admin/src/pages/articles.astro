@@ -17,6 +17,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -104,23 +105,6 @@ function resolvePreviewHref(docId: string): string {
   const target = new URL(Astro.url);
   target.searchParams.set("selected", docId);
   return `${target.pathname}${target.search}`;
-}
-
-function formatTimestamp(value: unknown): string {
-  if (!value) {
-    return "—";
-  }
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function resolveSafeHref(rawValue: unknown): string | null {

@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: пользователь попросил продолжать по порядку; Python worker unit-test import-stub consolidation is committed and the next scoped slice should be opened explicitly.
+- Почему сейчас: пользователь попросил продолжать по порядку; admin page timestamp view-helper consolidation is committed and the next scoped slice should be opened explicitly.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing Python worker unit-test import-stub consolidation.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `tests/unit/python/support/stubs.py`, `tests/unit/python/test_worker_hard_filters.py` and `tests/unit/python/test_interest_auto_repair.py`; no worker runtime code, test assertions, production imports, queue/job names, database behavior or persistent payloads were changed.
+- Worktree status: clean after committing admin page timestamp view-helper consolidation.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/articles/[docId].astro` and `apps/admin/src/pages/resources/[resourceId].astro`; no route/query behavior, pagination, view switching, copy, layout, server writes, runtime service code or visual redesign were changed.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice before broader admin UI/client helper or shared view-helper cleanup.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-21
+
+- Kind: Stage
+- Status: completed
+- In scope: add a small admin view-helper module for the repeated `formatTimestamp` behavior with `—` fallback and `year` in the locale options, then replace identical local copies in selected admin Astro pages.
+- Out of scope: pagination helpers, view-href helpers, `asRecord` helpers, copy changes, layout changes, visual redesign, server writes, API/runtime code and route behavior changes.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/articles/[docId].astro` and `apps/admin/src/pages/resources/[resourceId].astro`.
+- Risk: low-medium, because the formatter is display-only but appears on multiple operator surfaces.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted `rg` review that the selected identical local formatter copies were removed.
+- Acceptance criteria: selected pages import the shared admin formatter; formatted output stays equivalent for empty, invalid and valid timestamps; no routing/layout/copy behavior changes.
+- Architecture note: affected concern is admin view helper consistency; stakeholder/consumer is admin/operator pages; tradeoff is a tiny app-boundary helper instead of a broad date/time formatting abstraction across public web.
+- Implemented, with evidence: added `apps/admin/src/lib/view-helpers.ts` with the shared `formatTimestamp()` implementation for the selected admin timestamp format.
+- Implemented, with evidence: replaced identical local formatter copies in `resources.astro`, `articles.astro`, `clusters.astro`, `articles/[docId].astro` and `resources/[resourceId].astro`.
+- Scope note: no route/query behavior, pagination, view switching, copy, layout, server writes, runtime service code or visual redesign were changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: selected pages no longer contain local `function formatTimestamp` copies for the shared admin format.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-20
 

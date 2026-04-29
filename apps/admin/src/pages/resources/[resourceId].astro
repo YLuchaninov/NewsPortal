@@ -10,6 +10,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
+import { formatTimestamp } from "../../lib/view-helpers";
 
 export const prerender = false;
 
@@ -66,23 +67,6 @@ function sanitizeHtml(rawValue: unknown): string | null {
     .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
     .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
     .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
-}
-
-function formatTimestamp(rawValue: unknown): string {
-  if (!rawValue) {
-    return "—";
-  }
-  const date = new Date(String(rawValue));
-  if (Number.isNaN(date.getTime())) {
-    return String(rawValue);
-  }
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function toArray<T>(rawValue: unknown): T[] {

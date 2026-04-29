@@ -21,6 +21,7 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
+import { formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -63,23 +64,6 @@ function resolveSafeHref(rawValue: unknown): string | null {
   } catch {
     return null;
   }
-}
-
-function formatTimestamp(rawValue: unknown): string {
-  if (!rawValue) {
-    return "—";
-  }
-  const date = new Date(String(rawValue));
-  if (Number.isNaN(date.getTime())) {
-    return String(rawValue);
-  }
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function readDiscoverySource(value: unknown): string {
