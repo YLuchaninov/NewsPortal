@@ -761,7 +761,24 @@ async function main() {
                   where name like ${sqlLiteral(`RSS multi ${runId}%`)}
                 )
               )
-              and event_type in ('article.ingest.requested', 'article.normalized')
+              and event_type = 'article.ingest.requested'
+              and status = 'published'
+          ),
+          (
+            select count(*)::int
+            from outbox_events
+            where
+              aggregate_type = 'article'
+              and aggregate_id in (
+                select doc_id
+                from articles
+                where channel_id in (
+                  select channel_id
+                  from source_channels
+                  where name like ${sqlLiteral(`RSS multi ${runId}%`)}
+                )
+              )
+              and event_type = 'article.normalized'
               and status = 'published'
           ),
           (
@@ -784,17 +801,27 @@ async function main() {
               )
           )
       `
-    )[0] ?? ["0", "0", "0"];
+    )[0] ?? ["0", "0", "0", "0"];
     const firstArticleCount = Number.parseInt(firstCycleCounts[0] ?? "0", 10);
-    const publishedOutboxCount = Number.parseInt(firstCycleCounts[1] ?? "0", 10);
-    const processedInboxCount = Number.parseInt(firstCycleCounts[2] ?? "0", 10);
+    const ingestOutboxCount = Number.parseInt(firstCycleCounts[1] ?? "0", 10);
+    const normalizedOutboxCount = Number.parseInt(firstCycleCounts[2] ?? "0", 10);
+    const processedInboxCount = Number.parseInt(firstCycleCounts[3] ?? "0", 10);
+    const publishedOutboxCount = ingestOutboxCount + normalizedOutboxCount;
 
     if (firstArticleCount !== successfulCount) {
       throw new Error(`Expected ${successfulCount} successful article rows, got ${firstArticleCount}.`);
     }
-    if (publishedOutboxCount < successfulCount * 2) {
+    if (ingestOutboxCount < successfulCount) {
       throw new Error(
-        `Expected at least ${successfulCount * 2} published article outbox events, got ${publishedOutboxCount}.`
+        `Expected at least ${successfulCount} published article ingest outbox events, got ${ingestOutboxCount}.`
+      );
+    }
+    // Sequence-runtime pipelines suppress downstream article.normalized outbox fanout while still
+    // recording normalize/dedup inbox consumption for the original ingest event. Legacy fanout may
+    // still publish article.normalized, so accept either topology but reject partial normalized fanout.
+    if (normalizedOutboxCount > 0 && normalizedOutboxCount < successfulCount) {
+      throw new Error(
+        `Expected either no normalized outbox fanout or at least ${successfulCount} published article.normalized events, got ${normalizedOutboxCount}.`
       );
     }
     if (processedInboxCount < successfulCount * 2) {

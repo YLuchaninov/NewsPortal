@@ -1,0 +1,136 @@
+---
+import {
+  fmtUsd,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+import type { DiscoveryOperatorSummary } from "../../lib/server/operator-surfaces";
+
+type Props = {
+  costItems: DiscoveryRecord[];
+  costs: DiscoveryRecord;
+  operatorSummary: DiscoveryOperatorSummary;
+  totalCostUsd: unknown;
+};
+
+const { costItems, costs, operatorSummary, totalCostUsd } = Astro.props as Props;
+---
+
+<div class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+  <div class="space-y-4">
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 class="text-base font-semibold">Discovery operator model</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            The shipped runtime is now dual-path: graph-first compatibility planning plus independent recall acquisition and promotion.
+          </p>
+        </div>
+        <span class="inline-flex w-fit items-center rounded-full border border-border bg-background px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          {operatorSummary.operatingModel === "dual_path" ? "dual path" : "graph first only"}
+        </span>
+      </div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Graph missions</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.graphMissionCount)}</p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            {String(operatorSummary.activeGraphMissionCount)} active · {String(operatorSummary.compiledGraphCount)} compiled
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Mission backlog</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.pendingHypothesisCount)}</p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            pending hypotheses · {String(operatorSummary.graphCandidateCount)} graph candidates
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Mission fit state</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.sourceInterestScoreCount)}</p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            mission source scores · {String(operatorSummary.portfolioSnapshotCount)} portfolio snapshots
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Recall missions</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.recallMissionCount)}</p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            {String(operatorSummary.activeRecallMissionCount)} active neutral missions
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Recall backlog</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.recallCandidateCount)}</p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            {String(operatorSummary.pendingRecallCandidateCount)} pending · {String(operatorSummary.duplicateRecallCandidateCount)} linked duplicates
+          </p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Generic quality</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.sourceQualitySnapshotCount)}</p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            snapshots across {String(operatorSummary.sourceProfileCount)} source profiles
+          </p>
+        </div>
+      </div>
+      <div class="mt-4 grid gap-3 lg:grid-cols-2">
+        <div class="rounded-2xl border border-emerald-300/60 bg-emerald-50/60 p-4 text-sm text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100">
+          <p class="font-medium">Independent recall lane</p>
+          <p class="mt-1 leading-6">
+            Recall runs can search and probe `rss` / `website` candidates without `interest_graph`, persist generic source-quality snapshots, and now promote shortlisted candidates into `source_channels`.
+          </p>
+        </div>
+        <div class="rounded-2xl border border-amber-300/60 bg-amber-50/60 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100">
+          <p class="font-medium">Graph-first compatibility lane</p>
+          <p class="mt-1 leading-6">
+            Mission graphs, class registry planning, hypothesis execution, feedback, and portfolio assembly remain live compatibility flows. They are no longer the only owner of source onboarding.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 class="text-base font-semibold">Recall promotion snapshot</h2>
+      <div class="mt-4 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Promoted recall candidates</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.promotedRecallCandidateCount)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Linked duplicates</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.duplicateRecallCandidateCount)}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-background p-4">
+          <p class="text-sm font-medium">Review queue</p>
+          <p class="mt-2 text-3xl font-semibold">{String(operatorSummary.pendingRecallCandidateCount)}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <h2 class="text-base font-semibold">Cost ledger</h2>
+    <p class="mt-1 text-sm text-muted-foreground">
+      {fmtUsd(totalCostUsd)} total, {fmtUsd(costs.last24hCostUsd)} in the last 24h, {fmtUsd(costs.monthToDateCostUsd)} this UTC month.
+    </p>
+    <div class="mt-4 space-y-2">
+      {costItems.length === 0 ? (
+        <p class="rounded-2xl border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+          No discovery cost rows yet. Cost activity appears here after discovery runs.
+        </p>
+      ) : costItems.map((item) => (
+        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-medium">{String(item.provider ?? "unknown")} / {String(item.operation ?? "operation")}</p>
+              <p class="text-xs text-muted-foreground">
+                {String(item.row_count ?? 0)} entries · {fmtUsd(item.month_to_date_cost_usd)} this month
+              </p>
+            </div>
+            <p class="text-sm font-semibold">{fmtUsd(item.total_cost_usd)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+</div>

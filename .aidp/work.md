@@ -4,8 +4,8 @@
 
 ## Свежесть live state
 
-- Последняя проверка этого файла по worktree reality: 2026-04-27
-- Последняя проверка blockers/dependencies: 2026-04-27
+- Последняя проверка этого файла по worktree reality: 2026-04-29
+- Последняя проверка blockers/dependencies: 2026-04-29
 - Следующая revalidation для blocked items: n/a
 
 ## Текущий режим
@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: ARCH-HOTSPOT-REFACTOR-CAPABILITY завершена; final full proof прошел, stack cleanup выполнен, контейнеров не осталось.
+- Почему сейчас: broad final proof completed for the architecture hardening follow-up capability, including repeated three-domain live examples/yield evidence plus MCP/Admin/product-local validation.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,1302 @@
 
 ### Согласованность worktree
 
-- Worktree status: dirty with completed but uncommitted content-analysis implementation, Hybrid Structured Extraction, honest-green harness/docs/test hardening, completed architecture hotspot refactor capability and AIDP proof records.
-- Alignment note: dirty tree is expected to remain limited to the universal content-analysis layer, repo-owned live proof hardening, completed architecture hotspot refactor work and AIDP state records.
+- Worktree status: dirty with completed but uncommitted ARCH-HARDENING-FOLLOWUP-BATCH-1 through ARCH-HARDENING-FOLLOWUP-BATCH-67 edits plus completed final proof AIDP state.
+- Alignment note: dirty tree is expected to remain limited to completed API batch files, completed worker processor extraction files, completed discovery graph-planning/execution/recall/evaluation/planning/repository extraction files, completed Batch 54 through Batch 56 repository mixin files, completed Batch 57 proof/fix edits, completed Batch 58 fetcher persistence files, completed Batch 59 fetcher persistence subrepository files, completed Batch 60 website-ingestion helper files, completed Batch 61 website-ingestion static discovery files, completed Batch 62 website-ingestion browser runtime files, completed Batch 63 website-ingestion policy/probe files, completed Batch 64 through Batch 67 admin discovery UI/component files, the Batch 64 UI audit harness fix and this completed final proof AIDP state.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: none for this capability; choose the next route/item from fresh user request and revalidate worktree reality first.
+- Required action before ordinary implementation: none for the architecture hardening follow-up; broad final proof passed and stateful proof residue was cleaned.
+
+### ARCH-HARDENING-FOLLOWUP-FINAL-PROOF-2026-04-29
+
+- Kind: Stage
+- Status: completed
+- In scope: broad final proof for completed architecture hardening batches, including static/unit gates, Admin discovery proof, MCP proof, three-domain live discovery examples/yield proof and full product-local proof.
+- Out of scope: additional refactoring, product behavior changes, API/BFF/DB/queue/schema changes, new provider rollout, paid LLM/model changes and production-like environments.
+- Allowed paths: `.aidp/work.md` only unless a proof exposes a real regression requiring a narrow fix.
+- Risk: high, because this is capability-level closure proof over API, worker, fetcher, admin UI, discovery, MCP and product-local surfaces.
+- Required proof: `pnpm unit_tests:py`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; `pnpm test:discovery:admin:compose`; `pnpm test:mcp:compose`; `pnpm test:mcp:http:writes`; `pnpm test:discovery:examples:compose`; `pnpm test:discovery:yield:compose`; `pnpm test:product:local:full`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is capability-level regression confidence; stakeholder/consumer is the whole NewsPortal operator/product surface; proof intentionally exercises the refactored Admin route, MCP control-plane, three example domains and final product-local contour rather than adding new code.
+- Passed deterministic proof: `pnpm unit_tests:py` passed with 316 tests; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `pnpm typecheck` passed with 0 errors and existing Astro hints only; `git diff --check --` passed.
+- Passed Admin proof: `pnpm test:discovery:admin:compose` passed with `discovery-admin-ok`, including update/compile/run/review/feedback/re-evaluate/recall/promote/archive/reactivate/delete coverage.
+- Passed MCP proof: `pnpm test:mcp:compose` passed with deterministic HTTP artifact `/tmp/newsportal-mcp-http-deterministic-f32b17c1-b0db-4529-b05b-dd6b7b8b9291.md`; `pnpm test:mcp:http:writes` passed with deterministic writes artifact `/tmp/newsportal-mcp-http-deterministic-dc071d7a-8f0a-4b7e-8ccf-3d60d5b208e4.md`.
+- Passed standalone three-domain examples proof: `pnpm test:discovery:examples:compose` passed with runtime/yield/final verdict `pass`; evidence `/tmp/newsportal-live-discovery-examples-7c2eb195.md`; case packs covered Example A Job Board, Example B Developer News and Example C Outsourcing Lead Discovery.
+- Passed standalone multi-run yield proof: `pnpm test:discovery:yield:compose` passed with runtime/yield/final verdict `pass`; evidence `/tmp/newsportal-live-discovery-yield-proof-3e6aeba9.md`; each of Example A, Example B and Example C passed 3/3 runs with required 2 and aggregate `yield_pass:9`.
+- Passed product-local full proof: `pnpm test:product:local:full` passed; evidence `/tmp/newsportal-product-local-full-2b534937.md`; included lint, typecheck, unit tests, integration tests, website compose/admin, automation admin, MCP compose, web viewports, UI audit, discovery enabled/admin/examples/yield, live website matrix and MCP HTTP live.
+- Product-local live evidence note: embedded discovery examples evidence `/tmp/newsportal-live-discovery-examples-96234136.md`; embedded discovery yield evidence `/tmp/newsportal-live-discovery-yield-proof-986bfd6d.md`; live website matrix recorded 16 live sites with 7 expected-shape observations, 8 truthful unsupported/blocked observations, 1 partial/empty observation and no cleanup residuals; MCP HTTP live reported runtime `healthy` with usefulness `yield-usefulness-weak-but-runtime-healthy`.
+- Cleanup proof: final `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Capability closure note: `ARCH-HARDENING-FOLLOWUP-CAPABILITY` is closed by this final proof; no active architecture-hardening follow-up item remains.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-67-ADMIN-DISCOVERY-COMPONENT-POLISH
+
+- Kind: Stage
+- Status: completed
+- In scope: split the largest Stage 5 discovery components into focused create/list/workspace subcomponents under `apps/admin/src/components/discovery/`; keep route URL, query params, form names, BFF actions, side-pane data attributes and visual behavior stable.
+- Out of scope: API/BFF contract changes, DB schema changes, discovery behavior changes, auth/session changes, visual redesign, route path changes, form/action renames, server view-model changes and broad CSS redesign.
+- Allowed paths: `.aidp/work.md`, focused components under `apps/admin/src/components/discovery/`, and `apps/admin/src/pages/discovery.astro` only if import/prop wiring requires it.
+- Risk: high, because the polish touches profile and mission forms, action buttons, mission side-pane behavior and admin discovery proof coverage even though it is behavior-preserving.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:discovery:admin:compose`; `pnpm test:web:ui-audit`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is admin discovery UI component cohesion; stakeholder/consumer is the operator discovery admin page; tradeoff is more component files in exchange for smaller owners with one reason to change.
+- Implemented, with evidence: split `DiscoveryProfilesTab.astro` into a 53-line composition owner plus `DiscoveryProfileCreateForm.astro` and `DiscoveryProfileList.astro`, preserving profile create/update/archive/reactivate/delete form names, field names and diagnostics rendering.
+- Implemented, with evidence: split `DiscoveryMissionsTab.astro` into an 84-line composition owner plus `DiscoveryMissionCreateForm.astro`, `DiscoveryMissionList.astro` and `DiscoveryMissionWorkspaceContent.astro`, preserving mission create/update/compile/run/archive/reactivate/delete actions, list pane open links, portfolio links and side-pane data behavior.
+- Scope note: route URLs, query params, form names, BFF intents/actions, side-pane data attributes, API/BFF contracts, DB schema, discovery behavior, auth/session behavior and visual redesign remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed runtime/build proof: `pnpm dev:mvp:internal` built the admin Docker image successfully with the new Astro component graph and brought the local stack healthy.
+- Passed stateful proof: `pnpm test:discovery:admin:compose` passed with `discovery-admin-ok`, including update/compile/run/review/feedback/re-evaluate/recall/promote/archive/reactivate/delete discovery admin flow.
+- Passed stateful proof: after a disposable stack reset to avoid shared-worker contention, `pnpm test:web:ui-audit` passed with `ui-button-audit-ok` run id `3e447af7`; discovery action buttons remained intentionally covered by `test:discovery:admin:compose` inside that audit report.
+- Cleanup proof: final `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61/62/63 website-ingestion files, completed Batch 64/65/66/67 admin discovery component files, the Batch 64 UI audit harness fix and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-66-ADMIN-DISCOVERY-PROFILE-MISSION-SPLIT
+
+- Kind: Stage
+- Status: completed
+- In scope: extract the remaining large inline `profiles` and `missions` tab/workspace sections from `apps/admin/src/pages/discovery.astro` into focused discovery components; keep route URL, query params, form names, BFF actions, side-pane data attributes and visual behavior stable.
+- Out of scope: API/BFF contract changes, DB schema changes, discovery behavior changes, auth/session changes, visual redesign, route path changes, form/action renames, and server view-model changes unless required to pass stable href data into extracted components.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/discovery.astro`, focused components under `apps/admin/src/components/discovery/`, and targeted admin/discovery proof harness files only if proof exposes a harness issue.
+- Risk: high, because these sections own create/update/archive/delete profile and mission actions, mission graph compile/run actions, workspace pane behavior and admin discovery proof coverage.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:discovery:admin:compose`; `pnpm test:web:ui-audit`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is admin discovery UI composition-root cohesion; stakeholder/consumer is the operator discovery admin page; server BFF actions and existing UI semantics remain unchanged while the final large presentational/operator sections get focused owners.
+- Implemented, with evidence: extracted the policy profile create/list/update/archive/reactivate/delete workspace into `apps/admin/src/components/discovery/DiscoveryProfilesTab.astro`, preserving `create_profile`, `update_profile`, policy JSON textareas, class/template/profile linkage fields and profile diagnostics rendering.
+- Implemented, with evidence: extracted the mission list/detail/forms/compile/run workspace into `apps/admin/src/components/discovery/DiscoveryMissionsTab.astro`, preserving `create_mission`, `update_mission`, `compile_mission`, `run_mission`, archive/reactivate/delete flows, mission graph controls and workspace pane content.
+- Implemented, with evidence: moved mission selection and mission-scoped portfolio href materialization into the route composition root so the extracted mission component receives concrete href maps instead of owning URL-builder callbacks.
+- Implemented, with evidence: `apps/admin/src/pages/discovery.astro` reduced from 1154 lines after Batch 65 to 365 lines; the new Batch 66 components own 499 and 406 lines.
+- Scope note: route URLs, query params, form names, BFF intents/actions, side-pane data attributes, API/BFF contracts, DB schema, discovery behavior, auth/session behavior and visual redesign remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:discovery:admin:compose` passed, including update/compile/run/review/feedback/re-evaluate/recall/promote/archive/reactivate/delete discovery admin flow.
+- Stateful proof note: the first `pnpm test:web:ui-audit` attempt on the same stack timed out waiting for a compiled user interest while the shared worker was still occupied by the preceding discovery live/recall workload; no product or extracted-component failure was observed.
+- Passed stateful proof: after `pnpm dev:mvp:internal:down:volumes` reset the disposable stack, `pnpm test:web:ui-audit` passed with `ui-button-audit-ok` run id `b2922aa4`; discovery action buttons remained intentionally covered by `test:discovery:admin:compose` inside that audit report.
+- Cleanup proof: final `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61/62/63 website-ingestion files, completed Batch 64/65/66 admin discovery component files, the Batch 64 UI audit harness fix and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-65-ADMIN-DISCOVERY-SECOND-TAB-SPLIT
+
+- Kind: Stage
+- Status: completed
+- In scope: extract additional self-contained tabs/workspaces from `apps/admin/src/pages/discovery.astro`, prioritizing recall, sources, portfolio and feedback sections; keep route URL, query params, form names, BFF actions, side-pane data attributes and visual behavior stable.
+- Out of scope: API/BFF contract changes, DB schema changes, discovery behavior changes, auth/session changes, visual redesign, route path changes, form/action renames, and profile/mission deep refactors unless they are needed for safe component extraction in this batch.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/discovery.astro`, focused components under `apps/admin/src/components/discovery/`, and targeted admin/discovery proof harness files only if proof exposes a harness issue.
+- Risk: high, because the page remains a large admin operator surface with server-side actions, tab state, side panes, discovery controls and proof coverage through admin compose/UI gates.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:discovery:admin:compose`; `pnpm test:web:ui-audit`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is admin discovery UI composition-root cohesion; stakeholder/consumer is the operator discovery admin page; server BFF actions and existing UI semantics remain unchanged while more presentational/operator sections get focused owners.
+- Implemented, with evidence: extracted the independent recall mission/candidate workspace into `apps/admin/src/components/discovery/DiscoveryRecallTab.astro`, preserving `create_recall_mission`, `update_recall_mission`, `acquire_recall_mission`, `promote_recall_candidate`, `redirectTo` and promotion tag form fields.
+- Implemented, with evidence: extracted the source profile side-pane workspace into `apps/admin/src/components/discovery/DiscoverySourcesTab.astro`, preserving `data-discovery-row-href`, `data-discovery-row-pane="discovery-sources"` and `data-admin-pane-open-link` behavior.
+- Implemented, with evidence: extracted portfolio controls/ranked sources/gaps into `apps/admin/src/components/discovery/DiscoveryPortfolioTab.astro`, preserving the `re_evaluate` form intent and mission-scoped portfolio hrefs.
+- Implemented, with evidence: extracted feedback submit/history into `apps/admin/src/components/discovery/DiscoveryFeedbackTab.astro`, preserving the `submit_feedback` form intent and feedback pagination.
+- Implemented, with evidence: moved source profile selection hrefs, mission scoped hrefs and selected mission href materialization into the route composition root so extracted components receive concrete href data instead of owning URL-builder callbacks.
+- Implemented, with evidence: `apps/admin/src/pages/discovery.astro` reduced from 1661 lines after Batch 64 to 1154 lines; the new Batch 65 components own 302, 200, 118 and 108 lines.
+- Scope note: route URLs, query params, form names, BFF intents/actions, side-pane data attributes, API/BFF contracts, DB schema, discovery behavior, auth/session behavior and visual redesign remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:discovery:admin:compose` passed, including create/update/run/review/feedback/re-evaluate/recall/promote/archive/reactivate/delete discovery admin flow.
+- Passed stateful proof: `pnpm test:web:ui-audit` passed with `ui-button-audit-ok`; discovery action buttons remain intentionally covered by `test:discovery:admin:compose` inside that audit report.
+- Cleanup proof: `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61/62/63 website-ingestion files, completed Batch 64/65 admin discovery component files, the Batch 64 UI audit harness fix and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-64-ADMIN-DISCOVERY-SERVER-VIEW-SPLIT
+
+- Kind: Stage
+- Status: completed
+- In scope: extract focused server view-model/helpers and first reusable section/tab components from `apps/admin/src/pages/discovery.astro`; keep the Astro route as the composition owner and preserve route URL, form names, BFF actions, request/response assumptions, visual behavior and proof coverage.
+- Out of scope: API/BFF contract changes, DB schema changes, discovery behavior changes, auth/session changes, visual redesign, route path changes, form/action renames, and broad admin navigation refactors.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/discovery.astro`, new focused modules/components under `apps/admin/src/`, and targeted admin/discovery tests only if compatibility coverage requires them.
+- Risk: high, because the page is a large admin operator surface with server-side actions, tab state, discovery controls, policy/profile data and proof coverage through admin compose/UI gates.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:discovery:admin:compose`; `pnpm test:web:ui-audit`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is admin discovery UI composition-root cohesion; stakeholder/consumer is the operator discovery admin page; server BFF actions and existing UI semantics remain unchanged while view-model and presentational slices get focused owners.
+- Implemented, with evidence: extracted the discovery control-plane hero into `apps/admin/src/components/discovery/DiscoveryControlPlaneHero.astro`.
+- Implemented, with evidence: extracted the overview/dashboard tab into `apps/admin/src/components/discovery/DiscoveryDashboardTab.astro`.
+- Implemented, with evidence: extracted the classes registry/create tab into `apps/admin/src/components/discovery/DiscoveryClassesTab.astro`.
+- Implemented, with evidence: extracted the candidate moderation workspace pane into `apps/admin/src/components/discovery/DiscoveryCandidatesTab.astro`, preserving `data-discovery-row-*` side-pane behavior and review form intents.
+- Implemented, with evidence: extracted the hypotheses table tab into `apps/admin/src/components/discovery/DiscoveryHypothesesTab.astro`.
+- Implemented, with evidence: moved candidate selection href materialization into the route composition root so extracted components receive stable href data instead of owning URL-builder functions.
+- Implemented, with evidence: `apps/admin/src/pages/discovery.astro` reduced from 2219 lines before Batch 64 to 1661 lines; new focused discovery components own 210, 203, 125, 136 and 90 lines.
+- Fixed proof harness, with evidence: `infra/scripts/test-ui-button-audit.mjs` now waits for a browser-openable content item that is also story-followable by requiring `story_cluster_id`/`storyClusterId` before exercising follow/unfollow buttons.
+- Scope note: route URLs, form names, BFF intents/actions, API contracts, DB schema, discovery behavior, auth/session behavior and visual redesign remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed after callback props were replaced with route-materialized href props; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:discovery:admin:compose` passed, including create/update/run/review/recall/promote/archive/delete discovery admin flow.
+- Passed stateful proof: initial `pnpm test:web:ui-audit` exposed the harness selecting a non-followable content item; after the harness fix and a clean rerun, `pnpm test:web:ui-audit` passed with `ui-button-audit-ok`.
+- Cleanup proof: `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61/62/63 website-ingestion files, completed Batch 64 admin discovery component files, the Batch 64 UI audit harness fix and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-63-WEBSITE-INGESTION-POLICY-PROBE-SPLIT
+
+- Kind: Stage
+- Status: completed
+- In scope: extract conditional request state parsing/key helpers, website capability probing and discovery probe-result builders from `services/fetchers/src/web-ingestion.ts` into focused modules; keep public website ingestion exports and runtime behavior stable.
+- Out of scope: DB schema changes, queue/event name changes, fetcher persistence changes, provider/acquisition behavior changes, static/browser discovery algorithm changes, API/admin/worker behavior changes, new website policy behavior and broad harness changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/web-ingestion.ts`, new focused modules under `services/fetchers/src/`, and targeted TS tests only if compatibility coverage requires them.
+- Risk: high, because conditional request state, website capability probing and discovery probe responses affect website polling, discovery candidate probing and hard-site fallback decisions.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:website:compose`; `pnpm test:hard-sites:compose`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is website ingestion composition-root cohesion; stakeholder/consumer is fetcher website polling and discovery probe API; PostgreSQL/outbox behavior and browser/static discovery policies remain unchanged while state/probe formatting logic gets focused owners.
+- Implemented, with evidence: extracted conditional request state parsing, cached text response reads and conditional-state key construction from `services/fetchers/src/web-ingestion.ts` into `services/fetchers/src/web-ingestion-policy-state.ts`.
+- Implemented, with evidence: extracted website capability probing into `services/fetchers/src/web-ingestion-capabilities.ts` while preserving the compatibility re-export from `services/fetchers/src/web-ingestion.ts`.
+- Implemented, with evidence: extracted discovery website probe-result building and resource-shape classification into `services/fetchers/src/web-ingestion-probe-results.ts`.
+- Implemented, with evidence: `services/fetchers/src/web-ingestion.ts` reduced from 1125 lines after Batch 62 to 849 lines; the new focused modules own 101, 65 and 143 lines.
+- Scope note: DB schema, queue/event names, fetcher persistence, provider/acquisition behavior, static/browser discovery algorithm, API/admin/worker behavior and website policy behavior remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:website:compose` and `pnpm test:hard-sites:compose` passed.
+- Cleanup proof: `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61/62/63 website-ingestion files and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-62-WEBSITE-INGESTION-BROWSER-RUNTIME
+
+- Kind: Stage
+- Status: completed
+- In scope: extract Playwright/browser-assisted website discovery runtime from `services/fetchers/src/web-ingestion.ts` into a focused fetchers-owned module; preserve opt-in browser fallback policy, same-origin auth header routing, challenge reporting, network/DOM capture and browser provenance fields.
+- Out of scope: DB schema changes, queue/event name changes, fetcher persistence changes, provider/acquisition behavior changes, static discovery algorithm changes, website classification algorithm changes, API/admin/worker behavior changes, new browser capabilities and broad harness changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/web-ingestion.ts`, new focused modules under `services/fetchers/src/`, and targeted TS tests only if compatibility coverage requires them.
+- Risk: high, because browser-assisted discovery handles hard-site fallback, same-origin auth headers, rendered DOM/network capture and persisted resource provenance.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:website:compose`; `pnpm test:hard-sites:compose`; `pnpm test:channel-auth:compose`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is browser-assisted website runtime cohesion; stakeholder/consumer is website source polling, discovery probing and hard-site handling; browser automation remains owned by `services/fetchers` and no new cross-service/browser policy is introduced.
+- Implemented, with evidence: extracted Playwright/browser-assisted discovery runtime from `services/fetchers/src/web-ingestion.ts` into `services/fetchers/src/web-ingestion-browser-runtime.ts`.
+- Implemented, with evidence: moved rendered DOM link discovery, same-origin network capture, same-origin auth header routing, challenge reporting and browser provenance signal construction behind the focused fetchers-owned browser runtime module.
+- Implemented, with evidence: `services/fetchers/src/web-ingestion.ts` now delegates browser fallback execution to `discoverFromBrowserAssisted` while retaining policy decisioning, merge/filter/cursor metrics and public compatibility exports.
+- Implemented, with evidence: `services/fetchers/src/web-ingestion.ts` reduced from 1447 lines after Batch 61 to 1125 lines; `services/fetchers/src/web-ingestion-browser-runtime.ts` owns 341 lines.
+- Scope note: DB schema, queue/event names, fetcher persistence, provider/acquisition behavior, static discovery algorithm, website classification algorithm, API/admin/worker behavior and browser product policy remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:website:compose`, `pnpm test:hard-sites:compose` and `pnpm test:channel-auth:compose` passed.
+- Cleanup proof: `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61/62 website-ingestion files and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-61-WEBSITE-INGESTION-STATIC-DISCOVERY-RUNTIME
+
+- Kind: Stage
+- Status: completed
+- In scope: extract sitemap/feed/collection/inline-data/download website discovery adapters and their narrow discovery fetcher contract from `services/fetchers/src/web-ingestion.ts` into a focused module; keep `web-ingestion.ts` as the runtime composition/orchestration owner and preserve public helper exports.
+- Out of scope: DB schema changes, queue/event name changes, fetcher persistence changes, provider/acquisition behavior changes, browser-assisted policy behavior changes, website classification algorithm changes, API/admin/worker behavior changes and broad harness changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/web-ingestion.ts`, new focused modules under `services/fetchers/src/`, and targeted TS tests only if compatibility coverage requires them.
+- Risk: high, because static website discovery feeds sitemap/feed/collection/inline/download resource discovery and durable website resource persistence.
+- Required proof: `pnpm typecheck`; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm test:website:compose`; `pnpm test:hard-sites:compose`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is website ingestion runtime cohesion; stakeholder/consumer is website source polling, discovery probing and browser-assisted fallback decisioning; PostgreSQL/outbox behavior stays untouched while static discovery adapters move behind a narrow fetcher contract.
+- Implemented, with evidence: extracted sitemap/feed/collection/inline-data/download static discovery adapters from `services/fetchers/src/web-ingestion.ts` into `services/fetchers/src/web-ingestion-static-discovery.ts`.
+- Implemented, with evidence: added a narrow `WebsiteTextFetcher` and conditional-state key callback contract so static discovery can fetch through the existing authenticated/conditional fetch path without owning cache or persistence semantics.
+- Implemented, with evidence: updated `probeWebsitesForDiscovery` and `discoverWebsiteResources` to call the focused static discovery module with named option objects; public website ingestion exports and helper compatibility exports remain stable.
+- Implemented, with evidence: `services/fetchers/src/web-ingestion.ts` reduced from 1711 lines after Batch 60 to 1447 lines; `services/fetchers/src/web-ingestion-static-discovery.ts` owns 380 lines.
+- Scope note: DB schema, queue/event names, fetcher persistence, provider/acquisition behavior, browser-assisted policy behavior, website classification algorithm and API/admin/worker behavior remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:website:compose` and `pnpm test:hard-sites:compose` passed.
+- Cleanup proof: `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60/61 website-ingestion files and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-60-WEBSITE-INGESTION-EXTRACTION-HELPERS
+
+- Kind: Stage
+- Status: completed
+- In scope: extract pure website ingestion types and URL/HTML/resource helper functions from `services/fetchers/src/web-ingestion.ts` into focused modules; keep public exports/import compatibility and runtime orchestration behavior unchanged.
+- Out of scope: DB schema changes, queue/event name changes, fetcher persistence changes, provider/acquisition behavior changes, browser-assisted policy behavior changes, website classification algorithm changes, API/admin/worker behavior changes and broad harness changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/web-ingestion.ts`, new focused modules under `services/fetchers/src/`, and targeted TS tests only if compatibility coverage requires them.
+- Risk: high, because website discovery helpers feed sitemap/feed/collection/inline/browser candidate discovery and durable resource persistence.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `pnpm test:website:compose`; `pnpm test:hard-sites:compose`; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is website ingestion helper cohesion; stakeholder/consumer is website discovery, browser-assisted discovery and fetcher resource persistence; PostgreSQL/outbox behavior stays untouched while pure parsing/classification-adjacent helpers move behind narrow modules.
+- Implemented, with evidence: moved website ingestion public/shared types from `services/fetchers/src/web-ingestion.ts` into `services/fetchers/src/web-ingestion-types.ts` and kept compatibility type re-exports from `web-ingestion.ts`.
+- Implemented, with evidence: moved pure URL/HTML/resource helper logic into `services/fetchers/src/web-ingestion-extraction.ts`, including collection link extraction, link/feed/download extraction, JSON-LD/inline-data URL extraction, resource dedupe, cursor filtering, pattern filtering and browser fallback recommendation helpers.
+- Implemented, with evidence: `services/fetchers/src/web-ingestion.ts` now owns runtime cache/fetching/probe/discovery orchestration while importing helper names from the focused extraction module; public exports for `extractCollectionLinkCandidates`, `selectWebsiteDiscoveryModes` and `shouldAttemptBrowserAssistedDiscovery` remain stable.
+- Implemented, with evidence: `services/fetchers/src/web-ingestion.ts` reduced from 2629 lines before Batch 60 to 1711 lines; new focused modules own 824 and 191 lines.
+- Scope note: DB schema, queue/event names, fetcher persistence, provider/acquisition behavior, browser-assisted policy behavior, website classification algorithm and API/admin/worker behavior remain intentionally unchanged.
+- Passed proof: `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `git diff --check --` passed.
+- Passed stateful proof: after `pnpm dev:mvp:internal`, `pnpm test:website:compose` and `pnpm test:hard-sites:compose` passed.
+- Cleanup proof: `pnpm dev:mvp:internal:down:volumes` completed and final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files, completed Batch 60 website-ingestion files and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-59-FETCHER-PERSISTENCE-SUBREPOSITORIES
+
+- Kind: Stage
+- Status: completed
+- In scope: split `services/fetchers/src/fetcher-persistence.ts` into a stable facade plus focused channel-state and content-write persistence modules; keep the public `FetcherPersistenceRepository` API, exported helper/type names and fetcher call sites behavior-compatible.
+- Out of scope: DB schema changes, queue/event name changes, provider/acquisition behavior changes, RSS/website parsing changes, browser-assisted policy changes, scheduler redesign, API/admin/worker behavior changes and broad test harness changes.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/fetcher-persistence.ts`, new focused modules under `services/fetchers/src/`, and targeted TS tests only if compatibility coverage requires them.
+- Risk: high, because the extracted repository owns source-channel lease/cursor/runtime state, article/resource durable writes and outbox event persistence used by relay, workers and admin/operator proofs.
+- Required proof: `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `pnpm test:ingest:compose`; `pnpm test:website:compose`; `pnpm test:hard-sites:compose` if website persistence coupling is affected; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is fetcher ingestion persistence internal cohesion; stakeholder/consumer is RSS/website acquisition, relay/worker article pipeline and admin/operator proof; PostgreSQL remains durable truth while the new Batch 58 persistence facade becomes a thin composition root instead of a second hotspot.
+- Implemented, with evidence: split `services/fetchers/src/fetcher-persistence.ts` into a 72-line compatibility facade plus `services/fetchers/src/fetcher-channel-state-repository.ts`, `services/fetchers/src/fetcher-content-repository.ts` and `services/fetchers/src/fetcher-persistence-types.ts`.
+- Implemented, with evidence: `FetcherChannelStateRepository` now owns advisory lease, due-channel loading, channel lookup, cursor reads/writes, fetch-run inserts and adaptive runtime-state updates.
+- Implemented, with evidence: `FetcherContentRepository` now owns article/resource duplicate preflight, article writes, website resource writes, article observation upsert and outbox event inserts.
+- Implemented, with evidence: public `FetcherPersistenceRepository` methods and exported helper/type names remain stable through facade re-exports; `services/fetchers/src/fetchers.ts` call sites remain unchanged.
+- Scope note: SQL behavior, DB schema, queue/event names, provider/acquisition behavior, RSS/website parsing, browser-assisted policy, scheduler behavior and API/admin/worker behavior remain intentionally unchanged.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests, including duplicate preflight and website cache coverage.
+- Passed proof: `pnpm lint` passed; `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `git diff --check --` passed.
+- Passed stateful proof: initial `pnpm test:ingest:compose` failed only because `fetchers` service was not running; after `pnpm dev:mvp:internal`, `pnpm test:ingest:compose`, `pnpm test:website:compose`, `pnpm test:hard-sites:compose` and `pnpm test:channel-auth:compose` passed.
+- Passed stateful proof: `pnpm test:ingest:multi:compose` passed for 24 RSS channels, including second fetch-cycle idempotency and not-modified coverage, then stopped compose and removed dev volumes.
+- Cleanup proof: final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 57 harness fix, completed Batch 58/59 fetcher persistence files and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-58-FETCHER-PERSISTENCE-REPOSITORY
+
+- Kind: Stage
+- Status: completed
+- In scope: extract PostgreSQL persistence for fetcher channel loading/lease, cursors, article/resource writes, outbox writes, fetch completion and runtime state from `services/fetchers/src/fetchers.ts` into focused repository modules; preserve public `RssFetcherService` behavior and acquisition/classification flow.
+- Out of scope: DB schema changes, queue/event name changes, provider behavior changes, RSS/website parsing changes, browser-assisted policy changes, API/admin read-model changes and broad fetcher scheduler redesign.
+- Allowed paths: `.aidp/work.md`, `services/fetchers/src/fetchers.ts`, new focused modules under `services/fetchers/src/`, targeted TS tests only if compatibility/type coverage requires them.
+- Risk: high, because fetcher persistence writes source truth, article/resource rows, outbox events and cursor/runtime state used by workers, admin and proofs.
+- Required proof: targeted TypeScript compile/type proof for fetchers; `pnpm unit_tests:ts`; `pnpm lint`; `pnpm typecheck`; `pnpm test:ingest:compose`; `pnpm test:website:compose`; `pnpm test:hard-sites:compose` if website resource persistence is touched; `git diff --check --`; cleanup/residual state check.
+- Acceptance criteria: met.
+- Architecture note: affected concern is fetcher ingestion persistence boundary; stakeholder/consumer is RSS/website acquisition, relay/worker article pipeline and admin/operator proof; PostgreSQL remains durable truth while persistence moves behind cohesive fetcher repository modules.
+- Implemented, with evidence: extracted channel loading/lease, cursor reads/writes, article/resource persistence, outbox writes, fetch-run inserts and source-channel runtime state updates from `services/fetchers/src/fetchers.ts` into `services/fetchers/src/fetcher-persistence.ts`.
+- Implemented, with evidence: `services/fetchers/src/fetchers.ts` now keeps acquisition/orchestration/build-input logic and delegates persistence through `FetcherPersistenceRepository`; compatibility export for `classifyDuplicatePreflightInputs` is preserved for existing tests.
+- Implemented, with evidence: extracted crawl policy cache SQL from `services/fetchers/src/web-ingestion.ts` into `services/fetchers/src/web-ingestion-persistence.ts`, leaving `CrawlPolicyCacheService` to orchestrate policy fetching/building and delegate DB load/upsert/conditional-state writes.
+- Implemented, with evidence: `services/fetchers/src/fetchers.ts` reduced from 2168 lines to 1170 lines; `services/fetchers/src/web-ingestion.ts` reduced from 2725 lines to 2629 lines; new persistence modules own 1043 and 140 lines respectively.
+- Scope note: DB schema, queue/event names, provider behavior, RSS/website parsing, browser-assisted policy, API/admin read models and scheduler behavior remain intentionally unchanged.
+- Passed proof: `pnpm unit_tests:ts` passed with 246 tests; `pnpm lint` passed; `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `git diff --check --` passed.
+- Passed stateful proof: `pnpm test:ingest:compose` passed after the compose stack was started; the initial attempt failed only because `fetchers` was not running.
+- Passed stateful proof: `pnpm test:website:compose`, `pnpm test:channel-auth:compose`, `pnpm test:hard-sites:compose` and `pnpm test:ingest:multi:compose` passed; multi RSS covered 24 channels and cleaned compose/dev volumes.
+- Cleanup proof: final `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git status --short` remains dirty only with completed architecture-hardening files, completed Batch 58 fetcher persistence files and AIDP state.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-57-MAXIMUM-PROOF-CHECKPOINT
+
+- Kind: Sweep
+- Status: completed
+- In scope: run maximum necessary local/static/unit/build/stateful proof for completed architecture-hardening batches; fix failures found by proof when they are caused by current work; record residual proof gaps and cleanup state.
+- Out of scope: new feature work, broad additional refactors, DB schema changes, queue/event/public API changes, destructive cleanup such as volume reset unless explicitly required and approved.
+- Allowed paths: `.aidp/work.md`, files already touched by completed ARCH-HARDENING-FOLLOWUP batches, and narrow test/proof fixes directly required by failed gates.
+- Risk: high, because this checkpoint exercises cross-surface API/worker/discovery/fetcher/admin/MCP behavior and may create local compose artifacts.
+- Required proof: `pnpm unit_tests`; `pnpm lint`; `pnpm typecheck`; `pnpm build`; `pnpm test:migrations:smoke`; targeted compose gates for discovery/fetcher/MCP/admin as feasible; `pnpm integration_tests`; `pnpm test:product:local:core`; `pnpm test:product:local:full` if core and targeted gates pass; `git diff --check --`; cleanup/residual artifact status.
+- Acceptance criteria: met.
+- Architecture note: affected concern is proof confidence after architecture hardening; stakeholder/consumer is future refactor safety; behavior and contracts should remain unchanged while proof validates the extracted boundaries.
+- Implemented, with evidence: ran the maximum local/static/unit/build/stateful proof pass requested by the user after Batch 1 through Batch 56 and fixed the only code-owned proof issue found.
+- Fixed, with evidence: updated `infra/scripts/test-rss-multi-flow.mjs` so the multi RSS proof matches sequence-runtime behavior where `article.normalized` downstream outbox can be intentionally suppressed while the durable `article.ingest.requested` outbox and worker inbox progression still prove normalize/dedup flow. The harness now accepts zero normalized outbox events as the current architecture shape but still fails on partial normalized fanout.
+- Passed proof: `pnpm unit_tests` passed with TS 246 tests and Python 316 tests; `pnpm lint` passed; `pnpm typecheck` passed with 0 errors and 0 warnings, retaining only existing Astro hints; `pnpm build` passed; `git diff --check --` passed.
+- Passed proof: `pnpm test:migrations:smoke` initially failed with `ECONNREFUSED 127.0.0.1:55432` while the compose stack was down, then passed after starting the canonical local stack.
+- Passed proof: `pnpm integration_tests` passed and cleaned its stack/volumes.
+- Passed proof: `pnpm test:product:local:core` initially failed due a compose lifecycle/container-name conflict after previous stack state, then passed on a clean rerun after `pnpm dev:mvp:internal:down:volumes`; artifact `/tmp/newsportal-product-local-core-c92d4d12.md`.
+- Passed proof: targeted discovery/fetcher gates passed: `pnpm test:discovery-enabled:compose`, `pnpm test:discovery:admin:compose`, `pnpm test:discovery:examples:compose`, `pnpm test:discovery:yield:compose`, `pnpm test:hard-sites:compose`.
+- Passed proof: `pnpm test:ingest:multi:compose` first exposed the outdated outbox expectation described above; after the harness fix it passed for the 24-channel multi RSS flow.
+- Passed proof: `pnpm test:product:local:full` passed; artifact `/tmp/newsportal-product-local-full-7fcb1894.md`. The full run included static/unit/build gates, integration/MVP, website, website-admin, automation-admin, deterministic MCP, web viewports, UI button audit, discovery-enabled/admin/examples/yield, website matrix and MCP HTTP live.
+- Live-provider note: `website-matrix` recorded external upstream blocks as truthful live states, not product regressions: 16 live sites total, 7 `observed_expected_shape`, 8 `observed_truthful_unsupported_or_blocked`, 1 `observed_partial_or_empty_shape`; artifact `/tmp/newsportal-live-website-matrix-baseline-cb8b4bfa-3ab9-4aa4-9a28-3ffd794e43f5.json`.
+- Cleanup proof: final `pnpm dev:mvp:internal:down:volumes` completed and `docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+- Final worktree proof: `git diff --check --` passed; `git status --short` remains dirty only with completed architecture-hardening files, the Batch 57 harness fix and this AIDP state update.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-56-WORKER-DISCOVERY-REPOSITORY-SOURCE-QUALITY-COST-MIXIN
+
+- Kind: Stage
+- Status: completed
+- In scope: move source-profile persistence, source interest score/quality snapshot, portfolio snapshot, cost log/month-to-date cost, feedback events, strategy stats and channel metrics private repository SQL methods from `services/workers/app/discovery_repository.py` into a focused `services/workers/app/discovery_repository_source_quality.py` mixin; keep `DiscoveryCoordinatorRepository` as the public repository class and preserve async public method names/signatures.
+- Out of scope: SQL behavior changes, DB schema, public repository method signatures, mission/hypothesis/candidate repository methods already extracted, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_repository.py`, `services/workers/app/discovery_repository_source_quality.py`, `services/workers/app/discovery_repository_candidates.py`, `services/workers/app/discovery_repository_mission_hypotheses.py`, `services/workers/app/discovery_orchestrator.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because source quality and cost persistence are used by discovery execution, recall acquisition and evaluation; the move must preserve method names, SQL text/parameters and MRO behavior.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is discovery repository internal breadth around source quality and cost persistence; stakeholder/consumer is worker discovery execution/recall/evaluation runtime; PostgreSQL remains durable truth while source-quality/cost SQL gets a cohesive owner module.
+- Implemented, with evidence: moved source-profile persistence, source interest score/quality snapshot, portfolio snapshot, cost log/month-to-date cost, feedback events, strategy stats and channel metrics private SQL methods into `services/workers/app/discovery_repository_source_quality.py`.
+- Implemented, with evidence: `DiscoveryCoordinatorRepository` now subclasses `DiscoverySourceQualityRepositoryMixin` alongside the mission/hypothesis and candidate/stats mixins, preserving public async method names/signatures and private method availability through MRO.
+- Implemented, with evidence: `services/workers/app/discovery_repository.py` reduced from 1044 lines after Batch 55 to 363 lines; `services/workers/app/discovery_repository_source_quality.py` owns 689 lines.
+- Scope note: mission/hypothesis/candidate repository methods already extracted, SQL behavior, DB schema, public repository method signatures, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving repository mixin extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-55-WORKER-DISCOVERY-REPOSITORY-CANDIDATE-STATS-MIXIN
+
+- Kind: Stage
+- Status: completed
+- In scope: move candidate/recall-candidate persistence, candidate review/update, hypothesis candidate stats, hypothesis effectiveness and mission/recall mission stats refresh private repository SQL methods from `services/workers/app/discovery_repository.py` into a focused `services/workers/app/discovery_repository_candidates.py` mixin; keep `DiscoveryCoordinatorRepository` as the public repository class and preserve async public method names/signatures.
+- Out of scope: SQL behavior changes, DB schema, public repository method signatures, source-profile/scoring/cost repository methods, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_repository.py`, `services/workers/app/discovery_repository_candidates.py`, `services/workers/app/discovery_repository_mission_hypotheses.py`, `services/workers/app/discovery_orchestrator.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because candidate persistence and aggregate refresh are used by discovery execution, recall acquisition and evaluation; the move must preserve method names, SQL text/parameters and MRO behavior.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is discovery repository internal breadth around candidate persistence and aggregate refresh; stakeholder/consumer is worker discovery execution/recall/evaluation runtime; PostgreSQL remains durable truth while candidate/stats SQL gets a cohesive owner module.
+- Implemented, with evidence: moved candidate/recall-candidate persistence, review/update, hypothesis candidate stats, hypothesis effectiveness and mission/recall mission stats refresh private SQL methods into `services/workers/app/discovery_repository_candidates.py`.
+- Implemented, with evidence: `DiscoveryCoordinatorRepository` now subclasses `DiscoveryCandidateRepositoryMixin` alongside the mission/hypothesis mixin, preserving public async method names/signatures and private method availability through MRO.
+- Implemented, with evidence: `services/workers/app/discovery_repository.py` reduced from 1490 lines after Batch 54 to 1044 lines; `services/workers/app/discovery_repository_candidates.py` owns 464 lines.
+- Scope note: source-profile/scoring/cost repository methods, SQL behavior, DB schema, public repository method signatures, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving repository mixin extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-54-WORKER-DISCOVERY-REPOSITORY-MISSION-HYPOTHESIS-MIXINS
+
+- Kind: Stage
+- Status: completed
+- In scope: move mission, recall mission, hypothesis-class and hypothesis-state private repository SQL methods from `services/workers/app/discovery_repository.py` into a focused `services/workers/app/discovery_repository_mission_hypotheses.py` mixin; keep `DiscoveryCoordinatorRepository` as the public repository class and preserve async public method names/signatures.
+- Out of scope: SQL behavior changes, DB schema, public repository method signatures, candidate/source-profile/scoring/cost repository methods, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_repository.py`, `services/workers/app/discovery_repository_mission_hypotheses.py`, `services/workers/app/discovery_orchestrator.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because these private methods back planning, graph compile and hypothesis execution; the move must preserve method names, SQL text/parameters and MRO behavior.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is discovery repository internal breadth; stakeholder/consumer is worker discovery planning/execution runtime; PostgreSQL remains durable truth while mission/hypothesis SQL gets a cohesive owner module.
+- Implemented, with evidence: moved mission, recall mission, hypothesis-class and hypothesis-state private SQL methods into `services/workers/app/discovery_repository_mission_hypotheses.py`.
+- Implemented, with evidence: `DiscoveryCoordinatorRepository` now subclasses `DiscoveryMissionHypothesisRepositoryMixin`, preserving public async method names/signatures and private method availability through MRO.
+- Implemented, with evidence: `services/workers/app/discovery_repository.py` reduced from 2041 lines after Batch 53 to 1490 lines; `services/workers/app/discovery_repository_mission_hypotheses.py` owns 562 lines.
+- Scope note: candidate/source-profile/scoring/cost repository methods, SQL behavior, DB schema, public repository method signatures, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving repository mixin extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-53-WORKER-DISCOVERY-REPOSITORY
+
+- Kind: Stage
+- Status: completed
+- In scope: move `DiscoveryCoordinatorRepository` and its persistence SQL implementation from `services/workers/app/discovery_orchestrator.py` into `services/workers/app/discovery_repository.py`; keep `DiscoveryCoordinatorRepository` importable from `discovery_orchestrator.py` as a compatibility alias for API/tests.
+- Out of scope: SQL behavior changes, DB schema, repository method signatures, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_repository.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because this mechanically moves the persistence boundary used by graph planning, execution, recall acquisition and evaluation; it must preserve method signatures, SQL text/parameters and orchestrator compatibility exports.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is discovery persistence/repository boundary; stakeholder/consumer is API maintenance surfaces and worker discovery runtime modules; PostgreSQL remains durable truth while persistence SQL moves into a cohesive repository module.
+- Implemented, with evidence: moved `DiscoveryCoordinatorRepository` and its persistence SQL implementation into `services/workers/app/discovery_repository.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` now imports and re-exports `DiscoveryCoordinatorRepository` as a compatibility alias, with explicit `__all__` for the public compatibility surface used by API/tests.
+- Implemented, with evidence: repository method signatures, SQL text/parameters and public runtime wrappers were not intentionally changed; the move was mechanical around the persistence boundary.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 172 lines after this extraction; `services/workers/app/discovery_repository.py` owns 2041 lines of repository/persistence code.
+- Scope note: SQL behavior, DB schema, repository method signatures, discovery runtime wrappers, task-engine contracts, queue names and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving repository extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-52-WORKER-DISCOVERY-GRAPH-PLANNING-RUNTIME
+
+- Kind: Stage
+- Status: completed
+- In scope: move `compile_interest_graph_for_mission` and `plan_hypotheses` implementation logic from `services/workers/app/discovery_orchestrator.py` into a focused `services/workers/app/discovery_graph_planning_runtime.py` module; keep public orchestrator function names/signatures as compatibility wrappers and preserve patchable runtime-call dependencies for existing tests.
+- Out of scope: discovery planning pure helper algorithms already extracted, hypothesis class taxonomy, LLM task names/payload shapes, repository persistence methods, DB schema, task-engine contracts, queue names and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_graph_planning_runtime.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because graph compile/planning controls mission graph state, LLM cost logging, fallback hypotheses and inserted discovery hypotheses; this must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is graph-first discovery mission planning; stakeholder/consumer is worker discovery planning task runtime; PostgreSQL/repository, LLM runtime adapter, planning helper algorithms and cost/quota boundaries remain unchanged while orchestration moves behind a cohesive module.
+- Implemented, with evidence: moved `compile_interest_graph_for_mission` and `plan_hypotheses` implementation logic into `services/workers/app/discovery_graph_planning_runtime.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` keeps public wrappers with the same function names/signatures and passes patchable runtime-call dependencies to preserve existing tests/callers.
+- Implemented, with evidence: preserved `discovery_month_start_utc` compatibility export from `discovery_orchestrator.py` for API imports while keeping graph planning runtime logic extracted.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 2187 lines after this extraction; `services/workers/app/discovery_graph_planning_runtime.py` owns 200 lines of graph planning orchestration.
+- Scope note: discovery planning pure helper algorithms, hypothesis class taxonomy, LLM task names/payload shapes, repository persistence methods, DB schema, task-engine contracts, queue names and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving graph planning extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-51-WORKER-DISCOVERY-EXECUTION-RUNTIME
+
+- Kind: Stage
+- Status: completed
+- In scope: move `execute_hypotheses` implementation logic from `services/workers/app/discovery_orchestrator.py` into a focused `services/workers/app/discovery_execution_runtime.py` module; keep the public orchestrator function name/signature as a compatibility wrapper and preserve patchable runtime/executor dependencies for existing tests.
+- Out of scope: repository persistence methods, task-engine implementation, sequence registry/contracts, queue names, DB schema, policy/scoring algorithms, source registrar behavior, discovery planning and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_execution_runtime.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because hypothesis execution dispatches child sequence runs, persists candidates, source profiles, interest scores, quality snapshots, portfolio snapshots, gap hypotheses, auto-registration status and discovery cost logs.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is graph-first discovery hypothesis execution; stakeholder/consumer is worker discovery execution task runtime; PostgreSQL/repository, task-engine sequence execution, source registrar, policy/scoring and quota boundaries remain unchanged while the orchestration step moves behind a cohesive module.
+- Implemented, with evidence: moved `execute_hypotheses` implementation logic into `services/workers/app/discovery_execution_runtime.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` keeps public `execute_hypotheses` wrapper with the same signature and passes patchable runtime-call, executor and task-registry dependencies to preserve existing tests/callers.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 2329 lines after this extraction; `services/workers/app/discovery_execution_runtime.py` owns 383 lines of graph hypothesis execution runtime logic.
+- Scope note: repository persistence methods, task-engine implementation, sequence registry/contracts, queue names, DB schema, policy/scoring algorithms, source registrar behavior, discovery planning and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving graph execution extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-50-WORKER-DISCOVERY-RECALL-ORCHESTRATION
+
+- Kind: Stage
+- Status: completed
+- In scope: move `acquire_recall_missions` implementation logic from `services/workers/app/discovery_orchestrator.py` into a focused `services/workers/app/discovery_recall_orchestration.py` module; keep the public orchestrator function name/signature as a compatibility wrapper.
+- Out of scope: recall persistence repository methods, policy/scoring algorithms, provider adapters, DB schema, task-engine plugin contracts, public task names, queue names, environment/config behavior and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_recall_orchestration.py`, `services/workers/app/discovery_recall_runtime.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because recall acquisition runs bounded live search/probe orchestration and writes recall candidates, source profiles, quality snapshots and policy reviews; this must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is independent recall acquisition orchestration; stakeholder/consumer is worker discovery recall task runtime; PostgreSQL/repository, task-engine runtime adapters and policy/scoring boundaries remain unchanged while the orchestration step moves behind a cohesive module.
+- Implemented, with evidence: moved `acquire_recall_missions` implementation logic into `services/workers/app/discovery_recall_orchestration.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` keeps public `acquire_recall_missions` wrapper with the same signature and passes patchable runtime-call dependencies to preserve existing tests/callers.
+- Implemented, with evidence: compatibility aliases for recall helper names remain available from `discovery_orchestrator.py`; existing unit tests caught and verified this compatibility surface.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 2658 lines after this extraction; `services/workers/app/discovery_recall_orchestration.py` owns 286 lines of recall acquisition orchestration.
+- Scope note: recall persistence repository methods, policy/scoring algorithms, provider adapters, DB schema, task-engine plugin contracts, public task names, queue names, environment/config behavior and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving recall orchestration extraction with direct discovery orchestrator unit coverage; `pnpm typecheck` still reports existing Astro hints only, with 0 errors and 0 warnings.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-49-WORKER-DISCOVERY-EVALUATION-RUNTIME
+
+- Kind: Stage
+- Status: completed
+- In scope: move `evaluate_hypotheses` and `re_evaluate_sources` implementation logic from `services/workers/app/discovery_orchestrator.py` into `services/workers/app/discovery_evaluation_runtime.py`; keep public orchestrator functions as compatibility wrappers and inject `compile_interest_graph_for_mission` where needed.
+- Out of scope: repository persistence methods, scoring algorithms, portfolio algorithm, task-engine plugin contracts, DB schema, public task names and compose/runtime behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_evaluation_runtime.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: high, because source re-evaluation writes quality snapshots, interest scores, portfolio snapshots and gap hypotheses; this must be behavior-preserving with targeted unit proof.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is discovery evaluation runtime; stakeholder/consumer is worker discovery evaluation/re-evaluation tasks; repository and scoring boundaries remain unchanged while orchestration moves behind a focused module.
+- Implemented, with evidence: moved `evaluate_hypotheses` and `re_evaluate_sources` implementation logic into `services/workers/app/discovery_evaluation_runtime.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` keeps public compatibility wrappers with the same function names/signatures and injects `compile_interest_graph_for_mission` for re-evaluation.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 2891 lines after this extraction; `services/workers/app/discovery_evaluation_runtime.py` owns 204 lines of discovery evaluation/re-evaluation runtime logic.
+- Scope note: repository persistence methods, scoring algorithms, portfolio algorithm, task-engine plugin contracts, DB schema, public task names and compose/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving evaluation runtime extraction with direct discovery orchestrator unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-48-WORKER-DISCOVERY-RECALL-PLANNING
+
+- Kind: Stage
+- Status: completed
+- In scope: move pure recall acquisition planning helpers from `services/workers/app/discovery_orchestrator.py` into `services/workers/app/discovery_recall_runtime.py`: recall search plan building and seed probe target building; preserve `_build_recall_search_plans` and `_seed_probe_targets_for_recall_mission` compatibility names in `discovery_orchestrator.py`.
+- Out of scope: probe execution, web-search runtime calls, recall candidate persistence, repository methods, task-engine plugin contracts, DB schema and public task names.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_recall_runtime.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: medium-high, because recall planning affects source acquisition breadth even though this is a behavior-preserving extraction.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is independent recall acquisition planning; stakeholder/consumer is worker discovery recall orchestration; runtime probe/search adapters and persistence boundaries remain unchanged.
+- Implemented, with evidence: moved recall search plan building and seed probe target building into `services/workers/app/discovery_recall_runtime.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` preserves `_build_recall_search_plans` and `_seed_probe_targets_for_recall_mission` as imported compatibility names; probe execution, search runtime calls and persistence are unchanged.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 3055 lines after this extraction; `services/workers/app/discovery_recall_runtime.py` owns 323 lines including recall planning/runtime helpers.
+- Scope note: probe execution, web-search runtime calls, recall candidate persistence, repository methods, task-engine plugin contracts, DB schema and public task names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving helper extraction with direct discovery orchestrator unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-47-WORKER-DISCOVERY-PLANNING
+
+- Kind: Stage
+- Status: completed
+- In scope: move pure discovery planning helpers/constants from `services/workers/app/discovery_orchestrator.py` into `services/workers/app/discovery_planning.py`: text normalization/tokenization, interest graph validation/defaulting, query-family ordering, generation seed building, default hypothesis building and deduping; preserve imported names in `discovery_orchestrator.py` for internal/test compatibility.
+- Out of scope: repository persistence methods, runtime adapter calls, LLM/web-search execution, recall acquisition, DB schema, task-engine plugin contracts and public task names.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/discovery_orchestrator.py`, `services/workers/app/discovery_planning.py`, `tests/unit/python/test_discovery_orchestrator.py`.
+- Risk: medium-high, because hypothesis planning is core discovery behavior even though this is a behavior-preserving extraction.
+- Required proof: targeted Python syntax/import proof; targeted discovery orchestrator unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; compose discovery proof only if targeted/static gates reveal uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is discovery mission graph and hypothesis planning; stakeholder/consumer is worker task-engine discovery orchestration; PostgreSQL/repository and runtime adapter boundaries remain unchanged while planning becomes a cohesive module.
+- Implemented, with evidence: moved discovery text normalization/tokenization, interest graph validation/defaulting, query-family ordering, generation seed building, default hypothesis building and hypothesis deduping into `services/workers/app/discovery_planning.py`.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` preserves previous constants/private helper names as module-level aliases, so internal and test compatibility surfaces remain stable.
+- Implemented, with evidence: `services/workers/app/discovery_orchestrator.py` is reduced to 3196 lines after this extraction; `services/workers/app/discovery_planning.py` owns 363 lines of discovery planning logic.
+- Scope note: repository persistence methods, runtime adapter calls, LLM/web-search execution, recall acquisition, DB schema, task-engine plugin contracts and public task names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker/test modules passed; targeted `tests.unit.python.test_discovery_orchestrator` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving helper extraction with direct discovery orchestrator unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-46-API-DISCOVERY-PAYLOADS
+
+- Kind: Stage
+- Status: completed
+- In scope: move discovery FastAPI/Pydantic request payload models out of `services/api/app/main.py` into `services/api/app/discovery_payloads.py`; preserve all `api_main.Discovery*Payload` aliases, validation behavior, route annotations and tests.
+- Out of scope: discovery command/read behavior already extracted, content-analysis payloads, route paths, DB schema, queue/outbox behavior and UI.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_payloads.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because discovery request models span multiple operator/admin surfaces even though this is a behavior-preserving alias extraction.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery request-model cohesion; stakeholder/consumer is FastAPI/admin discovery management; boundary stays in the existing discovery payload module while `main.py` keeps compatibility aliases.
+- Implemented, with evidence: moved discovery mission, recall mission, policy profile, recall candidate, hypothesis class, candidate review, feedback and re-evaluation request payload models into `services/api/app/discovery_payloads.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility aliases for existing `api_main.Discovery*Payload` imports and route annotations; route paths, response shapes, DB schema and queue/outbox behavior remain unchanged.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 2977 lines after this extraction; `services/api/app/discovery_payloads.py` owns 392 lines including discovery request payloads and existing policy normalizers.
+- Implemented, with evidence: `services/api/app/main.py` no longer imports Pydantic directly after all remaining payload classes moved into cohesive payload modules.
+- Scope note: discovery command/read behavior, content-analysis payloads, route paths, DB schema, queue/outbox behavior and UI remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 40 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API request-model alias extraction with direct discovery unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-45-API-CONTENT-ANALYSIS-PAYLOADS
+
+- Kind: Stage
+- Status: completed
+- In scope: move content-analysis FastAPI/Pydantic request payload models out of `services/api/app/main.py` into `services/api/app/content_analysis_payloads.py`; preserve `api_main.ContentAnalysisPolicyPayload`, `ContentAnalysisPolicyUpdatePayload`, `ContentFilterPolicyPayload`, `ContentFilterPolicyUpdatePayload` and `ContentAnalysisBackfillPayload` aliases, validation behavior, route annotations and tests.
+- Out of scope: content-analysis read/write command behavior already extracted, discovery payloads, route paths, DB schema, queue/outbox behavior and UI.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/content_analysis_payloads.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium, because request models are public API surface even though this is a behavior-preserving alias extraction.
+- Required proof: targeted Python syntax/import proof; targeted discovery/content-analysis management unit suite; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API content-analysis request-model cohesion; stakeholder/consumer is FastAPI/admin discovery/content-analysis management; boundary stays in API payload module while wrappers preserve public import/annotation compatibility.
+- Implemented, with evidence: moved `ContentAnalysisPolicyPayload`, `ContentAnalysisPolicyUpdatePayload`, `ContentFilterPolicyPayload`, `ContentFilterPolicyUpdatePayload` and `ContentAnalysisBackfillPayload` into `services/api/app/content_analysis_payloads.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility aliases for existing `api_main.Content*Payload` imports and route annotations; route paths, response shapes, DB schema and queue/outbox behavior remain unchanged.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 3208 lines after this extraction; `services/api/app/content_analysis_payloads.py` owns 127 lines of content-analysis request payload definitions.
+- Scope note: content-analysis read/write command behavior, discovery payloads, route paths, DB schema, queue/outbox behavior and UI remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 40 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API request-model alias extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-44-API-SEQUENCE-PAYLOADS
+
+- Kind: Stage
+- Status: completed
+- In scope: move sequence-related FastAPI/Pydantic request payload models out of `services/api/app/main.py` into `services/api/app/sequence_payloads.py`; preserve `api_main.SequenceCreatePayload`, `SequenceUpdatePayload`, `SequenceManualRunPayload`, `SequenceRetryRunPayload`, `AgentSequenceCreatePayload`, `SequenceCancelPayload` and `ArticleEnrichmentRetryPayload` aliases, validation behavior, route annotations and tests.
+- Out of scope: sequence command/read behavior already extracted, discovery/content payloads, route paths, DB schema, queue dispatch behavior and UI.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/sequence_payloads.py`, `tests/unit/python/test_api_sequence_management.py`, `tests/unit/python/test_api_sequence_agent.py`.
+- Risk: medium, because route/request models are public API surface even though this is a behavior-preserving alias extraction.
+- Required proof: targeted Python syntax/import proof; targeted sequence management and sequence agent unit suites; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API sequence request-model cohesion; stakeholder/consumer is FastAPI/admin/MCP sequence tooling; boundary stays in API payload module while wrappers preserve public import/annotation compatibility; tradeoff is maintaining aliases in `main.py` during migration.
+- Implemented, with evidence: moved `SequenceCreatePayload`, `SequenceUpdatePayload`, `SequenceManualRunPayload`, `SequenceRetryRunPayload`, `AgentSequenceCreatePayload`, `SequenceCancelPayload` and `ArticleEnrichmentRetryPayload` into `services/api/app/sequence_payloads.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility aliases for existing `api_main.Sequence*Payload` import and monkeypatch surfaces; route paths, response shapes, DB schema and queue dispatch behavior remain unchanged.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 3323 lines after this extraction; `services/api/app/sequence_payloads.py` owns 79 lines of sequence request payload definitions.
+- Scope note: sequence command/read behavior, discovery/content payloads, route paths, DB schema, queue dispatch behavior and UI remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_sequence_management` plus `tests.unit.python.test_api_sequence_agent` passed with 27 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API request-model alias extraction with direct sequence unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-43-API-SEQUENCE-COMMANDS
+
+- Kind: Stage
+- Status: completed
+- In scope: move sequence create/update/archive DB writes, run creation/dispatch failure marking, manual run request, retry request, active-trigger lookup, article enrichment retry outbox write, agent sequence request and run cancellation out of `services/api/app/main.py` into `services/api/app/sequence_commands.py`; preserve route paths, public errors, response shapes, queue dispatch behavior and `api_main` monkeypatch surfaces for validators, query helpers, sequence read helpers, outbox helper, dispatch helper and UUID generation.
+- Out of scope: task-engine implementation, queue names, sequence schema, discovery routes, route registration, content read-models, compose/runtime proof unless unit/static gates reveal behavioral uncertainty.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/sequence_commands.py`, `tests/unit/python/test_api_sequence_management.py`, `tests/unit/python/test_api_sequence_agent.py`.
+- Risk: high, because this touches operator-facing sequence writes and dispatch error semantics; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted sequence management and sequence agent unit suites; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API sequence command cohesion; stakeholder/consumer is FastAPI/admin/MCP sequence tooling and worker sequence dispatch; boundary stays inside API command module with PostgreSQL as durable truth and BullMQ as transport; tradeoff is explicit dependency injection from `main.py` to preserve tests and route compatibility while removing sequence write orchestration from the god module.
+- Implemented, with evidence: moved sequence create/update/archive DB writes into `services/api/app/sequence_commands.py`.
+- Implemented, with evidence: moved sequence run creation, dispatch failure marking, manual retry request, active-trigger lookup, article enrichment retry outbox write, agent sequence request and run cancellation command orchestration into `services/api/app/sequence_commands.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers for route registration and monkeypatch surfaces; queue dispatch helper, route paths, DB schema and public errors remain unchanged.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 3386 lines after this extraction; `services/api/app/sequence_commands.py` owns 657 lines of sequence command logic.
+- Scope note: task-engine implementation, queue names, sequence schema, discovery routes, route registration and content read-models remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_sequence_management` plus `tests.unit.python.test_api_sequence_agent` passed with 27 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API sequence command extraction with direct unit coverage for route wrappers, validation, retry context, dispatch-error mapping and article retry orchestration.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-42-API-SEQUENCE-READ-VALIDATION
+
+- Kind: Stage
+- Status: completed
+- In scope: move sequence validation helpers, JSON/cron normalization, select SQL builders, plugin listing, sequence definition/run read-models, sequence list pagination and task-run reads out of `services/api/app/main.py` into `services/api/app/sequence_read_model.py`; preserve route paths, public errors, response shapes and `api_main` monkeypatch surfaces for `query_one`, `query_all`, `query_count`, pagination, task registry, cron parsing and parent-run guards.
+- Out of scope: sequence create/update/archive DB writes, run creation/dispatch/cancel/retry transactions, article enrichment retry event writes, discovery routes, DB schema, queue names and task registry contents.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/sequence_read_model.py`, `tests/unit/python/test_api_sequence_management.py`, `tests/unit/python/test_api_sequence_agent.py`.
+- Risk: medium-high, because sequence API validation/read-model behavior is operator-facing and tied to task-engine route contracts; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted sequence management and sequence agent unit suites; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API sequence read/validation cohesion; stakeholder/consumer is FastAPI/admin/MCP sequence tooling; boundary stays inside API read-model/validation module while PostgreSQL remains read truth and BullMQ dispatch stays untouched; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while reducing the sequence god-block.
+- Implemented, with evidence: moved sequence validation helpers, retry-context sanitization, JSON dump validation and cron normalization into `services/api/app/sequence_read_model.py`.
+- Implemented, with evidence: moved sequence select SQL builders, plugin listing, sequence list pagination, sequence definition/run reads and task-run reads into `services/api/app/sequence_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility aliases for sequence errors and wrappers for existing monkeypatch surfaces; sequence write/dispatch/cancel/retry transactions remain in `main.py` by design.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 3763 lines after this extraction; `services/api/app/sequence_read_model.py` owns 280 lines of sequence read/validation logic.
+- Scope note: sequence create/update/archive writes, run creation/dispatch/cancel/retry transactions, article enrichment retry event writes, discovery routes, DB schema, queue names and task registry contents remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_sequence_management` plus `tests.unit.python.test_api_sequence_agent` passed with 27 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API sequence read/validation extraction with direct unit coverage; write/dispatch runtime semantics were intentionally not moved.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-41-API-CONTENT-OPERATOR-READ-MODELS
+
+- Kind: Stage
+- Status: completed
+- In scope: move API article list, article residual list/summary, system-selected content item list and dashboard summary read-model SQL/assembly out of `services/api/app/main.py` into cohesive API read-model modules; preserve route paths, response shapes, query parameter behavior and `api_main` monkeypatch surfaces for `query_one`, `query_all`, `query_count`, pagination, content-analysis filters, content selection/explain helpers and LLM budget summary.
+- Out of scope: content detail and web resource detail already extracted, worker/fetcher behavior, DB schema, route paths, public response fields, admin UI changes, LLM budget implementation internals.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/article_list_read_model.py`, `services/api/app/article_residual_read_model.py`, `services/api/app/content_item_list_read_model.py`, `services/api/app/dashboard_read_model.py`, `tests/unit/python/test_api_zero_shot_operator_surfaces.py`, `tests/unit/python/test_api_feed_dedup.py`.
+- Risk: high, because this is a larger behavior-preserving extraction across user/operator content read surfaces with non-trivial SQL, pagination, selection diagnostics and dashboard budget composition.
+- Required proof: targeted Python syntax/import proof; targeted zero-shot/operator and feed-dedup unit suites; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API content/operator read-model cohesion; stakeholder/consumer is FastAPI/admin/web content and dashboard readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing multiple SQL/read assembly responsibilities from the god module in one larger batch.
+- Implemented, with evidence: moved article list SQL/selection payload assembly into `services/api/app/article_list_read_model.py`.
+- Implemented, with evidence: moved article residual row loading, diagnostics payload assembly, filter matching and summary grouping into `services/api/app/article_residual_read_model.py`.
+- Implemented, with evidence: moved system-selected/content-item list pagination/search/sort read model into `services/api/app/content_item_list_read_model.py`.
+- Implemented, with evidence: moved dashboard summary SQL and LLM budget composition into `services/api/app/dashboard_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers for route registration and monkeypatch surfaces, and is reduced to 3893 lines after this extraction; new modules own 729 lines of content/operator read-model logic.
+- Scope note: content detail, web resource detail, worker/fetcher behavior, DB schema, route paths, public response fields, admin UI and LLM budget internals remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_zero_shot_operator_surfaces` plus `tests.unit.python.test_api_feed_dedup` passed with 18 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage for the moved surfaces.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-40-API-WEB-RESOURCE-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API web resource list/detail read-model SQL, filters, validation, projection diagnostics and selection payload application out of `services/api/app/main.py` into `services/api/app/web_resource_read_model.py`; include `list_web_resources_page`, route wrapper delegation and `get_web_resource`; preserve route paths, response shapes, HTTP error details and `api_main` monkeypatch surfaces for `query_one`, `query_all`, `query_count`, content-analysis filter helpers, pagination and selection payload application.
+- Out of scope: content item/article detail already extracted, website fetcher runtime, web resource writes/projection worker behavior, article residual summaries, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/web_resource_read_model.py`, `tests/unit/python/test_api_web_resources.py`.
+- Risk: high, because this is an operator-facing web acquisition read surface with validation, content-analysis filters and selection diagnostics; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted web resource unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API web resource acquisition/read-model cohesion; stakeholder/consumer is FastAPI/admin website/resource readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing web resource SQL/filter ownership from the god module.
+- Implemented, with evidence: moved API web resource list/detail SQL, validation, filter-building, projection diagnostics and selection payload application into `services/api/app/web_resource_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, `query_all`, `query_count`, content-analysis filter helpers, pagination, paginated response builder, selection payload application and analysis summary loading.
+- Implemented, with evidence: strengthened targeted 404 compatibility coverage for missing web resources while existing web-resource tests continue to cover filters, route validation and projected/unprojected selection diagnostics.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 4312 lines after this extraction; `services/api/app/web_resource_read_model.py` owns 325 lines of web resource read-model logic.
+- Scope note: content item/article detail, website fetcher runtime, web resource writes/projection worker behavior, article residual summaries, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_web_resources` passed with 6 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API web-resource read-model extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-39-API-CONTENT-DETAIL-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API content/article detail and explain read-model SQL/assembly out of `services/api/app/main.py` into `services/api/app/content_detail_read_model.py`; include `get_resource_content_item`, `get_content_item`, `get_content_item_explain`, `get_article` and `get_article_explain`; preserve route paths, response shapes, HTTP error details and `api_main` monkeypatch surfaces for `query_one`, `query_all`, `get_article`, `get_content_item`, preview lookup, selection/explain builders and content-analysis summary loading.
+- Out of scope: content list/feed read-models, web resource list/get read-models, article residual summaries, enrichment retry writes, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/content_detail_read_model.py`, `tests/unit/python/test_api_zero_shot_operator_surfaces.py`.
+- Risk: high, because this is a larger user/operator-facing detail/explain surface with several monkeypatch compatibility tests; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted zero-shot/operator content detail tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API content detail read-model cohesion; stakeholder/consumer is FastAPI/web/admin content detail and explain readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing large detail/explain SQL ownership from the god module.
+- Implemented, with evidence: moved API resource content item, content item, content item explain, article detail and article explain SQL/assembly into `services/api/app/content_detail_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, `query_all`, `get_article`, `get_content_item`, preview lookup, selection/explain builders and content-analysis summary loading.
+- Implemented, with evidence: added targeted 404 compatibility coverage for missing article detail while existing zero-shot/operator detail/explain tests continue to cover SQL fields, fallback preview behavior, selection diagnostics and guidance.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 4527 lines after this extraction; `services/api/app/content_detail_read_model.py` owns 527 lines of content detail read-model logic.
+- Scope note: content list/feed read-models, web resource list/get read-models, article residual summaries, enrichment retry writes, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_zero_shot_operator_surfaces` passed with 14 tests; `pnpm unit_tests:py` passed with 316 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API detail/read-model extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-38-API-CHANNEL-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API channel list/get read-model SQL, pagination, provider filtering and adapter-field projection out of `services/api/app/main.py` into `services/api/app/channel_read_model.py`; add targeted unit coverage for provider filtering/pagination and get not-found compatibility; preserve route paths, response shapes and `api_main` monkeypatch surfaces for `query_all`, `query_count`, `query_one`, pagination helpers and channel adapter field projection.
+- Out of scope: channel create/update/import behavior, fetcher runtime, adaptive scheduler writes, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/channel_read_model.py`, `tests/unit/python/test_api_channels.py`.
+- Risk: medium-high, because this is operator/admin channel observability and source configuration read behavior; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted channel read-model unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API source/channel read-model cohesion; stakeholder/consumer is FastAPI/admin channel readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while moving channel SQL and projection ownership out of the god module.
+- Implemented, with evidence: moved API channel list/get SQL, provider filtering, runtime lateral joins, pagination and adapter-field projection into `services/api/app/channel_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_all`, `query_count`, `query_one`, pagination helpers, paginated response builder and channel adapter projection.
+- Implemented, with evidence: added targeted unit coverage for paginated provider filtering, non-paginated adapter projection, get-channel 404 compatibility and get-channel adapter projection.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 4931 lines after this extraction; `services/api/app/channel_read_model.py` owns 263 lines of channel read-model logic.
+- Scope note: channel create/update/import behavior, fetcher runtime, adaptive scheduler writes, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_channels` passed with 4 tests; `pnpm unit_tests:py` passed with 315 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-37-API-USER-MATCH-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API user match ranked/dedup read-model SQL, search/sort, pagination and internal projection cleanup out of `services/api/app/main.py` into `services/api/app/user_match_read_model.py`; strengthen targeted unit coverage for stripped internal fields while preserving existing ranked/dedup/search/sort coverage; preserve route path, response shape and `api_main` monkeypatch surfaces for `query_all`, `query_one` via `query_count`, pagination helpers and paginated response builder.
+- Out of scope: interest matching worker behavior, user interest writes/compile, notification delivery, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/user_match_read_model.py`, `tests/unit/python/test_api_matches.py`.
+- Risk: medium-high, because this is user-facing matched content read behavior with non-trivial SQL composition; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted user match unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API user personalization read-model cohesion; stakeholder/consumer is FastAPI/web/admin matched-content readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing ranked match SQL ownership from the god module.
+- Implemented, with evidence: moved API user match ranked/dedup SQL, search/sort, pagination and internal projection cleanup into `services/api/app/user_match_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps a compatibility wrapper that passes main-owned `query_all`, `query_count`, pagination helper and paginated response builder.
+- Implemented, with evidence: strengthened targeted unit coverage for internal projection field stripping while preserving existing ranked/dedup/search/sort tests.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5129 lines after this extraction; `services/api/app/user_match_read_model.py` owns 181 lines of user match read-model logic.
+- Scope note: interest matching worker behavior, user interest writes/compile, notification delivery, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_matches` passed with 4 tests; `pnpm unit_tests:py` passed with 311 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-36-API-USER-INTERESTS-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API user interest list read-model SQL and pagination out of `services/api/app/main.py` into `services/api/app/user_interest_read_model.py`; add targeted unit coverage for paginated and non-paginated behavior; preserve route path, response shape and `api_main` monkeypatch surfaces for `query_all`, `query_count`, pagination helpers and paginated response builder.
+- Out of scope: user interest writes, compile worker behavior, user match ranking, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/user_interest_read_model.py`, `tests/unit/python/test_api_user_interests.py`.
+- Risk: medium, because this is user-facing interest configuration read behavior; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted user interest read-model unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API user interest read-model cohesion; stakeholder/consumer is FastAPI/web/admin user interest readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing user interest read ownership from the god module.
+- Implemented, with evidence: moved API user interest list SQL and pagination behavior into `services/api/app/user_interest_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps a compatibility wrapper that passes main-owned `query_all`, `query_count`, pagination helper and paginated response builder.
+- Implemented, with evidence: added targeted unit coverage for non-paginated user interest list behavior and paginated count/offset behavior.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5261 lines after this extraction; `services/api/app/user_interest_read_model.py` owns 51 lines of user interest read-model logic.
+- Scope note: user interest writes, compile worker behavior, user match ranking, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_user_interests` passed with 2 tests; `pnpm unit_tests:py` passed with 310 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-35-API-CLUSTERS-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API event cluster list read-model SQL and pagination out of `services/api/app/main.py` into `services/api/app/cluster_read_model.py`; add targeted unit coverage for paginated and non-paginated behavior; preserve route path, response shape and `api_main` monkeypatch surfaces for `query_all`, `query_count`, pagination helpers and paginated response builder.
+- Out of scope: worker cluster generation/matching behavior, cluster membership writes, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/cluster_read_model.py`, `tests/unit/python/test_api_clusters.py`.
+- Risk: medium, because this is operator/user-facing cluster read behavior; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted cluster read-model unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API cluster read-model cohesion; stakeholder/consumer is FastAPI/web/admin cluster readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing cluster read ownership from the god module.
+- Implemented, with evidence: moved API event cluster list SQL, member aggregation and pagination behavior into `services/api/app/cluster_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps a compatibility wrapper that passes main-owned `query_all`, `query_count`, pagination helper and paginated response builder.
+- Implemented, with evidence: added targeted unit coverage for non-paginated limit/member projection behavior and paginated count/offset behavior.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5281 lines after this extraction; `services/api/app/cluster_read_model.py` owns 49 lines of cluster read-model logic.
+- Scope note: worker cluster generation/matching behavior, cluster membership writes, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_clusters` passed with 2 tests; `pnpm unit_tests:py` passed with 308 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-34-API-SYSTEM-INTERESTS-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API system interest list/get read-model SQL, pagination and not-found behavior out of `services/api/app/main.py` into `services/api/app/system_interest_read_model.py`; preserve selection profile policy normalization by injecting the existing normalizer; add targeted unit coverage for non-paginated list and get not-found compatibility; preserve route paths, response shapes and `api_main` monkeypatch surfaces for `query_all`, `query_count`, `query_one`, pagination helpers, paginated response builder and system interest normalization.
+- Out of scope: selection policy normalization semantics, interest template writes, selection profile writes, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/system_interest_read_model.py`, `tests/unit/python/test_api_system_interests.py`.
+- Risk: medium-high, because system interests feed selection behavior and admin/operator reads; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted system interest unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API system interest read-model cohesion; stakeholder/consumer is FastAPI/admin/operator interest template readers and selection observability; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit normalizer injection from `main.py` to preserve current compatibility and selection-profile policy projection behavior.
+- Implemented, with evidence: moved API system interest list/get SQL, pagination and not-found read behavior into `services/api/app/system_interest_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_all`, `query_count`, `query_one`, pagination helpers, paginated response builder and selection-profile normalization.
+- Implemented, with evidence: added targeted unit coverage for non-paginated system interest list behavior and not-found HTTP 404 compatibility while existing selection-profile policy projection tests continue to pass.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5299 lines after this extraction; `services/api/app/system_interest_read_model.py` owns 104 lines of system interest read-model logic.
+- Scope note: selection policy normalization semantics, interest template writes, selection profile writes, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_system_interests` passed with 8 tests; `pnpm unit_tests:py` passed with 306 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-33-API-NOTIFICATIONS-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API user notification list read-model SQL and pagination out of `services/api/app/main.py` into `services/api/app/notification_read_model.py`; add targeted unit coverage for paginated and non-paginated behavior; preserve route path, response shape and `api_main` monkeypatch surfaces for `query_all`, `query_count`, pagination helpers and paginated response builder.
+- Out of scope: notification delivery/worker behavior, notification preferences, digest behavior, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/notification_read_model.py`, `tests/unit/python/test_api_notifications.py`.
+- Risk: medium, because this is user-facing notification read behavior; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted notification read-model unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API notification read-model cohesion; stakeholder/consumer is FastAPI/web/admin user notification readers; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing notification read ownership from the god module.
+- Implemented, with evidence: moved API user notification list SQL and pagination into `services/api/app/notification_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps a compatibility wrapper that passes main-owned `query_all`, `query_count`, pagination helper and paginated response builder.
+- Implemented, with evidence: added targeted unit coverage for non-paginated notification limit/article join behavior and paginated count/offset behavior.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5381 lines after this extraction; `services/api/app/notification_read_model.py` owns 51 lines of notification read-model logic.
+- Scope note: notification delivery/worker behavior, notification preferences, digest behavior, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_notifications` passed with 2 tests; `pnpm unit_tests:py` passed with 304 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-32-API-LLM-TEMPLATES-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API LLM prompt template list/get read-model SQL, pagination and not-found behavior out of `services/api/app/main.py` into `services/api/app/llm_review_read_model.py`; add targeted unit coverage for paginated list and 404 not-found compatibility; preserve route paths, response shapes and `api_main` monkeypatch surfaces for `query_all`, `query_count`, `query_one`, pagination helpers and paginated response builder.
+- Out of scope: worker prompt rendering, LLM review execution, prompt template write behavior, DB schema, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/llm_review_read_model.py`, `tests/unit/python/test_api_llm_templates.py`.
+- Risk: medium, because this is operator-facing template observability/config read behavior; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted LLM template unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API LLM template read-model cohesion; stakeholder/consumer is FastAPI/admin/operator prompt template management; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is module-specific not-found error converted back to FastAPI HTTP 404 in `main.py` for compatibility.
+- Implemented, with evidence: moved API LLM prompt template list/get SQL, pagination and not-found read behavior into `services/api/app/llm_review_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_all`, `query_count` and `query_one`, and convert module not-found back into existing HTTP 404 detail.
+- Implemented, with evidence: added targeted unit coverage for paginated prompt template list SQL/shape and not-found HTTP 404 compatibility.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5399 lines after this extraction; `services/api/app/llm_review_read_model.py` owns 195 lines including LLM review and template read-model logic.
+- Scope note: worker prompt rendering, LLM review execution, prompt template write behavior, DB schema, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_llm_templates` passed with 2 tests; `pnpm unit_tests:py` passed with 302 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-31-API-REINDEX-JOBS-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API reindex job list read-model SQL/pagination/projection logic out of `services/api/app/main.py` into `services/api/app/reindex_read_model.py`; add targeted unit coverage for non-paginated limit behavior and preserve existing paginated projection behavior; preserve route path, response shape and `api_main` monkeypatch surfaces for `query_all`, `query_count`, pagination helpers and selection-profile projection.
+- Out of scope: reindex job creation/backfill request already extracted, worker reindex/backfill runtime, DB schema, queue/outbox behavior, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/reindex_read_model.py`, `tests/unit/python/test_api_reindex_jobs.py`.
+- Risk: medium, because this is operator-facing reindex observability; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted reindex jobs unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API reindex observability read-model cohesion; stakeholder/consumer is FastAPI/admin/operator reindex monitoring; boundary stays inside API read-model modules with PostgreSQL as read truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while removing read-model ownership from the god module.
+- Implemented, with evidence: moved API reindex job list SQL, pagination and selection-profile projection orchestration into `services/api/app/reindex_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps a compatibility wrapper that passes main-owned `query_all`, `query_count`, pagination helpers, paginated response builder and projection function.
+- Implemented, with evidence: added targeted unit coverage for non-paginated limit behavior while existing paginated projection coverage continues to pass.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5419 lines after this extraction; `services/api/app/reindex_read_model.py` owns 101 lines of reindex read-model logic.
+- Scope note: reindex job creation/backfill request, worker reindex/backfill runtime, DB schema, queue/outbox behavior, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_reindex_jobs` passed with 2 tests; `pnpm unit_tests:py` passed with 300 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API read-model extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-30-API-CONTENT-ANALYSIS-BACKFILL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API content-analysis backfill request persistence/outbox logic out of `services/api/app/main.py`; add targeted unit coverage for normalized subject IDs, queued reindex job persistence and outbox payload shape; preserve route path, response shape, event type, aggregate fields, reindex job kind/index name and `api_main` monkeypatch surfaces for `uuid.uuid4`, `psycopg.connect`, database URL resolution, `dict_row`, `dump_json_value` and subject ID normalization.
+- Out of scope: worker backfill processing behavior, queue/event contract changes, reindex DB schema, policy write/read logic already extracted, content-analysis read-model behavior, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/content_analysis_backfill.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because this writes durable reindex jobs and emits outbox events; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted unit tests for content-analysis backfill request persistence/outbox behavior; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API content-analysis backfill request cohesion; stakeholder/consumer is FastAPI/admin/operator content-analysis replay flow; boundary stays inside API modules with PostgreSQL/outbox as durable async handoff; tradeoff is explicit dependency injection from `main.py` to preserve existing route/test patch surfaces while moving reindex/outbox write ownership out of the god module.
+- Implemented, with evidence: moved content-analysis backfill request reindex job persistence and outbox event emission into `services/api/app/content_analysis_backfill.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps a compatibility wrapper that passes main-owned `uuid.uuid4`, `psycopg.connect`, `build_database_url`, `dict_row`, `dump_json_value` and subject ID normalization dependencies.
+- Implemented, with evidence: added targeted unit coverage for normalized requested/subject UUIDs, queued reindex job options persistence and `reindex.requested` outbox payload shape.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5433 lines after this extraction; `services/api/app/content_analysis_backfill.py` owns 95 lines of backfill request logic.
+- Scope note: worker backfill processing behavior, queue/event contract names, reindex DB schema, policy write/read behavior, content-analysis read-model behavior, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 40 tests; `pnpm unit_tests:py` passed with 299 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API persistence/outbox extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-29-API-CONTENT-ANALYSIS-POLICY-WRITES
+
+- Kind: Stage
+- Status: completed
+- In scope: move API content-analysis policy and content-filter policy create/update write logic out of `services/api/app/main.py`; add targeted unit coverage for create and versioned update behavior; preserve route paths, response shapes, HTTP 500 failure behavior and `api_main` monkeypatch surfaces for `query_one`, policy readbacks, `psycopg.connect` and database URL resolution.
+- Out of scope: content-analysis backfill enqueueing, read-model/list/get behavior already extracted, DB schema, worker analysis behavior, queue/event names, route paths, public response fields.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/content_analysis_policies.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because policy versioning changes content-analysis runtime behavior; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted unit tests for content-analysis policy writes; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API content-analysis policy write cohesion; stakeholder/consumer is FastAPI/admin/operator content-analysis and content-filter policy management; boundary stays inside API modules with PostgreSQL as durable truth; tradeoff is explicit dependency injection from `main.py` to preserve existing route/test patch surfaces while moving persistence/versioning ownership out of the god module.
+- Implemented, with evidence: moved content-analysis policy and content-filter policy create/update write/versioning logic into `services/api/app/content_analysis_policies.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, policy readback functions, `build_database_url`, `psycopg.connect` and `dict_row`, then converts module write failures back into existing HTTP 500 route behavior.
+- Implemented, with evidence: added targeted unit coverage for content-filter policy JSON persistence/readback and versioned content-analysis policy update runtime changes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5505 lines after this extraction; `services/api/app/content_analysis_policies.py` owns 377 lines of policy write logic.
+- Scope note: content-analysis backfill enqueueing, read-model/list/get behavior, DB schema, worker analysis behavior, queue/event names, route paths and public response fields remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 39 tests; `pnpm unit_tests:py` passed with 298 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API policy write extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-28-API-DISCOVERY-RE-EVALUATION
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery re-evaluation request handoff out of `services/api/app/main.py`; add targeted unit coverage for mission_id forwarding and repository injection; preserve route path, response shape, error behavior and `api_main` monkeypatch surfaces for `DiscoveryCoordinatorRepository` and `re_evaluate_sources`.
+- Out of scope: re-evaluation algorithm/orchestrator internals, feedback/candidate/mission management already extracted, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_re_evaluation.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium, because the route triggers discovery re-evaluation runtime but the slice is a behavior-preserving handoff extraction.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests including new re-evaluation test; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery runtime handoff cohesion; stakeholder/consumer is FastAPI/admin/operator re-evaluation flow; boundary stays inside API modules with orchestration delegated to worker discovery runtime through explicit dependency injection; tradeoff is preserving `main.py` patch surfaces while removing direct route-owned orchestration.
+- Implemented, with evidence: moved discovery re-evaluation request handoff into `services/api/app/discovery_re_evaluation.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps route-level compatibility wrapper that passes main-owned `DiscoveryCoordinatorRepository` and `re_evaluate_sources` dependencies.
+- Implemented, with evidence: added targeted unit test for mission_id forwarding and repository injection into the orchestrator handoff.
+- Implemented, with evidence: `services/api/app/main.py` is at 5781 lines after this extraction; `services/api/app/discovery_re_evaluation.py` owns 16 lines of handoff logic.
+- Scope note: re-evaluation algorithm/orchestrator internals, feedback/candidate/mission management, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 37 tests; `pnpm unit_tests:py` passed with 296 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was a behavior-preserving API runtime handoff extraction with direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-26-API-DISCOVERY-CANDIDATES
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery candidate update, recall candidate create/update/promote and canonical-domain helper logic out of `services/api/app/main.py`; preserve route names, response shapes, SQL behavior, source registrar semantics, source-profile linking and `api_main` monkeypatch surfaces for candidate/recall candidate/source profile lookups, `PostgresSourceRegistrarAdapter`, `psycopg.connect`, canonical domain resolution and database URL resolution.
+- Out of scope: mission/recall mission management already extracted, feedback creation, source profile create/update management, route paths, public response fields, DB schema, queue/event names, registrar internals.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_candidates.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because candidate promotion can register source channels and link source profiles; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery candidate management cohesion; stakeholder/consumer is FastAPI/admin/operator candidate review and promotion flows; boundary stays inside API modules with PostgreSQL as durable truth and source registration via existing registrar adapter; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while moving ownership out of the god module.
+- Implemented, with evidence: moved discovery candidate update, recall candidate create/update/promote and canonical-domain validation logic into `services/api/app/discovery_candidates.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned candidate/recall candidate/source profile lookups, canonical domain resolver, source registrar adapter, database URL and `psycopg.connect` dependencies.
+- Implemented, with evidence: added targeted guard test proving rejected recall candidates are not promoted through registrar unless rejected as `already_registered`.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5798 lines after this extraction; `services/api/app/discovery_candidates.py` owns 397 lines of candidate management logic.
+- Scope note: mission/recall mission management, feedback creation, source profile create/update management, route paths, response fields, DB schema, queue/event names and registrar internals remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 35 tests; `pnpm unit_tests:py` passed with 294 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API candidate extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-27-API-DISCOVERY-FEEDBACK
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery feedback create logic out of `services/api/app/main.py`; add targeted unit coverage for trimmed optional IDs and created row readback; preserve route names, response shapes, SQL behavior and `api_main` monkeypatch surfaces for `query_one`, `psycopg.connect`, feedback select SQL and database URL resolution.
+- Out of scope: feedback list/read-model already extracted, candidate/mission management already extracted, re-evaluation runtime, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_feedback.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium, because feedback events affect discovery learning/observability but this slice is a small behavior-preserving persistence extraction.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests including new feedback test; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery feedback write cohesion; stakeholder/consumer is FastAPI/admin/operator feedback creation flow; boundary stays inside API modules with PostgreSQL as durable truth; tradeoff is explicit dependency injection from `main.py` to preserve current monkeypatch/test surfaces while moving ownership out of the god module.
+- Implemented, with evidence: moved discovery feedback creation logic into `services/api/app/discovery_feedback.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrapper that passes main-owned feedback select SQL, `query_one`, database URL and `psycopg.connect` dependencies.
+- Implemented, with evidence: added targeted unit test for optional ID trimming and created feedback row readback.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 5780 lines after this extraction; `services/api/app/discovery_feedback.py` owns 54 lines of feedback write logic.
+- Scope note: feedback list/read-model, candidate/mission management, re-evaluation runtime, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 36 tests; `pnpm unit_tests:py` passed with 295 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was small behavior-preserving API feedback extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-24-API-DISCOVERY-RECALL-MISSIONS
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery recall mission create, update and acquisition request logic out of `services/api/app/main.py`; add targeted unit tests for recall mission create/update behavior where existing coverage is indirect; preserve route names, response shapes, SQL behavior and `api_main` monkeypatch surfaces for `get_discovery_recall_mission`, `require_attachable_discovery_policy_profile`, `snapshot_discovery_recall_mission_profile_policy`, `load_discovery_settings`, `DiscoveryCoordinatorRepository`, `acquire_recall_missions`, `psycopg.connect` and database URL resolution.
+- Out of scope: graph discovery mission management, candidate/recall candidate promotion, feedback creation, route paths, public response fields, DB schema, queue/event names, orchestrator/runtime behavior.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_recall_missions.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because recall mission management controls independent recall setup and live acquisition handoff; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests including new recall mission tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery recall mission cohesion; stakeholder/consumer is FastAPI/admin/operator recall mission management and acquisition request flows; boundary stays inside API modules with PostgreSQL as durable truth and discovery orchestrator invoked through explicit dependency injection; tradeoff is temporary `main.py` compatibility wrappers to preserve test/caller monkeypatch surfaces while moving ownership out of the god module.
+- Implemented, with evidence: moved discovery recall mission create, update and acquisition request logic into `services/api/app/discovery_recall_missions.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned profile attachment, recall mission lookup, policy snapshot, discovery settings, orchestrator repository, acquire function, database URL and `psycopg.connect` dependencies.
+- Implemented, with evidence: added targeted unit tests for recall mission create profile trimming/attachment and update-time applied policy snapshot reset when profile changes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6178 lines after this extraction; `services/api/app/discovery_recall_missions.py` owns 174 lines of recall mission management logic.
+- Scope note: graph discovery mission management, candidate/recall candidate promotion, feedback creation, route paths, response fields, DB schema, queue/event names and orchestrator/runtime behavior remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 32 tests; `pnpm unit_tests:py` passed with 291 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API recall mission extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-25-API-DISCOVERY-MISSIONS
+
+- Kind: Stage
+- Status: completed
+- In scope: move API graph discovery mission create, update, delete, compile and run request logic out of `services/api/app/main.py`; preserve route names, response shapes, SQL behavior, quota checks, sequence trigger semantics and `api_main` monkeypatch surfaces for `get_discovery_mission`, `require_attachable_discovery_policy_profile`, `snapshot_discovery_mission_profile_policy`, `get_discovery_monthly_quota_snapshot`, `create_sequence_run_request_for_trigger`, `load_discovery_settings`, `DiscoveryCoordinatorRepository`, `compile_interest_graph_for_mission`, `psycopg.connect` and database URL resolution.
+- Out of scope: recall mission management already extracted, candidate/recall candidate promotion, feedback creation, route paths, public response fields, DB schema, queue/event names, orchestrator runtime internals.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_missions.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because graph discovery mission management controls mission persistence, compile handoff, quota guardrails and sequence run dispatch; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery mission management cohesion; stakeholder/consumer is FastAPI/admin/operator graph discovery mission flows; boundary stays inside API modules with PostgreSQL as durable truth and orchestrator/sequence handoffs injected explicitly; tradeoff is temporary `main.py` compatibility wrappers to preserve current tests and route call sites while moving ownership out of the god module.
+- Implemented, with evidence: moved discovery mission create, update, delete, compile and run request logic into `services/api/app/discovery_missions.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned mission lookup, profile attachment, policy snapshot, quota snapshot, sequence trigger, discovery settings, orchestrator repository, interest-graph compiler, database URL and `psycopg.connect` dependencies.
+- Implemented, with evidence: added targeted unit tests for graph mission profile update applied policy reset and compile-time snapshot-before-compiler handoff.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6028 lines after this extraction; `services/api/app/discovery_missions.py` owns 325 lines of graph discovery mission management logic.
+- Scope note: recall mission management, candidate/recall candidate promotion, feedback creation, route paths, response fields, DB schema, queue/event names and orchestrator internals remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 34 tests; `pnpm unit_tests:py` passed with 293 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API mission management extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-16-API-OBSERVABILITY-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API fetch run listing and outbox event listing read-model logic out of `services/api/app/main.py`; preserve route names, response shapes, pagination semantics and `api_main` monkeypatch surfaces for `query_all`/`query_count`.
+- Out of scope: relay/outbox semantics, fetcher behavior, channel fetch persistence, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/observability_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium, because these are operator-facing observability reads; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved API fetch run listing and outbox event listing read-model logic into `services/api/app/observability_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_all` and `query_count` dependencies, preserving existing monkeypatch surfaces and response shapes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 7333 lines after this extraction.
+- Scope note: relay/outbox semantics, fetcher behavior, channel fetch persistence, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-19-API-DISCOVERY-GET-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery get-by-id/source-profile lookup/portfolio snapshot read helpers out of `services/api/app/main.py`; preserve route names, response shapes, not-found messages and `api_main` monkeypatch surfaces for `query_one` and public `get_discovery_*` compatibility functions.
+- Out of scope: discovery paginated list reads, create/update/delete/promote flows, quota/cost/monthly/summary behavior, orchestrator/runtime behavior, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium-high, because discovery write/update flows call some get helpers and tests may monkeypatch `api_main` functions; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery read-model cohesion; stakeholder/consumer is FastAPI routes/tests/admin/control-plane readers; boundary stays inside API modules with PostgreSQL as read truth; tradeoff is temporary `main.py` compatibility wrappers until callers/tests are migrated.
+- Implemented, with evidence: moved API discovery get-by-id/read helpers for missions, recall missions, policy profiles, classes, candidates, recall candidates, hypotheses, source profiles, quality snapshots, interest scores and portfolio snapshots into `services/api/app/discovery_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, convert `DiscoveryReadModelNotFound` back into `SequenceNotFoundError`, and preserve public SQL-builder compatibility exports expected by tests.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6615 lines after this extraction; `services/api/app/discovery_read_model.py` now owns 649 lines of discovery read-model logic.
+- Scope note: discovery paginated list reads, create/update/delete/promote flows, quota/cost/monthly/summary behavior, orchestrator/runtime behavior, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; targeted `tests.unit.python.test_api_discovery_management` passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-20-API-DISCOVERY-SUMMARY-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery monthly quota, summary and cost summary read-model logic out of `services/api/app/main.py`; preserve route names, response shapes, env/config semantics and `api_main` monkeypatch surfaces for `query_one`, `query_all`, `load_discovery_settings` and `get_discovery_monthly_quota_snapshot`.
+- Out of scope: discovery list/get reads already extracted, create/update/delete/promote flows, mission run quota enforcement, orchestrator/runtime behavior, env defaults, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium-high, because quota and cost summaries are operator guardrails and tests patch `api_main` dependencies; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery observability/read-model cohesion; stakeholder/consumer is FastAPI/admin/operator readers; boundary stays inside API read-model modules with PostgreSQL/config as inputs; tradeoff is explicit dependency injection to preserve existing `api_main` monkeypatch compatibility.
+- Implemented, with evidence: moved discovery monthly quota, summary and cost summary read-model logic into `services/api/app/discovery_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, `query_all`, `load_discovery_settings`, cost helpers and `get_discovery_monthly_quota_snapshot`, preserving existing monkeypatch surfaces and response shapes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6435 lines after this extraction; `services/api/app/discovery_read_model.py` now owns 904 lines of discovery read-model logic.
+- Scope note: discovery write/update/delete/promote flows, mission run quota enforcement, orchestrator/runtime behavior, env defaults, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; targeted `tests.unit.python.test_api_discovery_management` passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-21-API-DISCOVERY-POLICY-PROFILES
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery policy profile attachability, create, update and delete management logic out of `services/api/app/main.py`; preserve route names, response shapes, SQL behavior and `api_main` monkeypatch surfaces for `get_discovery_policy_profile`, payload normalization helpers, `psycopg.connect` and database URL resolution.
+- Out of scope: discovery mission/recall mission management, class management, candidate/recall candidate promotion, feedback creation, route paths, public response fields, DB schema, queue/event names, orchestrator/runtime behavior.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_policy_profiles.py`, targeted tests only if compatibility imports require them.
+- Risk: medium-high, because policy profiles are attached to mission and recall mission creation; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery management cohesion; stakeholder/consumer is FastAPI/admin/operator write flows; boundary stays inside API modules with PostgreSQL as durable truth; tradeoff is explicit dependency injection from `main.py` to preserve current test/caller monkeypatch surfaces while moving ownership out of the god module.
+- Implemented, with evidence: moved discovery policy profile attachability, create, update and delete management logic into `services/api/app/discovery_policy_profiles.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `get_discovery_policy_profile`, payload normalization helpers, `build_database_url`, `psycopg.connect` and `dict_row`, then convert module-specific errors back into existing `SequenceValidationError`, `SequenceNotFoundError` and `SequenceConflictError`.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6377 lines after this extraction; `services/api/app/discovery_policy_profiles.py` owns 201 lines of policy-profile management logic.
+- Scope note: mission/recall mission management, class management, candidate/recall candidate promotion, feedback creation, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; targeted `tests.unit.python.test_api_discovery_management` passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API management extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-22-API-DISCOVERY-CLASSES
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery hypothesis class create, update and delete management logic out of `services/api/app/main.py`; preserve route names, response shapes, SQL behavior and `api_main` monkeypatch surfaces for `get_discovery_class`, `psycopg.connect` and database URL resolution.
+- Out of scope: policy profile management already extracted, mission/recall mission management, candidate/recall candidate promotion, feedback creation, route paths, public response fields, DB schema, queue/event names, orchestrator/runtime behavior.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_classes.py`, targeted tests only if compatibility imports require them.
+- Risk: medium, because hypothesis classes are operator-managed discovery configuration and can block deletion when hypotheses exist; this slice must be behavior-preserving and keep compatibility wrappers.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery management cohesion; stakeholder/consumer is FastAPI/admin/operator write flows; boundary stays inside API modules with PostgreSQL as durable truth; tradeoff is explicit dependency injection from `main.py` to preserve current test/caller monkeypatch surfaces while moving ownership out of the god module.
+- Implemented, with evidence: moved discovery hypothesis class create, update and delete management logic into `services/api/app/discovery_classes.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `get_discovery_class`, `build_database_url`, `psycopg.connect` and `dict_row`, then convert module-specific errors back into existing `SequenceValidationError`, `SequenceNotFoundError` and `SequenceConflictError`.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6316 lines after this extraction; `services/api/app/discovery_classes.py` owns 166 lines of discovery class management logic.
+- Scope note: policy profile management, mission/recall mission management, candidate/recall candidate promotion, feedback creation, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; targeted `tests.unit.python.test_api_discovery_management` passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API management extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-23-API-DISCOVERY-POLICY-SNAPSHOTS
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery applied policy snapshot builders and mission/recall snapshot persistence helpers out of `services/api/app/main.py`; add targeted unit tests where existing coverage only checks indirect invocation; preserve route names, response shapes, SQL behavior and `api_main` monkeypatch surfaces for mission/profile lookups, payload normalization helpers, `psycopg.connect` and database URL resolution.
+- Out of scope: mission/recall mission create/update/delete flows, candidate/recall candidate promotion, feedback creation, route paths, public response fields, DB schema, queue/event names, orchestrator/runtime behavior.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_policy_snapshots.py`, `tests/unit/python/test_api_discovery_management.py`.
+- Risk: medium-high, because applied policy snapshots feed discovery mission and recall runtime behavior; this slice must be behavior-preserving and strengthen direct coverage.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests including new snapshot tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Architecture note: affected concern is API discovery policy snapshot cohesion and testability; stakeholder/consumer is mission/recall mission write/runtime flows; boundary stays inside API modules with PostgreSQL as durable truth; tradeoff is explicit dependency injection from `main.py` to preserve current test/caller monkeypatch surfaces while moving ownership out of the god module.
+- Implemented, with evidence: moved applied discovery policy snapshot builders and mission/recall snapshot persistence helpers into `services/api/app/discovery_policy_snapshots.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned mission/profile lookups, payload normalization helpers, `build_database_url`, `psycopg.connect` and `dict_row`.
+- Implemented, with evidence: added targeted unit tests for graph policy snapshot shape, mission applied policy persistence and recall applied policy clearing when no profile is attached.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6240 lines after this extraction; `services/api/app/discovery_policy_snapshots.py` owns 170 lines of policy snapshot logic.
+- Scope note: mission/recall mission create/update/delete flows, candidate/recall candidate promotion, feedback creation, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API/test modules passed; targeted `tests.unit.python.test_api_discovery_management` passed with 30 tests; `pnpm unit_tests:py` passed with 289 tests; `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving API snapshot extraction with strengthened direct unit coverage.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-17-API-CONTENT-ANALYSIS-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API content-analysis normalization helpers, summary/filter read helpers, read/list endpoints for analysis results/entities/labels/policies/filter results out of `services/api/app/main.py`; preserve route names, response shapes, pagination semantics and `api_main` monkeypatch surfaces for `query_one`/`query_all`/`query_count`.
+- Out of scope: content-analysis backfill enqueue semantics, policy create/update/versioning writes, filter policy create/update writes, worker analysis behavior, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/content_analysis_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium-high, because these helpers shape operator content-analysis reads and analysis summaries embedded into article/resource responses; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved API content-analysis normalization helpers, analysis summary/filter helper logic and read/list endpoints for analysis results, entities, labels, analysis policies, filter policies and filter results into `services/api/app/content_analysis_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, `query_all` and `query_count` dependencies, preserving existing monkeypatch surfaces and response shapes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6812 lines after this extraction.
+- Scope note: content-analysis backfill enqueue semantics, policy create/update/versioning writes, filter policy create/update writes, worker analysis behavior, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-18-API-DISCOVERY-LIST-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API discovery paginated/list read-model functions out of `services/api/app/main.py`; preserve route names, response shapes, pagination semantics and `api_main` monkeypatch surfaces for `query_all`/`query_count`.
+- Out of scope: discovery create/update/delete/promote flows, get-by-id not-found semantics, quota/cost/summary behavior, orchestrator/runtime behavior, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/discovery_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium, because these are operator-facing discovery list reads; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; targeted discovery management unit tests; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved API discovery paginated/list read-model functions for missions, recall missions, policy profiles, classes, candidates, recall candidates, hypotheses, source profiles, quality snapshots, interest scores and feedback into `services/api/app/discovery_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_all` and `query_count` dependencies, preserving existing monkeypatch surfaces and response shapes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 6621 lines after this extraction.
+- Scope note: discovery create/update/delete/promote flows, get-by-id not-found semantics, quota/cost/summary behavior, orchestrator/runtime behavior, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; targeted `tests.unit.python.test_api_discovery_management` passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-15-API-LLM-REVIEW-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API LLM review list, usage summary and monthly budget summary read-model logic out of `services/api/app/main.py`; preserve `api_main` compatibility functions, route names, response shapes and monkeypatch surfaces for `query_one`/`query_all`.
+- Out of scope: LLM review worker semantics, monthly budget policy semantics, env/config defaults, route paths, public response fields, DB schema, queue/event names.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/llm_review_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium, because the monthly budget summary is an operator-facing guardrail; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; targeted unit test for LLM budget compatibility; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved API LLM review list, usage summary and monthly budget summary read-model logic into `services/api/app/llm_review_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility wrappers that pass main-owned `query_one`, `query_all` and `query_count` dependencies, preserving existing monkeypatch surfaces and response shapes.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 7366 lines after this extraction.
+- Scope note: LLM review worker semantics, monthly budget policy semantics, env/config defaults, route paths, response fields, DB schema and queue/event names remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; targeted `test_llm_budget_summary_uses_precise_usd_comparison` passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-14-API-CONTENT-SELECTION-READ-MODEL
+
+- Kind: Stage
+- Status: completed
+- In scope: move API content item ID helpers, article/system selection SQL clauses, selection explain/diagnostics/guidance builders and article/resource selection payload applicators out of `services/api/app/main.py`; preserve `api_main` compatibility imports and all response shapes.
+- Out of scope: FastAPI route paths, public response fields, SQL semantics, sequence/discovery/content-analysis API logic, DB schema, worker/fetcher behavior.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/content_selection_read_model.py`, targeted tests only if compatibility imports require them.
+- Risk: medium-high, because these helpers shape content API responses and operator diagnostics; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; stronger compose proof only if static/unit gates indicate behavioral uncertainty.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved content item ID helpers, article/system selection SQL clauses, selection explain/diagnostics/guidance builders, content selection SQL builders, resource/article selection payload applicators and selected content preview helper into `services/api/app/content_selection_read_model.py`.
+- Implemented, with evidence: `services/api/app/main.py` keeps compatibility exports and a `query_count` wrapper that preserves the existing `api_main.query_one` monkeypatch surface used by unit tests.
+- Implemented, with evidence: `services/api/app/main.py` is reduced to 7443 lines after this extraction.
+- Scope note: FastAPI route paths, response fields, SQL semantics, DB schema, worker/fetcher behavior and content-analysis/discovery/sequence logic remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched API modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck` and `git diff --check --` passed.
+- Proof caveat: no compose proof was run for this batch because required static/unit gates passed and the slice was behavior-preserving read-model extraction only.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-13-WORKER-REINDEX-BACKFILL-RUNTIME
+
+- Kind: Stage
+- Status: completed
+- In scope: move reindex job context/options helpers, historical backfill snapshot/replay helpers, gray-zone replay helpers, content-analysis backfill helpers and interest auto-repair job helper ownership out of `services/workers/app/main.py`; preserve `main.py` compatibility exports and behavior.
+- Out of scope: reindex/backfill semantics, content-analysis policy behavior, selection/matching semantics, HNSW/indexer behavior, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/reindex_backfill_runtime.py`, `services/workers/app/reindex_processor.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because this code updates reindex jobs, snapshot rows, final selection/review replay paths and content-analysis backfill progress; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm test:reindex-backfill:compose` or `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved reindex job context/options helpers, historical backfill snapshot helpers, gray-zone replay helpers, content-analysis backfill helpers, selection-profile snapshot helper and interest auto-repair queue helper into `services/workers/app/reindex_backfill_runtime.py`.
+- Implemented, with evidence: `services/workers/app/main.py` keeps the moved helper names as compatibility exports for existing unit tests, monkeypatch callers and reindex processor dependency injection.
+- Implemented, with evidence: `services/workers/app/main.py` is reduced to 1752 lines after this extraction while preserving `process_reindex` dependency wiring.
+- Scope note: reindex/backfill semantics, content-analysis policies, HNSW/index behavior, queue names and DB schema remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Proof caveat: direct `pnpm test:reindex-backfill:compose` was attempted first and failed because the compose `worker` service was not running; this was a harness precondition miss, not a code failure. Canonical `pnpm integration_tests` then started compose itself and passed.
+- Passed stateful proof detail: final `pnpm integration_tests` passed; it exercised phase 4/5 reindex routing and Internal MVP acceptance queued historical backfill after an admin-managed interest was live.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-12-WORKER-COMPILE-PROCESSORS
+
+- Kind: Stage
+- Status: completed
+- In scope: move `process_interest_compile` and `process_criterion_compile` into focused compile processor module ownership; preserve `main.py` compatibility wrappers and main-owned monkeypatch dependency names; wire sequence direct handlers when import-safe.
+- Out of scope: compiler semantics, embedding provider behavior, feature extraction behavior, HNSW/index behavior, auto-repair/reindex semantics, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/compile_processors.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because compile processors write compiled selection artifacts/vector registries and can trigger downstream derived-state repair paths; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved interest and criterion compile processor logic into `services/workers/app/compile_processors.py`, with focused dependency dataclasses preserving main-owned compiler, feature extractor, vector registry, indexer and auto-repair call surfaces.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_interest_compile` and `process_criterion_compile` as compatibility wrappers using main-owned dependency names; `INTEREST_COMPILE_CONSUMER` and `CRITERION_COMPILE_CONSUMER` remain compatibility exports for import callers.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves both compile handlers through direct focused processors before falling back to legacy `main.py` loading.
+- Scope note: compiler semantics, vector/index behavior, auto-repair/reindex semantics and compile repository helper decomposition remain intentionally unchanged.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: final `pnpm integration_tests` passed; compose worker smoke returned `compiled` for both `interest-compile` and `criterion-compile`, and Internal MVP acceptance passed through fresh ingest, matching, notification, admin-managed interest and historical backfill.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-11-WORKER-REINDEX-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: move `process_reindex` into a focused reindex processor module; preserve `main.py` compatibility wrapper and main-owned monkeypatch dependency names; wire sequence direct handler when import-safe.
+- Out of scope: reindex/backfill semantics, content-analysis policy behavior, HNSW/indexer behavior, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/reindex_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because reindex controls HNSW rebuilds, historical backfill and content-analysis backfill; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved reindex processor logic into `services/workers/app/reindex_processor.py`, with `ReindexProcessorDependencies` preserving main-owned dependency names and indexer/backfill/content-analysis call surfaces.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_reindex` as a compatibility wrapper; `REINDEX_CONSUMER` remains a compatibility export for import callers.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_reindex` through a direct focused handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Scope note: reindex repository/helper decomposition, HNSW behavior, historical backfill semantics and content-analysis policy behavior remain intentionally out of this batch.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: final `pnpm integration_tests` passed; phase 4/5 relay routing covered reindex triggers, and Internal MVP acceptance passed through historical backfill after the processor extraction.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-10-WORKER-FEEDBACK-INGEST-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: move `process_feedback_ingest` into a focused feedback ingest processor module; preserve `main.py` compatibility wrapper and main-owned monkeypatch dependency names; wire sequence direct handler when import-safe.
+- Out of scope: feedback product semantics, notification delivery behavior, LLM review, reindex, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/feedback_ingest_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: medium, because feedback ingest updates notification delivery payload state and participates in phase 4/5 routing, but this slice is behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved feedback ingest processor logic into `services/workers/app/feedback_ingest_processor.py`, with `FeedbackIngestProcessorDependencies` preserving the main-owned dependency surface.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_feedback_ingest` as a compatibility wrapper; `FEEDBACK_INGEST_CONSUMER` remains a compatibility export alongside `LLM_REVIEW_CONSUMER` for worker smoke/import callers.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_feedback_ingest` through a direct focused handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: final `pnpm integration_tests` passed; phase 4/5 relay routing covered feedback ingest triggers, and full Internal MVP acceptance passed through fresh ingest, matching, notification, admin flows and historical backfill.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-9-WORKER-LLM-REVIEW-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: move `process_llm_review` into a focused LLM review processor module; preserve `main.py` compatibility wrapper and main-owned monkeypatch dependency names; wire sequence direct handler when import-safe.
+- Out of scope: LLM provider behavior, review policy semantics, quota semantics, criteria/interest scoring semantics, notification semantics, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/llm_review_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because LLM review resolves gray-zone criteria/interests and can emit downstream outbox events; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved LLM review processor logic into `services/workers/app/llm_review_processor.py`, with `LlmReviewProcessorDependencies` preserving the main-owned dependency and monkeypatch surface.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_llm_review` as a compatibility wrapper using main-owned dependency names; `LLM_REVIEW_CONSUMER` remains a compatibility export for worker smoke helpers.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_llm_review` through a direct focused handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Scope note: LLM review SQL/repository decomposition and provider/quota policy changes remain intentionally out of this batch; direct processor defaults can lazy-bind main-owned helper defaults until a later repository split.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed after compatibility export remediation.
+- Remediation detail: the first integration attempt failed because `services/workers/app/smoke.py` imports `LLM_REVIEW_CONSUMER` from `main.py`; restoring that compatibility export fixed the smoke import surface.
+- Passed stateful proof detail: final `pnpm integration_tests` passed; phase 4/5 relay routing covered LLM review triggers, and `test:cluster-match-notify:compose` returned matched criteria/interests plus notified delivery.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-8-WORKER-INTEREST-MATCH-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: move `process_match_interests` into a focused interest match processor module; preserve `main.py` compatibility wrapper and main-owned monkeypatch dependency names; wire sequence direct handler when import-safe.
+- Out of scope: interest scoring semantics, final selection semantics, notification semantics, LLM review policy changes, queue/event names, DB migrations, public API/schema changes, criteria matching.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/interest_match_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because interest matching owns personalization/filter truth and participates in final selection/outbox routing; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved interest matching processor logic into `services/workers/app/interest_match_processor.py`, with `InterestMatchProcessorDependencies` preserving the main-owned dependency and monkeypatch surface.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_match_interests` as a compatibility wrapper using main-owned dependency names, preserving import/test callers while reducing the worker hotspot to 3498 lines.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_match_interests` through a direct focused handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Scope note: interest match SQL/repository decomposition remains intentionally out of this batch; direct processor defaults can lazy-bind main-owned helper defaults until a later repository split.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: `pnpm integration_tests` included `test:cluster-match-notify:compose`, where `interests` returned `status: matched`, `interestCount: 1`, and downstream `notify` returned `sentCount: 1`, `suppressedCount: 0`, `llmReviewCount: 0`.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-7-WORKER-CRITERIA-MATCH-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: move `process_match_criteria` into a focused criteria match processor module; preserve `main.py` compatibility wrapper and main-owned monkeypatch dependency names; wire sequence direct handler when import-safe.
+- Out of scope: criteria scoring semantics, LLM review policy changes, selection profile behavior changes, reusable review semantics, interest matching, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/criteria_match_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because criteria matching gates clustering and can enqueue LLM review events; this slice must be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests`; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved criteria matching processor logic into `services/workers/app/criteria_match_processor.py`, with `CriteriaMatchProcessorDependencies` preserving the heavily monkeypatched main-owned dependency surface.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_match_criteria` as a compatibility wrapper using main-owned dependency names, preserving existing unit test monkeypatch behavior.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_match_criteria` through a direct focused handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Scope note: criteria helper repository decomposition remains intentionally out of this batch; direct processor defaults can lazy-bind main-owned helper defaults until a later repository split.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: `pnpm integration_tests` included `test:cluster-match-notify:compose`, where `criteria` returned `status: matched`, `criteriaCount: 1`, and downstream interests/notify passed.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-6-WORKER-ARTICLE-EXTRACT-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: move the `process_article_extract` wrapper into a focused worker module and wire sequence/legacy handler resolution to the narrow handler where applicable; keep fetchers-owned `ArticleExtractPlugin` semantics unchanged.
+- Out of scope: fetchers enrichment endpoint behavior, resource extraction, reindex semantics, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/article_extraction_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: medium, because the wrapper delegates to fetchers-owned enrichment and participates in historical backfill, but this slice is behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm integration_tests` if stateful enrichment/reindex coupling requires it; `git diff --check --`; cleanup with empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved the article enrichment wrapper into `services/workers/app/article_extraction_processor.py`; the wrapper still delegates to `ArticleExtractPlugin` and preserves the existing context/result shape.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_article_extract` as a compatibility export, while `services/workers/app/task_engine/pipeline_plugins.py` can resolve `process_article_extract` through a direct focused handler.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: `pnpm integration_tests` completed Internal MVP acceptance and included enrichment retry verification after the wrapper move.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-5-WORKER-CLUSTER-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: extract article cluster worker processor logic into a focused cluster processor module; update sequence pipeline plugins to use the narrow cluster processor handler instead of legacy `main.py` as the handler; keep `main.py` compatibility wrapper and main-owned dependency names for tests/monkeypatches.
+- Out of scope: clustering semantics, story/canonical verification semantics, selection gate semantics, repository decomposition of all cluster/system-feed helpers, matching/LLM/reindex/compile processors, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/cluster_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because cluster writes event clusters, story verification state and downstream matched events, but this slice is behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm test:cluster-match-notify:compose` or `pnpm integration_tests`; `git diff --check --`; cleanup with `pnpm dev:mvp:internal:down` and empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved article cluster processor logic into `services/workers/app/cluster_processor.py`, including focused dependency wiring through `ArticleClusterProcessorDependencies`.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_cluster` as a compatibility wrapper using main-owned dependency names, preserving import and monkeypatch surfaces while shrinking the hotspot.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_cluster` through a direct processor handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Scope note: cluster/system-feed repository helper decomposition remains intentionally out of this batch; default direct processor dependencies can still lazy-bind main-owned helper defaults until a later repository split.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: `pnpm integration_tests` included `test:cluster-match-notify:compose`, where `cluster` returned `status: clustered`, `isNewCluster: true` and downstream criteria/interests/notify all passed.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-4-WORKER-NOTIFY-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: extract article notify worker processor logic into a focused notification processor module; update sequence pipeline plugins to use the narrow notify processor instead of dynamically loading `services/workers/app/main.py`; keep `main.py` compatibility wrapper and main-owned dependency names for tests/monkeypatches.
+- Out of scope: notification product semantics, delivery channel behavior, digest schedulers, LLM review, clustering/matching, queue/event names, DB migrations, public API/schema changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/notification_processor.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: medium-high, because notify writes delivery logs/suppressions and advances article processing state, but this slice is behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm test:relay:phase3:compose` or `pnpm integration_tests`; `git diff --check --`; cleanup with `pnpm dev:mvp:internal:down` and empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved article notify processor logic into `services/workers/app/notification_processor.py`, including focused dependency wiring through `ArticleNotifyProcessorDependencies` and lazy runtime imports so API unit imports do not require Redis.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_notify` as a compatibility wrapper using main-owned dependency names, preserving import and monkeypatch surfaces while shrinking the hotspot.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_notify` through a direct processor handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm integration_tests` and `git diff --check --` passed.
+- Passed stateful proof detail: `pnpm integration_tests` included `test:cluster-match-notify:compose`, where `notify` returned `sentCount: 1`, `suppressedCount: 0`, `llmReviewCount: 0` through the new processor path.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-3-WORKER-EMBED-PROCESSOR
+
+- Kind: Stage
+- Status: completed
+- In scope: extract article embed worker processor logic into the existing cohesive article processor module; update sequence pipeline plugins to use the narrow embed processor instead of dynamically loading `services/workers/app/main.py`; keep `main.py` compatibility wrapper and main-owned dependency names for tests/monkeypatches.
+- Out of scope: clustering, matching, notify, LLM review, reindex, interest/criterion compile, queue/event names, DB migrations, vector schema changes, embedding model behavior changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/article_processors.py`, `services/workers/app/task_engine/pipeline_plugins.py`, targeted tests only if compatibility imports require them.
+- Risk: high, because embed writes vector registries/features and gates downstream clustering/matching, but this slice is behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm test:embed:compose` or `pnpm integration_tests`; `git diff --check --`; cleanup with `pnpm dev:mvp:internal:down` and empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved article embed processor logic into `services/workers/app/article_processors.py`, including focused dependency wiring through `ArticleEmbedProcessorDependencies` and lazy default imports for runtime-only dependencies.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_embed` as a compatibility wrapper using main-owned dependency names, preserving import and monkeypatch surfaces while shrinking the hotspot.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_embed` through a direct processor handler before falling back to legacy `main.py` loading for not-yet-migrated processors.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, `pnpm test:embed:compose` and `git diff --check --` passed.
+- Cleanup completed: `pnpm dev:mvp:internal:down` removed the compose stack after embed proof, and final `docker ps` returned only the header row with no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-2-WORKER-NORMALIZE-DEDUP-PROCESSORS
+
+- Kind: Stage
+- Status: completed
+- In scope: extract normalize/dedup worker processor logic and direct repository/event helpers into cohesive worker modules; update sequence pipeline plugins to use narrow processors for normalize/dedup instead of dynamically loading `services/workers/app/main.py`; keep `main.py` compatibility wrappers and existing monkeypatch/import surfaces.
+- Out of scope: full worker processor migration, queue names, event names, task keys, DB migrations, sequence runtime semantics, content-analysis/LLM/reindex processors, Admin/UI/fetcher/API changes.
+- Allowed paths: `.aidp/work.md`, `services/workers/app/main.py`, `services/workers/app/task_engine/pipeline_plugins.py`, new focused modules under `services/workers/app/`, targeted Python tests only if compatibility imports require them.
+- Risk: high, because normalize/dedup participate in the core article pipeline and sequence runtime, but this slice is intended to be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `pnpm test:normalize-dedup:compose`; `pnpm integration_tests` if compose smoke or sequence coupling requires it; `git diff --check --`; cleanup with `pnpm dev:mvp:internal:down` and empty `docker ps` if compose stack remains running.
+- Acceptance criteria: met.
+- Implemented, with evidence: moved normalize/dedup processor logic into `services/workers/app/article_processors.py`, moved direct article row locking into `services/workers/app/article_repository.py`, and moved shared inbox/outbox/processing-state helpers into `services/workers/app/worker_events.py`.
+- Implemented, with evidence: `services/workers/app/main.py` keeps `process_normalize` and `process_dedup` compatibility wrappers using main-owned dependency names, preserving import/monkeypatch surfaces while shrinking the hotspot.
+- Implemented, with evidence: `services/workers/app/task_engine/pipeline_plugins.py` now resolves `process_normalize` and `process_dedup` through direct processor handlers before falling back to legacy `main.py` loading for the not-yet-migrated processors.
+- Passed proof: targeted `python -m py_compile` and `python -m ruff check` for touched worker modules passed; `pnpm unit_tests:py`, `pnpm lint`, `pnpm typecheck`, and `git diff --check --` passed.
+- Stateful proof residual: first `pnpm integration_tests` after the extraction passed normalize/dedup smoke but failed later because `/collections/system-selected` did not include the new item on the first page; this was classified as dirty compose volume residue from the previous product core stack.
+- Passed remediation proof: clean rerun `pnpm integration_tests` passed, including `test:normalize-dedup:compose`, relay phase routing, article pipeline worker smokes, admin/web flows and historical backfill.
+- Cleanup completed: the successful integration harness removed compose containers and volumes; final `docker ps` returned only the header row and no running containers.
+
+### ARCH-HARDENING-FOLLOWUP-BATCH-1-API-ROUTER-HARDENING
+
+- Kind: Stage
+- Status: completed
+- In scope: continue FastAPI decomposition by converting focused route registration modules to real `APIRouter` composition where safe, and extract cohesive API read-model/route helper logic out of `services/api/app/main.py` only when behavior-preserving compatibility exports remain available.
+- Out of scope: DB migrations, route/path/schema/response changes, worker/fetcher/discovery runtime behavior changes, Admin UI redesign, MCP tool changes, broad all-hotspot refactor in one batch.
+- Allowed paths: `.aidp/work.md`, `services/api/app/main.py`, `services/api/app/routes/*`, new focused modules under `services/api/app/`, targeted Python tests only if import compatibility requires them.
+- Risk: medium-high, because FastAPI route composition and read-model helpers are public API surfaces, but this batch is intended to be behavior-preserving.
+- Required proof: targeted Python syntax/import proof; `pnpm unit_tests:py`; `pnpm lint`; `pnpm typecheck`; `git diff --check --`; `pnpm test:product:local:core` if route registration or handler behavior changes require stateful confirmation.
+- Acceptance criteria: met.
+- Implemented, with evidence: focused route registration modules now build local `APIRouter` instances and are composed through `services/api/app/routes.register_api_routes`, leaving public paths and handler functions unchanged.
+- Implemented, with evidence: LLM review budget/env helpers moved from `services/api/app/main.py` into `services/api/app/llm_review_budget.py`, while imported names remain available to existing `main.py` callers.
+- Passed proof: targeted `python -m py_compile` for touched API modules passed; `pnpm unit_tests:py` passed with 286 tests; `pnpm lint:py`, `pnpm lint`, `pnpm typecheck`, and `git diff --check --` passed.
+- Resolved residual, with evidence: after the initial product core run `9cc660a2` exposed stateful `integration_tests` instability, targeted `pnpm test:normalize-dedup:compose` passed on a fresh compose stack and `pnpm integration_tests` passed cleanly.
+- Passed final product proof: clean rerun `pnpm test:product:local:core` passed on run `c35c5ecf`, 11/11 lanes green, with artifacts `/tmp/newsportal-product-local-core-c35c5ecf.json` and `/tmp/newsportal-product-local-core-c35c5ecf.md`.
+- Cleanup completed: `pnpm dev:mvp:internal:down` removed the compose stack after final product core proof; final `docker ps` returned only the header row and no running containers.
 
 ### ARCH-HOTSPOT-REFACTOR-BATCH-1-API-ROUTES
 

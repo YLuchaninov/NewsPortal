@@ -13,10 +13,50 @@ from typing import Any, Awaitable, Callable, Final, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from ..article_extraction_processor import (
+    process_article_extract as process_article_extract_processor,
+)
+from ..article_processors import (
+    process_dedup as process_dedup_processor,
+    process_embed as process_embed_processor,
+    process_normalize as process_normalize_processor,
+)
+from ..cluster_processor import process_cluster as process_cluster_processor
+from ..compile_processors import (
+    process_criterion_compile as process_criterion_compile_processor,
+    process_interest_compile as process_interest_compile_processor,
+)
+from ..criteria_match_processor import (
+    process_match_criteria as process_match_criteria_processor,
+)
+from ..feedback_ingest_processor import (
+    process_feedback_ingest as process_feedback_ingest_processor,
+)
+from ..interest_match_processor import (
+    process_match_interests as process_match_interests_processor,
+)
+from ..llm_review_processor import process_llm_review as process_llm_review_processor
+from ..notification_processor import process_notify as process_notify_processor
+from ..reindex_processor import process_reindex as process_reindex_processor
 from .exceptions import TaskExecutionError
 from .plugins import TASK_REGISTRY, TaskPlugin, TaskPluginRegistry
 
 LegacyHandler = Callable[[Any, str], Awaitable[dict[str, Any]]]
+DIRECT_PROCESSOR_HANDLERS: dict[str, LegacyHandler] = {
+    "process_article_extract": process_article_extract_processor,
+    "process_normalize": process_normalize_processor,
+    "process_dedup": process_dedup_processor,
+    "process_embed": process_embed_processor,
+    "process_feedback_ingest": process_feedback_ingest_processor,
+    "process_cluster": process_cluster_processor,
+    "process_interest_compile": process_interest_compile_processor,
+    "process_criterion_compile": process_criterion_compile_processor,
+    "process_match_criteria": process_match_criteria_processor,
+    "process_match_interests": process_match_interests_processor,
+    "process_llm_review": process_llm_review_processor,
+    "process_notify": process_notify_processor,
+    "process_reindex": process_reindex_processor,
+}
 
 _CAMEL_CASE_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 _MISSING: Final = object()
@@ -48,6 +88,10 @@ def _load_legacy_main_module() -> Any:
 
 
 def load_legacy_handler(handler_name: str) -> LegacyHandler:
+    direct_handler = DIRECT_PROCESSOR_HANDLERS.get(handler_name)
+    if direct_handler is not None:
+        return direct_handler
+
     handler = getattr(_load_legacy_main_module(), handler_name, None)
     if handler is None or not callable(handler):
         raise LookupError(f"Legacy worker handler {handler_name} was not found.")

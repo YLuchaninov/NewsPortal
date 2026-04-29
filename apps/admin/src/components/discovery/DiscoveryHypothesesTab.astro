@@ -1,0 +1,90 @@
+---
+import { PaginationNav } from "@newsportal/ui";
+
+import {
+  asFloat,
+  fmtMoney,
+  fmtUsd,
+  type DiscoveryPagedRecord,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+
+type Props = {
+  hypotheses: DiscoveryPagedRecord;
+  hypothesisItems: DiscoveryRecord[];
+  nextHref: string;
+  prevHref: string;
+};
+
+const { hypotheses, hypothesisItems, nextHref, prevHref } = Astro.props as Props;
+---
+
+<section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+  <div class="border-b border-border px-5 py-4">
+    <h2 class="text-base font-semibold">Hypotheses</h2>
+    <p class="mt-1 text-sm text-muted-foreground">{hypotheses.total} hypothesis{hypotheses.total === 1 ? "" : "es"} total</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="admin-table w-full min-w-[1120px] text-sm">
+      <thead>
+        <tr class="border-b border-border bg-muted/30">
+          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mission</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Class</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Query</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Expected value</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Results</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {hypothesisItems.length === 0 ? (
+          <tr>
+            <td colspan="6" class="px-5 py-10 text-center text-sm text-muted-foreground">No discovery hypotheses yet. Compile or run a mission to generate them.</td>
+          </tr>
+        ) : hypothesisItems.map((hypothesis) => (
+          <tr class="border-b border-border last:border-b-0">
+            <td class="px-5 py-4 align-top">
+              <div class="admin-table-meta">
+                <div class="font-medium">{String(hypothesis.mission_title ?? "—")}</div>
+                <div class="text-xs text-muted-foreground">{String(hypothesis.status ?? "pending")}</div>
+              </div>
+            </td>
+            <td class="px-5 py-4 align-top">
+              <div class="admin-table-meta">
+                <div>{String(hypothesis.class_key ?? "—")}</div>
+                <div class="text-xs text-muted-foreground">{String(hypothesis.tactic_key ?? "default")}</div>
+              </div>
+            </td>
+            <td class="px-5 py-4 align-top text-muted-foreground">{String(hypothesis.search_query ?? "—")}</td>
+            <td class="px-5 py-4 align-top text-muted-foreground">{String(hypothesis.expected_value ?? "—")}</td>
+            <td class="px-5 py-4 align-top">
+              <div class="admin-table-meta">
+                <div>{String(hypothesis.sources_found ?? 0)} found</div>
+                <div class="text-xs text-muted-foreground">
+                  {String(hypothesis.sources_approved ?? 0)} approved · {asFloat(hypothesis.effectiveness, 0).toFixed(2)} effectiveness
+                </div>
+              </div>
+            </td>
+            <td class="px-5 py-4 align-top">
+              <div class="admin-table-meta">
+                <div>{fmtUsd(hypothesis.execution_cost_usd)}</div>
+                <div class="text-xs text-muted-foreground">{fmtMoney(hypothesis.execution_cost_cents ?? 0)}</div>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  {(hypotheses.hasPrev || hypotheses.hasNext) && (
+    <PaginationNav
+      className="rounded-none border-x-0 border-b-0"
+      page={hypotheses.page}
+      totalPages={hypotheses.totalPages}
+      hasPrev={hypotheses.hasPrev}
+      hasNext={hypotheses.hasNext}
+      prevHref={prevHref}
+      nextHref={nextHref}
+    />
+  )}
+</section>

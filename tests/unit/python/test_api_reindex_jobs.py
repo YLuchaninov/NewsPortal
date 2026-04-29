@@ -25,6 +25,35 @@ from services.api.app import main as api_main
 
 
 class ApiReindexJobsTests(unittest.TestCase):
+    def test_list_reindex_jobs_without_page_uses_limit_and_projection(self) -> None:
+        with (
+            patch.object(
+                api_main,
+                "query_all",
+                return_value=[
+                    {
+                        "reindex_job_id": "job-1",
+                        "result_json": {},
+                    }
+                ],
+            ) as query_all,
+            patch.object(
+                api_main,
+                "apply_reindex_selection_profile_payload",
+                side_effect=lambda item: dict(item, projected=True),
+            ) as apply_payload,
+        ):
+            result = api_main.list_reindex_jobs(limit=7, page=None, page_size=None)
+
+        query_sql, query_params = query_all.call_args.args
+        self.assertIn("from reindex_jobs", query_sql)
+        self.assertIn("order by requested_at desc", query_sql)
+        self.assertIn("limit %s", query_sql)
+        self.assertEqual(query_params, (7,))
+        apply_payload.assert_called_once()
+        self.assertEqual(result[0]["reindex_job_id"], "job-1")
+        self.assertEqual(result[0]["projected"], True)
+
     def test_list_reindex_jobs_projects_selection_profile_snapshot_summary(self) -> None:
         with (
             patch.object(api_main, "query_count", return_value=1),

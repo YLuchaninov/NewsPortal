@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from services.api.app.json_read_model import as_json_int, as_json_object
 
@@ -54,3 +54,48 @@ def apply_reindex_selection_profile_payload(
         else None
     )
     return payload
+
+
+def list_reindex_jobs(
+    *,
+    limit: int,
+    page: int | None,
+    page_size: int | None,
+    resolve_pagination_func: Callable[
+        [int | None, int | None, int], tuple[bool, int, int, int]
+    ],
+    query_all_func: Callable[[str, tuple[Any, ...] | None], list[dict[str, Any]]],
+    query_count_func: Callable[[str], int],
+    build_paginated_response_func: Callable[
+        [list[dict[str, Any]], int, int, int], dict[str, Any]
+    ],
+    apply_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]] = (
+        apply_reindex_selection_profile_payload
+    ),
+) -> dict[str, Any] | list[dict[str, Any]]:
+    reindex_select = """
+        select *
+        from reindex_jobs
+        order by requested_at desc
+    """
+    paginate, resolved_page, resolved_page_size, offset = resolve_pagination_func(
+        page, page_size, limit
+    )
+    if not paginate:
+        items = query_all_func(f"{reindex_select}\nlimit %s", (limit,))
+        return [apply_payload_func(item) for item in items]
+
+    total = query_count_func(
+        """
+        select count(*)::int as total
+        from reindex_jobs
+        """
+    )
+    items = query_all_func(
+        f"{reindex_select}\nlimit %s\noffset %s",
+        (resolved_page_size, offset),
+    )
+    projected_items = [apply_payload_func(item) for item in items]
+    return build_paginated_response_func(
+        projected_items, resolved_page, resolved_page_size, total
+    )

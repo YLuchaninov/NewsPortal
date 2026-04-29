@@ -106,6 +106,28 @@ class ApiMatchesTests(unittest.TestCase):
         )
         self.assertEqual(items_params, ("user-1", "%AI policy%", 10, 0))
 
+    def test_list_user_matches_strips_internal_projection_fields(self) -> None:
+        with patch.object(
+            api_main,
+            "query_all",
+            return_value=[
+                {
+                    "content_item_id": "editorial:doc-1",
+                    "title": "AI policy update",
+                    "_normalized_title": "ai policy update",
+                    "_search_text": "AI policy update lead body",
+                }
+            ],
+        ):
+            result = api_main.list_user_matches(
+                "user-1", limit=5, page=None, page_size=None
+            )
+
+        self.assertEqual(
+            result,
+            [{"content_item_id": "editorial:doc-1", "title": "AI policy update"}],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

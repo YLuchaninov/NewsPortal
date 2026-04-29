@@ -1,0 +1,203 @@
+---
+import { PaginationNav } from "@newsportal/ui";
+
+import { AdminConfirmAction } from "../AdminConfirmAction";
+import {
+  asStringList,
+  type DiscoveryPagedRecord,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+
+type Props = {
+  bffPath: string;
+  classItems: DiscoveryRecord[];
+  classes: DiscoveryPagedRecord;
+  currentPath: string;
+  nextHref: string;
+  prevHref: string;
+};
+
+const {
+  bffPath,
+  classItems,
+  classes,
+  currentPath,
+  nextHref,
+  prevHref,
+} = Astro.props as Props;
+---
+
+<div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <h2 class="text-base font-semibold">Create class</h2>
+    <form method="post" action={bffPath} class="mt-4 grid gap-3">
+      <input type="hidden" name="intent" value="create_class" />
+      <input type="hidden" name="redirectTo" value={currentPath} />
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Class key</span>
+          <input name="classKey" required placeholder="regional_watch" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Display name</span>
+          <input name="displayName" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        </label>
+      </div>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Description</span>
+        <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+      </label>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Status</span>
+          <select name="status" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            {["draft", "active", "archived"].map((option) => (
+              <option value={option} selected={option === "draft"}>{option}</option>
+            ))}
+          </select>
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Generation backend</span>
+          <select name="generationBackend" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            {["graph_seed_llm", "graph_seed_only"].map((option) => (
+              <option value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Provider types</span>
+          <input name="defaultProviderTypes" value="rss,website,api,email_imap,youtube" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Max per mission</span>
+          <input name="maxPerMission" type="number" min="1" value="3" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        </label>
+        <label class="grid gap-1.5">
+          <span class="text-xs font-medium">Sort order</span>
+          <input name="sortOrder" type="number" value="0" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        </label>
+      </div>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Prompt instructions</span>
+        <textarea name="promptInstructions" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+      </label>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Seed rules JSON</span>
+        <textarea name="seedRulesJson" rows="8" placeholder='{"tactics":["regional","official"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+      </label>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Config JSON</span>
+        <textarea name="configJson" rows="6" placeholder='{"notes":"optional"}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+      </label>
+      <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+        Create class
+      </button>
+    </form>
+  </section>
+
+  <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+    <div class="border-b border-border px-5 py-4">
+      <h2 class="text-base font-semibold">Registry</h2>
+      <p class="mt-1 text-sm text-muted-foreground">{classes.total} class{classes.total === 1 ? "" : "es"} total</p>
+    </div>
+    <div class="divide-y divide-border">
+      {classItems.length === 0 ? (
+        <p class="px-5 py-8 text-sm text-muted-foreground">No hypothesis classes yet. Create one before planning new mission shapes.</p>
+      ) : classItems.map((item) => {
+        const classKey = String(item.class_key ?? "");
+        const classStatus = String(item.status ?? "draft");
+        const isClassArchived = classStatus === "archived";
+        return (
+          <div class="px-5 py-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-sm font-semibold">{String(item.display_name ?? item.class_key ?? "Class")}</h3>
+              <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {String(item.class_key ?? "—")}
+              </span>
+              <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {String(item.status ?? "draft")}
+              </span>
+            </div>
+            <p class="mt-1 text-sm text-muted-foreground">{String(item.description ?? "No description")}</p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Backend: {String(item.generation_backend ?? "graph_seed_llm")} · Providers: {asStringList(item.default_provider_types).join(", ") || "rss, website, api, email_imap, youtube"} · Max/mission: {String(item.max_per_mission ?? 0)}
+            </p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <AdminConfirmAction
+                action={bffPath}
+                title={isClassArchived ? "Reactivate class" : "Archive class"}
+                description={isClassArchived
+                  ? "Make this class available again for future mission planning."
+                  : "Keep this class visible in history but remove it from new mission planning."}
+                triggerLabel={isClassArchived ? "Activate" : "Archive"}
+                confirmLabel={isClassArchived ? "Reactivate class" : "Archive class"}
+                fields={[
+                  { name: "intent", value: isClassArchived ? "activate_class" : "archive_class" },
+                  { name: "classKey", value: classKey },
+                  { name: "redirectTo", value: currentPath },
+                ]}
+                triggerClassName={isClassArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
+                confirmClassName={isClassArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
+                client:load
+              />
+              <AdminConfirmAction
+                action={bffPath}
+                title="Delete class"
+                description="Delete this class permanently only if it has no generated hypotheses. Archive it instead once mission history exists."
+                triggerLabel="Delete"
+                confirmLabel="Delete class"
+                fields={[
+                  { name: "intent", value: "delete_class" },
+                  { name: "classKey", value: classKey },
+                  { name: "redirectTo", value: currentPath },
+                ]}
+                triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                client:load
+              />
+            </div>
+            <form method="post" action={bffPath} class="mt-4 grid gap-3 md:grid-cols-4">
+              <input type="hidden" name="intent" value="update_class" />
+              <input type="hidden" name="classKey" value={classKey} />
+              <input type="hidden" name="redirectTo" value={currentPath} />
+              <label class="grid gap-1">
+                <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+                <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  {["draft", "active", "archived"].map((option) => (
+                    <option value={option} selected={classStatus === option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Sort order</span>
+                <input name="sortOrder" type="number" value={String(item.sort_order ?? 0)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Max per mission</span>
+                <input name="maxPerMission" type="number" min="1" value={String(item.max_per_mission ?? 3)} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <div class="grid gap-1">
+                <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Update</span>
+                <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                  Save class
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      })}
+    </div>
+    {(classes.hasPrev || classes.hasNext) && (
+      <PaginationNav
+        className="rounded-none border-x-0 border-b-0"
+        page={classes.page}
+        totalPages={classes.totalPages}
+        hasPrev={classes.hasPrev}
+        hasNext={classes.hasNext}
+        prevHref={prevHref}
+        nextHref={nextHref}
+      />
+    )}
+  </section>
+</div>

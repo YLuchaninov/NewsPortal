@@ -1,0 +1,200 @@
+---
+import { PaginationNav } from "@newsportal/ui";
+
+import AdminWorkspacePane from "../AdminWorkspacePane.astro";
+import {
+  asStringList,
+  fmtDate,
+  fmtPercent,
+  metricSourceLabel,
+  type DiscoveryPagedRecord,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+import {
+  resolveDiscoveryChannelMetrics,
+  resolveDiscoverySourceQuality,
+} from "../../lib/server/operator-surfaces";
+
+type Props = {
+  currentMissionHref: string;
+  nextHref: string;
+  prevHref: string;
+  selectedMissionId: string;
+  selectedSourceProfile: DiscoveryRecord | null;
+  selectedSourceProfileId: string;
+  sourceProfileItems: DiscoveryRecord[];
+  sourceProfiles: DiscoveryPagedRecord;
+  sourceScoreByProfileId: Map<string, DiscoveryRecord>;
+  sourceSelectionHrefById: Record<string, string>;
+};
+
+const {
+  currentMissionHref,
+  nextHref,
+  prevHref,
+  selectedMissionId,
+  selectedSourceProfile,
+  selectedSourceProfileId,
+  sourceProfileItems,
+  sourceProfiles,
+  sourceScoreByProfileId,
+  sourceSelectionHrefById,
+} = Astro.props as Props;
+---
+
+<AdminWorkspacePane
+  paneId="discovery-sources"
+  paneLabel="Source detail"
+  collapsedLabel="Source"
+  defaultWidth={540}
+  minWidth={420}
+  maxWidth={760}
+  minMainWidth={760}
+>
+  <Fragment slot="main">
+    <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+      <div class="border-b border-border px-5 py-4">
+        <h2 class="text-base font-semibold">Source profiles</h2>
+        <p class="mt-1 text-sm text-muted-foreground">{sourceProfiles.total} profile{sourceProfiles.total === 1 ? "" : "s"} total</p>
+      </div>
+      <div class="divide-y divide-border">
+        {sourceProfileItems.length === 0 ? (
+          <p class="px-5 py-8 text-sm text-muted-foreground">No source profiles yet. Discovery will add them after source evaluation runs.</p>
+        ) : sourceProfileItems.map((profile) => {
+          const profileId = String(profile.source_profile_id ?? "");
+          const isSelected = profileId === selectedSourceProfileId;
+          const profileHref = sourceSelectionHrefById[profileId] ?? "#";
+          return (
+            <article
+              class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}
+              data-discovery-row-href={profileHref}
+              data-discovery-row-pane="discovery-sources"
+              role="link"
+              tabindex="0"
+            >
+              <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div class="space-y-1.5">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <a
+                      href={profileHref}
+                      data-admin-pane-open-link="discovery-sources"
+                      class="text-sm font-semibold hover:text-primary"
+                    >
+                      {String(profile.canonical_domain ?? "Unknown domain")}
+                    </a>
+                    <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {String(profile.source_type ?? "unknown")}
+                    </span>
+                  </div>
+                  <p class="text-sm text-muted-foreground">
+                    Org {String(profile.org_name ?? "—")} · Country {String(profile.country ?? "—")} · Languages {asStringList(profile.languages).join(", ") || "—"}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    Trust {fmtPercent(profile.trust_score)} · Accountability {fmtPercent(profile.author_accountability)} · Technical quality {fmtPercent(profile.technical_quality)}
+                  </p>
+                </div>
+                <a
+                  href={profileHref}
+                  data-admin-pane-open-link="discovery-sources"
+                  class:list={[
+                    "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                    isSelected
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-input hover:bg-accent",
+                  ]}
+                >
+                  Inspect
+                </a>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {(sourceProfiles.hasPrev || sourceProfiles.hasNext) && (
+        <PaginationNav
+          className="rounded-none border-x-0 border-b-0"
+          page={sourceProfiles.page}
+          totalPages={sourceProfiles.totalPages}
+          hasPrev={sourceProfiles.hasPrev}
+          hasNext={sourceProfiles.hasNext}
+          prevHref={prevHref}
+          nextHref={nextHref}
+        />
+      )}
+    </section>
+  </Fragment>
+
+  <Fragment slot="pane">
+    {selectedSourceProfile ? (() => {
+      const profile = selectedSourceProfile;
+      const score = sourceScoreByProfileId.get(String(profile.source_profile_id ?? ""));
+      const channelMetrics = resolveDiscoveryChannelMetrics(score);
+      const sourceQuality = resolveDiscoverySourceQuality(profile);
+      return (
+        <div class="space-y-5">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {String(profile.source_type ?? "unknown")}
+              </span>
+              <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {String(profile.country ?? "Unknown country")}
+              </span>
+            </div>
+            <div>
+              <h2 class="text-2xl font-semibold tracking-tight">{String(profile.canonical_domain ?? "Unknown domain")}</h2>
+              <p class="mt-2 text-sm leading-6 text-muted-foreground">
+                Org {String(profile.org_name ?? "—")} · Languages {asStringList(profile.languages).join(", ") || "—"}
+              </p>
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+              <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Generic source quality</p>
+              <div class="mt-3 space-y-1.5">
+                <div>Recall score {sourceQuality.recallScore == null ? "—" : fmtPercent(sourceQuality.recallScore)}</div>
+                <div>Metric source {metricSourceLabel(sourceQuality.metricSource)}</div>
+                <div>Yield {fmtPercent(sourceQuality.yieldScore ?? 0)} · Lead {fmtPercent(sourceQuality.leadTimeScore ?? 0)} · Dupes {fmtPercent(sourceQuality.duplicationScore ?? 0)}</div>
+                <div>Snapshot {sourceQuality.snapshotReason ?? "—"} · {fmtDate(sourceQuality.scoredAt)}</div>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+              <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Mission fit</p>
+              {score ? (
+                <div class="mt-3 space-y-1.5">
+                  <div>Contextual fit {fmtPercent(score.contextual_score)}</div>
+                  <div>Channel quality {metricSourceLabel(channelMetrics.metricSource)}</div>
+                  <div>Yield {fmtPercent(channelMetrics.yieldScore ?? 0)} · Lead {fmtPercent(channelMetrics.leadTimeScore ?? 0)} · Dupes {fmtPercent(channelMetrics.duplicationScore ?? 0)}</div>
+                  <div>Unique articles {String(channelMetrics.uniqueArticlesPeriod ?? 0)} / {String(channelMetrics.totalArticlesPeriod ?? 0)}</div>
+                  <div>Roles {asStringList(score.role_labels).join(", ") || "—"}</div>
+                </div>
+              ) : (
+                <div class="mt-3">No mission-scoped source score for the current portfolio mission.</div>
+              )}
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+            <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Operator context</p>
+            <div class="mt-3 space-y-1.5">
+              <div>Trust {fmtPercent(profile.trust_score)} · Accountability {fmtPercent(profile.author_accountability)} · Technical quality {fmtPercent(profile.technical_quality)}</div>
+              <div>Context mission {selectedMissionId || "No active portfolio mission"}</div>
+              {selectedMissionId ? (
+                <div>
+                  <a href={currentMissionHref} class="text-primary hover:underline">
+                    Open current mission portfolio
+                  </a>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      );
+    })() : (
+      <div class="rounded-2xl border border-dashed border-border bg-background px-4 py-10 text-sm text-muted-foreground">
+        Select a source profile to compare generic quality against the current mission-fit context.
+      </div>
+    )}
+  </Fragment>
+</AdminWorkspacePane>

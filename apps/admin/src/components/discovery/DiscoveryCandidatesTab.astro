@@ -1,0 +1,210 @@
+---
+import { PaginationNav } from "@newsportal/ui";
+
+import AdminWorkspacePane from "../AdminWorkspacePane.astro";
+import {
+  asFloat,
+  fmtDate,
+  type DiscoveryPagedRecord,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+import { resolveDiscoveryPolicyExplainability } from "../../lib/server/operator-surfaces";
+
+type Props = {
+  bffPath: string;
+  candidateItems: DiscoveryRecord[];
+  candidates: DiscoveryPagedRecord;
+  currentPath: string;
+  nextHref: string;
+  prevHref: string;
+  selectedCandidate: DiscoveryRecord | null;
+  selectedCandidateId: string;
+  selectionHrefByCandidateId: Record<string, string>;
+};
+
+const {
+  bffPath,
+  candidateItems,
+  candidates,
+  currentPath,
+  nextHref,
+  prevHref,
+  selectedCandidate,
+  selectedCandidateId,
+  selectionHrefByCandidateId,
+} = Astro.props as Props;
+---
+
+<AdminWorkspacePane
+  paneId="discovery-candidates"
+  paneLabel="Candidate moderation"
+  collapsedLabel="Candidate"
+  defaultWidth={560}
+  minWidth={420}
+  maxWidth={760}
+  minMainWidth={760}
+>
+  <Fragment slot="main">
+    <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+      <div class="border-b border-border px-5 py-4">
+        <h2 class="text-base font-semibold">Candidates</h2>
+        <p class="mt-1 text-sm text-muted-foreground">{candidates.total} candidate{candidates.total === 1 ? "" : "s"} total</p>
+      </div>
+      <div class="divide-y divide-border">
+        {candidateItems.length === 0 ? (
+          <p class="px-5 py-8 text-sm text-muted-foreground">No discovery candidates yet. They appear here after mission runs.</p>
+        ) : candidateItems.map((candidate) => {
+          const candidateId = String(candidate.candidate_id ?? "");
+          const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
+          const isSelected = candidateId === selectedCandidateId;
+          const candidateHref = selectionHrefByCandidateId[candidateId] ?? "#";
+          return (
+            <article
+              class:list={["px-5 py-4 transition-colors", isSelected && "bg-muted/20"]}
+              data-discovery-row-href={candidateHref}
+              data-discovery-row-pane="discovery-candidates"
+              role="link"
+              tabindex="0"
+            >
+              <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div class="space-y-1.5">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <a
+                      href={candidateHref}
+                      data-admin-pane-open-link="discovery-candidates"
+                      class="text-sm font-semibold hover:text-primary"
+                    >
+                      {String(candidate.title ?? candidate.url ?? "Candidate")}
+                    </a>
+                    <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {String(candidate.status ?? "pending")}
+                    </span>
+                    <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {String(candidate.provider_type ?? "rss")}
+                    </span>
+                  </div>
+                  <a href={String(candidate.url ?? "#")} target="_blank" class="break-all text-sm text-primary hover:underline">
+                    {String(candidate.url ?? "—")}
+                  </a>
+                  <p class="text-sm text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
+                  <p class="text-xs text-muted-foreground">
+                    Mission {String(candidate.mission_title ?? "—")} · Class {String(candidate.class_key ?? "—")} · Tactic {String(candidate.tactic_key ?? "—")} · Score {asFloat(candidate.relevance_score, 0).toFixed(2)}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    Profile {explainability.profileName ?? "—"} · Version {String(explainability.profileVersion ?? "—")} · Reason bucket {explainability.reasonBucket ?? "—"}
+                  </p>
+                </div>
+                <a
+                  href={candidateHref}
+                  data-admin-pane-open-link="discovery-candidates"
+                  class:list={[
+                    "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                    isSelected
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-input hover:bg-accent",
+                  ]}
+                >
+                  Review
+                </a>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {(candidates.hasPrev || candidates.hasNext) && (
+        <PaginationNav
+          className="rounded-none border-x-0 border-b-0"
+          page={candidates.page}
+          totalPages={candidates.totalPages}
+          hasPrev={candidates.hasPrev}
+          hasNext={candidates.hasNext}
+          prevHref={prevHref}
+          nextHref={nextHref}
+        />
+      )}
+    </section>
+  </Fragment>
+
+  <Fragment slot="pane">
+    {selectedCandidate ? (() => {
+      const candidate = selectedCandidate;
+      const explainability = resolveDiscoveryPolicyExplainability(candidate, "graph");
+      return (
+        <div class="space-y-5">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {String(candidate.status ?? "pending")}
+              </span>
+              <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {String(candidate.provider_type ?? "rss")}
+              </span>
+            </div>
+            <div>
+              <h2 class="text-2xl font-semibold tracking-tight">{String(candidate.title ?? candidate.url ?? "Candidate")}</h2>
+              <a href={String(candidate.url ?? "#")} target="_blank" class="mt-2 block break-all text-sm text-primary hover:underline">
+                {String(candidate.url ?? "—")}
+              </a>
+              <p class="mt-3 text-sm leading-6 text-muted-foreground">{String(candidate.description ?? "No reasoning recorded")}</p>
+            </div>
+            <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Mission {String(candidate.mission_title ?? "—")} · Class {String(candidate.class_key ?? "—")} · Tactic {String(candidate.tactic_key ?? "—")}<br />
+              Relevance score {asFloat(candidate.relevance_score, 0).toFixed(2)} · Profile {explainability.profileName ?? "—"} · Version {String(explainability.profileVersion ?? "—")}
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+            <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Explainability</p>
+            <div class="mt-3 space-y-1.5">
+              <div>Threshold {explainability.threshold == null ? "—" : explainability.threshold.toFixed(2)} · Score {explainability.score == null ? "—" : explainability.score.toFixed(2)}</div>
+              <div>Fit {explainability.fitScore == null ? "—" : explainability.fitScore.toFixed(2)} · Quality prior {explainability.qualityPrior == null ? "—" : explainability.qualityPrior.toFixed(2)} · Final review {explainability.finalReviewScore == null ? "—" : explainability.finalReviewScore.toFixed(2)}</div>
+              <div>Policy verdict {explainability.policyVerdict ?? "—"} · Onboarding {explainability.onboardingVerdict ?? "—"} · Provider {explainability.provider ?? "—"}</div>
+              <div>Productivity risk {explainability.productivityRisk ?? "—"} · Diagnostic {explainability.usefulnessDiagnostic ?? "—"}</div>
+              <div>Source family {explainability.sourceFamily ?? "—"} · Source shape {explainability.sourceShape ?? "—"} · Stage loss {explainability.stageLossBucket ?? "—"}</div>
+              <div>Preferred domain {explainability.preferredDomainMatch ? "yes" : "no"} · Negative domain {explainability.negativeDomainMatch ? "yes" : "no"}</div>
+              <div>Positive keyword {explainability.positiveKeywordMatch ? "yes" : "no"} · Negative keyword {explainability.negativeKeywordMatch ? "yes" : "no"}</div>
+              <div>Benchmark-like {explainability.benchmarkLike ? "yes" : "no"} · Residuals {explainability.residuals.join(", ") || "—"}</div>
+            </div>
+          </div>
+
+          {String(candidate.status ?? "pending") === "pending" ? (
+            <div class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+              <div class="flex flex-wrap gap-2">
+                <form method="post" action={bffPath} class="flex gap-2">
+                  <input type="hidden" name="intent" value="review_candidate" />
+                  <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                  <input type="hidden" name="status" value="approved" />
+                  <input type="hidden" name="redirectTo" value={currentPath} />
+                  <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                    Approve
+                  </button>
+                </form>
+              </div>
+              <form method="post" action={bffPath} class="grid gap-2">
+                <input type="hidden" name="intent" value="review_candidate" />
+                <input type="hidden" name="candidateId" value={String(candidate.candidate_id ?? "")} />
+                <input type="hidden" name="status" value="rejected" />
+                <input type="hidden" name="redirectTo" value={currentPath} />
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Rejection reason</span>
+                  <input name="rejectionReason" placeholder="Explain why this candidate should not be promoted" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                  Reject
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Reviewed {fmtDate(candidate.reviewed_at)} by {String(candidate.reviewed_by ?? "system")}
+            </div>
+          )}
+        </div>
+      );
+    })() : (
+      <div class="rounded-2xl border border-dashed border-border bg-background px-4 py-10 text-sm text-muted-foreground">
+        Select a candidate to review explainability and moderation actions in one side pane.
+      </div>
+    )}
+  </Fragment>
+</AdminWorkspacePane>

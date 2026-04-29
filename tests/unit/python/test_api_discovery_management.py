@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import types
 import unittest
@@ -62,6 +63,9 @@ class _FakeConnection:
     def cursor(self) -> _FakeCursor:
         return self.cursor_instance
 
+    def transaction(self) -> "_FakeConnection":
+        return self
+
 
 class ApiDiscoveryManagementTests(unittest.TestCase):
     def test_profile_policy_normalization_preserves_supported_website_kinds(self) -> None:
@@ -106,6 +110,106 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
             recall_policy["supportedWebsiteKinds"],
             ["editorial", "procurement_portal"],
         )
+
+    def test_applied_discovery_policy_snapshot_preserves_graph_profile_and_mission_owned_inputs(
+        self,
+    ) -> None:
+        snapshot = api_main.build_applied_discovery_policy_snapshot(
+            lane="graph",
+            mission_like={
+                "target_provider_types": ["rss"],
+                "seed_topics": ["AI policy"],
+                "seed_languages": ["en"],
+                "seed_regions": ["EU"],
+            },
+            profile={
+                "profile_id": "profile-1",
+                "profile_key": "eu-ai",
+                "display_name": "EU AI",
+                "version": 3,
+                "graph_policy_json": {
+                    "providerTypes": ["rss", "website", "unsupported"],
+                    "preferredDomains": ["example.com"],
+                },
+                "yield_benchmark_json": {"domains": ["example.com"]},
+            },
+        )
+
+        self.assertEqual(snapshot["lane"], "graph")
+        self.assertEqual(snapshot["profileVersion"], 3)
+        self.assertEqual(snapshot["graphPolicy"]["providerTypes"], ["rss", "website"])
+        self.assertEqual(snapshot["graphPolicy"]["preferredDomains"], ["example.com"])
+        self.assertEqual(snapshot["yieldBenchmark"]["domains"], ["example.com"])
+        self.assertEqual(
+            snapshot["missionOwned"],
+            {
+                "targetProviderTypes": ["rss"],
+                "seedTopics": ["AI policy"],
+                "seedLanguages": ["en"],
+                "seedRegions": ["EU"],
+            },
+        )
+
+    def test_snapshot_discovery_mission_profile_policy_persists_applied_policy(self) -> None:
+        fake_connection = _FakeConnection()
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_mission",
+                return_value={
+                    "mission_id": "mission-1",
+                    "profile_id": "profile-1",
+                    "target_provider_types": ["website"],
+                    "seed_topics": ["climate"],
+                    "seed_languages": ["en"],
+                    "seed_regions": [],
+                },
+            ),
+            patch.object(
+                api_main,
+                "require_attachable_discovery_policy_profile",
+                return_value={
+                    "profile_id": "profile-1",
+                    "profile_key": "climate",
+                    "display_name": "Climate",
+                    "version": 4,
+                    "graph_policy_json": {"providerTypes": ["website"]},
+                    "yield_benchmark_json": {"titleKeywords": ["climate"]},
+                },
+            ),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            api_main.snapshot_discovery_mission_profile_policy("mission-1")
+
+        update_sql, update_params = fake_connection.cursor_instance.executed[0]
+        self.assertIn("update discovery_missions", update_sql.lower())
+        self.assertEqual(update_params[0], 4)
+        persisted_policy = json.loads(update_params[1])
+        self.assertEqual(persisted_policy["lane"], "graph")
+        self.assertEqual(persisted_policy["graphPolicy"]["providerTypes"], ["website"])
+        self.assertEqual(persisted_policy["missionOwned"]["seedTopics"], ["climate"])
+        self.assertEqual(update_params[2], "mission-1")
+
+    def test_snapshot_discovery_recall_mission_profile_policy_clears_policy_without_profile(
+        self,
+    ) -> None:
+        fake_connection = _FakeConnection()
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_recall_mission",
+                return_value={"recall_mission_id": "recall-1", "profile_id": None},
+            ),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            api_main.snapshot_discovery_recall_mission_profile_policy("recall-1")
+
+        update_sql, update_params = fake_connection.cursor_instance.executed[0]
+        self.assertIn("update discovery_recall_missions", update_sql.lower())
+        self.assertIn("applied_profile_version = null", update_sql)
+        self.assertEqual(update_params, ("recall-1",))
 
     def test_discovery_routes_are_registered(self) -> None:
         paths = {route.path for route in api_main.app.routes}
@@ -363,6 +467,73 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         get_mission.assert_called_once_with("mission-1")
         self.assertEqual(result["interest_graph_status"], "compiled")
 
+    def test_update_discovery_mission_profile_resets_applied_policy_snapshot(self) -> None:
+        payload = api_main.DiscoveryMissionUpdatePayload.model_validate(
+            {"profileId": " profile-3 "}
+        )
+        fake_connection = _FakeConnection(rows=[{"mission_id": "mission-1"}])
+
+        with (
+            patch.object(api_main, "build_database_url", return_value="postgres://test"),
+            patch.object(
+                api_main,
+                "require_attachable_discovery_policy_profile",
+                return_value={"profile_id": "profile-3"},
+            ) as require_profile,
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+            patch.object(
+                api_main,
+                "get_discovery_mission",
+                return_value={"mission_id": "mission-1", "profile_id": "profile-3"},
+            ) as get_mission,
+        ):
+            result = api_main.update_discovery_mission("mission-1", payload)
+
+        update_sql, update_params = fake_connection.cursor_instance.executed[0]
+        self.assertIn("update discovery_missions", update_sql.lower())
+        self.assertIn("profile_id = %s", update_sql)
+        self.assertIn("applied_profile_version = null", update_sql)
+        self.assertIn("applied_policy_json = null", update_sql)
+        self.assertEqual(update_params, ("profile-3", "mission-1"))
+        self.assertEqual(result["profile_id"], "profile-3")
+        require_profile.assert_called_once_with("profile-3")
+        get_mission.assert_called_once_with("mission-1")
+
+    def test_compile_discovery_mission_graph_snapshots_policy_before_compile(self) -> None:
+        repository = SimpleNamespace(
+            get_mission=AsyncMock(
+                side_effect=[
+                    {"mission_id": "mission-1", "status": "planned"},
+                    {"mission_id": "mission-1", "status": "planned", "profile_id": "profile-1"},
+                ]
+            )
+        )
+        expected = {"mission_id": "mission-1", "interest_graph_status": "compiled"}
+
+        with (
+            patch.object(api_main, "DiscoveryCoordinatorRepository", return_value=repository),
+            patch.object(
+                api_main,
+                "snapshot_discovery_mission_profile_policy",
+                return_value=None,
+            ) as snapshot_profile_policy,
+            patch.object(
+                api_main,
+                "compile_interest_graph_for_mission",
+                new=AsyncMock(return_value=None),
+            ) as compile_graph,
+            patch.object(api_main, "get_discovery_mission", return_value=expected),
+        ):
+            result = asyncio.run(api_main.compile_discovery_mission_graph("mission-1"))
+
+        self.assertEqual(result, expected)
+        self.assertEqual(repository.get_mission.await_count, 2)
+        snapshot_profile_policy.assert_called_once_with("mission-1")
+        compile_graph.assert_awaited_once_with(
+            mission={"mission_id": "mission-1", "status": "planned", "profile_id": "profile-1"},
+            repository=repository,
+        )
+
     def test_delete_discovery_mission_removes_empty_mission(self) -> None:
         fake_connection = _FakeConnection(
             rows=[
@@ -472,6 +643,80 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
                 api_main.delete_discovery_class("history_class")
 
         self.assertIn("Archive it instead of deleting it", str(error.exception))
+
+    def test_create_discovery_recall_mission_persists_attached_profile(self) -> None:
+        payload = api_main.DiscoveryRecallMissionCreatePayload.model_validate(
+            {
+                "title": "Neutral recall",
+                "missionKind": "query_seed",
+                "seedQueries": ["public procurement"],
+                "targetProviderTypes": ["rss", "website"],
+                "scopeJson": {"region": "eu"},
+                "maxCandidates": 12,
+                "profileId": " profile-1 ",
+                "createdBy": "admin-1",
+            }
+        )
+        fake_connection = _FakeConnection(rows=[{"recall_mission_id": "recall-1"}])
+
+        with (
+            patch.object(api_main, "build_database_url", return_value="postgres://test"),
+            patch.object(
+                api_main,
+                "require_attachable_discovery_policy_profile",
+                return_value={"profile_id": "profile-1"},
+            ) as require_profile,
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+            patch.object(
+                api_main,
+                "get_discovery_recall_mission",
+                return_value={"recall_mission_id": "recall-1", "profile_id": "profile-1"},
+            ) as get_recall_mission,
+        ):
+            result = api_main.create_discovery_recall_mission(payload)
+
+        insert_sql, insert_params = fake_connection.cursor_instance.executed[0]
+        self.assertIn("insert into discovery_recall_missions", insert_sql.lower())
+        self.assertEqual(insert_params[7], json.dumps({"region": "eu"}))
+        self.assertEqual(insert_params[9], "profile-1")
+        self.assertEqual(insert_params[10], "admin-1")
+        self.assertEqual(result["recall_mission_id"], "recall-1")
+        require_profile.assert_called_once_with("profile-1")
+        get_recall_mission.assert_called_once_with("recall-1")
+
+    def test_update_discovery_recall_mission_profile_resets_applied_policy_snapshot(
+        self,
+    ) -> None:
+        payload = api_main.DiscoveryRecallMissionUpdatePayload.model_validate(
+            {"profileId": " profile-2 "}
+        )
+        fake_connection = _FakeConnection(rows=[{"recall_mission_id": "recall-1"}])
+
+        with (
+            patch.object(api_main, "build_database_url", return_value="postgres://test"),
+            patch.object(
+                api_main,
+                "require_attachable_discovery_policy_profile",
+                return_value={"profile_id": "profile-2"},
+            ) as require_profile,
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+            patch.object(
+                api_main,
+                "get_discovery_recall_mission",
+                return_value={"recall_mission_id": "recall-1", "profile_id": "profile-2"},
+            ) as get_recall_mission,
+        ):
+            result = api_main.update_discovery_recall_mission("recall-1", payload)
+
+        update_sql, update_params = fake_connection.cursor_instance.executed[0]
+        self.assertIn("update discovery_recall_missions", update_sql.lower())
+        self.assertIn("profile_id = %s", update_sql)
+        self.assertIn("applied_profile_version = null", update_sql)
+        self.assertIn("applied_policy_json = null", update_sql)
+        self.assertEqual(update_params, ("profile-2", "recall-1"))
+        self.assertEqual(result["profile_id"], "profile-2")
+        require_profile.assert_called_once_with("profile-2")
+        get_recall_mission.assert_called_once_with("recall-1")
 
     def test_create_discovery_recall_candidate_links_existing_source_profile_by_canonical_domain(self) -> None:
         payload = api_main.DiscoveryRecallCandidateCreatePayload.model_validate(
@@ -673,6 +918,222 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         self.assertIn("source_quality_scoring_breakdown", sql)
         self.assertIn("source_quality_recall_score", sql)
 
+    def test_create_discovery_feedback_trims_optional_ids_and_reads_created_row(self) -> None:
+        payload = api_main.DiscoveryFeedbackCreatePayload.model_validate(
+            {
+                "missionId": " mission-1 ",
+                "candidateId": " ",
+                "sourceProfileId": " profile-1 ",
+                "feedbackType": "source_quality",
+                "feedbackValue": "useful",
+                "notes": "Promising source",
+                "createdBy": "admin-6",
+            }
+        )
+        fake_connection = _FakeConnection(rows=[{"feedback_event_id": "feedback-1"}])
+        expected = {"feedback_event_id": "feedback-1", "feedback_type": "source_quality"}
+
+        with (
+            patch.object(api_main, "build_database_url", return_value="postgres://test"),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+            patch.object(api_main, "query_one", return_value=expected) as query_one,
+        ):
+            result = api_main.create_discovery_feedback(payload)
+
+        insert_sql, insert_params = fake_connection.cursor_instance.executed[0]
+        self.assertIn("insert into discovery_feedback_events", insert_sql.lower())
+        self.assertEqual(
+            insert_params,
+            (
+                "mission-1",
+                None,
+                "profile-1",
+                "source_quality",
+                "useful",
+                "Promising source",
+                "admin-6",
+            ),
+        )
+        query_sql, query_params = query_one.call_args.args
+        self.assertIn("where dfe.feedback_event_id = %s", query_sql)
+        self.assertEqual(query_params, ("feedback-1",))
+        self.assertEqual(result, expected)
+
+    def test_re_evaluate_discovery_sources_route_delegates_to_orchestrator(self) -> None:
+        payload = api_main.DiscoveryReEvaluatePayload.model_validate(
+            {"missionId": "mission-1"}
+        )
+        expected = {"discovery_re_evaluated_count": 1}
+
+        with (
+            patch.object(api_main, "DiscoveryCoordinatorRepository", return_value="repo"),
+            patch.object(
+                api_main,
+                "re_evaluate_sources",
+                new=AsyncMock(return_value=expected),
+            ) as re_evaluate_sources,
+        ):
+            result = asyncio.run(api_main.re_evaluate_discovery_sources_route(payload))
+
+        self.assertEqual(result, expected)
+        re_evaluate_sources.assert_awaited_once_with(
+            mission_id="mission-1",
+            repository="repo",
+        )
+
+    def test_create_content_filter_policy_persists_policy_json_and_reads_created_policy(
+        self,
+    ) -> None:
+        payload = api_main.ContentFilterPolicyPayload.model_validate(
+            {
+                "policyKey": "filter-key",
+                "title": "Filter policy",
+                "policyJson": {"rules": [{"label": "keep"}]},
+            }
+        )
+        expected = {"filter_policy_id": "filter-policy-1", "policy_key": "filter-key"}
+
+        with (
+            patch.object(
+                api_main,
+                "query_one",
+                return_value={"filter_policy_id": "filter-policy-1"},
+            ) as query_one,
+            patch.object(
+                api_main,
+                "get_content_filter_policy",
+                return_value=expected,
+            ) as get_filter_policy,
+        ):
+            result = api_main.create_content_filter_policy(payload)
+
+        insert_sql, insert_params = query_one.call_args.args
+        self.assertIn("insert into content_filter_policies", insert_sql.lower())
+        self.assertEqual(insert_params[0], "filter-key")
+        self.assertEqual(insert_params[7], json.dumps({"rules": [{"label": "keep"}]}))
+        get_filter_policy.assert_called_once_with("filter-policy-1")
+        self.assertEqual(result, expected)
+
+    def test_update_content_analysis_policy_versions_runtime_changes(self) -> None:
+        payload = api_main.ContentAnalysisPolicyUpdatePayload.model_validate(
+            {
+                "mode": "enforce",
+                "configJson": {"threshold": 0.9},
+            }
+        )
+        fake_connection = _FakeConnection(rows=[{"policy_id": "policy-2"}])
+        current = {
+            "policy_id": "policy-1",
+            "policy_key": "analysis-key",
+            "title": "Analysis policy",
+            "description": None,
+            "module": "content_filter",
+            "enabled": True,
+            "mode": "dry_run",
+            "provider": None,
+            "model_key": None,
+            "model_version": None,
+            "config_json": {"threshold": 0.5},
+            "failure_policy": "skip",
+            "is_active": True,
+            "priority": 100,
+        }
+        updated = dict(current, policy_id="policy-2", mode="enforce")
+
+        with (
+            patch.object(
+                api_main,
+                "get_content_analysis_policy",
+                side_effect=[current, updated],
+            ) as get_policy,
+            patch.object(api_main, "build_database_url", return_value="postgres://test"),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            result = api_main.update_content_analysis_policy("policy-1", payload)
+
+        deactivate_sql, deactivate_params = fake_connection.cursor_instance.executed[0]
+        insert_sql, insert_params = fake_connection.cursor_instance.executed[1]
+        self.assertIn("update content_analysis_policies", deactivate_sql.lower())
+        self.assertEqual(deactivate_params, ("policy-1",))
+        self.assertIn("insert into content_analysis_policies", insert_sql.lower())
+        self.assertEqual(insert_params[2], "content_filter")
+        self.assertEqual(insert_params[4], "enforce")
+        self.assertEqual(insert_params[8], json.dumps({"threshold": 0.9}))
+        self.assertEqual(insert_params[-1], "policy-1")
+        self.assertEqual(result["policy_id"], "policy-2")
+        self.assertEqual(get_policy.call_count, 2)
+
+    def test_request_content_analysis_backfill_persists_job_and_outbox_event(
+        self,
+    ) -> None:
+        payload = api_main.ContentAnalysisBackfillPayload.model_validate(
+            {
+                "subjectTypes": ["article"],
+                "modules": ["content_filter"],
+                "missingOnly": False,
+                "policyKey": "strict-policy",
+                "batchSize": 25,
+                "maxTextChars": 12000,
+                "requestedByUserId": " 11111111-1111-1111-1111-111111111111 ",
+                "subjectIds": [
+                    " 22222222-2222-2222-2222-222222222222 ",
+                    "",
+                    "33333333-3333-3333-3333-333333333333",
+                ],
+            }
+        )
+        fake_connection = _FakeConnection()
+
+        with (
+            patch.object(api_main.uuid, "uuid4", side_effect=["job-1", "event-1"]),
+            patch.object(api_main, "build_database_url", return_value="postgres://test"),
+            patch.object(api_main.psycopg, "connect", return_value=fake_connection),
+        ):
+            result = api_main.request_content_analysis_backfill(payload)
+
+        job_sql, job_params = fake_connection.cursor_instance.executed[0]
+        event_sql, event_params = fake_connection.cursor_instance.executed[1]
+        persisted_options = json.loads(job_params[1])
+        persisted_event = json.loads(event_params[2])
+
+        self.assertIn("insert into reindex_jobs", job_sql.lower())
+        self.assertIn("index_name", job_sql)
+        self.assertEqual(job_params[0], "job-1")
+        self.assertEqual(job_params[2], "11111111-1111-1111-1111-111111111111")
+        self.assertEqual(persisted_options["batchSize"], 25)
+        self.assertEqual(persisted_options["subjectTypes"], ["article"])
+        self.assertEqual(persisted_options["modules"], ["content_filter"])
+        self.assertEqual(persisted_options["missingOnly"], False)
+        self.assertEqual(
+            persisted_options["subjectIds"],
+            [
+                "22222222-2222-2222-2222-222222222222",
+                "33333333-3333-3333-3333-333333333333",
+            ],
+        )
+        self.assertEqual(
+            persisted_options["requestSource"],
+            "content_analysis_backfill",
+        )
+        self.assertIn("insert into outbox_events", event_sql.lower())
+        self.assertIn("'reindex.requested'", event_sql)
+        self.assertEqual(event_params[0], "event-1")
+        self.assertEqual(event_params[1], "job-1")
+        self.assertEqual(
+            persisted_event,
+            {
+                "eventId": "event-1",
+                "reindexJobId": "job-1",
+                "indexName": "content_analysis",
+                "jobKind": "content_analysis",
+                "version": 1,
+            },
+        )
+        self.assertEqual(result["status"], "queued")
+        self.assertEqual(result["reindexJobId"], "job-1")
+        self.assertEqual(result["jobKind"], "content_analysis")
+        self.assertEqual(result["options"], persisted_options)
+
     def test_update_discovery_recall_candidate_updates_review_fields_without_registration(self) -> None:
         payload = api_main.DiscoveryRecallCandidateUpdatePayload.model_validate(
             {"status": "shortlisted", "reviewedBy": "admin-2"}
@@ -827,6 +1288,35 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
             update_params,
             ("duplicate", "already_registered", "admin-4", "channel-9", "recall-candidate-2"),
         )
+
+    def test_promote_discovery_recall_candidate_rejects_non_duplicate_rejection(
+        self,
+    ) -> None:
+        payload = api_main.DiscoveryRecallCandidatePromotePayload.model_validate(
+            {"reviewedBy": "admin-5"}
+        )
+
+        with (
+            patch.object(
+                api_main,
+                "get_discovery_recall_candidate",
+                return_value={
+                    "recall_candidate_id": "recall-candidate-3",
+                    "registered_channel_id": None,
+                    "status": "rejected",
+                    "rejection_reason": "low_quality",
+                },
+            ),
+            patch.object(api_main, "PostgresSourceRegistrarAdapter") as registrar_class,
+        ):
+            with self.assertRaises(api_main.SequenceValidationError) as error:
+                api_main.promote_discovery_recall_candidate(
+                    "recall-candidate-3",
+                    payload,
+                )
+
+        self.assertIn("Rejected recall candidates cannot be promoted", str(error.exception))
+        registrar_class.assert_not_called()
 
     def test_update_discovery_candidate_marks_duplicates_after_registration(self) -> None:
         payload = api_main.DiscoveryCandidateUpdatePayload.model_validate(

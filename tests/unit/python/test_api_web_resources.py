@@ -102,6 +102,7 @@ class ApiWebResourcesTests(unittest.TestCase):
                 api_main.get_web_resource("resource-404")
 
         self.assertEqual(error.exception.status_code, 404)
+        self.assertEqual(error.exception.detail, "Web resource not found.")
 
     def test_get_web_resource_includes_selection_diagnostics_for_projected_article(self) -> None:
         with (

@@ -89,6 +89,14 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("final_selection_duplicate_article_count_for_canonical", sql)
         self.assertIn("final_selection_reuse_source", sql)
 
+    def test_get_article_preserves_404_when_article_missing(self) -> None:
+        with patch.object(api_main, "query_one", return_value=None):
+            with self.assertRaises(api_main.HTTPException) as raised:
+                api_main.get_article("missing-doc")
+
+        self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(raised.exception.detail, "Article not found.")
+
     def test_get_article_includes_selection_diagnostics_from_article_read_model(self) -> None:
         with (
             patch.object(

@@ -1,0 +1,277 @@
+---
+import { PaginationNav } from "@newsportal/ui";
+
+import { AdminConfirmAction } from "../AdminConfirmAction";
+import {
+  asRecord,
+  asStringList,
+  type DiscoveryPagedRecord,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+import {
+  resolveDiscoveryPolicyExplainability,
+  type DiscoveryOperatorSummary,
+} from "../../lib/server/operator-surfaces";
+
+type Props = {
+  bffPath: string;
+  candidateItems: DiscoveryRecord[];
+  currentPath: string;
+  missionItems: DiscoveryRecord[];
+  nextHref: string;
+  operatorSummary: DiscoveryOperatorSummary;
+  prevHref: string;
+  profileItems: DiscoveryRecord[];
+  profiles: DiscoveryPagedRecord;
+  recallMissionItems: DiscoveryRecord[];
+};
+
+const {
+  bffPath,
+  candidateItems,
+  currentPath,
+  missionItems,
+  nextHref,
+  operatorSummary,
+  prevHref,
+  profileItems,
+  profiles,
+  recallMissionItems,
+} = Astro.props as Props;
+---
+
+<section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+  <div class="border-b border-border px-5 py-4">
+    <h2 class="text-base font-semibold">Profiles</h2>
+    <p class="mt-1 text-sm text-muted-foreground">
+      {profiles.total} profile{profiles.total === 1 ? "" : "s"} total · {String(operatorSummary.activeProfileCount)} active
+    </p>
+  </div>
+  <div class="divide-y divide-border">
+    {profileItems.length === 0 ? (
+      <p class="px-5 py-8 text-sm text-muted-foreground">No discovery profiles yet. Create one to standardize graph and recall policy.</p>
+    ) : profileItems.map((profile) => {
+      const profileId = String(profile.profile_id ?? "");
+      const profileStatus = String(profile.status ?? "draft");
+      const latestMissionTitles = missionItems
+        .filter((item) => String(item.profile_id ?? "") === profileId)
+        .slice(0, 2)
+        .map((item) => String(item.title ?? item.mission_id ?? "Mission"));
+      const latestRecallTitles = recallMissionItems
+        .filter((item) => String(item.profile_id ?? "") === profileId)
+        .slice(0, 2)
+        .map((item) => String(item.title ?? item.recall_mission_id ?? "Recall mission"));
+      const rejectedDomains = candidateItems
+        .filter(
+          (item) =>
+            String(item.profile_id ?? "") === profileId &&
+            String(item.status ?? "") === "rejected"
+        )
+        .map((item) => String(item.canonical_domain ?? item.url ?? "—"));
+      const reasonBuckets = candidateItems
+        .filter((item) => String(item.profile_id ?? "") === profileId)
+        .map((item) =>
+          resolveDiscoveryPolicyExplainability(item, "graph").reasonBucket ?? "—"
+        );
+      const isArchived = profileStatus === "archived";
+      return (
+        <div class="px-5 py-4">
+          <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="text-sm font-semibold">{String(profile.display_name ?? profile.profile_key ?? "Profile")}</h3>
+                <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {String(profile.profile_key ?? "—")}
+                </span>
+                <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {profileStatus}
+                </span>
+                <span class="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  v{String(profile.version ?? 1)}
+                </span>
+              </div>
+              <p class="text-sm text-muted-foreground">{String(profile.description ?? "No description")}</p>
+              <p class="text-xs text-muted-foreground">
+                Lane coverage: {String(profile.mission_count ?? 0)} graph mission{String(profile.mission_count ?? 0) === "1" ? "" : "s"} · {String(profile.recall_mission_count ?? 0)} recall mission{String(profile.recall_mission_count ?? 0) === "1" ? "" : "s"}
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <AdminConfirmAction
+                action={bffPath}
+                title={isArchived ? "Activate profile" : "Archive profile"}
+                description={isArchived
+                  ? "Make this profile available for new graph and recall missions."
+                  : "Keep this profile readable but block new mission attachments."}
+                triggerLabel={isArchived ? "Activate" : "Archive"}
+                confirmLabel={isArchived ? "Activate profile" : "Archive profile"}
+                fields={[
+                  { name: "intent", value: isArchived ? "activate_profile" : "archive_profile" },
+                  { name: "profileId", value: profileId },
+                  { name: "redirectTo", value: currentPath },
+                ]}
+                triggerClassName={isArchived ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-950/20" : "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-950/20"}
+                confirmClassName={isArchived ? "bg-emerald-600 text-white hover:bg-emerald-600/90" : "bg-amber-600 text-white hover:bg-amber-600/90"}
+                client:load
+              />
+              <AdminConfirmAction
+                action={bffPath}
+                title="Delete profile"
+                description="Delete this profile permanently. Archive it instead if any mission still depends on it."
+                triggerLabel="Delete"
+                confirmLabel="Delete profile"
+                fields={[
+                  { name: "intent", value: "delete_profile" },
+                  { name: "profileId", value: profileId },
+                  { name: "redirectTo", value: currentPath },
+                ]}
+                triggerClassName="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-950/20"
+                client:load
+              />
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+            <form method="post" action={bffPath} class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+              <input type="hidden" name="intent" value="update_profile" />
+              <input type="hidden" name="profileId" value={profileId} />
+              <input type="hidden" name="redirectTo" value={currentPath} />
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Display name</span>
+                  <input name="displayName" value={String(profile.display_name ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+                  <select name="status" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                    {["draft", "active", "archived"].map((option) => (
+                      <option value={option} selected={profileStatus === option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label class="grid gap-1">
+                <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Description</span>
+                <textarea name="description" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{String(profile.description ?? "")}</textarea>
+              </label>
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph providers</span>
+                  <input name="graphProviderTypes" value={asStringList(asRecord(profile.graph_policy_json).providerTypes).join(",")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph website kinds</span>
+                  <textarea name="graphSupportedWebsiteKinds" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).supportedWebsiteKinds).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall providers</span>
+                  <input name="recallProviderTypes" value={asStringList(asRecord(profile.recall_policy_json).providerTypes).join(",")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall website kinds</span>
+                  <textarea name="recallSupportedWebsiteKinds" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).supportedWebsiteKinds).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph min RSS</span>
+                  <input name="graphMinRssReviewScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.graph_policy_json).minRssReviewScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph min website</span>
+                  <input name="graphMinWebsiteReviewScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.graph_policy_json).minWebsiteReviewScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall min promotion</span>
+                  <input name="recallMinPromotionScore" type="number" min="0" max="1" step="0.01" value={String(asRecord(profile.recall_policy_json).minPromotionScore ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph expected shapes</span>
+                  <textarea name="graphExpectedSourceShapes" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).expectedSourceShapes).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall expected shapes</span>
+                  <textarea name="recallExpectedSourceShapes" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).expectedSourceShapes).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph allowed families</span>
+                  <textarea name="graphAllowedSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).allowedSourceFamilies).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall allowed families</span>
+                  <textarea name="recallAllowedSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).allowedSourceFamilies).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph disfavored families</span>
+                  <textarea name="graphDisfavoredSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).disfavoredSourceFamilies).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall disfavored families</span>
+                  <textarea name="recallDisfavoredSourceFamilies" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).disfavoredSourceFamilies).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph usefulness hints</span>
+                  <textarea name="graphUsefulnessHints" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.graph_policy_json).usefulnessHints).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall usefulness hints</span>
+                  <textarea name="recallUsefulnessHints" rows="2" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{asStringList(asRecord(profile.recall_policy_json).usefulnessHints).join("\n")}</textarea>
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph max per family</span>
+                  <input name="graphMaxPerSourceFamily" type="number" min="1" value={String(asRecord(asRecord(profile.graph_policy_json).diversityCaps).maxPerSourceFamily ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall max per family</span>
+                  <input name="recallMaxPerSourceFamily" type="number" min="1" value={String(asRecord(asRecord(profile.recall_policy_json).diversityCaps).maxPerSourceFamily ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Graph max per domain</span>
+                  <input name="graphMaxPerDomain" type="number" min="1" value={String(asRecord(asRecord(profile.graph_policy_json).diversityCaps).maxPerDomain ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Recall max per domain</span>
+                  <input name="recallMaxPerDomain" type="number" min="1" value={String(asRecord(asRecord(profile.recall_policy_json).diversityCaps).maxPerDomain ?? "")} class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                </label>
+                <div class="grid gap-1">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Update</span>
+                  <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+                    Save profile
+                  </button>
+                </div>
+              </div>
+            </form>
+            <div class="grid gap-3 rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+              <div>
+                <p class="text-sm font-medium text-foreground">Diagnostics</p>
+                <p class="mt-1 text-xs">Latest graph missions: {latestMissionTitles.join(", ") || "—"}</p>
+                <p class="mt-1 text-xs">Latest recall missions: {latestRecallTitles.join(", ") || "—"}</p>
+                <p class="mt-1 text-xs">Top rejected domains: {rejectedDomains.slice(0, 3).join(", ") || "—"}</p>
+                <p class="mt-1 text-xs">Top reason buckets: {reasonBuckets.slice(0, 3).join(", ") || "—"}</p>
+                <p class="mt-1 text-xs">Calibration agreement: —</p>
+              </div>
+              <div class="rounded-xl border border-dashed border-border px-3 py-3 text-xs">
+                <p>Graph preferred domains: {asStringList(asRecord(profile.graph_policy_json).preferredDomains).join(", ") || "—"}</p>
+                <p class="mt-1">Graph website kinds: {asStringList(asRecord(profile.graph_policy_json).supportedWebsiteKinds).join(", ") || "—"}</p>
+                <p class="mt-1">Graph expected shapes: {asStringList(asRecord(profile.graph_policy_json).expectedSourceShapes).join(", ") || "—"}</p>
+                <p class="mt-1">Graph allowed families: {asStringList(asRecord(profile.graph_policy_json).allowedSourceFamilies).join(", ") || "—"}</p>
+                <p class="mt-1">Recall preferred domains: {asStringList(asRecord(profile.recall_policy_json).preferredDomains).join(", ") || "—"}</p>
+                <p class="mt-1">Recall website kinds: {asStringList(asRecord(profile.recall_policy_json).supportedWebsiteKinds).join(", ") || "—"}</p>
+                <p class="mt-1">Recall expected shapes: {asStringList(asRecord(profile.recall_policy_json).expectedSourceShapes).join(", ") || "—"}</p>
+                <p class="mt-1">Recall allowed families: {asStringList(asRecord(profile.recall_policy_json).allowedSourceFamilies).join(", ") || "—"}</p>
+                <p class="mt-1">Benchmark domains: {asStringList(asRecord(profile.yield_benchmark_json).domains).join(", ") || "—"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+  {(profiles.hasPrev || profiles.hasNext) && (
+    <PaginationNav
+      className="rounded-none border-x-0 border-b-0"
+      page={profiles.page}
+      totalPages={profiles.totalPages}
+      hasPrev={profiles.hasPrev}
+      hasNext={profiles.hasNext}
+      prevHref={prevHref}
+      nextHref={nextHref}
+    />
+  )}
+</section>

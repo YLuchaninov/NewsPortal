@@ -1,0 +1,118 @@
+---
+import {
+  asStringList,
+  fmtDate,
+  fmtPercent,
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+import { resolveDiscoveryChannelMetrics } from "../../lib/server/operator-surfaces";
+
+type Props = {
+  bffPath: string;
+  currentPath: string;
+  missionHrefById: Record<string, string>;
+  missionItems: DiscoveryRecord[];
+  portfolioGaps: DiscoveryRecord[];
+  portfolioSnapshot: DiscoveryRecord;
+  portfolioSummary: DiscoveryRecord;
+  rankedSources: DiscoveryRecord[];
+  selectedMissionId: string;
+};
+
+const {
+  bffPath,
+  currentPath,
+  missionHrefById,
+  missionItems,
+  portfolioGaps,
+  portfolioSnapshot,
+  portfolioSummary,
+  rankedSources,
+  selectedMissionId,
+} = Astro.props as Props;
+---
+
+<div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <h2 class="text-base font-semibold">Portfolio controls</h2>
+    <div class="mt-4 space-y-3">
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Selected mission</span>
+        <div class="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          {selectedMissionId || "No mission selected"}
+        </div>
+      </label>
+      <form method="post" action={bffPath} class="grid gap-3">
+        <input type="hidden" name="intent" value="re_evaluate" />
+        <input type="hidden" name="missionId" value={selectedMissionId} />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+          Re-evaluate mission
+        </button>
+      </form>
+      <div class="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+        <p>Snapshot reason: {String(portfolioSnapshot.snapshot_reason ?? "—")}</p>
+        <p class="mt-1">Created: {fmtDate(portfolioSnapshot.created_at)}</p>
+        <p class="mt-1">Selected sources: {String(portfolioSummary.selected_count ?? 0)}</p>
+        <p class="mt-1">Gap count: {String(portfolioSummary.gap_count ?? 0)}</p>
+      </div>
+      <div class="space-y-2">
+        {missionItems.map((mission) => {
+          const missionId = String(mission.mission_id ?? "");
+          return (
+            <a href={missionHrefById[missionId] ?? "#"} class="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent">
+              <span>{String(mission.title ?? mission.mission_id ?? "Mission")}</span>
+              <span class="text-xs text-muted-foreground">{String(mission.interest_graph_status ?? "pending")}</span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  </section>
+
+  <section class="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+    <div class="border-b border-border px-5 py-4">
+      <h2 class="text-base font-semibold">Ranked sources</h2>
+      <p class="mt-1 text-sm text-muted-foreground">{rankedSources.length} ranked source{rankedSources.length === 1 ? "" : "s"} in latest snapshot</p>
+    </div>
+    <div class="divide-y divide-border">
+      {rankedSources.length === 0 ? (
+        <p class="px-5 py-8 text-sm text-muted-foreground">No portfolio snapshot yet. Run or refresh the selected mission first.</p>
+      ) : rankedSources.map((item) => {
+        const channelMetrics = resolveDiscoveryChannelMetrics(item);
+
+        return (
+          <div class="px-5 py-4">
+            <div class="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+              <div class="space-y-1">
+                <h3 class="text-sm font-semibold">{String(item.canonical_domain ?? item.url ?? "Source")}</h3>
+                <a href={String(item.url ?? "#")} target="_blank" class="text-sm text-primary hover:underline break-all">
+                  {String(item.url ?? "—")}
+                </a>
+                <p class="text-xs text-muted-foreground">Roles: {asStringList(item.role_labels).join(", ") || "—"}</p>
+              </div>
+              <div class="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                <div>Mission fit {fmtPercent(item.contextual_score)}</div>
+                <div class="mt-1">Trust {fmtPercent(item.trust_score)}</div>
+                <div class="mt-1">Yield {fmtPercent(channelMetrics.yieldScore ?? 0)} · Lead {fmtPercent(channelMetrics.leadTimeScore ?? 0)} · Dupes {fmtPercent(channelMetrics.duplicationScore ?? 0)}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+    <div class="border-t border-border px-5 py-4">
+      <h3 class="text-sm font-semibold">Coverage gaps</h3>
+      <div class="mt-3 space-y-2">
+        {portfolioGaps.length === 0 ? (
+          <p class="text-sm text-muted-foreground">No open portfolio gaps.</p>
+        ) : portfolioGaps.map((gap) => (
+          <div class="rounded-2xl border border-border bg-background px-4 py-3 text-sm">
+            <p class="font-medium">{String(gap.kind ?? "gap")}</p>
+            <p class="mt-1 text-muted-foreground">{String(gap.message ?? gap.query_hint ?? "No details")}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</div>

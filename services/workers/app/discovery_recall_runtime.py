@@ -3,6 +3,12 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
+from .discovery_planning import (
+    DISCOVERY_QUERY_FAMILY_TERMS,
+    normalize_text_list,
+    ordered_query_families,
+    tokenize,
+)
 from .source_scoring import canonical_domain
 from .task_engine.adapters.common import normalize_url
 
@@ -48,6 +54,148 @@ def normalize_domain_seed(value: Any) -> str:
     if candidate.startswith("www."):
         candidate = candidate[4:]
     return candidate
+
+
+def build_recall_search_plans(
+    *,
+    mission: dict[str, Any],
+    provider_type: str,
+    max_plans: int,
+    policy: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    plans: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    preferred_tactics = normalize_text_list((policy or {}).get("preferredTactics"))
+    expansion_hints = {
+        "procurement",
+        "tender",
+        "vendor",
+        "contract",
+        "rfp",
+        "outsourcing",
+        "funding",
+        "expansion",
+        "enterprise",
+        "migration",
+        "modernization",
+        "rollout",
+    }
+    for seed_query in normalize_text_list(mission.get("seed_queries")):
+        seed_query_text = seed_query if provider_type == "website" else f"{seed_query} rss"
+        seed_query_key = ("seed_query", seed_query_text.lower())
+        if seed_query_key not in seen:
+            seen.add(seed_query_key)
+            plans.append(
+                {
+                    "query": seed_query_text,
+                    "quality_signal_source": "seed_query_search",
+                    "seed_type": "seed_query",
+                    "seed_value": seed_query,
+                    "query_family": None,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
+        if not preferred_tactics and not (tokenize(seed_query) & expansion_hints):
+            continue
+        families = ordered_query_families(seed_text=seed_query, preferred_tactics=preferred_tactics)
+        for family in families[:4]:
+            term = DISCOVERY_QUERY_FAMILY_TERMS[family]
+            base_query = f"{seed_query} {term}".strip()
+            query = base_query if provider_type == "website" else f"{base_query} rss"
+            key = ("seed_query", query.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            plans.append(
+                {
+                    "query": query,
+                    "quality_signal_source": "seed_query_search",
+                    "seed_type": "seed_query",
+                    "seed_value": seed_query,
+                    "query_family": family,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
+    for seed_domain in normalize_text_list(mission.get("seed_domains")):
+        domain = normalize_domain_seed(seed_domain)
+        if not domain:
+            continue
+        seed_domain_text = f"site:{domain}" if provider_type == "website" else f"site:{domain} rss"
+        seed_domain_key = ("seed_domain", seed_domain_text.lower())
+        if seed_domain_key not in seen:
+            seen.add(seed_domain_key)
+            plans.append(
+                {
+                    "query": seed_domain_text,
+                    "quality_signal_source": "seed_domain_search",
+                    "seed_type": "seed_domain",
+                    "seed_value": domain,
+                    "query_family": None,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
+        if not preferred_tactics and not (tokenize(domain) & expansion_hints):
+            continue
+        families = ordered_query_families(seed_text=domain, preferred_tactics=preferred_tactics)
+        for family in families[:3]:
+            term = DISCOVERY_QUERY_FAMILY_TERMS[family]
+            base_query = f"site:{domain} {term}".strip()
+            query = base_query if provider_type == "website" else f"{base_query} rss"
+            key = ("seed_domain", query.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            plans.append(
+                {
+                    "query": query,
+                    "quality_signal_source": "seed_domain_search",
+                    "seed_type": "seed_domain",
+                    "seed_value": domain,
+                    "query_family": family,
+                }
+            )
+            if len(plans) >= max_plans:
+                return plans
+    return plans
+
+
+def seed_probe_targets_for_recall_mission(
+    *,
+    mission: dict[str, Any],
+    provider_type: str,
+) -> dict[str, dict[str, Any]]:
+    targets: dict[str, dict[str, Any]] = {}
+    for seed_url in normalize_text_list(mission.get("seed_urls")):
+        probe_url = canonical_origin_url(seed_url) if provider_type == "website" else str(seed_url).strip()
+        if not probe_url:
+            continue
+        targets[normalize_url(probe_url)] = {
+            "probe_url": probe_url,
+            "quality_signal_source": "seed_url_probe",
+            "seed_type": "seed_url",
+            "seed_value": seed_url,
+        }
+    if provider_type == "website":
+        for seed_domain in normalize_text_list(mission.get("seed_domains")):
+            domain = normalize_domain_seed(seed_domain)
+            if not domain:
+                continue
+            probe_url = canonical_origin_url(domain)
+            if not probe_url:
+                continue
+            targets.setdefault(
+                normalize_url(probe_url),
+                {
+                    "probe_url": probe_url,
+                    "quality_signal_source": "seed_domain_probe",
+                    "seed_type": "seed_domain",
+                    "seed_value": domain,
+                },
+            )
+    return targets
 
 
 def recall_candidate_rows_from_probe_results(

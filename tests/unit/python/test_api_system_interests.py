@@ -3,6 +3,8 @@ import types
 import unittest
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 if "psycopg" not in sys.modules:
     psycopg_stub = types.ModuleType("psycopg")
     psycopg_stub.connect = lambda *args, **kwargs: None
@@ -121,6 +123,29 @@ class ApiSystemInterestsTests(unittest.TestCase):
         count_sql = query_count.call_args.args[0]
         self.assertIn("from interest_templates it", count_sql)
 
+    def test_list_system_interests_without_page_uses_interest_template_order(
+        self,
+    ) -> None:
+        with patch.object(
+            api_main,
+            "query_all",
+            return_value=[
+                {
+                    "interest_template_id": "template-1",
+                    "selection_profile_family": None,
+                    "selection_profile_policy_json": None,
+                }
+            ],
+        ) as query_all:
+            result = api_main.list_system_interests(page=None, page_size=None)
+
+        sql = query_all.call_args.args[0]
+        self.assertIn("from interest_templates it", sql)
+        self.assertIn("left join selection_profiles sp", sql)
+        self.assertIn("order by it.is_active desc, it.updated_at desc", sql)
+        self.assertEqual(result[0]["interest_template_id"], "template-1")
+        self.assertEqual(result[0]["selection_profile_policy_json"], {})
+
     def test_get_system_interest_exposes_selection_profile_policy_fields(self) -> None:
         with patch.object(
             api_main,
@@ -175,6 +200,14 @@ class ApiSystemInterestsTests(unittest.TestCase):
             result = api_main.get_system_interest("template-2")
 
         self.assertEqual(result["selection_profile_policy_json"]["llmReviewMode"], "optional_high_value_only")
+
+    def test_get_system_interest_not_found_preserves_http_404(self) -> None:
+        with patch.object(api_main, "query_one", return_value=None):
+            with self.assertRaises(HTTPException) as raised:
+                api_main.get_system_interest("missing-template")
+
+        self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(raised.exception.detail, "System interest not found.")
 
 
 if __name__ == "__main__":

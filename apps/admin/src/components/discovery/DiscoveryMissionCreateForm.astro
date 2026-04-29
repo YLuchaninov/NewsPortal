@@ -1,0 +1,102 @@
+---
+import {
+  type DiscoveryRecord,
+} from "../../lib/server/discovery-view-model";
+
+type Props = {
+  attachableProfiles: DiscoveryRecord[];
+  bffPath: string;
+  currentPath: string;
+  missionItems: DiscoveryRecord[];
+  summary: DiscoveryRecord;
+};
+
+const { attachableProfiles, bffPath, currentPath, missionItems, summary } = Astro.props as Props;
+---
+
+<details class="rounded-2xl border border-border bg-card p-5 shadow-sm" open={missionItems.length === 0}>
+  <summary class="cursor-pointer list-none">
+    <div class="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h2 class="text-base font-semibold">Create mission</h2>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Start a new graph-first mission without pinning the full composer beside the queue.
+        </p>
+      </div>
+      <span class="text-[11px] font-medium uppercase tracking-[0.16em] text-primary/80">
+        Expand composer
+      </span>
+    </div>
+  </summary>
+  <form method="post" action={bffPath} class="mt-4 grid gap-3 border-t border-border pt-4">
+    <input type="hidden" name="intent" value="create_mission" />
+    <input type="hidden" name="redirectTo" value={currentPath} />
+    <label class="grid gap-1.5">
+      <span class="text-xs font-medium">Title</span>
+      <input name="title" required class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+    </label>
+    <label class="grid gap-1.5">
+      <span class="text-xs font-medium">Description</span>
+      <textarea name="description" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+    </label>
+    <label class="grid gap-1.5">
+      <span class="text-xs font-medium">Discovery profile</span>
+      <select name="profileId" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+        <option value="">No reusable profile</option>
+        {attachableProfiles.map((profile) => (
+          <option value={String(profile.profile_id ?? "")}>
+            {String(profile.display_name ?? profile.profile_key ?? "Profile")} · v{String(profile.version ?? 1)} · {String(profile.status ?? "draft")}
+          </option>
+        ))}
+      </select>
+      <span class="text-[11px] text-muted-foreground">
+        Profiles own structured discovery tuning. Seeds, budget, and run status stay mission-owned.
+      </span>
+    </label>
+    <label class="grid gap-1.5">
+      <span class="text-xs font-medium">Seed topics (one per line)</span>
+      <textarea name="seedTopics" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+    </label>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Seed languages</span>
+        <textarea name="seedLanguages" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+      </label>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Seed regions</span>
+        <textarea name="seedRegions" rows="3" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+      </label>
+    </div>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Target provider types</span>
+        <input name="targetProviderTypes" value="rss,website,api,email_imap,youtube" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+      </label>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Priority</span>
+        <input name="priority" type="number" value="0" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+      </label>
+    </div>
+    <div class="grid gap-3 sm:grid-cols-3">
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Max hypotheses</span>
+        <input name="maxHypotheses" type="number" min="1" value="10" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+      </label>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Max sources</span>
+        <input name="maxSources" type="number" min="1" value="20" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+      </label>
+      <label class="grid gap-1.5">
+        <span class="text-xs font-medium">Budget (cents)</span>
+        <input name="budgetCents" type="number" min="0" value={String(summary.defaultBudgetCents ?? 500)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+      </label>
+    </div>
+    <label class="grid gap-1.5">
+      <span class="text-xs font-medium">Optional interest graph JSON</span>
+      <textarea name="interestGraph" rows="10" placeholder='{"core_topic":"EU AI","subtopics":["regulation"]}' class="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
+    </label>
+    <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+      Create mission
+    </button>
+  </form>
+</details>

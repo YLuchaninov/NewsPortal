@@ -627,9 +627,15 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
           continue;
         }
         try {
-          await fetchJson(
+          const detail = await fetchJson(
             `http://127.0.0.1:8000/content-items/${encodeURIComponent(candidateContentItemId)}`
           );
+          const storyClusterId = String(
+            detail?.story_cluster_id ?? detail?.storyClusterId ?? ""
+          ).trim();
+          if (!storyClusterId) {
+            continue;
+          }
           return {
             items,
             contentItemId: candidateContentItemId,
