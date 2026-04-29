@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 27 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 28 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing LiveSettingsSection model-helper decomposition.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-model.ts`; JSX, form controls, server write payloads, BFF paths, live-update behavior, copy, layout and visual design stayed unchanged.
+- Worktree status: clean after committing LiveSettingsSection presentational primitive extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-parts.tsx`; state ownership, handlers, server write payloads, BFF paths, live-update behavior, copy, layout and visual design stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-28
+
+- Kind: Stage
+- Status: completed
+- In scope: move repeated `LiveSettingsSection.tsx` presentational primitives (settings card shell, toggle row and submit button) into a focused sibling `live-settings-section-parts.tsx` module and rewire call sites.
+- Out of scope: state ownership, event handlers beyond prop wiring, form action/method semantics, hidden input semantics, server write payloads, BFF paths, live-update event semantics, copy changes, layout changes, visual redesign and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and new `apps/web/src/components/live-settings-section-parts.tsx`.
+- Risk: medium, because repeated markup includes form controls, but the stage only moves presentational wrappers and keeps the same inputs, labels, disabled states and button text.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that moved markup classes/labels remain equivalent.
+- Acceptance criteria: component render output and form/control behavior remain unchanged; repeated card/toggle/button markup lives in the parts module; no BFF payload or UI copy/layout changes.
+- Architecture note: affected concern is public web settings component cohesion; stakeholder/consumer is signed-in users managing preferences/channels; tradeoff is extracting tiny local primitives before larger section-level decomposition.
+- Implemented, with evidence: added `apps/web/src/components/live-settings-section-parts.tsx` with `SettingsCard`, `ToggleRow` and `SubmitButton`.
+- Implemented, with evidence: `LiveSettingsSection.tsx` now reuses the local parts for repeated section shells, toggle rows and primary submit buttons.
+- Scope note: state ownership, event handlers, form action/method semantics, hidden input semantics, server write payloads, BFF paths, live-update event semantics, copy, layout, visual redesign and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: moved markup classes and labels remain equivalent; notification preference hidden checkbox inputs preserve their `name`/`value` semantics through `ToggleRow`.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-27
 

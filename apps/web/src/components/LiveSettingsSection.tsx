@@ -18,6 +18,7 @@ import {
   type ChannelRow,
   type LiveSettingsSectionProps,
 } from "./live-settings-section-model";
+import { SettingsCard, SubmitButton, ToggleRow } from "./live-settings-section-parts";
 
 export function LiveSettingsSection({
   initialThemePreference,
@@ -244,13 +245,7 @@ export function LiveSettingsSection({
 
   return (
     <div className="grid gap-6 max-w-3xl">
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Appearance</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Choose how NewsPortal looks to you
-          </p>
-        </div>
+      <SettingsCard title="Appearance" description="Choose how NewsPortal looks to you">
         <div className="p-6">
           <form
             className="flex items-end gap-3"
@@ -286,24 +281,19 @@ export function LiveSettingsSection({
                 <option value="dark">Dark</option>
               </select>
             </div>
-            <button
-              type="submit"
+            <SubmitButton
               disabled={savingAppearance}
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {savingAppearance ? "Saving..." : "Save"}
-            </button>
+              pendingLabel="Saving..."
+              idleLabel="Save"
+            />
           </form>
         </div>
-      </section>
+      </SettingsCard>
 
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Notification Preferences</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Control which notification channels are active
-          </p>
-        </div>
+      <SettingsCard
+        title="Notification Preferences"
+        description="Control which notification channels are active"
+      >
         <div className="p-6 space-y-4">
           <form
             className="space-y-4"
@@ -323,74 +313,43 @@ export function LiveSettingsSection({
               }
             }}
           >
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="text-sm font-medium">Web Push</p>
-                <p className="text-xs text-muted-foreground">
-                  Browser push notifications
-                </p>
-              </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input type="hidden" name="webPushEnabled" value="false" />
-                <input
-                  type="checkbox"
-                  name="webPushEnabled"
-                  value="true"
-                  checked={preferences.webPush}
-                  onChange={(event) =>
-                    setPreferences((current) => ({
-                      ...current,
-                      webPush: event.target.checked,
-                    }))
-                  }
-                  className="sr-only peer"
-                />
-                <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-              </label>
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="text-sm font-medium">Telegram</p>
-                <p className="text-xs text-muted-foreground">
-                  Telegram channel alerts
-                </p>
-              </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input type="hidden" name="telegramEnabled" value="false" />
-                <input
-                  type="checkbox"
-                  name="telegramEnabled"
-                  value="true"
-                  checked={preferences.telegram}
-                  onChange={(event) =>
-                    setPreferences((current) => ({
-                      ...current,
-                      telegram: event.target.checked,
-                    }))
-                  }
-                  className="sr-only peer"
-                />
-                <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-              </label>
-            </div>
-            <button
-              type="submit"
+            <ToggleRow
+              title="Web Push"
+              description="Browser push notifications"
+              name="webPushEnabled"
+              checked={preferences.webPush}
+              onCheckedChange={(checked) =>
+                setPreferences((current) => ({
+                  ...current,
+                  webPush: checked,
+                }))
+              }
+            />
+            <ToggleRow
+              title="Telegram"
+              description="Telegram channel alerts"
+              name="telegramEnabled"
+              checked={preferences.telegram}
+              onCheckedChange={(checked) =>
+                setPreferences((current) => ({
+                  ...current,
+                  telegram: checked,
+                }))
+              }
+            />
+            <SubmitButton
               disabled={savingPreferences}
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {savingPreferences ? "Saving..." : "Save Preferences"}
-            </button>
+              pendingLabel="Saving..."
+              idleLabel="Save Preferences"
+            />
           </form>
         </div>
-      </section>
+      </SettingsCard>
 
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Scheduled Digest</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Configure when your match digest email should be sent
-          </p>
-        </div>
+      <SettingsCard
+        title="Scheduled Digest"
+        description="Configure when your match digest email should be sent"
+      >
         <div className="p-6 space-y-4">
           <form
             className="space-y-4"
@@ -410,28 +369,17 @@ export function LiveSettingsSection({
               }
             }}
           >
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="text-sm font-medium">Enable scheduled digest</p>
-                <p className="text-xs text-muted-foreground">
-                  Uses your connected email digest channel
-                </p>
-              </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input
-                  type="checkbox"
-                  checked={digestSettings.is_enabled}
-                  onChange={(event) =>
-                    setDigestSettings((current) => ({
-                      ...current,
-                      is_enabled: event.target.checked,
-                    }))
-                  }
-                  className="sr-only peer"
-                />
-                <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-              </label>
-            </div>
+            <ToggleRow
+              title="Enable scheduled digest"
+              description="Uses your connected email digest channel"
+              checked={digestSettings.is_enabled}
+              onCheckedChange={(checked) =>
+                setDigestSettings((current) => ({
+                  ...current,
+                  is_enabled: checked,
+                }))
+              }
+            />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-1.5">
@@ -498,28 +446,18 @@ export function LiveSettingsSection({
               </p>
             </div>
 
-            <div className="flex items-center justify-between py-3 border-y border-border">
-              <div>
-                <p className="text-sm font-medium">Skip empty digest runs</p>
-                <p className="text-xs text-muted-foreground">
-                  Do not send a digest when there are no new personal matches
-                </p>
-              </div>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input
-                  type="checkbox"
-                  checked={digestSettings.skip_if_empty}
-                  onChange={(event) =>
-                    setDigestSettings((current) => ({
-                      ...current,
-                      skip_if_empty: event.target.checked,
-                    }))
-                  }
-                  className="sr-only peer"
-                />
-                <div className="peer h-5 w-9 rounded-full bg-input peer-checked:bg-primary after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4 after:shadow-sm"></div>
-              </label>
-            </div>
+            <ToggleRow
+              title="Skip empty digest runs"
+              description="Do not send a digest when there are no new personal matches"
+              checked={digestSettings.skip_if_empty}
+              onCheckedChange={(checked) =>
+                setDigestSettings((current) => ({
+                  ...current,
+                  skip_if_empty: checked,
+                }))
+              }
+              className="flex items-center justify-between py-3 border-y border-border"
+            />
 
             <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-4 text-sm">
               <div className="flex items-center justify-between gap-3">
@@ -541,24 +479,19 @@ export function LiveSettingsSection({
               )}
             </div>
 
-            <button
-              type="submit"
+            <SubmitButton
               disabled={savingDigestSettings}
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {savingDigestSettings ? "Saving..." : "Save Digest Settings"}
-            </button>
+              pendingLabel="Saving..."
+              idleLabel="Save Digest Settings"
+            />
           </form>
         </div>
-      </section>
+      </SettingsCard>
 
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Connect Channels</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Link notification delivery channels to your account
-          </p>
-        </div>
+      <SettingsCard
+        title="Connect Channels"
+        description="Link notification delivery channels to your account"
+      >
         <div className="p-6 grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg border border-border p-4">
             <p className="font-medium text-sm mb-1">Web Push</p>
@@ -662,13 +595,13 @@ export function LiveSettingsSection({
             </form>
           </div>
         </div>
-      </section>
+      </SettingsCard>
 
       {paginatedChannels.total > 0 && (
-        <section className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="font-semibold">Connected Channels</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
+        <SettingsCard
+          title="Connected Channels"
+          description={
+            <>
               {paginatedChannels.total} channel
               {paginatedChannels.total !== 1 ? "s" : ""} total
               {paginatedChannels.total > 0 &&
@@ -676,8 +609,9 @@ export function LiveSettingsSection({
                   paginatedChannels.totalPages,
                   1
                 )}`}
-            </p>
-          </div>
+            </>
+          }
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -754,7 +688,7 @@ export function LiveSettingsSection({
               nextHref={buildPageHref(currentPath, paginatedChannels.page + 1)}
             />
           )}
-        </section>
+        </SettingsCard>
       )}
     </div>
   );
