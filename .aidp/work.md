@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 31 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 32 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing ChannelEditorForm presentational shell extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-form-parts.tsx`; field names, default values, option lists, provider-specific sections, copy, layout, visual design and server write behavior stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm Email IMAP provider-fields extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-email-imap-fields.tsx`; field names, default values, option lists, password preservation semantics, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-32
+
+- Kind: Stage
+- Status: completed
+- In scope: move the Email IMAP-specific basic fields from `ChannelEditorForm.tsx` into a focused `channel-editor-email-imap-fields.tsx` component.
+- Out of scope: non-IMAP URL field, polling/common fields, advanced details, form field names, default values, option lists, validation semantics, password preservation semantics, hidden fields, submit/cancel behavior, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and new `apps/admin/src/components/channel-editor-email-imap-fields.tsx`.
+- Risk: medium, because mailbox credentials are sensitive form inputs, but the stage only moves markup and keeps props/field names/defaults equivalent.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that IMAP field names, defaults, required flags and password status copy remain equivalent.
+- Acceptance criteria: Email IMAP basic fields render equivalently from the new component; `ChannelEditorForm.tsx` keeps common form composition; no payload or validation behavior changes.
+- Architecture note: affected concern is admin channel editor provider-family cohesion; stakeholder/consumer is admin/operator source-channel configuration; tradeoff is extracting one cohesive provider block before website/API/RSS families.
+- Implemented, with evidence: added `apps/admin/src/components/channel-editor-email-imap-fields.tsx` with the Email IMAP host, port, security, username, password, password status, mailbox and sender-filter fields.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now renders `ChannelEditorEmailImapFields` for the IMAP branch while keeping common/basic URL and polling fields local.
+- Scope note: non-IMAP URL field, polling/common fields, advanced details, form field names, default values, option lists, validation semantics, password preservation semantics, hidden fields, submit/cancel behavior, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: IMAP field names, defaults, required flags and password status copy remain equivalent in the new component.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-31
 
