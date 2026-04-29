@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 28 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 29 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing LiveSettingsSection presentational primitive extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-parts.tsx`; state ownership, handlers, server write payloads, BFF paths, live-update behavior, copy, layout and visual design stayed unchanged.
+- Worktree status: clean after committing LiveSettingsSection display-only block extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-parts.tsx`; form controls, event handlers, state ownership, server write payloads, BFF paths, live-update behavior, copy, layout and visual design stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-29
+
+- Kind: Stage
+- Status: completed
+- In scope: move display-only digest status summary and connected-channel table markup from `LiveSettingsSection.tsx` into `live-settings-section-parts.tsx`.
+- Out of scope: form controls, event handlers, state ownership, pagination behavior, server write payloads, BFF paths, live-update event semantics, copy changes, layout changes, visual redesign and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-parts.tsx`.
+- Risk: medium, because the connected-channel table is user-visible and keyed by channel identifiers, but this stage only moves existing display markup and keeps helper functions injected by props.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that table/status labels, classes and keys remain equivalent.
+- Acceptance criteria: digest status and connected-channel display output remain unchanged; display-only code lives in the parts module; no form/control/payload behavior changes.
+- Architecture note: affected concern is public web settings component cohesion; stakeholder/consumer is signed-in users reviewing channel/digest status; tradeoff is moving display-only blocks before any form-level extraction.
+- Implemented, with evidence: added `DigestStatusSummary` and `ConnectedChannelsTable` to `apps/web/src/components/live-settings-section-parts.tsx`.
+- Implemented, with evidence: `LiveSettingsSection.tsx` now delegates digest status and connected-channel table rendering to the local parts module while continuing to pass existing formatter/identifier helpers.
+- Scope note: form controls, event handlers, state ownership, pagination behavior, server write payloads, BFF paths, live-update event semantics, copy, layout, visual redesign and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: table/status labels, classes, empty-state text and row key formula remain equivalent.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-28
 
