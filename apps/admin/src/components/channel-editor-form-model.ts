@@ -77,6 +77,10 @@ export interface ChannelEditorViewModel {
 }
 
 export const channelEditorInputClassName = "h-10 text-sm";
+export const channelEditorSelectClassName =
+  "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring";
+export const channelEditorTextareaClassName =
+  "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 export function boolToString(value: boolean): string {
   return value ? "true" : "false";

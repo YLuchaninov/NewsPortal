@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 29 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 30 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing LiveSettingsSection display-only block extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/components/LiveSettingsSection.tsx` and `apps/web/src/components/live-settings-section-parts.tsx`; form controls, event handlers, state ownership, server write payloads, BFF paths, live-update behavior, copy, layout and visual design stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm shared select/textarea class extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-form-model.ts`; field names, default values, option lists, section structure, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-30
+
+- Kind: Stage
+- Status: completed
+- In scope: add shared `channelEditorSelectClassName` and `channelEditorTextareaClassName` constants beside the existing input class, then replace repeated select/textarea class strings in `ChannelEditorForm.tsx`.
+- Out of scope: form field names, default values, option lists, validation semantics, hidden fields, submit/cancel behavior, section structure, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-form-model.ts`.
+- Risk: low-medium, because the change touches many form controls, but it only replaces identical class strings with shared constants.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that select/textarea class replacements are equivalent.
+- Acceptance criteria: select/textarea styling remains equivalent; field behavior and payloads remain unchanged; duplicated class strings are removed from the form component.
+- Architecture note: affected concern is admin channel editor maintainability; stakeholder/consumer is admin/operator source-channel configuration; tradeoff is consolidating styling constants before section-level decomposition.
+- Implemented, with evidence: added `channelEditorSelectClassName` and `channelEditorTextareaClassName` beside the existing input class in `channel-editor-form-model.ts`.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now uses local `selectClassName` and `textareaClassName` aliases for all repeated select/textarea styling.
+- Scope note: form field names, default values, option lists, validation semantics, hidden fields, submit/cancel behavior, section structure, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: exact repeated select/textarea class strings are gone from `ChannelEditorForm.tsx`; replacements point to equivalent constants.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-29
 

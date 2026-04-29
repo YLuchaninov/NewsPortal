@@ -4,6 +4,8 @@ import {
   boolToString,
   buildChannelEditorViewModel,
   channelEditorInputClassName,
+  channelEditorSelectClassName,
+  channelEditorTextareaClassName,
   type ChannelEditorFormValue,
   type ChannelProviderType,
 } from "./channel-editor-form-model";
@@ -47,6 +49,8 @@ export function ChannelEditorForm({
     passwordHelpText,
   } = buildChannelEditorViewModel(value, mode);
   const inputClassName = channelEditorInputClassName;
+  const selectClassName = channelEditorSelectClassName;
+  const textareaClassName = channelEditorTextareaClassName;
 
   return (
     <form method="post" action={action} className="space-y-6">
@@ -159,7 +163,7 @@ export function ChannelEditorForm({
                   id="channel-imap-secure"
                   name="secure"
                   defaultValue={boolToString(value.secure ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Secure (IMAPS)</option>
                   <option value="false">Plain IMAP</option>
@@ -295,7 +299,7 @@ export function ChannelEditorForm({
               id="channel-active"
               name="isActive"
               defaultValue={boolToString(value.isActive)}
-              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className={selectClassName}
             >
               <option value="true">Active</option>
               <option value="false">Paused</option>
@@ -312,7 +316,7 @@ export function ChannelEditorForm({
               id="channel-adaptive"
               name="adaptiveEnabled"
               defaultValue={boolToString(value.adaptiveEnabled)}
-              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className={selectClassName}
             >
               <option value="true">Enabled</option>
               <option value="false">Fixed interval only</option>
@@ -526,7 +530,7 @@ export function ChannelEditorForm({
                   id="channel-sitemap-discovery"
                   name="sitemapDiscoveryEnabled"
                   defaultValue={boolToString(value.sitemapDiscoveryEnabled ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -542,7 +546,7 @@ export function ChannelEditorForm({
                   id="channel-feed-discovery"
                   name="feedDiscoveryEnabled"
                   defaultValue={boolToString(value.feedDiscoveryEnabled ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -558,7 +562,7 @@ export function ChannelEditorForm({
                   id="channel-collection-discovery"
                   name="collectionDiscoveryEnabled"
                   defaultValue={boolToString(value.collectionDiscoveryEnabled ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -574,7 +578,7 @@ export function ChannelEditorForm({
                   id="channel-download-discovery"
                   name="downloadDiscoveryEnabled"
                   defaultValue={boolToString(value.downloadDiscoveryEnabled ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -590,7 +594,7 @@ export function ChannelEditorForm({
                   id="channel-browser-fallback"
                   name="browserFallbackEnabled"
                   defaultValue={boolToString(value.browserFallbackEnabled ?? false)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="false">Disabled</option>
                   <option value="true">Enabled</option>
@@ -610,7 +614,7 @@ export function ChannelEditorForm({
                   name="collectionSeedUrls"
                   defaultValue={value.collectionSeedUrlsText ?? ""}
                   rows={5}
-                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={textareaClassName}
                   placeholder={"https://example.com/datasets\nhttps://example.com/archive"}
                 />
               </FormField>
@@ -626,7 +630,7 @@ export function ChannelEditorForm({
                   name="allowedUrlPatterns"
                   defaultValue={value.allowedUrlPatternsText ?? ""}
                   rows={5}
-                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={textareaClassName}
                   placeholder={"/datasets/\n/report"}
                 />
               </FormField>
@@ -642,7 +646,7 @@ export function ChannelEditorForm({
                   name="blockedUrlPatterns"
                   defaultValue={value.blockedUrlPatternsText ?? ""}
                   rows={5}
-                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={textareaClassName}
                   placeholder={"/login\n/signup\n/cart"}
                 />
               </FormField>
@@ -708,7 +712,7 @@ export function ChannelEditorForm({
                   id="channel-enrichment-enabled"
                   name="enrichmentEnabled"
                   defaultValue={boolToString(value.enrichmentEnabled ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
@@ -877,7 +881,7 @@ export function ChannelEditorForm({
                 id="channel-enrichment-enabled"
                 name="enrichmentEnabled"
                 defaultValue={boolToString(value.enrichmentEnabled ?? true)}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className={selectClassName}
               >
                 <option value="true">Enabled</option>
                 <option value="false">Disabled</option>
@@ -960,7 +964,7 @@ export function ChannelEditorForm({
                   id="channel-prefer-content-encoded"
                   name="preferContentEncoded"
                   defaultValue={boolToString(value.preferContentEncoded ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Yes</option>
                   <option value="false">No</option>
@@ -977,7 +981,7 @@ export function ChannelEditorForm({
                   id="channel-adapter-strategy"
                   name="adapterStrategy"
                   defaultValue={selectedAdapterStrategy || "auto"}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="auto">Auto infer</option>
                   <option value="generic">Generic RSS / Atom</option>
@@ -1018,7 +1022,7 @@ export function ChannelEditorForm({
                   id="channel-enrichment-enabled"
                   name="enrichmentEnabled"
                   defaultValue={boolToString(value.enrichmentEnabled ?? true)}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={selectClassName}
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
