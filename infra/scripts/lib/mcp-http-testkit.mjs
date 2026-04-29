@@ -173,9 +173,14 @@ export function runCommand(command, args, options = {}) {
         process.stderr.write(result.stderr);
       }
     }
-    throw new Error(
+    const error = new Error(
       `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
     );
+    error.command = command;
+    error.args = args;
+    error.stdout = result.stdout ?? "";
+    error.stderr = result.stderr ?? "";
+    throw error;
   }
 
   return {
@@ -186,6 +191,10 @@ export function runCommand(command, args, options = {}) {
 
 export function runCompose(...args) {
   return runCommand("docker", [...composeArgs, ...args]);
+}
+
+export function runComposeCapture(...args) {
+  return runCommand("docker", [...composeArgs, ...args], { capture: true });
 }
 
 export async function readEnvFile(relativePath) {
@@ -509,7 +518,7 @@ export async function waitFor(
   label,
   producer,
   predicate,
-  { timeoutMs = 60000, intervalMs = 1500 } = {}
+  { timeoutMs = 60000, intervalMs = 1500, isFatalError = () => false } = {}
 ) {
   const startedAt = Date.now();
   let lastError = null;
@@ -520,6 +529,9 @@ export async function waitFor(
         return value;
       }
     } catch (error) {
+      if (isFatalError(error)) {
+        throw error;
+      }
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
