@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 39 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 40 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing AutomationEditorWorkspace node-renderer extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and `apps/admin/src/components/automation-editor-flow-nodes.tsx`; workflow state, graph transforms, save/run/archive handlers, inspector form fields, palette rendering, copy, layout, visual design, server writes and API/runtime code stayed unchanged.
+- Worktree status: clean after committing AutomationEditorWorkspace header/action extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and `apps/admin/src/components/automation-editor-header.tsx`; workflow state, graph transforms, save/run/archive handler bodies, palette/canvas/inspector/dialog rendering, BFF paths, copy, layout, visual design, server writes and API/runtime code stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-40
+
+- Kind: Stage
+- Status: completed
+- In scope: move AutomationEditorWorkspace top header/status/action panel into a focused `automation-editor-header.tsx` component.
+- Out of scope: workflow state, graph transforms, save/run/archive handler bodies, palette/canvas/inspector/dialog rendering, BFF paths, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-header.tsx`.
+- Risk: medium, because the header owns primary user actions, but the stage only moves markup and preserves props/action wiring.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that header labels, classes, hrefs, disabled state and action handlers remain equivalent.
+- Acceptance criteria: header/status/actions render through the new component with equivalent action behavior; editor save/run/archive logic remains in the workspace.
+- Architecture note: affected concern is admin automation editor cohesion; stakeholder/consumer is admin/operator workflow editing; tradeoff is separating header presentation from state orchestration.
+- Implemented, with evidence: added `apps/admin/src/components/automation-editor-header.tsx` with the visual workflow builder status/header and Run Now, Executions, Save and Archive actions.
+- Implemented, with evidence: `AutomationEditorWorkspace.tsx` now renders `AutomationEditorHeader` and keeps save/run/archive handler bodies local.
+- Scope note: workflow state, graph transforms, save/run/archive handler bodies, palette/canvas/inspector/dialog rendering, BFF paths, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: header labels, classes, executions href, Save disabled state and Run/Save/Archive action handlers remain equivalent through props.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-39
 
