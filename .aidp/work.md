@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 32 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 33 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing ChannelEditorForm Email IMAP provider-fields extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-email-imap-fields.tsx`; field names, default values, option lists, password preservation semantics, copy, layout, visual design and server write behavior stayed unchanged.
+- Worktree status: clean after committing ChannelEditorForm website discovery field extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and `apps/admin/src/components/channel-editor-website-discovery-fields.tsx`; crawl budget fields, API/RSS/IMAP controls, field names, default values, option lists, copy, layout, visual design and server write behavior stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-33
+
+- Kind: Stage
+- Status: completed
+- In scope: move website discovery mode toggles and collection/allowed/blocked URL textarea controls from `ChannelEditorForm.tsx` into `channel-editor-website-discovery-fields.tsx`.
+- Out of scope: website crawl budget numeric fields, API/RSS/IMAP provider controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/ChannelEditorForm.tsx` and new `apps/admin/src/components/channel-editor-website-discovery-fields.tsx`.
+- Risk: medium, because these fields shape website discovery behavior, but the stage only moves existing markup and preserves field names/defaults.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that website discovery field names, defaults, options and textarea placeholders remain equivalent.
+- Acceptance criteria: website discovery controls render equivalently from the new component; common crawl budget controls stay in the main form for later staged splits; no payload or validation behavior changes.
+- Architecture note: affected concern is admin channel editor provider-family cohesion; stakeholder/consumer is admin/operator website source-channel configuration; tradeoff is extracting discovery controls separately from crawl budget controls.
+- Implemented, with evidence: added `apps/admin/src/components/channel-editor-website-discovery-fields.tsx` with website discovery toggles and collection/allowed/blocked URL textarea controls.
+- Implemented, with evidence: `ChannelEditorForm.tsx` now renders `ChannelEditorWebsiteDiscoveryFields` in the website advanced branch while keeping crawl budget fields local.
+- Scope note: website crawl budget numeric fields, API/RSS/IMAP provider controls, form field names, default values, option ordering, validation semantics, hidden fields, submit/cancel behavior, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: website discovery field names, defaults, option ordering and textarea placeholders remain equivalent in the new component.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-32
 
