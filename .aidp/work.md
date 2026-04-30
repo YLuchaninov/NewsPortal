@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 42 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 43 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing AutomationEditorWorkspace canvas panel extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and `apps/admin/src/components/automation-editor-canvas.tsx`; workflow state, graph transforms, save/run/archive handlers, palette/inspector/dialog rendering, node renderer definitions, React Flow behavior, copy, layout, visual design, server writes and API/runtime code stayed unchanged.
+- Worktree status: clean after committing AutomationEditorWorkspace run-dialog extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-run-dialog.tsx`; run request handler, JSON parse/submission, workflow state, graph transforms, header/palette/canvas/inspector, copy/layout, server writes/API runtime stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open the next scoped slice in this file before editing implementation files.
+- Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-43
+
+- Kind: Stage
+- Status: completed
+- In scope: move AutomationEditorWorkspace manual run dialog into a focused `automation-editor-run-dialog.tsx` component.
+- Out of scope: run request handler body, JSON parsing/submission behavior, workflow state, graph transforms, header/palette/canvas/inspector rendering, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-run-dialog.tsx`.
+- Risk: medium, because the dialog triggers a workflow run, but the stage only moves markup and preserves submit/cancel wiring.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that dialog labels, textarea bindings, open state and submit/cancel handlers remain equivalent.
+- Acceptance criteria: run dialog renders through the new component with equivalent inputs and actions; `handleRunNow` and JSON parsing remain in the workspace.
+- Architecture note: affected concern is admin automation editor cohesion; stakeholder/consumer is admin/operator workflow execution; tradeoff is separating manual-run presentation from run orchestration.
+- Implemented, with evidence: added `apps/admin/src/components/automation-editor-run-dialog.tsx` with the manual run dialog, context JSON textarea, trigger meta JSON textarea and cancel/request actions.
+- Implemented, with evidence: `AutomationEditorWorkspace.tsx` now renders `AutomationEditorRunDialog` while `handleRunNow` and JSON parsing/submission remain local.
+- Scope note: run request handler body, JSON parsing/submission behavior, workflow state, graph transforms, header/palette/canvas/inspector rendering, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: dialog labels, textarea bindings, open state and submit/cancel handlers remain equivalent through props.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-42
 

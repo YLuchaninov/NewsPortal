@@ -11,12 +11,6 @@ import {
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
   ScrollArea,
   Select,
@@ -46,6 +40,7 @@ import {
 import { AutomationEditorCanvas } from "./automation-editor-canvas";
 import { AutomationEditorHeader } from "./automation-editor-header";
 import { AutomationEditorPalette } from "./automation-editor-palette";
+import { AutomationEditorRunDialog } from "./automation-editor-run-dialog";
 import {
   buildEdges,
   moduleToKey,
@@ -770,34 +765,15 @@ export function AutomationEditorWorkspace({
         </Card>
       </div>
 
-      <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Run workflow now</DialogTitle>
-            <DialogDescription>
-              Manual runs still go through the same maintenance API contract and sequence queue.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <label className="grid gap-2 text-sm">
-              <span className="font-medium">Context JSON</span>
-              <Textarea value={runContextJson} onChange={(event) => setRunContextJson(event.target.value)} rows={7} className="font-mono text-xs" />
-            </label>
-            <label className="grid gap-2 text-sm">
-              <span className="font-medium">Trigger meta JSON</span>
-              <Textarea value={runTriggerMetaJson} onChange={(event) => setRunTriggerMetaJson(event.target.value)} rows={6} className="font-mono text-xs" />
-            </label>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setRunDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void handleRunNow()}>
-              Request Run
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AutomationEditorRunDialog
+        open={runDialogOpen}
+        onOpenChange={setRunDialogOpen}
+        runContextJson={runContextJson}
+        onRunContextJsonChange={setRunContextJson}
+        runTriggerMetaJson={runTriggerMetaJson}
+        onRunTriggerMetaJsonChange={setRunTriggerMetaJson}
+        onSubmit={() => void handleRunNow()}
+      />
     </div>
   );
 }
