@@ -13,6 +13,7 @@ import {
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
 import {
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
@@ -135,15 +136,15 @@ function resolveLlmReviewMode(
         </p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
           <p class="mt-1 text-2xl font-semibold">{templates.total}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Active</p>
           <p class="mt-1 text-2xl font-semibold text-emerald-500">{activeCount}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Page</p>
           <p class="mt-1 text-2xl font-semibold">{templates.page}</p>
         </div>

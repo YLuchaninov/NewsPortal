@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 62 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 63 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin short timestamp helper adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/channels/[channelId]/edit.astro`; short timestamp helper ownership changed while page data loading, routes, rendering, copy, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin compact metric tile class adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/user-interests.astro`; compact metric tile class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-63
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared admin compact metric tile class and replace exact repeated `rounded-2xl border border-border bg-background px-4 py-3` metric tiles in LLM templates, interest templates and user interests pages.
+- Out of scope: cards with extra flex/min-height behavior, table classes, buttons, form controls, copy, layout, visual redesign, page data loading, routes and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro`, `apps/admin/src/pages/user-interests.astro`.
+- Risk: low, because this only moves an exact class string into a shared constant and leaves DOM structure and text unchanged.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that replaced class strings are exact matches.
+- Acceptance criteria: touched pages no longer repeat the exact compact metric tile class string for these metric tiles.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is a small shared class constant instead of introducing a component across Astro pages.
+- Implemented, with evidence: `ADMIN_COMPACT_METRIC_TILE_CLASS` was added to `apps/admin/src/lib/admin-ui-classes.ts`.
+- Implemented, with evidence: LLM templates, interest templates and user interests pages now use the shared class for exact compact metric tile matches.
+- Scope note: cards with extra flex/min-height behavior, table classes, buttons, form controls, copy, layout, visual redesign, page data loading, routes and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: replaced class strings were exact `rounded-2xl border border-border bg-background px-4 py-3` matches, and DOM structure/text stayed unchanged.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-62
 
