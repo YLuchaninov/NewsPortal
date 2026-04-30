@@ -5,6 +5,30 @@ import types
 from typing import Any
 
 
+class SubscriptableConnection:
+    def __class_getitem__(cls, _item):
+        return cls
+
+
+class SubscriptableAsyncConnection:
+    def __class_getitem__(cls, _item):
+        return cls
+
+    @staticmethod
+    async def connect(*args, **kwargs):
+        return None
+
+
+class SubscriptableAsyncCursor:
+    def __class_getitem__(cls, _item):
+        return cls
+
+
+class JsonValueWrapper:
+    def __init__(self, value):
+        self.value = value
+
+
 def install_psycopg_stub(
     *,
     connection: type[Any] | None = None,
@@ -12,16 +36,17 @@ def install_psycopg_stub(
     async_cursor: type[Any] | None = None,
     json_wrapper: type[Any] | None = None,
 ) -> None:
-    if "psycopg" not in sys.modules:
+    psycopg_stub = sys.modules.get("psycopg")
+    if psycopg_stub is None:
         psycopg_stub = types.ModuleType("psycopg")
         psycopg_stub.connect = lambda *args, **kwargs: None
-        if connection is not None:
-            psycopg_stub.Connection = connection
-        if async_connection is not None:
-            psycopg_stub.AsyncConnection = async_connection
-        if async_cursor is not None:
-            psycopg_stub.AsyncCursor = async_cursor
         sys.modules["psycopg"] = psycopg_stub
+    if connection is not None:
+        psycopg_stub.Connection = connection
+    if async_connection is not None:
+        psycopg_stub.AsyncConnection = async_connection
+    if async_cursor is not None:
+        psycopg_stub.AsyncCursor = async_cursor
 
     if "psycopg.rows" not in sys.modules:
         psycopg_rows_stub = types.ModuleType("psycopg.rows")
@@ -31,10 +56,14 @@ def install_psycopg_stub(
     if "psycopg.types" not in sys.modules:
         sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
 
-    if "psycopg.types.json" not in sys.modules:
+    psycopg_types_json_stub = sys.modules.get("psycopg.types.json")
+    if psycopg_types_json_stub is None:
         psycopg_types_json_stub = types.ModuleType("psycopg.types.json")
-        psycopg_types_json_stub.Json = json_wrapper if json_wrapper is not None else lambda value: value
         sys.modules["psycopg.types.json"] = psycopg_types_json_stub
+    if json_wrapper is not None:
+        psycopg_types_json_stub.Json = json_wrapper
+    elif not hasattr(psycopg_types_json_stub, "Json"):
+        psycopg_types_json_stub.Json = lambda value: value
 
 
 def install_redis_stub(redis_cls: type[Any]) -> None:
@@ -67,22 +96,6 @@ def install_gemini_stub() -> None:
 
 
 def install_worker_runtime_import_stubs() -> None:
-    class _AsyncConnection:
-        def __class_getitem__(cls, _item):
-            return cls
-
-        @staticmethod
-        async def connect(*args, **kwargs):
-            return None
-
-    class _AsyncCursor:
-        def __class_getitem__(cls, _item):
-            return cls
-
-    class _Json:
-        def __init__(self, value):
-            self.value = value
-
     class _RedisClient:
         def ping(self):
             return True
@@ -110,9 +123,9 @@ def install_worker_runtime_import_stubs() -> None:
             return None
 
     install_psycopg_stub(
-        async_connection=_AsyncConnection,
-        async_cursor=_AsyncCursor,
-        json_wrapper=_Json,
+        async_connection=SubscriptableAsyncConnection,
+        async_cursor=SubscriptableAsyncCursor,
+        json_wrapper=JsonValueWrapper,
     )
     install_redis_stub(_Redis)
     install_bullmq_stub(_Job, _Worker)

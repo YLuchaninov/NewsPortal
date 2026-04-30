@@ -1,42 +1,15 @@
-import sys
-import types
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-
-def _install_content_analysis_import_stubs() -> None:
-    if "psycopg" not in sys.modules:
-        psycopg_stub = types.ModuleType("psycopg")
-
-        class _Connection:
-            def __class_getitem__(cls, _item):
-                return cls
-
-        psycopg_stub.Connection = _Connection
-        psycopg_stub.connect = lambda *args, **kwargs: None
-        sys.modules["psycopg"] = psycopg_stub
-
-    if "psycopg.rows" not in sys.modules:
-        psycopg_rows_stub = types.ModuleType("psycopg.rows")
-        psycopg_rows_stub.dict_row = object()
-        sys.modules["psycopg.rows"] = psycopg_rows_stub
-
-    if "psycopg.types" not in sys.modules:
-        sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
-
-    if "psycopg.types.json" not in sys.modules:
-        psycopg_json_stub = types.ModuleType("psycopg.types.json")
-
-        class _Json:
-            def __init__(self, value):
-                self.value = value
-
-        psycopg_json_stub.Json = _Json
-        sys.modules["psycopg.types.json"] = psycopg_json_stub
+from tests.unit.python.support.stubs import (
+    JsonValueWrapper,
+    SubscriptableConnection,
+    install_psycopg_stub,
+)
 
 
-_install_content_analysis_import_stubs()
+install_psycopg_stub(connection=SubscriptableConnection, json_wrapper=JsonValueWrapper)
 
 from services.workers.app.content_analysis import (  # noqa: E402
     ContentSubject,

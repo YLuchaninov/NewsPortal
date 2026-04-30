@@ -1,27 +1,11 @@
 import asyncio
-import sys
-import types
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
 
-if "psycopg" not in sys.modules:
-    psycopg_stub = types.ModuleType("psycopg")
+from tests.unit.python.support.stubs import SubscriptableAsyncCursor, install_psycopg_stub
 
-    class _AsyncCursor:
-        def __class_getitem__(cls, _item):
-            return cls
-
-    psycopg_stub.AsyncCursor = _AsyncCursor
-    sys.modules["psycopg"] = psycopg_stub
-
-if "psycopg.types" not in sys.modules:
-    sys.modules["psycopg.types"] = types.ModuleType("psycopg.types")
-
-if "psycopg.types.json" not in sys.modules:
-    psycopg_types_json_stub = types.ModuleType("psycopg.types.json")
-    psycopg_types_json_stub.Json = lambda value: value
-    sys.modules["psycopg.types.json"] = psycopg_types_json_stub
+install_psycopg_stub(async_cursor=SubscriptableAsyncCursor)
 
 from services.workers.app.story_clusters import (
     compute_conflicting_signal_count,

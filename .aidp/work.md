@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 53 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 54 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing generic compose proof facade adoption in remaining non-MCP acceptance scripts.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/test-automation-admin-flow.mjs`, `infra/scripts/test-discovery-pipeline-nonregression.mjs`, `infra/scripts/test-live-discovery-examples.mjs` and `infra/scripts/test-live-website-matrix.mjs`; import ownership and equivalent polling wrapper ownership changed while proof scenarios, external/live behavior, SQL statements, fixture data, compose services, package scripts, runtime services and product code stayed unchanged.
+- Worktree status: clean after committing Python unit psycopg stub adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `tests/unit/python/support/stubs.py`, `tests/unit/python/test_canonical_documents.py`, `tests/unit/python/test_content_analysis.py`, `tests/unit/python/test_interest_filters.py`, `tests/unit/python/test_story_clusters.py` and `tests/unit/python/test_task_engine_pipeline_plugins.py`; import stubs were centralized while test assertions, tested service code and runtime code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-54
+
+- Kind: Stage
+- Status: completed
+- In scope: extend Python unit `support/stubs.py` with reusable subscriptable psycopg/json stub classes and replace remaining inline psycopg/json import stubs in focused unit tests.
+- Out of scope: tested service behavior, test assertions, fixture data, production imports, Redis/BullMQ worker runtime stubs beyond existing support usage, package scripts and runtime services.
+- Allowed paths: `.aidp/work.md`, `tests/unit/python/support/stubs.py`, `tests/unit/python/test_canonical_documents.py`, `tests/unit/python/test_content_analysis.py`, `tests/unit/python/test_interest_filters.py`, `tests/unit/python/test_story_clusters.py`, `tests/unit/python/test_task_engine_pipeline_plugins.py`.
+- Risk: medium, because import-order stubs affect Python unit loading, but the stage preserves the same sys.modules names and stub attributes before importing tested modules.
+- Required proof: `pnpm unit_tests:py`; `pnpm lint`; `git diff --check --`; targeted review that stub module names, `AsyncCursor`/`Connection` generic behavior and `Json.value` behavior remain equivalent.
+- Acceptance criteria: touched Python unit tests no longer own duplicated inline psycopg/json import stubs.
+- Architecture note: affected concern is deterministic unit test harness cohesion; stakeholder/consumer is maintainers running Python unit gates; tradeoff is centralizing import shims without changing tested runtime code.
+- Implemented, with evidence: added reusable `SubscriptableConnection`, `SubscriptableAsyncConnection`, `SubscriptableAsyncCursor` and `JsonValueWrapper` classes to `tests/unit/python/support/stubs.py`.
+- Implemented, with evidence: strengthened `install_psycopg_stub` so later tests can add requested `Connection`, `AsyncConnection`, `AsyncCursor` or `Json` attributes even if an earlier test already installed the module stub.
+- Implemented, with evidence: `test_canonical_documents.py`, `test_content_analysis.py`, `test_interest_filters.py`, `test_story_clusters.py` and `test_task_engine_pipeline_plugins.py` now use the shared support stubs instead of inline psycopg/json import stubs.
+- Scope note: tested service behavior, test assertions, fixture data, production imports, Redis/BullMQ worker runtime stubs beyond existing support usage, package scripts and runtime services were not changed.
+- Passed proof: `pnpm unit_tests:py` passed 316 tests.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: stub module names, `AsyncCursor`/`Connection` generic behavior and `Json.value` behavior remain equivalent; shared installer is less order-sensitive when later tests request additional stub attributes.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-53
 

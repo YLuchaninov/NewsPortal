@@ -1,17 +1,9 @@
-import sys
-import types
 import unittest
 import uuid
 
-if "psycopg" not in sys.modules:
-    psycopg_stub = types.ModuleType("psycopg")
+from tests.unit.python.support.stubs import SubscriptableAsyncCursor, install_psycopg_stub
 
-    class _AsyncCursor:
-        def __class_getitem__(cls, _item):
-            return cls
-
-    psycopg_stub.AsyncCursor = _AsyncCursor
-    sys.modules["psycopg"] = psycopg_stub
+install_psycopg_stub(async_cursor=SubscriptableAsyncCursor)
 
 from services.workers.app.canonical_documents import (
     resolve_observation_duplicate_kind,
