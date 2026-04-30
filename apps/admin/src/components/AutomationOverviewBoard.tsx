@@ -9,6 +9,7 @@ import {
 import {
   ADMIN_BACKGROUND_TILE_CLASS,
   ADMIN_AUTOMATION_CARD_CLASS,
+  ADMIN_HERO_CARD_CLASS,
 } from "../lib/admin-ui-classes";
 import {
   ADMIN_LIVE_UPDATES_EVENT,
@@ -179,7 +180,7 @@ export function AutomationOverviewBoard({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <section className={`overflow-hidden ${ADMIN_HERO_CARD_CLASS}`}>
         <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr] xl:items-start">
           <div className="space-y-3">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">

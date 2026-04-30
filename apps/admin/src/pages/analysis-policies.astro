@@ -10,7 +10,10 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
-import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
+import {
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -151,7 +154,7 @@ const policyViews = policies.items.map((policy) => ({
   </Fragment>
 
   <div class="space-y-6">
-    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <section class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Content analysis</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Analysis policies</h1>
     </section>

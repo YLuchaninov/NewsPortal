@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@newsportal/ui";
 
 import { formatUtcTimestamp, postJson, readText } from "./admin-client-helpers";
+import { ADMIN_HERO_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export interface McpTokenRecord {
   tokenId: string;
@@ -96,7 +97,7 @@ export function McpTokenWorkspace({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <section className={`overflow-hidden ${ADMIN_HERO_CARD_CLASS}`}>
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">

@@ -11,6 +11,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../../../lib/server/browser-flow";
+import { ADMIN_HERO_CARD_CLASS } from "../../../../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -105,7 +106,7 @@ const candidateSignalSummary =
 
   <div class="space-y-6">
     <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-      <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+      <div class={ADMIN_HERO_CARD_CLASS}>
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(template.name ?? "System interest")}</h1>
         <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">

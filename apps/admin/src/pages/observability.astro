@@ -21,6 +21,7 @@ import {
   parsePositivePage,
   resolvePageHref,
 } from "../lib/view-helpers";
+import { ADMIN_HERO_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -176,7 +177,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
   </Fragment>
 
   <div class="space-y-6">
-    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <section class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">System</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Observability</h1>
       <p class="mt-2 text-sm leading-6 text-muted-foreground">

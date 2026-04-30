@@ -8,7 +8,10 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
-import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
+import {
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SMALL_CARD_CLASS,
+} from "../lib/admin-ui-classes";
 
 export const prerender = false;
 const session = await resolveAdminSession(Astro.request);
@@ -43,7 +46,7 @@ const pagePaths = {
   </Fragment>
 
   <div class="max-w-6xl space-y-8">
-    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <section class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Help</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Admin Guide</h1>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
