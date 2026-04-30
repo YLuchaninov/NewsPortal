@@ -7,15 +7,6 @@ import {
   type Node,
   type Viewport,
 } from "@xyflow/react";
-import {
-  Card,
-  CardContent,
-  ScrollArea,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@newsportal/ui";
 
 import {
   buildEditorStateFromNodes,
@@ -28,13 +19,11 @@ import {
   type AutomationSequenceDefinition,
   type AutomationTaskDefinition,
 } from "../lib/automation-workspace";
-import { AutomationEditorAdvancedJson } from "./automation-editor-advanced-json";
 import { AutomationEditorCanvas } from "./automation-editor-canvas";
 import { AutomationEditorHeader } from "./automation-editor-header";
+import { AutomationEditorInspectorPanel } from "./automation-editor-inspector-panel";
 import { AutomationEditorPalette } from "./automation-editor-palette";
 import { AutomationEditorRunDialog } from "./automation-editor-run-dialog";
-import { AutomationEditorSequenceSettings } from "./automation-editor-sequence-settings";
-import { AutomationEditorTaskInspector } from "./automation-editor-task-inspector";
 import {
   buildEdges,
   moduleToKey,
@@ -456,58 +445,31 @@ export function AutomationEditorWorkspace({
           }}
         />
 
-        <Card className="overflow-hidden border-white/10 bg-card/90 shadow-sm">
-          <CardContent className="h-full p-0">
-            <Tabs defaultValue="settings" className="flex h-full flex-col">
-              <div className="border-b border-border/70 px-4 py-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="settings">Inspector</TabsTrigger>
-                  <TabsTrigger value="advanced">Advanced JSON</TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="settings" className="m-0 flex-1">
-                <ScrollArea className="h-[68vh] px-4 pb-5">
-                  {selectedTaskNode?.data.task ? (
-                    <AutomationEditorTaskInspector
-                      selectedTaskNode={selectedTaskNode}
-                      pluginRecords={pluginRecords}
-                      onTaskUpdate={updateSelectedTask}
-                      onOptionsJsonError={setErrorMessage}
-                      onMoveTask={moveTask}
-                      onRemoveTask={removeTask}
-                    />
-                  ) : (
-                    <AutomationEditorSequenceSettings
-                      title={title}
-                      onTitleChange={setTitle}
-                      description={description}
-                      onDescriptionChange={setDescription}
-                      status={status}
-                      onStatusChange={setStatus}
-                      triggerEvent={triggerEvent}
-                      onTriggerEventChange={setTriggerEvent}
-                      cron={cron}
-                      onCronChange={setCron}
-                      maxRuns={maxRuns}
-                      onMaxRunsChange={setMaxRuns}
-                      tags={tags}
-                      onTagsChange={setTags}
-                    />
-                  )}
-                </ScrollArea>
-              </TabsContent>
-
-              <TabsContent value="advanced" className="m-0 flex-1">
-                <AutomationEditorAdvancedJson
-                  advancedJson={advancedJson}
-                  onAdvancedJsonChange={setAdvancedJson}
-                  onApply={applyAdvancedJson}
-                />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+        <AutomationEditorInspectorPanel
+          selectedTaskNode={selectedTaskNode}
+          pluginRecords={pluginRecords}
+          onTaskUpdate={updateSelectedTask}
+          onOptionsJsonError={setErrorMessage}
+          onMoveTask={moveTask}
+          onRemoveTask={removeTask}
+          title={title}
+          onTitleChange={setTitle}
+          description={description}
+          onDescriptionChange={setDescription}
+          status={status}
+          onStatusChange={setStatus}
+          triggerEvent={triggerEvent}
+          onTriggerEventChange={setTriggerEvent}
+          cron={cron}
+          onCronChange={setCron}
+          maxRuns={maxRuns}
+          onMaxRunsChange={setMaxRuns}
+          tags={tags}
+          onTagsChange={setTags}
+          advancedJson={advancedJson}
+          onAdvancedJsonChange={setAdvancedJson}
+          onApplyAdvancedJson={applyAdvancedJson}
+        />
       </div>
 
       <AutomationEditorRunDialog

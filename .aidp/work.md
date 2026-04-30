@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 46 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 47 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing AutomationEditorWorkspace selected-task inspector extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-task-inspector.tsx`; updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, sequence metadata panel, advanced JSON fallback, header/palette/canvas/dialog rendering, copy/layout, server writes/API runtime stayed unchanged.
+- Worktree status: clean after committing AutomationEditorWorkspace inspector panel shell extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-inspector-panel.tsx`; updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, task inspector internals, sequence settings internals, advanced JSON internals, header/palette/canvas/dialog rendering, copy/layout, server writes/API runtime stayed unchanged.
+- Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-47
+
+- Kind: Stage
+- Status: completed
+- In scope: move AutomationEditorWorkspace right inspector card/tabs shell into a focused `automation-editor-inspector-panel.tsx` component that composes the extracted inspector subpanels.
+- Out of scope: updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, task inspector internals, sequence settings internals, advanced JSON internals, header/palette/canvas/dialog rendering, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-inspector-panel.tsx`.
+- Risk: medium, because the panel wires task and graph editing actions, but the stage only moves the shell and preserves callback wiring.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that tabs, selected-task/sequence branch, advanced tab and callback wiring remain equivalent.
+- Acceptance criteria: the inspector panel renders through the new component with equivalent tabs and actions; editor orchestration logic remains in the workspace.
+- Architecture note: affected concern is admin automation editor cohesion; stakeholder/consumer is admin/operator workflow editing; tradeoff is making the workspace a composition root while keeping state ownership local.
+- Implemented, with evidence: added `apps/admin/src/components/automation-editor-inspector-panel.tsx` composing the inspector card, settings/advanced tabs, selected-task inspector, sequence settings and advanced JSON panel.
+- Implemented, with evidence: `AutomationEditorWorkspace.tsx` now renders `AutomationEditorInspectorPanel` while state ownership, graph algorithms and handler bodies remain local.
+- Scope note: updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, task inspector internals, sequence settings internals, advanced JSON internals, header/palette/canvas/dialog rendering, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only after widening the panel prop to accept the workspace's existing `null` selected-task state.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Passed broader proof after commit: `pnpm unit_tests:ts` passed 246 tests.
+- Targeted review: tabs, selected-task/sequence branch, advanced tab and callback wiring remain equivalent through props.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-46
 
