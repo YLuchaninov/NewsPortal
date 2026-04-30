@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 48 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 49 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing compose proof testkit facade and waitFor wrapper unification.
-- Alignment note: latest committed stage touched `.aidp/work.md`, new `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs` and `infra/scripts/test-rss-multi-flow.mjs`; proof scenario logic, stack service lists, HTTP request semantics, database fixture SQL, Playwright assertions, MCP-specific diagnostics, compose files, package scripts, runtime services and product code stayed unchanged.
+- Worktree status: clean after committing compose proof testkit adoption across admin acceptance scripts.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-website-admin-flow.mjs`, `infra/scripts/test-discovery-admin-flow.mjs` and `infra/scripts/test-mvp-internal.mjs`; proof scenario logic, stack service lists, stale-stack error semantics, HTTP request semantics, database fixture SQL, browser/assertion flows, MCP-specific diagnostics, compose files, package scripts, runtime services and product code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-49
+
+- Kind: Stage
+- Status: completed
+- In scope: extend `compose-proof-testkit` exports needed by admin acceptance scripts, replace duplicated local `waitFor` wrappers in website-admin and MVP internal scripts, and move website-admin, discovery-admin and MVP internal generic helper imports to `compose-proof-testkit`.
+- Out of scope: proof scenario logic, stack service lists, stale-stack error semantics, HTTP request semantics, database fixture SQL, browser/assertion flows, MCP-specific diagnostics, compose files, package scripts, runtime services and product code.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-website-admin-flow.mjs`, `infra/scripts/test-discovery-admin-flow.mjs`, `infra/scripts/test-mvp-internal.mjs`.
+- Risk: medium, because these scripts are high-value acceptance gates, but the stage preserves behavior and only changes shared helper ownership/polling wrapper creation.
+- Required proof: `pnpm lint`; `pnpm unit_tests:ts`; `git diff --check --`; targeted review that imports, polling defaults, stale-stack fatal handling and helper call semantics remain equivalent.
+- Acceptance criteria: touched admin acceptance scripts consume generic helpers through `compose-proof-testkit`; duplicated waitFor wrappers are removed where behavior matches `createWaitFor`.
+- Architecture note: affected concern is proof harness cohesion; stakeholder/consumer is maintainers running admin/website/MVP acceptance gates; tradeoff is reducing MCP-named coupling while keeping scenario code local.
+- Implemented, with evidence: extended `infra/scripts/lib/compose-proof-testkit.mjs` to re-export Firebase admin-user helpers needed by non-MCP acceptance scripts.
+- Implemented, with evidence: `test-website-admin-flow.mjs`, `test-discovery-admin-flow.mjs` and `test-mvp-internal.mjs` now import generic helpers through `compose-proof-testkit`.
+- Implemented, with evidence: website-admin and MVP internal local waitFor wrappers were replaced with `createWaitFor` using the same polling defaults; website-admin kept the fatal stale-stack predicate.
+- Scope note: proof scenario logic, stack service lists, stale-stack error semantics, HTTP request semantics, database fixture SQL, browser/assertion flows, MCP-specific diagnostics, compose files, package scripts, runtime services and product code were not changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over infra scripts and Python ruff.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: imports, polling defaults, stale-stack fatal handling and helper call semantics remain equivalent.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-48
 

@@ -16,9 +16,9 @@ import {
   runComposeCapture,
   selectAdminEmail,
   sendRequest,
-  waitFor as waitForShared,
+  createWaitFor,
   waitForHttpHealth,
-} from "./lib/mcp-http-testkit.mjs";
+} from "./lib/compose-proof-testkit.mjs";
 
 const STACK_SERVICES = [
   "postgres",
@@ -58,19 +58,12 @@ async function assertRouteAvailable(label, url, { cookie } = {}) {
   }
 }
 
-async function waitFor(
-  label,
-  producer,
-  predicate,
-  { timeoutMs = 180000, intervalMs = 2000 } = {}
-) {
-  return await waitForShared(label, producer, predicate, {
-    timeoutMs,
-    intervalMs,
-    isFatalError: (error) =>
-      Boolean(error && typeof error === "object" && "fatal" in error && error.fatal),
-  });
-}
+const waitFor = createWaitFor({
+  timeoutMs: 180000,
+  intervalMs: 2000,
+  isFatalError: (error) =>
+    Boolean(error && typeof error === "object" && "fatal" in error && error.fatal),
+});
 
 function parseHealthPayload(text) {
   const normalized = String(text ?? "").trim();

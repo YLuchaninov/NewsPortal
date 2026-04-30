@@ -15,8 +15,8 @@ import {
   runComposeCapture,
   selectAdminEmail,
   sendRequest,
-  waitFor as waitForShared,
-} from "./lib/mcp-http-testkit.mjs";
+  createWaitFor,
+} from "./lib/compose-proof-testkit.mjs";
 
 function log(message) {
   console.log(`[mvp-internal] ${message}`);
@@ -143,9 +143,7 @@ async function postBrowserForm(url, payload, { cookie } = {}) {
   });
 }
 
-async function waitFor(label, producer, predicate, { timeoutMs = 180000, intervalMs = 2000 } = {}) {
-  return await waitForShared(label, producer, predicate, { timeoutMs, intervalMs });
-}
+const waitFor = createWaitFor({ timeoutMs: 180000, intervalMs: 2000 });
 
 function getComposeServiceContainerId(service) {
   return runComposeCapture("ps", "-q", service).stdout.trim();

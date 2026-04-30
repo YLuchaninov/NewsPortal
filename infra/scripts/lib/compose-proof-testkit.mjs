@@ -6,6 +6,8 @@ export {
   buildHttpDiagnostics,
   composeArgs,
   createLogger,
+  deleteFirebasePasswordUser,
+  ensureFirebasePasswordUser,
   extractCookie,
   extractHttpDiagnostics,
   fetchJson,
