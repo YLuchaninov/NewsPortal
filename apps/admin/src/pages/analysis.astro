@@ -10,6 +10,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 import { formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
@@ -120,7 +121,7 @@ const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
     </section>
 
     <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
-      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class={ADMIN_SECTION_CARD_CLASS}>
         <h2 class="text-base font-semibold">Backfill existing content</h2>
         <p class="mt-1 text-sm text-muted-foreground">
           Queue replay for stored articles and web resources. The job writes analysis evidence and skips retro notifications.
@@ -205,7 +206,7 @@ const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
         </form>
       </div>
 
-      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class={ADMIN_SECTION_CARD_CLASS}>
         <h2 class="text-base font-semibold">Recent backfill jobs</h2>
         <div class="mt-4 divide-y divide-border">
           {contentAnalysisJobViews.map((job) => (
@@ -223,7 +224,7 @@ const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
     </section>
 
     <section class="grid gap-6 xl:grid-cols-2">
-      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class={ADMIN_SECTION_CARD_CLASS}>
         <h2 class="text-base font-semibold">Recent analysis</h2>
         <div class="mt-4 divide-y divide-border">
           {analysis.items.map((item) => (
@@ -237,7 +238,7 @@ const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
         </div>
       </div>
 
-      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div class={ADMIN_SECTION_CARD_CLASS}>
         <h2 class="text-base font-semibold">Recent entities</h2>
         <div class="mt-4 flex flex-wrap gap-2">
           {entities.items.map((entity) => (

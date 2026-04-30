@@ -1,4 +1,5 @@
 import { FormField, Input, Textarea } from "@newsportal/ui";
+import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export interface LlmTemplateEditorValue {
   promptTemplateId?: string;
@@ -65,7 +66,7 @@ export function LlmTemplateEditorForm({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section className={ADMIN_SECTION_CARD_CLASS}>
         <div className="mb-5">
           <h2 className="text-base font-semibold text-foreground">
             {mode === "create" ? "LLM prompt definition" : "Edit LLM template"}

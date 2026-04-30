@@ -4,6 +4,7 @@ import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
 import type { DiscoveryOperatorSummary } from "../../lib/server/operator-surfaces";
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   costItems: DiscoveryRecord[];
@@ -17,7 +18,7 @@ const { costItems, costs, operatorSummary, totalCostUsd } = Astro.props as Props
 
 <div class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
   <div class="space-y-4">
-    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
       <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 class="text-base font-semibold">Discovery operator model</h2>
@@ -89,7 +90,7 @@ const { costItems, costs, operatorSummary, totalCostUsd } = Astro.props as Props
       </div>
     </section>
 
-    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
       <h2 class="text-base font-semibold">Recall promotion snapshot</h2>
       <div class="mt-4 grid gap-3 sm:grid-cols-3">
         <div class="rounded-2xl border border-border bg-background p-4">
@@ -108,7 +109,7 @@ const { costItems, costs, operatorSummary, totalCostUsd } = Astro.props as Props
     </section>
   </div>
 
-  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+  <section class={ADMIN_SECTION_CARD_CLASS}>
     <h2 class="text-base font-semibold">Cost ledger</h2>
     <p class="mt-1 text-sm text-muted-foreground">
       {fmtUsd(totalCostUsd)} total, {fmtUsd(costs.last24hCostUsd)} in the last 24h, {fmtUsd(costs.monthToDateCostUsd)} this UTC month.

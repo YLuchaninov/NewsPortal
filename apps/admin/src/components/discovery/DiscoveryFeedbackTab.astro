@@ -6,6 +6,7 @@ import {
   type DiscoveryPagedRecord,
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   bffPath: string;
@@ -29,7 +30,7 @@ const {
 ---
 
 <div class="grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
-  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+  <section class={ADMIN_SECTION_CARD_CLASS}>
     <h2 class="text-base font-semibold">Submit feedback</h2>
     <form method="post" action={bffPath} class="mt-4 grid gap-3">
       <input type="hidden" name="intent" value="submit_feedback" />

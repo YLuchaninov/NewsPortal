@@ -1,4 +1,5 @@
 import { FormField, Input, Textarea } from "@newsportal/ui";
+import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export interface InterestTemplateEditorValue {
   interestTemplateId?: string;
@@ -91,7 +92,7 @@ export function InterestTemplateEditorForm({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section className={ADMIN_SECTION_CARD_CLASS}>
         <div className="mb-5">
           <h2 className="text-base font-semibold text-foreground">
             {mode === "create" ? "System interest basics" : "Edit system interest"}
@@ -186,7 +187,7 @@ export function InterestTemplateEditorForm({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section className={ADMIN_SECTION_CARD_CLASS}>
         <div className="mb-5">
           <h2 className="text-base font-semibold text-foreground">Current runtime profile policy</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -305,7 +306,7 @@ export function InterestTemplateEditorForm({
         </div>
       </section>
 
-      <details className="group rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <details className={`group ${ADMIN_SECTION_CARD_CLASS}`}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
           <div>
             <p className="text-base font-semibold text-foreground">Advanced matching hints</p>

@@ -1,4 +1,6 @@
 ---
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
+
 type Props = {
   bffPath: string;
   currentPath: string;
@@ -7,7 +9,7 @@ type Props = {
 const { bffPath, currentPath } = Astro.props as Props;
 ---
 
-<section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+<section class={ADMIN_SECTION_CARD_CLASS}>
   <h2 class="text-base font-semibold">Create reusable profile</h2>
   <p class="mt-1 text-sm text-muted-foreground">
     Profiles own structured discovery tuning for graph and recall lanes. Missions still own seeds, budget, and run state.

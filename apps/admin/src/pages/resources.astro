@@ -19,6 +19,7 @@ import {
 } from "../lib/server/browser-flow";
 import {
   ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
@@ -254,7 +255,7 @@ function resolveResourcePreviewHref(resourceId: string): string {
       </div>
     </div>
 
-    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
       <div>
         <h2 class="text-base font-semibold">Filters</h2>
         <p class="mt-1 text-sm text-muted-foreground">

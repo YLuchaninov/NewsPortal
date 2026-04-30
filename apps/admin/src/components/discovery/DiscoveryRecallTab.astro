@@ -15,6 +15,7 @@ import {
   resolveDiscoverySourceQuality,
   type DiscoveryOperatorSummary,
 } from "../../lib/server/operator-surfaces";
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   attachableProfiles: DiscoveryRecord[];
@@ -48,7 +49,7 @@ const {
 ---
 
 <div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+  <section class={ADMIN_SECTION_CARD_CLASS}>
     <h2 class="text-base font-semibold">Independent recall missions</h2>
     <p class="mt-1 text-sm text-muted-foreground">
       These missions seed neutral acquisition without requiring `interest_graph`. This admin surface now owns the bounded operator loop for recall mission acquisition and candidate promotion while keeping the same maintenance-backed runtime truth.

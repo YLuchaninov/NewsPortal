@@ -2,6 +2,7 @@
 import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   attachableProfiles: DiscoveryRecord[];
@@ -14,7 +15,7 @@ type Props = {
 const { attachableProfiles, bffPath, currentPath, missionItems, summary } = Astro.props as Props;
 ---
 
-<details class="rounded-2xl border border-border bg-card p-5 shadow-sm" open={missionItems.length === 0}>
+<details class={ADMIN_SECTION_CARD_CLASS} open={missionItems.length === 0}>
   <summary class="cursor-pointer list-none">
     <div class="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
       <div>

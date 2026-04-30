@@ -10,6 +10,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -115,7 +116,7 @@ const policyViews = policies.items.map((policy, index) => {
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Filter policies</h1>
     </section>
 
-    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
       <h2 class="text-base font-semibold">Create policy</h2>
       <p class="mt-1 text-sm text-muted-foreground">
         Rules can use relative dates or persisted labels such as sentiment and taxonomy.

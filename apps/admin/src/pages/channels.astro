@@ -29,6 +29,7 @@ import {
 } from "../lib/channel-providers";
 import {
   ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
@@ -328,7 +329,7 @@ const visibleChannels = sourceChannels.filter((channel) => {
     </div>
 
     <div class="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
-      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section class={ADMIN_SECTION_CARD_CLASS}>
         <div class="flex items-start justify-between gap-4">
           <div>
             <h2 class="text-base font-semibold">Operational overview</h2>
@@ -354,7 +355,7 @@ const visibleChannels = sourceChannels.filter((channel) => {
         </div>
       </section>
 
-      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section class={ADMIN_SECTION_CARD_CLASS}>
         <div>
           <h2 class="text-base font-semibold">Bulk RSS schedule</h2>
           <p class="mt-1 text-sm text-muted-foreground">

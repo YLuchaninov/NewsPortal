@@ -25,7 +25,10 @@ import {
   listAdminUserInterests,
   type AdminUserInterestTarget,
 } from "../lib/server/user-interests";
-import { ADMIN_COMPACT_METRIC_TILE_CLASS } from "../lib/admin-ui-classes";
+import {
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -217,7 +220,7 @@ function formatUpdatedAt(value: unknown): string {
       )}
     </div>
 
-    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
       <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div class="max-w-2xl">
           <h2 class="text-base font-semibold">Select a target user</h2>
@@ -273,7 +276,7 @@ function formatUpdatedAt(value: unknown): string {
 
     {target ? (
       <Fragment>
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p class="text-xs font-medium uppercase tracking-[0.16em] text-primary/80">Acting on behalf of</p>

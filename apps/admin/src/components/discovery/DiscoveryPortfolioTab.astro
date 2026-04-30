@@ -6,6 +6,7 @@ import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
 import { resolveDiscoveryChannelMetrics } from "../../lib/server/operator-surfaces";
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   bffPath: string;
@@ -33,7 +34,7 @@ const {
 ---
 
 <div class="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-  <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+  <section class={ADMIN_SECTION_CARD_CLASS}>
     <h2 class="text-base font-semibold">Portfolio controls</h2>
     <div class="mt-4 space-y-3">
       <label class="grid gap-1.5">
