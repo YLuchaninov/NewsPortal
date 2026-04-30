@@ -9,7 +9,7 @@ import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap, listSavedContentItemRefs } from "../lib/server/user-content-state";
 import { loadSavedDigestItems } from "../lib/server/saved-digest";
-import { parsePositivePage, resolvePageHref as resolveWebPageHref } from "../lib/view-helpers";
+import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -49,9 +49,7 @@ const userStateMap = await getUserContentStateMap(getPool(), session.userId, sav
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 
-function resolvePageHref(nextPage: number): string {
-  return resolveWebPageHref(Astro.url, nextPage, DEFAULT_PAGE);
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
 ---
 
 <Shell

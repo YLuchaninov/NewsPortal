@@ -23,3 +23,10 @@ export function resolvePageHref(
   }
   return `${target.pathname}${target.search}`;
 }
+
+export function createPageHrefResolver(
+  url: URL,
+  defaultPage: number
+): (nextPage: number) => string {
+  return (nextPage: number) => resolvePageHref(url, nextPage, defaultPage);
+}

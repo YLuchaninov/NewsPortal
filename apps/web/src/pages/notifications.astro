@@ -9,7 +9,7 @@ import { LiveSurfaceSummary } from "../components/LiveSurfaceSummary";
 import { queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
-import { parsePositivePage, resolvePageHref as resolveWebPageHref } from "../lib/view-helpers";
+import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -52,9 +52,7 @@ const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 
-function resolvePageHref(nextPage: number): string {
-  return resolveWebPageHref(Astro.url, nextPage, DEFAULT_PAGE);
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
 ---
 
 <Shell

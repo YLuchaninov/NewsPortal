@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 56 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 57 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin dashboard timestamp helper adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts` and `apps/admin/src/pages/index.astro`; timestamp helper ownership changed while dashboard empty label/no-year formatting, data loading, routes, layout, live components and runtime code stayed unchanged.
+- Worktree status: clean after committing shared web page href resolver adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/lib/view-helpers.ts`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/matches.astro`, `apps/web/src/pages/saved.astro`, `apps/web/src/pages/following.astro` and `apps/web/src/pages/notifications.astro`; href resolver ownership changed while pagination URL semantics, data loading, routes, layout, copy, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-57
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared web `createPageHrefResolver` helper and replace identical local page-href wrapper functions in feed, matches, saved, following and notifications pages.
+- Out of scope: pagination component behavior, query parameter policy, page data loading, API calls, auth/session behavior, routes, layout, copy, visual redesign, admin helpers and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/web/src/lib/view-helpers.ts`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/matches.astro`, `apps/web/src/pages/saved.astro`, `apps/web/src/pages/following.astro`, `apps/web/src/pages/notifications.astro`.
+- Risk: low-medium, because pagination links are user-visible, but the new helper delegates to the existing `resolvePageHref` implementation with the same URL and default page.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that page query preservation and default-page deletion semantics remain equivalent.
+- Acceptance criteria: touched web pages no longer define identical local `resolvePageHref(nextPage)` wrapper functions.
+- Architecture note: affected concern is web page helper cohesion; stakeholder/consumer is web users and maintainers; tradeoff is a tiny binder helper to remove repeated closure code while preserving URL logic in one owner.
+- Implemented, with evidence: added `createPageHrefResolver` to `apps/web/src/lib/view-helpers.ts`, delegating to the existing `resolvePageHref` implementation.
+- Implemented, with evidence: feed, matches, saved, following and notifications pages now use `createPageHrefResolver(Astro.url, DEFAULT_PAGE)` instead of local wrapper functions.
+- Scope note: pagination component behavior, query parameter policy, page data loading, API calls, auth/session behavior, routes, layout, copy, visual redesign, admin helpers and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: page query preservation and default-page deletion semantics remain equivalent because all touched pages still call the same shared `resolvePageHref` logic with the same `Astro.url` and `DEFAULT_PAGE`.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-56
 

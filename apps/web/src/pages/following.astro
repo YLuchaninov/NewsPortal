@@ -10,7 +10,7 @@ import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap, listFollowedStoryRefs } from "../lib/server/user-content-state";
-import { parsePositivePage, resolvePageHref as resolveWebPageHref } from "../lib/view-helpers";
+import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -54,9 +54,7 @@ const userStateMap = await getUserContentStateMap(getPool(), session.userId, fol
 const themePreference = String(profile?.theme_preference ?? "system");
 const themeClass = themePreference === "dark" ? "dark" : "";
 
-function resolvePageHref(nextPage: number): string {
-  return resolveWebPageHref(Astro.url, nextPage, DEFAULT_PAGE);
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
 
 function readStoryNote(contentItemId: string): string | null {
   const state = userStateMap.get(contentItemId);

@@ -17,7 +17,7 @@ import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap } from "../lib/server/user-content-state";
-import { parsePositivePage, resolvePageHref as resolveWebPageHref } from "../lib/view-helpers";
+import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const WEB_CONTENT_SORT_OPTIONS: Array<{ value: WebContentListSort; label: string }> = [
@@ -89,9 +89,7 @@ const themeClass = themePreference === "dark" ? "dark" : "";
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const clearFiltersHref = Astro.url.pathname;
 
-function resolvePageHref(nextPage: number): string {
-  return resolveWebPageHref(Astro.url, nextPage, DEFAULT_PAGE);
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
 ---
 
 <Shell
