@@ -8,3 +8,6 @@ export const ADMIN_COMPACT_METRIC_TILE_CLASS =
 
 export const ADMIN_SECTION_CARD_CLASS =
   "rounded-2xl border border-border bg-card p-5 shadow-sm";
+
+export const ADMIN_HERO_CARD_CLASS =
+  "rounded-[1.75rem] border border-border bg-card p-6 shadow-sm";

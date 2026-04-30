@@ -6,7 +6,10 @@ import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
 import type { DiscoveryOperatorSummary } from "../../lib/server/operator-surfaces";
-import { ADMIN_COMPACT_METRIC_TILE_CLASS } from "../../lib/admin-ui-classes";
+import {
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
 
 type DiscoveryTabLink = {
   key: string;
@@ -43,7 +46,7 @@ const {
 } = Astro.props as Props;
 ---
 
-<div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+<div class={ADMIN_HERO_CARD_CLASS}>
   <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div class="max-w-3xl">
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Adaptive Discovery Agent</p>

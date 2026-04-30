@@ -14,6 +14,7 @@ import {
 } from "../../lib/server/browser-flow";
 import {
   ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
@@ -101,7 +102,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, {
   </Fragment>
 
   <div class="space-y-6">
-    <div class="flex flex-col gap-4 rounded-[1.75rem] border border-border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+    <div class={`flex flex-col gap-4 ${ADMIN_HERO_CARD_CLASS} lg:flex-row lg:items-end lg:justify-between`}>
       <div class="max-w-2xl">
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Rules</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">LLM templates</h1>

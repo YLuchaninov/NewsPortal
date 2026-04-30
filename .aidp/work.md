@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 65 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 66 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin section card class adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, selected admin Astro pages and selected admin/discovery/editor components that repeat `rounded-2xl border border-border bg-card p-5 shadow-sm`; panel class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin hero card class adoption on already-shared UI surfaces.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/user-interests.astro`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/components/discovery/DiscoveryControlPlaneHero.astro`; hero-card class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-66
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared admin hero card class and replace repeated `rounded-[1.75rem] border border-border bg-card p-6 shadow-sm` strings on admin surfaces that already import shared UI class constants.
+- Out of scope: pages/components that do not yet import admin UI classes, section cards, metric tiles, table containers, copy, layout semantics, visual redesign, page data loading, routes and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/user-interests.astro`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro`, `apps/admin/src/components/discovery/DiscoveryControlPlaneHero.astro`.
+- Risk: low, because this only replaces exact base class strings with a shared constant while preserving DOM structure and local `flex` prefixes.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that replaced class strings are exact matches and local prefix classes remain.
+- Acceptance criteria: touched surfaces no longer repeat the exact hero-card class string inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is shared class composition on surfaces already using the shared class module.
+- Implemented, with evidence: `ADMIN_HERO_CARD_CLASS` was added to `apps/admin/src/lib/admin-ui-classes.ts`.
+- Implemented, with evidence: channels, resources, user interests, template list pages and discovery control-plane hero now compose the shared hero card class.
+- Scope note: pages/components that do not yet import admin UI classes, section cards, metric tiles, table containers, copy, layout semantics, visual redesign, page data loading, routes and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: replaced class strings were exact matches and local `flex flex-col gap-4 ... lg:flex-row ...` prefixes remain on list-page hero wrappers.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-65
 
