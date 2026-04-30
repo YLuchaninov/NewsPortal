@@ -10,6 +10,11 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
 import { formatTimestamp } from "../../lib/view-helpers";
 
 export const prerender = false;
@@ -174,7 +179,7 @@ const analysisFilter =
   </Fragment>
 
   <div class="space-y-6">
-    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <div class={ADMIN_HERO_CARD_CLASS}>
       <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 font-medium text-secondary-foreground">
           {String(resource.resource_kind ?? "unknown")}
@@ -212,12 +217,12 @@ const analysisFilter =
         <p class="mt-1 text-sm opacity-90">{selectionGuidanceSummary}</p>
       </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-2xl border border-border bg-background p-4">
+        <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Channel</p>
           <p class="mt-2 font-medium">{String(resource.channel_name ?? "Unknown website channel")}</p>
           <p class="mt-1 text-sm text-muted-foreground">Resource id: {String(resource.resource_id)}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background p-4">
+        <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Projection</p>
           <p class="mt-2 font-medium">
             {resource.projected_article_id ? "Projected into article" : "Diagnostics only"}
@@ -228,12 +233,12 @@ const analysisFilter =
               : projectionError || "Not projected to an article yet."}
           </p>
         </div>
-        <div class="rounded-2xl border border-border bg-background p-4">
+        <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Timeline</p>
           <p class="mt-2 font-medium">{formatTimestamp(resource.discovered_at)}</p>
           <p class="mt-1 text-sm text-muted-foreground">Published: {formatTimestamp(resource.published_at)}</p>
         </div>
-        <div class="rounded-2xl border border-border bg-background p-4">
+        <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Counts</p>
           <p class="mt-2 font-medium">Docs {String(resource.documents_count ?? 0)} · Media {String(resource.media_count ?? 0)}</p>
           <p class="mt-1 text-sm text-muted-foreground">Links {String(resource.links_out_count ?? 0)} · Children {String(resource.child_resources_count ?? 0)}</p>
@@ -241,7 +246,7 @@ const analysisFilter =
       </div>
     </div>
 
-    <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-base font-semibold">Analysis</h2>
@@ -266,7 +271,7 @@ const analysisFilter =
     </section>
 
     <div class="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section class={ADMIN_SECTION_CARD_CLASS}>
         <div class="mb-4">
           <h2 class="text-base font-semibold">Content preview</h2>
           <p class="mt-1 text-sm text-muted-foreground">
@@ -284,7 +289,7 @@ const analysisFilter =
       </section>
 
       <div class="space-y-6">
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="mb-4">
             <h2 class="text-base font-semibold">Selection diagnostics</h2>
             <p class="mt-1 text-sm text-muted-foreground">
@@ -327,7 +332,7 @@ const analysisFilter =
           </dl>
         </section>
 
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="mb-4">
             <h2 class="text-base font-semibold">Resolved URLs</h2>
             <p class="mt-1 text-sm text-muted-foreground">
@@ -354,7 +359,7 @@ const analysisFilter =
           </dl>
         </section>
 
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="mb-4">
             <h2 class="text-base font-semibold">Discovery provenance</h2>
             <p class="mt-1 text-sm text-muted-foreground">
@@ -385,7 +390,7 @@ const analysisFilter =
           </dl>
         </section>
 
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="mb-4">
             <h2 class="text-base font-semibold">Structured extraction</h2>
             <p class="mt-1 text-sm text-muted-foreground">
@@ -418,7 +423,7 @@ const analysisFilter =
       </div>
     </div>
 
-    <details class="group rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <details class={`group ${ADMIN_SECTION_CARD_CLASS}`}>
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
         <span>Raw resource payloads</span>
         <span class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition group-open:rotate-180">

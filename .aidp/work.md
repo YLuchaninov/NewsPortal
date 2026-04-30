@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 68 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 69 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin background tile class adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, selected admin pages, selected discovery tabs, `AutomationOverviewBoard.tsx` and `InterestTemplateEditorForm.tsx`; background tile class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin card class adoption on content/detail pages.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/articles/[docId].astro` and `apps/admin/src/pages/resources/[resourceId].astro`; class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-69
+
+- Kind: Stage
+- Status: completed
+- In scope: import existing shared admin UI class constants into `articles`, `clusters`, article detail and resource detail pages, then replace exact hero, section and background tile class strings while preserving local layout prefixes/suffixes.
+- Out of scope: unrelated admin pages, new shared constants, copy, layout semantics, visual redesign, page data loading, routes, server behavior and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/articles/[docId].astro`, `apps/admin/src/pages/resources/[resourceId].astro`.
+- Risk: low-medium, because this touches multiple Astro pages but only replaces exact class strings with existing shared constants.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that exact strings and local prefixes/suffixes remain equivalent.
+- Acceptance criteria: selected content/detail pages no longer repeat exact shared hero, section and background tile class strings inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is importing shared class constants instead of introducing new cross-page components.
+- Implemented, with evidence: `articles.astro` and `clusters.astro` now use shared hero/background tile classes.
+- Implemented, with evidence: article detail and resource detail pages now use shared hero, section and background tile classes.
+- Scope note: unrelated admin pages, new shared constants, copy, layout semantics, visual redesign, page data loading, routes, server behavior and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: exact hero, section and background tile strings were removed from the four declared pages, and local prefixes/suffixes such as `group`, `mt-4` and muted-text suffixes remain composed around the shared constants.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-68
 

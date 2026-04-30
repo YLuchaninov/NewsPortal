@@ -18,6 +18,10 @@ import {
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
 import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+} from "../lib/admin-ui-classes";
+import {
   createPageHrefResolver,
   createViewHrefResolver,
   formatTimestamp,
@@ -161,7 +165,7 @@ function shortId(value: unknown): string {
   </Fragment>
 
   <div class="space-y-5">
-    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <section class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Operations</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Article triage</h1>
       <p class="mt-2 text-sm leading-6 text-muted-foreground">
@@ -416,31 +420,31 @@ function shortId(value: unknown): string {
                 </div>
 
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div class="rounded-2xl border border-border bg-background p-4">
+                  <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Source</p>
                     <p class="mt-2 text-sm font-semibold">{String(selectedArticle.source_name ?? selectedArticle.channel_name ?? "Unknown source")}</p>
                     <p class="mt-1 text-xs text-muted-foreground">Published {formatTimestamp(selectedArticle.extracted_published_at ?? selectedArticle.published_at)}</p>
                   </div>
-                  <div class="rounded-2xl border border-border bg-background p-4">
+                  <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Pipeline summary</p>
                     <p class="mt-2 text-sm font-semibold">{operatorState.selectionSummary}</p>
                     <p class="mt-1 text-xs text-muted-foreground">
                       raw:{String(operatorState.processingState ?? "raw")} · enrich:{String(operatorState.enrichmentState ?? "pending")} · compat:{String(operatorState.compatDecision ?? "—")}
                     </p>
                   </div>
-                  <div class="rounded-2xl border border-border bg-background p-4">
+                  <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">IDs</p>
                     <p class="mt-2 text-sm font-semibold">canonical {operatorState.canonicalDocumentId ? shortId(operatorState.canonicalDocumentId) : "pending"}</p>
                     <p class="mt-1 text-xs text-muted-foreground">cluster {operatorState.storyClusterId ? shortId(operatorState.storyClusterId) : "—"}</p>
                   </div>
-                  <div class="rounded-2xl border border-border bg-background p-4">
+                  <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Engagement</p>
                     <p class="mt-2 text-sm font-semibold">👍 {String(selectedArticle.like_count ?? 0)} / 👎 {String(selectedArticle.dislike_count ?? 0)}</p>
                     <p class="mt-1 text-xs text-muted-foreground">next: {operatorGuidance.summary}</p>
                   </div>
                 </div>
 
-                <div class="rounded-2xl border border-border bg-background p-4">
+                <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                   <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Operator guidance</p>
                   <p class="mt-2 text-sm text-foreground">{operatorGuidance.summary}</p>
                   <p class="mt-1 text-xs text-muted-foreground">
