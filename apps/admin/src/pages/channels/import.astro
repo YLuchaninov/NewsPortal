@@ -8,6 +8,11 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../../lib/server/browser-flow";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -35,7 +40,7 @@ const pagePath = `${Astro.url.pathname}${Astro.url.search}`;
   </Fragment>
 
   <div class="space-y-6">
-    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <div class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Bulk onboarding</p>
       <h1 class="mt-4 text-2xl font-semibold tracking-tight">Import channels from JSON</h1>
       <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -54,18 +59,18 @@ const pagePath = `${Astro.url.pathname}${Astro.url.search}`;
         client:load
       />
 
-      <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section class={ADMIN_SECTION_CARD_CLASS}>
         <h2 class="text-base font-semibold">Import checklist</h2>
         <div class="mt-4 space-y-4 text-sm text-muted-foreground">
-          <div class="rounded-2xl border border-border bg-background p-4">
+          <div class={ADMIN_BACKGROUND_TILE_CLASS}>
             <p class="font-medium text-foreground">Validate before importing</p>
             <p class="mt-2">Use the built-in server-backed preflight to catch missing provider types, invalid URLs or mailbox settings, bad scheduling values, and unexpected overwrite targets before the batch is submitted.</p>
           </div>
-          <div class="rounded-2xl border border-border bg-background p-4">
+          <div class={ADMIN_BACKGROUND_TILE_CLASS}>
             <p class="font-medium text-foreground">Keep naming consistent</p>
             <p class="mt-2">Channel names show up in fetch-run logs and admin health tables, so use source names that operators can recognize quickly across RSS, website, API, and mailbox operations.</p>
           </div>
-          <div class="rounded-2xl border border-border bg-background p-4">
+          <div class={ADMIN_BACKGROUND_TILE_CLASS}>
             <p class="font-medium text-foreground">Keep secrets and provider-specific fields explicit</p>
             <p class="mt-2">Website rows may update by fetch URL and preserve their stored authorization header when you omit auth fields, while Email IMAP rows preserve the stored password on update if you omit <code>password</code>. Review these rows carefully before confirming an overwrite.</p>
           </div>

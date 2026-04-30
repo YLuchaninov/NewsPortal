@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 69 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 70 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin card class adoption on content/detail pages.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/articles/[docId].astro` and `apps/admin/src/pages/resources/[resourceId].astro`; class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin card class adoption on channel onboarding/edit pages.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels/new.astro`, `apps/admin/src/pages/channels/import.astro` and `apps/admin/src/pages/channels/[channelId]/edit.astro`; class ownership changed while layout, copy, routes, data loading, visual design, channel contracts and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-70
+
+- Kind: Stage
+- Status: completed
+- In scope: import existing shared admin UI class constants into channel new/import/edit pages, then replace exact hero, section and background tile class strings while preserving local link/form hover and layout classes.
+- Out of scope: channel parser/server modules, `ChannelEditorForm`, `BulkChannelImport`, copy, layout semantics, visual redesign, routes, provider contracts and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/channels/new.astro`, `apps/admin/src/pages/channels/import.astro`, `apps/admin/src/pages/channels/[channelId]/edit.astro`.
+- Risk: low-medium, because this touches channel admin pages but only replaces exact class strings with existing shared constants.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that exact strings and local link/form classes remain equivalent.
+- Acceptance criteria: selected channel onboarding/edit pages no longer repeat exact shared hero, section and background tile class strings inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is importing shared class constants without changing channel form behavior.
+- Implemented, with evidence: channel new/import pages now use shared hero, section and background tile classes.
+- Implemented, with evidence: channel edit page now uses the shared hero class for supported and unsupported provider shells.
+- Scope note: channel parser/server modules, `ChannelEditorForm`, `BulkChannelImport`, copy, layout semantics, visual redesign, routes, provider contracts and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: exact class strings were removed from the three declared pages, while local link/form classes including `mt-4`, `transition-colors`, `hover:bg-accent` and `hover:border-primary/20` remain composed around the shared constants.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-69
 

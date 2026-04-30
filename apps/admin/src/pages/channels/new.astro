@@ -20,6 +20,11 @@ import {
 import {
   resolveAdminChannelProviderType,
 } from "../../lib/channel-providers";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
 
 export const prerender = false;
 
@@ -71,7 +76,7 @@ const description = providerType === "website"
   </Fragment>
 
   <div class="space-y-6">
-    <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <div class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Create</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">{title}</h1>
       <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
@@ -79,12 +84,12 @@ const description = providerType === "website"
 
     {providerType === null ? (
       <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <h2 class="text-base font-semibold">Choose a source type</h2>
           <p class="mt-1 text-sm text-muted-foreground">
             Start with the provider. Deep settings, auth, and advanced fetch controls stay on the next screen so this first step stays lightweight.
           </p>
-          <div class="mt-4 rounded-2xl border border-border bg-background p-4">
+          <div class={`mt-4 ${ADMIN_BACKGROUND_TILE_CLASS}`}>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="text-sm font-medium text-foreground">Quick RSS entry</p>
@@ -136,7 +141,7 @@ const description = providerType === "website"
                 body: "Mailbox-backed ingest for press inboxes and structured sender-filter workflows.",
               },
             ].map((option) => (
-              <a href={option.href} class="rounded-2xl border border-border bg-background p-4 transition-colors hover:bg-accent hover:border-primary/20">
+              <a href={option.href} class={`${ADMIN_BACKGROUND_TILE_CLASS} transition-colors hover:bg-accent hover:border-primary/20`}>
                 <p class="text-sm font-medium text-foreground">{option.title}</p>
                 <p class="mt-2 text-sm text-muted-foreground">{option.body}</p>
                 <p class="mt-4 text-sm font-medium text-primary">Continue →</p>
@@ -145,12 +150,12 @@ const description = providerType === "website"
           </div>
         </section>
 
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <h2 class="text-base font-semibold">Bulk onboarding stays separate</h2>
           <p class="mt-1 text-sm text-muted-foreground">
             Use the dedicated import flow when you already have a prepared batch of source rows and want explicit row-level provider validation.
           </p>
-          <div class="mt-4 rounded-2xl border border-border bg-background p-4">
+          <div class={`mt-4 ${ADMIN_BACKGROUND_TILE_CLASS}`}>
             <p class="text-sm font-medium">When to choose each path</p>
             <div class="mt-3 space-y-3 text-sm text-muted-foreground">
               <p><span class="font-medium text-foreground">Add source:</span> deliberate setup, one provider at a time, easier to reason about defaults and risk.</p>

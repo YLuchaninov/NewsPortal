@@ -24,6 +24,7 @@ import {
   formatAdminChannelProviderLabel,
   isAdminChannelProviderType,
 } from "../../../lib/channel-providers";
+import { ADMIN_HERO_CARD_CLASS } from "../../../lib/admin-ui-classes";
 import { asRecord, formatTimestamp } from "../../../lib/view-helpers";
 
 export const prerender = false;
@@ -85,7 +86,7 @@ const deleteDescription = storedItemCount > 0
   {providerType ? (
     <div class="space-y-6">
       <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <div class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+        <div class={ADMIN_HERO_CARD_CLASS}>
           <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Edit channel</p>
           <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(channel.name ?? `${providerLabel} channel`)}</h1>
           <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -267,7 +268,7 @@ const deleteDescription = storedItemCount > 0
       </section>
     </div>
   ) : (
-    <section class="rounded-[1.75rem] border border-border bg-card p-6 shadow-sm">
+    <section class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Unsupported provider</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(channel.name ?? "Channel")}</h1>
       <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
