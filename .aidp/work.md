@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 63 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 64 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin compact metric tile class adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/user-interests.astro`; compact metric tile class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin metric tile base class adoption for flex tiles.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/resources.astro` and `apps/admin/src/components/discovery/DiscoveryControlPlaneHero.astro`; compact metric tile base class ownership changed while flex/min-height behavior, layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-64
+
+- Kind: Stage
+- Status: completed
+- In scope: reuse `ADMIN_COMPACT_METRIC_TILE_CLASS` as the shared base for flex metric tiles in channels, resources and discovery control-plane hero surfaces while keeping each tile's local `flex min-h-* flex-col` behavior.
+- Out of scope: non-flex metric tiles, table classes, buttons, form controls, copy, layout semantics, visual redesign, page data loading, routes and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/components/discovery/DiscoveryControlPlaneHero.astro`.
+- Risk: low, because this only moves the exact repeated base class string into a shared constant and leaves each tile's unique flex/min-height classes in place.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that base class strings are exact matches and local flex/min-height classes remain.
+- Acceptance criteria: touched flex metric tiles no longer repeat the compact metric tile base class string inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is composing a shared class string in Astro rather than introducing cross-page components.
+- Implemented, with evidence: channels, resources and discovery control-plane hero flex metric tiles now compose `ADMIN_COMPACT_METRIC_TILE_CLASS`.
+- Scope note: non-flex metric tiles, table classes, buttons, form controls, copy, layout semantics, visual redesign, page data loading, routes and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: base class strings were exact matches and local `flex min-h-* flex-col` classes remain on every changed tile.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-63
 

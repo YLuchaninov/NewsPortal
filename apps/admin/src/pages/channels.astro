@@ -28,6 +28,7 @@ import {
   isAdminChannelProviderType,
 } from "../lib/channel-providers";
 import {
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
@@ -295,27 +296,27 @@ const visibleChannels = sourceChannels.filter((channel) => {
             </p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.75rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{channels.total}</p>
         </div>
-        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.75rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">RSS</p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{rssCount}</p>
         </div>
-        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.75rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Website</p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{websiteCount}</p>
         </div>
-        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.75rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">API</p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{apiCount}</p>
         </div>
-        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.75rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Email IMAP</p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{emailImapCount}</p>
         </div>
-        <div class="flex min-h-[8.75rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.75rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Attention / Paused</p>
           <p class="mt-auto inline-flex items-baseline whitespace-nowrap pt-4 text-[clamp(2rem,2.6vw,2.25rem)] font-semibold leading-none tracking-tight">
             <span class="text-amber-500">{attentionCount}</span>

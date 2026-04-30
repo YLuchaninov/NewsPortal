@@ -18,6 +18,7 @@ import {
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
 import {
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
@@ -226,25 +227,25 @@ function resolveResourcePreviewHref(resourceId: string): string {
         )}
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             <span class="inline-block max-w-[8ch] leading-[1.35]">Results</span>
           </p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{resources.total}</p>
         </div>
-        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             <span class="inline-block max-w-[8ch] leading-[1.35]">Projected</span>
           </p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{projectedOnPage}</p>
         </div>
-        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             <span class="inline-block max-w-[8ch] leading-[1.35]">Resource only</span>
           </p>
           <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{resourceOnlyOnPage}</p>
         </div>
-        <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+        <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             <span class="inline-block max-w-[8ch] leading-[1.35]">Failed on page</span>
           </p>

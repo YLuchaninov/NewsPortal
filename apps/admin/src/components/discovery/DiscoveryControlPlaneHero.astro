@@ -6,6 +6,7 @@ import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
 import type { DiscoveryOperatorSummary } from "../../lib/server/operator-surfaces";
+import { ADMIN_COMPACT_METRIC_TILE_CLASS } from "../../lib/admin-ui-classes";
 
 type DiscoveryTabLink = {
   key: string;
@@ -52,21 +53,21 @@ const {
       </p>
     </div>
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+      <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
         <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Enabled</p>
         <p class={`mt-auto pt-4 text-4xl font-semibold leading-none ${summary.enabled ? "text-emerald-500" : "text-slate-500"}`}>
           {summary.enabled ? "Yes" : "No"}
         </p>
       </div>
-      <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+      <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
         <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Graph missions</p>
         <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{String(operatorSummary.graphMissionCount)}</p>
       </div>
-      <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+      <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
         <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Recall missions</p>
         <p class="mt-auto pt-4 text-4xl font-semibold leading-none">{String(operatorSummary.recallMissionCount)}</p>
       </div>
-      <div class="flex min-h-[8.25rem] flex-col rounded-2xl border border-border bg-background px-4 py-3">
+      <div class={`flex min-h-[8.25rem] flex-col ${ADMIN_COMPACT_METRIC_TILE_CLASS}`}>
         <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">This month</p>
         <p class="mt-auto overflow-hidden whitespace-nowrap pt-4 text-[clamp(2rem,2.6vw,2.25rem)] font-semibold leading-none tracking-tight">
           {fmtUsd(monthToDateCostUsd)}
