@@ -1,5 +1,8 @@
 import { FormField, Input, Textarea } from "@newsportal/ui";
-import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../lib/admin-ui-classes";
 
 export interface InterestTemplateEditorValue {
   interestTemplateId?: string;
@@ -196,7 +199,7 @@ export function InterestTemplateEditorForm({
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className={ADMIN_BACKGROUND_TILE_CLASS}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Strictness</p>
             <p className="mt-2 text-sm font-semibold">
               {displayValue(value.selectionProfileStrictness, "balanced")}
@@ -205,7 +208,7 @@ export function InterestTemplateEditorForm({
               Keeps the runtime conservative enough for mass-scale filtering without exposing raw thresholds.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className={ADMIN_BACKGROUND_TILE_CLASS}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Unresolved outcome</p>
             <p className="mt-2 text-sm font-semibold">
               {displayValue(value.selectionProfileUnresolvedDecision, "hold")}
@@ -214,7 +217,7 @@ export function InterestTemplateEditorForm({
               Uncertain cases stay out of the selected collection unless the runtime review path resolves them more confidently.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className={ADMIN_BACKGROUND_TILE_CLASS}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">LLM review mode</p>
             <p className="mt-2 text-sm font-semibold">
               {displayValue(value.selectionProfileLlmReviewMode, "always")}
@@ -223,7 +226,7 @@ export function InterestTemplateEditorForm({
               Gray-zone system-interest cases default to asynchronous LLM review instead of silently collapsing into a cheap hold path.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className={ADMIN_BACKGROUND_TILE_CLASS}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Profile sync</p>
             <p className="mt-2 text-sm font-semibold">
               {displayValue(value.selectionProfileStatus, value.isActive ? "active" : "archived")}
@@ -239,7 +242,7 @@ export function InterestTemplateEditorForm({
               </p>
             )}
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className={ADMIN_BACKGROUND_TILE_CLASS}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Candidate cues</p>
             <p className="mt-2 text-sm font-semibold">
               {displayValue(value.candidateSignalSource, "generic_fallback")}

@@ -28,6 +28,7 @@ import {
   isAdminChannelProviderType,
 } from "../lib/channel-providers";
 import {
+  ADMIN_BACKGROUND_TILE_CLASS,
   ADMIN_COMPACT_METRIC_TILE_CLASS,
   ADMIN_HERO_CARD_CLASS,
   ADMIN_SECTION_CARD_CLASS,
@@ -341,15 +342,15 @@ const visibleChannels = sourceChannels.filter((channel) => {
           <a href={pagePaths.help} class="text-sm font-medium text-primary hover:underline">Read setup guide</a>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-3">
-          <div class="rounded-2xl border border-border bg-background p-4">
+          <div class={ADMIN_BACKGROUND_TILE_CLASS}>
             <p class="text-sm font-medium">One primary create path</p>
             <p class="mt-2 text-sm text-muted-foreground">Start with a single “Add source” entry point, then choose the provider and continue in a dedicated wizard-like screen.</p>
           </div>
-          <div class="rounded-2xl border border-border bg-background p-4">
+          <div class={ADMIN_BACKGROUND_TILE_CLASS}>
             <p class="text-sm font-medium">Keep provider truth explicit</p>
             <p class="mt-2 text-sm text-muted-foreground">Website channels stay websites, APIs stay APIs, and mailbox ingest stays mailbox-based instead of being silently coerced into another provider shape.</p>
           </div>
-          <div class="rounded-2xl border border-border bg-background p-4">
+          <div class={ADMIN_BACKGROUND_TILE_CLASS}>
             <p class="text-sm font-medium">Delete safely</p>
             <p class="mt-2 text-sm text-muted-foreground">Channels with stored history are archived instead of hard-deleted, so previously ingested items stay recoverable.</p>
           </div>

@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 67 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 68 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin automation card class adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/components/AutomationOverviewBoard.tsx`, `apps/admin/src/components/AutomationExecutionsBoard.tsx`, `apps/admin/src/components/AutomationTemplateGallery.tsx`, `apps/admin/src/components/automation-editor-canvas.tsx`, `apps/admin/src/components/automation-editor-inspector-panel.tsx` and `apps/admin/src/components/automation-editor-palette.tsx`; automation card class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin background tile class adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, selected admin pages, selected discovery tabs, `AutomationOverviewBoard.tsx` and `InterestTemplateEditorForm.tsx`; background tile class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-68
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared admin background tile class and replace exact `rounded-2xl border border-border bg-background p-4` strings on admin surfaces that already import shared UI class constants, preserving local layout prefixes/suffixes.
+- Out of scope: pages/components that do not yet import admin UI classes, cards with different backgrounds/padding/borders, copy, layout semantics, visual redesign, page data loading, routes and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/resources.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/user-interests.astro`, `apps/admin/src/pages/analysis.astro`, `apps/admin/src/components/AutomationOverviewBoard.tsx`, `apps/admin/src/components/InterestTemplateEditorForm.tsx`, `apps/admin/src/components/discovery/DiscoveryDashboardTab.astro`, `apps/admin/src/components/discovery/DiscoveryControlPlaneHero.astro`, `apps/admin/src/components/discovery/DiscoveryPortfolioTab.astro`, `apps/admin/src/components/discovery/DiscoveryProfileCreateForm.astro`, `apps/admin/src/components/discovery/DiscoveryRecallTab.astro`.
+- Risk: low-medium, because this touches multiple UI surfaces, but it only replaces an exact class string with a shared constant while preserving DOM structure and local prefix/suffix classes.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that replaced class strings are exact matches and local layout prefixes/suffixes remain.
+- Acceptance criteria: selected surfaces no longer repeat the exact background tile class string inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is a shared class constant instead of cross-framework component churn.
+- Implemented, with evidence: `ADMIN_BACKGROUND_TILE_CLASS` was added to `apps/admin/src/lib/admin-ui-classes.ts`.
+- Implemented, with evidence: selected admin pages, discovery tabs, automation overview and interest template form now use the shared background tile class for exact `rounded-2xl border border-border bg-background p-4` matches.
+- Scope note: pages/components that do not yet import admin UI classes, cards with different backgrounds/padding/borders, copy, layout semantics, visual redesign, page data loading, routes and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: exact background tile strings were replaced only in declared files, and local layout prefixes/suffixes such as `grid gap-3`, `mt-4`, `flex min-h-[7rem] flex-col justify-between` and text-muted suffixes remain composed around the shared class.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-67
 

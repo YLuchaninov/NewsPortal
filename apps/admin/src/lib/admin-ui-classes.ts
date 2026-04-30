@@ -6,6 +6,9 @@ export const ADMIN_TABLE_ACTIONS_HEADER_CLASS = `admin-table-actions-col ${ADMIN
 export const ADMIN_COMPACT_METRIC_TILE_CLASS =
   "rounded-2xl border border-border bg-background px-4 py-3";
 
+export const ADMIN_BACKGROUND_TILE_CLASS =
+  "rounded-2xl border border-border bg-background p-4";
+
 export const ADMIN_SECTION_CARD_CLASS =
   "rounded-2xl border border-border bg-card p-5 shadow-sm";
 

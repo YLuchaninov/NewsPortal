@@ -6,7 +6,10 @@ import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
 import { resolveDiscoveryChannelMetrics } from "../../lib/server/operator-surfaces";
-import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
 
 type Props = {
   bffPath: string;
@@ -51,7 +54,7 @@ const {
           Re-evaluate mission
         </button>
       </form>
-      <div class="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+      <div class={`${ADMIN_BACKGROUND_TILE_CLASS} text-sm text-muted-foreground`}>
         <p>Snapshot reason: {String(portfolioSnapshot.snapshot_reason ?? "—")}</p>
         <p class="mt-1">Created: {fmtDate(portfolioSnapshot.created_at)}</p>
         <p class="mt-1">Selected sources: {String(portfolioSummary.selected_count ?? 0)}</p>

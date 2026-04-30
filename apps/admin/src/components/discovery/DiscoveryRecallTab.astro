@@ -15,7 +15,10 @@ import {
   resolveDiscoverySourceQuality,
   type DiscoveryOperatorSummary,
 } from "../../lib/server/operator-surfaces";
-import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
 
 type Props = {
   attachableProfiles: DiscoveryRecord[];
@@ -54,7 +57,7 @@ const {
     <p class="mt-1 text-sm text-muted-foreground">
       These missions seed neutral acquisition without requiring `interest_graph`. This admin surface now owns the bounded operator loop for recall mission acquisition and candidate promotion while keeping the same maintenance-backed runtime truth.
     </p>
-    <form method="post" action={bffPath} class="mt-4 grid gap-3 rounded-2xl border border-border bg-background p-4">
+    <form method="post" action={bffPath} class={`mt-4 grid gap-3 ${ADMIN_BACKGROUND_TILE_CLASS}`}>
       <input type="hidden" name="intent" value="create_recall_mission" />
       <input type="hidden" name="redirectTo" value={currentPath} />
       <label class="grid gap-1.5">

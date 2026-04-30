@@ -7,6 +7,7 @@ import {
 } from "../../lib/server/discovery-view-model";
 import type { DiscoveryOperatorSummary } from "../../lib/server/operator-surfaces";
 import {
+  ADMIN_BACKGROUND_TILE_CLASS,
   ADMIN_COMPACT_METRIC_TILE_CLASS,
   ADMIN_HERO_CARD_CLASS,
 } from "../../lib/admin-ui-classes";
@@ -102,22 +103,22 @@ const {
   )}
 
   <div class="mt-4 grid gap-3 sm:grid-cols-4">
-    <div class="rounded-2xl border border-border bg-background p-4">
+    <div class={ADMIN_BACKGROUND_TILE_CLASS}>
       <p class="text-sm font-medium">Search provider</p>
       <p class="mt-1 text-sm text-muted-foreground">{activeSearchProvider}</p>
     </div>
-    <div class="rounded-2xl border border-border bg-background p-4">
+    <div class={ADMIN_BACKGROUND_TILE_CLASS}>
       <p class="text-sm font-medium">Discovery LLM</p>
       <p class="mt-1 text-sm text-muted-foreground break-all">{activeLlmModel}</p>
     </div>
-    <div class="rounded-2xl border border-border bg-background p-4">
+    <div class={ADMIN_BACKGROUND_TILE_CLASS}>
       <p class="text-sm font-medium">Monthly quota</p>
       <p class="mt-1 text-sm text-muted-foreground">
         {fmtBudget(monthlyBudgetCents)}
         {Number(monthlyBudgetCents) > 0 ? ` · ${fmtMoney(remainingMonthlyBudgetCents)} left` : ""}
       </p>
     </div>
-    <div class="rounded-2xl border border-border bg-background p-4">
+    <div class={ADMIN_BACKGROUND_TILE_CLASS}>
       <p class="text-sm font-medium">Default cron</p>
       <p class="mt-1 text-sm text-muted-foreground font-mono">{String(summary.defaultCron ?? defaultCron)}</p>
     </div>

@@ -6,7 +6,10 @@ import {
   AUTOMATION_TEMPLATES,
   createBlankLinearAutomation,
 } from "../lib/automation-workspace";
-import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_AUTOMATION_CARD_CLASS,
+} from "../lib/admin-ui-classes";
 import {
   ADMIN_LIVE_UPDATES_EVENT,
   isAdminLiveSurfaceSnapshot,
@@ -248,7 +251,7 @@ export function AutomationOverviewBoard({
             ].map((card) => (
               <div
                 key={card.label}
-                className="flex min-h-[7rem] flex-col justify-between rounded-2xl border border-border bg-background p-4"
+                className={`flex min-h-[7rem] flex-col justify-between ${ADMIN_BACKGROUND_TILE_CLASS}`}
               >
                 <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                   {card.label}
