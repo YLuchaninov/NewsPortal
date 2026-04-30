@@ -10,6 +10,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -60,22 +61,10 @@ const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
   return {
     id: String(job.reindex_job_id ?? ""),
     status: String(job.status ?? "queued"),
-    timestamp: formatTimestamp(job.updated_at ?? job.requested_at),
+    timestamp: formatTimestamp(job.updated_at ?? job.requested_at, { includeYear: false }),
     progressLabel,
   };
 });
-
-function formatTimestamp(rawValue: unknown): string {
-  if (!rawValue) return "—";
-  const date = new Date(String(rawValue));
-  if (Number.isNaN(date.getTime())) return String(rawValue);
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 ---
 
 <AdminShell title="Analysis — Admin" session={session} flash={flash} activeNav="analysis">
@@ -241,7 +230,7 @@ function formatTimestamp(rawValue: unknown): string {
             <a href={appPath(`/analysis?subject=${String(item.subject_id ?? "")}`)} class="block py-3 text-sm">
               <span class="font-medium">{String(item.analysis_type ?? "analysis")}</span>
               <span class="ml-2 text-muted-foreground">{String(item.subject_type ?? "subject")}:{String(item.subject_id ?? "").slice(0, 8)}</span>
-              <span class="float-right text-xs text-muted-foreground">{formatTimestamp(item.updated_at)}</span>
+              <span class="float-right text-xs text-muted-foreground">{formatTimestamp(item.updated_at, { includeYear: false })}</span>
             </a>
           ))}
           {analysis.items.length === 0 && <p class="py-4 text-sm text-muted-foreground">No analysis results yet.</p>}

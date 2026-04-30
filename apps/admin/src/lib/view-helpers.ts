@@ -1,4 +1,7 @@
-export function formatTimestamp(value: unknown): string {
+export function formatTimestamp(
+  value: unknown,
+  { includeYear = true }: { includeYear?: boolean } = {}
+): string {
   if (!value) {
     return "—";
   }
@@ -11,7 +14,7 @@ export function formatTimestamp(value: unknown): string {
   return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
-    year: "numeric",
+    ...(includeYear ? { year: "numeric" as const } : {}),
     hour: "numeric",
     minute: "2-digit",
   });

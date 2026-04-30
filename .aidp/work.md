@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 54 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 55 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing Python unit psycopg stub adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `tests/unit/python/support/stubs.py`, `tests/unit/python/test_canonical_documents.py`, `tests/unit/python/test_content_analysis.py`, `tests/unit/python/test_interest_filters.py`, `tests/unit/python/test_story_clusters.py` and `tests/unit/python/test_task_engine_pipeline_plugins.py`; import stubs were centralized while test assertions, tested service code and runtime code stayed unchanged.
+- Worktree status: clean after committing admin analysis timestamp helper adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts` and `apps/admin/src/pages/analysis.astro`; timestamp helper ownership changed while rendered no-year timestamp behavior in analysis, data loading, routes, forms, server writes, layout and product code outside the admin page stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-55
+
+- Kind: Stage
+- Status: completed
+- In scope: extend admin `formatTimestamp` view helper with an option that preserves existing default output, then replace the local analysis page timestamp formatter with the shared helper using no-year formatting.
+- Out of scope: page data loading, API calls, routes, forms/actions, server writes, layout, copy, visual redesign, public web helper behavior and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/analysis.astro`.
+- Risk: low-medium, because this touches rendered admin text, but the helper option preserves the existing analysis no-year output and default shared behavior.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that invalid/empty timestamp fallback and analysis no-year formatting remain equivalent.
+- Acceptance criteria: `analysis.astro` no longer owns a duplicated local timestamp formatter; existing consumers of `formatTimestamp` keep default year-inclusive output.
+- Architecture note: affected concern is admin page helper cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is adding a small option to an existing shared helper instead of creating a second formatter.
+- Implemented, with evidence: `apps/admin/src/lib/view-helpers.ts` `formatTimestamp` now accepts `{ includeYear?: boolean }` and keeps `includeYear: true` as the default.
+- Implemented, with evidence: `apps/admin/src/pages/analysis.astro` now imports the shared helper and passes `{ includeYear: false }` at both existing timestamp call sites.
+- Scope note: page data loading, API calls, routes, forms/actions, server writes, layout, copy, visual redesign, public web helper behavior and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: invalid/empty timestamp fallback and analysis no-year formatting remain equivalent; existing shared-helper consumers keep year-inclusive default output.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-54
 
