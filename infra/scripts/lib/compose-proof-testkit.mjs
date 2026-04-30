@@ -80,6 +80,20 @@ export function queryPostgres(env, sql) {
   return result.stdout.trim();
 }
 
+export function stripPostgresCommandTags(output) {
+  return String(output ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^(INSERT|UPDATE|DELETE) \d+( \d+)?$/iu.test(line))
+    .join("\n")
+    .trim();
+}
+
+export function queryPostgresWithoutCommandTags(env, sql) {
+  return stripPostgresCommandTags(queryPostgres(env, sql));
+}
+
 export function queryPostgresInt(env, sql) {
   const value = firstResultLine(queryPostgres(env, sql));
   const parsed = Number.parseInt(value, 10);

@@ -7,6 +7,8 @@ import {
   extractCookie,
   fetchJson,
   postForm,
+  queryPostgres,
+  queryPostgresInt,
   readAllowlistEntries,
   readEnvFile,
   requireConfigured,
@@ -16,14 +18,11 @@ import {
   selectAdminEmail,
   sendRequest,
   createWaitFor,
+  sqlLiteral,
 } from "./lib/compose-proof-testkit.mjs";
 
 function log(message) {
   console.log(`[mvp-internal] ${message}`);
-}
-
-function sqlLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 function readHeader(headers, name) {
@@ -173,34 +172,6 @@ function fetchComposeJson(service, url) {
   } catch {
     return { raw: text };
   }
-}
-
-function queryPostgres(env, sql) {
-  const result = runComposeCapture(
-    "exec",
-    "-T",
-    "postgres",
-    "psql",
-    "-U",
-    env.POSTGRES_USER || "newsportal",
-    "-d",
-    env.POSTGRES_DB || "newsportal",
-    "-At",
-    "-F",
-    "|",
-    "-c",
-    sql
-  );
-  return result.stdout.trim();
-}
-
-function queryPostgresInt(env, sql) {
-  const value = queryPostgres(env, sql);
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Expected integer query result, got ${value || "<empty>"}.`);
-  }
-  return parsed;
 }
 
 function countInterestMatches(env, { docId, interestId }) {

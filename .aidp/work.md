@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 50 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 51 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared compose Postgres proof helpers.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs` and `infra/scripts/test-rss-multi-flow.mjs`; SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code stayed unchanged.
+- Worktree status: clean after committing shared compose Postgres helper adoption in MVP/discovery admin proofs.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-mvp-internal.mjs` and `infra/scripts/test-discovery-admin-flow.mjs`; SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-51
+
+- Kind: Stage
+- Status: completed
+- In scope: add command-tag-filtered Postgres query helper support to `compose-proof-testkit`, then replace local SQL literal/query duplicates in MVP internal and discovery admin proof scripts.
+- Out of scope: SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-mvp-internal.mjs`, `infra/scripts/test-discovery-admin-flow.mjs`.
+- Risk: medium-high, because MVP/discovery proof scripts are broad gates, but the stage preserves psql flags and existing command-tag filtering semantics.
+- Required proof: `pnpm lint`; `pnpm unit_tests:ts`; `git diff --check --`; targeted review that SQL literal escaping, psql flags, discovery command-tag filtering and MVP integer parsing remain equivalent.
+- Acceptance criteria: MVP internal and discovery admin scripts no longer own local compose Postgres query helper duplicates.
+- Architecture note: affected concern is proof harness cohesion; stakeholder/consumer is maintainers running broad MVP/discovery proof gates; tradeoff is centralizing psql invocation while preserving script-specific filtering through a named helper.
+- Implemented, with evidence: added `stripPostgresCommandTags` and `queryPostgresWithoutCommandTags` to `infra/scripts/lib/compose-proof-testkit.mjs`.
+- Implemented, with evidence: `test-mvp-internal.mjs` now uses shared `sqlLiteral`, `queryPostgres` and `queryPostgresInt` instead of local duplicates.
+- Implemented, with evidence: `test-discovery-admin-flow.mjs` now uses shared `sqlLiteral` and `queryPostgresWithoutCommandTags` aliased as `queryPostgres`, preserving its prior INSERT/UPDATE/DELETE command-tag filtering.
+- Scope note: SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code were not changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over infra scripts and Python ruff.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests after the import cleanup.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: SQL literal escaping, psql flags, discovery command-tag filtering and MVP integer parsing remain equivalent.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-50
 

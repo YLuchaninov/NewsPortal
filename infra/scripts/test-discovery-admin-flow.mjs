@@ -7,13 +7,14 @@ import {
   fetchJson,
   postForm,
   postJson,
+  queryPostgresWithoutCommandTags as queryPostgres,
   readAllowlistEntries,
   readEnvFile,
   requireConfigured,
   runCompose,
-  runComposeCapture,
   selectAdminEmail,
   sendRequest,
+  sqlLiteral,
   waitFor,
   waitForHttpHealth,
 } from "./lib/compose-proof-testkit.mjs";
@@ -36,10 +37,6 @@ function log(message) {
   console.log(`[discovery-admin] ${message}`);
 }
 
-function sqlLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for discovery-admin acceptance.");
   runCompose("up", "--build", "-d", ...STACK_SERVICES);
@@ -48,31 +45,6 @@ async function ensureComposeStack() {
     waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health"),
     waitForHttpHealth("nginx", "http://127.0.0.1:8080/health"),
   ]);
-}
-
-function queryPostgres(env, sql) {
-  const result = runComposeCapture(
-    "exec",
-    "-T",
-    "postgres",
-    "psql",
-    "-U",
-    env.POSTGRES_USER || "newsportal",
-    "-d",
-    env.POSTGRES_DB || "newsportal",
-    "-At",
-    "-F",
-    "|",
-    "-c",
-    sql
-  );
-  return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^(INSERT|UPDATE|DELETE) \d+( \d+)?$/u.test(line))
-    .join("\n")
-    .trim();
 }
 
 async function main() {
