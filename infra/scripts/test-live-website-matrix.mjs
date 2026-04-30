@@ -13,8 +13,8 @@ import {
   runComposeCapture,
   selectAdminEmail,
   sendRequest,
-  waitFor as waitForShared,
-} from "./lib/mcp-http-testkit.mjs";
+  createWaitFor,
+} from "./lib/compose-proof-testkit.mjs";
 
 const LIVE_GROUP_VARIANTS = {
   baseline: [
@@ -509,9 +509,7 @@ async function fetchHtml(url, { cookie, timeoutMs = 10000 } = {}) {
   return response.text;
 }
 
-async function waitFor(label, producer, predicate, { timeoutMs = 180000, intervalMs = 3000 } = {}) {
-  return await waitForShared(label, producer, predicate, { timeoutMs, intervalMs });
-}
+const waitFor = createWaitFor({ timeoutMs: 180000, intervalMs: 3000 });
 
 function clearCrawlPolicyCache(domain) {
   runCompose(

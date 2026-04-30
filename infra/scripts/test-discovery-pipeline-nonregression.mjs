@@ -12,7 +12,7 @@ import {
   runCompose,
   runComposeCapture,
   waitForHttpHealth,
-} from "./lib/mcp-http-testkit.mjs";
+} from "./lib/compose-proof-testkit.mjs";
 
 const stackServices = [
   "postgres",

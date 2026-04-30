@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 52 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 53 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared cookie parser adoption in web viewport and UI button audit proof scripts.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs`; cookie splitting/error semantics remained equivalent while browser flows, auth setup, SQL statements, fixture data, compose services, package scripts, runtime services and product code stayed unchanged.
+- Worktree status: clean after committing generic compose proof facade adoption in remaining non-MCP acceptance scripts.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/test-automation-admin-flow.mjs`, `infra/scripts/test-discovery-pipeline-nonregression.mjs`, `infra/scripts/test-live-discovery-examples.mjs` and `infra/scripts/test-live-website-matrix.mjs`; import ownership and equivalent polling wrapper ownership changed while proof scenarios, external/live behavior, SQL statements, fixture data, compose services, package scripts, runtime services and product code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-53
+
+- Kind: Stage
+- Status: completed
+- In scope: move remaining non-MCP acceptance scripts that use generic compose/HTTP helpers from `mcp-http-testkit` imports to `compose-proof-testkit`, and replace the live website matrix local waitFor wrapper with `createWaitFor` defaults.
+- Out of scope: MCP-specific proof scripts, proof scenario logic, external/live provider behavior, SQL statements, fixture data, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/test-automation-admin-flow.mjs`, `infra/scripts/test-discovery-pipeline-nonregression.mjs`, `infra/scripts/test-live-discovery-examples.mjs`, `infra/scripts/test-live-website-matrix.mjs`.
+- Risk: medium-high, because live/acceptance proof scripts are broad gates, but this stage only changes helper import ownership and an equivalent polling wrapper.
+- Required proof: `pnpm lint`; `pnpm unit_tests:ts`; `git diff --check --`; targeted review that imported helper names, waitFor defaults and live-script custom response parsing remain equivalent.
+- Acceptance criteria: touched non-MCP scripts consume generic helpers through `compose-proof-testkit`; live website matrix no longer owns a duplicated waitFor wrapper where `createWaitFor` is equivalent.
+- Architecture note: affected concern is proof harness cohesion and naming clarity; stakeholder/consumer is maintainers running automation, discovery and live website acceptance gates; tradeoff is reducing MCP-named coupling while leaving MCP-specific scripts on the MCP toolkit.
+- Implemented, with evidence: `test-automation-admin-flow.mjs`, `test-discovery-pipeline-nonregression.mjs` and `test-live-discovery-examples.mjs` now import generic helpers from `compose-proof-testkit`.
+- Implemented, with evidence: `test-live-website-matrix.mjs` now imports from `compose-proof-testkit` and uses `createWaitFor({ timeoutMs: 180000, intervalMs: 3000 })` instead of a local wrapper around shared waitFor.
+- Scope note: MCP-specific proof scripts, proof scenario logic, external/live provider behavior, SQL statements, fixture data, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code were not changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over infra scripts and Python ruff.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: imported helper names, waitFor defaults and live-script custom response parsing remain equivalent; live discovery examples kept its custom `parseJsonResponse` and waitFor with `describeLastValue`.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-52
 
