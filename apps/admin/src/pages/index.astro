@@ -13,6 +13,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -53,11 +54,6 @@ const [summary, fetchRuns] = session
     ])
   : [null, null];
 
-function formatTimestamp(v: unknown): string {
-  if (!v) return "never";
-  const d = new Date(String(v));
-  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
 function formatFetchRunDelta(run: R): string {
   const metrics = asRecord(run.provider_metrics_json);
@@ -334,7 +330,7 @@ const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
                     </td>
                     <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">{formatFetchRunDelta(run)}</td>
                     <td class="px-4 py-2.5 text-xs text-muted-foreground">
-                      {formatTimestamp(run.started_at)}
+                      {formatTimestamp(run.started_at, { emptyLabel: "never", includeYear: false })}
                     </td>
                   </tr>
                 ))}

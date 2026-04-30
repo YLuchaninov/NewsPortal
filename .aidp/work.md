@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 55 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 56 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing admin analysis timestamp helper adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts` and `apps/admin/src/pages/analysis.astro`; timestamp helper ownership changed while rendered no-year timestamp behavior in analysis, data loading, routes, forms, server writes, layout and product code outside the admin page stayed unchanged.
+- Worktree status: clean after committing admin dashboard timestamp helper adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts` and `apps/admin/src/pages/index.astro`; timestamp helper ownership changed while dashboard empty label/no-year formatting, data loading, routes, layout, live components and runtime code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-56
+
+- Kind: Stage
+- Status: completed
+- In scope: extend admin `formatTimestamp` view helper with an optional empty label, then replace the local dashboard timestamp formatter with the shared helper using `emptyLabel: "never"` and no-year formatting.
+- Out of scope: dashboard data loading, API calls, routes, live components, layout, copy, visual redesign, public web helper behavior and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/index.astro`.
+- Risk: low-medium, because this touches rendered admin text, but the helper options preserve dashboard empty/no-year output and default shared behavior.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that empty timestamp fallback, invalid timestamp fallback and dashboard no-year formatting remain equivalent.
+- Acceptance criteria: `index.astro` no longer owns a duplicated local timestamp formatter; existing consumers of `formatTimestamp` keep default `—` empty label and year-inclusive output.
+- Architecture note: affected concern is admin page helper cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is adding a small option to an existing shared helper instead of creating a second formatter.
+- Implemented, with evidence: `apps/admin/src/lib/view-helpers.ts` `formatTimestamp` now accepts `emptyLabel` while keeping the default `—` value for existing consumers.
+- Implemented, with evidence: `apps/admin/src/pages/index.astro` now imports the shared helper and passes `{ emptyLabel: "never", includeYear: false }` for fetch-run timestamps.
+- Scope note: dashboard data loading, API calls, routes, live components, layout, copy, visual redesign, public web helper behavior and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: empty timestamp fallback, invalid timestamp fallback and dashboard no-year formatting remain equivalent; existing shared-helper consumers keep default `—` empty label and year-inclusive output.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-55
 

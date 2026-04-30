@@ -1,9 +1,15 @@
 export function formatTimestamp(
   value: unknown,
-  { includeYear = true }: { includeYear?: boolean } = {}
+  {
+    emptyLabel = "—",
+    includeYear = true,
+  }: {
+    emptyLabel?: string;
+    includeYear?: boolean;
+  } = {}
 ): string {
   if (!value) {
-    return "—";
+    return emptyLabel;
   }
 
   const date = new Date(String(value));
