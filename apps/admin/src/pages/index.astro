@@ -13,7 +13,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
-import { formatTimestamp } from "../lib/view-helpers";
+import { asRecord, formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -54,9 +54,8 @@ const [summary, fetchRuns] = session
     ])
   : [null, null];
 
-function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
 function formatFetchRunDelta(run: R): string {
-  const metrics = asRecord(run.provider_metrics_json);
+  const metrics = asRecord<R>(run.provider_metrics_json);
   if (String(run.provider_type ?? "") === "website" && Object.keys(metrics).length > 0) {
     const staticAccepted = asInt(metrics.staticAcceptedCount, 0);
     const browserOnly = asInt(metrics.browserOnlyAcceptedCount, 0);

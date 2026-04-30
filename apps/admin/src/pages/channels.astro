@@ -31,7 +31,12 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
-import { createPageHrefResolver, createViewHrefResolver, parsePositivePage } from "../lib/view-helpers";
+import {
+  asRecord,
+  createPageHrefResolver,
+  createViewHrefResolver,
+  parsePositivePage,
+} from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -61,9 +66,6 @@ const pagePaths = {
 };
 
 type R = Record<string, unknown>;
-function asRecord(v: unknown): R {
-  return v != null && typeof v === "object" && !Array.isArray(v) ? (v as R) : {};
-}
 function asInt(v: unknown, f: number) {
   const p = typeof v === "number" && Number.isInteger(v) ? v : parseInt(String(v ?? ""), 10);
   return Number.isInteger(p) && p >= 0 ? p : f;
@@ -96,7 +98,7 @@ const channels = await sdk.listChannelsPage<R>({
 
 const currentListPath = `${Astro.url.pathname}${Astro.url.search}`;
 const sourceChannels = channels.items.map((c) => {
-  const cfg = asRecord(c.config_json);
+  const cfg = asRecord<R>(c.config_json);
   const rawProviderType = resolveListedProviderType(c.provider_type);
   const editableProviderType = isAdminChannelProviderType(rawProviderType)
     ? rawProviderType

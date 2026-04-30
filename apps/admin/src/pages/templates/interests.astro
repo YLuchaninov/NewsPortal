@@ -17,6 +17,7 @@ import {
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
 import {
+  asRecord,
   createPageHrefResolver,
   createViewHrefResolver,
   parsePositivePage,
@@ -82,12 +83,6 @@ const resolveViewHref = createViewHrefResolver(Astro.url, {
 function asPolicyRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
-    : {};
-}
-
-function asRecord(value: unknown): R {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as R)
     : {};
 }
 
@@ -224,7 +219,7 @@ function resolveLlmReviewMode(
                 const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_json);
                 const candidateSignalSummary = asRecord(
                   template.selection_profile_candidate_signal_summary
-                );
+                ) as R;
                 const profileFamily = String(template.selection_profile_family ?? "");
                 const unresolvedDecision = String(selectionProfilePolicy.unresolvedDecision ?? "hold");
                 const llmReviewMode = resolveLlmReviewMode(profileFamily, selectionProfilePolicy);

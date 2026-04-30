@@ -24,6 +24,7 @@ import {
   formatAdminChannelProviderLabel,
   isAdminChannelProviderType,
 } from "../../../lib/channel-providers";
+import { asRecord } from "../../../lib/view-helpers";
 
 export const prerender = false;
 
@@ -42,10 +43,6 @@ const channelId = String(Astro.params.channelId ?? "");
 type R = Record<string, unknown>;
 const channel = await sdk.getChannel<R>(channelId);
 
-function asRecord(v: unknown): R {
-  return v != null && typeof v === "object" && !Array.isArray(v) ? (v as R) : {};
-}
-
 function asInt(v: unknown, fallback: number) {
   const parsed = typeof v === "number" && Number.isFinite(v) ? v : Number.parseInt(String(v ?? ""), 10);
   return Number.isFinite(parsed) ? Number(parsed) : fallback;
@@ -57,7 +54,7 @@ function fmt(v: unknown) {
   return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-const configJson = asRecord(channel.config_json);
+const configJson = asRecord<R>(channel.config_json);
 const rawProviderType = String(channel.provider_type ?? "").trim();
 const providerType = isAdminChannelProviderType(rawProviderType) ? rawProviderType : null;
 const providerLabel = providerType ? formatAdminChannelProviderLabel(providerType) : rawProviderType || "Unknown";

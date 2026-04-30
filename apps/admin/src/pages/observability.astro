@@ -15,6 +15,7 @@ import {
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
 import {
+  asRecord,
   createViewHrefResolver,
   parsePositivePage,
   resolvePageHref,
@@ -48,7 +49,6 @@ const [fetchRuns, llmReviews, llmUsageSummary, llmBudgetSummary] = await Promise
   sdk.getLlmBudgetSummary<R>(),
 ]);
 
-function asRecord(v: unknown): R { return v != null && typeof v === "object" && !Array.isArray(v) ? v as R : {}; }
 function asInt(v: unknown, fallback = 0): number {
   const parsed =
     typeof v === "number" && Number.isFinite(v)
@@ -64,12 +64,12 @@ function asFloat(v: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 function formatFetchRunSummary(run: R): string {
-  const metrics = asRecord(run.provider_metrics_json);
+  const metrics = asRecord<R>(run.provider_metrics_json);
   if (String(run.provider_type ?? "") === "website" && Object.keys(metrics).length > 0) {
     const staticAccepted = asInt(metrics.staticAcceptedCount, 0);
     const browserOnly = asInt(metrics.browserOnlyAcceptedCount, 0);
     const finalAccepted = asInt(metrics.finalAcceptedCount, 0);
-    const hits = asRecord(metrics.conditionalRequestHits);
+    const hits = asRecord<R>(metrics.conditionalRequestHits);
     const total304 =
       asInt(hits.homepage, 0) +
       asInt(hits.sitemap, 0) +
@@ -80,8 +80,8 @@ function formatFetchRunSummary(run: R): string {
   }
   return `${String(run.fetched_item_count ?? 0)} fetched / ${String(run.new_article_count ?? 0)} new / ${String(run.duplicate_suppressed_count ?? 0)} dupes`;
 }
-const llmUsage24h = asRecord((llmUsageSummary as R)["24h"]);
-const llmUsage7d = asRecord((llmUsageSummary as R)["7d"]);
+const llmUsage24h = asRecord<R>((llmUsageSummary as R)["24h"]);
+const llmUsage7d = asRecord<R>((llmUsageSummary as R)["7d"]);
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=observability`;
 const initialUsage24h = {
