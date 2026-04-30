@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 47 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 48 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing AutomationEditorWorkspace inspector panel shell extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-inspector-panel.tsx`; updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, task inspector internals, sequence settings internals, advanced JSON internals, header/palette/canvas/dialog rendering, copy/layout, server writes/API runtime stayed unchanged.
+- Worktree status: clean after committing compose proof testkit facade and waitFor wrapper unification.
+- Alignment note: latest committed stage touched `.aidp/work.md`, new `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs` and `infra/scripts/test-rss-multi-flow.mjs`; proof scenario logic, stack service lists, HTTP request semantics, database fixture SQL, Playwright assertions, MCP-specific diagnostics, compose files, package scripts, runtime services and product code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-48
+
+- Kind: Stage
+- Status: completed
+- In scope: add a narrow `infra/scripts/lib/compose-proof-testkit.mjs` facade for generic compose proof helpers and replace duplicated local `waitFor` wrapper functions in web viewport, UI button audit and RSS multi-flow proof scripts.
+- Out of scope: proof scenario logic, stack service lists, HTTP request semantics, database fixture SQL, Playwright assertions, MCP-specific diagnostics, compose files, package scripts, runtime services and product code.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs`, `infra/scripts/test-rss-multi-flow.mjs`.
+- Risk: medium, because proof scripts are gate infrastructure, but the stage only changes import ownership and preserves polling defaults.
+- Required proof: `pnpm lint`; `pnpm unit_tests:ts`; `git diff --check --`; targeted review that imports, polling defaults and waitFor call semantics remain equivalent.
+- Acceptance criteria: non-MCP compose proof scripts consume generic helpers through `compose-proof-testkit`; local duplicated waitFor wrappers are removed for the touched scripts.
+- Architecture note: affected concern is proof harness cohesion; stakeholder/consumer is maintainers running compose/UI/RSS proof gates; tradeoff is introducing a narrow shared facade before deeper harness extraction.
+- Implemented, with evidence: added `infra/scripts/lib/compose-proof-testkit.mjs` as a generic facade over compose/HTTP proof helpers plus `createWaitFor` for per-script polling defaults.
+- Implemented, with evidence: `test-web-viewports.mjs`, `test-ui-button-audit.mjs` and `test-rss-multi-flow.mjs` now import generic helpers from `compose-proof-testkit` and removed their local duplicated waitFor wrapper functions.
+- Scope note: proof scenario logic, stack service lists, HTTP request semantics, database fixture SQL, Playwright assertions, MCP-specific diagnostics, compose files, package scripts, runtime services and product code were not changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over infra scripts and Python ruff.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: imports, polling defaults and waitFor call semantics remain equivalent; web/UI scripts keep 120000 ms and 1500 ms defaults, RSS multi-flow keeps 180000 ms and 2000 ms defaults.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-47
 

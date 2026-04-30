@@ -14,9 +14,9 @@ import {
   runCommand,
   runCompose,
   selectAdminEmail,
-  waitFor as waitForShared,
+  createWaitFor,
   waitForHttpHealth,
-} from "./lib/mcp-http-testkit.mjs";
+} from "./lib/compose-proof-testkit.mjs";
 
 const requireFromFetchers = createRequire(
   new URL("../../services/fetchers/package.json", import.meta.url)
@@ -41,13 +41,7 @@ function log(message) {
   console.log(`[ui-button-audit] ${message}`);
 }
 
-async function waitFor(label, producer, predicate, options = {}) {
-  return await waitForShared(label, producer, predicate, {
-    timeoutMs: 120000,
-    intervalMs: 1500,
-    ...options,
-  });
-}
+const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
 function queryPostgres(env, sql) {
   const result = runCommand(

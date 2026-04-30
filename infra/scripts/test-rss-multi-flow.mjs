@@ -12,8 +12,8 @@ import {
   runCompose,
   runComposeCapture,
   selectAdminEmail,
-  waitFor as waitForShared,
-} from "./lib/mcp-http-testkit.mjs";
+  createWaitFor,
+} from "./lib/compose-proof-testkit.mjs";
 
 const SUCCESS_STATES = ["deduped", "embedded", "clustered", "matched", "notified"];
 const PROFILE_SEQUENCE = [
@@ -36,12 +36,10 @@ function log(message) {
   console.log(`[rss-multi-flow] ${message}`);
 }
 
+const waitFor = createWaitFor({ timeoutMs: 180000, intervalMs: 2000 });
+
 function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-async function waitFor(label, producer, predicate, { timeoutMs = 180000, intervalMs = 2000 } = {}) {
-  return await waitForShared(label, producer, predicate, { timeoutMs, intervalMs });
 }
 
 function getComposeServiceContainerId(service) {
