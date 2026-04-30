@@ -8,6 +8,7 @@ import {
   instantiateAutomationTemplate,
   type AutomationPaletteGroup,
 } from "../lib/automation-workspace";
+import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
 import { postJson, readText } from "./admin-client-helpers";
 
 interface AutomationTemplateGalleryProps {
@@ -144,7 +145,7 @@ export function AutomationTemplateGallery({
           {filteredTemplates.map((template) => (
             <Card
               key={template.id}
-              className="overflow-hidden border-white/10 bg-card/90 shadow-sm"
+              className={`overflow-hidden ${ADMIN_AUTOMATION_CARD_CLASS}`}
             >
               <div className={`h-2 w-full bg-gradient-to-r ${template.accent}`} />
               <CardHeader className="space-y-3">
@@ -195,7 +196,7 @@ export function AutomationTemplateGallery({
           ))}
         </div>
 
-        <Card className="border-white/10 bg-card/90 shadow-sm">
+        <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
           <CardHeader>
             <CardTitle>Available Node Library</CardTitle>
             <CardDescription>

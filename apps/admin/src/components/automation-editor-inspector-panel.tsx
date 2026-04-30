@@ -14,6 +14,7 @@ import type {
   AutomationPluginRecord,
   AutomationTaskDefinition,
 } from "../lib/automation-workspace";
+import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
 import { AutomationEditorAdvancedJson } from "./automation-editor-advanced-json";
 import { AutomationEditorSequenceSettings } from "./automation-editor-sequence-settings";
 import { AutomationEditorTaskInspector } from "./automation-editor-task-inspector";
@@ -70,7 +71,7 @@ export function AutomationEditorInspectorPanel({
   onApplyAdvancedJson,
 }: AutomationEditorInspectorPanelProps) {
   return (
-    <Card className="overflow-hidden border-white/10 bg-card/90 shadow-sm">
+    <Card className={`overflow-hidden ${ADMIN_AUTOMATION_CARD_CLASS}`}>
       <CardContent className="h-full p-0">
         <Tabs defaultValue="settings" className="flex h-full flex-col">
           <div className="border-b border-border/70 px-4 py-4">

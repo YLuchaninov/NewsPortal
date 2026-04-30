@@ -4,6 +4,7 @@ import type {
   AutomationPaletteGroup,
   AutomationPluginRecord,
 } from "../lib/automation-workspace";
+import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
 import { readText } from "./automation-editor-workspace-model";
 
 interface AutomationEditorPaletteProps {
@@ -24,7 +25,7 @@ export function AutomationEditorPalette({
   onAppendTask,
 }: AutomationEditorPaletteProps) {
   return (
-    <Card className="overflow-hidden border-white/10 bg-card/90 shadow-sm">
+    <Card className={`overflow-hidden ${ADMIN_AUTOMATION_CARD_CLASS}`}>
       <CardContent className="flex h-full flex-col gap-4 p-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Node Library</p>

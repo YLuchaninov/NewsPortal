@@ -6,6 +6,7 @@ import {
   AUTOMATION_TEMPLATES,
   createBlankLinearAutomation,
 } from "../lib/automation-workspace";
+import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
 import {
   ADMIN_LIVE_UPDATES_EVENT,
   isAdminLiveSurfaceSnapshot,
@@ -260,7 +261,7 @@ export function AutomationOverviewBoard({
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-        <Card className="border-white/10 bg-card/90 shadow-sm">
+        <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
           <CardHeader className="gap-4 border-b border-border/70">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
@@ -377,7 +378,7 @@ export function AutomationOverviewBoard({
         </Card>
 
         <div className="space-y-6">
-          <Card className="border-white/10 bg-card/90 shadow-sm">
+          <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
             <CardHeader>
               <CardTitle>Recent Failures</CardTitle>
               <CardDescription>
@@ -423,7 +424,7 @@ export function AutomationOverviewBoard({
             </CardContent>
           </Card>
 
-          <Card className="border-white/10 bg-card/90 shadow-sm">
+          <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
             <CardHeader>
               <CardTitle>Recent Outbox</CardTitle>
               <CardDescription>

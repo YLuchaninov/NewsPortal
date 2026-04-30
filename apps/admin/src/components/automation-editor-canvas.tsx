@@ -14,6 +14,7 @@ import {
 import { Card, CardContent } from "@newsportal/ui";
 
 import type { AutomationNodeData } from "../lib/automation-workspace";
+import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
 import { automationEditorNodeTypes } from "./automation-editor-flow-nodes";
 
 interface AutomationEditorCanvasProps {
@@ -36,7 +37,7 @@ export function AutomationEditorCanvas({
   onMoveEnd,
 }: AutomationEditorCanvasProps) {
   return (
-    <Card className="overflow-hidden border-white/10 bg-card/90 shadow-sm">
+    <Card className={`overflow-hidden ${ADMIN_AUTOMATION_CARD_CLASS}`}>
       <CardContent className="h-full p-0">
         <div className="border-b border-border/70 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">

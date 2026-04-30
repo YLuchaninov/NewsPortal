@@ -6,6 +6,7 @@ import {
   isSequenceRunCancellable,
   isSequenceRunRetryable,
 } from "../lib/automation-workspace";
+import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
 import {
   ADMIN_LIVE_UPDATES_EVENT,
   isAdminLiveSurfaceSnapshot,
@@ -194,7 +195,7 @@ export function AutomationExecutionsBoard({
       )}
 
       <div className="grid gap-6 xl:grid-cols-[0.96fr_1.04fr]">
-        <Card className="border-white/10 bg-card/90 shadow-sm">
+        <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
           <CardHeader className="border-b border-border/70">
             <CardTitle>Run History</CardTitle>
             <CardDescription>
@@ -246,7 +247,7 @@ export function AutomationExecutionsBoard({
         </Card>
 
         <div className="space-y-6">
-          <Card className="border-white/10 bg-card/90 shadow-sm">
+          <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
             <CardHeader className="border-b border-border/70">
               <CardTitle>Selected Run</CardTitle>
               <CardDescription>
@@ -335,7 +336,7 @@ export function AutomationExecutionsBoard({
             </CardContent>
           </Card>
 
-          <Card className="border-white/10 bg-card/90 shadow-sm">
+          <Card className={ADMIN_AUTOMATION_CARD_CLASS}>
             <CardHeader>
               <CardTitle>Recent Outbox Around This Lane</CardTitle>
               <CardDescription>
