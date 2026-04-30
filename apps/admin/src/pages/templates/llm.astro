@@ -17,9 +17,9 @@ import {
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
 import {
+  createPageHrefResolver,
   createViewHrefResolver,
   parsePositivePage,
-  resolvePageHref,
 } from "../../lib/view-helpers";
 
 export const prerender = false;
@@ -78,9 +78,7 @@ const templateViews = [
   { key: "all", label: "All", count: templates.items.length },
 ] as const;
 
-function resolveListHref(nextPage: number): string {
-  return resolvePageHref(Astro.url, nextPage, { defaultPage: DEFAULT_PAGE });
-}
+const resolveListHref = createPageHrefResolver(Astro.url, { defaultPage: DEFAULT_PAGE });
 
 const resolveViewHref = createViewHrefResolver(Astro.url, {
   defaultView: "active",
