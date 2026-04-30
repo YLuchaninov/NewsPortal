@@ -19,6 +19,7 @@ import {
 import {
   createPageHrefResolver,
   createViewHrefResolver,
+  formatTimestamp,
   parsePositivePage,
 } from "../../lib/view-helpers";
 
@@ -37,12 +38,6 @@ const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const TEMPLATE_PAGE_SIZE = 8;
 type R = Record<string, unknown>;
-
-function fmt(v: unknown) {
-  if (!v) return "—";
-  const d = new Date(String(v));
-  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const templates = await sdk.listLlmTemplatesPage<R>({ page, pageSize: TEMPLATE_PAGE_SIZE });
@@ -196,7 +191,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, {
                         <p class="text-sm font-semibold leading-5">{String(template.name ?? "Unnamed template")}</p>
                         <div class="admin-table-meta text-xs text-muted-foreground">
                           <p>Language: {String(template.language ?? "Any")}</p>
-                          <p>Updated {fmt(template.updated_at)}</p>
+                          <p>Updated {formatTimestamp(template.updated_at, { includeYear: false })}</p>
                         </div>
                       </div>
                     </td>

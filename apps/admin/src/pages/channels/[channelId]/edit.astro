@@ -24,7 +24,7 @@ import {
   formatAdminChannelProviderLabel,
   isAdminChannelProviderType,
 } from "../../../lib/channel-providers";
-import { asRecord } from "../../../lib/view-helpers";
+import { asRecord, formatTimestamp } from "../../../lib/view-helpers";
 
 export const prerender = false;
 
@@ -46,12 +46,6 @@ const channel = await sdk.getChannel<R>(channelId);
 function asInt(v: unknown, fallback: number) {
   const parsed = typeof v === "number" && Number.isFinite(v) ? v : Number.parseInt(String(v ?? ""), 10);
   return Number.isFinite(parsed) ? Number(parsed) : fallback;
-}
-
-function fmt(v: unknown) {
-  if (!v) return "—";
-  const d = new Date(String(v));
-  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 const configJson = asRecord<R>(channel.config_json);
@@ -113,12 +107,12 @@ const deleteDescription = storedItemCount > 0
           </div>
           <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Last success</p>
-            <p class="mt-2 text-sm font-medium">{fmt(channel.last_success_at)}</p>
+            <p class="mt-2 text-sm font-medium">{formatTimestamp(channel.last_success_at, { includeYear: false })}</p>
             <p class="mt-2 text-sm text-muted-foreground">Most recent successful fetch for this {providerSubject}.</p>
           </div>
           <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Next due</p>
-            <p class="mt-2 text-sm font-medium">{fmt(channel.next_due_at)}</p>
+            <p class="mt-2 text-sm font-medium">{formatTimestamp(channel.next_due_at, { includeYear: false })}</p>
             <p class="mt-2 text-sm text-muted-foreground">Live scheduler target after the last runtime update.</p>
           </div>
         </section>

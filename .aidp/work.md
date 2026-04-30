@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 61 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 62 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin asRecord helper adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/index.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/pages/templates/interests.astro` and `apps/admin/src/pages/channels/[channelId]/edit.astro`; record-narrowing helper ownership changed while page data loading, routes, rendering, copy, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin short timestamp helper adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/pages/templates/llm.astro` and `apps/admin/src/pages/channels/[channelId]/edit.astro`; short timestamp helper ownership changed while page data loading, routes, rendering, copy, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-62
+
+- Kind: Stage
+- Status: completed
+- In scope: replace identical local short timestamp `fmt` helpers in channels list, channel edit, observability and LLM templates pages with shared `formatTimestamp(..., { includeYear: false })`.
+- Out of scope: other timestamp helpers with different semantics, client-side live timestamp formatting, numeric formatting, page data loading, API calls, routes, layout, copy, visual redesign and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/pages/templates/llm.astro`, `apps/admin/src/pages/channels/[channelId]/edit.astro`.
+- Risk: low, because the existing local helpers and shared helper use the same empty fallback, invalid-date fallback and `en-US` month/day/hour/minute format when `includeYear` is false.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that empty, invalid-date and valid-date formatting semantics remain equivalent.
+- Acceptance criteria: touched admin pages no longer define duplicated local `fmt` helpers for short timestamps.
+- Architecture note: affected concern is admin page helper cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is centralizing repeated pure presentation formatting while leaving distinct timestamp formatters local.
+- Implemented, with evidence: channels list, channel edit, observability and LLM templates pages now use shared `formatTimestamp(..., { includeYear: false })`.
+- Scope note: other timestamp helpers with different semantics, client-side live timestamp formatting, numeric formatting, page data loading, API calls, routes, layout, copy, visual redesign and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: empty, invalid-date and valid-date formatting semantics remain equivalent because `formatTimestamp` keeps the same empty label, invalid-date string fallback and `en-US` month/day/hour/minute format when `includeYear` is false.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-61
 

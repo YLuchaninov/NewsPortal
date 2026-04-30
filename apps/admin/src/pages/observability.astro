@@ -17,6 +17,7 @@ import {
 import {
   asRecord,
   createViewHrefResolver,
+  formatTimestamp,
   parsePositivePage,
   resolvePageHref,
 } from "../lib/view-helpers";
@@ -143,11 +144,6 @@ const llmReviewsRevision = buildAdminLiveRevision([
   llmReviews.items[0]?.model_name ?? "",
 ]);
 
-function fmt(v: unknown) {
-  if (!v) return "—";
-  const d = new Date(String(v));
-  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 function fmtD(v: unknown, decimals = 2): string {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
   return isFinite(n) ? n.toFixed(decimals) : "0";
@@ -294,7 +290,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
                     }`}>{String(run.outcome_kind ?? "—")}</span>
                   </td>
                   <td class="px-4 py-2.5 hidden sm:table-cell text-xs text-muted-foreground">{formatFetchRunSummary(run)}</td>
-                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{fmt(run.started_at)}</td>
+                  <td class="px-4 py-2.5 text-xs text-muted-foreground">{formatTimestamp(run.started_at, { includeYear: false })}</td>
                   <td class="px-4 py-2.5 hidden md:table-cell text-xs text-muted-foreground">{String(run.fetch_duration_ms ?? "—")}ms</td>
                 </tr>
               ))}
@@ -357,7 +353,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
                   <td class="px-4 py-2.5">
                     <div class="admin-table-meta">
                       <div class="text-xs font-medium line-clamp-1">{String(r.article_title ?? r.doc_id ?? "—")}</div>
-                      <div class="text-[10px] text-muted-foreground">{fmt(r.created_at)}</div>
+                      <div class="text-[10px] text-muted-foreground">{formatTimestamp(r.created_at, { includeYear: false })}</div>
                     </div>
                   </td>
                   <td class="px-4 py-2.5">

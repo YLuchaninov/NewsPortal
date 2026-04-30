@@ -35,6 +35,7 @@ import {
   asRecord,
   createPageHrefResolver,
   createViewHrefResolver,
+  formatTimestamp,
   parsePositivePage,
 } from "../lib/view-helpers";
 
@@ -227,12 +228,6 @@ const sourceChannels = channels.items.map((c) => {
         : null,
   };
 });
-
-function fmt(v: unknown) {
-  if (!v) return "—";
-  const d = new Date(String(v));
-  return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 const resolvePageHref = createPageHrefResolver(Astro.url, { defaultPage: DEFAULT_PAGE });
 
@@ -580,7 +575,7 @@ const visibleChannels = sourceChannels.filter((channel) => {
                         </div>
                         <div class="admin-table-meta text-sm text-muted-foreground">
                           <p>Last result: <span class="font-medium text-foreground">{channel.lastResultKind}</span></p>
-                          <p>Next due: {fmt(channel.nextDueAt)}</p>
+                          <p>Next due: {formatTimestamp(channel.nextDueAt, { includeYear: false })}</p>
                         </div>
                       </div>
                     </td>
@@ -593,8 +588,8 @@ const visibleChannels = sourceChannels.filter((channel) => {
                     </td>
                     <td class="px-5 py-4 align-top text-sm text-muted-foreground">
                       <div class="admin-table-meta">
-                        <p>Last fetch: {fmt(channel.lastFetchAt)}</p>
-                        <p>Last success: {fmt(channel.lastSuccessAt)}</p>
+                        <p>Last fetch: {formatTimestamp(channel.lastFetchAt, { includeYear: false })}</p>
+                        <p>Last success: {formatTimestamp(channel.lastSuccessAt, { includeYear: false })}</p>
                       </div>
                     </td>
                     <td class="px-5 py-4 align-top">
