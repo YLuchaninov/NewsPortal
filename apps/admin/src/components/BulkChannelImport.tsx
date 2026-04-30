@@ -5,6 +5,7 @@ import {
   formatAdminChannelProviderLabel,
   type AdminChannelProviderType
 } from "../lib/channel-providers";
+import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -680,7 +681,7 @@ export function BulkChannelImport({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className={ADMIN_SMALL_CARD_CLASS}>
       <h2 className="mb-1 text-sm font-semibold">{viewModel.title}</h2>
       <p className="mb-1 text-[11px] text-muted-foreground">{viewModel.description}</p>
       <p className="mb-3 text-[11px] text-muted-foreground">{viewModel.helpText}</p>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type React from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, FormField, Input, Textarea } from "@newsportal/ui";
+import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
 
 interface LlmTemplateFormProps {
   action: string;
@@ -75,7 +76,7 @@ export function LlmTemplateForm({ action }: LlmTemplateFormProps) {
   const textareaCls = "min-h-0 text-xs";
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className={ADMIN_SMALL_CARD_CLASS}>
       <h2 className="font-semibold text-sm mb-1">Create LLM Template</h2>
       <p className="text-[11px] text-muted-foreground mb-3">
         LLM templates define the prompt sent to an external AI model when a content item lands in the
@@ -204,7 +205,7 @@ export function InterestTemplateForm({ action }: InterestTemplateFormProps) {
   const textareaCls = "min-h-0 text-xs";
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className={ADMIN_SMALL_CARD_CLASS}>
       <h2 className="font-semibold text-sm mb-1">Create System Interest</h2>
       <p className="text-[11px] text-muted-foreground mb-3">
         System interests are predefined global selection rules. Each one contains prototypes that

@@ -12,6 +12,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
 import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
@@ -273,7 +274,7 @@ const initialJobs = {
             <li>When matching quality looks stale but raw ingest still looks healthy.</li>
           </ul>
         </div>
-        <div class="rounded-xl border border-border bg-card p-4">
+        <div class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">What this job does not do</p>
           <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
             <li>It does not delete historical content.</li>
@@ -281,7 +282,7 @@ const initialJobs = {
             <li>It does not change fetch cadence or source health configuration.</li>
           </ul>
         </div>
-        <div class="rounded-xl border border-border bg-card p-4">
+        <div class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Next check after you queue it</p>
           <p class="mt-2 text-xs text-muted-foreground">
             Watch the live jobs section below for status, progress, and the exact selection-profile

@@ -13,6 +13,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
 import { asRecord, formatTimestamp } from "../lib/view-helpers";
 
 export const prerender = false;
@@ -191,7 +192,7 @@ const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
       ) : (
         <div class="grid grid-cols-2 gap-3 xl:grid-cols-6">
           {kpiCards.map(({ label, value, color }) => (
-            <div class="rounded-xl border border-border bg-card p-4">
+            <div class={ADMIN_SMALL_CARD_CLASS}>
               <p class="mb-1 text-xs text-muted-foreground">{label}</p>
               <p class={`text-2xl font-bold ${color}`}>{value}</p>
             </div>

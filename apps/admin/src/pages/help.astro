@@ -8,6 +8,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
+import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export const prerender = false;
 const session = await resolveAdminSession(Astro.request);
@@ -68,7 +69,7 @@ const pagePaths = {
       </div>
     </section>
 
-    <nav class="rounded-xl border border-border bg-card p-4">
+    <nav class={ADMIN_SMALL_CARD_CLASS}>
       <p class="text-sm font-semibold mb-2">Jump to</p>
       <ul class="grid gap-1 sm:grid-cols-3 text-sm">
         <li><a href="#overview" class="text-primary hover:underline">System Overview</a></li>
@@ -86,17 +87,17 @@ const pagePaths = {
         {DEFAULT_BRAND_CONFIG.productName} remains a zero-shot acquisition, filtering, and notification system. The operator model is `acquire -&gt; normalize -&gt; canonicalize -&gt; cluster/verify -&gt; interest filter -&gt; final select`, and the UI is now split so each surface owns one clearer job in that path.
       </p>
       <div class="grid gap-3 md:grid-cols-3">
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Acquire</p>
           <p class="mt-2 text-sm font-medium">Channels, Resources, Discovery</p>
           <p class="mt-2 text-xs text-muted-foreground">Bring sources in, inspect source quality, and separate mission fit from generic recall quality before content enters the editorial pipeline.</p>
         </article>
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Decide</p>
           <p class="mt-2 text-sm font-medium">Articles, Clusters, Rules</p>
           <p class="mt-2 text-xs text-muted-foreground">Inspect canonical evidence, verification strength, moderation state, and the rules that shape system or user matching.</p>
         </article>
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Maintain</p>
           <p class="mt-2 text-sm font-medium">Observability, Reindex, Automation</p>
           <p class="mt-2 text-xs text-muted-foreground">Monitor fetch health and budgets, queue bounded repair work, and tune recurring maintenance workflows without mixing those jobs into content triage.</p>
@@ -110,7 +111,7 @@ const pagePaths = {
         <a href={pagePaths.discovery} class="text-primary hover:underline">Discovery</a> is a dual-path operator surface. Graph-first missions own mission planning, hypotheses, and portfolio fit, while recall owns neutral acquisition backlog, source-quality snapshots, and bounded promotion into normal channels.
       </p>
       <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
-        <div class="rounded-xl border border-border bg-card p-4">
+        <div class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold">Debug order</p>
           <ol class="mt-3 list-decimal list-inside space-y-2 text-xs text-muted-foreground">
             <li>Check mission fit or recall quality before changing downstream rules.</li>
@@ -118,7 +119,7 @@ const pagePaths = {
             <li>Only promote a discovery result once the source quality looks durable enough for normal channel operations.</li>
           </ol>
         </div>
-        <div class="rounded-xl border border-border bg-card p-4">
+        <div class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold">What not to conflate</p>
           <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
             <li><strong>Mission fit</strong> is not the same thing as final zero-shot filtering.</li>
@@ -132,7 +133,7 @@ const pagePaths = {
     <section id="operations" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">Operational Playbooks</h2>
       <div class="grid gap-3 md:grid-cols-2">
-        <article id="channels" class="rounded-xl border border-border bg-card p-4">
+        <article id="channels" class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Channels &amp; Source Onboarding</p>
           <p class="mt-2 text-xs text-muted-foreground">
             Use <a href={pagePaths.channels} class="text-primary hover:underline">Channels</a> for normal source operations. RSS stays the fastest editorial path; website channels keep generic discovery semantics for collections, entities, documents, and hidden feeds.
@@ -143,7 +144,7 @@ const pagePaths = {
             <li>Use Observability to confirm whether the problem is fetch health before editing source rules.</li>
           </ul>
         </article>
-        <article id="articles" class="rounded-xl border border-border bg-card p-4">
+        <article id="articles" class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Content &amp; Moderation</p>
           <p class="mt-2 text-xs text-muted-foreground">
             <a href={pagePaths.articles} class="text-primary hover:underline">Articles</a> is the main triage surface for editorial observations, canonical document ownership, verification, and final-selection read model state.
@@ -154,13 +155,13 @@ const pagePaths = {
             <li>Read raw processing state only after the summary area points to a pipeline problem.</li>
           </ul>
         </article>
-        <article id="clusters" class="rounded-xl border border-border bg-card p-4">
+        <article id="clusters" class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Event Clusters</p>
           <p class="mt-2 text-xs text-muted-foreground">
             <a href={pagePaths.clusters} class="text-primary hover:underline">Clusters</a> groups canonical documents that describe the same event. Use it when you need corroboration context, duplicate pressure, or verification strength instead of one row’s local metadata.
           </p>
         </article>
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">User-specific tuning</p>
           <p class="mt-2 text-xs text-muted-foreground">
             <a href={appPath("/user-interests")} class="text-primary hover:underline">User Interests</a> now opens as a focused workspace after lookup. Keep the left queue for prioritization and use the main pane for the one interest you are actively editing or compiling.
@@ -172,7 +173,7 @@ const pagePaths = {
     <section id="rules" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">Rules &amp; AI Review</h2>
       <div class="grid gap-3 md:grid-cols-2">
-        <article id="templates" class="rounded-xl border border-border bg-card p-4">
+        <article id="templates" class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">LLM &amp; System Interests</p>
           <p class="mt-2 text-xs text-muted-foreground">
             <a href={pagePaths.llmTemplates} class="text-primary hover:underline">LLM Templates</a> define review prompts, while <a href={pagePaths.interestTemplates} class="text-primary hover:underline">System Interests</a> define reusable prototypes, hard constraints, time windows, and content-kind gates for system selection.
@@ -181,7 +182,7 @@ const pagePaths = {
             Matching constraints sync into live criteria for fresh ingest and historical reindex, while <code class="rounded bg-muted px-1 py-0.5">allowed_content_kinds</code> remains the gate for what can appear in the system-selected collection.
           </p>
         </article>
-        <article id="gray-zone" class="rounded-xl border border-border bg-card p-4">
+        <article id="gray-zone" class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Gray Zone &amp; AI Review</p>
           <p class="mt-2 text-xs text-muted-foreground">
             The baseline LLM lane currently applies only to system-interest gray-zone decisions. User-interest gray-zone review stays suppressed in the baseline tier.
@@ -218,7 +219,7 @@ const pagePaths = {
             <li>When matching quality looks stale but ingest health still looks normal.</li>
           </ul>
         </article>
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">What maintenance does not do</p>
           <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
             <li>It does not delete stored content.</li>
@@ -238,15 +239,15 @@ const pagePaths = {
         The <a href={pagePaths.observability} class="text-primary hover:underline">Observability</a> page is split into fetch health and AI review &amp; budget so source instability and review-cost pressure are debugged separately.
       </p>
       <div class="grid gap-3 md:grid-cols-3">
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Fetch Runs</p>
           <p class="mt-2 text-xs text-muted-foreground">Each row is one poll of a channel. High error counts mean inspect the source first, not the matching rules.</p>
         </article>
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">LLM Reviews</p>
           <p class="mt-2 text-xs text-muted-foreground">Each row is one gray-zone review with decision, tokens, cost, and latency. Use it to watch review pressure rather than article correctness.</p>
         </article>
-        <article class="rounded-xl border border-border bg-card p-4">
+        <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Budget state</p>
           <p class="mt-2 text-xs text-muted-foreground">Track remaining monthly budget, hard-stop state, and post-cap policy here before changing prompts or thresholds elsewhere.</p>
         </article>

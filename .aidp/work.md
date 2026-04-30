@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 70 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 71 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin card class adoption on channel onboarding/edit pages.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/pages/channels/new.astro`, `apps/admin/src/pages/channels/import.astro` and `apps/admin/src/pages/channels/[channelId]/edit.astro`; class ownership changed while layout, copy, routes, data loading, visual design, channel contracts and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin small card class adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, help/dashboard/reindex pages and selected live/template/import React components; class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-71
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared admin small card class and replace exact `rounded-xl border border-border bg-card p-4` strings in help/dashboard/reindex/live/template/import surfaces.
+- Out of scope: hero/section cards, cards with different padding/background/borders, copy, layout semantics, visual redesign, data loading, routes and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/admin-ui-classes.ts`, `apps/admin/src/pages/help.astro`, `apps/admin/src/pages/index.astro`, `apps/admin/src/pages/reindex.astro`, `apps/admin/src/components/LiveDashboardKpiGrid.tsx`, `apps/admin/src/components/LiveObservabilitySummary.tsx`, `apps/admin/src/components/TemplateFormsIsland.tsx`, `apps/admin/src/components/BulkChannelImport.tsx`.
+- Risk: low-medium, because this touches several UI surfaces but only replaces exact small-card class strings with a shared constant.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that replaced class strings are exact matches and local element semantics remain unchanged.
+- Acceptance criteria: selected surfaces no longer repeat the exact small card class string inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is a shared class constant rather than a cross-framework component.
+- Implemented, with evidence: `ADMIN_SMALL_CARD_CLASS` was added to `apps/admin/src/lib/admin-ui-classes.ts`.
+- Implemented, with evidence: help, dashboard, reindex, live KPI/observability, template form and bulk import surfaces now use the shared small card class.
+- Scope note: hero/section cards, cards with different padding/background/borders, copy, layout semantics, visual redesign, data loading, routes and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: exact `rounded-xl border border-border bg-card p-4` strings were removed from the declared files and local element semantics (`nav`, `article`, `div`) stayed unchanged.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-70
 

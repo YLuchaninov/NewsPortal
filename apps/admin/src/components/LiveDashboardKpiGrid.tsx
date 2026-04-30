@@ -6,6 +6,7 @@ import {
   type AdminDashboardSummarySnapshot,
   type AdminLiveUpdatesEventDetail,
 } from "../lib/live-updates";
+import { ADMIN_SMALL_CARD_CLASS } from "../lib/admin-ui-classes";
 
 interface LiveDashboardKpiGridProps {
   initialSummary: AdminDashboardSummarySnapshot;
@@ -104,7 +105,7 @@ export function LiveDashboardKpiGrid({
   return (
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
       {buildCards(summary).map(({ label, value, color }) => (
-        <div key={label} className="rounded-xl border border-border bg-card p-4">
+        <div key={label} className={ADMIN_SMALL_CARD_CLASS}>
           <p className="mb-1 text-xs text-muted-foreground">{label}</p>
           <p className={`text-2xl font-bold ${color}`}>{value}</p>
         </div>
