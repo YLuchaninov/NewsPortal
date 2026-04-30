@@ -6,6 +6,7 @@ import {
   fmtMoney,
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
+import { ADMIN_BACKGROUND_TILE_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   attachableProfiles: DiscoveryRecord[];
@@ -146,7 +147,7 @@ const {
         />
       </div>
 
-      <form method="post" action={bffPath} class="grid gap-3 rounded-2xl border border-border bg-background p-4 md:grid-cols-2">
+      <form method="post" action={bffPath} class={`grid gap-3 ${ADMIN_BACKGROUND_TILE_CLASS} md:grid-cols-2`}>
         <input type="hidden" name="intent" value="update_mission" />
         <input type="hidden" name="missionId" value={missionId} />
         <input type="hidden" name="redirectTo" value={currentPath} />

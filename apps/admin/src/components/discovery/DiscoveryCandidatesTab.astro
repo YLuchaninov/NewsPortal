@@ -9,6 +9,7 @@ import {
   type DiscoveryRecord,
 } from "../../lib/server/discovery-view-model";
 import { resolveDiscoveryPolicyExplainability } from "../../lib/server/operator-surfaces";
+import { ADMIN_BACKGROUND_TILE_CLASS } from "../../lib/admin-ui-classes";
 
 type Props = {
   bffPath: string;
@@ -168,7 +169,7 @@ const {
           </div>
 
           {String(candidate.status ?? "pending") === "pending" ? (
-            <div class="grid gap-3 rounded-2xl border border-border bg-background p-4">
+            <div class={`grid gap-3 ${ADMIN_BACKGROUND_TILE_CLASS}`}>
               <div class="flex flex-wrap gap-2">
                 <form method="post" action={bffPath} class="flex gap-2">
                   <input type="hidden" name="intent" value="review_candidate" />

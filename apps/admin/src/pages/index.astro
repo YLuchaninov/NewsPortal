@@ -15,6 +15,7 @@ import {
 } from "../lib/server/browser-flow";
 import {
   ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
   ADMIN_SMALL_CARD_CLASS,
 } from "../lib/admin-ui-classes";
 import { asRecord, formatTimestamp } from "../lib/view-helpers";
@@ -204,7 +205,7 @@ const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
       )}
 
       <div class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-base font-semibold">Needs attention now</h2>
@@ -254,7 +255,7 @@ const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
           </div>
         </section>
 
-        <section class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section class={ADMIN_SECTION_CARD_CLASS}>
           <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-base font-semibold">Continue recent work</h2>

@@ -1,4 +1,5 @@
 import { FormField, Input } from "@newsportal/ui";
+import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 
 import {
   boolToString,
@@ -274,7 +275,7 @@ export function ChannelEditorForm({
       )}
 
       <details
-        className="group rounded-2xl border border-border bg-card p-5 shadow-sm"
+        className={`group ${ADMIN_SECTION_CARD_CLASS}`}
         open={mode === "edit" && !isRss}
       >
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">

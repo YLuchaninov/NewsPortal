@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 72 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 73 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin hero card adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md` and remaining admin Astro/React surfaces that repeated exact `rounded-[1.75rem] border border-border bg-card p-6 shadow-sm`; class ownership changed while layout, copy, routes, data loading, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing residual shared admin section/background card adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, dashboard, discovery and channel editor surfaces with remaining exact section/background card class strings; class ownership changed while layout, copy, routes, data loading, form behavior, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-73
+
+- Kind: Stage
+- Status: completed
+- In scope: replace remaining exact `rounded-2xl border border-border bg-card p-5 shadow-sm` and `rounded-2xl border border-border bg-background p-4` strings in dashboard, channel editor and selected discovery surfaces with existing shared constants.
+- Out of scope: non-exact card strings, copy, layout semantics, visual redesign, data loading, routes, form behavior, BFF writes and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/index.astro`, `apps/admin/src/components/ChannelEditorForm.tsx`, `apps/admin/src/components/discovery/DiscoveryProfileList.astro`, `apps/admin/src/components/discovery/DiscoveryCandidatesTab.astro`, `apps/admin/src/components/discovery/DiscoveryMissionWorkspaceContent.astro`.
+- Risk: low-medium, because this touches dashboard/discovery/channel editor UI wrappers but only exact class strings are replaced with existing shared constants.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that local `group`, `grid gap-3`, text suffixes and responsive suffixes remain equivalent.
+- Acceptance criteria: declared surfaces no longer repeat the remaining exact shared section/background card class strings inline.
+- Architecture note: affected concern is admin UI primitive cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is shared constants without changing form or discovery behavior.
+- Implemented, with evidence: dashboard sections now use `ADMIN_SECTION_CARD_CLASS`.
+- Implemented, with evidence: `ChannelEditorForm` advanced details composes `group` with `ADMIN_SECTION_CARD_CLASS`.
+- Implemented, with evidence: selected discovery profile/candidate/mission forms now compose local grid/responsive/text classes with `ADMIN_BACKGROUND_TILE_CLASS`.
+- Scope note: non-exact card strings, copy, layout semantics, visual redesign, data loading, routes, form behavior, BFF writes and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: targeted `rg` no longer finds the main exact inline admin card classes in `apps/admin/src/pages` or `apps/admin/src/components`; local `group`, `grid gap-3`, `md:grid-cols-2` and muted-text suffixes remain composed around shared constants.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-72
 
