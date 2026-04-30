@@ -17,9 +17,9 @@ import {
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
 import {
+  createViewHrefResolver,
   parsePositivePage,
   resolvePageHref,
-  resolveViewHref as resolveAdminViewHref,
 } from "../../lib/view-helpers";
 
 export const prerender = false;
@@ -76,12 +76,10 @@ function resolveListHref(nextPage: number): string {
   return resolvePageHref(Astro.url, nextPage, { defaultPage: DEFAULT_PAGE });
 }
 
-function resolveViewHref(view: string): string {
-  return resolveAdminViewHref(Astro.url, view, {
-    defaultView: "active",
-    resetPageParam: "page",
-  });
-}
+const resolveViewHref = createViewHrefResolver(Astro.url, {
+  defaultView: "active",
+  resetPageParam: "page",
+});
 
 function asPolicyRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)

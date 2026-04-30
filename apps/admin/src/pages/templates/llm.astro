@@ -17,9 +17,9 @@ import {
   ADMIN_TABLE_HEADER_CLASS,
 } from "../../lib/admin-ui-classes";
 import {
+  createViewHrefResolver,
   parsePositivePage,
   resolvePageHref,
-  resolveViewHref as resolveAdminViewHref,
 } from "../../lib/view-helpers";
 
 export const prerender = false;
@@ -82,12 +82,10 @@ function resolveListHref(nextPage: number): string {
   return resolvePageHref(Astro.url, nextPage, { defaultPage: DEFAULT_PAGE });
 }
 
-function resolveViewHref(view: string): string {
-  return resolveAdminViewHref(Astro.url, view, {
-    defaultView: "active",
-    resetPageParam: "page",
-  });
-}
+const resolveViewHref = createViewHrefResolver(Astro.url, {
+  defaultView: "active",
+  resetPageParam: "page",
+});
 ---
 
 <AdminShell title="LLM Templates — Admin" session={session} flash={flash} activeNav="llm-templates">

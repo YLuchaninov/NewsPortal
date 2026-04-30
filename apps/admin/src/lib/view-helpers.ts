@@ -80,14 +80,19 @@ export function resolveViewHref(
   {
     defaultView,
     resetPageParam,
+    resetParams = [],
   }: {
     defaultView: string;
     resetPageParam?: string;
+    resetParams?: string[];
   }
 ): string {
   const target = new URL(url);
   if (resetPageParam) {
     target.searchParams.delete(resetPageParam);
+  }
+  for (const paramName of resetParams) {
+    target.searchParams.delete(paramName);
   }
   if (view === defaultView) {
     target.searchParams.delete("view");
@@ -95,4 +100,15 @@ export function resolveViewHref(
     target.searchParams.set("view", view);
   }
   return `${target.pathname}${target.search}`;
+}
+
+export function createViewHrefResolver(
+  url: URL,
+  options: {
+    defaultView: string;
+    resetPageParam?: string;
+    resetParams?: string[];
+  }
+): (view: string) => string {
+  return (view: string) => resolveViewHref(url, view, options);
 }

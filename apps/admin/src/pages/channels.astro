@@ -31,7 +31,7 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
-import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
+import { createPageHrefResolver, createViewHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -252,15 +252,7 @@ const viewOptions = [
   { key: "email_imap", label: "Email IMAP", count: emailImapCount },
 ] as const;
 
-function resolveViewHref(view: string): string {
-  const target = new URL(Astro.url);
-  if (view === "all") {
-    target.searchParams.delete("view");
-  } else {
-    target.searchParams.set("view", view);
-  }
-  return `${target.pathname}${target.search}`;
-}
+const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "all" });
 
 const visibleChannels = sourceChannels.filter((channel) => {
   if (currentView === "attention") {

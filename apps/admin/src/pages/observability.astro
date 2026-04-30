@@ -15,9 +15,9 @@ import {
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
 import {
+  createViewHrefResolver,
   parsePositivePage,
   resolvePageHref,
-  resolveViewHref as resolveAdminViewHref,
 } from "../lib/view-helpers";
 
 export const prerender = false;
@@ -160,9 +160,7 @@ function resolveTableHref(paramName: string, nextPage: number): string {
   });
 }
 
-function resolveViewHref(view: string): string {
-  return resolveAdminViewHref(Astro.url, view, { defaultView: "fetch" });
-}
+const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch" });
 ---
 
 <AdminShell

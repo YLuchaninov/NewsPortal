@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 58 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 59 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,32 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared admin page href resolver adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/clusters.astro` and `apps/admin/src/pages/resources.astro`; href resolver ownership changed while pagination URL semantics, selected-param reset behavior, data loading, routes, layout, copy, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin view-tab href resolver adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/pages/templates/interests.astro` and `apps/admin/src/pages/templates/llm.astro`; view href resolver ownership changed while tab URL semantics, page/selected reset behavior, data loading, routes, layout, copy, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-59
+
+- Kind: Stage
+- Status: completed
+- In scope: extend admin `resolveViewHref` with optional reset params, add `createViewHrefResolver`, and replace repeated local view-tab href functions in articles, channels, observability and template list pages.
+- Out of scope: pagination/list href helpers, preview href helpers, tab definitions/counts, query parameter policy beyond preserving existing reset behavior, page data loading, API calls, auth/session behavior, routes, layout, copy, visual redesign and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/observability.astro`, `apps/admin/src/pages/templates/interests.astro`, `apps/admin/src/pages/templates/llm.astro`.
+- Risk: low-medium, because admin tab links are operator-visible, but the helper delegates to existing view-href logic and preserves reset behavior as explicit options.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that default-view deletion, non-default view setting and page/selected reset semantics remain equivalent.
+- Acceptance criteria: touched admin pages no longer define duplicated local `resolveViewHref(view)` functions.
+- Architecture note: affected concern is admin page helper cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is a tiny binder helper plus explicit reset params instead of repeated local URL mutation code.
+- Implemented, with evidence: admin `resolveViewHref` now accepts optional `resetParams`, and `createViewHrefResolver` delegates to it.
+- Implemented, with evidence: articles page now uses `createViewHrefResolver(Astro.url, { defaultView: "needs-review", resetParams: ["selected", "page"] })`.
+- Implemented, with evidence: channels and observability pages now use `createViewHrefResolver` with their existing default views and no extra reset.
+- Implemented, with evidence: interest and LLM template list pages now use `createViewHrefResolver` with `defaultView: "active"` and `resetPageParam: "page"`.
+- Scope note: pagination/list href helpers, preview href helpers, tab definitions/counts, query parameter policy beyond preserving existing reset behavior, page data loading, API calls, auth/session behavior, routes, layout, copy, visual redesign and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: default-view deletion, non-default view setting and page/selected reset semantics remain equivalent through explicit helper options.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-58
 
