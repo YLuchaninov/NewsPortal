@@ -44,6 +44,17 @@ export function createWaitFor(defaultOptions = {}) {
   };
 }
 
+export function readCookieValue(cookie) {
+  const separatorIndex = cookie.indexOf("=");
+  if (separatorIndex < 0) {
+    throw new Error(`Invalid cookie format: ${cookie}`);
+  }
+  return {
+    name: cookie.slice(0, separatorIndex),
+    value: cookie.slice(separatorIndex + 1),
+  };
+}
+
 export function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }

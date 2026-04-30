@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 51 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 52 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared compose Postgres helper adoption in MVP/discovery admin proofs.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-mvp-internal.mjs` and `infra/scripts/test-discovery-admin-flow.mjs`; SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code stayed unchanged.
+- Worktree status: clean after committing shared cookie parser adoption in web viewport and UI button audit proof scripts.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs` and `infra/scripts/test-ui-button-audit.mjs`; cookie splitting/error semantics remained equivalent while browser flows, auth setup, SQL statements, fixture data, compose services, package scripts, runtime services and product code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-52
+
+- Kind: Stage
+- Status: completed
+- In scope: add a shared cookie parsing helper to `compose-proof-testkit`, then replace identical local `readCookieValue` helpers in web viewport and UI button audit proof scripts.
+- Out of scope: browser flow logic, auth user setup/cleanup, SQL statements, fixture data, stack service lists, HTTP request semantics, Playwright assertions, compose files, package scripts, runtime services and product code.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs`.
+- Risk: medium, because these proof scripts drive stateful UI/admin gates, but the stage only centralizes identical cookie parsing behavior.
+- Required proof: `pnpm lint`; `pnpm unit_tests:ts`; `git diff --check --`; targeted review that cookie name/value splitting and invalid-cookie error semantics remain equivalent.
+- Acceptance criteria: web viewport and UI button audit scripts no longer own duplicated local cookie parsing helpers.
+- Architecture note: affected concern is proof harness cohesion; stakeholder/consumer is maintainers running viewport and UI audit gates; tradeoff is adding a narrow shared helper while keeping proof scenario logic local.
+- Implemented, with evidence: added shared `readCookieValue` to `infra/scripts/lib/compose-proof-testkit.mjs`.
+- Implemented, with evidence: `test-web-viewports.mjs` and `test-ui-button-audit.mjs` now import `readCookieValue` from the shared compose proof testkit and no longer define local copies.
+- Scope note: browser flow logic, auth user setup/cleanup, SQL statements, fixture data, stack service lists, HTTP request semantics, Playwright assertions, compose files, package scripts, runtime services and product code were not changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over infra scripts and Python ruff.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: cookie name/value splitting and invalid-cookie error semantics remain equivalent to the removed local helpers.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-51
 

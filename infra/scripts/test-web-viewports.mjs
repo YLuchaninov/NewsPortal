@@ -9,6 +9,7 @@ import {
   queryPostgres,
   queryPostgresInt,
   readAllowlistEntries,
+  readCookieValue,
   readEnvFile,
   requireConfigured,
   runCompose,
@@ -58,17 +59,6 @@ async function ensureComposeStack() {
     waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health", healthOptions),
     waitForHttpHealth("nginx", "http://127.0.0.1:8080/health", healthOptions),
   ]);
-}
-
-function readCookieValue(cookie) {
-  const separatorIndex = cookie.indexOf("=");
-  if (separatorIndex < 0) {
-    throw new Error(`Invalid cookie format: ${cookie}`);
-  }
-  return {
-    name: cookie.slice(0, separatorIndex),
-    value: cookie.slice(separatorIndex + 1),
-  };
 }
 
 async function waitForVisible(locator, label) {
