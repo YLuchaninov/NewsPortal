@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 45 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 46 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,10 +57,29 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing AutomationEditorWorkspace sequence metadata panel extraction.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-sequence-settings.tsx`; save/build handler bodies, workflow state, graph transforms, selected-task inspector rendering, advanced JSON fallback, header/palette/canvas/dialog rendering, copy/layout, server writes/API runtime stayed unchanged.
+- Worktree status: clean after committing AutomationEditorWorkspace selected-task inspector extraction.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-task-inspector.tsx`; updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, sequence metadata panel, advanced JSON fallback, header/palette/canvas/dialog rendering, copy/layout, server writes/API runtime stayed unchanged.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-46
+
+- Kind: Stage
+- Status: completed
+- In scope: move AutomationEditorWorkspace selected-task inspector into a focused `automation-editor-task-inspector.tsx` component.
+- Out of scope: updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, sequence metadata panel, advanced JSON fallback, header/palette/canvas/dialog rendering, copy changes, layout changes, visual redesign, server writes and API/runtime code.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/components/AutomationEditorWorkspace.tsx` and new `apps/admin/src/components/automation-editor-task-inspector.tsx`.
+- Risk: medium-high, because the inspector edits task definitions, retry policy and options JSON, but the stage only moves markup and preserves callback wiring.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that selected-task copy, field bindings, options JSON validation message, retry/default values and move/remove actions remain equivalent.
+- Acceptance criteria: selected-task inspector renders through the new component with equivalent controlled fields and actions; task update, move and remove logic remain in the workspace.
+- Architecture note: affected concern is admin automation editor cohesion; stakeholder/consumer is admin/operator workflow editing; tradeoff is separating task form presentation from graph orchestration.
+- Implemented, with evidence: added `apps/admin/src/components/automation-editor-task-inspector.tsx` with selected-step labels, module selector, notes, options JSON editor, enabled switch, retry fields, timeout and move/remove actions.
+- Implemented, with evidence: `AutomationEditorWorkspace.tsx` now renders `AutomationEditorTaskInspector` while `updateSelectedTask`, node ordering and remove logic remain local.
+- Scope note: updateSelectedTask implementation, node ordering algorithms, graph transforms, save/run/archive handlers, sequence metadata panel, advanced JSON fallback, header/palette/canvas/dialog rendering, copy, layout, visual redesign, server writes and API/runtime code were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: selected-task copy, field bindings, options JSON validation message, retry/default values and move/remove actions remain equivalent through props.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-45
 
