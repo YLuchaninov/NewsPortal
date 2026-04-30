@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 57 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 58 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,31 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing shared web page href resolver adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/web/src/lib/view-helpers.ts`, `apps/web/src/pages/index.astro`, `apps/web/src/pages/matches.astro`, `apps/web/src/pages/saved.astro`, `apps/web/src/pages/following.astro` and `apps/web/src/pages/notifications.astro`; href resolver ownership changed while pagination URL semantics, data loading, routes, layout, copy, visual design and runtime services stayed unchanged.
+- Worktree status: clean after committing shared admin page href resolver adoption.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/clusters.astro` and `apps/admin/src/pages/resources.astro`; href resolver ownership changed while pagination URL semantics, selected-param reset behavior, data loading, routes, layout, copy, visual design and runtime services stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-58
+
+- Kind: Stage
+- Status: completed
+- In scope: extend admin `resolvePageHref` with optional reset params, add `createPageHrefResolver`, and replace repeated local page-href functions in articles, channels, clusters and resources pages.
+- Out of scope: view-tab href helpers, preview href helpers, pagination component behavior, query parameter policy beyond preserving existing selected reset, page data loading, API calls, auth/session behavior, routes, layout, copy, visual redesign and runtime services.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/lib/view-helpers.ts`, `apps/admin/src/pages/articles.astro`, `apps/admin/src/pages/channels.astro`, `apps/admin/src/pages/clusters.astro`, `apps/admin/src/pages/resources.astro`.
+- Risk: low-medium, because admin pagination links are operator-visible, but the helper delegates to the existing page-href implementation and preserves selected-param reset as an explicit option.
+- Required proof: `pnpm typecheck`; `pnpm lint`; `git diff --check --`; targeted review that page query preservation, default-page deletion and selected-param reset semantics remain equivalent.
+- Acceptance criteria: touched admin pages no longer define duplicated local `resolvePageHref(nextPage)` functions.
+- Architecture note: affected concern is admin page helper cohesion; stakeholder/consumer is admin operators and maintainers; tradeoff is a tiny binder helper plus explicit reset params instead of repeated local URL mutation code.
+- Implemented, with evidence: admin `resolvePageHref` now accepts optional `resetParams`, and `createPageHrefResolver` delegates to it.
+- Implemented, with evidence: articles and clusters pages now use `createPageHrefResolver(Astro.url, { defaultPage: DEFAULT_PAGE, resetParams: ["selected"] })`.
+- Implemented, with evidence: channels and resources pages now use `createPageHrefResolver(Astro.url, { defaultPage: DEFAULT_PAGE })`.
+- Scope note: view-tab href helpers, preview href helpers, pagination component behavior, query parameter policy beyond preserving existing selected reset, page data loading, API calls, auth/session behavior, routes, layout, copy, visual redesign and runtime services were not changed.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm lint` passed, including TS ESLint and Python ruff.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: page query preservation, default-page deletion and selected-param reset semantics remain equivalent through explicit `resetParams`.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-57
 

@@ -31,7 +31,7 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
-import { parsePositivePage } from "../lib/view-helpers";
+import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -232,15 +232,7 @@ function fmt(v: unknown) {
   return isNaN(d.getTime()) ? String(v) : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function resolvePageHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, { defaultPage: DEFAULT_PAGE });
 
 const attentionCount = sourceChannels.filter((channel) => channel.needsAttention).length;
 const pausedCount = sourceChannels.filter((channel) => !channel.isActive).length;

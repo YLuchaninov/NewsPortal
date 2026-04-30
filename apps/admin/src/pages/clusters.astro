@@ -12,7 +12,7 @@ import {
   resolveAdminAppPath,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
-import { formatTimestamp, parsePositivePage } from "../lib/view-helpers";
+import { createPageHrefResolver, formatTimestamp, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -38,16 +38,10 @@ const selectedCluster =
   null;
 const CLUSTERS_PANE_ID = "clusters-preview";
 
-function resolvePageHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  target.searchParams.delete("selected");
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, {
+  defaultPage: DEFAULT_PAGE,
+  resetParams: ["selected"],
+});
 
 function resolvePreviewHref(clusterId: string): string {
   const target = new URL(Astro.url);

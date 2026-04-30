@@ -44,18 +44,34 @@ export function resolvePageHref(
   {
     pageParam = "page",
     defaultPage,
+    resetParams = [],
   }: {
     pageParam?: string;
     defaultPage: number;
+    resetParams?: string[];
   }
 ): string {
   const target = new URL(url);
+  for (const paramName of resetParams) {
+    target.searchParams.delete(paramName);
+  }
   if (nextPage <= defaultPage) {
     target.searchParams.delete(pageParam);
   } else {
     target.searchParams.set(pageParam, String(nextPage));
   }
   return `${target.pathname}${target.search}`;
+}
+
+export function createPageHrefResolver(
+  url: URL,
+  options: {
+    pageParam?: string;
+    defaultPage: number;
+    resetParams?: string[];
+  }
+): (nextPage: number) => string {
+  return (nextPage: number) => resolvePageHref(url, nextPage, options);
 }
 
 export function resolveViewHref(

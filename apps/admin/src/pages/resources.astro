@@ -21,7 +21,7 @@ import {
   ADMIN_TABLE_ACTIONS_HEADER_CLASS,
   ADMIN_TABLE_HEADER_CLASS,
 } from "../lib/admin-ui-classes";
-import { formatTimestamp, parsePositivePage } from "../lib/view-helpers";
+import { createPageHrefResolver, formatTimestamp, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 
@@ -126,15 +126,7 @@ const websiteChannels = websiteChannelsPage.items.map((item) => ({
 }));
 const selectedChannel = websiteChannels.find((channel) => channel.channelId === selectedChannelId) ?? null;
 
-function resolvePageHref(nextPage: number): string {
-  const target = new URL(Astro.url);
-  if (nextPage <= DEFAULT_PAGE) {
-    target.searchParams.delete("page");
-  } else {
-    target.searchParams.set("page", String(nextPage));
-  }
-  return `${target.pathname}${target.search}`;
-}
+const resolvePageHref = createPageHrefResolver(Astro.url, { defaultPage: DEFAULT_PAGE });
 
 function badgeClass(kind: string): string {
   switch (kind) {
