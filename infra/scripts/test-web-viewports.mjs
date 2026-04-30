@@ -2,18 +2,19 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createRequire } from "node:module";
 import {
-  composeArgs,
   deleteFirebasePasswordUser,
   ensureFirebasePasswordUser,
   fetchJson,
   postForm,
+  queryPostgres,
+  queryPostgresInt,
   readAllowlistEntries,
   readEnvFile,
   requireConfigured,
-  runCommand,
   runCompose,
   selectAdminEmail,
   createWaitFor,
+  sqlLiteral,
   waitForHttpHealth,
 } from "./lib/compose-proof-testkit.mjs";
 
@@ -47,10 +48,6 @@ function log(message) {
 
 const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
-function sqlLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for web viewport smoke.");
   runCompose("up", "-d", ...STACK_SERVICES);
@@ -61,41 +58,6 @@ async function ensureComposeStack() {
     waitForHttpHealth("admin", "http://127.0.0.1:4322/api/health", healthOptions),
     waitForHttpHealth("nginx", "http://127.0.0.1:8080/health", healthOptions),
   ]);
-}
-
-function queryPostgres(env, sql) {
-  const result = runCommand(
-    "docker",
-    [
-      ...composeArgs,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      env.POSTGRES_USER || "newsportal",
-      "-d",
-      env.POSTGRES_DB || "newsportal",
-      "-At",
-      "-F",
-      "|",
-      "-c",
-      sql,
-    ],
-    {
-      capture: true,
-    }
-  );
-  return result.stdout.trim();
-}
-
-function queryPostgresInt(env, sql) {
-  const value = queryPostgres(env, sql);
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Expected integer query result, got ${value || "<empty>"}.`);
-  }
-  return parsed;
 }
 
 function readCookieValue(cookie) {

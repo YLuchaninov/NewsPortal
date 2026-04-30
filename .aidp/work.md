@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 49 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: stage 50 committed; next refactoring slice should be opened explicitly from a clean live state.
 
 ## Проверки закрытия route
 
@@ -57,11 +57,30 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing compose proof testkit adoption across admin acceptance scripts.
-- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-website-admin-flow.mjs`, `infra/scripts/test-discovery-admin-flow.mjs` and `infra/scripts/test-mvp-internal.mjs`; proof scenario logic, stack service lists, stale-stack error semantics, HTTP request semantics, database fixture SQL, browser/assertion flows, MCP-specific diagnostics, compose files, package scripts, runtime services and product code stayed unchanged.
+- Worktree status: clean after committing shared compose Postgres proof helpers.
+- Alignment note: latest committed stage touched `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs` and `infra/scripts/test-rss-multi-flow.mjs`; SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code stayed unchanged.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: open next scoped slice before implementation.
+
+### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-50
+
+- Kind: Stage
+- Status: completed
+- In scope: add shared `sqlLiteral`, `firstResultLine`, `queryPostgres`, `queryPostgresInt` and `queryPostgresRows` helpers to `compose-proof-testkit`, then replace local duplicates in web viewport, UI button audit and RSS multi-flow proof scripts.
+- Out of scope: SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code.
+- Allowed paths: `.aidp/work.md`, `infra/scripts/lib/compose-proof-testkit.mjs`, `infra/scripts/test-web-viewports.mjs`, `infra/scripts/test-ui-button-audit.mjs`, `infra/scripts/test-rss-multi-flow.mjs`.
+- Risk: medium, because SQL helpers support stateful proof fixtures, but the stage preserves psql flags and parsing semantics.
+- Required proof: `pnpm lint`; `pnpm unit_tests:ts`; `git diff --check --`; targeted review that SQL literal escaping, psql flags, integer parsing and row parsing remain equivalent.
+- Acceptance criteria: touched smaller proof scripts no longer own local compose Postgres query helper duplicates.
+- Architecture note: affected concern is proof harness cohesion; stakeholder/consumer is maintainers running UI/RSS proof gates; tradeoff is centralizing psql invocation while keeping scenario SQL local.
+- Implemented, with evidence: added shared `sqlLiteral`, `firstResultLine`, `queryPostgres`, `queryPostgresInt` and `queryPostgresRows` helpers to `infra/scripts/lib/compose-proof-testkit.mjs`.
+- Implemented, with evidence: `test-web-viewports.mjs`, `test-ui-button-audit.mjs` and `test-rss-multi-flow.mjs` now use shared compose Postgres helpers instead of local duplicates.
+- Scope note: SQL statements, fixture data, scenario flow, stack service lists, HTTP request semantics, browser/assertion flows, compose files, package scripts, runtime services and product code were not changed.
+- Passed proof: `pnpm lint` passed, including TS ESLint over infra scripts and Python ruff.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests.
+- Passed proof: `git diff --check --` passed.
+- Targeted review: SQL literal escaping, psql flags, integer parsing and row parsing remain equivalent.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-49
 

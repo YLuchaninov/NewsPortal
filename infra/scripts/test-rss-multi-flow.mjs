@@ -5,6 +5,7 @@ import {
   ensureFirebasePasswordUser,
   postForm,
   postJson,
+  queryPostgresRows,
   readAllowlistEntries,
   readEnvFile,
   requireConfigured,
@@ -13,6 +14,7 @@ import {
   runComposeCapture,
   selectAdminEmail,
   createWaitFor,
+  sqlLiteral,
 } from "./lib/compose-proof-testkit.mjs";
 
 const SUCCESS_STATES = ["deduped", "embedded", "clustered", "matched", "notified"];
@@ -37,10 +39,6 @@ function log(message) {
 }
 
 const waitFor = createWaitFor({ timeoutMs: 180000, intervalMs: 2000 });
-
-function sqlLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
 
 function getComposeServiceContainerId(service) {
   return runComposeCapture("ps", "-q", service).stdout.trim();
@@ -70,35 +68,6 @@ function fetchComposeJson(service, url) {
   } catch {
     return { raw: text };
   }
-}
-
-function queryPostgres(env, sql) {
-  const result = runComposeCapture(
-    "exec",
-    "-T",
-    "postgres",
-    "psql",
-    "-U",
-    env.POSTGRES_USER || "newsportal",
-    "-d",
-    env.POSTGRES_DB || "newsportal",
-    "-At",
-    "-F",
-    "|",
-    "-c",
-    sql
-  );
-  return result.stdout.trim();
-}
-
-function queryPostgresRows(env, sql) {
-  const output = queryPostgres(env, sql);
-  return output
-    ? output
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .map((line) => line.split("|"))
-    : [];
 }
 
 function parseArgs(argv) {

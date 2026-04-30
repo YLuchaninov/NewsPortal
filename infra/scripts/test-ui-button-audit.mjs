@@ -3,18 +3,20 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createRequire } from "node:module";
 import {
-  composeArgs,
   deleteFirebasePasswordUser,
   ensureFirebasePasswordUser,
   fetchJson,
+  firstResultLine,
   postForm,
+  queryPostgres,
+  queryPostgresInt,
   readAllowlistEntries,
   readEnvFile,
   requireConfigured,
-  runCommand,
   runCompose,
   selectAdminEmail,
   createWaitFor,
+  sqlLiteral,
   waitForHttpHealth,
 } from "./lib/compose-proof-testkit.mjs";
 
@@ -42,50 +44,6 @@ function log(message) {
 }
 
 const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
-
-function queryPostgres(env, sql) {
-  const result = runCommand(
-    "docker",
-    [
-      ...composeArgs,
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      "-U",
-      env.POSTGRES_USER || "newsportal",
-      "-d",
-      env.POSTGRES_DB || "newsportal",
-      "-At",
-      "-F",
-      "|",
-      "-c",
-      sql,
-    ],
-    { capture: true }
-  );
-  return result.stdout.trim();
-}
-
-function firstResultLine(value) {
-  return String(value ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0 && !/^INSERT\b/i.test(line) && !/^UPDATE\b/i.test(line) && !/^DELETE\b/i.test(line)) ?? "";
-}
-
-function queryPostgresInt(env, sql) {
-  const value = queryPostgres(env, sql);
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Expected integer query result, got ${value || "<empty>"}.`);
-  }
-  return parsed;
-}
-
-function sqlLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for the UI button audit.");
