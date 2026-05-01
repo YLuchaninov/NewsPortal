@@ -1,874 +1,207 @@
-# HOW_TO_USE.md — Руководство по администрированию NewsPortal
+# Operator Guide
 
-> **Для кого этот документ:** для администратора системы NewsPortal. Технические знания не требуются — всё объяснено простым языком с примерами и скриншот-подобными описаниями интерфейса.
->
-> **Что этот документ покрывает:** ежедневную работу в админке NewsPortal: dashboard, source channels, rules, articles, clusters, reindex и observability.
->
-> **Что этот документ не покрывает полностью:** полный local bootstrap stack-а, discovery-specific operator testing, live website matrices, MCP client setup и stateful cleanup/reset детали.
->
-> **Prerequisites:** рабочий локальный или удаленный NewsPortal runtime, admin access и базовая настройка из [`manual-mvp-runbook.md`](./manual-mvp-runbook.md), если вы запускаете систему локально впервые.
->
-> **Как понять, что все в порядке:** вы можете войти в `/admin`, создать или изменить source/rule, увидеть изменения на operator surfaces и использовать этот документ без необходимости читать runtime-core или chat history.
+Этот документ для человека, который управляет NewsPortal через админку.
 
----
+Он не объясняет каждую таблицу и не повторяет код. Его задача — помочь понять, что делает система, где нажимать, какой результат ожидать и где искать проблему.
 
-## Оглавление
+## Коротко о системе
 
-1. [Что такое NewsPortal и как он работает](#1-что-такое-newsportal-и-как-он-работает)
-2. [Вход в админку](#2-вход-в-админку)
-3. [Дашборд (главная страница)](#3-дашборд-главная-страница)
-4. [Каналы (Channels) — откуда берутся новости](#4-каналы-channels--откуда-берутся-новости)
-   - [4.1. Добавление одного канала](#41-добавление-одного-канала)
-   - [4.2. Массовый импорт каналов (Import)](#42-массовый-импорт-каналов-import)
-   - [4.3. Массовое расписание (Bulk Schedule)](#43-массовое-расписание-bulk-schedule)
-   - [4.4. Управление каналами (пауза / возобновление)](#44-управление-каналами-пауза--возобновление)
-   - [4.5. Мониторинг здоровья каналов](#45-мониторинг-здоровья-каналов)
-   - [4.6. Website-источники и JS-heavy сайты](#46-website-источники-и-js-heavy-сайты)
-5. [Rules — настройка ИИ и системных интересов](#5-rules--настройка-ии-и-системных-интересов)
-   - [5.1. Что такое LLM-шаблоны](#51-что-такое-llm-шаблоны)
-   - [5.2. Что такое «серая зона» (Gray Zone)](#52-что-такое-серая-зона-gray-zone)
-   - [5.3. Три области действия (scope) LLM-шаблонов](#53-три-области-действия-scope-llm-шаблонов)
-   - [5.4. Как создать LLM-шаблон — пошаговая инструкция](#54-как-создать-llm-шаблон--пошаговая-инструкция)
-   - [5.5. Примеры готовых LLM-шаблонов](#55-примеры-готовых-llm-шаблонов)
-   - [5.6. Что такое system interests](#56-что-такое-system-interests)
-   - [5.7. Положительные и отрицательные прототипы — зачем они нужны](#57-положительные-и-отрицательные-прототипы--зачем-они-нужны)
-   - [5.8. Как создать шаблон интересов — пошаговая инструкция](#58-как-создать-шаблон-интересов--пошаговая-инструкция)
-   - [5.9. Примеры готовых шаблонов интересов](#59-примеры-готовых-шаблонов-интересов)
-   - [5.10. Analysis и Filter Policies](#510-analysis-и-filter-policies)
-6. [Статьи (Articles) — модерация контента](#6-статьи-articles--модерация-контента)
-7. [Кластеры (Clusters) — группировка событий](#7-кластеры-clusters--группировка-событий)
-8. [Переиндексация (Reindex) — обслуживание системы](#8-переиндексация-reindex--обслуживание-системы)
-   - [8.1. Что такое индексы и зачем их пересоздавать](#81-что-такое-индексы-и-зачем-их-пересоздавать)
-   - [8.2. Когда нужно делать переиндексацию](#82-когда-нужно-делать-переиндексацию)
-   - [8.3. Как запустить переиндексацию — пошаговая инструкция](#83-как-запустить-переиндексацию--пошаговая-инструкция)
-   - [8.4. Безопасность и частые вопросы](#84-безопасность-и-частые-вопросы)
-9. [Наблюдаемость (Observability) — мониторинг и расходы](#9-наблюдаемость-observability--мониторинг-и-расходы)
-10. [Типичный порядок первоначальной настройки](#10-типичный-порядок-первоначальной-настройки)
-11. [Часто задаваемые вопросы (FAQ)](#11-часто-задаваемые-вопросы-faq)
+NewsPortal берет материалы из источников, сохраняет их в PostgreSQL, прогоняет через async pipeline и показывает оператору уже объяснимое состояние.
 
----
-
-## 1. Что такое NewsPortal и как он работает
-
-NewsPortal — это система умной фильтрации и персонализации новостей. Она делает следующее:
-
-```
-RSS / Website-источники → Сбор контента → Очистка текста → Удаление дубликатов → Группировка событий → Системные критерии → AI-проверка серой зоны для критериев → System Feed → Дополнительная персонализация → Уведомления
+```text
+Channels -> Fetchers -> PostgreSQL -> Relay/Queue -> Workers -> PostgreSQL -> Admin/Web/API
 ```
 
-**Простыми словами:**
+Важные правила:
 
-1. Вы подключаете источники новостей: RSS-ленты или website-источники
-2. Система автоматически собирает из них контент и выделяет пригодные новости/ресурсы
-3. Каждая новость сначала проходит через системный слой: очистка → проверка на дубликаты → группировка по событиям → системные критерии администратора
-4. Если статья попала в спорную зону, ИИ проверяет именно системный критерий, после чего статья либо попадает в общий **system-selected feed**, либо отфильтровывается
-5. Только после этого, если у конкретного пользователя настроены личные интересы, система выполняет дополнительную персонализацию: такие статьи появляются на отдельной странице **My Matches** (`/matches`) и при подходящих условиях могут ещё и отправиться как уведомление (через браузер, Telegram или email)
+- база — место бизнес-правды;
+- очереди только двигают работу;
+- website resources видны отдельно от articles;
+- сначала работает system selection, потом user personalization;
+- LLM используется только для разрешенных серых зон;
+- discovery выключен по умолчанию и требует явного включения.
 
-**Ключевые особенности:**
+## Вход в админку
 
-- **Zero-shot** — не нужно «обучать» систему. Пользователь просто указывает свои интересы, и система сразу начинает подбирать новости
-- **Экономичность** — тяжёлые ИИ-модели (LLM вроде Gemini) вызываются только для спорных случаев, а не для каждой статьи
-- **Объяснимость** — для каждого решения можно посмотреть, почему система решила, что новость релевантна или нет
+Откройте `/admin/` или локально `http://127.0.0.1:4322/`.
 
----
+Войти может только пользователь с локальной ролью `admin`. Firebase подтверждает identity, но права после bootstrap живут в PostgreSQL.
 
-## 2. Вход в админку
+Если вход не работает:
 
-1. Откройте адрес админки в браузере (обычно `http://ваш-домен/admin/` или `http://localhost:4322/`)
-2. Введите вашу электронную почту и пароль
-3. Нажмите **Sign In**
+- проверьте Firebase setup;
+- проверьте `ADMIN_ALLOWLIST_EMAILS`;
+- убедитесь, что локальный пользователь получил роль `admin`.
 
-> ⚠️ Войти могут только пользователи с ролью `admin`. Если при попытке входа появляется ошибка — убедитесь, что ваш email добавлен в список разрешённых администраторов.
+## Dashboard
 
-После входа вы попадёте на **Dashboard** (дашборд) — главную страницу админки.
+Dashboard нужен для первого ответа на вопрос “система жива?”.
 
----
+Смотрите:
 
-## 3. Дашборд (главная страница)
+- сколько контента обработано за 24 часа;
+- есть ли overdue channels;
+- есть ли fetch failures;
+- сколько LLM reviews было за 24 часа;
+- появились ли новые articles/resources;
+- есть ли surfaces, требующие внимания.
 
-На дашборде отображаются ключевые показатели:
+Если dashboard пустой после старта, сначала проверьте channels и fetch history, а не rules.
 
-| Карточка | Что означает |
-|---|---|
-| **System Feed News** | Сколько статей сейчас входит в системно-отобранный пользовательский поток |
-| **Processed 24h** | Сколько статей дошло до поздних стадий обработки за последние 24 часа |
-| **Total Users** | Общее число пользователей |
-| **Overdue Channels** | Каналы, которые «просрочили» запланированный сбор (возможна проблема) |
-| **Fetch Failures 24h** | Количество ошибок при сборе новостей за последние 24 часа |
-| **LLM Reviews 24h** | Сколько статей было отправлено на проверку ИИ за 24 часа |
-| **New Content 24h** | Сколько новых статей появилось за 24 часа |
-| **Needs Attention** | Каналы, требующие внимания (частые ошибки) |
+## Channels
 
-Ниже расположены **быстрые ссылки** на все разделы и таблица **последних сборов** (Recent Fetch Runs).
+Channels — это вход в систему.
 
----
+Основные provider types:
 
-## 4. Каналы (Channels) — откуда берутся новости
+- `rss` — RSS, Atom и JSON Feed через общий adapter;
+- `website` — сайты и website resources;
+- `api` — JSON endpoint ingest;
+- `email_imap` — mailbox ingest.
 
-> 📍 **Где это:** боковое меню → **Sources** → **Channels**
+`youtube` есть как значение в модели, но не является полноценным operator baseline.
 
-Каналы — это источники новостей. Текущий internal product-testing contour обязательно покрывает **RSS** и **Website**. `api`, inbound `email_imap` и Telegram ingestion сейчас parked: они не входят в обязательный локальный product test и не должны блокировать текущий цикл.
+### Добавить источник
 
-В кодовой базе также есть более широкие provider surfaces:
+1. Откройте `Channels`.
+2. Нажмите `Add source`.
+3. Выберите provider type.
+4. Заполните name, URL/config, language и poll settings.
+5. Для первого запуска оставьте разумный interval и включите adaptive scheduling.
+6. Сохраните.
 
-- **RSS** — классические RSS/Atom/JSON Feed источники
-- **Website** — обычные сайты, sitemap/section/homepage sources и JS-heavy страницы, которые система может обходить как website provider
-- **API** — JSON endpoint ingest с явным field mapping и optional authorization header, parked for current testing
-- **Email IMAP** — mailbox ingest для press inboxes и sender-filter workflows, parked for current testing
+Ожидаемый результат:
 
-`youtube` по-прежнему остается future-ready provider type без полноценного operator create/edit flow в текущем admin baseline.
+- channel появляется в списке;
+- fetch run появляется после poll;
+- для RSS проверяйте `Articles`;
+- для website проверяйте и `Resources`, и `Articles`.
 
-### 4.1. Добавление одного канала
+### Website sources
 
-В текущем mandatory product-testing cycle проверяйте create/edit flows для **RSS** и **Website**.
+Website source не обязан сразу давать article.
 
-Самый простой стартовый путь — RSS, поэтому ниже сначала показан именно он.
+Правильный порядок проверки:
 
-Если вам нужен обычный сайт, а не RSS-лента:
+1. Создайте `website` channel.
+2. Дождитесь poll или запустите проверочный flow.
+3. Откройте `Resources`.
+4. Посмотрите resource status, provenance, enrichment/projection state.
+5. Только затем проверяйте, появились ли articles.
 
-- создавайте channel как `website`;
-- после первого опроса проверяйте не только `Articles`, но и страницу `Resources`, потому что не каждый найденный ресурс обязан проецироваться в editorial article;
-- для JS-heavy сайтов browser fallback включается только при необходимости и только для `website` channels.
+Browser assistance включайте только для публичных JS-heavy страниц, где static path не находит реальные resources. Login/CAPTCHA/manual challenge bypass не поддерживаются.
 
-Стартовая точка на странице Channels теперь одна: **Add source**. Для RSS там есть быстрый путь **Create RSS source**, а для остальных provider types сначала выбирается source type, затем открывается отдельный setup screen.
+### Массовый импорт
 
-**Шаг 1. Заполните основные поля:**
+Используйте `Channels -> Import`.
 
-| Поле | Что писать | Пример |
-|---|---|---|
-| **Name** *(обязательно)* | Понятное название канала — для вас, чтобы потом было легко найти | `Reuters World News` |
-| **Feed URL** *(обязательно)* | Адрес RSS-ленты. Обычно заканчивается на `.xml` или `.rss`, но не обязательно | `https://feeds.reuters.com/reuters/worldNews` |
-| **Language** | Код языка содержимого. Используется при обработке текстов | `en` (английский), `uk` (украинский), `de` (немецкий) |
+Каждая row в JSON должна иметь `providerType`; importer не должен угадывать тип.
 
-**Шаг 2. Настройте расписание:**
+Примеры лежат в [Data Script Assets](../data-scripts/README.md).
 
-| Поле | Что означает | Рекомендация |
-|---|---|---|
-| **Poll interval (s)** | Как часто (в секундах) система проверяет ленту. `300` = каждые 5 минут, `900` = каждые 15 минут, `3600` = каждый час | Для крупных лент (Reuters, BBC) — `300`. Для мелких блогов — `3600` |
-| **Adaptive** | Адаптивный режим. Если включен — система сама замедляет проверки, когда лента «молчит», и ускоряет, когда появляется контент | **Рекомендуется: Yes**. Это экономит ресурсы |
+## Rules
 
-**Шаг 3. Выберите статус:**
+Rules отвечают за system selection.
 
-| Значение | Что означает |
-|---|---|
-| **Active — start fetching now** | Система начнёт собирать новости сразу после создания |
-| **Paused — configure first** | Канал создастся, но сбор не начнётся, пока вы не активируете его вручную |
+Важные сущности:
 
-**Шаг 4.** Нажмите **Create RSS source** или завершите форму на отдельном setup screen кнопкой **Save changes**
+- interest templates — операторские темы/критерии;
+- selection profiles/policies — как система принимает match/hold/reject;
+- LLM templates — как проверяются серые зоны;
+- analysis/filter policies — дополнительные explainable gates.
 
-### 4.2. Массовый импорт каналов (Import)
-
-Если вам нужно добавить много источников сразу — используйте отдельный экран **Channels → Import**.
-
-Вставьте JSON-массив в текстовое поле. **JSON — это текстовый формат данных**, который выглядит так:
-
-```json
-[
-  {
-    "providerType": "rss",
-    "name": "Reuters World News",
-    "fetchUrl": "https://feeds.reuters.com/reuters/worldNews",
-    "language": "en",
-    "pollIntervalSeconds": 300,
-    "adaptiveEnabled": true,
-    "maxPollIntervalSeconds": 3600,
-    "maxItemsPerPoll": 25,
-    "isActive": true
-  },
-  {
-    "providerType": "rss",
-    "name": "BBC Technology",
-    "fetchUrl": "https://feeds.bbci.co.uk/news/technology/rss.xml",
-    "language": "en",
-    "pollIntervalSeconds": 600,
-    "adaptiveEnabled": true,
-    "isActive": true
-  },
-  {
-    "providerType": "rss",
-    "name": "DW News (German)",
-    "fetchUrl": "https://rss.dw.com/rdf/rss-de-all",
-    "language": "de",
-    "pollIntervalSeconds": 900,
-    "adaptiveEnabled": true,
-    "isActive": true
-  }
-]
-```
+Практический минимум:
 
-**Описание полей JSON:**
+1. Создайте активные system interests.
+2. Проверьте positive/negative prototypes.
+3. Создайте LLM templates для `criteria` и `global`, если используете LLM review.
+4. Запустите reindex/backfill, если нужно применить новые rules к старому контенту.
 
-| Поле | Тип | Обязательно | Описание |
-|---|---|---|---|
-| `providerType` | текст | ✅ Да | Тип источника для shared import. Для RSS-batch указывайте `rss` |
-| `name` | текст | ✅ Да | Название канала |
-| `fetchUrl` | текст (URL) | ✅ Да | Адрес RSS-ленты |
-| `language` | текст | Нет | Код языка, по умолчанию `en` |
-| `pollIntervalSeconds` | число | Нет | Интервал опроса в секундах, по умолчанию `300` |
-| `adaptiveEnabled` | true/false | Нет | Адаптивный режим, по умолчанию `true` |
-| `maxPollIntervalSeconds` | число | Нет | Максимальный интервал при адаптивном режиме. По умолчанию = `pollIntervalSeconds × 16` |
-| `maxItemsPerPoll` | число | Нет | Максимум статей за один опрос, по умолчанию `20` |
-| `requestTimeoutMs` | число | Нет | Таймаут запроса в миллисекундах, по умолчанию `10000` (10 секунд) |
-| `isActive` | true/false | Нет | Начать сбор сразу? По умолчанию `true` |
+Scope `interests` не является обязательным baseline для LLM review. Не делайте его hot path без отдельного решения.
 
-**Кнопки:**
+## Articles, Resources and Clusters
 
-- **Import JSON** — загрузить каналы
-- **Validate** — проверить JSON на ошибки перед загрузкой (рекомендуется!)
-- **Load example** — вставить пример JSON для ознакомления
+`Articles` показывают editorial/content items.
 
-> 💡 **Совет:** Всегда нажимайте **Validate** перед **Import JSON**. Система проверит формат и покажет ошибки, если что-то не так (например, пропущен `fetchUrl`, не указан `providerType` или указан некорректный URL).
->
-> Экран `Import` поддерживает shared bulk onboarding. Для RSS JSON указывайте `"providerType": "rss"` на каждой row. В текущем product-testing contour batch/import проверки фокусируются на `rss` и `website`; `api` и `email_imap` parked.
+`Resources` показывают website-level truth: найденные страницы, документы, newsroom entries, downloads and projection state.
 
-### 4.3. Массовое расписание (Bulk Schedule)
+`Clusters` показывают группировку событий.
 
-Правая колонка — **Bulk Schedule**. Позволяет одним действием изменить расписание **всех** каналов определённого типа.
+Если материал “пропал”, проверьте по порядку:
 
-Это полезно, если вы хотите, например, замедлить все RSS-ленты на ночь или ускорить их во время важных событий.
+1. channel fetch history;
+2. resource/article row;
+3. dedup state;
+4. cluster/verification state;
+5. selection diagnostics;
+6. LLM review/budget state;
+7. final decision.
 
-| Поле | Описание |
-|---|---|
-| **Provider** | К каким каналам применить (обычно RSS) |
-| **Base interval (s)** | Новый базовый интервал для всех каналов |
-| **Adaptive** | Включить/выключить адаптивный режим для всех |
-| **Max interval (s)** | Максимальный интервал (для адаптивного режима). `86400` = 1 сутки |
+## Reindex and Backfill
 
-### 4.4. Управление каналами (пауза / возобновление)
+Reindex нужен, когда изменились rules/profiles/templates или нужно переиграть historical content.
 
-В таблице каналов у каждого канала есть кнопка:
+Правила безопасности:
 
-- **Pause** — приостановить сбор (канал перестанет проверяться)
-- **Resume** — возобновить сбор
+- backfill должен быть видимым как job/run;
+- historical replay не должен рассылать retro notifications;
+- результат должен объяснять counts and residuals;
+- если job завис, смотрите maintenance/read-model surfaces и worker logs.
 
-Это полезно, если какой-то источник временно недоступен или вы хотите провести обслуживание.
+## Observability
 
-### 4.5. Мониторинг здоровья каналов
+Observability должна отвечать на вопросы:
 
-В таблице каналов обращайте внимание на:
+- какие источники ломаются;
+- что произошло с конкретным channel/resource/article;
+- сколько стоит LLM/discovery;
+- что можно retry;
+- какие errors являются upstream residuals, а какие regression.
 
-| Индикатор | Что означает | Что делать |
-|---|---|---|
-| 🟢 **active** | Канал работает нормально | Ничего |
-| ⚪ **paused** | Канал на паузе | Нажмите Resume, если хотите возобновить |
-| 🟡 **attention** | Канал требует внимания | Проверьте URL ленты — возможно, она перестала работать |
-| 🔴 **X failures 24h** | Было X ошибок за сутки | Если ошибок много — проверьте, что URL корректный и сайт доступен |
+Для LLM смотрите budget summary and review history. Для website смотрите fetch runs, resources and enrichment/projection state. Для discovery смотрите missions, candidates, cost summary and promotion status.
 
-### 4.6. Website-источники и JS-heavy сайты
+## Discovery
 
-Website channel нужен, когда у источника нет удобной RSS-ленты или когда вам важнее обход самого сайта, чем готового feed URL.
+Discovery выключен по умолчанию.
 
-Что важно помнить:
+Используйте его, когда нужно найти новые источники или проверить candidate recall:
 
-- Website provider не превращается автоматически в RSS, даже если сайт где-то прячет feed.
-- Для website source рабочей страницей наблюдаемости является не только `Articles`, но и `Resources`: там видны и projected editorial rows, и resource-only страницы/документы.
-- Для JS-heavy сайтов browser-assisted fallback включается только как opt-in настройка website channel. Это нужно, когда обычный статический обход не видит ссылки или контент.
-- Login-required сайты, CAPTCHA и ручной anti-bot bypass не входят в текущий MVP baseline.
+1. Включите env/config явно.
+2. Проверьте bounded smoke.
+3. Создайте или используйте profile.
+4. Запустите mission/recall.
+5. Review candidates.
+6. Promote только понятные sources.
 
-Если вы готовите manual verification или проверяете hard-site path, используйте также:
+Для подробного сценария используйте [Discovery Mode Testing](./examples/DISCOVERY_MODE_TESTING.md).
 
-- `README.md` — для discovery/discovery-env и bounded runtime enable path
-- `docs/product/operator/manual-mvp-runbook.md` — для полного operator walkthrough и `/resources` проверки
-- `WEBSITE_SOURCES_TESTING.md` — для отдельной пошаговой инструкции именно по `website` sources, `/admin/resources`, projected/resource-only rows и bounded live-site checklist
-- `node infra/scripts/test-live-website-matrix.mjs` — для расширенного bounded live-site прогона по 16 реальным public website targets уже после того, как локальный website proof (`website`, `hard-sites`, `channel-auth`, `website-admin`, `enrichment`) зелёный
+## MCP
 
----
+MCP service нужен для operator tooling. Он не заменяет admin, а дает bounded tools with token scopes.
 
-## 5. Rules — настройка ИИ и системных интересов
+Начните с [MCP Operator Docs](./mcp/README.md).
 
-> 📍 **Где это:** боковое меню → **Rules** → **LLM Templates** и **System Interests**
+## Нормальный порядок первого запуска
 
-Это **самый важный раздел** для качества работы системы. Здесь настраиваются два вида шаблонов:
+1. Поднять stack по [Manual MVP Runbook](./manual-mvp-runbook.md).
+2. Убедиться, что `/admin` открывается.
+3. Создать или импортировать RSS channel.
+4. Дождаться article flow.
+5. Создать system interests.
+6. Запустить reindex/backfill при необходимости.
+7. Проверить Articles, Clusters, Observability.
+8. Добавить website channel и проверить Resources.
+9. Только после этого включать discovery или live provider paths.
 
-1. **LLM templates** — промпты (инструкции) для ИИ
-2. **System interests** — библиотека системных тем, которые синхронизируются в live `criteria` для всего продукта
+## Когда остановиться
 
-### 5.1. Что такое LLM-шаблоны
+Остановитесь и не “докручивайте руками”, если:
 
-**LLM** (Large Language Model) — это большая языковая модель, например Google Gemini. Система NewsPortal использует LLM **не для каждой статьи**, а только для спорных случаев — так называемой **«серой зоны»**.
+- auth/admin role ведет себя непонятно;
+- channel пишет ошибки авторизации или unsupported provider state;
+- website уперся в CAPTCHA/login/manual challenge;
+- LLM/discovery budget исчерпан;
+- backfill может разослать внешние уведомления;
+- dashboard и maintenance API спорят друг с другом.
 
-LLM-шаблон — это **текст промпта** (инструкция для ИИ), который система отправляет модели вместе со статьёй. ИИ читает промпт, анализирует статью и возвращает решение.
-
-> ⚠️ **Важно для текущей версии системы:** в baseline runtime LLM-проверка серой зоны включена для **системных критериев**. Scope `interests` зарезервирован на будущее для отдельной opt-in / premium персонализации и по умолчанию сейчас не участвует в рабочем конвейере.
-
-### 5.2. Что такое «серая зона» (Gray Zone)
-
-Когда система оценивает, насколько статья подходит системному критерию или пользовательскому интересу, она выставляет **оценку от 0 до 1**:
-
-```
-Оценка ≥ 0.72  →  ✅ РЕЛЕВАНТНО (статья точно подходит, может вызвать уведомление)
-Оценка 0.45–0.72  →  🟡 СЕРАЯ ЗОНА (система не уверена → отправляет на проверку ИИ)
-Оценка ≤ 0.45  →  ❌ НЕРЕЛЕВАНТНО (статья точно не подходит, игнорируется)
-```
-
-**Зачем это нужно?** Без серой зоны система либо пропускала бы спорные статьи (и пользователь бы их не увидел), либо слала бы слишком много нерелевантных уведомлений. ИИ помогает принять решение в этих пограничных случаях.
-
-**Пример:**
-
-Администратор настроил системный критерий «Регулирование ИИ в Евросоюзе». Приходит статья: «Новый закон ЕС ограничивает использование распознавания лиц». Оценка — 0.61 (серая зона). Система не уверена, относится ли статья к этому критерию. Она отправляет статью на проверку ИИ, и тот решает — `approve` (да, подходит) или `reject` (нет, не подходит).
-
-### 5.3. Три области действия (scope) LLM-шаблонов
-
-Каждый LLM-шаблон имеет **область действия** (scope). Это определяет, **когда** этот шаблон будет использоваться:
-
-| Scope | Русское название | Когда используется | Пример |
-|---|---|---|---|
-| `interests` | Интересы | Зарезервирован на будущее для opt-in / premium проверки **личных интересов пользователя**. В текущем baseline по умолчанию не используется | Промпт получит название интереса пользователя и текст статьи |
-| `criteria` | Критерии | **Основной active scope**. Используется, когда спорная оценка связана с **системным критерием**. Критерии — это правила, которые настраивает администратор для всей системы | Промпт получит название критерия и текст статьи |
-| `global` | Глобальный | **Запасной шаблон**, который используется, если для данного типа проверки не нашлось специализированного шаблона. Должен быть универсальным | Промпт получит общий контекст и текст статьи |
-
-**Рекомендация:** Для текущей рабочей конфигурации создайте как минимум один шаблон с scope `criteria` и один с scope `global`. Scope `interests` можно подготовить заранее как future-ready шаблон, но в baseline runtime он не обязателен.
-
-### 5.4. Как создать LLM-шаблон — пошаговая инструкция
-
-**Шаг 1.** Перейдите в **Rules → LLM Templates**
-
-**Шаг 2.** Откройте экран **Create LLM template**
-
-**Шаг 3.** Заполните поля:
-
-| Поле | Что писать | Обязательно |
-|---|---|---|
-| **Template name** | Понятное название, чтобы потом легко найти. Например: `Проверка интересов пользователя` | ✅ Да |
-| **Scope** | Выберите из выпадающего списка: `interests`, `criteria` или `global` (см. таблицу выше) | ✅ Да |
-| **Prompt template** | Текст инструкции для ИИ (подробнее ниже) | ✅ Да |
-
-**Шаг 4.** Напишите текст промпта (Prompt template).
-
-Промпт — это инструкция для ИИ на естественном языке. В тексте можно использовать **переменные-заполнители** — они будут автоматически заменены реальными данными при отправке:
-
-| Переменная | Что подставится |
-|---|---|
-| `{title}` | Заголовок статьи |
-| `{lead}` | Вводный абзац (лид) статьи |
-| `{body}` | Основной текст статьи (обычно в сокращённом виде) |
-| `{interest_name}` | Название интереса пользователя (только для scope `interests`) |
-| `{criterion_name}` | Название системного критерия (только для scope `criteria`) |
-| `{explain_json}` | Дополнительный JSON-контекст со скорингом и служебными пояснениями |
-| `{context}` | Общий контекст (для scope `global`) |
-
-**Шаг 5.** Нажмите кнопку **Show example**, чтобы увидеть готовый пример промпта для выбранного scope. Если пример подходит — нажмите **Use this example**, чтобы вставить его в поле.
-
-**Шаг 6.** Нажмите **Create template** или **Save changes**, если редактируете существующий шаблон
-
-> ⚠️ **Важно:** ИИ должен вернуть ответ в формате JSON:
-> ```json
-> {
->   "decision": "approve",
->   "score": 0.85,
->   "reason": "Статья напрямую касается регулирования ИИ в ЕС"
-> }
-> ```
-> Возможные значения `decision`:
-> - `approve` — статья подходит, можно отправлять уведомление
-> - `reject` — статья не подходит, не отправлять
-> - `uncertain` — ИИ тоже не уверен (по умолчанию трактуется как «не отправлять» для безопасности)
-
-### 5.5. Примеры готовых LLM-шаблонов
-
-#### Пример 1: Шаблон для интересов (scope: `interests`)
-
-> ℹ️ Этот scope приведён как future-ready пример. В текущем baseline runtime по умолчанию активно используются `criteria` и `global`.
-
-**Название:** `Interest gray-zone review`
-
-**Текст промпта:**
-```
-You are a news relevance reviewer. The user is interested in "{interest_name}".
-
-Given the article below, decide if it is relevant to this interest.
-
-Article title: {title}
-Article lead: {lead}
-
-Respond with a JSON object:
-{
-  "decision": "approve" or "reject" or "uncertain",
-  "score": a number from 0.0 to 1.0 indicating confidence,
-  "reason": "brief explanation of your decision"
-}
-
-Rules:
-- "approve" means the article is clearly relevant to the user's interest
-- "reject" means the article is NOT relevant, even if it touches a similar topic
-- "uncertain" means you genuinely cannot decide
-- Be strict: only approve if the article directly relates to the stated interest
-```
-
-#### Пример 2: Шаблон для критериев (scope: `criteria`)
-
-**Название:** `Criterion gray-zone review`
-
-**Текст промпта:**
-```
-You are a news classification reviewer. The system criterion is: "{criterion_name}".
-
-Given the article below, decide if it matches this criterion.
-
-Article title: {title}
-Article lead: {lead}
-
-Respond with a JSON object:
-{
-  "decision": "approve" or "reject" or "uncertain",
-  "score": a number from 0.0 to 1.0,
-  "reason": "brief explanation"
-}
-```
-
-#### Пример 3: Глобальный шаблон (scope: `global`)
-
-**Название:** `Global fallback review`
-
-**Текст промпта:**
-```
-You are a news relevance reviewer.
-
-Given the article below, decide whether it should be sent to the user based on the context provided.
-
-Article title: {title}
-Article lead: {lead}
-Context: {context}
-
-Respond with a JSON object:
-{
-  "decision": "approve" or "reject" or "uncertain",
-  "score": a number from 0.0 to 1.0,
-  "reason": "brief explanation"
-}
-
-Default to "reject" if unsure — it is better to miss an article than to spam the user.
-```
-
-### 5.6. Что такое system interests
-
-System interests — это **библиотека готовых тем**, которую администратор настраивает для всей системы. Активные шаблоны синхронизируются в live `criteria` и становятся частью **системного слоя отбора** статей.
-
-**Важно:** Это **не то же самое**, что реальные личные `user_interests` конкретного пользователя. Личные интересы редактируются отдельно на странице **User Interests** и применяются только после того, как статья уже прошла системный слой.
-
-**Аналогия:** System interests — это редакционная политика или каталог тем для всей системы. А `user_interests` — это уже персональная подписка конкретного человека внутри этого потока.
-
-Но в отличие от простых тегов, каждый шаблон содержит **примеры заголовков** (прототипы), которые помогают системе понять, какие статьи считать подходящими, а какие — нет.
-
-### 5.7. Положительные и отрицательные прототипы — зачем они нужны
-
-Каждый шаблон интересов содержит два списка примеров:
-
-#### ✅ Положительные прототипы (Positive prototypes)
-
-Это заголовки статей, которые **ДОЛЖНЫ** совпадать с этим интересом. Система преобразует их в математическое представление (эмбеддинги) и ищет похожие статьи.
-
-**Пример для интереса «Регулирование ИИ»:**
-```
-EU passes landmark AI regulation act
-US government proposes AI safety framework
-New AI governance rules for healthcare
-China announces national AI strategy update
-UN adopts global AI ethics guidelines
-```
-
-#### ❌ Отрицательные прототипы (Negative prototypes)
-
-Это заголовки статей, которые **НЕ ДОЛЖНЫ** совпадать с этим интересом, хотя на первый взгляд кажутся похожими. Они нужны, чтобы система не путала смежные темы.
-
-**Пример для того же интереса «Регулирование ИИ»:**
-```
-New iPhone AI assistant features released
-Google unveils latest AI chatbot upgrade
-AI startup raises $100M funding round
-OpenAI releases GPT-5 model
-Microsoft integrates AI into Office suite
-```
-
-> ⚠️ **Важно:** Без отрицательных прототипов количество ложных срабатываний **резко возрастает**! Система будет считать релевантной любую статью, хоть как-то связанную с ИИ, а не только статьи про регулирование.
-
-**Сколько прототипов нужно?**
-- Положительных: **минимум 3, рекомендуется 5–7**. Чем разнообразнее — тем лучше
-- Отрицательных: **минимум 2–3**. Выбирайте самые «коварные» — те, что могут сбить систему с толку
-
-### 5.8. Как создать шаблон интересов — пошаговая инструкция
-
-**Шаг 1.** Перейдите в **Rules → System Interests**
-
-**Шаг 2.** Откройте экран **Create system interest**
-
-**Шаг 3.** Заполните поля:
-
-| Поле | Что писать | Обязательно |
-|---|---|---|
-| **Template name** | Короткое название системной темы. Его используют операторы и downstream-представления темы | ✅ Да |
-| **Description** | Пояснение: о чём эта системная тема и какие статьи она должна отбирать | Нет, но рекомендуется |
-| **Positive prototypes** | Примеры заголовков, которые ДОЛЖНЫ совпадать. **По одному на каждой строке** | ✅ Да (минимум 2) |
-| **Negative prototypes** | Примеры заголовков, которые НЕ ДОЛЖНЫ совпадать. **По одному на каждой строке** | Нет, но **настоятельно** рекомендуется |
-
-> 💡 **Как писать прототипы:** Пишите каждый пример на **отдельной строке**. Не нужно нумеровать или ставить точки — просто текст заголовка.
-
-**Шаг 4.** Нажмите **Create template** или **Save changes**, если редактируете существующий system interest
-
-### 5.9. Примеры готовых шаблонов интересов
-
-#### Пример 1: «Климатическая политика»
-
-| Поле | Значение |
-|---|---|
-| **Name** | Climate regulation |
-| **Description** | News about government climate policies, carbon regulations, and international climate agreements |
-
-**Positive prototypes** (каждый на отдельной строке):
-```
-EU agrees on carbon border adjustment mechanism
-New US climate legislation targets methane emissions
-Global leaders sign updated Paris Agreement commitments
-Carbon tax proposal gains bipartisan support
-COP28 reaches historic fossil fuel agreement
-```
-
-**Negative prototypes:**
-```
-Tesla reports record electric vehicle sales
-New solar panel technology achieves 30% efficiency
-Climate activists block London highway
-Extreme heatwave breaks temperature records in Spain
-```
-
-#### Пример 2: «Кибербезопасность»
-
-| Поле | Значение |
-|---|---|
-| **Name** | Cybersecurity threats |
-| **Description** | Major cybersecurity incidents, vulnerabilities, and threat intelligence |
-
-**Positive prototypes:**
-```
-Major ransomware attack hits hospital network across three states
-Critical zero-day vulnerability found in widely used open source library
-State-sponsored hackers breach government contractor systems
-New phishing campaign targets banking customers in Europe
-FBI warns of rising business email compromise attacks
-```
-
-**Negative prototypes:**
-```
-Cybersecurity startup raises $50M in Series B funding
-Best antivirus software of 2026 reviewed
-How to create a strong password guide
-University launches new cybersecurity degree program
-```
-
-#### Пример 3: «Криптовалюты и регулирование»
-
-| Поле | Значение |
-|---|---|
-| **Name** | Crypto regulation |
-| **Description** | Government policies and regulations affecting cryptocurrency and blockchain |
-
-**Positive prototypes:**
-```
-SEC approves new cryptocurrency ETF regulation
-EU MiCA regulation comes into full effect
-US Treasury proposes new crypto tax reporting rules
-Japan updates cryptocurrency exchange licensing requirements
-Central bank digital currency pilot launches in Brazil
-```
-
-**Negative prototypes:**
-```
-Bitcoin price surges past $100,000 milestone
-New DeFi protocol offers 20% yield on stablecoins
-NFT marketplace launches celebrity collection
-Ethereum completes major network upgrade
-Crypto mining company opens new facility in Texas
-```
-
-### 5.10. Analysis и Filter Policies
-
-> 📍 **Где это:** боковое меню → **Rules** → **Analysis** и **Filter Policies**
-
-Analysis — это слой наблюдаемого анализа контента. Он сохраняет извлеченные сущности, sentiment/tone/risk signals, taxonomy categories, story-cluster summaries, structured extraction results, системные метки интересов и результаты дополнительных фильтров в базе данных, чтобы оператор мог проверять, почему объект выглядит релевантным или спорным.
-
-Что смотреть:
-
-| Экран | Что показывает |
-|---|---|
-| **Analysis** | Последние analysis results, найденные entities, labels и gate decisions |
-| **Analysis Policies** | Настройки analysis modules: NER, sentiment, categories, cluster summaries, structured extraction templates и projection policies |
-| **Filter Policies** | Настроенные политики финальной фильтрации, их режим и версию |
-| **Article / Resource detail** | Краткую `analysis_summary`: entities, labels и последний gate result |
-
-Текущая безопасная политика по умолчанию — `default_recent_content_gate`. Она проверяет, что публикация не старше трех месяцев, но работает в режиме `dry_run`: результат записывается и виден оператору, но сам по себе не скрывает контент из пользовательского feed.
-
-На экране **Analysis** можно поставить backfill job для уже сохраненных articles/resources/story clusters. Такой job по умолчанию пишет NER, sentiment, categories, cluster summaries, labels и gate results для старого контента, показывает прогресс среди maintenance jobs и не отправляет retro notifications. `structured_extraction` запускается только при явном выборе, потому что активная Gemini policy может вызвать LLM.
-
-На экране **Filter Policies** можно создать или обновить policy. Если меняются `mode`, `combiner` или `policy_json`, система создает новую версию policy, чтобы старые gate results оставались объяснимыми относительно своей версии.
-
-На экране **Analysis Policies** можно создать или обновить policy для analysis module. Изменения runtime-значимых полей (`module`, `enabled`, `mode`, provider/model fields, `config_json`, `failure_policy`) создают новую версию policy. Локальный deterministic runtime использует только безопасные настройки `config_json`: например `maxTextChars`, `entityTypeAllowlist`, дополнительные sentiment terms, taxonomy terms и параметры projection для system-interest labels. Для `structured_extraction` `config_json` является extraction template: `templateKey`, `instructions`, `allowHighCardinalityLabels`, `entityTypes` и fields с `project: ["entity", "label"]`; при активной policy provider `gemini` вызывается только через явный module request или явную sequence-настройку. Свободный текст не проецируется в `content_labels` без `allowHighCardinalityLabels: true`.
-
-`content_filter_results` является owner-table для gate decisions. Соответствующая запись `content_analysis_results` с type `content_filter` — только summary/projection snapshot для единого analysis view.
-
-Policy может ссылаться не только на время публикации, но и на сохраненные labels или structured extraction fields. Например, rule с `op: "has_label"` и `value: { "labelType": "sentiment", "labelKey": "negative", "minScore": 0.2 }` позволяет отправлять негативные материалы в `needs_review`, а `op: "has_extracted_field"` с `value: { "entityType": "job_opening", "fieldKey": "remote", "value": true }` позволяет отбирать remote-вакансии в `dry_run` режиме.
-
-Для настройки через MCP используйте токен с нужными правами и tools `content_analysis.*`, `content_analysis_policies.*`, `content_entities.*`, `content_labels.*`, `content_filter_policies.*` и `content_filter_results.*`. Backfill доступен через `content_analysis.backfill.request`. Изменение policy в `enforce` должно быть отдельным осознанным шагом: такой режим предназначен для подтвержденного rollout, а не для случайного включения.
-
----
-
-## 6. Статьи (Articles) — модерация контента
-
-> 📍 **Где это:** боковое меню → **Content** → **Articles**
-
-На этой странице вы видите все статьи, собранные системой. Каждая статья проходит жизненный цикл:
-
-```
-raw/pending → normalized → deduped/embedded → clustered → matched/notified
-```
-
-| Статус | Цвет | Что означает |
-|---|---|---|
-| **raw / pending** | 🟡 жёлтый | Только что собрана, ждёт очистки текста и последующей обработки |
-| **normalized** | 🔵 синий | Текст очищен, признаки извлечены |
-| **deduped / embedded / clustered** | 🟣 фиолетовый / голубой | Промежуточные стадии: дедупликация, эмбеддинги, кластеризация |
-| **matched** | 🟢 зелёный | Статья прошла дополнительную персонализацию хотя бы для одного `user_interest` |
-| **notified** | 🟦 бирюзовый | Для personalization lane уже выполнялось уведомление или его подавление |
-| **blocked** | 🔴 красный | Заблокирована администратором, скрыта от пользователей |
-
-> ⚠️ **Важно:** Видимость статьи в пользовательском feed теперь определяется не только `processing_state`, а отдельным системным gate в `system_feed_results`. То есть статья может уже быть в system feed даже без `matched`, если системные критерии её одобрили, а у пользователя нет личной персонализации.
-
-**Модерация:**
-
-- Нажмите **Block**, чтобы скрыть нежелательную статью от пользователей
-- Нажмите **Unblock**, чтобы вернуть ранее заблокированную статью
-
-Все действия модерации записываются в журнал аудита.
-
-**Реакции (👍 👎)** — это обратная связь от пользователей. На данный момент они сохраняются для будущей аналитики, но не влияют на алгоритм подбора.
-
----
-
-## 7. Кластеры (Clusters) — группировка событий
-
-> 📍 **Где это:** боковое меню → **Content** → **Clusters**
-
-Кластеры — это **автоматическая группировка статей по событиям**. Когда несколько источников публикуют новости об одном и том же событии (например, все пишут о саммите G7), система объединяет их в один кластер.
-
-**Зачем это нужно?**
-
-- Пользователь получает **одно уведомление** о событии, а не пять одинаковых от разных источников
-- Система понимает, когда новость — это **обновление** уже известного события, а когда — **новое событие**
-
-**Как это работает (упрощённо):**
-
-Система сравнивает каждую новую статью с существующими кластерами по четырём параметрам:
-- Смысловая близость текстов (55%)
-- Совпадение упомянутых людей и организаций (20%)
-- Совпадение географии (15%)
-- Близость по времени (10%)
-
-Если общий балл ≥ 0.78 — статья присоединяется к кластеру. Иначе — создаётся новый кластер.
-
-> 💡 Кластеры создаются **автоматически**. Вам не нужно ничего настраивать — просто наблюдайте.
-
----
-
-## 8. Переиндексация (Reindex) — обслуживание системы
-
-> 📍 **Где это:** боковое меню → **System** → **Reindex**
-
-### 8.1. Что такое индексы и зачем их пересоздавать
-
-Для быстрого поиска похожих статей система использует **индексы** — специальные структуры данных, которые позволяют за доли секунды найти статьи, похожие на интересы пользователей.
-
-**Аналогия:** Представьте библиотеку. Все книги хранятся на полках (это база данных PostgreSQL). А указатель в конце каталога, где написано «книги про космос — полки 5, 12, 47» — это индекс. Без указателя пришлось бы проверять каждую полку.
-
-Индексы — это **производные** (derived) данные. Они построены на основе данных из базы и могут быть **безопасно перестроены** в любой момент. При переиндексации **никакие данные не удаляются** — пересчитывается только указатель.
-
-### 8.2. Когда нужно делать переиндексацию
-
-| Ситуация | Нужна ли переиндексация |
-|---|---|
-| Вы **добавили или значительно изменили** шаблоны интересов | ✅ **Да** — индексы должны учесть новые прототипы |
-| Вы **заблокировали** одну статью | ❌ Нет |
-| Качество подбора новостей **ухудшилось** без видимых причин | ✅ **Да** — возможно, индексы устарели |
-| Вы **восстановили базу данных** из бэкапа | ✅ **Да** — индексы могут не соответствовать данным |
-| Вы просто **добавили новые RSS-каналы** | ❌ Нет — новые статьи индексируются автоматически |
-| Прошло **много времени** (недели) с последней переиндексации | 🟡 Желательно — для профилактики |
-
-### 8.3. Как запустить переиндексацию — пошаговая инструкция
-
-**Шаг 1.** Перейдите в **Reindex** (боковое меню → System → Reindex)
-
-**Шаг 2.** В выпадающем списке **Index name** выберите индекс:
-- `interest_centroids` — производный индекс тематических центроидов, который помогает matching-слою быстрее сравнивать статьи с прототипами и текущим набором тем
-
-**Шаг 3.** Выберите режим:
-- **Rebuild index only** — пересобрать derived index без исправления уже существующих статей
-- **Rebuild + repair existing articles** — пересобрать индекс и заново прогнать historical repair для уже сохранённых статей по текущему системному набору тем без retro-уведомлений
-
-**Шаг 4.** Нажмите **Queue maintenance job**
-
-**Шаг 5.** Наблюдайте за статусом в списке **Recent Jobs** ниже:
-
-| Статус | Что означает |
-|---|---|
-| **pending** | Задача в очереди, ожидает обработки |
-| **running** | 🔵 Переиндексация в процессе |
-| **completed** | 🟢 Готово! Индекс пересоздан |
-| **failed** | 🔴 Ошибка. Проверьте логи или попробуйте снова |
-
-### 8.4. Безопасность и частые вопросы
-
-**Вопрос: Переиндексация удаляет данные?**
-> Нет! Переиндексация только **пересчитывает** поисковый указатель. Все статьи, интересы пользователей и другие данные остаются нетронутыми.
-
-**Вопрос: Можно ли продолжать работать во время переиндексации?**
-> Да. Переиндексация выполняется **в фоновом режиме** через очередь задач. Система продолжает работать: собирать новости, отправлять уведомления и т.д.
-
-**Вопрос: Сколько времени занимает переиндексация?**
-> Обычно от нескольких секунд до нескольких минут, в зависимости от объёма данных.
-
-**Вопрос: Как часто нужно делать переиндексацию?**
-> Только при необходимости (см. таблицу выше). Для профилактики — раз в 1–2 недели.
-
----
-
-## 9. Наблюдаемость (Observability) — мониторинг и расходы
-
-> 📍 **Где это:** боковое меню → **System** → **Observability**
-
-На этой странице два главных блока:
-
-### Расходы на ИИ (LLM Usage)
-
-Верхние карточки показывают статистику использования LLM за 24 часа и 7 дней:
-
-| Метрика | Что означает |
-|---|---|
-| **Reviews** | Сколько статей было отправлено на проверку ИИ |
-| **Tokens** | Сколько «токенов» (единиц текста) было обработано. Чем больше токенов — тем дороже |
-| **Cost USD** | Примерная стоимость в долларах |
-| **Avg latency** | Среднее время ответа от ИИ-провайдера в миллисекундах |
-
-> 💡 **Как снизить расходы:** Расходы на ИИ напрямую зависят от количества статей, попадающих в серую зону. Если расходы слишком высокие — попробуйте улучшить шаблоны интересов (добавьте больше прототипов), чтобы система реже сомневалась.
-
-### Таблица сборов (Fetch Runs)
-
-Каждая строка — один опрос одного канала. Обращайте внимание на колонку **Outcome**:
-
-| Результат | Что означает | Нормально ли это |
-|---|---|---|
-| **new_content** | 🟢 Найдены новые статьи | Да |
-| **no_change** | ⚪ Лента не изменилась | Да, особенно для малоактивных лент |
-| **error** | 🔴 Ошибка сбора | Единичные — нормально. Если повторяются — проверьте канал |
-
-### Таблица проверок ИИ (LLM Reviews)
-
-Каждая строка — одна проверка статьи ИИ. Показывает:
-- Какая статья проверялась
-- Какое решение принял ИИ (`approve` / `reject` / `uncertain`)
-- Сколько токенов потрачено
-- Стоимость конкретной проверки
-- Время ответа
-
----
-
-## 10. Типичный порядок первоначальной настройки
-
-Если вы настраиваете систему впервые, следуйте этому порядку:
-
-### Шаг 1. Подключите источники новостей
-1. Перейдите в **Channels**
-2. Добавьте RSS-ленты (по одной или массовым импортом) или создайте один website channel, если хотите проверить website ingest
-3. Начните с 3–5 RSS-лент или 1 понятного website source, чтобы протестировать
-4. Убедитесь, что каналы в статусе **active**
-
-### Шаг 2. Дождитесь первых статей
-1. Перейдите в **Articles**
-2. Через 5–10 минут должны появиться первые статьи в статусах `raw`, `normalized` или `clustered`
-3. Если статей нет — проверьте каналы на наличие ошибок в **Observability**
-
-### Шаг 3. Создайте LLM-шаблоны
-1. Перейдите в **Rules → LLM Templates**
-2. Создайте минимум два шаблона:
-   - Один с scope `criteria` (основной active baseline для системных критериев)
-   - Один с scope `global` (запасной шаблон на все случаи)
-3. Scope `interests` можно подготовить заранее, но в текущем baseline runtime он по умолчанию не участвует в обработке
-4. Используйте готовые примеры (кнопка **Show example** → **Use this example**)
-
-### Шаг 4. Создайте шаблоны интересов
-1. Затем перейдите в **Rules → System Interests**
-2. Создайте 3–5 тематических шаблонов для системного слоя (например: «AI policy», «Climate regulation», «Cybersecurity»)
-3. Для каждого добавьте **минимум 3 положительных** и **2 отрицательных** прототипа
-4. Помните: чем лучше прототипы — тем точнее система
-5. Если нужно управлять интересами конкретного пользователя, используйте отдельную страницу **User Interests**
-
-### Шаг 5. Запустите переиндексацию
-1. Перейдите в **Reindex**
-2. Выберите `interest_centroids`
-3. Нажмите **Queue Reindex**
-4. Дождитесь статуса **completed**
-
-### Шаг 6. Проверьте работу
-1. Откройте **Observability** и убедитесь, что сборы работают (`new_content`)
-2. Откройте **Clusters** — должны начать появляться кластеры событий
-3. Если вы тестируете website source — откройте также **Resources** и убедитесь, что там появляются найденные ресурсы
-4. Откройте **Dashboard** и проверьте KPI
-
-### Шаг 7. Тонкая настройка
-- Если слишком много нерелевантных уведомлений — улучшите прототипы (особенно отрицательные)
-- Если слишком мало уведомлений — добавьте больше положительных прототипов
-- Если расходы на LLM высокие — улучшите прототипы, чтобы меньше статей попадало в серую зону
-- Мониторьте здоровье каналов и отключайте нерабочие
-
----
-
-## 11. Часто задаваемые вопросы (FAQ)
-
-### Общие вопросы
-
-**В: Что будет, если я ничего не настрою в Rules?**
-> Система будет собирать статьи и обрабатывать их, но без LLM-шаблонов ИИ-проверка серой зоны для системных критериев работать не будет. Без шаблонов интересов у вас не будет подготовленного каталога системных тем, который синхронизируется в live `criteria`. Личные `user_interests` при этом остаются отдельным слоем и настраиваются отдельно.
-
-**В: Нужно ли мне знать программирование?**
-> Нет. Вся настройка делается через веб-интерфейс. JSON для массового импорта каналов — это единственный «технический» формат, и для него есть кнопка **Load example** с готовым образцом.
-
-**В: Могу ли я что-то сломать?**
-> Практически нет. Самое «опасное» действие — блокировка статьи, но её всегда можно разблокировать. Переиндексация безопасна. Удаление канала прекращает сбор, но не удаляет уже собранные статьи.
-
-### Каналы
-
-**В: Какой poll interval выбрать?**
-> - Крупные международные ленты (Reuters, AP, BBC): `300` (5 минут)
-> - Средние издания: `600`–`900` (10–15 минут)
-> - Мелкие блоги / редко обновляемые: `3600`–`7200` (1–2 часа)
-> - Всегда включайте **Adaptive** — система сама подстроится
-
-**В: Что такое адаптивный режим (Adaptive)?**
-> Когда включён — система автоматически замедляет проверки, если лента давно не обновлялась, и ускоряет, когда новый контент появляется. Это экономит ресурсы. Например, если ленту не обновляли 6 часов, система может проверять её раз в час вместо каждых 5 минут. Как только появится новый контент — частота вернётся к нормальной.
-
-**В: Можно ли добавлять не-RSS источники?**
-> Для текущего mandatory product-testing contour проверяйте `website` sources через operator flows в админке. Для `website` главным экраном проверки становится `Resources`, а для JS-heavy сайтов можно opt-in включить browser-assisted fallback. `api`, inbound `email_imap`, Telegram ingestion и `youtube` остаются parked/future lanes для этого цикла.
-
-### Шаблоны
-
-**В: Что если я создам несколько LLM-шаблонов с одним scope?**
-> Система использует последний активный шаблон для данного scope. Рекомендуется иметь по одному активному шаблону на каждый scope.
-
-**В: Можно ли писать промпт на русском?**
-> Технически да — LLM-модели (Gemini и другие) понимают русский. Но английский обычно даёт более предсказуемые результаты. Рекомендуется писать промпт на английском, а статьи система отправит как есть (на языке оригинала).
-
-**В: Как понять, что мои прототипы хорошие?**
-> Хороший набор прототипов:
-> - Покрывает **разные аспекты** темы (не 5 вариаций одного заголовка)
-> - Содержит **конкретные** примеры (не «новости про ИИ», а «EU passes AI regulation act»)
-> - Имеет **отрицательные прототипы** — из смежных, но не нужных тем
-> - Содержит **минимум 3 положительных и 2 отрицательных** примера
-
-### Переиндексация
-
-**В: Как я пойму, что нужна переиндексация?**
-> Основной сигнал — ухудшение качества подбора. Если пользователи жалуются, что получают нерелевантные уведомления, или наоборот — не получают нужные — попробуйте переиндексировать. Также делайте это после массового обновления шаблонов интересов.
-
-**В: Переиндексация сбросит все настройки?**
-> Нет! Переиндексация только пересчитывает поисковый индекс. Все ваши настройки, каналы, шаблоны, статьи и пользовательские данные останутся нетронутыми.
-
----
-
-> 📖 **Дополнительная помощь:** В каждом разделе админки есть сворачиваемые блоки с подсказками (ищите иконку ℹ️). А в боковом меню есть раздел **Help & Guide** с полным справочником на английском языке.
+В таких случаях сначала нужен proof/debug path, а не новые настройки.

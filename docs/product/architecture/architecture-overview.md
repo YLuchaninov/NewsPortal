@@ -1,323 +1,128 @@
 # Architecture Overview
 
-Этот документ дает быстрый current-state walkthrough системы после shipped zero-shot cutover, universal selection-profile migration и shipped dual-path discovery.
+NewsPortal — это локальная content platform для сбора источников, нормализации контента, отбора полезных материалов, персонализации и операторского контроля.
 
-Он не заменяет:
+Самая короткая модель такая:
 
-- [`docs/product/architecture/product-blueprint.md`](./product-blueprint.md)
-- [`.aidp/contracts/zero-shot-interest-filtering.md`](../../../.aidp/contracts/zero-shot-interest-filtering.md)
-- [`.aidp/contracts/universal-selection-profiles.md`](../../../.aidp/contracts/universal-selection-profiles.md)
-- [`.aidp/contracts/discovery-agent.md`](../../../.aidp/contracts/discovery-agent.md)
-- [`.aidp/contracts/independent-recall-discovery.md`](../../../.aidp/contracts/independent-recall-discovery.md)
-
-Его задача другая: быстро показать, как все реально работает вместе.
-
-## 1. Главная идея
-
-Система больше не является просто “новостным RSS-парсером” или “набором template matchers”.
-
-Сейчас она состоит из 4 больших контуров:
-
-1. ingest и normalization;
-2. zero-shot selection и personalization;
-3. operator/read-model и maintenance replay;
-4. discovery как dual-path acquisition layer.
-
-## 2. Верхнеуровневая карта
-
-```mermaid
-flowchart LR
-  SC[Source channels\nrss / website / api / email_imap] --> F[Fetchers]
-  F --> PG[(PostgreSQL)]
-  PG --> O[Outbox events]
-  O --> R[Relay]
-  R --> Q[q.sequence / fallback queues]
-  Q --> W[Workers]
-  W --> PG
-  PG --> API[FastAPI]
-  PG --> WEB[Astro web]
-  PG --> ADM[Astro admin]
-  W --> IDX[HNSW indices / snapshots]
-  IDX --> W
+```text
+sources -> fetchers -> PostgreSQL -> outbox -> relay -> BullMQ -> workers -> PostgreSQL -> API/admin/web/MCP
 ```
 
-Ключевой принцип:
+PostgreSQL хранит бизнес-истину. Redis, BullMQ, HNSW-индексы, snapshots и cache — рабочие и пересобираемые слои.
 
-- PostgreSQL остается source of truth;
-- очереди и индексы являются derived/runtime слоями;
-- UI и API читают уже материализованную truth, а не владеют pipeline.
+## Что входит в систему
 
-## 3. Ingest и канонизация
+- `apps/web` — пользовательское Astro SSR приложение.
+- `apps/admin` — Astro SSR админка и операторские BFF routes.
+- `services/api` — FastAPI read/debug/maintenance API.
+- `services/fetchers` — Node/TypeScript сборщики RSS, website, API и IMAP-polled email источников.
+- `services/relay` — outbox relay: читает события из PostgreSQL и отправляет тонкие jobs в BullMQ.
+- `services/workers` — Python workers: normalization, dedup, embeddings, clustering, selection, notifications, discovery и sequence runtime.
+- `services/mcp` — MCP control-plane для операторских инструментов.
+- `packages/contracts` — общие типы и контракты для source/content/queue/auth.
+- `packages/control-plane` — общая логика admin/MCP write flows.
+- `infra/docker` и `infra/nginx` — локальный single-host runtime.
 
-### 3.1 Поток ingest
+## Главный поток контента
 
-```mermaid
-flowchart TD
-  CH[Channel poll] --> FE[Fetchers poll / extract]
-  FE --> OBS[document_observations]
-  FE --> ART[articles / web_resources]
-  ART --> OUT[outbox event]
-  OUT --> REL[Relay]
-  REL --> SEQ[sequence run]
-  SEQ --> NORM[article.normalize]
-  NORM --> DEDUP[canonical dedup]
-  DEDUP --> CAN[canonical_documents]
+1. Оператор создает source channel в админке или через control-plane.
+2. Fetchers опрашивают due channels и сохраняют наблюдения, статьи или website resources в PostgreSQL.
+3. Fetchers пишут тонкое событие в `outbox_events`.
+4. Relay публикует job в BullMQ, чаще всего через sequence-managed путь `q.sequence`.
+5. Workers читают job, снова загружают нужные данные из PostgreSQL, выполняют шаги обработки и пишут результат обратно.
+6. API, admin, web и MCP читают уже материализованную правду из PostgreSQL.
+
+Важная деталь: job не должен нести большой payload. Очередь говорит “что случилось”, а worker сам читает authoritative state из базы.
+
+## Источники
+
+Поддерживаемые provider types:
+
+- `rss` — RSS, Atom и JSON Feed внутри одного adapter boundary.
+- `website` — сайты, sitemap/section/homepage resources и browser-assisted fallback для публичных JS-heavy страниц.
+- `api` — JSON endpoint ingest с явным mapping.
+- `email_imap` — mailbox ingest для press inboxes и sender filters.
+- `youtube` — значение в модели provider types, без полноценного operator runtime в текущем baseline.
+
+Website-источники важны отдельно: `web_resources` не являются “почти статьями” и не должны тихо превращаться в RSS. Editorial-compatible resources могут проецироваться в `articles`, но resource truth остается видимой в admin `Resources`.
+
+## Selection и personalization
+
+Система сначала строит общий system-selected слой, а уже потом персонализацию.
+
+```text
+document observations
+-> deduplicated documents
+-> story clusters / verification
+-> interest filter results
+-> final_selection_results
+-> system-selected feed
+-> optional user matches / saved / following / notifications
 ```
 
-Что важно:
+`final_selection_results` — основная implementation truth для отбора. `system_feed_results` остается ограниченной compatibility projection и не должен становиться вторым центром принятия решений.
 
-- RSS/Atom distinction живет внутри `rss` boundary через adapter layer;
-- website-ingestion идет через `web_resources`, а не через скрытую RSS-конверсию;
-- editorial-compatible website rows могут project-иться в `articles`, но `web_resources` не теряют свою собственную truth.
+LLM не является горячим путем для каждой статьи. Он используется как bounded review для серых зон, когда policy и бюджет это разрешают.
 
-## 4. Zero-shot selection pipeline
+## Discovery
 
-### 4.1 Материализованный pipeline
+Discovery помогает находить новые источники, но не должен самовольно расширять ingest рискованными sources.
 
-```mermaid
-flowchart TD
-  OBS[document_observations] --> CAN[canonical_documents]
-  CAN --> CL[story_clusters\nstory_cluster_members]
-  CL --> VER[verification_results]
-  VER --> IFR[interest_filter_results]
-  IFR --> FSR[final_selection_results]
-  FSR --> SFR[system_feed_results\ncompatibility projection only]
+Правила:
+
+- по умолчанию discovery выключен;
+- live search и LLM требуют явных env/config;
+- auto-promotion зависит от profile policy и review gates;
+- graph-first missions и independent recall — разные, но связанные пути;
+- browser-assisted hints для website candidates не превращают source в RSS и не обходят CAPTCHA/login/manual challenge.
+
+## Операторские поверхности
+
+Оператору важны не внутренние классы, а видимые точки контроля:
+
+- `/admin` — dashboard, channels, rules, articles, clusters, resources, reindex, observability.
+- `/admin/discovery` и соседние discovery routes — missions, profiles, recall, candidates, sources.
+- `/maintenance/*` FastAPI endpoints — read/debug/maintenance контур.
+- MCP service — безопасный control-plane для внешних operator tools.
+- Mailpit в dev compose — локальная проверка email delivery без реальных писем.
+
+## Auth и роли
+
+Firebase подтверждает identity. После bootstrap локальная PostgreSQL-модель users/roles решает authorization. Admin allowlist помогает первому входу, но не заменяет локальные роли.
+
+Web anonymous sessions, admin sign-in, cookies, nginx `/admin` routing и BFF paths должны оставаться раздельными.
+
+## Runtime baseline
+
+Локальный baseline — Docker Compose:
+
+```sh
+pnpm dev:mvp:internal
 ```
 
-Слои значат следующее:
+Обычные gates:
 
-- `document_observations`
-  Сырым фактом является наблюдение документа/статьи.
-- `canonical_documents`
-  Канонизированный документ после dedup ownership.
-- `story_clusters`
-  Story/event grouping поверх canonical layer.
-- `verification_results`
-  Проверка силы/согласованности сигнала.
-- `interest_filter_results`
-  Технический и семантический zero-shot filtering.
-- `final_selection_results`
-  Основная final-selection truth.
-- `system_feed_results`
-  Только bounded compatibility projection.
-
-### 4.2 Семантика selection после universal-profile migration
-
-```mermaid
-flowchart TD
-  CRIT[criteria + interest_templates] --> MAP[compatibility mapping]
-  MAP --> PROF[selection_profiles]
-  DOC[document / cluster context] --> SCORE[criterion scoring]
-  PROF --> POLICY[profile policy]
-  SCORE --> GZ{gray zone?}
-  POLICY --> GZ
-  GZ -->|profile says hold| HOLD[cheap hold]
-  GZ -->|profile allows review| LLM[optional LLM review]
-  GZ -->|not gray| DEC[match / no_match]
-  HOLD --> IFR[interest_filter_results]
-  LLM --> IFR
-  DEC --> IFR
-  IFR --> FSR[final_selection_results]
+```sh
+pnpm lint
+pnpm typecheck
+pnpm unit_tests
+pnpm integration_tests
 ```
 
-Главный смысл:
+Полный продуктовый локальный контур:
 
-- доменная логика больше не должна быть скрыта только в engine;
-- `selection_profiles` делают profile/policy truth явной;
-- `hold` является нормальным cheap outcome;
-- LLM не является обязательным hot path.
-
-### 4.3 Final-selection truth
-
-```mermaid
-flowchart LR
-  IFR[interest_filter_results] --> FS[final_selection policy]
-  FS --> FSR[final_selection_results]
-  FSR --> READ[system-selected collection / content-items / admin]
-  FSR -.fallback only when absent.-> SFR[system_feed_results]
+```sh
+pnpm test:product:local:core
+pnpm test:product:local:full
 ```
 
-Read-path truth сейчас такая:
+## Что нельзя ломать
 
-- сначала читается `final_selection_results`;
-- `system_feed_results` используется только как compatibility fallback;
-- operator surfaces дополнительно получают нормализованные `selection_*` поля, diagnostics и guidance.
-
-## 5. Personalization и нотификации
-
-```mermaid
-flowchart TD
-  FSR[final_selection_results] --> PERS[user-interest matching]
-  PERS --> UM[user matches]
-  UM --> NOTIF[notification decisioning]
-  NOTIF --> LOG[notification_log / digest_delivery_log]
-  LOG --> WEB[web notifications]
-  LOG --> TG[telegram]
-  LOG --> DIG[email_digest]
-```
-
-Здесь важны 2 правила:
-
-- personalization больше не должна тихо обходить final-selection truth;
-- `email_digest` остается digest-only каналом, а immediate delivery truth живет отдельно.
-
-## 6. Operator и maintenance слой
-
-### 6.1 Read-model surfaces
-
-```mermaid
-flowchart LR
-  PG[(PostgreSQL)] --> API[FastAPI maintenance/read APIs]
-  API --> A1[/maintenance/articles]
-  API --> A2[/content-items]
-  API --> A3[/maintenance/web-resources]
-  API --> A4[/maintenance/reindex-jobs]
-  API --> A5[/system-interests]
-  A1 --> ADM[Astro admin]
-  A2 --> WEB[Astro web]
-  A3 --> ADM
-  A4 --> ADM
-  A5 --> ADM
-```
-
-Operator truth теперь включает:
-
-- `selectionMode`;
-- `selectionSummary`;
-- `selectionReason`;
-- `selectionDiagnostics`;
-- `selectionGuidance`;
-- replay provenance через `selectionProfileSnapshot`.
-
-### 6.2 Historical replay / backfill
-
-```mermaid
-flowchart TD
-  RJ[reindex job] --> SNAP[freeze target snapshot]
-  SNAP --> ENR[optional enrichment replay]
-  ENR --> REFILT[rebuild filter rows]
-  REFILT --> FSR[rebuild final_selection_results]
-  FSR --> COMPAT[bounded compatibility projection sync]
-  COMPAT --> RES[result_json + selectionProfileSnapshot]
-  RES --> MR[/maintenance/reindex-jobs]
-```
-
-Что важно:
-
-- replay теперь несет не только счетчики, но и profile provenance;
-- historical repair не должен рассылать retro notifications;
-- compatibility closeout является наблюдаемым, а не скрытым.
-
-## 7. Discovery как dual-path control plane
-
-Сейчас discovery больше не graph-first-only в операционном смысле.
-
-Есть 2 связанных, но разных пути.
-
-### 7.1 Graph-first adaptive discovery
-
-```mermaid
-flowchart TD
-  M[discovery_missions\ninterest_graph] --> H[hypotheses]
-  H --> C[candidates]
-  C --> FIT[discovery_source_interest_scores]
-  FIT --> PORT[portfolio snapshots]
-  PORT --> REVIEW[operator review / feedback]
-  REVIEW --> REEVAL[re-evaluation]
-```
-
-Это путь для:
-
-- mission planning;
-- hypothesis-driven source search;
-- mission-fit ranking;
-- feedback loop.
-
-### 7.2 Independent recall discovery
-
-```mermaid
-flowchart TD
-  RM[discovery_recall_missions] --> ACQ[recall acquisition]
-  ACQ --> RC[discovery_recall_candidates]
-  ACQ --> QS[discovery_source_quality_snapshots]
-  RC --> PROMOTE[promote candidate]
-  PROMOTE --> CH[source_channels]
-  CH --> SYNC[source.channel.sync.requested]
-```
-
-Это путь для:
-
-- neutral recall backlog;
-- generic source quality;
-- bounded recall-first acquisition;
-- promotion в `source_channels` без обязательного `interest_graph`.
-
-### 7.3 Как они связаны
-
-```mermaid
-flowchart LR
-  G[Graph-first missions] --> SP[discovery_source_profiles]
-  R[Recall missions] --> SP
-  SP --> SQ[generic quality snapshots]
-  SP --> SI[mission-fit scores]
-  SI --> PORT[portfolio]
-  SQ --> OPER[operator source-quality reads]
-  R --> PROM[promotion]
-  G --> REV[review path]
-```
-
-Главная мысль:
-
-- `discovery_source_profiles` являются shared source identity layer;
-- `discovery_source_interest_scores` выражают mission-fit;
-- `discovery_source_quality_snapshots` выражают generic source quality;
-- discovery теперь dual-path, но не хаотичный.
-
-## 8. Что сейчас является primary truth
-
-Если смотреть сверху вниз:
-
-- channel/source truth:
-  - `source_channels`
-- raw observation truth:
-  - `document_observations`
-- canonical/story/verification truth:
-  - `canonical_documents`
-  - `story_clusters`
-  - `verification_results`
-- semantic/final selection truth:
-  - `interest_filter_results`
-  - `final_selection_results`
-- compatibility-only truth:
-  - `system_feed_results`
-- profile semantics truth:
-  - `selection_profiles`
-- graph-first discovery planning truth:
-  - `discovery_missions.interest_graph`
-- neutral recall/discovery quality truth:
-  - `discovery_source_quality_snapshots`
-  - `discovery_recall_missions`
-  - `discovery_recall_candidates`
-
-## 9. Что важно не перепутать
-
-- `articles` не являются единственной product truth после universal content и observation layering.
-- `system_feed_results` больше не являются primary owner final selection.
-- `selection_profiles` не заменяют весь scoring engine мгновенно, но уже являются явной semantics/config truth.
-- discovery не является больше только mission/hypothesis review path.
-- recall quality и downstream selected-content yield не должны смешиваться.
-
-## 10. Куда смотреть дальше
-
-Для деталей:
-
-- полный blueprint:
-  [`docs/product/architecture/product-blueprint.md`](./product-blueprint.md)
-- zero-shot pipeline contract:
-  [`.aidp/contracts/zero-shot-interest-filtering.md`](../../../.aidp/contracts/zero-shot-interest-filtering.md)
-- universal selection profiles:
-  [`.aidp/contracts/universal-selection-profiles.md`](../../../.aidp/contracts/universal-selection-profiles.md)
-- adaptive discovery:
-  [`.aidp/contracts/discovery-agent.md`](../../../.aidp/contracts/discovery-agent.md)
-- independent recall discovery:
-  [`.aidp/contracts/independent-recall-discovery.md`](../../../.aidp/contracts/independent-recall-discovery.md)
+- PostgreSQL остается бизнес-истиной.
+- Redis/BullMQ остаются transport, а не state store.
+- Heavy processing остается async через outbox/relay/workers.
+- Website resources видимы как first-class layer.
+- System selection не смешивается с personalization.
+- Historical replay/backfill не рассылает retro notifications.
+- Discovery и browser assistance остаются safe-by-default.
+- Docs объясняют систему, но не заменяют `.aidp/*`, migrations, contracts и код.

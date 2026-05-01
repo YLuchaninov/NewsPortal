@@ -1,48 +1,23 @@
 # Data Script Assets
 
-Этот каталог хранит importable example assets и operator-facing reference bundles для ручного импорта, локальных экспериментов и объяснения текущих corpus/template наборов.
+Этот каталог хранит JSON и companion notes для ручного импорта, локальных экспериментов и демонстрационных сценариев.
 
-## Что находится в каталоге
+Это не global config системы. Runtime-данные живут в PostgreSQL, а operator меняет их через admin/control-plane surfaces.
 
-- [`it_news.json`](./it_news.json)
-  Пример набора RSS-каналов по IT/news domain.
-- [`outsource.json`](./outsource.json)
-  Большой source bundle для outsourcing-oriented corpus discovery/import.
-- [`outsource_cleaned_balanced_tenders_and_company_signals.json`](./outsource_cleaned_balanced_tenders_and_company_signals.json)
-  Более узкий и очищенный source bundle для tenders/company-signal monitoring.
-- [`web.bulk-import.json`](./web.bulk-import.json)
-  Derived website-only shared bulk-import bundle with explicit `providerType: "website"` on every row.
-- [`outsource_balanced_templates.md`](./outsource_balanced_templates.md)
-  Focused outsourcing-only companion к Example C в [`EXAMPLES.md`](../operator/examples/EXAMPLES.md), если нужен короткий one-scenario cheat sheet без остальных built-in examples.
-- [`outsource_balanced_templates.json`](./outsource_balanced_templates.json)
-  Legacy/reference asset для ручного сравнения или переноса значений в админку. Не используется кодом как runtime truth и не заменяет Example C в [`EXAMPLES.md`](../operator/examples/EXAMPLES.md).
+## Файлы
 
-## Важное различие
+- `it_news.json` — пример RSS-каналов для IT/news domain.
+- `outsource.json` — широкий source bundle для outsourcing-oriented corpus.
+- `outsource_cleaned_balanced_tenders_and_company_signals.json` — более узкий bundle для tenders/company-signal monitoring.
+- `web.bulk-import.json` — website-only bulk import bundle, все rows имеют `providerType: "website"`.
+- `web.json` — website reference bundle.
+- `outsource_balanced_templates.json` — reference values for templates and interests.
 
-Для built-in example bundles primary human-facing source теперь должен быть [`EXAMPLES.md`](../operator/examples/EXAMPLES.md). Файлы в этом каталоге помогают узкому use case или ручному переносу, но не должны переопределять тот walkthrough.
+## Channel rows
 
-Эти JSON-файлы не являются global runtime config системы.
+Channel import rows должны явно указывать `providerType`. Importer не должен угадывать provider mode по экрану или имени файла.
 
-Они используются как:
-
-- import/export assets;
-- corpus/bootstrap bundles;
-- operator-facing examples;
-- reproducible reference inputs для ручной настройки.
-
-Каноническая runtime truth все равно живет в:
-
-- PostgreSQL (`source_channels`, `interest_templates`, `criteria`, `selection_profiles`, и т.д.);
-- canonical product docs;
-- migrations и коде.
-
-## Channel bundle schema
-
-Файлы [`it_news.json`](./it_news.json), [`outsource.json`](./outsource.json), [`outsource_cleaned_balanced_tenders_and_company_signals.json`](./outsource_cleaned_balanced_tenders_and_company_signals.json) и [`web.bulk-import.json`](./web.bulk-import.json) содержат массивы channel-import rows.
-
-Shared admin bulk import now requires row-level `providerType` on every JSON row. The importer no longer infers provider mode from the screen or from a top-level bulk setting, so example bundles in this directory should keep `providerType` explicit even when every row belongs to the same provider family.
-
-Обязательный минимум для таких rows:
+Минимальные поля:
 
 - `name`
 - `providerType`
@@ -54,71 +29,41 @@ Shared admin bulk import now requires row-level `providerType` on every JSON row
 - `maxItemsPerPoll`
 - `isActive`
 
-Опциональные override-поля:
+Optional overrides:
 
 - `requestTimeoutMs`
 - `userAgent`
 - `preferContentEncoded`
 
-Если эти override-поля отсутствуют у отдельных rows, это не считается неполной конфигурацией: runtime/admin import path может использовать свои дефолты.
+Если optional override отсутствует, это не ошибка: runtime/admin path использует свои defaults.
 
-## Provider-type truth
+## Provider types
 
-Для shipped runtime operator-ready provider types сейчас truthful являются:
+Для текущей модели допустимы:
 
 - `rss`
 - `website`
 - `api`
 - `email_imap`
-- `youtube` как future-oriented provider type в blueprint/config model
+- `youtube` как declared provider value без полного operator runtime baseline
 
-Важно:
+Atom feeds импортируются как `rss`. Различие RSS/Atom принадлежит adapter layer, а не `providerType`.
 
-- RSS/Atom distinction не должна жить как отдельный `providerType`.
-- Atom feeds должны импортироваться через `providerType = "rss"` и при необходимости различаться внутренним parser/adapter behavior.
+## Template rows
 
-В рамках этого doc sweep `outsource.json` был синхронизирован с этой truth: legacy rows с `providerType = "atom"` приведены к `providerType = "rss"`.
-
-## Template bundle schema
-
-[`outsource_balanced_templates.json`](./outsource_balanced_templates.json) может содержать:
+`outsource_balanced_templates.json` может содержать:
 
 - `interest_templates`
 - `llm_templates`
 
-`interest_templates` сейчас описывают template-import rows с полями:
+Он полезен как reference для ручной настройки, но не является machine-owned runtime config.
 
-- `name`
-- `description`
-- `priority`
-- `time_window_hours`
-- `allowed_content_kinds`
-- `must_have_terms`
-- `must_not_have_terms`
-- `positive_prototypes`
-- `negative_prototypes`
-- `selection_profile_policy`
-- `candidate_positive_signals`
-- `candidate_negative_signals`
+Человеческое описание outsourcing scenario теперь живет в [Example Bundles](../operator/examples/EXAMPLES.md), чтобы не держать отдельную companion note рядом с asset-файлами.
 
-`llm_templates` сейчас описывают rows с полями:
+## Проверка
 
-- `template_name`
-- `scope`
-- `prompt_template`
+Для этого каталога достаточно:
 
-Важно:
-
-- этот JSON больше не должен считаться каноническим runtime bundle;
-- operational/remediation code не должен читать его по умолчанию;
-- для live runtime operator должен опираться на admin UI и БД, а Markdown handbook — использовать как human guidance.
-- новые `selection_profile_policy` и `candidate_*_signals` в этом JSON являются reference-example слоем, чтобы оператор мог не потерять текущие настройки при ручном переносе в админку.
-
-## Проверка в рамках текущего sweep
-
-Во время текущего прохода было проверено:
-
-- все `docs/product/data-scripts/*.json` синтаксически валидны;
-- channel bundles не содержат provider types вне текущего durable contract после исправления legacy `atom` rows;
-- частично отсутствующие `requestTimeoutMs` / `userAgent` / `preferContentEncoded` являются допустимыми optional overrides, а не поврежденными rows;
-- legacy template JSON остается syntactically valid reference asset, но не рассматривается как machine-owned runtime truth.
+- parse-check всех JSON;
+- проверка provider types;
+- проверка, что assets не объявлены единственным местом runtime-правды.

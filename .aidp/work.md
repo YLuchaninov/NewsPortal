@@ -4,8 +4,8 @@
 
 ## Свежесть live state
 
-- Последняя проверка этого файла по worktree reality: 2026-04-29
-- Последняя проверка blockers/dependencies: 2026-04-29
+- Последняя проверка этого файла по worktree reality: 2026-05-01
+- Последняя проверка blockers/dependencies: 2026-05-01
 - Следующая revalidation для blocked items: n/a
 
 ## Текущий режим
@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: refactoring closure slice opened from a clean live state to address the remaining high-value hotspots without continuing cosmetic cleanup.
+- Почему сейчас: targeted recovery requested because the prior docs cleanup accidentally changed validated manual testing artifacts that the user relies on.
 
 ## Проверки закрытия route
 
@@ -38,15 +38,15 @@
 
 ### Активные capabilities
 
-- AIDP-ENGINEERING-REFACTORING-CLOSURE — staged behavior-preserving closure of the remaining high-value refactoring hotspots: API main composition pressure, worker/runtime hotspots, proof harness helper duplication, and explicit deferral of admin-only large modules.
+- none
 
 ## Активное execution state
 
 ### Primary active item
 
-- ID: AIDP-ENGINEERING-REFACTORING-CLOSURE-STAGE-1
-- Parent capability: AIDP-ENGINEERING-REFACTORING-CLOSURE
-- Почему это primary active work: user approved the closure plan and asked to implement it; worktree was clean, and the next honest slice is staged refactoring with compatibility-preserving proof.
+- ID: NEWSPORTAL-DOCS-MANUAL-ARTIFACT-RECOVERY-PATCH-1
+- Parent capability: NEWSPORTAL-DOCS-HUMAN-REVISION
+- Почему это primary active work: user explicitly asked to restore validated manual test docs from the original HEAD version without undoing compact architecture/general docs.
 
 ### Secondary active item
 
@@ -57,16 +57,86 @@
 
 ### Согласованность worktree
 
-- Worktree status: dirty by active refactoring closure stage after opening `AIDP-ENGINEERING-REFACTORING-CLOSURE-STAGE-1`.
-- Alignment note: expected changes are limited to AIDP live state, API composition/decomposition, worker/runtime decomposition, proof harness helper reuse, and final closure notes; admin templates/import surfaces and fetchers are explicitly deferred unless new evidence appears.
-- Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
+- Worktree status: dirty by completed docs revision/consolidation and completed `NEWSPORTAL-DOCS-MANUAL-ARTIFACT-RECOVERY-PATCH-1`.
+- Alignment note: validated manual artifacts under `docs/product/operator/examples/**`, `docs/product/operator/mcp/**` and `docs/product/data-scripts/outsource_balanced_templates.md` were restored to HEAD content; remaining dirty docs are compact architecture/general docs, targeted index links, legacy docs/mcp deletions, and this AIDP sync. Product code, database migrations, queue payloads, runtime behavior and generated artifacts were not changed.
+- Latest broad proof: manual-artifact recovery proof passed on 2026-05-01: restored-file line-count sanity, no diff for restored validated artifacts, JSON parse validation, provider type validation, local Markdown link check, docs command parity against `package.json`, reviewed stale-marker allowance for restored validated docs, and `git diff --check --`.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: keep each closure stage behavior-preserving, run targeted proof after each meaningful slice, and stop if an endpoint, payload, DB schema, queue payload or smoke output shape would need to change.
+- Required action before ordinary implementation: no active implementation remains; if further work starts, open a new active item and re-check worktree alignment.
+
+### NEWSPORTAL-DOCS-MANUAL-ARTIFACT-RECOVERY-PATCH-1
+
+- Kind: Patch
+- Status: done
+- In scope: selectively restore validated manual testing docs from HEAD: RSS/examples, website source examples/testing, discovery mode testing, MCP README/client/http/testing docs, and outsourcing companion; update product docs index links.
+- Out of scope: restoring compact architecture docs to long-form versions, restoring legacy `docs/mcp/*` compatibility stubs, product code changes, migrations, runtime behavior changes, JSON asset deletion.
+- Allowed paths: `.aidp/work.md`, `docs/product/README.md`, `docs/product/operator/examples/**`, `docs/product/operator/mcp/**`, `docs/product/data-scripts/outsource_balanced_templates.md`.
+- Risk: low-medium, because this is docs-only but the restored docs include validated manual procedures that must not be edited casually.
+- Required proof: line-count sanity for restored files, local Markdown link check, JSON parse validation, provider type validation, docs command parity against `package.json`, stale marker scan with reviewed restored-doc allowances, `git diff --check --`.
+- Acceptance criteria: validated manual artifacts are back at original HEAD content, discoverable from `docs/product/README.md`, compact architecture/general docs remain untouched, and runtime tests are explicitly not required.
+- No-runtime-gate rationale: docs-only targeted recovery from repo truth.
+- Implemented, with evidence: restored `EXAMPLES.md`, `DISCOVERY_MODE_TESTING.md`, `WEBSITE_SOURCES_TESTING.md`, `WEBSITE_SOURCE_EXAMPLES.md`, MCP README/client/http/testing docs, and `outsource_balanced_templates.md` from HEAD.
+- Implemented, with evidence: `docs/product/README.md` now explicitly links to the restored manual-testing entrypoints.
+- Passed proof: restored line counts match HEAD expectations: examples 2901, discovery 1169, website testing 725, website examples 620, MCP docs 59/254/288/192, outsourcing companion 285.
+- Passed proof: `git diff --name-status` for restored validated artifacts is empty.
+- Passed proof: JSON parse validation for 6 files in `docs/product/data-scripts`.
+- Passed proof: provider type validation for data-script JSON rows.
+- Passed proof: local Markdown link check across 17 Markdown files.
+- Passed proof: docs `pnpm` command parity against `package.json` for 24 commands, with `pnpm --filter` options handled as command options rather than root scripts.
+- Reviewed proof: stale-marker scan matches remain only inside restored validated docs and represent their established manual/proof language, not new cleanup markers.
+- Passed proof: `git diff --check --` passed.
+- No-runtime-gate rationale: docs-only recovery from HEAD; runtime tests were not required because product code and runtime contracts were unchanged.
+
+### NEWSPORTAL-DOCS-STRUCTURAL-CONSOLIDATION-SWEEP-1
+
+- Kind: Sweep
+- Status: done
+- In scope: merge thin/historical docs into their owner docs: sequence runtime and candidate recall into product blueprint, website audit/examples into website testing/product blueprint, MCP setup/smoke/testing into MCP README, outsourcing companion into examples/data-scripts owner text; delete now-redundant Markdown files.
+- Out of scope: product code changes, migrations, runtime behavior changes, JSON asset deletion, Firebase setup merge, changing `.aidp/*` architecture truth except this live-state sync.
+- Allowed paths: `.aidp/work.md`, `docs/**`.
+- Risk: low, because this is documentation structure only, but broken links or lost operator guidance would hurt discoverability.
+- Required proof: local Markdown link check, JSON parse validation for data-script assets, provider type validation for data-script JSON, docs command parity against `package.json`, stale marker/conflicting truth scan, `git diff --check --`.
+- Acceptance criteria: fewer Markdown files, no thin docs that only duplicate an adjacent owner document, all references to deleted docs removed or redirected, JSON assets preserved, runtime tests explicitly not required.
+- No-runtime-gate rationale: docs/assets-only structural cleanup.
+- Implemented, with evidence: sequence runtime and candidate recall notes were merged into `docs/product/architecture/product-blueprint.md`; their separate historical/plan files were deleted.
+- Implemented, with evidence: website audit guidance and website shape examples were merged into `docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md`; dated audit/example files were deleted.
+- Implemented, with evidence: MCP client setup, HTTP smoke and testing guidance were merged into `docs/product/operator/mcp/README.md`; the thin MCP subdocs were deleted.
+- Implemented, with evidence: outsourcing companion guidance was merged into `docs/product/operator/examples/EXAMPLES.md` and `docs/product/data-scripts/README.md`; the separate companion note was deleted.
+- Passed proof: JSON parse validation for 6 files in `docs/product/data-scripts`.
+- Passed proof: provider type validation for data-script JSON rows.
+- Passed proof: local Markdown link check across 12 Markdown files.
+- Passed proof: docs `pnpm` command parity against `package.json` for 26 commands.
+- Passed proof: stale marker/conflicting truth scan returned no matches for TODO/FIXME/ADR/deprecated/planned/future/source-of-truth/canonical/versioning markers.
+- Passed proof: `git diff --check --` passed.
+- No-runtime-gate rationale: structural docs-only cleanup; runtime tests were not required because product code and runtime contracts were unchanged.
+
+### NEWSPORTAL-DOCS-HUMAN-REVISION-SWEEP-1
+
+- Kind: Sweep
+- Status: done
+- In scope: revise `docs/**` in two passes: source-to-docs for missing critical system truth, then docs-to-source for paragraph-level pruning/fixing; make architecture docs compact and human-readable; keep operator docs practical; reduce examples to useful scenarios/assets; validate JSON data-script assets without treating them as prose.
+- Out of scope: product code changes, migrations, runtime behavior changes, new ADR/versioning system, generated release artifacts, changing `.aidp/*` architecture truth except this live-state sync.
+- Allowed paths: `.aidp/work.md`, `docs/**`.
+- Risk: low-medium, because only docs/assets change, but broad docs can accidentally create a second source of truth or stale operator guidance.
+- Required proof: source evidence from `.aidp/blueprint.md`, `.aidp/contracts/*`, manifests, migrations, contracts and service entrypoints; Markdown local link check; JSON parse validation for `docs/product/data-scripts/*.json`; command parity check against `package.json` and `.aidp/os.yaml`; `rg` scan for stale markers/conflicting truth language; `git diff --check --`.
+- Acceptance criteria: `docs/product/architecture` explains the current system in compact human language; operator docs answer what to do, why, expected result and where to check; examples are no longer encyclopedic duplicates; legacy MCP stubs are either justified or removed; docs-only no-runtime-gate rationale is explicit.
+- Architecture note: product docs remain explanatory and human-facing; `.aidp/*` remains runtime-agent truth and must not be duplicated as a second hidden contract.
+- Implemented, with evidence: `docs/product/architecture/**` was compacted into human-readable current-system descriptions for product purpose, runtime surfaces, content flow, sequence runtime, candidate recall, data ownership, selection, discovery, operator surfaces and constraints.
+- Implemented, with evidence: operator docs were rewritten around practical flows: admin use, manual MVP runbook, local product testing, website sources, discovery and MCP.
+- Implemented, with evidence: oversized example docs were reduced to scenario guidance and linked assets; JSON data-script assets were preserved and validated rather than treated as prose.
+- Implemented, with evidence: legacy `docs/mcp/*` compatibility stubs were removed because live references point to `docs/product/operator/mcp/**`.
+- Out of scope honored: no product code, migrations, queue contracts, runtime behavior or generated artifacts were changed.
+- Passed proof: JSON parse validation for 6 files in `docs/product/data-scripts`.
+- Passed proof: provider type validation for data-script JSON rows.
+- Passed proof: local Markdown link check across 20 Markdown files.
+- Passed proof: docs `pnpm` command parity against `package.json` for 27 commands.
+- Passed proof: stale marker/conflicting truth scan returned no matches for TODO/FIXME/ADR/deprecated/planned/future/source-of-truth/canonical/versioning markers.
+- Passed proof: `git diff --check --` passed.
+- No-runtime-gate rationale: docs/assets-only sweep; runtime tests were not required because product code and runtime contracts were unchanged.
 
 ### AIDP-ENGINEERING-REFACTORING-CLOSURE-STAGE-1
 
 - Kind: Stage
-- Status: active
+- Status: done
 - In scope: staged behavior-preserving cleanup of remaining high-value refactoring hotspots: reduce API main composition pressure where compatible with existing `api_main` unit-test patchability, split worker content/smoke support into cohesive modules, reuse existing proof harness helpers in remaining duplicate scripts, and record explicit admin/fetchers deferrals.
 - Out of scope: public endpoint changes, payload changes, auth behavior changes, DB schema changes, queue payload changes, smoke output shape changes, visual redesign, admin templates/import refactor, fetchers refactor beyond closure note.
 - Allowed paths: `.aidp/work.md`, `.aidp/history.md`, `services/api/app/**`, `services/workers/app/**`, `infra/scripts/**`, `services/fetchers/src/cli/test-*.ts` for proof-harness timeout hardening, and `tests/unit/python/**` only if compatibility tests need to follow moved internals.
