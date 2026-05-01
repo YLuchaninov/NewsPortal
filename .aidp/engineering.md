@@ -40,6 +40,18 @@
 
 `normal` не является route; normal lifecycle mode всегда требует выбранный work route.
 
+## Planning/source independence
+
+Tool-native Plan Mode, Ask Mode, design mode, Spec Kit, external specs, tickets, PRDs and user-provided plans may guide work, but they do not replace AIDP route selection.
+
+Planning/specification is a phase or artifact inside the selected work route. It is not a separate route and must not create `plan`, `planning`, `spec` or `spec-driven` as work routes.
+
+If the selected route requires planning and no tool-native or external plan is available, use AIDP-native planning in `.aidp/work.md`.
+
+Do not start implementation stage for `capability`, non-trivial `sweep`, runtime-core/router `docs-operator` migration, non-trivial `audit`, or complex `delivery` while required planning/spec state is absent or only observed.
+
+Before implementation, check accepted plan/spec artifacts against relevant blueprint boundaries, engineering constraints and verification gates. External specs cannot change durable architecture truth without owner-file consolidation.
+
 ## Item state discipline
 
 - Не помечай item `done` до route-specific proof and close gate.
@@ -348,3 +360,5 @@ If a subsystem requires more detail than this compact core can hold, create or u
 - Shipping test/proof harnesses or fixtures inside production images.
 - Depending on chat memory for repository truth.
 - Updating product docs while leaving `.aidp/*` stale when runtime-agent truth changed.
+- Skipping AIDP-native planning when the selected route requires planning and no tool-native/external plan exists.
+- Treating Plan Mode, Spec Kit, tickets, PRDs or external specs as canonical repository truth without active-item acceptance and consolidation.

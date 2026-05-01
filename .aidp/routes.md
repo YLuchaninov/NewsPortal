@@ -30,6 +30,7 @@ Lifecycle mode отвечает на вопрос, готова ли ОС к о�
 - route phase;
 - route-specific next step;
 - route-specific proof;
+- planning/spec state, если route или item требует planning;
 - risk;
 - approval required;
 - approval reason, если approval нужен или risk выше low;
@@ -62,6 +63,26 @@ High-risk action требует явного approval до risky action. Approva
 - not applicable, потому что работа строго локальная и не меняет durable boundaries.
 
 Если repository reality противоречит `.aidp/blueprint.md`, это observation. Выбери owner-файл и консолидируй или supersede через rules из `.aidp/verification.md`.
+
+## Planning and specification independence
+
+AIDP не требует, чтобы активный AI-инструмент поддерживал Plan Mode, Ask Mode, design mode, Spec Kit или external specification workflow.
+
+Planning/specification является phase/artifact внутри выбранного work route. Это не work route и не замена route selection.
+
+Allowed planning sources:
+
+- `none` — planning не требуется.
+- `AIDP-native` — compact plan записан в `.aidp/work.md`.
+- `tool-native` — Plan Mode, Ask Mode, design mode или аналог активного инструмента.
+- `external-spec` — Spec Kit output, repository spec, product spec, ticket, PRD, user-provided spec или похожий artifact.
+- `unknown` — источник неясен и остается observation until confirmed.
+
+Если selected route требует planning, агент должен создать или использовать planning/spec artifact. Если tool-native/external planner недоступен или неизвестен, используй AIDP-native planning в `.aidp/work.md`.
+
+Planning/spec artifacts не являются canonical truth сами по себе. Они становятся accepted-for-this-item только после сверки с repository reality, selected route, blueprint, engineering и verification constraints.
+
+Не добавляй отдельные work routes `plan`, `planning`, `spec` или `spec-driven`.
 
 ## AIDP package migration
 
@@ -116,6 +137,8 @@ Proof:
 
 ## Route: micro-patch
 
+Planning default: обычно не требуется. Если для изменения нужен план шире one-line intent, выбери `capability`, `bugfix`, `sweep` или `docs-operator` по реальному смыслу задачи.
+
 Используй, когда изменение маленькое, локальное, не требует новой capability, architectural decision или broad refactor.
 
 Sequence:
@@ -140,6 +163,8 @@ Proof:
 
 ## Route: capability
 
+Planning default: required. Если нет tool-native plan mode или external/spec artifact, используй AIDP-native planning в `.aidp/work.md`.
+
 Используй, когда добавляется user-visible behavior, workflow/API, multi-step feature или работа требует staged delivery and capability-level proof.
 
 Sequence:
@@ -149,16 +174,18 @@ Sequence:
 3. Запиши assumptions and competing interpretations.
 4. Определи in scope/out of scope.
 5. Запиши risk and approval requirements.
-6. Прочитай релевантный `.aidp/blueprint.md` context до boundary-affecting design/writes.
-7. Разбей на stages.
-8. Активируй ровно один stage.
-9. Закрой stage со stage proof.
-10. Запиши cleanup per stage, если нужно.
-11. Не помечай capability done до capability-level proof.
-12. Sync blueprint/engineering/verification/routes/history только если их owned truth changed.
+6. Создай или прими planning/spec artifact и запиши source/status в `.aidp/work.md`.
+7. Прочитай релевантный `.aidp/blueprint.md` context до boundary-affecting design/writes.
+8. Разбей на stages.
+9. Активируй ровно один stage.
+10. Закрой stage со stage proof.
+11. Запиши cleanup per stage, если нужно.
+12. Не помечай capability done до capability-level proof.
+13. Sync blueprint/engineering/verification/routes/history только если их owned truth changed.
 
 Proof:
 
+- planning/spec source and accepted plan summary recorded before implementation stages;
 - stage proof for each completed stage;
 - cleanup proof for artifacts/state created by stages;
 - capability-level proof for overall behavior;
@@ -166,21 +193,24 @@ Proof:
 
 ## Route: bugfix
 
+Planning default: optional. Planning required, если причина неясна или затронуты architecture/state/API/boundaries; если external/tool plan отсутствует, используй AIDP-native planning в `.aidp/work.md`.
+
 Используй, когда behavior incorrect, test fails, regression exists, user reports defect или invariant violated.
 
 Sequence:
 
 1. Сформулируй failure.
 2. Reproduce issue или укажи existing failing proof.
-3. Изолируй likely cause.
-4. Если failure crosses boundary, прочитай relevant `.aidp/blueprint.md`.
-5. Запиши risk and approval.
-6. Patch minimally.
-7. Докажи, что reproducer/regression proof passes.
-8. Добавь или сохрани regression proof, если уместно.
-9. Запиши cleanup для test artifacts/state.
-10. Запиши worked/failed/not attempted в Attempt memory.
-11. Консолидируй durable lessons только если они важны для future work.
+3. Если причина неясна, defect crosses boundary или есть несколько fix strategies, запиши planning/spec state в `.aidp/work.md`.
+4. Изолируй likely cause.
+5. Если failure crosses boundary, прочитай relevant `.aidp/blueprint.md`.
+6. Запиши risk and approval.
+7. Patch minimally.
+8. Докажи, что reproducer/regression proof passes.
+9. Добавь или сохрани regression proof, если уместно.
+10. Запиши cleanup для test artifacts/state.
+11. Запиши worked/failed/not attempted в Attempt memory.
+12. Консолидируй durable lessons только если они важны для future work.
 
 Proof:
 
@@ -191,23 +221,27 @@ Proof:
 
 ## Route: sweep
 
+Planning default: required для multi-file, boundary-changing, destructive или migration-like changes; optional для tiny local cleanup.
+
 Используй для refactor, cleanup, migration, rename/reorg, dead-code removal или structural changes без intended behavior change.
 
 Sequence:
 
 1. Определи behavior invariant.
 2. Определи allowed paths.
-3. Прочитай relevant `.aidp/blueprint.md` context.
-4. Запиши risk and approval.
-5. Capture baseline proof if needed.
-6. Сделай small structural changes.
-7. Докажи behavior preserved.
-8. Запиши cleanup status для generated files/caches/deleted artifacts/snapshots/test data/side effects.
-9. Supersede stale canonical claims if structure changed.
-10. Не добавляй behavior; если он нужен, меняй route на `capability`.
+3. Для non-trivial sweep создай или прими planning/spec artifact и запиши source/status в `.aidp/work.md`.
+4. Прочитай relevant `.aidp/blueprint.md` context.
+5. Запиши risk and approval.
+6. Capture baseline proof if needed.
+7. Сделай small structural changes.
+8. Докажи behavior preserved.
+9. Запиши cleanup status для generated files/caches/deleted artifacts/snapshots/test data/side effects.
+10. Supersede stale canonical claims if structure changed.
+11. Не добавляй behavior; если он нужен, меняй route на `capability`.
 
 Proof:
 
+- planning artifact recorded when sweep is multi-file, boundary-changing, destructive or migration-like;
 - behavior preservation proof;
 - targeted checks for affected boundaries;
 - cleanup proof when artifacts/state changed;
@@ -215,25 +249,31 @@ Proof:
 
 ## Route: audit
 
+Planning default: read-only audit plan required для нетривиального audit; simple one-file/one-finding audit может записать planning not required.
+
 Используй для consistency/drift/risk/architecture/proof/docs/OS-state review, когда сначала нужны findings.
 
 Sequence:
 
 1. Оставайся read-only by default.
 2. Определи audit scope.
-3. Risk остается `low`, пока audit read-only.
-4. Сравни relevant owner files и repository reality.
-5. Классифицируй findings: stale doc, broken proof, wrong owner file, worktree drift, router conflict, architecture contradiction, missing blueprint boundary context, setup/repair inconsistency, route mismatch, invalid item transition, missing risk/approval record, missing cleanup record.
-6. Не исправляй silently.
-7. Если fixes approved, создай explicit repair/sweep/docs-operator item.
+3. Для нетривиального audit запиши AIDP-native audit plan в `.aidp/work.md`.
+4. Risk остается `low`, пока audit read-only.
+5. Сравни relevant owner files и repository reality.
+6. Классифицируй findings: stale doc, broken proof, wrong owner file, worktree drift, router conflict, architecture contradiction, missing blueprint boundary context, setup/repair inconsistency, route mismatch, invalid item transition, missing risk/approval record, missing cleanup record, missing planning/spec state.
+7. Не исправляй silently.
+8. Если fixes approved, создай explicit repair/sweep/docs-operator item.
 
 Proof:
 
+- read-only audit plan for non-trivial scope;
 - findings traceable to files or observed repo state;
 - no silent writes during read-only audit;
 - proposed fixes have owner file, risk and route.
 
 ## Route: docs-operator
+
+Planning default: optional для small doc edits; required для migration, runtime-core updates, routers/adapters или second-canon risk.
 
 Используй для root docs, human docs, prompts, router presets, install instructions, `.aidp/*` docs-as-runtime-docs, optional contracts и migration уже installed AIDP core.
 
@@ -241,17 +281,19 @@ Sequence:
 
 1. Определи document class: canonical runtime file, router/adapter, human guidance, prompt или optional contract.
 2. Запиши risk and approval requirements.
-3. Держи truth в правильном owner file.
-4. Если docs touch durable project structure, architecture, ownership, APIs, state/data, runtime или packaging boundaries, update/verify `.aidp/blueprint.md`, не human-doc/router.
-5. Не помещай runtime truth в human-docs.
-6. Не помещай human explanation в machine facts.
-7. Не позволяй routers become policy stores.
-8. Для package migration сохраняй existing language, project truth, active state, history, commands, proof policy and conventions.
-9. Проверь instruction duplication and second canon.
-10. Verify install/bootstrap wording remains accurate.
+3. Для migration/runtime-core/router work создай или прими planning/spec artifact и запиши source/status в `.aidp/work.md`.
+4. Держи truth в правильном owner file.
+5. Если docs touch durable project structure, architecture, ownership, APIs, state/data, runtime или packaging boundaries, update/verify `.aidp/blueprint.md`, не human-doc/router.
+6. Не помещай runtime truth в human-docs.
+7. Не помещай human explanation в machine facts.
+8. Не позволяй routers become policy stores.
+9. Для package migration сохраняй existing language, project truth, active state, history, commands, proof policy and conventions.
+10. Проверь instruction duplication and second canon.
+11. Verify install/bootstrap wording remains accurate.
 
 Proof:
 
+- planning artifact recorded for migration/runtime-core/router work;
 - owner-file alignment check;
 - no duplicate durable rule in tool-facing router;
 - no contradiction between root docs, human docs and `.aidp/*`;
@@ -260,25 +302,29 @@ Proof:
 
 ## Route: delivery
 
+Planning default: optional для simple artifact creation; required для complex package/release flows, multi-artifact delivery, publishing, signing, deployment-like behavior или package-shape changes.
+
 Используй для archive/package/release artifact/final handoff bundle.
 
 Sequence:
 
 1. Подтверди deliverable and target package shape.
 2. Запиши risk and approval.
-3. Проверь required files present.
-4. Проверь excluded files absent.
-5. Verify installed core contains only intended runtime files.
-6. Verify root docs and prompts present.
-7. Если delivery/package shape changes durable boundaries, consult/update `.aidp/blueprint.md`.
-8. Verify routers are thin and route-aware.
-9. Verify no report/changelog/release-note noise unless explicitly requested.
-10. Produce artifact.
-11. Record delivery proof, cleanup status and handoff.
+3. Для complex delivery создай или прими planning/spec artifact и запиши source/status в `.aidp/work.md`.
+4. Проверь required files present.
+5. Проверь excluded files absent.
+6. Verify installed core contains only intended runtime files.
+7. Verify root docs and prompts present.
+8. Если delivery/package shape changes durable boundaries, consult/update `.aidp/blueprint.md`.
+9. Verify routers are thin and route-aware.
+10. Verify no report/changelog/release-note noise unless explicitly requested.
+11. Produce artifact.
+12. Record delivery proof, cleanup status and handoff.
 
 Proof:
 
 - package structure checked;
+- planning artifact recorded for complex package/release flows;
 - required docs checked;
 - installed-core shape checked;
 - route dispatcher present;

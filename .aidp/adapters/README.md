@@ -3,6 +3,7 @@
 Этот каталог содержит тонкие router-presets для разных AI-инструментов.
 Они не являются канонической runtime-истиной и только направляют инструмент к `.aidp/*`.
 Routers должны быть route-aware: после чтения `.aidp/AGENTS.md`, `.aidp/os.yaml` и `.aidp/work.md` они должны направлять инструмент к `.aidp/routes.md`, потому что lifecycle mode сам по себе не является рабочим маршрутом.
+Tool-native Plan Mode, Ask Mode, design mode, Spec Kit и external specs могут помогать, но не заменяют AIDP route selection. Если выбранный route требует planning, а tool-native/external planner недоступен, router должен направлять инструмент к AIDP-native planning в `.aidp/work.md`.
 
 ## Доступные presets
 
@@ -19,3 +20,4 @@ Routers должны быть route-aware: после чтения `.aidp/AGENTS
 
 После materialization router остается указателем. Долговечная repository-specific истина все равно принадлежит только `.aidp/*`.
 Durable truth, команды, blueprint, active work, proof rules и history нельзя хранить в materialized router files.
+Planning/spec artifacts также не должны превращаться в router-level canon.

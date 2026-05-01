@@ -18,7 +18,9 @@
 Используй `normal` только когда setup и repair честно не нужны.
 
 Lifecycle mode недостаточен для выполнения задачи. `normal` не является work route.
-Правильная модель: lifecycle mode -> work route -> route sequence -> route proof -> sync.
+Правильная модель: lifecycle mode -> work route -> planning/specification if required -> route sequence -> route proof -> sync.
+
+Plan Mode, Ask Mode, design mode, Spec Kit и external specs являются optional aids. Они не заменяют AIDP route selection. Если selected route requires planning и tool-native/external planner unavailable, используй AIDP-native planning в `.aidp/work.md`.
 
 Наблюдения не становятся канонической истиной, пока они не перепроверены по репозиторию и не записаны в правильный owner-файл под `.aidp/*`.
 Durable truth нельзя хранить в этом router-файле.

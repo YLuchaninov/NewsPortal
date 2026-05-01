@@ -106,12 +106,12 @@
 |---|---|
 | `bootstrap` | setup-exit checks; owner files filled with repository truth; placeholders removed or parked; no second canon; machine flags updated truthfully; cleanup status recorded if setup produced artifacts/state |
 | `micro-patch` | targeted proof for the changed path; no unrelated changes; no hidden capability claim; cleanup proof if artifacts/state were created |
-| `capability` | relevant blueprint context checked before boundary-affecting design/writes; stage proof for each completed stage; cleanup proof per stage when needed; capability-level proof before marking capability done; approval recorded for high-risk work |
+| `capability` | planning required; accepted planning/spec artifact or AIDP-native plan recorded before implementation stages; relevant blueprint context checked before boundary-affecting design/writes; stage proof for each completed stage; cleanup proof per stage when needed; capability-level proof before marking capability done; approval recorded for high-risk work |
 | `bugfix` | failing/reproducing proof when practical; relevant blueprint context checked when the failure crosses boundaries; passing proof after patch; regression evidence or explicit reason if unavailable; cleanup proof for reproducer/test artifacts/state |
-| `sweep` | relevant blueprint context checked; stated invariant; baseline proof if needed; behavior preservation proof; cleanup proof when artifacts/state changed; stale canonical claims superseded |
-| `audit` | read-only findings first; findings traceable to files/repo state; no silent fixes; risk/approval/cleanup gaps reported when found |
-| `docs-operator` | owner-file alignment; blueprint owns durable project structure/boundaries; no second canon; no contradictory router/human-doc/runtime instructions; migration proof if updating an installed AIDP core |
-| `delivery` | required files present; excluded files absent; installed core shape verified; blueprint checked if delivery changes durable project/package/runtime boundaries; artifact produced and linked/recorded; temporary build files cleaned or excluded |
+| `sweep` | planning required for broad/boundary/destructive/migration-like changes; relevant blueprint context checked; stated invariant; baseline proof if needed; behavior preservation proof; cleanup proof when artifacts/state changed; stale canonical claims superseded |
+| `audit` | read-only audit plan for non-trivial scope; findings traceable to files/repo state; no silent fixes; risk/approval/cleanup/planning gaps reported when found |
+| `docs-operator` | planning required for runtime/core/router migration; owner-file alignment; blueprint owns durable project structure/boundaries; no second canon; no contradictory router/human-doc/runtime instructions; migration proof if updating an installed AIDP core |
+| `delivery` | planning required for complex package/release flows; required files present; excluded files absent; installed core shape verified; blueprint checked if delivery changes durable project/package/runtime boundaries; artifact produced and linked/recorded; temporary build files cleaned or excluded |
 
 ## AIDP package migration gate
 
@@ -123,6 +123,7 @@ Migration proof must show:
 - new package mechanisms were added without resetting the hidden core to template state;
 - `initialized: true` and `project.placeholder_values_present: false` were not changed unless truthfully required;
 - lifecycle mode and work route are recorded in `.aidp/work.md`;
+- planning/spec state is recorded in `.aidp/work.md` when the migration route requires planning;
 - `.aidp/routes.md` exists and `normal` is not treated as a work route;
 - routers/adapters remain thin and route-aware;
 - no second canon was created outside `.aidp/*`;
@@ -133,6 +134,33 @@ Migration proof must show:
 - Low: targeted unit/static check or explicit read-only audit evidence.
 - Medium: static proof plus targeted behavioral proof.
 - High: full relevant gate set, boundary review, integration/smoke proof and explicit residual gap review.
+
+## Planning/specification gate
+
+Planning/specification proof is required when the selected work route or item scope makes planning necessary.
+
+Valid planning/spec state in `.aidp/work.md` records:
+
+- Planning required by route: `no | yes`;
+- Planning source: `none | AIDP-native | tool-native | external-spec | unknown`;
+- Spec/source artifact, when any exists;
+- Plan/spec status: `absent | observed | accepted-for-this-item | superseded | rejected`;
+- Current plan summary or link/reference to the accepted artifact;
+- Owner-file updates required, if any.
+
+Tool-native plans, Spec Kit outputs, tickets, PRDs, user-provided specs and external planning documents are observations until checked against repository reality and accepted for the active item. They do not replace AIDP route selection and do not become owner-file truth by themselves.
+
+If no tool-native or external planning mechanism is available and the route requires planning, use AIDP-native planning in `.aidp/work.md`.
+
+An item cannot honestly enter implementation stages for `capability`, non-trivial `sweep`, AIDP/runtime `docs-operator` migration, non-trivial `audit`, or complex `delivery` while required planning/spec state is missing or only `observed`.
+
+## Planning artifacts and consolidation
+
+Planning/spec artifacts may guide implementation, but durable facts from them still pass through the consolidation gate.
+
+Do not copy an entire plan/spec into multiple durable files. Extract only confirmed owner-routed facts and supersede stale claims explicitly.
+
+External spec/tool plan acceptance is scoped to the active item. It must be checked against repository reality, relevant blueprint boundaries, engineering constraints and verification gates before it can guide writes.
 
 ## Ожидания по границам
 

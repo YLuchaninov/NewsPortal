@@ -104,6 +104,7 @@ NewsPortal — локальный MVP polyglot content-platform monorepo для 
 - Notifications/digests: смотри `Notification/digest boundary`, `.aidp/contracts/notifications-and-digests.md`.
 - Test/runtime boundary: смотри `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/engineering.md` section `Разделение production source, tests и fixtures`.
 - AIDP/process truth: смотри `Product docs vs AIDP runtime`; durable AIDP truth живет только в `.aidp/*`, routers/adapters остаются thin.
+- Planning/spec artifacts: проверяй tool-native plans, Spec Kit outputs, tickets, PRDs and external specs against relevant blueprint boundaries before implementation; они не могут менять durable architecture truth без consolidation в правильный owner-файл.
 
 ## Когда читать blueprint перед изменениями
 
@@ -179,6 +180,7 @@ Durable capability lines that often need staged work:
 - Hiding behavior changes inside a "refactor".
 - Leaving stateful test artifacts untracked.
 - Duplicating AIDP runtime truth in root router files or product docs.
+- Treating planning/spec artifacts, Plan Mode output, Spec Kit, tickets or PRDs as durable architecture truth without blueprint consolidation.
 
 ## Deep contracts
 

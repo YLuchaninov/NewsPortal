@@ -15,8 +15,11 @@
 - Work route: none (idle; next substantive normal task must choose a work route from `.aidp/routes.md`)
 - Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
 - Route phase: idle
-- Route-specific next step: для следующей substantive task выбрать work route; AIDP 1.7.2 migration завершена и archived
-- Route-specific proof: n/a while idle; last completed route proof recorded under `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`
+- Route-specific next step: для следующей substantive task выбрать work route; AIDP 1.7.3 migration завершена и archived
+- Route-specific proof: n/a while idle; last completed route proof recorded under `AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1`
+- Planning required by route: no
+- Planning source: none
+- Plan/spec status: absent
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
@@ -36,7 +39,7 @@
 - Repair route: закрыт 2026-04-25 after live-state/docs cleanup repair
 - Current lifecycle mode: `normal`
 - Current work route: none while idle
-- Last completed work route: `docs-operator` for `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`
+- Last completed work route: `docs-operator` for `AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1`
 - Normal mode note: `normal` не является work route; следующая substantive task должна выбрать work route.
 
 ## Item state machine
@@ -68,7 +71,7 @@
 
 - ID: none
 - Parent capability: n/a
-- Почему это primary active work: n/a; последняя migration AIDP OS 1.6.1 -> 1.7.2 завершена и archived.
+- Почему это primary active work: n/a; последняя migration AIDP OS 1.7.2 -> 1.7.3 завершена и archived.
 
 ### Secondary active item
 
@@ -84,6 +87,88 @@
 - Latest broad proof: 2026-05-01 `pnpm test:product:local:core` passed after the test/runtime separation sweep; it included lint, typecheck, unit tests, integration compose acceptance, local stack startup/health, website/admin/MCP/viewports/UI audit coverage.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - Required action before ordinary implementation: choose a work route from `.aidp/routes.md` for the next substantive task.
+
+### Planning / specification
+
+Planning/specification is a phase inside the selected work route, not a separate route.
+
+- Planning required by route: no
+- Planning source: none
+- Spec/source artifact: none while idle
+- Plan/spec status: absent
+- Current plan summary: n/a while idle; last accepted plan is archived under `AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1`.
+- Owner-file updates required: none while idle
+- Allowed planning sources: none | AIDP-native | tool-native | external-spec | unknown
+- Allowed plan/spec statuses: absent | observed | accepted-for-this-item | superseded | rejected
+
+### AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1
+
+- Kind: Docs-operator
+- Status: archived
+- Item status: archived
+- Lifecycle mode: normal
+- Work route: docs-operator
+- Route phase: closed
+- Route-specific next step: none; future tasks must choose their own work route from `.aidp/routes.md`.
+- Route-specific proof: owner-file alignment; no second canon; all 1.7.2 routes retained; no planning/spec route added; planning policy present in `.aidp/os.yaml`; planning gate present in `.aidp/verification.md`; routers thin; package cleanup proof passed.
+- Planning required by route: yes
+- Planning source: tool-native
+- Spec/source artifact: user migration request plus accepted proposed migration plan in current Codex planning turn
+- Plan/spec status: accepted-for-this-item
+- Current plan summary: add planning/spec independence as route phase/artifact logic, not a work route; add AIDP-native fallback when selected route requires planning and tool/external planning is unavailable; keep `.aidp/work.md` as planning state owner; preserve all NewsPortal-specific runtime truth.
+- Owner-file updates required: `.aidp/AGENTS.md`, `.aidp/routes.md`, `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/engineering.md`, `.aidp/verification.md`, `.aidp/blueprint.md`, `.aidp/history.md`, `.aidp/prompts/INITIALIZE-OR-REPAIR-AIDP.md`, `.aidp/adapters/**`, `AGENTS.md`
+- In scope: merge-safe updates to AIDP runtime owner files, prompt, thin router/adapters, `package_version`/`schema_version`, planning policy and migration archive; removal of `ai-dev-process-os-1.7.3-release/` after checks.
+- Out of scope: product code, product docs, `.codex/config.toml`, fresh install/reset, setup flag changes to false/template state, new work routes, replacing `.aidp/contracts/*`, changing runtime commands/proof command semantics.
+- Allowed paths: `.aidp/**`, `AGENTS.md`, `ai-dev-process-os-1.7.3-release/`.
+- Risk: medium, because runtime OS process rules and tool-facing routers change, but project code, product architecture, secrets, schema/data and deployment are not changed.
+- Approval required: no
+- Approval reason: requested migration explicitly authorizes docs/operator updates and package cleanup after consistency proof; no high-risk production, secret, schema, deployment or broad source write action is in scope.
+- Acceptance criteria: AIDP 1.7.3 planning/specification mechanisms are present in Russian and aligned with current 1.7.2 truth; existing routes and project-specific truth are preserved; routers remain thin; package directory is removed after successful verification.
+- Blueprint context:
+  - Relevant blueprint sections checked: `Product docs vs AIDP runtime`, `AIDP/process truth`, `Запрещенные shortcuts`, `Deep contracts`.
+  - Boundary/invariant checked: AIDP runtime truth belongs only in `.aidp/*`; routers/adapters stay thin; planning/spec artifacts cannot become durable architecture truth without consolidation.
+  - Blueprint gap: none found for this migration; durable product architecture is not changed.
+- Observed this session:
+  - Current 1.7.2 core is truthfully initialized and project-specific.
+  - Missing 1.7.3 mechanism: tool-independent planning/specification layer across runtime owner files, prompts and thin routers.
+  - Installed project does not have root human-docs such as `WORK-ROUTES-GUIDE.md` outside the unpacked 1.7.3 package.
+- Confirmed for consolidation:
+  - This upgrade is not fresh setup; route is lifecycle mode `normal`, work route `docs-operator`.
+  - `initialized: true` and `project.placeholder_values_present: false` must remain true/false respectively.
+  - Planning/specification is a phase or artifact inside selected routes, not a new work route.
+- Parked / latent items:
+  - Older completed details in `.aidp/work.md` remain verbose; this migration preserves them rather than compacting unrelated history.
+- Attempt memory:
+  - Worked, with evidence: current 1.7.2 `.aidp/*`, routers/adapters and package 1.7.3 installed core/human-docs were read before edits.
+  - Worked, with evidence: `.aidp/os.yaml` parsed as package/schema 1.7.3/30 and preserved `initialized: true` plus `project.placeholder_values_present: false`.
+  - Worked, with evidence: route heading check confirmed the eight 1.7.2 routes and no `plan`, `planning`, `spec` or `spec-driven` route headings.
+  - Worked, with evidence: planning text checks found required planning/spec logic in `.aidp/AGENTS.md`, `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `.aidp/engineering.md`, prompt and thin routers/adapters.
+  - Worked, with evidence: blueprint/history/contracts preservation checks passed; `git diff --check --` passed; package cleanup proof passed.
+  - Tried and did not work: none.
+  - Not yet attempted: none for this migration.
+- Test artifacts and cleanup:
+  - Artifacts created: updated runtime docs and routers.
+  - State changed: no product/runtime/database state changed.
+  - Cleanup required: yes, remove unpacked `ai-dev-process-os-1.7.3-release/` after migration proof passes.
+  - Cleanup performed: `rm -rf ai-dev-process-os-1.7.3-release/` after migration checks.
+  - Intentional retained artifacts: updated `.aidp/*` owner files and thin routers.
+  - Cleanup proof: `test ! -e ai-dev-process-os-1.7.3-release` returned success.
+- Route-specific proof:
+  - Required proof: verify all eight routes retained; no planning/spec route created; `.aidp/AGENTS.md`, `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `.aidp/engineering.md`, prompts and routers contain required planning/spec logic; `.aidp/os.yaml` parses; setup flags preserved; `.aidp/contracts/*`, blueprint and history not template-replaced; `git diff --check --`; package cleanup proof.
+  - Current proof status: passed.
+  - Passed: `.aidp/os.yaml` parsed and reports `package_version: 1.7.3`, `schema_version: 30`, `initialized: true`, `project.placeholder_values_present: false`, `planning_policy` present and `planning_spec_state_required_when_route_requires_planning: true`.
+  - Passed: `.aidp/routes.md` retains all eight work routes: `bootstrap`, `micro-patch`, `capability`, `bugfix`, `sweep`, `audit`, `docs-operator`, `delivery`.
+  - Passed: no route headings `plan`, `planning`, `spec` or `spec-driven` were added.
+  - Passed: `.aidp/AGENTS.md` contains planning/specification independence.
+  - Passed: `.aidp/work.md` contains `### Planning / specification`.
+  - Passed: `.aidp/verification.md` contains planning/specification gate.
+  - Passed: `.aidp/engineering.md` says to use AIDP-native planning when selected route requires planning and no tool-native/external plan exists.
+  - Passed: prompts and thin routers/adapters were updated and remain pointers to `.aidp/*`.
+  - Passed: `.aidp/blueprint.md` still contains NewsPortal project-specific architecture truth and was not replaced by template.
+  - Passed: `.aidp/history.md` retained old archive entries including `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`.
+  - Passed: `.aidp/contracts/*` were not modified.
+  - Passed: `git diff --check --`.
+  - Passed: unpacked package cleanup proof `test ! -e ai-dev-process-os-1.7.3-release`.
 
 ### AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1
 

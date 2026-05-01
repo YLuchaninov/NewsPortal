@@ -75,9 +75,31 @@ Work route отвечает на вопрос: как выполнять тек�
 
 Правильная модель выполнения:
 
-`lifecycle mode -> work route -> route sequence -> route-specific proof -> sync`
+`lifecycle mode -> work route -> planning/specification if required -> route sequence -> route-specific proof -> sync`
 
 Для уже установленной и truthfully initialized AIDP package migration обычно используй lifecycle mode `normal` и work route `docs-operator`, если hidden core консистентен. Перейди в `repair` только при реальном противоречии или unsafe live state.
+
+## Planning and specification independence
+
+AIDP не зависит от того, умеет ли конкретный AI-инструмент Plan Mode, Ask Mode, design mode, Spec Kit, external specs, tickets, PRD или product specs.
+
+Planning/specification является фазой или artifact внутри выбранного work route. Это не отдельный route и не замена lifecycle/work-route selection.
+
+Allowed planning sources:
+
+- `none` — planning не требуется для route/item.
+- `AIDP-native` — compact plan записан в `.aidp/work.md`.
+- `tool-native` — Plan Mode, Ask Mode, design mode или аналогичная возможность активного инструмента.
+- `external-spec` — Spec Kit output, repository spec, product spec, user-provided spec, ticket, PRD или похожий artifact.
+- `unknown` — источник неясен; treat as observation until confirmed.
+
+Если выбранный work route требует planning, агент должен создать или использовать planning/spec artifact. Если tool-native Plan Mode / Spec Kit / external spec недоступны или неизвестны, используй AIDP-native planning в `.aidp/work.md`.
+
+Planning/spec artifact сам по себе не является canonical truth. Он становится accepted-for-this-item только когда связан с active item, сверён с repository reality, selected route, `.aidp/blueprint.md`, `.aidp/engineering.md` и `.aidp/verification.md`.
+
+Не создавай отдельные work routes `plan`, `planning`, `spec` или `spec-driven`. Work route всегда выбирается из `.aidp/routes.md`.
+
+Если route требует planning, planning/spec state должен быть отражён в `.aidp/work.md`.
 
 ## Resume Protocol
 
@@ -103,6 +125,7 @@ Work route отвечает на вопрос: как выполнять тек�
 - Какой completion layer открыт?
 - Какие blockers или dependencies есть?
 - Какие proof уже пройдены, а какие отсутствуют?
+- Требует ли выбранный route planning/specification и какой source/status записан?
 - Какой item status, risk и approval state?
 - Проверен ли blueprint context, если меняются architecture, ownership, API, state/data, runtime, packaging или durable boundaries?
 - Есть ли test artifacts/state и cleanup obligation?
@@ -127,7 +150,7 @@ External context не может переопределять `.aidp/*` как d
 
 ## Owner-файлы
 
-- `.aidp/work.md` — lifecycle mode, selected work route, active item, item status, blockers, observations, proof status, risk/approval, cleanup, handoff.
+- `.aidp/work.md` — lifecycle mode, selected work route, planning/spec state, active item, item status, blockers, observations, proof status, risk/approval, cleanup, handoff.
 - `.aidp/routes.md` — work route dispatcher, route sequences and route-specific proof summaries.
 - `.aidp/blueprint.md` — системный смысл, архитектурная карта, инварианты, границы, risk zones.
 - `.aidp/engineering.md` — повседневная инженерная дисциплина и правила изменения кода.
@@ -188,6 +211,7 @@ Capability описывает больший результат. Stage — од�
 - route phase;
 - route-specific next step;
 - route-specific proof;
+- planning/spec state, если selected route требует planning;
 - item status;
 - in scope;
 - out of scope;
@@ -264,17 +288,18 @@ Audit является work route, а не lifecycle mode.
 
 1. Resume — проверь lifecycle mode, work route, active item, status, blockers, risk/approval, cleanup and dirty worktree.
 2. Classify — выбери work route через `.aidp/routes.md`.
-3. Design — создай capability/stage, если требование крупнее одного шага.
-4. Bind — выбери или создай active item.
-5. Bound — зафиксируй scope, allowed paths, route phase, route-specific proof, risk and approval.
-6. Blueprint — до boundary-affecting writes проверь relevant blueprint context или запиши gap.
-7. Load — прочитай нужные owner-файлы и contracts.
-8. Implement — меняй минимальную честную поверхность.
-9. Prove — выполни route-specific proof.
-10. Consolidate — перенеси подтвержденные durable facts в owner-файлы без параллельных истин.
-11. Sync — обнови `.aidp/work.md` и связанные owner-файлы.
-12. Archive — перенеси завершенную долговечную деталь в `.aidp/history.md`, прежде чем status станет `archived`.
-13. Handoff — оставь состояние, которое можно продолжить без chat history.
+3. Plan/spec — если route требует planning, создай или прими planning/spec artifact и запиши source/status в `.aidp/work.md`.
+4. Design — создай capability/stage, если требование крупнее одного шага.
+5. Bind — выбери или создай active item.
+6. Bound — зафиксируй scope, allowed paths, route phase, route-specific proof, risk and approval.
+7. Blueprint — до boundary-affecting writes проверь relevant blueprint context или запиши gap.
+8. Load — прочитай нужные owner-файлы и contracts.
+9. Implement — меняй минимальную честную поверхность.
+10. Prove — выполни route-specific proof.
+11. Consolidate — перенеси подтвержденные durable facts в owner-файлы без параллельных истин.
+12. Sync — обнови `.aidp/work.md` и связанные owner-файлы.
+13. Archive — перенеси завершенную долговечную деталь в `.aidp/history.md`, прежде чем status станет `archived`.
+14. Handoff — оставь состояние, которое можно продолжить без chat history.
 
 ## Consolidation gate
 
@@ -289,6 +314,7 @@ Audit является work route, а не lifecycle mode.
 - setup или repair все еще применимы;
 - scope больше не соответствует worktree;
 - proof expectation неясен или невозможен;
+- route требует planning/specification, но `.aidp/work.md` не содержит accepted, rejected, superseded or not-required planning state;
 - требуется human approval;
 - blueprint boundary context нужен, но отсутствует и не может быть честно восстановлен;
 - cleanup obligation не закрыт и не parked;

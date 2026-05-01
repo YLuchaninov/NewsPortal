@@ -1,6 +1,6 @@
 # AI Dev Process OS runtime schema для NewsPortal
-package_version: 1.7.2
-schema_version: 29
+package_version: 1.7.3
+schema_version: 30
 mode: Minimal
 runtime_profile: compact-strict-anti-drift-newsportal
 initialized: true
@@ -52,6 +52,55 @@ planning:
   create_next_stage_before_implementation_when_needed: true
   stage_dependency_enforcement: true
   dependency_override_requires_human_approval: true
+planning_policy:
+  tool_native_planning_optional: true
+  aidp_native_planning_fallback_required: true
+  planning_is_phase_not_route: true
+  spec_artifact_is_observation_until_accepted: true
+  planning_state_owner: .aidp/work.md
+  allowed_sources:
+  - none
+  - AIDP-native
+  - tool-native
+  - external-spec
+  - unknown
+  allowed_statuses:
+  - absent
+  - observed
+  - accepted-for-this-item
+  - superseded
+  - rejected
+  planning_required_by_default_for_routes:
+  - capability
+  planning_conditionally_required_for_routes:
+  - bugfix
+  - sweep
+  - audit
+  - docs-operator
+  - delivery
+  planning_not_required_by_default_for_routes:
+  - micro-patch
+  required_conditions:
+    bugfix:
+    - unclear_cause
+    - architecture_state_api_or_boundary_impact
+    - multiple_fix_strategies
+    sweep:
+    - multi_file_change
+    - boundary_changing_change
+    - destructive_change
+    - migration_like_change
+    audit:
+    - non_trivial_audit_scope
+    docs-operator:
+    - package_migration
+    - runtime_core_update
+    - router_or_adapter_update
+    - second_canon_risk
+    delivery:
+    - complex_package_or_release_flow
+    - multi_artifact_delivery
+    - publishing_signing_or_deployment_like_behavior
 project:
   name: news-portal
   placeholder_values_present: false
@@ -312,6 +361,7 @@ policies:
   observed_is_not_canonical: true
   consolidation_required_before_canon: true
   route_specific_proof_required: true
+  planning_spec_state_required_when_route_requires_planning: true
   blueprint_boundary_check_required: true
   normal_is_not_work_route: true
   item_state_machine_required: true
@@ -341,6 +391,12 @@ external_surfaces:
   - external_instructions
   - previous_chats
   - delegated_or_subagent_outputs
+  - tool_native_plans
+  - spec_kit_outputs
+  - product_specs
+  - tickets
+  - prds
+  - external_planning_documents
 context_hygiene:
   short_current_memory: true
   durable_full_history: true

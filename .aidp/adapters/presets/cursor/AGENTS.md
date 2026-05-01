@@ -18,6 +18,8 @@
 `normal` допустим только когда setup и repair не нужны.
 Lifecycle mode недостаточен для выполнения задачи. `normal` не является work route.
 
+Plan Mode, Ask Mode, design mode, Spec Kit и external specs являются optional aids. Они не заменяют AIDP route selection. Если selected route requires planning и tool-native/external planner unavailable, используй AIDP-native planning в `.aidp/work.md`.
+
 Наблюдения становятся каноном только после перепроверки по репозиторию и записи в правильный owner-файл под `.aidp/*`.
 Durable truth нельзя хранить в этом router-файле.
 Если явно запрошен аудит, сначала выполняй read-only анализ; исправления применяй только после явного разрешения.

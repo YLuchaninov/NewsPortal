@@ -19,6 +19,21 @@
 - Если item superseded, archive entry должен назвать replacing item или replacement route.
 - Migration самой AIDP OS можно архивировать как completed `docs-operator` item только после проверки owner-file alignment, router thinness, setup flags, required fields и cleanup распакованного пакета.
 
+## Минимальный archive entry template
+
+- Archive outcome:
+- Kind:
+- Финальный status:
+- Work route:
+- Planning/source:
+- Risk:
+- Approval:
+- Почему существовало:
+- Что изменилось:
+- Выполненный proof:
+- Cleanup:
+- Оставшиеся risks/gaps:
+
 ## Индекс архива
 
 - `AIDP-BOOTSTRAP-2026-04-24` — первичная инициализация/repair AIDP runtime core для NewsPortal.
@@ -29,8 +44,54 @@
 - `AIDP-FINAL-PROOF-DOCS-2026-04-24` — финальная чистка product/reference docs, lint fixes and requested proof gates.
 - `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25` — удаление старых duplicate `docs/contracts/*` после переноса canonical truth в `.aidp/contracts/*`.
 - `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1` — мягкая migration AIDP OS 1.6.1 -> 1.7.2 через двухуровневую маршрутизацию и docs-operator route.
+- `AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1` — мягкая migration AIDP OS 1.7.2 -> 1.7.3 через tool-independent planning/specification layer.
 
 ## Завершенные items
+
+### AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1 — Migration AIDP OS 1.7.2 -> 1.7.3
+
+- Archive outcome: completed
+- Kind: Docs-operator
+- Финальный status: archived
+- Work route: docs-operator
+- Lifecycle mode: normal
+- Planning/source: required by docs-operator migration; source `tool-native`; accepted plan/spec artifact was the user migration request plus the accepted proposed migration plan for this item.
+- Parent capability: none
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил мягко обновить уже установленную и truthfully initialized AIDP OS 1.7.2 до 1.7.3 из распакованного пакета, без fresh install, без blind overwrite и без потери NewsPortal-specific truth.
+- Что сохранено:
+  - `initialized: true` и `project.placeholder_values_present: false`;
+  - all eight existing work routes: `bootstrap`, `micro-patch`, `capability`, `bugfix`, `sweep`, `audit`, `docs-operator`, `delivery`;
+  - NewsPortal project name, commands, runtime surfaces, proof commands, blueprint, engineering rules, verification policy, old history, active/parked work details and conventions;
+  - все existing `.aidp/contracts/*` как project-specific subsystem truth;
+  - русский язык и стиль runtime/router docs, кроме schema keys, command names and existing mixed technical vocabulary.
+- Что изменилось:
+  - `.aidp/AGENTS.md` получил planning/specification independence and execution model `lifecycle mode -> work route -> planning/specification if required -> route sequence -> route-specific proof -> sync`;
+  - `.aidp/routes.md` получил planning/specification independence, allowed planning sources and route-level planning defaults without adding a planning route;
+  - `.aidp/work.md` получил current operating planning fields and `### Planning / specification` block, and archived this migration item with accepted planning/source state;
+  - `.aidp/os.yaml` поднят до `package_version: 1.7.3`, `schema_version: 30`, and получил `planning_policy`, planning gate policy and external planning/spec observation surfaces;
+  - `.aidp/verification.md` получил planning/specification gate, planning artifacts consolidation and route-specific planning proof updates;
+  - `.aidp/engineering.md` получил planning/source independence, AIDP-native fallback and implementation-start guard for required-planning routes;
+  - `.aidp/blueprint.md` получил короткую связь между planning/spec artifacts and blueprint boundary consolidation;
+  - `.aidp/prompts/INITIALIZE-OR-REPAIR-AIDP.md`, root `AGENTS.md` and `.aidp/adapters/**` now mention planning/spec fallback while staying thin routers/adapters.
+- Выполненный proof:
+  - current 1.7.2 core and package 1.7.3 installed core/human-docs were read before edits;
+  - `.aidp/os.yaml` parsed and reports `package_version: 1.7.3`, `schema_version: 30`, `initialized: true`, `project.placeholder_values_present: false`, `planning_policy` present and `planning_spec_state_required_when_route_requires_planning: true`;
+  - route heading check confirmed all eight 1.7.2 routes remain and no `plan`, `planning`, `spec` or `spec-driven` route headings were added;
+  - planning text checks confirmed required planning/spec logic in `.aidp/AGENTS.md`, `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `.aidp/engineering.md`, prompt and thin routers/adapters;
+  - blueprint/history/contracts preservation checks passed;
+  - `git diff --check --` passed;
+  - `test ! -e ai-dev-process-os-1.7.3-release` passed after cleanup.
+- Cleanup:
+  - removed unpacked package directory `ai-dev-process-os-1.7.3-release/`;
+  - no product/runtime/database state was changed.
+- Оставшиеся risks/gaps:
+  - no unresolved migration gap remains;
+  - `.codex/config.toml` was intentionally left unchanged because it is local tool config, not an AIDP router;
+  - project does not have installed root human-docs like `WORK-ROUTES-GUIDE.md`, so none were materialized.
+- Follow-up created: none.
+- Archived on: 2026-05-01
 
 ### AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1 — Migration AIDP OS 1.6.1 -> 1.7.2
 
