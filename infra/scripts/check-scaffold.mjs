@@ -22,6 +22,7 @@ const requiredDirectories = [
   "database/ddl",
   "database/seeds",
   "infra/docker",
+  "infra/fixtures",
   "infra/nginx",
   "infra/systemd",
   "infra/scripts",

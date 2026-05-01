@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@newsportal/contracts": [
+        "packages/contracts/src/index.ts"
+      ],
+      "@newsportal/contracts/*": [
+        "packages/contracts/src/*"
+      ],
+      "bullmq": [
+        "services/relay/node_modules/bullmq"
+      ]
+    }
+  },
+  "include": [
+    "infra/scripts/**/*.ts"
+  ]
+}

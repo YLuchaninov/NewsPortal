@@ -8,11 +8,17 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from . import main as worker_main
-from .main import (
+REPO_ROOT = Path(__file__).resolve().parents[3]
+os.environ.setdefault("MODEL_CACHE_DIR", str(REPO_ROOT / "data" / "models"))
+os.environ.setdefault("HNSW_INDEX_ROOT", str(REPO_ROOT / "data" / "indices"))
+os.environ.setdefault("HNSW_SNAPSHOT_ROOT", str(REPO_ROOT / "data" / "snapshots"))
+
+from services.workers.app import main as worker_main
+from services.workers.app.main import (
     LLM_REVIEW_REQUESTED_EVENT,
     LLM_REVIEW_CONSUMER,
     open_connection,
@@ -28,7 +34,7 @@ from .main import (
     process_interest_compile,
     process_reindex,
 )
-from .discovery_orchestrator import (
+from services.workers.app.discovery_orchestrator import (
     DiscoveryCoordinatorRepository,
     compile_interest_graph_for_mission,
     evaluate_hypotheses,
@@ -37,12 +43,16 @@ from .discovery_orchestrator import (
     plan_hypotheses,
     re_evaluate_sources,
 )
-from .task_engine import configure_discovery_runtime, get_discovery_runtime, reset_discovery_runtime
-from .task_engine.adapters import build_live_discovery_runtime, discovery_enabled
-from .task_engine.discovery_runtime import DiscoveryRuntime
-from .task_engine.discovery_plugins import LlmAnalyzerPlugin, WebSearchPlugin
-from .task_engine.repository import PostgresSequenceRepository
-from .smoke_adaptive_discovery import (
+from services.workers.app.task_engine import (
+    configure_discovery_runtime,
+    get_discovery_runtime,
+    reset_discovery_runtime,
+)
+from services.workers.app.task_engine.adapters import build_live_discovery_runtime, discovery_enabled
+from services.workers.app.task_engine.discovery_runtime import DiscoveryRuntime
+from services.workers.app.task_engine.discovery_plugins import LlmAnalyzerPlugin, WebSearchPlugin
+from services.workers.app.task_engine.repository import PostgresSequenceRepository
+from infra.scripts.workers.smoke_adaptive_discovery import (
     AdaptiveDiscoverySmokeFixture,
     _AdaptiveSmokeContentSamplerAdapter,
     _AdaptiveSmokeUrlValidatorAdapter,
@@ -56,7 +66,7 @@ from .smoke_adaptive_discovery import (
     stable_uuid,
     temporary_environment,
 )
-from .system_feed import summarize_system_feed_result
+from services.workers.app.system_feed import summarize_system_feed_result
 
 
 @dataclass

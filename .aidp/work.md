@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: targeted recovery requested because the prior docs cleanup accidentally changed validated manual testing artifacts that the user relies on.
+- Почему сейчас: n/a
 
 ## Проверки закрытия route
 
@@ -44,9 +44,9 @@
 
 ### Primary active item
 
-- ID: NEWSPORTAL-DOCS-MANUAL-ARTIFACT-RECOVERY-PATCH-1
-- Parent capability: NEWSPORTAL-DOCS-HUMAN-REVISION
-- Почему это primary active work: user explicitly asked to restore validated manual test docs from the original HEAD version without undoing compact architecture/general docs.
+- ID: none
+- Parent capability: n/a
+- Почему это primary active work: n/a
 
 ### Secondary active item
 
@@ -57,11 +57,38 @@
 
 ### Согласованность worktree
 
-- Worktree status: dirty by completed docs revision/consolidation and completed `NEWSPORTAL-DOCS-MANUAL-ARTIFACT-RECOVERY-PATCH-1`.
-- Alignment note: validated manual artifacts under `docs/product/operator/examples/**`, `docs/product/operator/mcp/**` and `docs/product/data-scripts/outsource_balanced_templates.md` were restored to HEAD content; remaining dirty docs are compact architecture/general docs, targeted index links, legacy docs/mcp deletions, and this AIDP sync. Product code, database migrations, queue payloads, runtime behavior and generated artifacts were not changed.
-- Latest broad proof: manual-artifact recovery proof passed on 2026-05-01: restored-file line-count sanity, no diff for restored validated artifacts, JSON parse validation, provider type validation, local Markdown link check, docs command parity against `package.json`, reviewed stale-marker allowance for restored validated docs, and `git diff --check --`.
+- Worktree status before this item: clean by `git status --short` on 2026-05-01; prior live note about dirty docs recovery was stale and is superseded by this AIDP repair.
+- Alignment note: current dirty worktree is expected to be owned by `NEWSPORTAL-TEST-RUNTIME-SEPARATION-SWEEP-1` once edits begin.
+- Latest broad proof: 2026-05-01 `pnpm test:product:local:core` passed after the test/runtime separation sweep; it included lint, typecheck, unit tests, integration compose acceptance, local stack startup/health, website/admin/MCP/viewports/UI audit coverage.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: no active implementation remains; if further work starts, open a new active item and re-check worktree alignment.
+- Required action before ordinary implementation: completed for this item; AIDP live-state stale dirty-worktree claim was repaired and a bounded sweep is open.
+
+### NEWSPORTAL-TEST-RUNTIME-SEPARATION-SWEEP-1
+
+- Kind: Sweep
+- Status: done
+- In scope: move tracked test/proof harnesses and fixtures out of production source trees; keep unit tests under `tests/**`; keep smoke/proof harnesses under `infra/scripts/**`; keep fixtures under `infra/fixtures/**`; preserve public `pnpm test:*` command names; make dev/test compose include harnesses/fixtures explicitly; keep production Docker images test-free; add `pnpm check:test-layout`; update `.aidp/*` owner truth.
+- Out of scope: changing runtime behavior, queue payloads, database schema, product UI, external provider policy, broad fixture semantics, or public proof command names.
+- Allowed paths: `.aidp/work.md`, `.aidp/engineering.md`, `.aidp/verification.md`, `.aidp/os.yaml`, `.aidp/contracts/test-access-and-fixtures.md`, `package.json`, `eslint.config.mjs`, `ruff.toml`, `infra/docker/**`, `infra/scripts/**`, `infra/fixtures/**`, `services/fetchers/package.json`, `services/fetchers/src/cli/test-*.ts`, `services/fetchers/src/fixtures/**`, `services/relay/package.json`, `services/relay/src/cli/test-*.ts`, `services/relay/src/cli/seed-outbox-smoke.ts`, `services/workers/app/smoke.py`, `services/workers/app/smoke_adaptive_discovery.py`.
+- Risk: medium-high, because this changes proof harness paths, compose test execution, and production image contents without intending runtime behavior changes.
+- Required proof: `pnpm check:test-layout`; scan tracked production source dirs for forbidden test/proof paths; `git diff --check --`; `pnpm lint`; `pnpm typecheck`; `pnpm unit_tests`; `pnpm build`; representative fetcher/relay/worker smoke commands; dev/test compose availability check for moved harnesses/fixtures; production image build and absence check for moved test/proof paths; record any unavailable compose/runtime residual honestly.
+- Acceptance criteria: production source trees no longer contain tracked test/proof harnesses or fixtures; production Dockerfiles do not copy `tests/**`, `infra/scripts/**` or `infra/fixtures/**`; dev/test compose can see moved harnesses/fixtures; public test command names keep working; engineering rules make the boundary explicit.
+- Architecture note: affected concern is build/release integrity and runtime/test boundary hygiene; stakeholder/consumer is operators and maintainers; tradeoff is explicit dev/test mounting and slightly more path wiring in exchange for test-free production runtime images.
+- Implemented, with evidence: fetchers, relay and worker smoke/proof harnesses were moved out of production source trees into `infra/scripts/**`; fetcher smoke XML fixture moved to `infra/fixtures/fetchers/smoke-feed.xml`; public `pnpm test:*` command names were preserved via package/root script rewiring.
+- Implemented, with evidence: `infra/docker/compose.dev.yml` explicitly mounts `tests/**`, `infra/scripts/**` and `infra/fixtures/**` for dev/test services; production Dockerfiles/build context no longer copy those paths, including removal of `COPY infra/scripts infra/scripts` from `infra/docker/relay.Dockerfile`.
+- Implemented, with evidence: added `pnpm check:test-layout` guard and `tsconfig.infra-scripts.json`; lint/typecheck now include moved TypeScript/Python harnesses under `infra/scripts/**`.
+- Implemented, with evidence: `.aidp/engineering.md`, `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/verification.md` and `.aidp/os.yaml` now define canonical locations and production/dev-test build expectations.
+- Implemented, with evidence: root `README.md` now documents the dev/test contour, production build/run contract, test-free production image rule, and canonical paths for tests, proof harnesses and fixtures.
+- Passed proof: `pnpm check:test-layout`; `pnpm check:scaffold`; `git diff --check --`; tracked production source scan for forbidden test/proof paths returned no matches.
+- Passed proof: `pnpm lint`; `pnpm lint:py`; `pnpm typecheck`; `tsc -p tsconfig.infra-scripts.json --noEmit`; `pnpm unit_tests`; `pnpm build`.
+- Passed proof: representative smoke commands after moves: `pnpm test:feed-ingress-adapters:smoke`; `pnpm test:ingest:compose`; `pnpm test:relay`; `pnpm test:migrations:smoke`; `pnpm test:interest-compile:smoke`; `pnpm test:interest-compile:compose`.
+- Passed proof: dev/test compose availability checks confirmed moved harnesses/fixtures/tests are present inside fetchers, relay and worker containers via the dev overlay.
+- Passed proof: production image absence checks passed for `docker-fetchers`, `docker-relay` and `docker-worker`: no `/workspace/tests`, `/workspace/infra/scripts`, `/workspace/infra/fixtures`, or old moved smoke/proof files were present.
+- Passed proof: README local link check and README `pnpm` command parity check passed after documentation follow-up.
+- Passed proof: first `pnpm integration_tests` attempt timed out on an admin backfill in a previously dirty long-lived dev DB; the command cleaned compose volumes, and a clean rerun passed fully.
+- Passed proof: `pnpm test:product:local:core` passed; it covered lint/typecheck/unit, clean integration acceptance, production Dockerfile build/startup/health via compose.dev, website/admin/MCP/viewports/UI audit flows.
+- Cleanup: stopped the final compose.dev stack with `pnpm dev:mvp:internal:down`; volumes were not removed by that final cleanup command.
+- Residual local artifacts: worker smoke/build proofs created ignored derived model/index/snapshot/cache data under local `data/**` and Docker named volumes may remain from the final product-local stack; these are runtime artifacts, not tracked source.
 
 ### NEWSPORTAL-DOCS-MANUAL-ARTIFACT-RECOVERY-PATCH-1
 

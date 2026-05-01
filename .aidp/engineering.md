@@ -2,9 +2,9 @@
 
 ## Свежесть
 
-- Последняя проверка по реальности репозитория: 2026-04-29
+- Последняя проверка по реальности репозитория: 2026-05-01
 - Проверил: Codex
-- Следующий trigger пересмотра: изменение workspace/package structure, proof commands, runtime boundaries или stateful test model.
+- Следующий trigger пересмотра: изменение workspace/package structure, proof commands, runtime/test boundaries, Docker build contours или stateful test model.
 
 ## Назначение
 
@@ -184,8 +184,23 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 - `services/api`, `services/workers`, `services/ml`, `services/indexer` — Python runtime/tooling.
 - `packages/contracts`, `packages/config`, `packages/sdk`, `packages/control-plane`, `packages/ui` — workspace packages.
 - `database/migrations` — ordered SQL truth.
-- `infra/docker`, `infra/nginx`, `infra/scripts` — delivery and proof tooling.
+- `infra/docker`, `infra/nginx`, `infra/scripts`, `infra/fixtures` — delivery, proof tooling and test fixtures.
 - `tests/unit/ts` и `tests/unit/python` — deterministic unit proof.
+
+## Разделение production source, tests и fixtures
+
+Тестовая оснастка не должна смешиваться с production source/runtime.
+
+Правила:
+
+- Unit/regression tests живут в `tests/**`.
+- Executable smoke/proof harnesses живут в `infra/scripts/**`.
+- Test fixtures живут в `infra/fixtures/**`.
+- Production source trees `apps/**/src`, `packages/**/src`, `services/**/src` и `services/**/app` не должны содержать tracked `test`, `spec`, `smoke`, `fixture`, `mock` или `stub` files/directories.
+- Public `pnpm test:*` commands may call harnesses under `infra/scripts/**`, but service runtime packages must not depend on harness files being present in production images.
+- Dev/test compose may mount `tests/**`, `infra/scripts/**` and `infra/fixtures/**` explicitly. Production Dockerfiles must not copy these paths.
+- Test layout changes must update `pnpm check:test-layout`, `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/verification.md` and `.aidp/os.yaml` when command/path truth changes.
+- Before closing a change that moves proof harnesses or fixtures, run `pnpm check:test-layout` and representative affected `pnpm test:*` commands.
 
 ## Дисциплина границ
 
@@ -212,7 +227,7 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 
 - Keep `services/api` read/maintenance API concerns separate from `services/workers` processing concerns.
 - Keep ML/compiler helpers in `services/ml` when they are shared by worker/indexing paths.
-- Worker smoke helpers may create deterministic fixtures, but cleanup or residual tracking is part of the work.
+- Worker smoke harnesses under `infra/scripts/workers/**` may create deterministic fixtures, but cleanup or residual tracking is part of the work.
 - Prefer explicit SQL and data-shape handling over hidden global state.
 - For indexing/rebuild tools, treat HNSW/snapshot outputs as derived artifacts.
 - Cross-service imports from Python code must remain narrow and justified; shared ML/compiler behavior belongs in `services/ml`, while API routes and worker processors keep separate runtime concerns.
@@ -286,5 +301,6 @@ If a subsystem requires more detail than this compact core can hold, create or u
 - Creating cross-service imports that bypass `packages/contracts`, `packages/config`, `packages/control-plane` or a declared server module.
 - Removing compatibility adapters without a recorded deprecation/removal trigger.
 - Leaving hidden persistent test residue.
+- Shipping test/proof harnesses or fixtures inside production images.
 - Depending on chat memory for repository truth.
 - Updating product docs while leaving `.aidp/*` stale when runtime-agent truth changed.

@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from .main import open_connection
-from .task_engine.adapters import web_search as web_search_module
+from services.workers.app.main import open_connection
+from services.workers.app.task_engine.adapters import web_search as web_search_module
 
 
 class _FakeGeminiHandler(BaseHTTPRequestHandler):

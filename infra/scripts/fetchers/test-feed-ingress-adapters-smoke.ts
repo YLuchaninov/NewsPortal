@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { parseRssChannelConfig } from "@newsportal/contracts";
 
-import { adaptFeedIngress } from "../feed-ingress-adapters";
+import { adaptFeedIngress } from "../../../services/fetchers/src/feed-ingress-adapters";
 
 async function run(): Promise<void> {
   const redditEntities = "&amp;".repeat(1205);

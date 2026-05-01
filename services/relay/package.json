@@ -5,12 +5,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "migrate": "node --import tsx src/cli/migrate.ts",
-    "seed:outbox-smoke": "node --import tsx src/cli/seed-outbox-smoke.ts",
+    "seed:outbox-smoke": "NODE_PATH=./node_modules node --import tsx ../../infra/scripts/relay/seed-outbox-smoke.ts",
     "start": "node --import tsx src/main.ts",
-    "test:migrations": "node --import tsx src/cli/test-migrations.ts",
-    "test:phase45-routing": "node --import tsx src/cli/test-phase45-routing.ts",
-    "test:phase3-routing": "node --import tsx src/cli/test-phase3-routing.ts",
-    "test:relay": "node --import tsx src/cli/test-relay.ts",
+    "test:migrations": "NODE_PATH=./node_modules node --import tsx ../../infra/scripts/relay/test-migrations.ts",
+    "test:phase45-routing": "NODE_PATH=./node_modules node --import tsx ../../infra/scripts/relay/test-phase45-routing.ts",
+    "test:phase3-routing": "NODE_PATH=./node_modules node --import tsx ../../infra/scripts/relay/test-phase3-routing.ts",
+    "test:relay": "NODE_PATH=./node_modules node --import tsx ../../infra/scripts/relay/test-relay.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

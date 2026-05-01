@@ -48,8 +48,8 @@ apps/
   web/        Astro-приложение с пользовательским health endpoint
   admin/      Astro-приложение с admin health endpoint
 services/
-  fetchers/   Node/TypeScript ingest service + smoke CLI
-  relay/      Node/TypeScript outbox relay + migration/test CLI
+  fetchers/   Node/TypeScript ingest runtime service and operator CLI
+  relay/      Node/TypeScript outbox relay, migrations and operator CLI
   api/        FastAPI thin read/debug API с health endpoint
   workers/    Python workers для normalize, dedup, embed, compile, match и notify
   ml/         Shared Python logic для feature extraction, embeddings и compilers
@@ -61,9 +61,13 @@ database/
   ddl/        Текущий schema snapshot
 infra/
   docker/     Compose baseline и Dockerfiles
+  scripts/    Smoke/proof harnesses и operator proof scripts
+  fixtures/   Test/proof fixtures used only by dev/test contours
+tests/
+  unit/       Deterministic unit/regression tests
 ```
 
-## Локальный запуск
+## Разработка и dev/test contour
 
 1. Установить Node dependencies:
 
@@ -102,6 +106,7 @@ infra/
 5. Прогнать быстрые root-level QA gates:
 
    ```sh
+   pnpm check:test-layout
    pnpm lint
    pnpm unit_tests
    ```
@@ -125,12 +130,69 @@ infra/
 
    `stop` останавливает контейнеры без удаления, `down` удаляет stack без стирания volumes, `down:volumes` удаляет stack вместе с volumes, `logs` показывает compose-логи. Для конкретных сервисов можно передать имена после `--`, например `pnpm dev:mvp:internal:logs -- web api`.
 
+Dev/test contour всегда запускается через base compose плюс dev overlay:
+
+```sh
+docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml ...
+```
+
+Именно `infra/docker/compose.dev.yml` добавляет в контейнеры тестовую оснастку: `tests/**`, `infra/scripts/**` и `infra/fixtures/**`. Production source dirs (`apps/*/src`, `packages/*/src`, `services/*/src`, `services/*/app`) не должны содержать tracked test/proof/fixture/mock/stub files. Это проверяет:
+
+```sh
+pnpm check:test-layout
+```
+
+Каноническая раскладка такая:
+
+- unit/regression tests: `tests/**`;
+- smoke/proof harnesses: `infra/scripts/**`;
+- fixtures: `infra/fixtures/**`;
+- runtime/operator code: `apps/**`, `packages/**`, `services/**`.
+
+## Production build/run contract
+
+Production contour собирается из base compose и production env overlay:
+
+```sh
+docker compose --env-file .env.prod -f infra/docker/compose.yml -f infra/docker/compose.prod.yml build
+docker compose --env-file .env.prod -f infra/docker/compose.yml -f infra/docker/compose.prod.yml up -d
+```
+
+Production Dockerfiles должны копировать только runtime source, runtime package manifests, migrations/config and runtime data needed by the service. Они не должны копировать `tests/**`, `infra/scripts/**` или `infra/fixtures/**`. Это означает:
+
+- public `pnpm test:*` commands run moved harnesses from `infra/scripts/**`;
+- dev/test compose includes those harnesses explicitly through read-only mounts;
+- production images remain test-free and must not contain moved smoke files or fixtures.
+
+Минимальная проверка после изменений в build/runtime границах:
+
+```sh
+pnpm check:test-layout
+pnpm lint
+pnpm typecheck
+pnpm unit_tests
+pnpm build
+pnpm integration_tests
+```
+
+Для product-level local acceptance используйте:
+
+```sh
+pnpm test:product:local:core
+```
+
 ## Root QA Gates
 
+- `pnpm check:test-layout`
+  Structural guard: падает, если tracked test/proof/fixture/mock/stub files оказываются внутри production source dirs.
 - `pnpm lint`
   Root-level ESLint + Ruff gate для `apps`, `packages`, `services` и `infra/scripts`; Python часть требует установленный `ruff` из `infra/docker/python.dev-requirements.txt`.
+- `pnpm typecheck`
+  Workspace TypeScript/Astro typecheck плюс отдельный `tsconfig.infra-scripts.json` для moved proof harnesses в `infra/scripts`.
 - `pnpm unit_tests`
   Root-level deterministic unit gate: `node:test` + `tsx` для pure TS logic и `unittest` для pure Python helpers.
+- `pnpm build`
+  Workspace build gate for packages/apps/services that expose a build script.
 - `pnpm integration_tests`
   Root-level full-acceptance gate; сейчас это thin alias на `pnpm test:mvp:internal`.
 
@@ -341,6 +403,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 
 ## Основные команды
 
+- `pnpm check:test-layout`
 - `pnpm check:scaffold`
 - `pnpm db:migrate`
 - `pnpm db:seed:outbox-smoke`
@@ -374,6 +437,9 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 - `pnpm test:mvp:internal`
 - `pnpm test:normalize-dedup:compose`
 - `pnpm test:normalize-dedup:smoke`
+- `pnpm test:product:local:core`
+- `pnpm test:product:local:full`
+- `pnpm test:product:local:cleanup`
 - `pnpm test:relay`
 - `pnpm test:relay:phase3`
 - `pnpm test:relay:compose`

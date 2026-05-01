@@ -98,6 +98,7 @@ commands:
   dev_down_volumes: pnpm dev:mvp:internal:down:volumes
   dev_logs: pnpm dev:mvp:internal:logs
   check_scaffold: pnpm check:scaffold
+  check_test_layout: pnpm check:test-layout
   build: pnpm build
   lint: pnpm lint
   lint_ts: pnpm lint:ts

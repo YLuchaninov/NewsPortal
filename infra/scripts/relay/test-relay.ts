@@ -1,10 +1,10 @@
 import { Queue } from "bullmq";
 import { FOUNDATION_SMOKE_QUEUE } from "@newsportal/contracts";
 
-import { loadRelayConfig } from "../config";
-import { createPgPool, createRedisConnection } from "../db";
-import { OutboxRelay } from "../relay";
-import { insertFoundationSmokeEvent, waitForPublishedEvent } from "../outbox";
+import { loadRelayConfig } from "../../../services/relay/src/config";
+import { createPgPool, createRedisConnection } from "../../../services/relay/src/db";
+import { OutboxRelay } from "../../../services/relay/src/relay";
+import { insertFoundationSmokeEvent, waitForPublishedEvent } from "../../../services/relay/src/outbox";
 
 async function main(): Promise<void> {
   const config = loadRelayConfig();

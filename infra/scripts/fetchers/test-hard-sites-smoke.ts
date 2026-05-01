@@ -3,10 +3,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import type { Pool } from "pg";
 
-import { loadFetchersConfig } from "../config";
-import { createPgPool } from "../db";
-import { RssFetcherService } from "../fetchers";
-import { ResourceEnrichmentService } from "../resource-enrichment";
+import { loadFetchersConfig } from "../../../services/fetchers/src/config";
+import { createPgPool } from "../../../services/fetchers/src/db";
+import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
+import { ResourceEnrichmentService } from "../../../services/fetchers/src/resource-enrichment";
 
 interface WaitOptions {
   timeoutMs: number;

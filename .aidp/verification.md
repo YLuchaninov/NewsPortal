@@ -2,7 +2,7 @@
 
 ## Свежесть
 
-- Последняя проверка по реальности репозитория: 2026-04-29
+- Последняя проверка по реальности репозитория: 2026-05-01
 - Проверил: Codex
 - Следующий trigger пересмотра: изменение root scripts, test harnesses, compose baseline, migration process или delivery proof.
 
@@ -21,6 +21,7 @@
 - Python lint only: `pnpm lint:py`
 - Typecheck: `pnpm typecheck`
 - Build/no-emit package checks: `pnpm build`
+- Test/runtime layout guard: `pnpm check:test-layout`
 
 ### Unit proof
 
@@ -75,9 +76,10 @@
 ## Test surface taxonomy
 
 - Static gates: lint, typecheck and build prove source shape and package contracts without runtime state.
+- Layout guard: `pnpm check:test-layout` proves tracked test/proof files are outside production source trees.
 - Unit gates: `tests/unit/ts/**/*.test.ts` and `tests/unit/python/test_*.py` prove deterministic local logic.
-- Local smoke gates: direct Python/Node smoke commands that can run outside compose when dependencies are available.
-- Compose smoke gates: commands that assume local Docker Compose services and may create persistent PostgreSQL/Mailpit/Redis state.
+- Local smoke gates: direct Python/Node smoke commands under `infra/scripts/**` that can run outside compose when dependencies are available.
+- Compose smoke gates: commands that assume local Docker Compose services, use the dev/test compose overlay for `infra/scripts/**` and `infra/fixtures/**`, and may create persistent PostgreSQL/Mailpit/Redis state.
 - Full acceptance gates: `pnpm test:mvp:internal`, website/admin/discovery/MCP live harnesses and multi/soak ingest.
 - Diagnostic/remediation utilities: commands that inspect or repair runtime-derived state; they are not default close gates unless the active item touches their area.
 - Live/external-provider gates: discovery live examples/yield, website live matrix and MCP live proof may involve external networks/providers or nondeterminism; residual gaps must be explicit if skipped.
@@ -120,6 +122,7 @@
 - MCP/control-plane changes: `pnpm test:mcp:compose` or targeted MCP HTTP group proof.
 - Automation/control-plane changes: `pnpm test:automation:admin:compose` plus targeted unit/control-plane proof.
 - Delivery/compose changes: compose startup/health proof or an explicit blocked proof gap; scaffold changes should run `pnpm check:scaffold`.
+- Test/runtime layout changes: `pnpm check:test-layout`, lint/typecheck/unit proof, representative moved smoke commands, dev/test compose availability proof, and production image absence checks for `tests/**`, `infra/scripts/**` and `infra/fixtures/**`.
 - Notification/digest changes: affected BFF/worker proof plus Mailpit-local or explicit external-provider residual gap.
 - HNSW/index changes: affected rebuild/check command, plus worker/API proof if matching or search behavior changed.
 - UI interaction/layout changes: viewport proof and, for button/control regressions, `pnpm test:web:ui-audit`.

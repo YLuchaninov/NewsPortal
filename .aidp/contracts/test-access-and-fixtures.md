@@ -19,6 +19,7 @@
 ## Разрешенные environments
 
 - `local`: канонический baseline. Разрешены `pnpm dev:mvp:internal`, related compose lifecycle commands, host-side smoke against local PostgreSQL/Redis, Mailpit, local Firebase-backed `.env.dev` setup and repo-owned fixture scripts.
+- `local-dev-test`: тот же local compose baseline с `infra/docker/compose.dev.yml`; dev/test containers explicitly mount `tests/**`, `infra/scripts/**` and `infra/fixtures/**` so production images remain test-free.
 - `dev`: не объявлена как стандартный baseline; используй только при явном human framing.
 - `staging`: не объявлена как стандартная test environment.
 - `preview`: не объявлена как стандартная test environment.
@@ -35,8 +36,9 @@
   - `pnpm test:discovery-enabled:compose`
   - `pnpm test:discovery:examples:compose`
   - `pnpm db:seed:outbox-smoke`
-  - worker smoke commands through `services/workers/app/smoke.py`
-  - fetcher smoke commands through `services/fetchers/src/cli/*`
+  - worker smoke commands through `infra/scripts/workers/smoke.py`
+  - fetcher smoke commands through `infra/scripts/fetchers/*`
+  - relay smoke/migration proof commands through `infra/scripts/relay/*`
 - Ephemeral credentials created by deterministic proof harnesses.
 - No mandatory secrets manager path is currently declared.
 
@@ -62,9 +64,10 @@ Reusable deterministic procedures:
 - `infra/scripts/test-automation-admin-flow.mjs`
 - `infra/scripts/test-discovery-admin-flow.mjs`
 - `infra/scripts/test-rss-multi-flow.mjs`
-- `services/workers/app/smoke.py`
-- `services/fetchers/src/cli/test-rss-smoke.ts`
-- `services/relay/src/cli/seed-outbox-smoke.ts`
+- `infra/scripts/workers/smoke.py`
+- `infra/scripts/fetchers/test-rss-smoke.ts`
+- `infra/scripts/relay/seed-outbox-smoke.ts`
+- `infra/fixtures/fetchers/smoke-feed.xml`
 
 ## Правила ephemeral naming
 

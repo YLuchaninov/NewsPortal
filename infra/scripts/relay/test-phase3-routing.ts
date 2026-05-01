@@ -2,18 +2,18 @@ import { randomUUID } from "node:crypto";
 
 import { Queue } from "bullmq";
 import {
-  LLM_REVIEW_REQUESTED_EVENT,
-  NOTIFICATION_FEEDBACK_RECORDED_EVENT,
-  REINDEX_REQUESTED_EVENT,
+  ARTICLE_INGEST_REQUESTED_EVENT,
+  CRITERION_COMPILE_REQUESTED_EVENT,
+  INTEREST_COMPILE_REQUESTED_EVENT,
   SEQUENCE_QUEUE
 } from "@newsportal/contracts";
 import type { Pool } from "pg";
 
-import { loadRelayConfig } from "../config";
-import { createPgPool, createRedisConnection } from "../db";
-import { waitForPublishedEvent } from "../outbox";
-import { OutboxRelay } from "../relay";
-import { PostgresSequenceRoutingRepository } from "../sequence-routing";
+import { loadRelayConfig } from "../../../services/relay/src/config";
+import { createPgPool, createRedisConnection } from "../../../services/relay/src/db";
+import { waitForPublishedEvent } from "../../../services/relay/src/outbox";
+import { OutboxRelay } from "../../../services/relay/src/relay";
+import { PostgresSequenceRoutingRepository } from "../../../services/relay/src/sequence-routing";
 
 interface ActiveSequenceRow {
   sequenceId: string;
@@ -243,71 +243,56 @@ async function main(): Promise<void> {
 
   try {
     const docId = randomUUID();
+    const interestId = randomUUID();
     const criterionId = randomUUID();
-    const notificationId = randomUUID();
-    const userId = randomUUID();
-    const promptTemplateId = randomUUID();
-    const reindexJobId = randomUUID();
 
     await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
-      eventType: LLM_REVIEW_REQUESTED_EVENT,
+      eventType: ARTICLE_INGEST_REQUESTED_EVENT,
+      aggregateType: "article",
+      aggregateId: docId,
+      payload: {
+        docId,
+        version: 1
+      },
+      expectedContext: {
+        doc_id: docId,
+        version: 1
+      },
+      label: "article.ingest.requested"
+    });
+
+    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
+      eventType: INTEREST_COMPILE_REQUESTED_EVENT,
+      aggregateType: "interest",
+      aggregateId: interestId,
+      payload: {
+        interestId,
+        version: 2
+      },
+      expectedContext: {
+        interest_id: interestId,
+        version: 2
+      },
+      label: "interest.compile.requested"
+    });
+
+    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
+      eventType: CRITERION_COMPILE_REQUESTED_EVENT,
       aggregateType: "criterion",
       aggregateId: criterionId,
       payload: {
-        docId,
-        scope: "criterion",
-        targetId: criterionId,
-        promptTemplateId,
-        version: 1
+        criterionId,
+        version: 3
       },
       expectedContext: {
-        doc_id: docId,
-        scope: "criterion",
-        target_id: criterionId,
-        prompt_template_id: promptTemplateId,
-        version: 1
+        criterion_id: criterionId,
+        version: 3
       },
-      label: "llm.review.requested"
-    });
-
-    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
-      eventType: NOTIFICATION_FEEDBACK_RECORDED_EVENT,
-      aggregateType: "notification",
-      aggregateId: notificationId,
-      payload: {
-        notificationId,
-        docId,
-        userId,
-        version: 1
-      },
-      expectedContext: {
-        notification_id: notificationId,
-        doc_id: docId,
-        user_id: userId,
-        version: 1
-      },
-      label: "notification.feedback.recorded"
-    });
-
-    await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
-      eventType: REINDEX_REQUESTED_EVENT,
-      aggregateType: "reindex",
-      aggregateId: reindexJobId,
-      payload: {
-        reindexJobId,
-        indexName: "event_cluster_centroids",
-        version: 1
-      },
-      expectedContext: {
-        reindex_job_id: reindexJobId,
-        index_name: "event_cluster_centroids",
-        version: 1
-      },
-      label: "reindex.requested"
+      label: "criterion.compile.requested"
     });
 
     console.log(
-      `Phase 4/5 relay routing smoke passed: LLM review, feedback ingest, and reindex triggers created PostgreSQL-backed sequence runs and thin ${SEQUENCE_QUEUE} jobs.`
+      `Phase 3 relay routing smoke passed: sequence-managed article/interest/criterion events created PostgreSQL-backed sequence runs and thin ${SEQUENCE_QUEUE} jobs.`
     );
   } finally {
     await relay.close();

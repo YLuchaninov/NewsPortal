@@ -12,7 +12,6 @@ COPY services/relay/package.json services/relay/package.json
 COPY services/relay/tsconfig.json services/relay/tsconfig.json
 COPY services/relay/src services/relay/src
 COPY database database
-COPY infra/scripts infra/scripts
 
 RUN pnpm install --frozen-lockfile
 

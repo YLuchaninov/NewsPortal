@@ -8,13 +8,14 @@ const sourceGlobs = [
   "apps/**/*.{astro,ts,tsx}",
   "packages/**/*.ts",
   "services/**/*.{ts,tsx}",
-  "infra/scripts/**/*.{js,mjs}"
+  "infra/scripts/**/*.{js,mjs,ts}"
 ];
 
 const tsGlobs = [
   "apps/**/*.{ts,tsx}",
   "packages/**/*.ts",
-  "services/**/*.{ts,tsx}"
+  "services/**/*.{ts,tsx}",
+  "infra/scripts/**/*.ts"
 ];
 
 const sharedGlobals = {

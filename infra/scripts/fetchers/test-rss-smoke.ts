@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
-import { loadFetchersConfig } from "../config";
-import { createPgPool } from "../db";
-import { RssFetcherService } from "../fetchers";
+import { loadFetchersConfig } from "../../../services/fetchers/src/config";
+import { createPgPool } from "../../../services/fetchers/src/db";
+import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
 
 interface WaitOptions {
   timeoutMs: number;
@@ -655,7 +655,7 @@ async function main(): Promise<void> {
   const smokeRunId = randomUUID();
   const fixturesDirectory = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    "../fixtures"
+    "../../fixtures/fetchers"
   );
   const fixtureXml = (
     await readFile(path.join(fixturesDirectory, "smoke-feed.xml"), "utf8")

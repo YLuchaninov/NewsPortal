@@ -27,16 +27,28 @@ services:
   relay:
     env_file:
       - ../../.env.dev
+    volumes:
+      - ../../infra/scripts:/workspace/infra/scripts:ro
+      - ../../infra/fixtures:/workspace/infra/fixtures:ro
+      - ../../tests:/workspace/tests:ro
 
   fetchers:
     env_file:
       - ../../.env.dev
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../infra/scripts:/workspace/infra/scripts:ro
+      - ../../infra/fixtures:/workspace/infra/fixtures:ro
+      - ../../tests:/workspace/tests:ro
 
   worker:
     env_file:
       - ../../.env.dev
+    volumes:
+      - ../../infra/scripts:/workspace/infra/scripts:ro
+      - ../../infra/fixtures:/workspace/infra/fixtures:ro
+      - ../../tests:/workspace/tests:ro
 
   api:
     env_file:
