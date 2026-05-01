@@ -12,8 +12,12 @@
 
 ## Общие принципы
 
+- Think before coding: зафиксируй interpretation, assumptions, success criteria, route и proof до содержательных правок.
+- Simplicity first: выбирай самый маленький честный route and implementation surface.
+- Surgical changes: каждый changed path должен быть оправдан active item, route, proof или sync requirement.
+- Goal-driven execution: proof определяется до claim completion.
 - Делай минимальное честное изменение под declared active item.
-- Сначала зафиксируй route, scope, allowed paths и proof; потом меняй код.
+- Сначала зафиксируй lifecycle mode, work route, scope, allowed paths, risk/approval и proof; потом меняй код.
 - Сохраняй существующие границы сервисов и пакетов, если work item явно не меняет архитектуру.
 - Не называй behavior change refactor-ом.
 - Предпочитай явные contracts и typed/shared boundaries скрытой связности.
@@ -21,6 +25,46 @@
 - Если durable truth меняется, обновляй правильный `.aidp/*` owner-файл в том же sync cycle.
 - Архитектурное качество оценивай через явные quality attributes: modifiability, reliability, security, performance efficiency, operational excellence and cost/complexity tradeoffs.
 - Любая архитектурная правка должна назвать affected concern, stakeholder/consumer, boundary, tradeoff and proof. Если это нельзя объяснить, изменение еще не готово.
+
+## Route-aware engineering
+
+Не используй один generic implementation habit для всех задач.
+
+- `micro-patch`: локальная surgical правка и targeted proof.
+- `capability`: goal, success criteria, stages and capability-level proof до claiming completion.
+- `bugfix`: failure/reproducer first when practical, then minimal patch and regression proof.
+- `sweep`: invariant, allowed paths and behavior preservation proof.
+- `audit`: read-only first; fixes only after approval or explicit repair/sweep/docs-operator item.
+- `docs-operator`: owner-file boundaries, no second canon, routers stay thin.
+- `delivery`: package/artifact shape and cleanup proof.
+
+`normal` не является route; normal lifecycle mode всегда требует выбранный work route.
+
+## Item state discipline
+
+- Не помечай item `done` до route-specific proof and close gate.
+- Не помечай item `archived` до `.aidp/history.md` sync.
+- Не помечай item `superseded` без named replacement.
+- Не продолжай `blocked` item без записи, что unblock произошло.
+
+## Risk and approval discipline
+
+Каждый active item должен записывать `Risk: low | medium | high` и `Approval required: no | yes`.
+
+High-risk work требует явного approval до broad writes, destructive cleanup, deployment/publishing/signing, secret access, schema/data migration, production/external state changes, off-repo effects или tool/router/runtime changes, которые могут создать второй canon.
+
+Если approval отсутствует, block или park item. Не понижай risk только чтобы продолжить.
+
+## Blueprint-aware implementation
+
+Перед writes, которые меняют architecture, ownership, module/API/state/data/runtime/packaging/deployment boundaries или durable project structure:
+
+- прочитай relevant `.aidp/blueprint.md` section/canonical neighborhood;
+- запиши checked context или gap в `.aidp/work.md`;
+- сохраняй stated invariants unless active route explicitly changes them;
+- консолидируй confirmed durable truth в один owner-файл вместо параллельных claims.
+
+Если boundary кажется неправильной, сначала зафиксируй observation. Не переписывай architecture в unrelated route.
 
 ## Архитектурный quality bar
 

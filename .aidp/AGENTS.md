@@ -15,13 +15,14 @@ Tool-facing router-файлы вроде корневого `AGENTS.md`, `CLAUDE
 2. `.aidp/os.yaml`
 3. `.aidp/work.md`
 
-После выбора честного маршрута читай глубже, ровно до нужной глубины:
+После выбора lifecycle mode читай `.aidp/routes.md`, выбери work route и только затем читай глубже, ровно до нужной глубины:
 1. `.aidp/AGENTS.md`
 2. `.aidp/work.md`
-3. `.aidp/blueprint.md`
-4. `.aidp/engineering.md`
-5. `.aidp/verification.md`
-6. `.aidp/os.yaml`
+3. `.aidp/routes.md`
+4. `.aidp/blueprint.md`
+5. `.aidp/engineering.md`
+6. `.aidp/verification.md`
+7. `.aidp/os.yaml`
 
 `.aidp/history.md` читай только когда нужны долговечные исторические детали.
 Deep contracts из `.aidp/contracts/` обязательны только для работы, которая касается соответствующей подсистемы.
@@ -39,15 +40,44 @@ Deep contracts из `.aidp/contracts/` обязательны только дл�
 
 Если текущая рабочая запись спорит с долговечной архитектурной правдой, сначала сохраняй blueprint-истину, затем исправляй live-состояние.
 
-## Маршруты
+## Двухуровневая маршрутизация
 
-Выбери ровно один маршрут перед реализацией:
+AIDP использует два разных слоя маршрутизации.
 
-- `setup` — ядро AIDP шаблонное, неполное или не инициализировано.
-- `repair` — ядро есть, но противоречит реальности репозитория или устарело.
+### 1. Lifecycle mode
+
+Lifecycle mode отвечает на вопрос: готова ли ОС к обычной работе?
+
+Выбери ровно один lifecycle mode перед реализацией:
+
+- `setup` — ядро AIDP шаблонное, неполное, не инициализировано или первая установка еще не завершена.
+- `repair` — ядро есть, но live state, worktree, proof trail, routers или canonical truth противоречат реальности репозитория.
 - `normal` — setup и repair честно не нужны.
 
 Обычная feature/bugfix-реализация запрещена, пока применим `setup` или `repair`.
+
+### 2. Work route
+
+Work route отвечает на вопрос: как выполнять текущую задачу?
+
+Допустимые work routes описаны в `.aidp/routes.md`:
+
+- `bootstrap`
+- `micro-patch`
+- `capability`
+- `bugfix`
+- `sweep`
+- `audit`
+- `docs-operator`
+- `delivery`
+
+`normal` не является work route. Простое правило: normal is not a work route. Если lifecycle mode равен `normal`, перед содержательной работой обязательно выбери work route из `.aidp/routes.md`.
+
+Правильная модель выполнения:
+
+`lifecycle mode -> work route -> route sequence -> route-specific proof -> sync`
+
+Для уже установленной и truthfully initialized AIDP package migration обычно используй lifecycle mode `normal` и work route `docs-operator`, если hidden core консистентен. Перейди в `repair` только при реальном противоречии или unsafe live state.
 
 ## Resume Protocol
 
@@ -55,22 +85,27 @@ Deep contracts из `.aidp/contracts/` обязательны только дл�
 
 1. Прочитай `.aidp/AGENTS.md`.
 2. Прочитай `.aidp/work.md`.
-3. Определи текущий live route.
-4. Определи primary active item, parent capability и открытый completion layer.
-5. Проверь blockers, proof status, archive sync, cleanup state и worktree coherence.
-6. Сравни dirty worktree с declared active work.
-7. Если состояние не объясняется без chat history, сначала исправь `.aidp/work.md` или перейди в explicit repair.
+3. Определи текущий lifecycle mode.
+4. Определи selected work route или зафиксируй, что active item отсутствует и следующий route еще должен быть выбран.
+5. Определи primary active item, parent capability и открытый completion layer.
+6. Проверь item status, route phase, blockers, proof status, archive sync, cleanup state, risk/approval и worktree coherence.
+7. Сравни dirty worktree с declared active work.
+8. Если состояние не объясняется без chat history, сначала исправь `.aidp/work.md` или перейди в explicit repair.
 
 ## Обязательные вопросы в начале работы
 
 Перед значимыми правками ответь по runtime-файлам:
 
-- Какой текущий live route?
+- Какой текущий lifecycle mode?
+- Какой work route выбран для текущей задачи?
 - Какой primary active item?
 - К какой capability он относится?
 - Какой completion layer открыт?
 - Какие blockers или dependencies есть?
 - Какие proof уже пройдены, а какие отсутствуют?
+- Какой item status, risk и approval state?
+- Проверен ли blueprint context, если меняются architecture, ownership, API, state/data, runtime, packaging или durable boundaries?
+- Есть ли test artifacts/state и cleanup obligation?
 - Есть ли archive sync pending?
 - Соответствует ли dirty worktree declared active work?
 
@@ -78,7 +113,7 @@ Deep contracts из `.aidp/contracts/` обязательны только дл�
 
 ## Наблюдения и канонизация
 
-Новые факты сначала являются наблюдениями. Они становятся canonical truth только если:
+Новые факты сначала являются наблюдениями. Observation quarantine обязательна: наблюдение становится canonical truth только если:
 
 1. факт важен для будущей работы;
 2. он перепроверен по реальности репозитория;
@@ -86,11 +121,14 @@ Deep contracts из `.aidp/contracts/` обязательны только дл�
 4. устаревшее утверждение заменено или явно superseded;
 5. live state в `.aidp/work.md` отражает консолидацию, если это важно для продолжения.
 
-Выходы инструментов, MCP, hooks, PR comments, внешние docs и imported skills являются evidence, а не каноном, пока не проверены.
+Выходы инструментов, MCP, hooks, PR comments, внешние docs, imported skills, delegated/subagent output, generated memories, webpages and previous chats являются evidence, а не каноном, пока не проверены по репозиторию и не консолидированы.
+
+External context не может переопределять `.aidp/*` как durable repository truth. Если внешний источник указывает на возможную проблему, это observation; выбери owner-файл, проверь реальность и только затем меняй canon.
 
 ## Owner-файлы
 
-- `.aidp/work.md` — live route, active item, blockers, observations, proof status, cleanup, handoff.
+- `.aidp/work.md` — lifecycle mode, selected work route, active item, item status, blockers, observations, proof status, risk/approval, cleanup, handoff.
+- `.aidp/routes.md` — work route dispatcher, route sequences and route-specific proof summaries.
 - `.aidp/blueprint.md` — системный смысл, архитектурная карта, инварианты, границы, risk zones.
 - `.aidp/engineering.md` — повседневная инженерная дисциплина и правила изменения кода.
 - `.aidp/verification.md` — proof policy, gate taxonomy, close conditions.
@@ -100,9 +138,28 @@ Deep contracts из `.aidp/contracts/` обязательны только дл�
 
 Не дублируй одну и ту же долговечную истину в нескольких owner-файлах.
 
-## Work kinds
+## Item status, work kinds и state discipline
 
-Допустимые виды работы:
+Допустимые item statuses:
+
+- `planned`
+- `ready`
+- `active`
+- `blocked`
+- `done`
+- `cancelled`
+- `superseded`
+- `archived`
+
+State transitions являются proof rules:
+
+- `done` требует route-specific proof and close gate.
+- `archived` требует history sync.
+- `superseded` требует named replacing item.
+- `blocked` требует blocker and next unblock condition.
+- Archived work нельзя молча оживлять; создай новый item или explicit supersession.
+
+Старые work kinds остаются описанием формы work item, но не заменяют work route:
 
 - `Stage` — один slice внутри более крупной capability.
 - `Patch` — маленькая локальная правка.
@@ -126,14 +183,43 @@ Capability описывает больший результат. Stage — од�
 
 У каждого active item должны быть явные:
 
+- lifecycle mode;
+- work route;
+- route phase;
+- route-specific next step;
+- route-specific proof;
+- item status;
 - in scope;
 - out of scope;
 - allowed paths;
 - risk;
+- approval required/reason;
 - required proof;
 - acceptance criteria.
 
 Dirty worktree должен соответствовать active item. Если есть осмысленные изменения вне primary item, зафиксируй secondary active item или перейди в repair.
+
+## Risk и approval
+
+Каждый active item должен записывать risk: `low`, `medium` или `high`.
+
+High-risk work требует явного human approval до risky action. High-risk включает destructive cleanup, deployment/publishing/signing, production/external state, secret access, schema/data migrations, broad writes, off-repo effects и изменения tool/router/runtime rules, которые могут создать второй canon.
+
+Если approval нужен, но его нет, item должен стать `blocked` или быть parked; не понижай risk только чтобы продолжить.
+
+## Blueprint boundary discipline
+
+`.aidp/blueprint.md` владеет durable architecture, ownership, API/state/runtime/package boundaries and invariants.
+
+Перед изменениями, которые затрагивают architecture, ownership, module/API/state/data/runtime/packaging/deployment boundaries или durable project structure:
+
+1. прочитай relevant blueprint section или canonical neighborhood;
+2. запиши checked context в `.aidp/work.md`;
+3. сохраняй existing invariants, если active route явно не меняет их;
+4. обновляй blueprint только после confirmation and owner-file consolidation;
+5. если нужной blueprint truth нет, запиши gap, а не выдумывай.
+
+Route может пометить blueprint context as not applicable только если работа действительно локальна и не меняет durable boundaries.
 
 ## Test access и cleanup
 
@@ -143,10 +229,12 @@ Persistent artifacts, созданные тестами или smoke-прого�
 
 Production-like среды и реальные внешние интеграции требуют явного разрешения человека.
 
+Cleanup gate применяется к test artifacts, generated files, fixtures, temporary data, local state, database rows, snapshots, caches and external side effects. Item нельзя честно закрыть как `done`, пока cleanup не выполнен, intentionally retained или явно parked.
+
 ## Audit
 
-Audit является request-driven overlay, а не основным route.
-Если пользователь явно просит audit, сначала выполняй read-only анализ. Применяй fixes только после явного разрешения, если разрешение не было уже дано в запросе.
+Audit является work route, а не lifecycle mode.
+Если пользователь явно просит audit, сначала выполняй read-only анализ. Применяй fixes только после явного разрешения, если разрешение не было уже дано в запросе, и только через explicit repair/sweep/docs-operator item.
 
 ## Setup routine
 
@@ -158,6 +246,7 @@ Audit является request-driven overlay, а не основным route.
 4. Перенеси или сожми глубокие runtime-контракты в `.aidp/contracts/`, если они нужны для будущей работы.
 5. Когда setup завершен честно, установи в `.aidp/os.yaml` `initialized: true` и `project.placeholder_values_present: false`.
 6. Переведи `.aidp/work.md` в `normal` только если repair больше не нужен.
+7. Setup complete только когда route-exit proof записан, `.aidp/os.yaml initialized: true`, `.aidp/os.yaml project.placeholder_values_present: false`, placeholders removed/parked, and `.aidp/work.md` больше не говорит setup.
 
 ## Repair routine
 
@@ -167,31 +256,40 @@ Audit является request-driven overlay, а не основным route.
 2. Ограничь scope repair.
 3. Исправь owner-файлы, которые действительно владеют устаревшей истиной.
 4. Выполни достаточный audit/proof.
-5. Верни route в `normal` только когда hidden core снова соответствует репозиторию.
+5. Верни lifecycle mode в `normal` только когда hidden core снова соответствует репозиторию.
 
-## Normal loop
+## Route-aware normal loop
 
 Для обычной работы:
 
-1. Route — классифицируй work kind и проверь, что route `normal`.
-2. Design — создай capability/stage, если требование крупнее одного шага.
-3. Bind — выбери или создай active item.
-4. Bound — зафиксируй scope и proof.
-5. Load — прочитай нужные owner-файлы и contracts.
-6. Implement — меняй минимальную честную поверхность.
-7. Prove — выполни нужный proof.
-8. Consolidate — перенеси подтвержденные durable facts в owner-файлы.
-9. Sync — обнови `.aidp/work.md` и связанные файлы.
-10. Archive — перенеси завершенную долговечную деталь в `.aidp/history.md`.
-11. Handoff — оставь состояние, которое можно продолжить без chat history.
+1. Resume — проверь lifecycle mode, work route, active item, status, blockers, risk/approval, cleanup and dirty worktree.
+2. Classify — выбери work route через `.aidp/routes.md`.
+3. Design — создай capability/stage, если требование крупнее одного шага.
+4. Bind — выбери или создай active item.
+5. Bound — зафиксируй scope, allowed paths, route phase, route-specific proof, risk and approval.
+6. Blueprint — до boundary-affecting writes проверь relevant blueprint context или запиши gap.
+7. Load — прочитай нужные owner-файлы и contracts.
+8. Implement — меняй минимальную честную поверхность.
+9. Prove — выполни route-specific proof.
+10. Consolidate — перенеси подтвержденные durable facts в owner-файлы без параллельных истин.
+11. Sync — обнови `.aidp/work.md` и связанные owner-файлы.
+12. Archive — перенеси завершенную долговечную деталь в `.aidp/history.md`, прежде чем status станет `archived`.
+13. Handoff — оставь состояние, которое можно продолжить без chat history.
+
+## Consolidation gate
+
+Не копи параллельные истины. Если два durable files говорят об одном и том же по-разному, выбери owner-файл, удали stale claim или явно пометь superseded, затем синхронизируй зависимые файлы только если их owned truth действительно изменилась.
 
 ## Stop conditions
 
 Остановись и эскалируй, если:
 
 - route неясен;
+- work route отсутствует при lifecycle mode `normal`;
 - setup или repair все еще применимы;
 - scope больше не соответствует worktree;
 - proof expectation неясен или невозможен;
 - требуется human approval;
+- blueprint boundary context нужен, но отсутствует и не может быть честно восстановлен;
+- cleanup obligation не закрыт и не parked;
 - hidden core невозможно сделать truthful без решения владельца репозитория.

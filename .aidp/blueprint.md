@@ -92,6 +92,42 @@ NewsPortal — локальный MVP polyglot content-platform monorepo для 
 - Auth/session boundary: web anonymous sessions, admin password sign-in, cookies, allowlist and nginx `/admin` routing must stay visibly separated.
 - Notification/digest boundary: immediate web push/Telegram notifications and scheduled email digests share channel storage but have separate delivery semantics and proof risks.
 
+## Boundary/invariant references
+
+Перед изменениями, которые пересекают durable boundary, агент должен прочитать этот раздел и соответствующий deep contract, если он есть.
+
+- Architecture/runtime surfaces: смотри `Техническая модель`, `Runtime-поверхности`, `Delivery/runtime baseline`.
+- Data/state ownership: смотри `Ключевые инварианты`, `PostgreSQL vs derived state`, `.aidp/contracts/runtime-migrations-and-derived-state.md`.
+- API/control-plane/admin writes: смотри `UI/BFF boundary`, `Public API vs admin/operator API`, `.aidp/contracts/mcp-control-plane.md`, `.aidp/contracts/auth-session-boundary.md`.
+- Source/content pipeline: смотри `Fetchers vs workers`, `Source model vs provider adapters`, `.aidp/contracts/feed-ingress-adapters.md`, `.aidp/contracts/content-model.md`, `.aidp/contracts/article-pipeline-core.md`.
+- Selection/personalization/discovery: смотри `System selection vs personalization`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`, `.aidp/contracts/discovery-agent.md`.
+- Notifications/digests: смотри `Notification/digest boundary`, `.aidp/contracts/notifications-and-digests.md`.
+- Test/runtime boundary: смотри `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/engineering.md` section `Разделение production source, tests и fixtures`.
+- AIDP/process truth: смотри `Product docs vs AIDP runtime`; durable AIDP truth живет только в `.aidp/*`, routers/adapters остаются thin.
+
+## Когда читать blueprint перед изменениями
+
+Blueprint context обязателен до writes, которые меняют или могут изменить:
+
+- architecture или service/package ownership;
+- public/internal API, BFF, SDK, MCP tools, queue/event contracts;
+- database schema, migrations, state ownership или derived-state model;
+- runtime surfaces, Docker/compose/nginx/env, startup/health or packaging boundaries;
+- auth/session/admin authorization, notification delivery, discovery/live-provider policy;
+- production/test fixture boundaries or production image contents;
+- durable AIDP/runtime documentation boundaries.
+
+Если подходящего blueprint context нет, не выдумывай. Запиши gap в `.aidp/work.md`, подтверди reality по репозиторию и только затем обновляй правильный owner-файл.
+
+## Durable boundary summary
+
+- Architecture boundary: `apps/*`, `services/*`, `packages/*`, `database/*`, `infra/*` имеют разные reasons-to-change и не должны смешиваться ради удобства.
+- Ownership boundary: fetchers own acquisition/raw persistence; relay owns dispatch/routing; workers own processing/selection/notifications/discovery; API/admin/web expose or orchestrate declared surfaces.
+- API boundary: shared vocabulary belongs in `packages/contracts`, `packages/sdk`, `packages/control-plane` or explicit server modules, not hidden cross-service imports.
+- State/data boundary: PostgreSQL owns business truth; Redis/BullMQ/HNSW/snapshots/cache are transport or derived state.
+- Runtime boundary: compose/nginx/env/health scripts define local delivery baseline; proof harnesses and fixtures are dev/test inputs, not production runtime content.
+- Packaging boundary: production Dockerfiles must not copy `tests/**`, `infra/scripts/**` or `infra/fixtures/**`; package/release proof remains a declared gap until real release commands exist.
+
 ## Структурные правила
 
 - Keep package/service responsibilities visible; avoid dumping orchestration into vague shared helpers.

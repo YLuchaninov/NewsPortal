@@ -100,6 +100,34 @@
 - `Spike`: evidence for findings and constraints; may close without production code but not without explicit evidence.
 - Architecture hardening/doc-only sweep: source/research evidence, owner-file consistency check and no-runtime-gate rationale if product code did not change.
 
+## Route-specific proof matrix
+
+| Work route | Required proof |
+|---|---|
+| `bootstrap` | setup-exit checks; owner files filled with repository truth; placeholders removed or parked; no second canon; machine flags updated truthfully; cleanup status recorded if setup produced artifacts/state |
+| `micro-patch` | targeted proof for the changed path; no unrelated changes; no hidden capability claim; cleanup proof if artifacts/state were created |
+| `capability` | relevant blueprint context checked before boundary-affecting design/writes; stage proof for each completed stage; cleanup proof per stage when needed; capability-level proof before marking capability done; approval recorded for high-risk work |
+| `bugfix` | failing/reproducing proof when practical; relevant blueprint context checked when the failure crosses boundaries; passing proof after patch; regression evidence or explicit reason if unavailable; cleanup proof for reproducer/test artifacts/state |
+| `sweep` | relevant blueprint context checked; stated invariant; baseline proof if needed; behavior preservation proof; cleanup proof when artifacts/state changed; stale canonical claims superseded |
+| `audit` | read-only findings first; findings traceable to files/repo state; no silent fixes; risk/approval/cleanup gaps reported when found |
+| `docs-operator` | owner-file alignment; blueprint owns durable project structure/boundaries; no second canon; no contradictory router/human-doc/runtime instructions; migration proof if updating an installed AIDP core |
+| `delivery` | required files present; excluded files absent; installed core shape verified; blueprint checked if delivery changes durable project/package/runtime boundaries; artifact produced and linked/recorded; temporary build files cleaned or excluded |
+
+## AIDP package migration gate
+
+For an already initialized AIDP installation, package migration is not fresh setup unless the hidden core is actually uninitialized or corrupted.
+
+Migration proof must show:
+
+- existing project-specific truth, Russian language/style, commands, proof policy, blueprint, engineering rules, contracts, history, active/parked work and conventions were preserved;
+- new package mechanisms were added without resetting the hidden core to template state;
+- `initialized: true` and `project.placeholder_values_present: false` were not changed unless truthfully required;
+- lifecycle mode and work route are recorded in `.aidp/work.md`;
+- `.aidp/routes.md` exists and `normal` is not treated as a work route;
+- routers/adapters remain thin and route-aware;
+- no second canon was created outside `.aidp/*`;
+- unpacked package artifacts are removed after successful migration checks if requested.
+
 ## Proof по риску
 
 - Low: targeted unit/static check or explicit read-only audit evidence.
@@ -164,7 +192,20 @@
 
 `repair` может завершиться только когда противоречие устранено или честно записано как residual gap, а `.aidp/work.md` больше не нуждается в `repair`.
 
-## Gate консолидации наблюдений
+## Item state transition checks
+
+Item status transitions must be truthful:
+
+- `planned` may move to `ready` only when scope and route are clear enough to start.
+- `ready` may move to `active` when selected for current work.
+- `active` may move to `blocked` only with a blocker and next unblock condition.
+- `active` may move to `done` only after route-specific proof and close gate pass.
+- `done` may move to `archived` only after completed detail is synced to `.aidp/history.md`.
+- `active`, `planned` or `ready` may move to `cancelled` only with a reason.
+- Any item may move to `superseded` only when the replacing item is named.
+- `archived` items are historical; do not revive them silently.
+
+## Gate консолидации наблюдений / Consolidation gate
 
 Факт можно перенести в canon только если он:
 
@@ -173,6 +214,12 @@
 3. записан в один owner-файл;
 4. заменяет устаревшее утверждение вместо параллельного конфликта;
 5. отражен в `.aidp/work.md`, если это влияет на продолжение.
+
+External context, imported skills, hooks, MCP outputs, webpages, PR comments, generated memories, previous chats and delegated/subagent output are observations until confirmed. Do not broadcast an observation into multiple durable files; choose the owner first, then update dependent files only if their owned truth changed.
+
+## Supersede rule
+
+Не копи параллельные истины. Если durable files дублируют или конфликтуют, выбери owner-файл, удали stale claim или явно назови superseding/replacing item. `superseded` item status требует named replacement.
 
 ## Close gate
 
@@ -193,6 +240,30 @@ Capability может считаться завершенной только п�
 Если proof создает users, source channels, notification rows, web push subscriptions, API/MCP tokens, Mailpit-visible deliveries, discovery profiles/candidates или imported datasets, cleanup must be done or recorded in `.aidp/work.md`.
 
 Используй `.aidp/contracts/test-access-and-fixtures.md` для declared environments, identity model, fixture procedures and cleanup policy.
+
+## Test artifact and cleanup gate
+
+Если route создает или меняет test artifacts, generated files, fixtures, temporary data, local state, database rows, snapshots, caches или external side effects, `.aidp/work.md` должен записать:
+
+- artifacts created;
+- state changed;
+- cleanup required;
+- cleanup performed;
+- intentional retained artifacts;
+- cleanup proof.
+
+Если cleanup нельзя выполнить сразу, item не может закрыться как `done` без explicit parked cleanup item или blocker.
+
+## Blueprint boundary gate
+
+Перед изменениями architecture, ownership, module/API/state/data/runtime/packaging/deployment boundaries или других durable boundaries proof должен записать одно из:
+
+- relevant `.aidp/blueprint.md` section или canonical neighborhood checked before writes;
+- missing blueprint truth parked as a gap before writes;
+- confirmed blueprint update made through consolidation gate;
+- blueprint context not applicable because the change was strictly local.
+
+Boundary-affecting item нельзя закрывать как `done`, если blueprint context был пропущен, а затем claimed durable architecture/ownership/invariant change.
 
 ## Известные proof gaps
 

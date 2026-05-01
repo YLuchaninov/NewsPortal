@@ -14,6 +14,10 @@
 - Не переоткрывай архивный item; для новой работы создавай новый item в `.aidp/work.md`.
 - Архив должен объяснять outcome без chat history.
 - Отмененные и superseded items архивируются честно, с причиной и replacement, если он есть.
+- Item может быть archived только после route-specific proof, close gate и sync этого файла.
+- `done` означает proof passed; `archived` означает completed detail перенесен из live state в history.
+- Если item superseded, archive entry должен назвать replacing item или replacement route.
+- Migration самой AIDP OS можно архивировать как completed `docs-operator` item только после проверки owner-file alignment, router thinness, setup flags, required fields и cleanup распакованного пакета.
 
 ## Индекс архива
 
@@ -24,8 +28,49 @@
 - `AIDP-VERIFICATION-COVERAGE-2026-04-24` — аудит и закрепление test/proof surfaces.
 - `AIDP-FINAL-PROOF-DOCS-2026-04-24` — финальная чистка product/reference docs, lint fixes and requested proof gates.
 - `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25` — удаление старых duplicate `docs/contracts/*` после переноса canonical truth в `.aidp/contracts/*`.
+- `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1` — мягкая migration AIDP OS 1.6.1 -> 1.7.2 через двухуровневую маршрутизацию и docs-operator route.
 
 ## Завершенные items
+
+### AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1 — Migration AIDP OS 1.6.1 -> 1.7.2
+
+- Archive outcome: completed
+- Kind: Docs-operator
+- Финальный status: archived
+- Work route: docs-operator
+- Lifecycle mode: normal
+- Parent capability: none
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил мягко обновить уже установленную и truthfully initialized AIDP OS 1.6.1 до 1.7.2 из распакованного пакета, без fresh install, без blind overwrite и без потери NewsPortal-specific truth.
+- Что сохранено:
+  - `initialized: true` и `project.placeholder_values_present: false`;
+  - project name, commands, runtime surfaces, proof commands, conventions, blueprint, engineering rules, verification policy, old history and active/parked work details;
+  - все existing `.aidp/contracts/*` как project-specific subsystem truth;
+  - русский язык и стиль runtime/human-facing AIDP docs.
+- Что изменилось:
+  - добавлен `.aidp/routes.md` с work routes `bootstrap`, `micro-patch`, `capability`, `bugfix`, `sweep`, `audit`, `docs-operator`, `delivery`;
+  - `.aidp/AGENTS.md` обновлен под двухуровневую модель `lifecycle mode -> work route -> route sequence -> route-specific proof -> sync`;
+  - `.aidp/work.md` получил Workflow mode, Work route, Route phase, Route-specific next step/proof, Item status, Risk/Approval, Blueprint context, Observed/Confirmed, Attempt memory and Test artifacts/cleanup fields;
+  - `.aidp/os.yaml` поднят до `package_version: 1.7.2`, `schema_version: 29` and получил routing/item/risk/approval/cleanup/blueprint-boundary policies;
+  - `.aidp/verification.md` получил route-specific proof matrix, AIDP migration gate, consolidation gate, item state transition checks, supersede rule, cleanup gate and blueprint boundary gate;
+  - `.aidp/blueprint.md` получил boundary/invariant references and durable boundary summary without replacing NewsPortal architecture;
+  - `.aidp/engineering.md` получил route-aware, risk/approval and blueprint-aware implementation discipline;
+  - prompt and thin routers/adapters now point to `.aidp/routes.md` and state that `normal` is not a work route.
+- Выполненный proof:
+  - read/compare of current 1.6.1 AIDP core and package 1.7.2 installed core;
+  - `.aidp/os.yaml` parsed successfully through Ruby YAML;
+  - required-field scans confirmed `.aidp/routes.md`, normal-not-work-route wording, work.md fields, os.yaml routing/item/risk/boundary fields, verification gates and route-aware routers;
+  - `git diff --check --` passed after edits;
+  - `test ! -e ai-dev-process-os-1.7.2-release` confirmed unpacked package cleanup.
+- Cleanup:
+  - removed unpacked package directory `ai-dev-process-os-1.7.2-release/`;
+  - no product/runtime/database state was changed.
+- Оставшиеся risks/gaps:
+  - no unresolved migration gap remains;
+  - older completed details in `.aidp/work.md` are still verbose and may be compacted by a future docs-operator cleanup, but they were intentionally preserved during this migration to avoid accidental loss.
+- Follow-up created: none.
+- Archived on: 2026-05-01
 
 ### AIDP-BOOTSTRAP-2026-04-24 — Инициализация AIDP core
 

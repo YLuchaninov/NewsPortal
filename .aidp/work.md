@@ -12,10 +12,21 @@
 
 - Workflow mode: normal
 - Разрешенные workflow modes: setup | normal | repair
+- Work route: none (idle; next substantive normal task must choose a work route from `.aidp/routes.md`)
+- Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
+- Route phase: idle
+- Route-specific next step: для следующей substantive task выбрать work route; AIDP 1.7.2 migration завершена и archived
+- Route-specific proof: n/a while idle; last completed route proof recorded under `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
 - Почему сейчас: n/a
+- Active item id: none
+- Active item status: none
+- Item status: n/a while idle
+- Risk: n/a while idle
+- Approval required: n/a while idle
+- Approval reason: n/a while idle
 
 ## Проверки закрытия route
 
@@ -23,7 +34,18 @@
 - `.aidp/os.yaml` placeholder flag: false
 - Setup route: закрыт 2026-04-24
 - Repair route: закрыт 2026-04-25 after live-state/docs cleanup repair
-- Current route: `normal`
+- Current lifecycle mode: `normal`
+- Current work route: none while idle
+- Last completed work route: `docs-operator` for `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`
+- Normal mode note: `normal` не является work route; следующая substantive task должна выбрать work route.
+
+## Item state machine
+
+- Разрешенные item statuses: planned | ready | active | blocked | done | cancelled | superseded | archived
+- `done` разрешен только после route-specific proof and close gate.
+- `archived` разрешен только после sync в `.aidp/history.md`.
+- `superseded` требует named replacing item.
+- `blocked` требует blocker and next unblock condition.
 
 ## Текущая память
 
@@ -46,7 +68,7 @@
 
 - ID: none
 - Parent capability: n/a
-- Почему это primary active work: n/a
+- Почему это primary active work: n/a; последняя migration AIDP OS 1.6.1 -> 1.7.2 завершена и archived.
 
 ### Secondary active item
 
@@ -57,11 +79,67 @@
 
 ### Согласованность worktree
 
-- Worktree status before this item: clean by `git status --short` on 2026-05-01; prior live note about dirty docs recovery was stale and is superseded by this AIDP repair.
-- Alignment note: current dirty worktree is expected to be owned by `NEWSPORTAL-TEST-RUNTIME-SEPARATION-SWEEP-1` once edits begin.
+- Worktree status before `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`: clean except untracked `ai-dev-process-os-1.7.2-release/` by `git status --short` on 2026-05-01.
+- Alignment note: current `.aidp/*` and thin router edits are the completed output of `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1`; unpacked package cleanup was performed after successful migration checks.
 - Latest broad proof: 2026-05-01 `pnpm test:product:local:core` passed after the test/runtime separation sweep; it included lint, typecheck, unit tests, integration compose acceptance, local stack startup/health, website/admin/MCP/viewports/UI audit coverage.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: completed for this item; AIDP live-state stale dirty-worktree claim was repaired and a bounded sweep is open.
+- Required action before ordinary implementation: choose a work route from `.aidp/routes.md` for the next substantive task.
+
+### AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1
+
+- Kind: Docs-operator
+- Status: archived
+- Item status: archived
+- Lifecycle mode: normal
+- Work route: docs-operator
+- Route phase: closed
+- Route-specific next step: none; future tasks must choose their own work route from `.aidp/routes.md`.
+- Route-specific proof: owner-file alignment; no second canon; route-aware routers; `.aidp/routes.md` exists; `.aidp/os.yaml` parses and keeps `initialized: true` plus `project.placeholder_values_present: false`; required 1.7.2 fields exist; unpacked package removed after successful checks.
+- In scope: `.aidp/AGENTS.md`, `.aidp/routes.md`, `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/blueprint.md`, `.aidp/engineering.md`, `.aidp/verification.md`, `.aidp/history.md`, `.aidp/prompts/INITIALIZE-OR-REPAIR-AIDP.md`, `.aidp/adapters/**`, root `AGENTS.md`, and cleanup of `ai-dev-process-os-1.7.2-release/` after validation.
+- Out of scope: product code, runtime behavior, migrations, database state, project proof command semantics, `.aidp/contracts/*` project contracts except read-only review, product docs outside AIDP prompt/router scope, fresh install/reset.
+- Allowed paths: `.aidp/**`, `AGENTS.md`, `ai-dev-process-os-1.7.2-release/`.
+- Risk: medium, because runtime OS process rules and routers change, but project code and durable product architecture are not changed.
+- Approval required: no
+- Approval reason: requested migration explicitly authorizes docs/operator updates and package cleanup after consistency proof; no high-risk production, secret, schema, deployment or broad source write action is in scope.
+- Acceptance criteria: AIDP 1.7.2 routing mechanisms are present in Russian; existing NewsPortal project truth, commands, proof rules, blueprint, engineering rules, contracts, history and setup flags remain intact; routers stay thin; no unresolved contradiction remains unrecorded.
+- Blueprint context:
+  - Relevant blueprint sections checked: `Карта границ`, `Канонические neighborhoods для типовой работы`, `Запрещенные shortcuts`, `Deep contracts`.
+  - Boundary/invariant checked: AIDP runtime truth belongs only in `.aidp/*`; router files must remain thin; product docs must not become AIDP runtime canon.
+  - Blueprint gap: none found for this migration; durable product architecture was not changed.
+- Observed this session:
+  - Current 1.6.1 core is truthfully initialized and project-specific.
+  - Missing 1.7.2 mechanism: dedicated `.aidp/routes.md` and explicit two-level lifecycle/work-route vocabulary across owner files.
+  - Current active work before migration was none, though older completed work details remain in live state and history.
+- Confirmed for consolidation:
+  - This upgrade is not fresh setup; route is lifecycle mode `normal`, work route `docs-operator`.
+  - `initialized: true` and `project.placeholder_values_present: false` must remain true/false respectively.
+  - `.aidp/contracts/*` contain project-specific subsystem truth and should not be template-replaced.
+- Parked / latent items:
+  - Older completed details in `.aidp/work.md` remain verbose; a future docs-operator cleanup may archive/compact them, but this migration does not delete them to avoid losing live/historical context.
+- Attempt memory:
+  - Worked, with evidence: current `.aidp/AGENTS.md`, `.aidp/os.yaml`, `.aidp/work.md`, `.aidp/blueprint.md`, `.aidp/engineering.md`, `.aidp/verification.md`, `.aidp/history.md`, prompts and adapters were read before edits.
+  - Worked, with evidence: `.aidp/routes.md` was added; `.aidp/os.yaml` parsed; required-field scans found lifecycle/work-route, item state, risk and boundary policy fields; routers were route-aware and thin.
+  - Worked, with evidence: `ai-dev-process-os-1.7.2-release/` was deleted after checks.
+  - Tried and did not work: none.
+  - Not yet attempted: none for this migration.
+- Test artifacts and cleanup:
+  - Artifacts created: `.aidp/routes.md`; updated runtime docs and routers.
+  - State changed: no product/runtime/database state changed.
+  - Cleanup required: yes, remove unpacked `ai-dev-process-os-1.7.2-release/` after migration proof passes.
+  - Cleanup performed: `rm -rf ai-dev-process-os-1.7.2-release/`.
+  - Intentional retained artifacts: `.aidp/routes.md` and updated owner files.
+  - Cleanup proof: `test ! -e ai-dev-process-os-1.7.2-release` after final verification.
+- Route-specific proof:
+  - Passed: `.aidp/routes.md` exists and describes all eight work routes.
+  - Passed: `.aidp/AGENTS.md` and thin routers state that `normal` is not a work route.
+  - Passed: `.aidp/work.md` contains Workflow mode, Work route, Route phase, Route-specific next step/proof, Item status, Risk/Approval, Blueprint context, Observed/Confirmed sections, Attempt memory and Test artifacts and cleanup.
+  - Passed: `.aidp/os.yaml` contains `routing.lifecycle_modes`, `routing.work_routes`, `normal_requires_work_route`, `item_states`, `risk_levels`, `approval_policy`, `blueprint_boundary_policy`, and still has `initialized: true` plus `project.placeholder_values_present: false`.
+  - Passed: `.aidp/verification.md` contains route-specific proof matrix, consolidation gate, item state transition checks, cleanup gate and blueprint boundary gate.
+  - Passed: `.aidp/blueprint.md` preserved NewsPortal architecture truth and gained boundary/invariant references.
+  - Passed: `.aidp/engineering.md` preserved existing rules and gained route/risk/approval/blueprint-aware discipline.
+  - Passed: `.aidp/history.md` retained old history and archives this migration.
+  - Passed: documentation remained Russian-first except schema keys, command names and existing mixed technical vocabulary.
+  - Passed: no product code, `.aidp/contracts/*`, project commands or runtime proof command semantics were changed.
 
 ### NEWSPORTAL-TEST-RUNTIME-SEPARATION-SWEEP-1
 

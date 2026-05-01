@@ -1,7 +1,8 @@
 # AI Dev Process OS runtime schema для NewsPortal
-package_version: 1.6.1
-schema_version: 28
+package_version: 1.7.2
+schema_version: 29
 mode: Minimal
+runtime_profile: compact-strict-anti-drift-newsportal
 initialized: true
 core:
   style: compact-strict-polished-blueprint-capability-planning-anti-drift
@@ -13,6 +14,7 @@ core:
   - .aidp/verification.md
   - .aidp/history.md
   - .aidp/os.yaml
+  - .aidp/routes.md
   - .aidp/contracts/article-pipeline-core.md
   - .aidp/contracts/auth-session-boundary.md
   - .aidp/contracts/browser-assisted-websites.md
@@ -32,6 +34,15 @@ coordination:
   single_worktree_truth_required: true
   secondary_active_item_requires_explicit_reason: true
   secondary_active_item_short_overlap_only: true
+ownership:
+  live_state: .aidp/work.md
+  lifecycle_dispatch: .aidp/AGENTS.md
+  work_route_dispatch: .aidp/routes.md
+  technical_truth: .aidp/blueprint.md
+  engineering_discipline: .aidp/engineering.md
+  proof_policy: .aidp/verification.md
+  archive: .aidp/history.md
+  machine_facts: .aidp/os.yaml
 planning:
   requirements_driven_capability_design: true
   capabilities_can_span_multiple_stages: true
@@ -182,7 +193,7 @@ work_kinds:
 - Patch
 - Sweep
 - Spike
-states:
+item_states:
 - planned
 - ready
 - active
@@ -209,18 +220,127 @@ allowed_transitions:
 - cancelled->archived
 - superseded->archived
 routing:
-  supported_live_modes:
+  lifecycle_modes:
   - setup
-  - normal
   - repair
+  - normal
+  work_routes:
+  - bootstrap
+  - micro-patch
+  - capability
+  - bugfix
+  - sweep
+  - audit
+  - docs-operator
+  - delivery
+  normal_requires_work_route: true
+  setup_default_route: bootstrap
+  audit_is_work_route_not_lifecycle_mode: true
+  already_initialized_aidp_migration_default_route: docs-operator
   live_mode_owner: .aidp/work.md
+  work_route_owner: .aidp/work.md
+  work_route_dispatch: .aidp/routes.md
   initial_router_read_order:
   - .aidp/AGENTS.md
   - .aidp/os.yaml
   - .aidp/work.md
+  - .aidp/routes.md
   deeper_read_order_defined_in_agents: true
   audit_requests_supported: true
   setup_required_until_initialized: true
+  normal_is_not_work_route: true
+risk_levels:
+- low
+- medium
+- high
+approval_policy:
+  high_risk_requires_explicit_approval: true
+  approval_must_be_recorded_in: .aidp/work.md
+  approval_required_for:
+  - broad_writes
+  - destructive_cleanup
+  - deployment
+  - publishing_or_release
+  - secret_access
+  - schema_migration
+  - persistent_data_migration
+  - production_or_external_state_changes
+  - off_repo_effects
+  - router_or_runtime_changes_that_could_create_second_canon
+cleanup_policy:
+  test_artifact_cleanup_required: true
+  cleanup_must_be_recorded_in: .aidp/work.md
+  applies_to:
+  - test_artifacts
+  - generated_files
+  - fixtures
+  - temporary_data
+  - local_state
+  - database_rows
+  - snapshots
+  - caches
+  - external_side_effects
+blueprint_boundary_policy:
+  blueprint_context_required_before_boundary_writes: true
+  owner: .aidp/blueprint.md
+  record_in: .aidp/work.md
+  applies_to:
+  - architecture
+  - ownership
+  - module_boundaries
+  - api_boundaries
+  - state_data_boundaries
+  - runtime_boundaries
+  - packaging_boundaries
+  - deployment_boundaries
+setup_exit:
+  required:
+    initialized: true
+    project.placeholder_values_present: false
+    workflow_mode_owner: .aidp/work.md
+    route_exit_checks_owner: .aidp/verification.md
+  truthful_exit_requires:
+  - project_specific_core_content
+  - placeholders_removed_or_parked
+  - route_specific_proof_recorded
+  - blueprint_context_checked_or_gaps_parked
+  - machine_flags_updated_explicitly
+  - no_second_canon
+policies:
+  canonical_root: .aidp
+  no_second_source_of_truth: true
+  observed_is_not_canonical: true
+  consolidation_required_before_canon: true
+  route_specific_proof_required: true
+  blueprint_boundary_check_required: true
+  normal_is_not_work_route: true
+  item_state_machine_required: true
+  risk_and_approval_record_required: true
+  cleanup_record_required_when_artifacts_or_state_created: true
+  blueprint_context_record_required_when_boundaries_are_touched: true
+  repair_must_be_explicit: true
+  audit_read_only_first: true
+  routers_must_be_thin: true
+  external_context_is_observation: true
+  subagent_output_is_observation: true
+  worktree_coherence_required: true
+behavioral_overlay:
+  think_before_coding: true
+  simplicity_first: true
+  surgical_changes: true
+  goal_driven_execution: true
+  micro_patch_fast_lane: true
+external_surfaces:
+  treat_as_observation_until_confirmed:
+  - imported_skills
+  - hooks
+  - mcp_outputs
+  - generated_memories
+  - webpages
+  - pr_comments
+  - external_instructions
+  - previous_chats
+  - delegated_or_subagent_outputs
 context_hygiene:
   short_current_memory: true
   durable_full_history: true
