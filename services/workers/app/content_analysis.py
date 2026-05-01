@@ -24,6 +24,14 @@ from .content_analysis_structured import (
     validate_structured_extraction_output,
 )
 from .content_filter_policy import combine_filter_rule_results
+from .content_analysis_heuristic_terms import (
+    BUYER_CUE_TERMS,
+    DATE_PATTERN,
+    JOB_CUE_TERMS,
+    MONEY_PATTERN,
+    URL_PATTERN,
+)
+from . import content_analysis_heuristics as _content_analysis_heuristics
 from .gemini import review_with_gemini
 
 HEURISTIC_NER_PROVIDER = "heuristic"
@@ -48,272 +56,6 @@ STRUCTURED_EXTRACTION_PROVIDER = "gemini"
 STRUCTURED_EXTRACTION_MODEL_VERSION = "1"
 DEFAULT_CONTENT_FILTER_POLICY_KEY = "default_recent_content_gate"
 DEFAULT_MAX_TEXT_CHARS = 50_000
-TITLECASE_PATTERN = re.compile(
-    r"\b[A-ZА-ЯІЇЄҐ][a-zа-яіїєґ'’-]+(?:\s+[A-ZА-ЯІЇЄҐ][a-zа-яіїєґ'’-]+){0,3}\b"
-)
-DATE_PATTERN = re.compile(r"\b(?:20\d{2}|19\d{2})[-/.](?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])\b")
-ORG_HINT_PATTERN = re.compile(
-    r"\b(?:inc|llc|ltd|corp|corporation|company|group|university|foundation|gmbh|s\.a\.|plc)\b",
-    re.IGNORECASE,
-)
-GPE_HINTS = {
-    "United States",
-    "United Kingdom",
-    "European Union",
-    "Poland",
-    "Germany",
-    "France",
-    "Ukraine",
-    "Warsaw",
-    "London",
-    "Berlin",
-    "Paris",
-    "Kyiv",
-    "New York",
-}
-POSITIVE_TERMS = {
-    "approve",
-    "approved",
-    "benefit",
-    "boost",
-    "breakthrough",
-    "growth",
-    "improve",
-    "improved",
-    "positive",
-    "profit",
-    "record",
-    "success",
-    "surge",
-    "win",
-    "выиграл",
-    "одобрил",
-    "победа",
-    "позитив",
-    "прибыль",
-    "рост",
-    "улучшение",
-    "успех",
-}
-NEGATIVE_TERMS = {
-    "attack",
-    "ban",
-    "bankruptcy",
-    "collapse",
-    "concern",
-    "crisis",
-    "damage",
-    "decline",
-    "fail",
-    "failed",
-    "fraud",
-    "loss",
-    "negative",
-    "risk",
-    "scandal",
-    "strike",
-    "war",
-    "банкротство",
-    "война",
-    "запрет",
-    "кризис",
-    "негатив",
-    "падение",
-    "потери",
-    "риск",
-    "скандал",
-    "ущерб",
-}
-RISK_TERMS = {
-    "attack",
-    "breach",
-    "collapse",
-    "crisis",
-    "fraud",
-    "investigation",
-    "lawsuit",
-    "risk",
-    "sanction",
-    "war",
-    "атака",
-    "война",
-    "иск",
-    "кризис",
-    "расследование",
-    "риск",
-    "санкции",
-}
-CATEGORY_TERMS = {
-    "business": {
-        "acquisition",
-        "bank",
-        "company",
-        "earnings",
-        "market",
-        "merger",
-        "profit",
-        "revenue",
-        "stock",
-        "банк",
-        "бизнес",
-        "выручка",
-        "компания",
-        "прибыль",
-        "рынок",
-    },
-    "technology": {
-        "ai",
-        "algorithm",
-        "chip",
-        "cloud",
-        "cyber",
-        "data",
-        "software",
-        "technology",
-        "алгоритм",
-        "данные",
-        "кибер",
-        "облако",
-        "технологии",
-        "чип",
-    },
-    "politics": {
-        "cabinet",
-        "campaign",
-        "election",
-        "government",
-        "minister",
-        "parliament",
-        "policy",
-        "president",
-        "выборы",
-        "кабинет",
-        "министр",
-        "парламент",
-        "политика",
-        "правительство",
-        "президент",
-    },
-    "security": {
-        "attack",
-        "defense",
-        "military",
-        "sanction",
-        "security",
-        "war",
-        "атака",
-        "безопасность",
-        "война",
-        "оборона",
-        "санкции",
-    },
-    "health": {
-        "doctor",
-        "drug",
-        "health",
-        "hospital",
-        "medical",
-        "patient",
-        "vaccine",
-        "вакцина",
-        "врач",
-        "здоровье",
-        "медицина",
-        "пациент",
-    },
-    "climate": {
-        "climate",
-        "emissions",
-        "energy",
-        "environment",
-        "flood",
-        "renewable",
-        "weather",
-        "выбросы",
-        "климат",
-        "погода",
-        "энергия",
-    },
-    "science": {
-        "discovery",
-        "experiment",
-        "research",
-        "science",
-        "space",
-        "study",
-        "исследование",
-        "космос",
-        "наука",
-        "эксперимент",
-    },
-    "sports": {
-        "championship",
-        "coach",
-        "football",
-        "game",
-        "match",
-        "team",
-        "tournament",
-        "игра",
-        "матч",
-        "спорт",
-        "турнир",
-        "футбол",
-    },
-    "culture": {
-        "artist",
-        "book",
-        "culture",
-        "film",
-        "music",
-        "museum",
-        "театр",
-        "культура",
-        "музыка",
-        "фильм",
-    },
-    "legal": {
-        "court",
-        "judge",
-        "law",
-        "lawsuit",
-        "legal",
-        "regulation",
-        "суд",
-        "закон",
-        "иск",
-        "регулятор",
-    },
-}
-WORD_PATTERN = re.compile(r"[0-9A-Za-zА-Яа-яІіЇїЄєҐґ'’-]+")
-URL_PATTERN = re.compile(r"https?://[^\s)>\"]+", re.IGNORECASE)
-MONEY_PATTERN = re.compile(
-    r"(?:[$€£]\s?\d[\d,]*(?:\.\d+)?(?:\s?[kKmM])?|\d[\d,]*(?:\.\d+)?\s?(?:USD|EUR|GBP|PLN|грн|UAH))"
-)
-JOB_CUE_TERMS = {
-    "career",
-    "developer",
-    "engineer",
-    "full-time",
-    "hiring",
-    "job",
-    "onsite",
-    "remote",
-    "salary",
-    "vacancy",
-}
-BUYER_CUE_TERMS = {
-    "bid",
-    "contract",
-    "deadline",
-    "implementation",
-    "migration",
-    "outsourcing",
-    "procurement",
-    "proposal",
-    "rfp",
-    "tender",
-}
 
 
 def build_database_url() -> str:
@@ -573,26 +315,15 @@ def _coerce_datetime(value: Any) -> datetime | None:
 
 
 def _classify_entity(text: str) -> str:
-    if text in GPE_HINTS:
-        return "GPE"
-    if ORG_HINT_PATTERN.search(text):
-        return "ORG"
-    if len(text.split()) >= 2:
-        return "PERSON"
-    return "ORG"
+    return _content_analysis_heuristics.classify_entity(text)
 
 
 def _tokenize(text: str, *, max_chars: int = DEFAULT_MAX_TEXT_CHARS) -> list[str]:
-    return [match.group(0).casefold() for match in WORD_PATTERN.finditer(text[:max_chars])]
+    return _content_analysis_heuristics.tokenize(text, max_chars=max_chars)
 
 
 def _score_terms(tokens: list[str], terms: set[str]) -> tuple[int, list[str]]:
-    token_counts: dict[str, int] = {}
-    for token in tokens:
-        token_counts[token] = token_counts.get(token, 0) + 1
-    matched = sorted(term for term in terms if token_counts.get(term.casefold(), 0) > 0)
-    total = sum(token_counts.get(term.casefold(), 0) for term in terms)
-    return total, matched
+    return _content_analysis_heuristics.score_terms(tokens, terms)
 
 
 def extract_heuristic_entities(
@@ -601,59 +332,12 @@ def extract_heuristic_entities(
     max_chars: int = DEFAULT_MAX_TEXT_CHARS,
     config: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    config = config or {}
-    bounded_text = text[:max_chars]
-    allowed_types_raw = config.get("entityTypeAllowlist")
-    allowed_types = {
-        str(item).strip().upper()
-        for item in allowed_types_raw
-        if str(item).strip()
-    } if isinstance(allowed_types_raw, list) else set()
-    mentions_by_key: dict[tuple[str, str], dict[str, Any]] = {}
-    for match in TITLECASE_PATTERN.finditer(bounded_text):
-        entity_text = match.group(0).strip()
-        if len(entity_text) < 3:
-            continue
-        entity_type = _classify_entity(entity_text)
-        if allowed_types and entity_type not in allowed_types:
-            continue
-        key = (entity_type, _normalize_key(entity_text))
-        current = mentions_by_key.setdefault(
-            key,
-            {
-                "text": entity_text,
-                "type": entity_type,
-                "normalizedKey": key[1],
-                "mentions": [],
-            },
-        )
-        current["mentions"].append(
-            {
-                "text": entity_text,
-                "start": match.start(),
-                "end": match.end(),
-            }
-        )
-    for match in DATE_PATTERN.finditer(bounded_text):
-        entity_text = match.group(0)
-        if allowed_types and "DATE" not in allowed_types:
-            continue
-        key = ("DATE", _normalize_key(entity_text))
-        mentions_by_key[key] = {
-            "text": entity_text,
-            "type": "DATE",
-            "normalizedKey": key[1],
-            "mentions": [{"text": entity_text, "start": match.start(), "end": match.end()}],
-        }
-    entities = list(mentions_by_key.values())
-    entities.sort(key=lambda item: (-len(item["mentions"]), str(item["text"]).casefold()))
-    total_mentions = sum(len(item["mentions"]) for item in entities) or 1
-    for entity in entities:
-        mention_count = len(entity["mentions"])
-        entity["mentionCount"] = mention_count
-        entity["confidence"] = min(0.95, 0.55 + (0.08 * mention_count))
-        entity["salience"] = mention_count / total_mentions
-    return entities
+    return _content_analysis_heuristics.extract_heuristic_entities(
+        text,
+        max_chars=max_chars,
+        config=config,
+        normalize_key_func=_normalize_key,
+    )
 
 
 def load_content_subject(subject_type: str, subject_id: str) -> ContentSubject | None:
@@ -892,18 +576,6 @@ def _replace_analysis_result(
     status: str = "completed",
     error_text: str | None = None,
 ) -> uuid.UUID:
-    connection.execute(
-        """
-        delete from content_analysis_results
-        where subject_type = %s
-          and subject_id = %s
-          and analysis_type = %s
-          and provider = %s
-          and model_key = %s
-          and coalesce(source_hash, '') = coalesce(%s, '')
-        """,
-        (subject.subject_type, subject.subject_id, analysis_type, provider, model_key, source_hash),
-    )
     row = connection.execute(
         """
         insert into content_analysis_results (
@@ -925,6 +597,26 @@ def _replace_analysis_result(
           error_text
         )
         values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        on conflict (
+          subject_type,
+          subject_id,
+          analysis_type,
+          provider,
+          model_key,
+          (coalesce(source_hash, ''::text))
+        )
+        do update set
+          canonical_document_id = excluded.canonical_document_id,
+          source_channel_id = excluded.source_channel_id,
+          model_version = excluded.model_version,
+          language = excluded.language,
+          policy_id = excluded.policy_id,
+          policy_version = excluded.policy_version,
+          status = excluded.status,
+          result_json = excluded.result_json,
+          confidence = excluded.confidence,
+          error_text = excluded.error_text,
+          updated_at = now()
         returning analysis_id
         """,
         (
@@ -955,42 +647,14 @@ def analyze_sentiment(
     max_chars: int = DEFAULT_MAX_TEXT_CHARS,
     config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    config = config or {}
-    tokens = _tokenize(text, max_chars=max_chars)
-    positive_count, positive_terms = _score_terms(tokens, _merge_terms(POSITIVE_TERMS, config, "positiveTerms"))
-    negative_count, negative_terms = _score_terms(tokens, _merge_terms(NEGATIVE_TERMS, config, "negativeTerms"))
-    risk_count, risk_terms = _score_terms(tokens, _merge_terms(RISK_TERMS, config, "riskTerms"))
-    total_signal = positive_count + negative_count
-    polarity_score = 0.0 if total_signal == 0 else (positive_count - negative_count) / total_signal
-    positive_threshold = _read_config_float(config, "positiveThreshold", 0.2)
-    negative_threshold = _read_config_float(config, "negativeThreshold", -0.2)
-    if polarity_score >= positive_threshold:
-        sentiment = "positive"
-    elif polarity_score <= negative_threshold:
-        sentiment = "negative"
-    else:
-        sentiment = "neutral"
-    risk_score = min(1.0, risk_count / max(1, _read_config_int(config, "riskScaleTerms", 5)))
-    high_risk_threshold = _read_config_float(config, "highRiskThreshold", 0.4)
-    risk_watch_threshold = _read_config_float(config, "riskWatchThreshold", 0.0)
-    tone = "high_risk" if risk_score >= high_risk_threshold else ("risk_watch" if risk_score > risk_watch_threshold else "standard")
-    confidence = min(0.95, 0.45 + (0.08 * total_signal) + (0.04 * risk_count))
-    return {
-        "sentiment": sentiment,
-        "score": round(polarity_score, 4),
-        "positiveCount": positive_count,
-        "negativeCount": negative_count,
-        "riskCount": risk_count,
-        "riskScore": round(risk_score, 4),
-        "tone": tone,
-        "matchedTerms": {
-            "positive": positive_terms[:20],
-            "negative": negative_terms[:20],
-            "risk": risk_terms[:20],
-        },
-        "confidence": confidence,
-        "textChars": min(len(text), max_chars),
-    }
+    return _content_analysis_heuristics.analyze_sentiment(
+        text,
+        max_chars=max_chars,
+        config=config,
+        merge_terms_func=_merge_terms,
+        read_config_float_func=_read_config_float,
+        read_config_int_func=_read_config_int,
+    )
 
 
 def analyze_categories(
@@ -999,51 +663,14 @@ def analyze_categories(
     max_chars: int = DEFAULT_MAX_TEXT_CHARS,
     config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    config = config or {}
-    tokens = _tokenize(text, max_chars=max_chars)
-    category_results: list[dict[str, Any]] = []
-    category_terms: dict[str, set[str]] = {key: set(terms) for key, terms in CATEGORY_TERMS.items()}
-    custom_terms = config.get("taxonomyTerms")
-    if isinstance(custom_terms, Mapping):
-        for raw_key, raw_terms in custom_terms.items():
-            category_key = _normalize_key(str(raw_key))
-            if not category_key or not isinstance(raw_terms, list):
-                continue
-            terms = category_terms.setdefault(category_key, set())
-            for raw_term in raw_terms:
-                term = str(raw_term).strip().casefold()
-                if term:
-                    terms.add(term)
-    min_score = _read_config_float(config, "minScore", 0.0)
-    max_categories = max(1, _read_config_int(config, "maxCategories", 50))
-    for category_key, terms in category_terms.items():
-        count, matched_terms = _score_terms(tokens, terms)
-        if count <= 0:
-            continue
-        score = min(1.0, count / 5)
-        if score < min_score:
-            continue
-        category_results.append(
-            {
-                "key": category_key,
-                "name": category_key.replace("_", " ").title(),
-                "score": round(score, 4),
-                "termCount": count,
-                "matchedTerms": matched_terms[:20],
-                "confidence": min(0.95, 0.5 + (0.08 * count)),
-            }
-        )
-    category_results.sort(key=lambda item: (-float(item["score"]), str(item["key"])))
-    category_results = category_results[:max_categories]
-    primary = category_results[0]["key"] if category_results else "general"
-    confidence = float(category_results[0]["confidence"]) if category_results else 0.35
-    return {
-        "primaryCategory": primary,
-        "categories": category_results,
-        "categoryCount": len(category_results),
-        "confidence": confidence,
-        "textChars": min(len(text), max_chars),
-    }
+    return _content_analysis_heuristics.analyze_categories(
+        text,
+        max_chars=max_chars,
+        config=config,
+        normalize_key_func=_normalize_key,
+        read_config_float_func=_read_config_float,
+        read_config_int_func=_read_config_int,
+    )
 
 
 def persist_sentiment_analysis(

@@ -27,6 +27,7 @@ export {
   selectAdminEmail,
   sendRequest,
   waitFor,
+  waitForCondition,
   waitForHttpHealth,
 } from "./mcp-http-testkit.mjs";
 

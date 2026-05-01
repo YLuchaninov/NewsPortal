@@ -227,6 +227,21 @@ export function requireConfigured(env, key, { proofName = "MCP HTTP proof" } = {
 export function parseJsonResponse(text, responseMeta) {
   const json = parseJsonPayload(text, responseMeta);
   if (responseMeta.status < 200 || responseMeta.status >= 300) {
+    const detailMessage = Array.isArray(json?.detail)
+      ? json.detail
+          .map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+            if (item && typeof item === "object") {
+              const location = Array.isArray(item.loc) ? item.loc.join(".") : "detail";
+              const message = typeof item.msg === "string" ? item.msg : JSON.stringify(item);
+              return `${location}: ${message}`;
+            }
+            return String(item);
+          })
+          .join("; ")
+      : null;
     let message = `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
     if (typeof json?.error === "string") {
       message = json.error;
@@ -234,8 +249,10 @@ export function parseJsonResponse(text, responseMeta) {
       message = json.error.message;
     } else if (typeof json?.detail === "string") {
       message = json.detail;
-    } else if (Array.isArray(json?.detail)) {
-      message = json.detail.join("; ");
+    } else if (detailMessage) {
+      message = detailMessage;
+    } else if (text && text.trim()) {
+      message = `${text.trim()} (HTTP ${responseMeta.status} ${responseMeta.statusText})`;
     }
     throw new Error(message);
   }
@@ -520,13 +537,22 @@ export async function waitFor(
   label,
   producer,
   predicate,
-  { timeoutMs = 60000, intervalMs = 1500, isFatalError = () => false } = {}
+  {
+    timeoutMs = 60000,
+    intervalMs = 1500,
+    isFatalError = () => false,
+    describeLastValue = null,
+  } = {}
 ) {
   const startedAt = Date.now();
   let lastError = null;
+  let lastValue = null;
+  let hasLastValue = false;
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const value = await producer();
+      lastValue = value;
+      hasLastValue = true;
       if (predicate(value)) {
         return value;
       }
@@ -539,7 +565,35 @@ export async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
-  throw new Error(`Timed out waiting for ${label}.${reason}`);
+  const snapshot =
+    hasLastValue && typeof describeLastValue === "function"
+      ? ` Last snapshot: ${describeLastValue(lastValue)}`
+      : "";
+  throw new Error(`Timed out waiting for ${label}.${reason}${snapshot}`);
+}
+
+export async function waitForCondition(
+  label,
+  producer,
+  { timeoutMs = 180000, pollIntervalMs = 1000 } = {}
+) {
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const snapshot = await producer();
+    lastSnapshot = snapshot;
+    if (snapshot?.ok) {
+      return snapshot;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error(
+    `Timed out waiting for ${label}.${
+      lastSnapshot?.message ? ` Last state: ${lastSnapshot.message}` : ""
+    }`
+  );
 }
 
 export async function waitForHttpHealth(label, url, options = {}) {

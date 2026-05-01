@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
 import { OUTSOURCE_EXAMPLE_C_BUNDLE } from "./lib/outsource-example-c.bundle.mjs";
+import { waitForCondition } from "./lib/compose-proof-testkit.mjs";
 
 const CRITERION_COMPILE_REQUESTED_EVENT = "criterion.compile.requested";
 const REINDEX_REQUESTED_EVENT = "reindex.requested";
@@ -557,24 +558,6 @@ const EXAMPLE_C_CHANNELS = [
   { providerType: "rss", name: "Reuters — Technology", fetchUrl: "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best&best-sectors=tech", language: "en", pollIntervalSeconds: 1200, adaptiveEnabled: true, maxPollIntervalSeconds: 7200, maxItemsPerPoll: 15, isActive: true },
   { providerType: "rss", name: "The New Stack", fetchUrl: "https://thenewstack.io/feed/", language: "en", pollIntervalSeconds: 1800, adaptiveEnabled: true, maxPollIntervalSeconds: 14400, maxItemsPerPoll: 15, isActive: true },
 ];
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForCondition(label, fn, timeoutMs = 300000, pollIntervalMs = 2000) {
-  const startedAt = Date.now();
-  let lastMessage = "";
-  while (Date.now() - startedAt <= timeoutMs) {
-    const snapshot = await fn();
-    lastMessage = snapshot?.message ?? "";
-    if (snapshot?.ok) {
-      return snapshot;
-    }
-    await sleep(pollIntervalMs);
-  }
-  throw new Error(`Timed out waiting for ${label}.${lastMessage ? ` Last state: ${lastMessage}` : ""}`);
-}
 
 function normalizeSignalGroups(groups) {
   if (!Array.isArray(groups)) {

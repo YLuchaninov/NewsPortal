@@ -79,6 +79,8 @@ from services.api.app.content_selection_read_model import (
     system_interest_kind_enabled_clause,
 )
 from services.api.app.pagination import build_paginated_response, resolve_pagination
+from services.api.app import discovery_error_mapping as _discovery_error_mapping
+from services.api.app.route_deps import build_route_deps
 from services.api.app.routes import register_api_routes
 from services.api.app.llm_review_budget import (
     coerce_llm_review_cost_usd,
@@ -226,72 +228,22 @@ SequenceNotFoundError = _sequence_read_model.SequenceNotFoundError
 SequenceConflictError = _sequence_read_model.SequenceConflictError
 
 
-def _raise_discovery_read_model_not_found(
-    error: _discovery_read_model.DiscoveryReadModelNotFound,
-) -> None:
-    raise SequenceNotFoundError(str(error)) from error
-
-
-def _raise_content_analysis_policy_write_error(error: Exception) -> None:
-    if isinstance(error, _content_analysis_policies.ContentAnalysisPolicyWriteFailure):
-        raise HTTPException(status_code=500, detail=str(error)) from error
-    raise error
-
-
-def _raise_discovery_policy_profile_error(error: Exception) -> None:
-    if isinstance(error, _discovery_policy_profiles.DiscoveryPolicyProfileValidation):
-        raise SequenceValidationError(error.errors) from error
-    if isinstance(error, _discovery_policy_profiles.DiscoveryPolicyProfileNotFound):
-        raise SequenceNotFoundError(str(error)) from error
-    if isinstance(error, _discovery_policy_profiles.DiscoveryPolicyProfileConflict):
-        raise SequenceConflictError(str(error)) from error
-    raise error
-
-
-def _raise_discovery_class_error(error: Exception) -> None:
-    if isinstance(error, _discovery_classes.DiscoveryClassValidation):
-        raise SequenceValidationError(error.errors) from error
-    if isinstance(error, _discovery_classes.DiscoveryClassNotFound):
-        raise SequenceNotFoundError(str(error)) from error
-    if isinstance(error, _discovery_classes.DiscoveryClassConflict):
-        raise SequenceConflictError(str(error)) from error
-    raise error
-
-
-def _raise_discovery_candidate_error(error: Exception) -> None:
-    if isinstance(error, _discovery_candidates.DiscoveryCandidateValidation):
-        raise SequenceValidationError(error.errors) from error
-    if isinstance(error, _discovery_candidates.DiscoveryCandidateNotFound):
-        raise SequenceNotFoundError(str(error)) from error
-    if isinstance(error, _discovery_candidates.DiscoveryCandidateConflict):
-        raise SequenceConflictError(str(error)) from error
-    raise error
-
-
-def _raise_discovery_feedback_error(error: Exception) -> None:
-    if isinstance(error, _discovery_feedback.DiscoveryFeedbackConflict):
-        raise SequenceConflictError(str(error)) from error
-    raise error
-
-
-def _raise_discovery_mission_error(error: Exception) -> None:
-    if isinstance(error, _discovery_missions.DiscoveryMissionValidation):
-        raise SequenceValidationError(error.errors) from error
-    if isinstance(error, _discovery_missions.DiscoveryMissionNotFound):
-        raise SequenceNotFoundError(str(error)) from error
-    if isinstance(error, _discovery_missions.DiscoveryMissionConflict):
-        raise SequenceConflictError(str(error)) from error
-    raise error
-
-
-def _raise_discovery_recall_mission_error(error: Exception) -> None:
-    if isinstance(error, _discovery_recall_missions.DiscoveryRecallMissionValidation):
-        raise SequenceValidationError(error.errors) from error
-    if isinstance(error, _discovery_recall_missions.DiscoveryRecallMissionNotFound):
-        raise SequenceNotFoundError(str(error)) from error
-    if isinstance(error, _discovery_recall_missions.DiscoveryRecallMissionConflict):
-        raise SequenceConflictError(str(error)) from error
-    raise error
+_raise_discovery_read_model_not_found = (
+    _discovery_error_mapping.raise_discovery_read_model_not_found
+)
+_raise_content_analysis_policy_write_error = (
+    _discovery_error_mapping.raise_content_analysis_policy_write_error
+)
+_raise_discovery_policy_profile_error = (
+    _discovery_error_mapping.raise_discovery_policy_profile_error
+)
+_raise_discovery_class_error = _discovery_error_mapping.raise_discovery_class_error
+_raise_discovery_candidate_error = _discovery_error_mapping.raise_discovery_candidate_error
+_raise_discovery_feedback_error = _discovery_error_mapping.raise_discovery_feedback_error
+_raise_discovery_mission_error = _discovery_error_mapping.raise_discovery_mission_error
+_raise_discovery_recall_mission_error = (
+    _discovery_error_mapping.raise_discovery_recall_mission_error
+)
 
 
 SequenceDispatchError = _sequence_read_model.SequenceDispatchError
@@ -2878,4 +2830,4 @@ def get_discovery_cost_summary_route() -> dict[str, Any]:
     return get_discovery_cost_summary()
 
 
-register_api_routes(app, globals())
+register_api_routes(app, build_route_deps(globals()))

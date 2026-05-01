@@ -345,7 +345,7 @@ async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string
       select count(*)::text as count
       from sequence_task_runs str
       join sequence_runs sr on sr.run_id = str.run_id
-      where str.task_key = 'enrichment'
+      where str.task_key = 'extract_article'
         and sr.context_json ->> 'doc_id' in (
           select doc_id::text
           from articles
@@ -356,7 +356,7 @@ async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string
   );
 
   if (Number(taskRunResult.rows[0]?.count ?? "0") < 3) {
-    throw new Error("Expected sequence task runs to record one enrichment step per article.");
+    throw new Error("Expected sequence task runs to record one article extraction step per article.");
   }
 }
 

@@ -28,11 +28,13 @@ import {
 import { formatDiscoveryEvidenceMarkdown } from "./lib/discovery-live-report-format.mjs";
 import {
   composeArgs,
+  parseJsonResponse,
   readEnvFile,
   runCommand,
   runCompose,
   runComposeCapture,
   sendRequest,
+  waitFor,
   waitForHttpHealth,
 } from "./lib/compose-proof-testkit.mjs";
 const STACK_SERVICES = [
@@ -110,48 +112,6 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function parseJsonResponse(text, responseMeta) {
-  let json = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch (error) {
-      if (responseMeta.status >= 200 && responseMeta.status < 300) {
-        throw error;
-      }
-    }
-  }
-  if (responseMeta.status < 200 || responseMeta.status >= 300) {
-    const detailMessage = Array.isArray(json?.detail)
-      ? json.detail
-          .map((item) => {
-            if (typeof item === "string") {
-              return item;
-            }
-            if (item && typeof item === "object") {
-              const location = Array.isArray(item.loc) ? item.loc.join(".") : "detail";
-              const message = typeof item.msg === "string" ? item.msg : JSON.stringify(item);
-              return `${location}: ${message}`;
-            }
-            return String(item);
-          })
-          .join("; ")
-      : null;
-    const message =
-      typeof json?.error === "string"
-        ? json.error
-        : typeof json?.detail === "string"
-          ? json.detail
-          : detailMessage
-            ? detailMessage
-            : text && text.trim()
-              ? `${text.trim()} (HTTP ${responseMeta.status} ${responseMeta.statusText})`
-              : `HTTP ${responseMeta.status} ${responseMeta.statusText}`;
-    throw new Error(message);
-  }
-  return json;
-}
-
 async function fetchJson(url, { timeoutMs = 10000 } = {}) {
   const response = await sendRequest(url, { timeoutMs });
   return parseJsonResponse(response.text, response);
@@ -191,34 +151,6 @@ async function patchJson(url, payload, { timeoutMs = 30000 } = {}) {
     timeoutMs,
   });
   return parseJsonResponse(response.text, response);
-}
-
-async function waitFor(label, producer, predicate, { timeoutMs, intervalMs, describeLastValue = null }) {
-  const startedAt = Date.now();
-  let lastError = null;
-  let lastValue = null;
-  let hasLastValue = false;
-
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const value = await producer();
-      lastValue = value;
-      hasLastValue = true;
-      if (predicate(value)) {
-        return value;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-
-  const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
-  const snapshot =
-    hasLastValue && typeof describeLastValue === "function"
-      ? ` Last snapshot: ${describeLastValue(lastValue)}`
-      : "";
-  throw new Error(`Timed out waiting for ${label}.${reason}${snapshot}`);
 }
 
 function parseEnvOutput(text) {

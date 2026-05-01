@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
 import {
   OUTSOURCE_EXAMPLE_C_BUNDLE,
   OUTSOURCE_EXAMPLE_C_PARITY,
 } from "./lib/outsource-example-c.bundle.mjs";
+import {
+  readEnvFile,
+  repoRoot,
+  runCommand,
+  waitForCondition,
+} from "./lib/compose-proof-testkit.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..", "..");
 const READY_STATUS = "ready";
 const NEEDS_BROWSER_FALLBACK_STATUS = "needs_browser_fallback";
 const REJECTED_OPEN_WEB_STATUS = "rejected_open_web";
@@ -34,6 +36,7 @@ const EXPECTED_BROWSER_FALLBACK_SITE_COUNT = 3;
 const EXPECTED_SKIPPED_SITE_COUNT = 1;
 const EXPECTED_IMPORTED_SITE_COUNT =
   EXPECTED_READY_SITE_COUNT + EXPECTED_BROWSER_FALLBACK_SITE_COUNT;
+const DOWNSTREAM_SETTLE_TIMEOUT_MS = 1_800_000;
 
 let runtimeDependenciesPromise;
 
@@ -70,55 +73,6 @@ async function loadRuntimeDependencies() {
   }
 
   return runtimeDependenciesPromise;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-  });
-
-  if (result.status !== 0 && !options.allowFailure) {
-    if (options.capture) {
-      if (result.stdout) {
-        process.stdout.write(result.stdout);
-      }
-      if (result.stderr) {
-        process.stderr.write(result.stderr);
-      }
-    }
-    throw new Error(
-      `Command failed (${command} ${args.join(" ")}): exit code ${result.status ?? "unknown"}`
-    );
-  }
-
-  return {
-    status: result.status ?? 0,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
-}
-
-async function readEnvFile(relativePath) {
-  const content = await readFile(path.join(repoRoot, relativePath), "utf8");
-  return Object.fromEntries(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-        if (separatorIndex < 0) {
-          return [line, ""];
-        }
-        return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)];
-      })
-  );
 }
 
 function applyEnv(env) {
@@ -522,26 +476,6 @@ async function upsertTemplates(pool, bundle, runtimeDependencies) {
     llmResults,
     interestResults,
   };
-}
-
-async function waitForCondition(label, fn, options = {}) {
-  const timeoutMs = options.timeoutMs ?? 180000;
-  const pollIntervalMs = options.pollIntervalMs ?? 1000;
-  const startedAt = Date.now();
-  let lastSnapshot = null;
-
-  while (Date.now() - startedAt <= timeoutMs) {
-    const snapshot = await fn();
-    lastSnapshot = snapshot;
-    if (snapshot?.ok) {
-      return snapshot;
-    }
-    await sleep(pollIntervalMs);
-  }
-
-  throw new Error(
-    `Timed out waiting for ${label}.${lastSnapshot?.message ? ` Last state: ${lastSnapshot.message}` : ""}`
-  );
 }
 
 async function waitForCriteriaCompiled(pool, expectedCount) {
@@ -954,7 +888,7 @@ async function waitForDownstreamSettle(pool, channels) {
         snapshot,
       };
     },
-    { timeoutMs: 600000, pollIntervalMs: 3000 }
+    { timeoutMs: DOWNSTREAM_SETTLE_TIMEOUT_MS, pollIntervalMs: 3000 }
   );
 }
 
@@ -1578,7 +1512,7 @@ async function main() {
     log("Loading outsourcing bundle and website source list");
     const outsourcingBundle = OUTSOURCE_EXAMPLE_C_BUNDLE;
     const templateParity = assertTemplateParity(outsourcingBundle);
-    const websiteCandidates = await loadJson("docs/data_scripts/web.json");
+    const websiteCandidates = await loadJson("docs/product/data-scripts/web.json");
     const candidateSet = validateWebsiteCandidateSet(websiteCandidates);
 
     log("Importing LLM templates and system-interest templates");

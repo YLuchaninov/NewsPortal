@@ -56,6 +56,7 @@ const PROCESSING_STATE_ORDER: Record<string, number> = {
   matched: 5,
   notified: 6
 };
+const RSS_ARTICLE_PROCESSING_TIMEOUT_MS = 180000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -302,7 +303,7 @@ async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<v
         );
       },
       {
-        timeoutMs: 90000,
+        timeoutMs: RSS_ARTICLE_PROCESSING_TIMEOUT_MS,
         pollIntervalMs: 500
       }
     );

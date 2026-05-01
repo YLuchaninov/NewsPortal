@@ -39,6 +39,8 @@ function log(message) {
 }
 
 const waitFor = createWaitFor({ timeoutMs: 180000, intervalMs: 2000 });
+const SOAK_CHANNEL_COUNT = 60;
+const SOAK_WORKER_PROGRESS_TIMEOUT_MS = 420000;
 
 function getComposeServiceContainerId(service) {
   return runComposeCapture("ps", "-q", service).stdout.trim();
@@ -456,7 +458,13 @@ async function main() {
         };
       },
       (summary) =>
-        summary.articleCount === successfulCount && summary.progressedCount === successfulCount
+        summary.articleCount === successfulCount && summary.progressedCount === successfulCount,
+      {
+        timeoutMs:
+          options.channelCount >= SOAK_CHANNEL_COUNT ? SOAK_WORKER_PROGRESS_TIMEOUT_MS : undefined,
+        describeLastValue: (summary) =>
+          `articleCount=${summary.articleCount}, progressedCount=${summary.progressedCount}, expected=${successfulCount}`
+      }
     );
 
     const firstCycleCounts = queryPostgresRows(

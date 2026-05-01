@@ -15,7 +15,7 @@
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: stage 73 committed; next refactoring slice should be opened explicitly from a clean live state.
+- Почему сейчас: refactoring closure slice opened from a clean live state to address the remaining high-value hotspots without continuing cosmetic cleanup.
 
 ## Проверки закрытия route
 
@@ -38,15 +38,15 @@
 
 ### Активные capabilities
 
-- none
+- AIDP-ENGINEERING-REFACTORING-CLOSURE — staged behavior-preserving closure of the remaining high-value refactoring hotspots: API main composition pressure, worker/runtime hotspots, proof harness helper duplication, and explicit deferral of admin-only large modules.
 
 ## Активное execution state
 
 ### Primary active item
 
-- ID: none
-- Parent capability: n/a
-- Почему это primary active work: n/a
+- ID: AIDP-ENGINEERING-REFACTORING-CLOSURE-STAGE-1
+- Parent capability: AIDP-ENGINEERING-REFACTORING-CLOSURE
+- Почему это primary active work: user approved the closure plan and asked to implement it; worktree was clean, and the next honest slice is staged refactoring with compatibility-preserving proof.
 
 ### Secondary active item
 
@@ -57,11 +57,47 @@
 
 ### Согласованность worktree
 
-- Worktree status: clean after committing residual shared admin section/background card adoption.
-- Alignment note: latest committed stage touched `.aidp/work.md`, dashboard, discovery and channel editor surfaces with remaining exact section/background card class strings; class ownership changed while layout, copy, routes, data loading, form behavior, visual design and runtime services stayed unchanged.
+- Worktree status: dirty by active refactoring closure stage after opening `AIDP-ENGINEERING-REFACTORING-CLOSURE-STAGE-1`.
+- Alignment note: expected changes are limited to AIDP live state, API composition/decomposition, worker/runtime decomposition, proof harness helper reuse, and final closure notes; admin templates/import surfaces and fetchers are explicitly deferred unless new evidence appears.
 - Latest broad proof: `pnpm unit_tests:ts` passed 246 tests after the AutomationEditorWorkspace decomposition sequence.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
-- Required action before ordinary implementation: open next scoped slice before implementation.
+- Required action before ordinary implementation: keep each closure stage behavior-preserving, run targeted proof after each meaningful slice, and stop if an endpoint, payload, DB schema, queue payload or smoke output shape would need to change.
+
+### AIDP-ENGINEERING-REFACTORING-CLOSURE-STAGE-1
+
+- Kind: Stage
+- Status: active
+- In scope: staged behavior-preserving cleanup of remaining high-value refactoring hotspots: reduce API main composition pressure where compatible with existing `api_main` unit-test patchability, split worker content/smoke support into cohesive modules, reuse existing proof harness helpers in remaining duplicate scripts, and record explicit admin/fetchers deferrals.
+- Out of scope: public endpoint changes, payload changes, auth behavior changes, DB schema changes, queue payload changes, smoke output shape changes, visual redesign, admin templates/import refactor, fetchers refactor beyond closure note.
+- Allowed paths: `.aidp/work.md`, `.aidp/history.md`, `services/api/app/**`, `services/workers/app/**`, `infra/scripts/**`, `services/fetchers/src/cli/test-*.ts` for proof-harness timeout hardening, and `tests/unit/python/**` only if compatibility tests need to follow moved internals.
+- Risk: medium-high, because API and worker hotspots are broadly imported and proof scripts are operational gates; mitigate by preserving public facades and running targeted tests.
+- Required proof: after Python/API/worker slices run `git diff --check --`, `pnpm unit_tests:py`, `pnpm typecheck`; after proof harness slice run `pnpm lint` and targeted proof where available; final closure runs `pnpm lint`, `pnpm typecheck`, `pnpm unit_tests:py`, `pnpm unit_tests:ts` or records any unavailable compose/runtime gap.
+- Acceptance criteria: `services/api/app/main.py`, worker hotspots and proof helper duplication are materially less risky for future changes; admin large modules are documented as deferred product-adjacent hotspots; fetchers are documented as no longer a closure blocker.
+- Architecture note: this is a closure stage, not a new feature; the value is lower change risk and clearer ownership while preserving runtime behavior.
+- Implemented, with evidence: API route registration no longer receives full `globals()`; `services/api/app/route_deps.py` defines an explicit route dependency contract while preserving `api_main` facade/patchability used by unit tests.
+- Implemented, with evidence: discovery/content-policy error mapping moved to `services/api/app/discovery_error_mapping.py`; `main.py` keeps compatibility aliases while shedding cross-domain error translation code.
+- Implemented, with evidence: worker content analysis heuristic terms and analyzer logic moved to `content_analysis_heuristic_terms.py` and `content_analysis_heuristics.py`; `content_analysis.py` retains compatible public functions and persistence/policy flow.
+- Implemented, with evidence: adaptive discovery smoke support/fake runtime helpers moved from `smoke.py` to `smoke_adaptive_discovery.py`; `smoke.py` remains the CLI/scenario dispatcher and existing scenario names/output shapes are unchanged.
+- Implemented, with evidence: proof scripts now reuse shared `runCommand`, `readEnvFile`, `parseJsonResponse`, `waitFor` and `waitForCondition` helpers from the compose/MCP testkit; local duplicate helper copies were removed from the targeted large scripts.
+- Explicit deferral: `apps/admin/src/lib/server/admin-templates.ts` and `apps/admin/src/components/BulkChannelImport.tsx` remain known hotspots but are deferred until a product-adjacent template/import UX change.
+- Explicit deferral: `services/fetchers/src/fetchers.ts` remains out of closure scope because the provider poller split is already done and the file is no longer a main hotspot.
+- Passed proof: `git diff --check --` passed.
+- Passed proof: `node --check` passed for `infra/scripts/lib/mcp-http-testkit.mjs`, `infra/scripts/test-live-discovery-examples.mjs`, `infra/scripts/run-live-website-outsourcing.mjs` and `infra/scripts/seed-live-discovery-example-fixtures.mjs`.
+- Passed proof: `pnpm lint:py` passed after smoke/content extraction cleanup.
+- Passed proof: `pnpm unit_tests:py` passed 316 tests.
+- Passed proof: `pnpm typecheck` passed with 0 errors and existing Astro hints only.
+- Passed proof: `pnpm unit_tests:ts` passed 246 tests.
+- Passed proof: `pnpm lint` passed.
+- Maximum proof pass, with evidence: deterministic/static gates passed repeatedly after refactor and proof fixes: `git diff --check --`, `pnpm lint`, `pnpm typecheck`, `pnpm unit_tests`, `pnpm unit_tests:py`, `pnpm unit_tests:ts`, `pnpm build`, and `pnpm test:migrations:smoke`.
+- Maximum proof pass, with evidence: worker/data pipeline gates passed at requested repeat depth where applicable: `pnpm test:embed:compose` x3, `pnpm test:normalize-dedup:compose` x3, `pnpm test:interest-compile:compose` x3, `pnpm test:criterion-compile:compose` x3, `pnpm test:cluster-match-notify:compose` x2, `pnpm test:llm-budget-stop:compose` x3 after fixture repair, `pnpm test:reindex-backfill:compose` x2, and in-container centroid checks x2 for interests and event clusters.
+- Maximum proof pass, with evidence: RSS/website compose gates passed: `pnpm test:feed-ingress-adapters:smoke` x2, `pnpm test:ingest:compose` x3 plus a targeted rerun after timeout hardening, `pnpm test:ingest:multi:compose` x2, `pnpm test:ingest:soak:compose` x1 after timeout hardening, `pnpm test:website:compose` x3, `pnpm test:website:admin:compose` x3, `pnpm test:enrichment:compose` x3 after task-key contract repair, `pnpm test:hard-sites:compose` x2, and `pnpm test:channel-auth:compose` x2.
+- Maximum proof pass, with evidence: live website matrix passed baseline x3 and `alt_2026_04_16` x3; expected live residuals were stable upstream blocks/captcha/403/Cloudflare/robots/unsupported-block cases, with JSON/Markdown evidence under `/tmp/newsportal-live-website-matrix-*`.
+- Maximum proof pass, with evidence: discovery/system-interest/LLM examples passed repeat proof after targeted reruns: `pnpm test:discovery-enabled:compose` x3, `pnpm test:discovery:admin:compose` x3, `pnpm test:discovery:examples:compose` x3 plus targeted x2, `pnpm test:discovery:nonregression:compose` x2 plus targeted x2, `pnpm test:discovery:yield:compose` x3 with targeted reruns; latest full-yield artifact is `/tmp/newsportal-live-discovery-yield-proof-edc553da.json`.
+- Maximum proof pass, with evidence: live website outsourcing passed after fixture-path, timeout and content-analysis upsert fixes; successful artifact is `/tmp/newsportal-live-website-outsourcing-2026-04-30T182241536Z.json`.
+- Maximum proof pass, with evidence: MCP passed `pnpm test:mcp:compose` x2, `pnpm test:mcp:http:auth` x2, `pnpm test:mcp:http:reads` x2, `pnpm test:mcp:http:writes` x2, `pnpm test:mcp:http:discovery` x3 and `pnpm test:mcp:http:live` x3; one live run had weak usefulness but healthy runtime and the later product-full MCP live run was healthy/healthy.
+- Fixed during proof: LLM budget smoke fixtures now create matching canonical/document-observation rows; RSS smoke and RSS soak waits tolerate cold worker scheduling; enrichment smoke expects the current `extract_article` task key; live outsourcing uses the current fixture path and longer downstream settle timeout; content-analysis result replacement uses an atomic upsert to remove the observed duplicate-key race; `test-mvp-internal` waits longer and reports status for admin-triggered backfill.
+- Product envelope proof: first `pnpm test:product:local:full` run produced `/tmp/newsportal-product-local-full-474ae970.json` and failed only on `integration_tests` due admin-triggered backfill timeout. After harness hardening, targeted `pnpm integration_tests` passed end-to-end, including the backfill section, and final `pnpm test:product:local:full` passed on run `5ffb502b`, producing `/tmp/newsportal-product-local-full-5ffb502b.json` and `/tmp/newsportal-product-local-full-5ffb502b.md`.
+- Residuals: live website upstream blocks remain accepted residuals, discovery had occasional async-latency timeouts that passed targeted reruns, and final full-product proof accepted MCP live `external-runtime-residual` as a live-provider residual while still exiting green. Cleanup can be run separately if a clean local Docker state is needed.
 
 ### AIDP-ENGINEERING-REFACTORING-UNIFICATION-STAGE-73
 

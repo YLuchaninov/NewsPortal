@@ -143,6 +143,7 @@ async function postBrowserForm(url, payload, { cookie } = {}) {
 }
 
 const waitFor = createWaitFor({ timeoutMs: 180000, intervalMs: 2000 });
+const ADMIN_BACKFILL_TIMEOUT_MS = 600000;
 
 function getComposeServiceContainerId(service) {
   return runComposeCapture("ps", "-q", service).stdout.trim();
@@ -1606,7 +1607,11 @@ async function main() {
             where reindex_job_id = ${sqlLiteral(backfillJobId)};
           `
         ),
-      (value) => value === "completed"
+      (value) => value === "completed",
+      {
+        timeoutMs: ADMIN_BACKFILL_TIMEOUT_MS,
+        describeLastValue: (value) => `status=${value || "<none>"}`,
+      }
     );
 
     const historicalAdminMatchCountAfterBackfill = countInterestMatches(env, {
