@@ -2,18 +2,14 @@ import type { APIRoute } from "astro";
 
 import { readRuntimeConfig } from "@newsportal/config";
 
+import type { AdminActionContext } from "../../../lib/server/admin-action";
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  insertAdminAuditLog,
+  prepareAdminAction,
+} from "../../../lib/server/admin-action";
 import { getPool } from "../../../lib/server/db";
-import { readRequestPayload } from "../../../lib/server/request";
 import {
   buildSequenceAuditPayload,
   buildSequenceCancelApiPayload,
@@ -56,38 +52,27 @@ async function writeAuditLog(
   entityId: string | null,
   payloadJson: Record<string, unknown>
 ): Promise<void> {
-  await getPool().query(
-    `
-      insert into audit_log (
-        actor_user_id,
-        action_type,
-        entity_type,
-        entity_id,
-        payload_json
-      )
-      values ($1, $2, $3, $4, $5::jsonb)
-    `,
-    [actorUserId, actionType, entityType, entityId, JSON.stringify(payloadJson)]
-  );
+  await insertAdminAuditLog(getPool(), {
+    actorUserId,
+    actionType,
+    entityType,
+    entityId,
+    payloadJson,
+  });
 }
 
 function respondAutomationSuccess(
-  request: Request,
-  browserRequest: boolean,
-  redirectTo: string,
+  context: AdminActionContext,
   message: string,
   payload: unknown,
   status = 200
 ): Response {
-  if (browserRequest) {
-    return buildFlashRedirect(request, {
-      section: "automation",
-      status: "success",
-      message,
-      redirectTo,
-    });
-  }
-  return Response.json(payload, { status });
+  return adminActionSuccess(context, {
+    section: "automation",
+    message,
+    json: payload,
+    status,
+  });
 }
 
 function resolveActionType(intent: SequenceAdminIntent): string {
@@ -108,27 +93,15 @@ function resolveActionType(intent: SequenceAdminIntent): string {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const payload = await readRequestPayload(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
-    "/automation"
-  );
-  const session = await resolveAdminSession(request);
-
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/automation",
+    actionToken: { scope: "automation" },
+  });
+  if (!action.ok) {
+    return action.response;
   }
+  const context = action.context;
+  const { payload, session } = context;
 
   try {
     const intent = resolveSequenceAdminIntent(payload);
@@ -147,9 +120,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildSequenceAuditPayload(intent, payload, result)
       );
       return respondAutomationSuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
         "Sequence created",
         result,
         201
@@ -177,9 +148,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildSequenceAuditPayload(intent, payload, result)
       );
       return respondAutomationSuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
         "Sequence updated",
         result
       );
@@ -204,9 +173,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildSequenceAuditPayload(intent, payload, result)
       );
       return respondAutomationSuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
         "Sequence archived",
         result
       );
@@ -233,9 +200,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildSequenceAuditPayload(intent, payload, result)
       );
       return respondAutomationSuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
         "Sequence run requested",
         result,
         202
@@ -263,9 +228,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildSequenceAuditPayload(intent, payload, result)
       );
       return respondAutomationSuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
         "Sequence retry requested",
         result,
         202
@@ -292,23 +255,16 @@ export const POST: APIRoute = async ({ request }) => {
       buildSequenceAuditPayload(intent, payload, result)
     );
     return respondAutomationSuccess(
-      request,
-      browserRequest,
-      redirectTo,
+      context,
       "Sequence run cancelled",
       result
     );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to update automation state.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "automation",
-        status: "error",
-        message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: 400 });
+    return adminActionError(context, {
+      section: "automation",
+      message,
+    });
   }
 };

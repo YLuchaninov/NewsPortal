@@ -5,7 +5,8 @@ import {
   type RssChannelConfig
 } from "@newsportal/contracts";
 
-import { parseFeed, parseRedditSearchFeed, type ParsedFeed, type ParsedFeedEntry } from "./feed-parser";
+import { parseFeed, parseRedditSearchFeed, type ParsedFeed, type ParsedFeedEntry } from "./feed-parser/index";
+import { validateAcquisitionUrl } from "./probe-url-guard";
 import { canonicalizeUrl, collapseWhitespace, stripHtmlTags } from "./rss";
 
 export interface FeedIngressAdapterContext {
@@ -139,7 +140,11 @@ async function resolveGoogleNewsPublisherUrl(
   }
 
   try {
-    const response = await fetch(sourceUrl, {
+    const guardedSourceUrl = await validateAcquisitionUrl(sourceUrl);
+    if (!guardedSourceUrl.url) {
+      throw new Error(guardedSourceUrl.error ?? "Feed adapter canonical URL is not allowed.");
+    }
+    const response = await fetch(guardedSourceUrl.url, {
       redirect: "follow",
       headers: {
         "user-agent": context.rssConfig.userAgent,
@@ -148,7 +153,11 @@ async function resolveGoogleNewsPublisherUrl(
       signal: AbortSignal.timeout(Math.min(context.rssConfig.requestTimeoutMs, 3000))
     });
 
-    const finalUrl = normalizeUrl(response.url);
+    const guardedFinalUrl = await validateAcquisitionUrl(response.url || guardedSourceUrl.url);
+    if (!guardedFinalUrl.url) {
+      throw new Error(guardedFinalUrl.error ?? "Feed adapter canonical final URL is not allowed.");
+    }
+    const finalUrl = normalizeUrl(guardedFinalUrl.url);
     if (finalUrl && finalUrl !== sourceUrl) {
       context.canonicalUrlCache.set(sourceUrl, finalUrl);
       return {
@@ -171,7 +180,8 @@ const genericAdapter: FeedIngressAdapter = {
   parse(context) {
     return parseFeed({
       body: context.responseBody,
-      contentType: context.contentType
+      contentType: context.contentType,
+      feedUrl: context.fetchUrl
     });
   },
   normalizeEntry(entry, context) {
@@ -198,7 +208,8 @@ const redditSearchAdapter: FeedIngressAdapter = {
   parse(context) {
     return parseRedditSearchFeed({
       body: context.responseBody,
-      contentType: context.contentType
+      contentType: context.contentType,
+      feedUrl: context.fetchUrl
     });
   },
   normalizeEntry(entry, context) {

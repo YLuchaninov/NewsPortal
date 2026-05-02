@@ -1,3 +1,5 @@
+import { assertJsonSchema } from "@newsportal/contracts";
+
 import { ADMIN_MCP_TOOLS } from "./tools/admin-tools";
 import { CHANNEL_MCP_TOOLS } from "./tools/channels-tools";
 import { CONTENT_MCP_TOOLS } from "./tools/content-tools";
@@ -383,8 +385,43 @@ export async function executeMcpTool(
 ): Promise<unknown> {
   const tool = resolveMcpTool(name);
   await requireScope(context.token, tool.requiredScope);
+  try {
+    assertJsonSchema(args, tool.inputSchema, {
+      boundaryName: `MCP tool "${tool.name}" arguments`,
+    });
+  } catch (error) {
+    throw new JsonRpcError(
+      -32602,
+      error instanceof Error ? error.message : "MCP tool arguments failed schema validation.",
+      {
+        statusCode: 400,
+        data: {
+          tool: tool.name,
+        },
+      }
+    );
+  }
   if (tool.destructive) {
     requireDestructiveConfirmation(context.token, args);
   }
-  return tool.handler(context, args);
+  const result = await tool.handler(context, args);
+  if (tool.outputSchema) {
+    try {
+      assertJsonSchema(result, tool.outputSchema, {
+        boundaryName: `MCP tool "${tool.name}" result`,
+      });
+    } catch (error) {
+      throw new JsonRpcError(
+        -32603,
+        error instanceof Error ? error.message : "MCP tool result failed schema validation.",
+        {
+          statusCode: 500,
+          data: {
+            tool: tool.name,
+          },
+        }
+      );
+    }
+  }
+  return result;
 }

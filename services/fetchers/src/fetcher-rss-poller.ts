@@ -13,12 +13,15 @@ import {
 } from "./fetcher-channel-helpers";
 import { adaptFeedIngress } from "./feed-ingress-adapters";
 import { buildRssPersistInput } from "./fetcher-persist-inputs";
+import { validateAcquisitionUrl } from "./probe-url-guard";
 import type {
   ChannelPollCompletion,
   CursorMap,
   PersistArticleInput,
   SourceChannelRow
 } from "./fetcher-persistence";
+
+const MAX_RSS_RESPONSE_BODY_BYTES = 5_000_000;
 
 interface RssChannelPollerDependencies {
   config: FetchersConfig;
@@ -52,6 +55,21 @@ export async function pollRssProviderChannel(
     });
   }
 
+  const guardedFetchUrl = await validateAcquisitionUrl(channel.fetchUrl, { resolveDns: true });
+  if (!guardedFetchUrl.url) {
+    const message = `RSS channel ${channel.channelId} fetchUrl is not allowed: ${guardedFetchUrl.error}`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: null,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+
   const rssConfig = parseRssChannelConfig(channel.configJson);
   const cursors = await dependencies.loadCursorMap(channel.channelId);
   const headers = new Headers({
@@ -67,19 +85,33 @@ export async function pollRssProviderChannel(
     headers.set("if-modified-since", cursors.timestamp.cursorValue);
   }
   const authorizationHeader = resolveSourceChannelAuthorizationHeader(
-    channel.fetchUrl,
-    channel.fetchUrl,
+    guardedFetchUrl.url,
+    guardedFetchUrl.url,
     channel.authConfigJson
   );
   if (authorizationHeader) {
     headers.set("authorization", authorizationHeader);
   }
 
-  const response = await fetch(channel.fetchUrl, {
+  const response = await fetch(guardedFetchUrl.url, {
     headers,
     signal: AbortSignal.timeout(rssConfig.requestTimeoutMs)
   });
   const fetchedAt = new Date().toISOString();
+  const guardedFinalUrl = await validateAcquisitionUrl(response.url || guardedFetchUrl.url);
+  if (!guardedFinalUrl.url) {
+    const message = `RSS channel ${channel.channelId} final URL is not allowed: ${guardedFinalUrl.error}`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: response.status,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
 
   if (response.status === 304) {
     const cursorValue =
@@ -134,10 +166,38 @@ export async function pollRssProviderChannel(
     });
   }
 
-  const responseBody = await response.text();
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_RSS_RESPONSE_BODY_BYTES) {
+    const message = `RSS fetch failed for ${channel.channelId}: response body is too large.`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: response.status,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+  const responseBytes = await response.arrayBuffer();
+  if (responseBytes.byteLength > MAX_RSS_RESPONSE_BODY_BYTES) {
+    const message = `RSS fetch failed for ${channel.channelId}: response body is too large.`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: response.status,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+  const responseBody = new TextDecoder().decode(responseBytes);
   try {
     const adaptedFeed = await adaptFeedIngress({
-      fetchUrl: channel.fetchUrl,
+      fetchUrl: guardedFinalUrl.url,
       rssConfig,
       fetchedAt,
       contentType: response.headers.get("content-type"),

@@ -60,6 +60,7 @@ Bounded recall introduces neutral acquisition independent of `interest_graph`, b
 - Enabled runtime: `pnpm test:discovery-enabled:compose`.
 - Admin/operator changes: `pnpm test:discovery:admin:compose`.
 - Example/profile-backed runtime: `pnpm test:discovery:examples:compose`.
+- Mega comprehensive matrix live runtime: `pnpm test:discovery:mega:compose`.
 - Non-regression/yield lanes when tuning discovery policy: `pnpm test:discovery:nonregression:compose`, `pnpm test:discovery:yield:compose` where applicable.
 
 ## Update triggers

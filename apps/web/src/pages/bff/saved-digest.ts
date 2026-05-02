@@ -1,10 +1,11 @@
 import type { APIRoute } from "astro";
+import {
+  assertJsonSchema,
+  WEB_BFF_ACTION_PAYLOAD_SCHEMAS,
+} from "@newsportal/contracts";
 
 import { getPool } from "../../lib/server/db";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession,
-} from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 import {
   loadSavedDigestItems,
   parseSelectedDigestItemIds,
@@ -27,20 +28,31 @@ function buildReturnRedirect(request: Request, returnTo: string, status: "succes
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const session = await resolveWebSession(request);
+  const action = await prepareWebAction(request, {
+    authSetCookie: true,
+    readPayload: false,
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+  const { session } = action.context;
   if (!session) {
-    return Response.json(
-      { error: "Unauthorized." },
-      {
-        status: 401,
-        headers: {
-          "Set-Cookie": buildExpiredSessionCookie(),
-        },
-      }
-    );
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   const formData = await request.formData();
+  try {
+    assertJsonSchema(Object.fromEntries(formData.entries()), WEB_BFF_ACTION_PAYLOAD_SCHEMAS["saved-digest"], {
+      boundaryName: "saved-digest payload",
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error: error instanceof Error ? error.message : "Invalid saved digest payload.",
+      },
+      { status: 400 },
+    );
+  }
   const itemIds = parseSelectedDigestItemIds(formData);
   const returnTo = String(formData.get("returnTo") ?? "/saved/digest").trim() || "/saved/digest";
 

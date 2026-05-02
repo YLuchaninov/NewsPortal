@@ -1,9 +1,14 @@
 import math
+import os
 import unittest
+from unittest import mock
 
 from services.ml.app.compiler import CriterionBaselineCompiler, InterestBaselineCompiler
 from services.ml.app.embedding import (
+    DEFAULT_HASH_MODEL_KEY,
     HashEmbeddingProvider,
+    SentenceTransformerEmbeddingProvider,
+    load_embedding_provider,
     mean_vectors,
     normalize_vector,
     truncate_text_for_embedding,
@@ -57,6 +62,29 @@ class EmbeddingAndCompilerTests(unittest.TestCase):
         self.assertEqual(len(first), 8)
         self.assertEqual(first, second)
         self.assertAlmostEqual(math.sqrt(sum(value * value for value in first)), 1.0)
+
+    def test_load_embedding_provider_defaults_to_hash_backend(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            provider = load_embedding_provider()
+
+        self.assertIsInstance(provider, HashEmbeddingProvider)
+        self.assertEqual(provider.model_key, DEFAULT_HASH_MODEL_KEY)
+
+    def test_load_embedding_provider_auto_uses_hash_when_neural_backend_missing(self) -> None:
+        with (
+            mock.patch.dict(os.environ, {"EMBEDDING_BACKEND": "auto"}, clear=True),
+            mock.patch("services.ml.app.embedding.is_sentence_transformers_available", return_value=False),
+        ):
+            provider = load_embedding_provider()
+
+        self.assertIsInstance(provider, HashEmbeddingProvider)
+
+    def test_load_embedding_provider_explicit_neural_backend_is_strict(self) -> None:
+        with mock.patch.dict(os.environ, {"EMBEDDING_BACKEND": "sentence-transformers"}, clear=True):
+            provider = load_embedding_provider()
+
+        self.assertIsInstance(provider, SentenceTransformerEmbeddingProvider)
+        self.assertFalse(provider._fallback_to_hash)
 
     def test_interest_compiler_normalizes_lists_and_constraints(self) -> None:
         compiler = InterestBaselineCompiler()

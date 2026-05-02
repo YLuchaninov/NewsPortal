@@ -30,13 +30,16 @@ Universal Task Engine is the sequence-based execution model for NewsPortal: decl
 - `q.sequence` does not replace outbox; triggered execution starts from PostgreSQL truth and relay handoff.
 - Missing active sequence route for sequence-managed event is relay failure, not silent skip.
 - `TaskGraph` is ordered tasks with unique `key`, registered `module`, options, optional enable/retry/timeout/label/notes.
+- `TaskGraph` shape is validated through the task-engine Pydantic boundary before persistence/API use and again when records are materialized for worker execution; task node extras are rejected, public camel-case aliases are normalized, and plugin `validate_options(...)` is enforced again immediately before runtime `execute(...)`.
 - Reserved context keys include `_sequence_id`, `_run_id`, `_task_key`, `_task_index`, `_trigger_type`, `_trigger_meta`; `_stop` is normal early termination.
+- Plugin metadata returned by the registry must include executable contract data for options, context/input, output, output caps, retry classification and error taxonomy; context/output schemas may be permissive for raw JSON adapter edges, but the declaration itself is required for every registered plugin.
 
 ## Responsibility boundaries
 
 - Relay owns outbox polling and sequence lookup/handoff.
 - Sequence Runner owns traversal, retries/timeouts, context merge and run/task-run persistence.
 - Task plugins are self-contained execution units and must not become relay or scheduler.
+- Builtin plugin ownership lives in focused plugin-family modules, with `services/workers/app/task_engine/pipeline_registry.py` as the canonical registration surface. Do not restore the old catch-all `pipeline_plugins.py` compatibility module for internal imports.
 - Maintenance API owns sequence CRUD/run/read/cancel/retry.
 - Admin `/automation` visual workspace may store `editor_state`, but `task_graph` remains execution truth.
 
@@ -64,6 +67,7 @@ Relay uses sequence routing by default unless explicitly disabled.
 - Final/default runtime changes: migration smoke, relay compose phase tests, ingest/normalize/interest/criterion/cluster smoke as relevant.
 - Admin automation changes: `node infra/scripts/test-automation-admin-flow.mjs`.
 - Plugin migrations: parity-oriented proof against current handler behavior plus existing worker smoke paths.
+- Plugin ownership changes: unit proof for canonical module imports plus compatibility-path search showing no remaining `task_engine.pipeline_plugins` imports.
 
 ## Update triggers
 

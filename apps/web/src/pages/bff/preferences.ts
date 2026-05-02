@@ -1,15 +1,12 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import {
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
 } from "../../lib/server/browser-flow";
 import { getPool } from "../../lib/server/db";
-import { readRequestPayload } from "../../lib/server/request";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession
-} from "../../lib/server/auth";
+import { resolveWebSession } from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 
 export const prerender = false;
 export const GET: APIRoute = async ({ request }) => {
@@ -57,21 +54,18 @@ function readOptionalBoolean(value: unknown): boolean | null {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const session = await resolveWebSession(request);
+  const action = await prepareWebAction(request, {
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS.preferences,
+    payloadBoundaryName: "preferences payload",
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+  const { browserRequest, payload, session } = action.context;
   if (!session) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please start a session to continue.",
-        setCookie: buildExpiredSessionCookie()
-      });
-    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const payload = await readRequestPayload(request);
   const themePreference = String(payload.themePreference ?? "system");
   if (!["light", "dark", "system"].includes(themePreference)) {
     if (browserRequest) {

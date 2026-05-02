@@ -15,6 +15,7 @@ import {
   runCompose,
   selectAdminEmail,
   createWaitFor,
+  firstResultLine,
   sqlLiteral,
   waitForHttpHealth,
 } from "./lib/compose-proof-testkit.mjs";
@@ -147,8 +148,9 @@ async function runViewportScenario({
 
     const page = await context.newPage();
     log(`Running ${viewport.name} viewport checks.`);
+    const articleSearchParam = encodeURIComponent(articleTitle);
 
-    await openPage(page, "http://127.0.0.1:4321/", "NewsPortal");
+    await openPage(page, `http://127.0.0.1:4321/?q=${articleSearchParam}`, "NewsPortal");
     await waitForVisible(page.getByText(articleTitle), `collection article title on ${viewport.name}`);
     await assertVisibleAction(
       page,
@@ -165,7 +167,7 @@ async function runViewportScenario({
       await page.waitForURL("**/matches");
     }
 
-    await openPage(page, "http://127.0.0.1:4321/matches", "My Matches");
+    await openPage(page, `http://127.0.0.1:4321/matches?q=${articleSearchParam}`, "My Matches");
     await waitForVisible(page.getByText(articleTitle), `matches article title on ${viewport.name}`);
     await assertVisibleAction(
       page,
@@ -444,6 +446,210 @@ async function main() {
     const docId = articleRow[0];
     const contentItemId = `editorial:${docId}`;
 
+    firstResultLine(queryPostgres(
+      env,
+      `
+        with article_cluster as (
+          select
+            doc_id,
+            coalesce(event_cluster_id, gen_random_uuid()) as cluster_id,
+            title,
+            published_at
+          from articles
+          where doc_id = ${sqlLiteral(docId)}::uuid
+        ),
+        upsert_cluster as (
+          insert into event_clusters (
+            cluster_id,
+            article_count,
+            primary_title,
+            min_published_at,
+            max_published_at
+          )
+          select
+            cluster_id,
+            1,
+            title,
+            published_at,
+            published_at
+          from article_cluster
+          on conflict (cluster_id) do update
+          set
+            article_count = greatest(event_clusters.article_count, 1),
+            primary_title = coalesce(event_clusters.primary_title, excluded.primary_title),
+            min_published_at = coalesce(event_clusters.min_published_at, excluded.min_published_at),
+            max_published_at = coalesce(event_clusters.max_published_at, excluded.max_published_at),
+            updated_at = now()
+          returning cluster_id
+        ),
+        upsert_member as (
+          insert into event_cluster_members (cluster_id, doc_id)
+          select cluster_id, doc_id
+          from article_cluster
+          on conflict (doc_id) do update
+          set cluster_id = excluded.cluster_id
+          returning doc_id
+        )
+        update articles a
+        set
+          processing_state = 'matched',
+          visibility_state = 'visible',
+          canonical_doc_id = null,
+          family_id = article_cluster.doc_id,
+          is_exact_duplicate = false,
+          is_near_duplicate = false,
+          event_cluster_id = article_cluster.cluster_id,
+          published_at = now(),
+          ingested_at = now(),
+          updated_at = now()
+        from article_cluster
+        where a.doc_id = article_cluster.doc_id;
+
+        insert into system_feed_results (
+          doc_id,
+          decision,
+          eligible_for_feed,
+          total_criteria_count,
+          relevant_criteria_count,
+          irrelevant_criteria_count,
+          pending_llm_criteria_count,
+          explain_json
+        )
+        values (
+          ${sqlLiteral(docId)}::uuid,
+          'eligible',
+          true,
+          1,
+          1,
+          0,
+          0,
+          jsonb_build_object('source', 'web-viewports-seed', 'runId', ${sqlLiteral(runId)})
+        )
+        on conflict (doc_id) do update
+        set
+          decision = excluded.decision,
+          eligible_for_feed = excluded.eligible_for_feed,
+          total_criteria_count = excluded.total_criteria_count,
+          relevant_criteria_count = excluded.relevant_criteria_count,
+          irrelevant_criteria_count = excluded.irrelevant_criteria_count,
+          pending_llm_criteria_count = excluded.pending_llm_criteria_count,
+          explain_json = excluded.explain_json,
+          updated_at = now();
+
+        insert into final_selection_results (
+          doc_id,
+          final_decision,
+          is_selected,
+          compat_system_feed_decision,
+          total_filter_count,
+          matched_filter_count,
+          no_match_filter_count,
+          gray_zone_filter_count,
+          technical_filtered_out_count,
+          explain_json
+        )
+        values (
+          ${sqlLiteral(docId)}::uuid,
+          'selected',
+          true,
+          'eligible',
+          1,
+          1,
+          0,
+          0,
+          0,
+          jsonb_build_object(
+            'source',
+            'web-viewports-seed',
+            'selectionMode',
+            'browser_smoke_seed',
+            'selectionReason',
+            'Deterministic viewport browser proof seed.',
+            'runId',
+            ${sqlLiteral(runId)}
+          )
+        )
+        on conflict (doc_id) do update
+        set
+          final_decision = excluded.final_decision,
+          is_selected = excluded.is_selected,
+          compat_system_feed_decision = excluded.compat_system_feed_decision,
+          total_filter_count = excluded.total_filter_count,
+          matched_filter_count = excluded.matched_filter_count,
+          no_match_filter_count = excluded.no_match_filter_count,
+          gray_zone_filter_count = excluded.gray_zone_filter_count,
+          technical_filtered_out_count = excluded.technical_filtered_out_count,
+          explain_json = excluded.explain_json,
+          updated_at = now();
+
+        insert into interest_match_results (
+          doc_id,
+          user_id,
+          interest_id,
+          event_cluster_id,
+          score_pos,
+          score_neg,
+          score_meta,
+          score_novel,
+          score_interest,
+          score_user,
+          decision,
+          explain_json
+        )
+        select
+          a.doc_id,
+          ${sqlLiteral(userId)}::uuid,
+          ${sqlLiteral(userInterestId)}::uuid,
+          a.event_cluster_id,
+          0.98,
+          0.01,
+          0.91,
+          0.77,
+          0.97,
+          0.97,
+          'notify',
+          jsonb_build_object('source', 'web-viewports-seed', 'runId', ${sqlLiteral(runId)})
+        from articles a
+        where a.doc_id = ${sqlLiteral(docId)}::uuid
+        on conflict (doc_id, interest_id) do update
+        set
+          user_id = excluded.user_id,
+          event_cluster_id = excluded.event_cluster_id,
+          score_pos = excluded.score_pos,
+          score_neg = excluded.score_neg,
+          score_meta = excluded.score_meta,
+          score_novel = excluded.score_novel,
+          score_interest = excluded.score_interest,
+          score_user = excluded.score_user,
+          decision = excluded.decision,
+          explain_json = excluded.explain_json,
+          created_at = now();
+
+        insert into notification_log (
+          user_id,
+          interest_id,
+          doc_id,
+          channel_type,
+          status,
+          title,
+          body,
+          decision_reason,
+          delivery_payload_json
+        )
+        values (
+          ${sqlLiteral(userId)}::uuid,
+          ${sqlLiteral(userInterestId)}::uuid,
+          ${sqlLiteral(docId)}::uuid,
+          'telegram',
+          'sent',
+          ${sqlLiteral(`Viewport notification ${runId}`)},
+          ${sqlLiteral("Deterministic notification row for responsive browser proof.")},
+          'seeded_viewport_smoke',
+          '{}'::jsonb
+        );
+      `
+    ));
+
     await waitFor(
       "matched article visibility for viewport smoke",
       async () =>
@@ -459,7 +665,10 @@ async function main() {
     );
     await waitFor(
       "system-selected collection row for viewport smoke",
-      async () => fetchJson("http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=20"),
+      async () =>
+        fetchJson(
+          `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(articleTitle)}`
+        ),
       (payload) =>
         Array.isArray(payload?.items) &&
         payload.items.some((item) => String(item?.content_item_id ?? "") === contentItemId)
@@ -515,6 +724,44 @@ async function main() {
     );
 
     for (const viewport of VIEWPORTS) {
+      firstResultLine(queryPostgres(
+        env,
+        `
+          update articles
+          set
+            processing_state = 'matched',
+            published_at = now(),
+            ingested_at = now(),
+            updated_at = now()
+          where doc_id = ${sqlLiteral(docId)}::uuid;
+
+          update system_feed_results
+          set
+            decision = 'eligible',
+            eligible_for_feed = true,
+            explain_json = jsonb_build_object('source', 'web-viewports-seed-reassert', 'runId', ${sqlLiteral(runId)}),
+            updated_at = now()
+          where doc_id = ${sqlLiteral(docId)}::uuid;
+
+          update final_selection_results
+          set
+            final_decision = 'selected',
+            is_selected = true,
+            compat_system_feed_decision = 'eligible',
+            explain_json = jsonb_build_object(
+              'source',
+              'web-viewports-seed-reassert',
+              'selectionMode',
+              'browser_smoke_seed',
+              'selectionReason',
+              'Deterministic viewport browser proof seed.',
+              'runId',
+              ${sqlLiteral(runId)}
+            ),
+            updated_at = now()
+          where doc_id = ${sqlLiteral(docId)}::uuid;
+        `
+      ));
       await runViewportScenario({
         viewport,
         webCookie,

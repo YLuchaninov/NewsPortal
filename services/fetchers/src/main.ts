@@ -3,9 +3,13 @@ import Fastify from "fastify";
 import { loadFetchersConfig } from "./config";
 import { checkPostgres, createPgPool } from "./db";
 import { ArticleEnrichmentService } from "./enrichment";
+import { probeFeedsForDiscovery } from "./feed-probe";
 import { ResourceEnrichmentService } from "./resource-enrichment";
 import { RssFetcherService } from "./fetchers";
+import { validateUrlsForDiscovery } from "./url-validation";
 import { probeWebsitesForDiscovery } from "./web-ingestion";
+
+const MAX_DISCOVERY_PROBE_URLS = 10;
 
 const config = loadFetchersConfig();
 const pool = createPgPool(config);
@@ -81,13 +85,98 @@ app.post<{ Params: { resourceId: string }; Body: { force?: boolean } }>(
 );
 
 app.post<{ Body: { urls?: unknown; sampleCount?: unknown } }>(
+  "/internal/discovery/feeds/probe",
+  async (request, reply) => {
+    const rawUrls = Array.isArray(request.body?.urls) ? request.body?.urls : [];
+    const urls = Array.from(
+      new Set(
+        rawUrls
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, MAX_DISCOVERY_PROBE_URLS);
+    const sampleCount =
+      typeof request.body?.sampleCount === "number" && Number.isFinite(request.body.sampleCount)
+        ? Math.max(1, Math.min(10, Math.round(request.body.sampleCount)))
+        : 3;
+    if (urls.length === 0) {
+      reply.code(400);
+      return {
+        probed_feeds: [],
+        error: "Discovery feed probe requires at least one URL.",
+      };
+    }
+
+    try {
+      return await probeFeedsForDiscovery({
+        urls,
+        sampleCount,
+        userAgent: config.defaultUserAgent,
+        timeoutMs: config.defaultRequestTimeoutMs,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Discovery feed probe failed.";
+      app.log.error({ error, urls }, "Fetchers discovery feed probe route failed.");
+      reply.code(400);
+      return {
+        probed_feeds: [],
+        error: message,
+      };
+    }
+  }
+);
+
+app.post<{ Body: { urls?: unknown } }>(
+  "/internal/discovery/urls/validate",
+  async (request, reply) => {
+    const rawUrls = Array.isArray(request.body?.urls) ? request.body?.urls : [];
+    const urls = Array.from(
+      new Set(
+        rawUrls
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, MAX_DISCOVERY_PROBE_URLS);
+    if (urls.length === 0) {
+      reply.code(400);
+      return {
+        validated_urls: [],
+        error: "Discovery URL validation requires at least one URL.",
+      };
+    }
+
+    try {
+      return await validateUrlsForDiscovery({
+        urls,
+        userAgent: config.defaultUserAgent,
+        timeoutMs: config.defaultRequestTimeoutMs,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Discovery URL validation failed.";
+      app.log.error({ error, urls }, "Fetchers discovery URL validation route failed.");
+      reply.code(400);
+      return {
+        validated_urls: [],
+        error: message,
+      };
+    }
+  }
+);
+
+app.post<{ Body: { urls?: unknown; sampleCount?: unknown } }>(
   "/internal/discovery/websites/probe",
   async (request, reply) => {
     const rawUrls = Array.isArray(request.body?.urls) ? request.body?.urls : [];
-    const urls = rawUrls
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => value.trim())
-      .filter(Boolean);
+    const urls = Array.from(
+      new Set(
+        rawUrls
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, MAX_DISCOVERY_PROBE_URLS);
     const sampleCount =
       typeof request.body?.sampleCount === "number" && Number.isFinite(request.body.sampleCount)
         ? Math.max(1, Math.min(10, Math.round(request.body.sampleCount)))

@@ -6,7 +6,7 @@ from .runtime_values import coerce_bool
 
 
 async def process_article_extract(job: Any, _job_token: str) -> dict[str, Any]:
-    from .task_engine.pipeline_plugins import ArticleExtractPlugin
+    from .task_engine.pipeline_enrichment_plugins import ArticleExtractPlugin
 
     plugin = ArticleExtractPlugin()
     event_id = str(job.data.get("eventId"))

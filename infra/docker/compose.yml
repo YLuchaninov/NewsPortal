@@ -36,7 +36,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/relay.Dockerfile
-    command: ["pnpm", "db:migrate"]
+    command: ["node", "services/relay/dist/cli/migrate.mjs"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-newsportal}
       POSTGRES_USER: ${POSTGRES_USER:-newsportal}
@@ -56,7 +56,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/relay.Dockerfile
-    command: ["pnpm", "--filter", "@newsportal/relay", "start"]
+    command: ["node", "services/relay/dist/main.mjs"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-newsportal}
       POSTGRES_USER: ${POSTGRES_USER:-newsportal}
@@ -90,7 +90,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/fetchers.Dockerfile
-    command: ["pnpm", "--filter", "@newsportal/fetchers", "start"]
+    command: ["node", "services/fetchers/dist/main.mjs"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-newsportal}
       POSTGRES_USER: ${POSTGRES_USER:-newsportal}
@@ -103,6 +103,7 @@ services:
       FETCHERS_CONCURRENCY: ${FETCHERS_CONCURRENCY:-4}
       FETCHERS_REQUEST_TIMEOUT_MS: ${FETCHERS_REQUEST_TIMEOUT_MS:-10000}
       FETCHERS_USER_AGENT: ${FETCHERS_USER_AGENT:-NewsPortalFetchers/0.1 (+https://newsportal.local)}
+      FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST: ${FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST:-}
       IMAP_HOST: ${IMAP_HOST:-}
       IMAP_PORT: ${IMAP_PORT:-993}
       IMAP_USERNAME: ${IMAP_USERNAME:-}
@@ -124,6 +125,9 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/python-app.Dockerfile
+      args:
+        PYTHON_APP_UID: ${PYTHON_APP_UID:-10001}
+        PYTHON_APP_GID: ${PYTHON_APP_GID:-10001}
     working_dir: /workspace/services/workers
     command: ["python", "-m", "app.main"]
     volumes:
@@ -136,8 +140,8 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
-      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-auto}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-hash://deterministic/384}
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-hash}
       EMBEDDING_HASH_DIMENSIONS: ${EMBEDDING_HASH_DIMENSIONS:-384}
       MODEL_CACHE_DIR: ${MODEL_CACHE_DIR:-/workspace/data/models}
       HNSW_INDEX_ROOT: ${HNSW_INDEX_ROOT:-/workspace/data/indices}
@@ -161,6 +165,8 @@ services:
       DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD: ${DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD:-}
       DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD: ${DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD:-}
       DISCOVERY_MONTHLY_BUDGET_CENTS: ${DISCOVERY_MONTHLY_BUDGET_CENTS:-0}
+      FETCHERS_INTERNAL_BASE_URL: ${FETCHERS_INTERNAL_BASE_URL:-http://fetchers:4100}
+      FETCHERS_INTERNAL_TIMEOUT_SECONDS: ${FETCHERS_INTERNAL_TIMEOUT_SECONDS:-30}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       EMAIL_DIGEST_SMTP_URL: ${EMAIL_DIGEST_SMTP_URL:-}
       EMAIL_DIGEST_FROM: ${EMAIL_DIGEST_FROM:-alerts@newsportal.local}
@@ -195,6 +201,9 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/python-app.Dockerfile
+      args:
+        PYTHON_APP_UID: ${PYTHON_APP_UID:-10001}
+        PYTHON_APP_GID: ${PYTHON_APP_GID:-10001}
     working_dir: /workspace/services/api
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
@@ -245,12 +254,15 @@ services:
       dockerfile: infra/docker/web.Dockerfile
       args:
         NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
-    command: ["pnpm", "--filter", "@newsportal/web", "start"]
+    command: ["node", "apps/web/dist/server/entry.mjs"]
     environment:
+      HOST: 0.0.0.0
+      PORT: ${WEB_PORT:-4321}
       WEB_PORT: ${WEB_PORT:-4321}
       NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
       NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
       NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+      NEWSPORTAL_COOKIE_SECURE_POLICY: ${NEWSPORTAL_COOKIE_SECURE_POLICY:-auto}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
       WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
@@ -276,12 +288,15 @@ services:
       dockerfile: infra/docker/admin.Dockerfile
       args:
         NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
-    command: ["pnpm", "--filter", "@newsportal/admin", "start"]
+    command: ["node", "apps/admin/dist/server/entry.mjs"]
     environment:
+      HOST: 0.0.0.0
+      PORT: ${ADMIN_PORT:-4322}
       ADMIN_PORT: ${ADMIN_PORT:-4322}
       NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
       NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
       NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+      NEWSPORTAL_COOKIE_SECURE_POLICY: ${NEWSPORTAL_COOKIE_SECURE_POLICY:-auto}
       DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-0}
       DISCOVERY_CRON: ${DISCOVERY_CRON:-0 */6 * * *}
       DISCOVERY_SEARCH_PROVIDER: ${DISCOVERY_SEARCH_PROVIDER:-ddgs}
@@ -309,7 +324,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/mcp.Dockerfile
-    command: ["pnpm", "--filter", "@newsportal/mcp", "start"]
+    command: ["node", "services/mcp/dist/main.mjs"]
     environment:
       MCP_PORT: ${MCP_PORT:-4300}
       NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}

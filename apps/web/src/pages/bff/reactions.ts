@@ -1,34 +1,27 @@
 import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import {
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
 } from "../../lib/server/browser-flow";
 import { getPool } from "../../lib/server/db";
-import { readRequestPayload } from "../../lib/server/request";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession
-} from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const session = await resolveWebSession(request);
+  const action = await prepareWebAction(request, {
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS.reactions,
+    payloadBoundaryName: "reactions payload",
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+  const { browserRequest, payload, session } = action.context;
   if (!session) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please start a session to continue.",
-        setCookie: buildExpiredSessionCookie()
-      });
-    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const payload = await readRequestPayload(request);
   const docId = String(payload.docId ?? "");
   const reactionType = String(payload.reactionType ?? "");
   if (!docId || !["like", "dislike"].includes(reactionType)) {

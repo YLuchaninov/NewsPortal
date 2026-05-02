@@ -6,6 +6,12 @@
 
 External source model keeps `provider_type = rss`; Reddit, Hacker News, Google News and similar aggregators are handled by internal `FeedIngressAdapter` strategies inside fetchers.
 
+Feed parsing and discovery normalization are fetchers-owned. Workers may orchestrate discovery, but live feed probing should call the fetchers internal feed probe contract rather than maintain a second parser with materially different URL/date/content semantics.
+
+Fetchers feed/website probe endpoints are untrusted URL boundaries. Probe targets and final redirect URLs must pass the fetchers URL guard before any network result is trusted: only `http`/`https`, no credentials, no malformed/protocol-relative/overlong URLs, and no localhost/private/link-local/reserved IP literals. Batch probe endpoints must dedupe URLs and cap each request batch.
+
+The canonical parser module is `services/fetchers/src/feed-parser/index.ts` plus its owner helpers. Do not recreate internal compatibility re-export files for old feed-parser import paths.
+
 ## Strategy set
 
 - `generic`: baseline RSS/Atom/JSON Feed path.
@@ -41,6 +47,8 @@ External source model keeps `provider_type = rss`; Reddit, Hacker News, Google N
 ## Proof expectations
 
 - TS unit coverage for config parse/inference and normalization.
+- Shared parser/probe conformance coverage for RSS, Atom, RDF and JSON Feed edge cases that affect discovery/ingest parity.
+- Probe safety coverage for unsafe URL rejection, redirect revalidation, parser-based HTML alternate discovery, dedupe and batch limits.
 - Deterministic smoke/fixture proof for Reddit/HN/Google.
 - Regression proof that generic RSS remains working.
 - Live internet is not required for closeout.

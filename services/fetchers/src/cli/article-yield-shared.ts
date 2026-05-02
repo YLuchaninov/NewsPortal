@@ -1,16 +1,16 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
 import { loadFetchersConfig } from "../config";
 import { createPgPool } from "../db";
+import { findRepoRoot } from "../runtime-paths";
 
-const cliDir = path.dirname(fileURLToPath(import.meta.url));
-export const repoRoot = path.resolve(cliDir, "..", "..", "..", "..");
 const DEFAULT_ENV_FILE = ".env.dev";
 const HOST_EXPR = "split_part(split_part(sc.fetch_url, '://', 2), '/', 1)";
+
+export const repoRoot = await findRepoRoot();
 
 type JsonRecord = Record<string, unknown>;
 

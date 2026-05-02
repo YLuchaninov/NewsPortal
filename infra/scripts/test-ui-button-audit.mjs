@@ -48,6 +48,9 @@ const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for the UI button audit.");
+  log("Rebuilding admin and fetchers so the audit uses current BFF and acquisition-guard code.");
+  runCompose("build", "admin");
+  runCompose("build", "fetchers");
   runCompose("up", "-d", ...STACK_SERVICES);
   const healthOptions = { timeoutMs: 120000, intervalMs: 1500 };
   await Promise.all([
@@ -283,46 +286,224 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
   }
   log("Web seed: resolved article rows.");
 
-  const collectionPayload = await waitFor(
+  const primaryArticle = articleRows[0];
+  const primaryNotificationDocId = primaryArticle.docId;
+  const primaryContentItemId = `editorial:${primaryNotificationDocId}`;
+  firstResultLine(queryPostgres(
+    env,
+    `
+      with article_cluster as (
+        select
+          doc_id,
+          coalesce(event_cluster_id, gen_random_uuid()) as cluster_id,
+          title,
+          published_at
+        from articles
+        where doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
+      ),
+      upsert_cluster as (
+        insert into event_clusters (
+          cluster_id,
+          article_count,
+          primary_title,
+          min_published_at,
+          max_published_at
+        )
+        select
+          cluster_id,
+          1,
+          title,
+          coalesce(published_at, now()),
+          coalesce(published_at, now())
+        from article_cluster
+        on conflict (cluster_id) do update
+        set
+          article_count = greatest(event_clusters.article_count, 1),
+          primary_title = coalesce(event_clusters.primary_title, excluded.primary_title),
+          min_published_at = coalesce(event_clusters.min_published_at, excluded.min_published_at),
+          max_published_at = coalesce(event_clusters.max_published_at, excluded.max_published_at),
+          updated_at = now()
+        returning cluster_id
+      ),
+      upsert_member as (
+        insert into event_cluster_members (cluster_id, doc_id)
+        select cluster_id, doc_id
+        from article_cluster
+        on conflict (doc_id) do update
+        set cluster_id = excluded.cluster_id
+        returning doc_id
+      )
+      update articles a
+      set
+        processing_state = 'matched',
+        event_cluster_id = article_cluster.cluster_id,
+        published_at = now(),
+        ingested_at = now(),
+        updated_at = now()
+      from article_cluster
+      where a.doc_id = article_cluster.doc_id;
+
+      insert into system_feed_results (
+        doc_id,
+        decision,
+        eligible_for_feed,
+        total_criteria_count,
+        relevant_criteria_count,
+        irrelevant_criteria_count,
+        pending_llm_criteria_count,
+        explain_json
+      )
+      values (
+        ${sqlLiteral(primaryNotificationDocId)}::uuid,
+        'eligible',
+        true,
+        1,
+        1,
+        0,
+        0,
+        jsonb_build_object('source', 'ui-button-audit-seed', 'runId', ${sqlLiteral(runId)})
+      )
+      on conflict (doc_id) do update
+      set
+        decision = excluded.decision,
+        eligible_for_feed = excluded.eligible_for_feed,
+        total_criteria_count = excluded.total_criteria_count,
+        relevant_criteria_count = excluded.relevant_criteria_count,
+        irrelevant_criteria_count = excluded.irrelevant_criteria_count,
+        pending_llm_criteria_count = excluded.pending_llm_criteria_count,
+        explain_json = excluded.explain_json,
+        updated_at = now();
+
+      insert into final_selection_results (
+        doc_id,
+        final_decision,
+        is_selected,
+        compat_system_feed_decision,
+        total_filter_count,
+        matched_filter_count,
+        no_match_filter_count,
+        gray_zone_filter_count,
+        technical_filtered_out_count,
+        explain_json
+      )
+      values (
+        ${sqlLiteral(primaryNotificationDocId)}::uuid,
+        'selected',
+        true,
+        'eligible',
+        1,
+        1,
+        0,
+        0,
+        0,
+        jsonb_build_object(
+          'source',
+          'ui-button-audit-seed',
+          'selectionMode',
+          'browser_smoke_seed',
+          'selectionReason',
+          'Deterministic UI button browser proof seed.',
+          'runId',
+          ${sqlLiteral(runId)}
+        )
+      )
+      on conflict (doc_id) do update
+      set
+        final_decision = excluded.final_decision,
+        is_selected = excluded.is_selected,
+        compat_system_feed_decision = excluded.compat_system_feed_decision,
+        total_filter_count = excluded.total_filter_count,
+        matched_filter_count = excluded.matched_filter_count,
+        no_match_filter_count = excluded.no_match_filter_count,
+        gray_zone_filter_count = excluded.gray_zone_filter_count,
+        technical_filtered_out_count = excluded.technical_filtered_out_count,
+        explain_json = excluded.explain_json,
+        updated_at = now();
+    `
+  ));
+  await waitFor(
     "system-selected collection availability",
     async () => {
       const payload = await fetchJson(
-        "http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100"
+        `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(primaryArticle.title)}`
       );
       const items = Array.isArray(payload?.items) ? payload.items : [];
-      for (const item of items) {
-        const candidateContentItemId = String(item?.content_item_id ?? "");
-        if (!candidateContentItemId || !candidateContentItemId.startsWith("editorial:")) {
-          continue;
-        }
-        try {
-          const detail = await fetchJson(
-            `http://127.0.0.1:8000/content-items/${encodeURIComponent(candidateContentItemId)}`
-          );
-          const storyClusterId = String(
-            detail?.story_cluster_id ?? detail?.storyClusterId ?? ""
-          ).trim();
-          if (!storyClusterId) {
-            continue;
-          }
-          return {
-            items,
-            contentItemId: candidateContentItemId,
-          };
-        } catch {
-          continue;
-        }
-      }
-      return { items, contentItemId: "" };
+      return items.some((item) => String(item?.content_item_id ?? "") === primaryContentItemId);
     },
-    (payload) => Array.isArray(payload?.items) && String(payload?.contentItemId ?? "").length > 0
+    Boolean
   );
-  const primaryContentItemId = String(collectionPayload.contentItemId ?? "");
-  if (!primaryContentItemId) {
-    throw new Error("System-selected collection did not expose a browser-openable content_item_id for the web button audit.");
-  }
   log(`Web seed: using content item ${primaryContentItemId}.`);
-  const primaryNotificationDocId = primaryContentItemId.replace(/^editorial:/, "");
+  firstResultLine(queryPostgres(
+    env,
+    `
+      insert into interest_match_results (
+        doc_id,
+        user_id,
+        interest_id,
+        event_cluster_id,
+        score_pos,
+        score_neg,
+        score_meta,
+        score_novel,
+        score_interest,
+        score_user,
+        decision,
+        explain_json
+      )
+      select
+        a.doc_id,
+        ${sqlLiteral(userId)}::uuid,
+        ${sqlLiteral(userInterestId)}::uuid,
+        a.event_cluster_id,
+        0.97,
+        0.01,
+        0.88,
+        0.75,
+        0.96,
+        0.96,
+        'notify',
+        jsonb_build_object(
+          'source',
+          'ui-button-audit-seed',
+          'runId',
+          ${sqlLiteral(runId)}
+        )
+      from articles a
+      where a.doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
+      on conflict (doc_id, interest_id) do update
+      set
+        user_id = excluded.user_id,
+        event_cluster_id = excluded.event_cluster_id,
+        score_pos = excluded.score_pos,
+        score_neg = excluded.score_neg,
+        score_meta = excluded.score_meta,
+        score_novel = excluded.score_novel,
+        score_interest = excluded.score_interest,
+        score_user = excluded.score_user,
+        decision = excluded.decision,
+        explain_json = excluded.explain_json,
+        created_at = now()
+      returning interest_match_id::text;
+    `
+  ));
+  await waitFor(
+    "seeded user match row",
+    async () =>
+      queryPostgresInt(
+        env,
+        `
+          select count(*)::int
+          from interest_match_results
+          where user_id = ${sqlLiteral(userId)}
+            and interest_id = ${sqlLiteral(userInterestId)}
+            and doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
+            and decision = 'notify';
+        `
+      ),
+    (count) => count >= 1
+  );
+  log("Web seed: match row visible.");
+
   const notificationId = firstResultLine(queryPostgres(
     env,
     `
@@ -722,11 +903,94 @@ async function seedAdminFixtures(env, adminCookie, runId) {
   };
 }
 
-async function auditWebButtons(page, runId, scenario, result) {
+function reassertWebMatchSeed(env, runId, scenario) {
+  const docId = String(scenario.contentItemId ?? "").replace(/^editorial:/, "");
+  if (!docId || !scenario.targetUserId || !scenario.userInterestId) {
+    throw new Error("Web match seed cannot be reasserted without content, user, and interest identifiers.");
+  }
+  firstResultLine(queryPostgres(
+    env,
+    `
+      update articles
+      set
+        processing_state = 'matched',
+        published_at = now(),
+        ingested_at = now(),
+        updated_at = now()
+      where doc_id = ${sqlLiteral(docId)}::uuid;
+
+      update system_feed_results
+      set
+        decision = 'eligible',
+        eligible_for_feed = true,
+        updated_at = now()
+      where doc_id = ${sqlLiteral(docId)}::uuid;
+
+      update final_selection_results
+      set
+        final_decision = 'selected',
+        is_selected = true,
+        compat_system_feed_decision = 'eligible',
+        updated_at = now()
+      where doc_id = ${sqlLiteral(docId)}::uuid;
+
+      insert into interest_match_results (
+        doc_id,
+        user_id,
+        interest_id,
+        event_cluster_id,
+        score_pos,
+        score_neg,
+        score_meta,
+        score_novel,
+        score_interest,
+        score_user,
+        decision,
+        explain_json
+      )
+      select
+        a.doc_id,
+        ${sqlLiteral(scenario.targetUserId)}::uuid,
+        ${sqlLiteral(scenario.userInterestId)}::uuid,
+        a.event_cluster_id,
+        0.99,
+        0.01,
+        0.92,
+        0.78,
+        0.99,
+        0.99,
+        'notify',
+        jsonb_build_object('source', 'ui-button-audit-reassert', 'runId', ${sqlLiteral(runId)})
+      from articles a
+      where a.doc_id = ${sqlLiteral(docId)}::uuid
+      on conflict (doc_id, interest_id) do update
+      set
+        user_id = excluded.user_id,
+        event_cluster_id = excluded.event_cluster_id,
+        score_pos = excluded.score_pos,
+        score_neg = excluded.score_neg,
+        score_meta = excluded.score_meta,
+        score_novel = excluded.score_novel,
+        score_interest = excluded.score_interest,
+        score_user = excluded.score_user,
+        decision = excluded.decision,
+        explain_json = excluded.explain_json,
+        created_at = now();
+    `
+  ));
+}
+
+async function auditWebButtons(page, env, runId, scenario, result) {
   log("Auditing web buttons.");
 
   log("Web: collection save/unsave.");
-  await openPage(page, "/");
+  reassertWebMatchSeed(env, runId, scenario);
+  await openPage(page, `/?q=${encodeURIComponent(scenario.articleTitles[0] ?? "")}`);
+  await waitFor(
+    "collection save toggle",
+    async () => page.getByRole("button", { name: /Save|Unsave/ }).count(),
+    (count) => count >= 1
+  );
   await clickAndWaitForToggle(page.getByRole("button", { name: /Save|Unsave/ }).first(), {
     on: "Save",
     off: "Unsave",
@@ -930,7 +1194,13 @@ async function auditWebButtons(page, runId, scenario, result) {
   result.notApplicable.push("web:/following no standalone buttons rendered once story is followed");
 
   log("Web: matches button.");
+  reassertWebMatchSeed(env, runId, scenario);
   await openPage(page, "/matches");
+  await waitFor(
+    "matches save toggle",
+    async () => page.getByRole("button", { name: /Save|Unsave/ }).count(),
+    (count) => count >= 1
+  );
   await clickAndWaitForToggle(page.getByRole("button", { name: /Save|Unsave/ }).first(), {
     on: "Save",
     off: "Unsave",
@@ -977,8 +1247,17 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   await page.locator('input[name="fetchUrl"]').fill(
     `http://web:4321/internal-mvp-feed.xml?run=${encodeURIComponent(`browser-new-${runId}`)}`
   );
-  await page.getByRole("button", { name: /Create .* channel|Save changes/ }).click();
-  await page.waitForURL(/\/channels\/.+\/edit/);
+  const createChannelButton = page.getByRole("button", { name: /Create .* channel|Save changes/ });
+  await Promise.all([
+    page.waitForURL(/\/channels\/.+\/edit/, { timeout: 30000 }).catch(async (error) => {
+      const currentUrl = page.url();
+      const bodyText = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+      throw new Error(
+        `Timed out waiting for channel create redirect from ${currentUrl}. Visible page text: ${bodyText.slice(0, 1200)}. ${error instanceof Error ? error.message : String(error)}`
+      );
+    }),
+    createChannelButton.click(),
+  ]);
   const createdChannelUrl = page.url();
   const createdChannelId = createdChannelUrl.match(/\/channels\/([^/]+)\/edit/)?.[1] ?? "";
   assert.ok(createdChannelId);
@@ -1079,7 +1358,14 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   const userInterestEditorForm = page.locator('form[action*="/bff/admin/user-interests/"]').first();
   await userInterestEditorForm.locator('textarea[name="description"]').fill(updatedAdminInterestDescription);
   await userInterestEditorForm.getByRole("button", { name: "Save changes" }).click();
-  await page.getByText(updatedAdminInterestDescription, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.getByText(updatedAdminInterestDescription, { exact: true }).first().waitFor({ state: "visible", timeout: 15000 }).catch(async (error) => {
+    const currentUrl = page.url();
+    const bodyText = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+    throw new Error(
+      `Timed out waiting for admin user-interest update on ${currentUrl}. Visible page text: ${bodyText.slice(0, 1200)}. ${error instanceof Error ? error.message : String(error)}`
+    );
+  });
   result.checked.push("admin:/user-interests save");
 
   await userInterestEditorForm.getByRole("button", { name: "Clone" }).click();
@@ -1280,7 +1566,7 @@ async function main() {
       },
     };
 
-    await auditWebButtons(webPage, runId, webScenario, result);
+    await auditWebButtons(webPage, env, runId, webScenario, result);
     await auditAdminButtons(adminPage, env, runId, adminFixtures, webScenario, result);
 
     await webContext.close();

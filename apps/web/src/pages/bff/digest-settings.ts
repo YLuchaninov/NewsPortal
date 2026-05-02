@@ -1,11 +1,9 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import { getPool } from "../../lib/server/db";
-import { readRequestPayload } from "../../lib/server/request";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession,
-} from "../../lib/server/auth";
+import { resolveWebSession } from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 import {
   loadDigestSettings,
   saveDigestSettings,
@@ -24,24 +22,24 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  const session = await resolveWebSession(request);
+  const action = await prepareWebAction(request, {
+    authSetCookie: true,
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["digest-settings"],
+    payloadBoundaryName: "digest-settings payload",
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+  const { payload, session } = action.context;
   if (!session) {
-    return Response.json(
-      { error: "Unauthorized." },
-      {
-        status: 401,
-        headers: {
-          "Set-Cookie": buildExpiredSessionCookie(),
-        },
-      }
-    );
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   try {
     const digestSettings = await saveDigestSettings(
       getPool(),
       session.userId,
-      await readRequestPayload(request)
+      payload
     );
     return Response.json({ updated: true, digestSettings });
   } catch (error) {

@@ -420,8 +420,99 @@ export function extractCookie(setCookies) {
   return cookie.split(";")[0];
 }
 
+const adminActionTokenCache = new Map();
+const adminActionScopes = new Map([
+  ["/bff/admin/articles/enrichment-retry", "articles.enrichment-retry"],
+  ["/bff/admin/automation", "automation"],
+  ["/bff/admin/channels", "channels"],
+  ["/bff/admin/channels/bulk", "channels.bulk"],
+  ["/bff/admin/channels/bulk/preflight", "channels.bulk.preflight"],
+  ["/bff/admin/channels/schedule", "channels.schedule"],
+  ["/bff/admin/content-analysis", "content-analysis"],
+  ["/bff/admin/content-analysis-policies", "content-analysis-policies"],
+  ["/bff/admin/content-filter-policies", "content-filter-policies"],
+  ["/bff/admin/discovery", "discovery"],
+  ["/bff/admin/mcp-tokens", "mcp-tokens"],
+  ["/bff/admin/moderation", "moderation"],
+  ["/bff/admin/reindex", "reindex"],
+  ["/bff/admin/templates", "templates"],
+  ["/bff/admin/user-interests", "user-interests"],
+]);
+
+function normalizeAdminActionPath(value) {
+  const pathname = new URL(value, "http://127.0.0.1").pathname;
+  if (pathname === "/admin") {
+    return "/";
+  }
+  if (pathname.startsWith("/admin/bff/")) {
+    return pathname.slice("/admin".length);
+  }
+  if (pathname.startsWith("/admin/")) {
+    return pathname.slice("/admin".length) || "/";
+  }
+  return pathname.startsWith("/") ? pathname : `/${pathname}`;
+}
+
+function resolveAdminActionScope(url) {
+  const pathname = normalizeAdminActionPath(url);
+  const exact = adminActionScopes.get(pathname);
+  if (exact) {
+    return exact;
+  }
+  if (pathname.startsWith("/bff/admin/user-interests/")) {
+    return "user-interests";
+  }
+  return "";
+}
+
+function parseAdminActionTokens(html) {
+  const match = html.match(
+    /<script[^>]*id=["']admin-action-tokens["'][^>]*>([\s\S]*?)<\/script>/i
+  );
+  if (!match) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(match[1] ?? "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function readAdminActionToken(url, cookie, timeoutMs) {
+  if (!cookie) {
+    return "";
+  }
+  const target = new URL(url);
+  const scope = resolveAdminActionScope(target.href);
+  if (!scope) {
+    return "";
+  }
+
+  const cacheKey = `${target.origin}|${cookie}`;
+  let tokens = adminActionTokenCache.get(cacheKey);
+  if (!tokens) {
+    const response = await sendRequest(`${target.origin}/`, {
+      method: "GET",
+      headers: {
+        Accept: "text/html",
+        Cookie: cookie,
+      },
+      timeoutMs,
+    });
+    if (response.status < 200 || response.status >= 300) {
+      return "";
+    }
+    tokens = parseAdminActionTokens(response.text);
+    adminActionTokenCache.set(cacheKey, tokens);
+  }
+  return String(tokens[scope] ?? "").trim();
+}
+
 export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {}) {
   const target = new URL(url);
+  const adminActionToken = await readAdminActionToken(url, cookie, timeoutMs);
   const body = new URLSearchParams(
     Object.entries(payload).map(([key, value]) => [key, String(value)])
   ).toString();
@@ -432,6 +523,7 @@ export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {})
       Origin: target.origin,
       Referer: `${target.origin}/`,
       ...(cookie ? { Cookie: cookie } : {}),
+      ...(adminActionToken ? { "x-admin-action-token": adminActionToken } : {}),
       "Content-Type": "application/x-www-form-urlencoded",
       "Content-Length": Buffer.byteLength(body).toString(),
     },
@@ -451,6 +543,7 @@ export async function postJson(
   { cookie, bearerToken, expectStatus, timeoutMs = 20000 } = {}
 ) {
   const target = new URL(url);
+  const adminActionToken = await readAdminActionToken(url, cookie, timeoutMs);
   const body = JSON.stringify(payload);
   const response = await sendRequest(url, {
     method: "POST",
@@ -460,6 +553,7 @@ export async function postJson(
       Referer: `${target.origin}/`,
       ...(cookie ? { Cookie: cookie } : {}),
       ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+      ...(adminActionToken ? { "x-admin-action-token": adminActionToken } : {}),
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(body).toString(),
     },

@@ -15,6 +15,7 @@ import {
   buildJsonRpcSuccess,
   buildToolResult,
   parseJsonRpcRequest,
+  readOptionalArgumentsObject,
   toJsonRpcError,
 } from "./protocol";
 import { listMcpPrompts, resolveMcpPrompt } from "./prompts";
@@ -168,11 +169,7 @@ app.post("/mcp", async (request, reply) => {
             token,
           },
           String(rpcRequest.params.name ?? ""),
-          rpcRequest.params.arguments != null &&
-            typeof rpcRequest.params.arguments === "object" &&
-            !Array.isArray(rpcRequest.params.arguments)
-            ? (rpcRequest.params.arguments as Record<string, unknown>)
-            : {}
+          readOptionalArgumentsObject(rpcRequest.params.arguments)
         )
       );
     } else if (rpcRequest.method === "resources/list") {
@@ -203,13 +200,7 @@ app.post("/mcp", async (request, reply) => {
     } else if (rpcRequest.method === "prompts/get") {
       promptName = String(rpcRequest.params.name ?? "").trim();
       const prompt = resolveMcpPrompt(promptName);
-      result = prompt.render(
-        rpcRequest.params.arguments != null &&
-          typeof rpcRequest.params.arguments === "object" &&
-          !Array.isArray(rpcRequest.params.arguments)
-          ? (rpcRequest.params.arguments as Record<string, unknown>)
-          : {}
-      );
+      result = prompt.render(readOptionalArgumentsObject(rpcRequest.params.arguments));
     } else {
       throw new Error(`Unknown MCP method "${rpcRequest.method}".`);
     }

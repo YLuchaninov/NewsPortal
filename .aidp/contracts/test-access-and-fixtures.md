@@ -31,6 +31,7 @@
 - Env vars from `.env.dev`, `.env.example`, compose env wiring and documented counterparts.
 - Seed/bootstrap/runtime commands:
   - `pnpm dev:mvp:internal`
+  - `pnpm release:verify`
   - `pnpm test:mvp:internal`
   - `pnpm test:ingest:multi:compose`
   - `pnpm test:discovery-enabled:compose`
@@ -59,13 +60,16 @@ Reusable deterministic procedures:
 - `infra/scripts/test-website-admin-flow.mjs`
 - `infra/scripts/test-live-website-matrix.mjs`
 - `infra/scripts/test-live-discovery-examples.mjs`
+- `infra/scripts/test-live-discovery-domain-matrix.mjs`
 - `infra/scripts/test-discovery-pipeline-nonregression.mjs`
 - `infra/scripts/test-live-discovery-yield-proof.mjs`
+- `infra/scripts/release-verify.mjs`
 - `infra/scripts/test-automation-admin-flow.mjs`
 - `infra/scripts/test-discovery-admin-flow.mjs`
 - `infra/scripts/test-rss-multi-flow.mjs`
 - `infra/scripts/workers/smoke.py`
 - `infra/scripts/fetchers/test-rss-smoke.ts`
+- `infra/scripts/fetchers/test-provider-universality-smoke.ts`
 - `infra/scripts/relay/seed-outbox-smoke.ts`
 - `infra/fixtures/fetchers/smoke-feed.xml`
 
@@ -119,6 +123,7 @@ If cleanup cannot be completed:
 
 - Discovery proof is DDGS-first by default; Brave/Serper-backed discovery is not part of the default local proof contour.
 - `pnpm test:discovery:examples:compose` is the canonical profile-backed examples entrypoint.
+- `pnpm test:discovery:mega:compose` is the bounded A/B/C mega comprehensive matrix proof layered on the profile-backed examples harness; `pnpm test:discovery:domains:compose` remains a compatibility alias.
 - `pnpm test:discovery-enabled:compose` proves bounded enabled runtime.
 - Live external provider proof is allowed only as bounded evidence and may leave explicit nondeterministic proof gaps.
 

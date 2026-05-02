@@ -188,6 +188,16 @@ export interface ApiChannelConfig {
   maxItemsPerPoll: number;
   requestTimeoutMs: number;
   userAgent: string;
+  requestMethod: "GET" | "POST";
+  requestHeaders: Record<string, string>;
+  requestBodyJson: unknown | null;
+  pagination: {
+    mode: "none" | "next_url" | "page";
+    nextUrlPath: string;
+    pageParam: string;
+    pageStart: number;
+    maxPagesPerPoll: number;
+  };
   itemsPath: string;
   titleField: string;
   leadField: string;
@@ -206,6 +216,9 @@ export interface EmailImapChannelConfig {
   password: string;
   mailbox: string;
   searchFrom?: string | null;
+  searchSinceHours: number | null;
+  maxMessageBytes: number;
+  bodyPreference: "text" | "html";
   maxItemsPerPoll: number;
 }
 
@@ -266,6 +279,16 @@ const DEFAULT_API_CHANNEL_CONFIG: ApiChannelConfig = {
   maxItemsPerPoll: 20,
   requestTimeoutMs: 10000,
   userAgent: "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+  requestMethod: "GET",
+  requestHeaders: {},
+  requestBodyJson: null,
+  pagination: {
+    mode: "none",
+    nextUrlPath: "next",
+    pageParam: "page",
+    pageStart: 1,
+    maxPagesPerPoll: 1
+  },
   itemsPath: "items",
   titleField: "title",
   leadField: "lead",
@@ -284,6 +307,9 @@ const DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG: EmailImapChannelConfig = {
   password: "",
   mailbox: "INBOX",
   searchFrom: null as string | null,
+  searchSinceHours: 720,
+  maxMessageBytes: 524288,
+  bodyPreference: "text",
   maxItemsPerPoll: 20
 };
 
@@ -453,6 +479,109 @@ function readFeedIngressAdapterStrategy(
   throw new Error(
     `Source channel config field "${fieldName}" must be one of ${FEED_INGRESS_ADAPTER_STRATEGIES.join(", ")}.`
   );
+}
+
+function readApiRequestMethod(value: unknown): ApiChannelConfig["requestMethod"] {
+  if (value == null) {
+    return DEFAULT_API_CHANNEL_CONFIG.requestMethod;
+  }
+  if (typeof value !== "string") {
+    throw new Error('Source channel config field "requestMethod" must be a string.');
+  }
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "GET" || normalized === "POST") {
+    return normalized;
+  }
+  throw new Error('Source channel config field "requestMethod" must be GET or POST.');
+}
+
+function readApiPaginationMode(value: unknown): ApiChannelConfig["pagination"]["mode"] {
+  if (value == null) {
+    return DEFAULT_API_CHANNEL_CONFIG.pagination.mode;
+  }
+  if (typeof value !== "string") {
+    throw new Error('Source channel config field "pagination.mode" must be a string.');
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "none" || normalized === "next_url" || normalized === "page") {
+    return normalized;
+  }
+  throw new Error('Source channel config field "pagination.mode" must be none, next_url, or page.');
+}
+
+const API_REQUEST_HEADER_BLOCKLIST = new Set([
+  "authorization",
+  "cookie",
+  "host",
+  "content-length",
+  "connection",
+  "user-agent",
+  "accept",
+]);
+
+function readApiRequestHeaders(value: unknown): Record<string, string> {
+  if (value == null) {
+    return { ...DEFAULT_API_CHANNEL_CONFIG.requestHeaders };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error('Source channel config field "requestHeaders" must be an object.');
+  }
+  const headers: Record<string, string> = {};
+  for (const [rawName, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const name = rawName.trim().toLowerCase();
+    if (!name) {
+      throw new Error('Source channel config field "requestHeaders" must not include empty names.');
+    }
+    if (API_REQUEST_HEADER_BLOCKLIST.has(name)) {
+      throw new Error(`Source channel config request header "${rawName}" is managed by NewsPortal.`);
+    }
+    if (typeof rawValue !== "string") {
+      throw new Error(`Source channel config request header "${rawName}" must be a string.`);
+    }
+    const headerValue = rawValue.trim();
+    if (!headerValue) {
+      throw new Error(`Source channel config request header "${rawName}" must not be empty.`);
+    }
+    headers[name] = headerValue;
+  }
+  return headers;
+}
+
+function readEmailImapBodyPreference(value: unknown): EmailImapChannelConfig["bodyPreference"] {
+  if (value == null) {
+    return DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG.bodyPreference;
+  }
+  if (typeof value !== "string") {
+    throw new Error('Source channel config field "bodyPreference" must be a string.');
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "text" || normalized === "html") {
+    return normalized;
+  }
+  throw new Error('Source channel config field "bodyPreference" must be text or html.');
+}
+
+function assertJsonCompatible(value: unknown, fieldName: string): unknown {
+  if (value == null || typeof value === "string" || typeof value === "boolean") {
+    return value ?? null;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Source channel config field "${fieldName}" must be JSON-compatible.`);
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, index) => assertJsonCompatible(item, `${fieldName}[${index}]`));
+  }
+  if (typeof value === "object") {
+    const output: Record<string, unknown> = {};
+    for (const [key, childValue] of Object.entries(value as Record<string, unknown>)) {
+      output[key] = assertJsonCompatible(childValue, `${fieldName}.${key}`);
+    }
+    return output;
+  }
+  throw new Error(`Source channel config field "${fieldName}" must be JSON-compatible.`);
 }
 
 export function inferFeedIngressAdapterStrategy(
@@ -809,6 +938,7 @@ export function parseWebsiteChannelConfig(config: unknown): WebsiteChannelConfig
 
 export function parseApiChannelConfig(config: unknown): ApiChannelConfig {
   const candidate = asRecord(config);
+  const pagination = asRecord(candidate.pagination);
 
   return {
     maxItemsPerPoll: readPositiveInteger(
@@ -826,6 +956,38 @@ export function parseApiChannelConfig(config: unknown): ApiChannelConfig {
       DEFAULT_API_CHANNEL_CONFIG.userAgent,
       "userAgent"
     ),
+    requestMethod: readApiRequestMethod(candidate.requestMethod),
+    requestHeaders: readApiRequestHeaders(candidate.requestHeaders),
+    requestBodyJson:
+      candidate.requestBodyJson === undefined
+        ? DEFAULT_API_CHANNEL_CONFIG.requestBodyJson
+        : assertJsonCompatible(candidate.requestBodyJson, "requestBodyJson"),
+    pagination: {
+      mode: readApiPaginationMode(pagination.mode),
+      nextUrlPath: readString(
+        pagination.nextUrlPath,
+        DEFAULT_API_CHANNEL_CONFIG.pagination.nextUrlPath,
+        "pagination.nextUrlPath"
+      ),
+      pageParam: readString(
+        pagination.pageParam,
+        DEFAULT_API_CHANNEL_CONFIG.pagination.pageParam,
+        "pagination.pageParam"
+      ),
+      pageStart: readPositiveInteger(
+        pagination.pageStart,
+        DEFAULT_API_CHANNEL_CONFIG.pagination.pageStart,
+        "pagination.pageStart"
+      ),
+      maxPagesPerPoll: Math.min(
+        10,
+        readPositiveInteger(
+          pagination.maxPagesPerPoll,
+          DEFAULT_API_CHANNEL_CONFIG.pagination.maxPagesPerPoll,
+          "pagination.maxPagesPerPoll"
+        )
+      )
+    },
     itemsPath: readString(candidate.itemsPath, DEFAULT_API_CHANNEL_CONFIG.itemsPath, "itemsPath"),
     titleField: readString(
       candidate.titleField,
@@ -880,6 +1042,20 @@ export function parseEmailImapChannelConfig(config: unknown): EmailImapChannelCo
       DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG.searchFrom ?? null,
       "searchFrom"
     ),
+    searchSinceHours: readNullablePositiveInteger(
+      candidate.searchSinceHours,
+      DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG.searchSinceHours,
+      "searchSinceHours"
+    ),
+    maxMessageBytes: Math.min(
+      5 * 1024 * 1024,
+      readPositiveInteger(
+        candidate.maxMessageBytes,
+        DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG.maxMessageBytes,
+        "maxMessageBytes"
+      )
+    ),
+    bodyPreference: readEmailImapBodyPreference(candidate.bodyPreference),
     maxItemsPerPoll: readPositiveInteger(
       candidate.maxItemsPerPoll,
       DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG.maxItemsPerPoll,

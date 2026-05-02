@@ -1,27 +1,36 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import { buildExpiredSessionCookie } from "../../../lib/server/auth";
-import {
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation
-} from "../../../lib/server/browser-flow";
+import { buildFlashRedirect } from "../../../lib/server/browser-flow";
+import { prepareWebAction } from "../../../lib/server/web-action";
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  if (requestPrefersHtmlNavigation(request)) {
+  const action = await prepareWebAction(request, {
+    requireSession: false,
+    readPayload: false,
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["auth.logout"],
+    payloadBoundaryName: "auth logout payload",
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+
+  if (action.context.browserRequest) {
     return buildFlashRedirect(request, {
       section: "auth",
       status: "success",
       message: "Signed out.",
-      setCookie: buildExpiredSessionCookie()
+      setCookie: buildExpiredSessionCookie({ request })
     });
   }
 
   return new Response(null, {
     status: 204,
     headers: {
-      "Set-Cookie": buildExpiredSessionCookie()
+      "Set-Cookie": buildExpiredSessionCookie({ request })
     }
   });
 };

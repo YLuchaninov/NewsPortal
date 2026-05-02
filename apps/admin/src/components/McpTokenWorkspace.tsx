@@ -20,12 +20,14 @@ export interface McpTokenRecord {
 
 interface McpTokenWorkspaceProps {
   mcpBffPath: string;
+  adminActionToken: string;
   initialTokens: McpTokenRecord[];
   scopeOptions: readonly string[];
 }
 
 export function McpTokenWorkspace({
   mcpBffPath,
+  adminActionToken,
   initialTokens,
   scopeOptions,
 }: McpTokenWorkspaceProps) {
@@ -52,6 +54,7 @@ export function McpTokenWorkspace({
     try {
       const response = await postJson(mcpBffPath, {
         intent: "issue",
+        adminActionToken,
         label,
         expiresAt,
         scopes: selectedScopes.join(","),
@@ -79,6 +82,7 @@ export function McpTokenWorkspace({
     try {
       const response = await postJson(mcpBffPath, {
         intent: "revoke",
+        adminActionToken,
         tokenId,
       });
       const tokenRecord = response.tokenRecord as McpTokenRecord | undefined;

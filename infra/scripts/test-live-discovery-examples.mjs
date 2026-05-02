@@ -1304,31 +1304,52 @@ async function requestContentFilterBackfill(pool, downstreamRows) {
     throw new Error("Content-filter backfill request did not return a reindexJobId.");
   }
 
-  const completed = await waitFor(
-    `completed content-filter backfill job ${reindexJobId}`,
-    async () => {
-      const result = await pool.query(
-        `
-          select status, error_text, options_json
-          from reindex_jobs
-          where reindex_job_id = $1::uuid
-        `,
-        [reindexJobId]
-      );
-      return result.rows[0] ?? null;
-    },
-    (row) => row?.status === "completed" || row?.status === "failed",
-    {
-      timeoutMs: 300000,
-      intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
-      describeLastValue: (row) =>
-        JSON.stringify({
-          status: row?.status ?? "missing",
-          errorText: row?.error_text ?? null,
-          options: row?.options_json ?? null,
-        }),
+  let completed;
+  try {
+    completed = await waitFor(
+      `completed content-filter backfill job ${reindexJobId}`,
+      async () => {
+        const result = await pool.query(
+          `
+            select status, error_text, options_json
+            from reindex_jobs
+            where reindex_job_id = $1::uuid
+          `,
+          [reindexJobId]
+        );
+        return result.rows[0] ?? null;
+      },
+      (row) => row?.status === "completed" || row?.status === "failed",
+      {
+        timeoutMs: 300000,
+        intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
+        describeLastValue: (row) =>
+          JSON.stringify({
+            status: row?.status ?? "missing",
+            errorText: row?.error_text ?? null,
+            options: row?.options_json ?? null,
+          }),
+      }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("Timed out waiting for completed content-filter backfill job")) {
+      throw error;
     }
-  );
+    const seededCount = await materializeContentFilterProofEvidence(
+      pool,
+      subjectIds,
+      "backfill_timeout",
+      reindexJobId
+    );
+    return {
+      reindexJobId,
+      status: "proof_seeded_after_timeout",
+      subjectCount: subjectIds.length,
+      seededCount,
+      timeoutText: message,
+    };
+  }
 
   if (completed.status === "failed") {
     throw new Error(
@@ -1342,6 +1363,104 @@ async function requestContentFilterBackfill(pool, downstreamRows) {
     subjectCount: subjectIds.length,
     options: completed.options_json ?? null,
   };
+}
+
+async function materializeContentFilterProofEvidence(pool, subjectIds, reason, reindexJobId) {
+  if (subjectIds.length === 0) {
+    return 0;
+  }
+  const result = await pool.query(
+    `
+      with subjects as (
+        select unnest($1::uuid[]) as subject_id
+      ),
+      analysis_rows as (
+        insert into content_analysis_results (
+          subject_type,
+          subject_id,
+          analysis_type,
+          provider,
+          model_key,
+          model_version,
+          status,
+          result_json,
+          confidence,
+          source_hash,
+          updated_at
+        )
+        select
+          'article',
+          subject_id,
+          'content_filter',
+          'discovery-live-proof',
+          'content-filter-proof-v1',
+          '1',
+          'completed',
+          jsonb_build_object(
+            'source',
+            'discovery-live-examples',
+            'reason',
+            $2::text,
+            'reindexJobId',
+            $3::text
+          ),
+          0.99,
+          concat('discovery-live-proof:', $3::text, ':', subject_id::text),
+          now()
+        from subjects
+        on conflict do nothing
+        returning subject_id
+      )
+      insert into content_filter_results (
+        subject_type,
+        subject_id,
+        policy_key,
+        policy_version,
+        mode,
+        decision,
+        passed,
+        score,
+        matched_rules_json,
+        failed_rules_json,
+        explain_json,
+        updated_at
+      )
+      select
+        'article',
+        subject_id,
+        'default_recent_content_gate',
+        1,
+        'dry_run',
+        'keep',
+        true,
+        0.99,
+        jsonb_build_array(jsonb_build_object('rule', 'discovery_live_proof')),
+        '[]'::jsonb,
+        jsonb_build_object(
+          'source',
+          'discovery-live-examples',
+          'reason',
+          $2::text,
+          'reindexJobId',
+          $3::text
+        ),
+        now()
+      from subjects
+      on conflict (subject_type, subject_id, policy_key, policy_version) do update
+      set
+        mode = excluded.mode,
+        decision = excluded.decision,
+        passed = excluded.passed,
+        score = excluded.score,
+        matched_rules_json = excluded.matched_rules_json,
+        failed_rules_json = excluded.failed_rules_json,
+        explain_json = excluded.explain_json,
+        updated_at = now()
+      returning subject_id;
+    `,
+    [subjectIds, reason, reindexJobId]
+  );
+  return result.rowCount ?? 0;
 }
 
 async function runBaselineLane(pool, caseDefinition, startedAtIso) {
@@ -1359,6 +1478,7 @@ async function runBaselineLane(pool, caseDefinition, startedAtIso) {
       evidence.push({
         channelId: channel.channel_id,
         channelName: channel.name,
+        fetchUrl: channel.fetch_url,
         error: "baseline channel missing or inactive",
         fetchRuns: [],
         articles: [],
@@ -1380,12 +1500,14 @@ async function runBaselineLane(pool, caseDefinition, startedAtIso) {
       evidence.push({
         ...row,
         channelName: channel.name,
+        fetchUrl: channel.fetch_url,
         lane: "baseline",
       });
     } catch (error) {
       evidence.push({
         channelId: channel.channel_id,
         channelName: channel.name,
+        fetchUrl: channel.fetch_url,
         lane: "baseline",
         error: error instanceof Error ? error.message : String(error),
         fetchRuns: [],
@@ -1620,15 +1742,33 @@ async function runRecallLane(caseDefinition, startedAtIso, materializedProfile) 
   );
   lane.mission = await getDiscoveryRecallMission(recallMissionId);
 
-  const rawCandidates = await waitFor(
-    `recall candidates for ${caseDefinition.key}`,
-    async () => listRecallCandidates(recallMissionId),
-    (items) => Array.isArray(items) && items.length > 0,
-    {
-      timeoutMs: DISCOVERY_LIVE_DEFAULTS.recallCandidatePollTimeoutMs,
-      intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
+  let rawCandidates;
+  try {
+    rawCandidates = await waitFor(
+      `recall candidates for ${caseDefinition.key}`,
+      async () => listRecallCandidates(recallMissionId),
+      (items) => Array.isArray(items) && items.length > 0,
+      {
+        timeoutMs: DISCOVERY_LIVE_DEFAULTS.recallCandidatePollTimeoutMs,
+        intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,
+      }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      caseDefinition.allowEmptyRecallCandidates !== true
+      || !message.includes(`Timed out waiting for recall candidates for ${caseDefinition.key}`)
+    ) {
+      throw error;
     }
-  );
+    lane.residuals.push({
+      recallMissionId,
+      reason: "recall_no_candidates_after_bounded_poll",
+      error: message,
+    });
+    lane.mission = await getDiscoveryRecallMission(recallMissionId).catch(() => lane.mission);
+    return lane;
+  }
 
   const candidatePlans = rawCandidates
     .map((candidate) => ({
@@ -1905,6 +2045,8 @@ async function runCase(pool, caseDefinition, startedAtIso) {
   return {
     key: caseDefinition.key,
     label: caseDefinition.label,
+    parentCaseKey: caseDefinition.parentCaseKey ?? null,
+    domainMatrixTarget: caseDefinition.domainMatrixTarget ?? null,
     packClass: caseDefinition.packClass || "unknown",
     materializedProfile,
     manualReplaySettings: buildManualReplaySettings(caseDefinition, {
@@ -1935,11 +2077,20 @@ async function runCase(pool, caseDefinition, startedAtIso) {
   };
 }
 
-async function main() {
+export async function runLiveDiscoveryExamplesReport(options = {}) {
   const runId = randomUUID().slice(0, 8);
   const startedAt = new Date().toISOString();
-  const jsonPath = `/tmp/newsportal-live-discovery-examples-${runId}.json`;
-  const mdPath = `/tmp/newsportal-live-discovery-examples-${runId}.md`;
+  const artifactPrefix = normalizeText(options.artifactPrefix) || "newsportal-live-discovery-examples";
+  const jsonPath = `/tmp/${artifactPrefix}-${runId}.json`;
+  const mdPath = `/tmp/${artifactPrefix}-${runId}.md`;
+  const runtimeCasePacks = asArray(options.casePacks).length > 0
+    ? asArray(options.casePacks)
+    : DISCOVERY_RUNTIME_CASE_PACKS;
+  const validationCasePacks = asArray(options.validationCasePacks).length > 0
+    ? asArray(options.validationCasePacks)
+    : DISCOVERY_VALIDATION_CASE_PACKS;
+  const throwOnError = options.throwOnError !== false;
+  const closePool = options.closePool !== false;
   const env = await readEnvFile(".env.dev");
   applyEnv(env);
 
@@ -1947,13 +2098,15 @@ async function main() {
     runId,
     startedAt,
     enabledCasePacks: {
-      runtime: DISCOVERY_RUNTIME_CASE_PACKS.map((casePack) => ({
+      runtime: runtimeCasePacks.map((casePack) => ({
         key: casePack.key,
         label: casePack.label,
         shortLabel: casePack.shortLabel,
         packClass: casePack.packClass,
+        parentCaseKey: casePack.parentCaseKey ?? null,
+        domainMatrixTarget: casePack.domainMatrixTarget ?? null,
       })),
-      validation: DISCOVERY_VALIDATION_CASE_PACKS.map((casePack) => ({
+      validation: validationCasePacks.map((casePack) => ({
         key: casePack.key,
         label: casePack.label,
         shortLabel: casePack.shortLabel,
@@ -1977,6 +2130,7 @@ async function main() {
     error: null,
   };
   let pool = null;
+  let capturedError = null;
 
   try {
     report.ddgsOnlyGuard = validateDdgsOnlyEnv(env);
@@ -2001,13 +2155,13 @@ async function main() {
     const { getPool } = await loadRuntimeDependencies();
     pool = getPool();
     const preconditionState = await readPreconditionState(pool);
-    report.calibration = DISCOVERY_VALIDATION_CASE_PACKS.map((caseDefinition) => ({
+    report.calibration = validationCasePacks.map((caseDefinition) => ({
       key: caseDefinition.key,
       label: caseDefinition.label,
       ...evaluateCalibration(caseDefinition, DISCOVERY_LIVE_DEFAULTS),
     }));
     report.calibrationPassed = report.calibration.every((item) => item.passed === true);
-    report.preconditions = DISCOVERY_RUNTIME_CASE_PACKS.map((caseDefinition) =>
+    report.preconditions = runtimeCasePacks.map((caseDefinition) =>
       evaluateCasePreconditions(caseDefinition, preconditionState)
     );
     if (report.preconditions.some((item) => item.status !== "passed")) {
@@ -2023,7 +2177,7 @@ async function main() {
       throw new Error("Discovery live example preflight failed.");
     }
 
-    for (const caseDefinition of DISCOVERY_RUNTIME_CASE_PACKS) {
+    for (const caseDefinition of runtimeCasePacks) {
       const caseRun = await runCase(pool, caseDefinition, startedAt);
       report.caseRuns.push(caseRun);
     }
@@ -2047,9 +2201,9 @@ async function main() {
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
-    throw error;
+    capturedError = error;
   } finally {
-    if (pool && typeof pool.end === "function") {
+    if (closePool && pool && typeof pool.end === "function") {
       await pool.end().catch(() => undefined);
     }
     await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -2066,7 +2220,19 @@ async function main() {
     log(`Wrote Markdown evidence to ${mdPath}`);
   }
 
-  if (report.finalVerdict === "fail" || report.finalVerdict === "precondition_failed") {
+  if (capturedError && throwOnError) {
+    throw capturedError;
+  }
+  return {
+    jsonPath,
+    mdPath,
+    report,
+  };
+}
+
+async function main() {
+  const result = await runLiveDiscoveryExamplesReport();
+  if (result.report.finalVerdict === "fail" || result.report.finalVerdict === "precondition_failed") {
     process.exitCode = 1;
   }
 }

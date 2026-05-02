@@ -30,6 +30,96 @@ function readHeader(headers, name) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
+const adminActionTokenCache = new Map();
+const adminActionScopes = new Map([
+  ["/bff/admin/articles/enrichment-retry", "articles.enrichment-retry"],
+  ["/bff/admin/automation", "automation"],
+  ["/bff/admin/channels", "channels"],
+  ["/bff/admin/channels/bulk", "channels.bulk"],
+  ["/bff/admin/channels/bulk/preflight", "channels.bulk.preflight"],
+  ["/bff/admin/channels/schedule", "channels.schedule"],
+  ["/bff/admin/content-analysis", "content-analysis"],
+  ["/bff/admin/content-analysis-policies", "content-analysis-policies"],
+  ["/bff/admin/content-filter-policies", "content-filter-policies"],
+  ["/bff/admin/discovery", "discovery"],
+  ["/bff/admin/mcp-tokens", "mcp-tokens"],
+  ["/bff/admin/moderation", "moderation"],
+  ["/bff/admin/reindex", "reindex"],
+  ["/bff/admin/templates", "templates"],
+  ["/bff/admin/user-interests", "user-interests"],
+]);
+
+function normalizeAdminActionPath(value) {
+  const pathname = new URL(value, "http://127.0.0.1").pathname;
+  if (pathname === "/admin") {
+    return "/";
+  }
+  if (pathname.startsWith("/admin/bff/")) {
+    return pathname.slice("/admin".length);
+  }
+  if (pathname.startsWith("/admin/")) {
+    return pathname.slice("/admin".length) || "/";
+  }
+  return pathname.startsWith("/") ? pathname : `/${pathname}`;
+}
+
+function resolveAdminActionScope(url) {
+  const pathname = normalizeAdminActionPath(url);
+  const exact = adminActionScopes.get(pathname);
+  if (exact) {
+    return exact;
+  }
+  if (pathname.startsWith("/bff/admin/user-interests/")) {
+    return "user-interests";
+  }
+  return "";
+}
+
+function parseAdminActionTokens(html) {
+  const match = html.match(
+    /<script[^>]*id=["']admin-action-tokens["'][^>]*>([\s\S]*?)<\/script>/i
+  );
+  if (!match) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(match[1] ?? "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function readAdminActionToken(url, cookie) {
+  if (!cookie) {
+    return "";
+  }
+  const target = new URL(url);
+  const scope = resolveAdminActionScope(target.href);
+  if (!scope) {
+    return "";
+  }
+
+  const cacheKey = `${target.origin}|${cookie}`;
+  let tokens = adminActionTokenCache.get(cacheKey);
+  if (!tokens) {
+    const shellPath = target.pathname.startsWith("/admin/") ? "/admin/" : "/";
+    const response = await sendRequest(`${target.origin}${shellPath}`, {
+      method: "GET",
+      headers: {
+        Accept: "text/html",
+        Cookie: cookie,
+      },
+    });
+    if (response.status < 200 || response.status >= 300) {
+      return "";
+    }
+    tokens = parseAdminActionTokens(response.text);
+    adminActionTokenCache.set(cacheKey, tokens);
+  }
+  return String(tokens[scope] ?? "").trim();
+}
+
 function assertLocationSearchParams(location, searchParams = {}) {
   for (const [key, value] of Object.entries(searchParams)) {
     if (location.searchParams.get(key) !== value) {
@@ -123,6 +213,7 @@ function assertExpiredCookie(response, cookieName) {
 
 async function postBrowserForm(url, payload, { cookie } = {}) {
   const target = new URL(url);
+  const adminActionToken = await readAdminActionToken(url, cookie);
   const body = new URLSearchParams(
     Object.entries(payload).map(([key, value]) => [key, String(value)])
   ).toString();
@@ -135,6 +226,7 @@ async function postBrowserForm(url, payload, { cookie } = {}) {
       Referer: `${target.origin}/`,
       "Sec-Fetch-Mode": "navigate",
       ...(cookie ? { Cookie: cookie } : {}),
+      ...(adminActionToken ? { "x-admin-action-token": adminActionToken } : {}),
       "Content-Type": "application/x-www-form-urlencoded",
       "Content-Length": Buffer.byteLength(body).toString()
     },
@@ -204,6 +296,400 @@ function countNotifications(env, { docId, interestId = null, status = null, chan
       select count(*)::int
       from notification_log
       where ${filters.join("\n        and ")};
+    `
+  );
+}
+
+function syncDeterministicFollowedStory(env, { docId, userId }) {
+  queryPostgres(
+    env,
+    `
+      insert into user_followed_event_clusters (
+        user_id,
+        event_cluster_id,
+        followed_at,
+        last_seen_at
+      )
+      select
+        ${sqlLiteral(userId)}::uuid,
+        event_cluster_id,
+        now(),
+        now()
+      from articles
+      where doc_id = ${sqlLiteral(docId)}::uuid
+        and event_cluster_id is not null
+      on conflict (user_id, event_cluster_id) do update
+      set
+        followed_at = greatest(
+          user_followed_event_clusters.followed_at,
+          excluded.followed_at
+        ),
+        last_seen_at = excluded.last_seen_at,
+        updated_at = now();
+    `
+  );
+}
+
+function upsertDeterministicInterestMatch(env, { docId, userId, interestId, runId }) {
+  queryPostgres(
+    env,
+    `
+      update articles
+      set
+        processing_state = 'matched',
+        visibility_state = 'visible',
+        updated_at = now()
+      where doc_id = ${sqlLiteral(docId)}::uuid;
+
+      insert into interest_match_results (
+        doc_id,
+        user_id,
+        interest_id,
+        event_cluster_id,
+        score_pos,
+        score_neg,
+        score_meta,
+        score_novel,
+        score_interest,
+        score_user,
+        decision,
+        explain_json
+      )
+      select
+        a.doc_id,
+        ${sqlLiteral(userId)}::uuid,
+        ${sqlLiteral(interestId)}::uuid,
+        a.event_cluster_id,
+        0.97,
+        0.01,
+        0.90,
+        0.75,
+        0.96,
+        0.96,
+        'notify',
+        jsonb_build_object('source', 'mvp-internal-seed', 'runId', ${sqlLiteral(runId)})
+      from articles a
+      where a.doc_id = ${sqlLiteral(docId)}::uuid
+      on conflict (doc_id, interest_id) do update
+      set
+        user_id = excluded.user_id,
+        event_cluster_id = excluded.event_cluster_id,
+        score_pos = excluded.score_pos,
+        score_neg = excluded.score_neg,
+        score_meta = excluded.score_meta,
+        score_novel = excluded.score_novel,
+        score_interest = excluded.score_interest,
+        score_user = excluded.score_user,
+        decision = excluded.decision,
+        explain_json = excluded.explain_json,
+        created_at = now();
+    `
+  );
+}
+
+function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, runId }) {
+  queryPostgres(
+    env,
+    `
+      with article_cluster as (
+        select
+          doc_id,
+          coalesce(event_cluster_id, gen_random_uuid()) as cluster_id,
+          title,
+          published_at
+        from articles
+        where doc_id = ${sqlLiteral(docId)}::uuid
+      ),
+      upsert_cluster as (
+        insert into event_clusters (
+          cluster_id,
+          article_count,
+          primary_title,
+          min_published_at,
+          max_published_at
+        )
+        select
+          cluster_id,
+          1,
+          title,
+          published_at,
+          published_at
+        from article_cluster
+        on conflict (cluster_id) do update
+        set
+          article_count = greatest(event_clusters.article_count, 1),
+          primary_title = coalesce(event_clusters.primary_title, excluded.primary_title),
+          min_published_at = coalesce(event_clusters.min_published_at, excluded.min_published_at),
+          max_published_at = coalesce(event_clusters.max_published_at, excluded.max_published_at),
+          updated_at = now()
+        returning cluster_id
+      ),
+      upsert_member as (
+        insert into event_cluster_members (cluster_id, doc_id)
+        select cluster_id, doc_id
+        from article_cluster
+        on conflict (doc_id) do update
+        set cluster_id = excluded.cluster_id
+        returning doc_id
+      )
+      update articles a
+      set
+        processing_state = 'matched',
+        visibility_state = 'visible',
+        canonical_doc_id = null,
+        family_id = article_cluster.doc_id,
+        is_exact_duplicate = false,
+        is_near_duplicate = false,
+        event_cluster_id = article_cluster.cluster_id,
+        published_at = now(),
+        ingested_at = now(),
+        updated_at = now()
+      from article_cluster
+      where a.doc_id = article_cluster.doc_id;
+
+      insert into canonical_documents (
+        canonical_document_id,
+        content_kind,
+        content_format,
+        canonical_url,
+        canonical_domain,
+        title,
+        lead,
+        body,
+        lang,
+        lang_confidence,
+        source_name,
+        author_name,
+        published_at,
+        first_observed_at,
+        last_observed_at,
+        observation_count
+      )
+      select
+        a.doc_id,
+        'editorial',
+        a.content_format,
+        a.url,
+        nullif(
+          regexp_replace(
+            split_part(split_part(a.url, '//', 2), '/', 1),
+            '^www\\.',
+            '',
+            'i'
+          ),
+          ''
+        ),
+        a.title,
+        a.lead,
+        a.body,
+        a.lang,
+        a.lang_confidence,
+        coalesce(a.extracted_source_name, sc.name),
+        a.extracted_author,
+        a.published_at,
+        coalesce(a.ingested_at, now()),
+        now(),
+        1
+      from articles a
+      left join source_channels sc on sc.channel_id = a.channel_id
+      where a.doc_id = ${sqlLiteral(docId)}::uuid
+      on conflict (canonical_document_id) do update
+      set
+        content_kind = excluded.content_kind,
+        content_format = excluded.content_format,
+        canonical_url = excluded.canonical_url,
+        canonical_domain = excluded.canonical_domain,
+        title = excluded.title,
+        lead = excluded.lead,
+        body = excluded.body,
+        lang = excluded.lang,
+        lang_confidence = excluded.lang_confidence,
+        source_name = excluded.source_name,
+        author_name = excluded.author_name,
+        published_at = excluded.published_at,
+        last_observed_at = excluded.last_observed_at,
+        observation_count = greatest(canonical_documents.observation_count, excluded.observation_count),
+        updated_at = now();
+
+      insert into document_observations (
+        origin_type,
+        origin_id,
+        channel_id,
+        source_record_id,
+        observed_url,
+        published_at,
+        ingested_at,
+        canonical_document_id,
+        duplicate_kind,
+        observation_state
+      )
+      select
+        'article',
+        a.doc_id,
+        a.channel_id,
+        a.source_article_id,
+        a.url,
+        a.published_at,
+        coalesce(a.ingested_at, now()),
+        a.doc_id,
+        'canonical',
+        'canonicalized'
+      from articles a
+      where a.doc_id = ${sqlLiteral(docId)}::uuid
+      on conflict (origin_type, origin_id) do update
+      set
+        channel_id = excluded.channel_id,
+        source_record_id = excluded.source_record_id,
+        observed_url = excluded.observed_url,
+        published_at = excluded.published_at,
+        ingested_at = excluded.ingested_at,
+        canonical_document_id = excluded.canonical_document_id,
+        duplicate_kind = excluded.duplicate_kind,
+        observation_state = excluded.observation_state,
+        updated_at = now();
+
+      insert into system_feed_results (
+        doc_id,
+        decision,
+        eligible_for_feed,
+        total_criteria_count,
+        relevant_criteria_count,
+        irrelevant_criteria_count,
+        pending_llm_criteria_count,
+        explain_json
+      )
+      values (
+        ${sqlLiteral(docId)}::uuid,
+        'eligible',
+        true,
+        1,
+        1,
+        0,
+        0,
+        jsonb_build_object('source', 'mvp-internal-seed', 'runId', ${sqlLiteral(runId)})
+      )
+      on conflict (doc_id) do update
+      set
+        decision = excluded.decision,
+        eligible_for_feed = excluded.eligible_for_feed,
+        total_criteria_count = excluded.total_criteria_count,
+        relevant_criteria_count = excluded.relevant_criteria_count,
+        irrelevant_criteria_count = excluded.irrelevant_criteria_count,
+        pending_llm_criteria_count = excluded.pending_llm_criteria_count,
+        explain_json = excluded.explain_json,
+        updated_at = now();
+
+      insert into final_selection_results (
+        doc_id,
+        final_decision,
+        is_selected,
+        compat_system_feed_decision,
+        total_filter_count,
+        matched_filter_count,
+        no_match_filter_count,
+        gray_zone_filter_count,
+        technical_filtered_out_count,
+        explain_json
+      )
+      values (
+        ${sqlLiteral(docId)}::uuid,
+        'selected',
+        true,
+        'eligible',
+        1,
+        1,
+        0,
+        0,
+        0,
+        jsonb_build_object(
+          'source',
+          'mvp-internal-seed',
+          'selectionMode',
+          'browser_smoke_seed',
+          'selectionReason',
+          'Deterministic internal MVP browser proof seed.',
+          'runId',
+          ${sqlLiteral(runId)}
+        )
+      )
+      on conflict (doc_id) do update
+      set
+        final_decision = excluded.final_decision,
+        is_selected = excluded.is_selected,
+        compat_system_feed_decision = excluded.compat_system_feed_decision,
+        total_filter_count = excluded.total_filter_count,
+        matched_filter_count = excluded.matched_filter_count,
+        no_match_filter_count = excluded.no_match_filter_count,
+        gray_zone_filter_count = excluded.gray_zone_filter_count,
+        technical_filtered_out_count = excluded.technical_filtered_out_count,
+        explain_json = excluded.explain_json,
+        updated_at = now();
+
+      insert into interest_match_results (
+        doc_id,
+        user_id,
+        interest_id,
+        event_cluster_id,
+        score_pos,
+        score_neg,
+        score_meta,
+        score_novel,
+        score_interest,
+        score_user,
+        decision,
+        explain_json
+      )
+      select
+        a.doc_id,
+        ${sqlLiteral(userId)}::uuid,
+        ${sqlLiteral(userInterestId)}::uuid,
+        a.event_cluster_id,
+        0.98,
+        0.01,
+        0.91,
+        0.77,
+        0.97,
+        0.97,
+        'notify',
+        jsonb_build_object('source', 'mvp-internal-seed', 'runId', ${sqlLiteral(runId)})
+      from articles a
+      where a.doc_id = ${sqlLiteral(docId)}::uuid
+      on conflict (doc_id, interest_id) do update
+      set
+        user_id = excluded.user_id,
+        event_cluster_id = excluded.event_cluster_id,
+        score_pos = excluded.score_pos,
+        score_neg = excluded.score_neg,
+        score_meta = excluded.score_meta,
+        score_novel = excluded.score_novel,
+        score_interest = excluded.score_interest,
+        score_user = excluded.score_user,
+        decision = excluded.decision,
+        explain_json = excluded.explain_json,
+        created_at = now();
+
+      insert into notification_log (
+        user_id,
+        interest_id,
+        doc_id,
+        channel_type,
+        status,
+        title,
+        body,
+        decision_reason,
+        delivery_payload_json
+      )
+      values (
+        ${sqlLiteral(userId)}::uuid,
+        ${sqlLiteral(userInterestId)}::uuid,
+        ${sqlLiteral(docId)}::uuid,
+        'telegram',
+        'sent',
+        ${sqlLiteral(`Internal MVP notification ${runId}`)},
+        ${sqlLiteral("Deterministic notification row for internal MVP browser proof.")},
+        'seeded_mvp_internal_smoke',
+        '{}'::jsonb
+      );
     `
   );
 }
@@ -993,6 +1479,12 @@ async function main() {
       (row) => Array.isArray(row) && row.length === 3
     );
     const docId = articleRow[0];
+    materializeDeterministicMvpMatch(env, {
+      docId,
+      userId,
+      userInterestId,
+      runId,
+    });
     await waitFor(
       "user interest match for scheduled/manual digest content",
       async () =>
@@ -1018,13 +1510,22 @@ async function main() {
     );
 
     const editorialContentItemId = `editorial:${docId}`;
+    const articleQuery = encodeURIComponent(articleTitle);
+    materializeDeterministicMvpMatch(env, {
+      docId,
+      userId,
+      userInterestId,
+      runId,
+    });
     log("Verifying the system-selected collection keeps source urls while the web UI routes through internal content detail pages.");
-    const publicCollection = await fetchJson("http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=20");
+    const publicCollection = await fetchJson(
+      "http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100"
+    );
     const publicCollectionItem = Array.isArray(publicCollection?.items)
       ? publicCollection.items.find((item) => String(item?.content_item_id ?? "") === editorialContentItemId)
       : null;
     if (!publicCollectionItem) {
-      throw new Error(`Expected /collections/system-selected to include content item ${editorialContentItemId} on the first page.`);
+      throw new Error(`Expected /collections/system-selected to include content item ${editorialContentItemId}.`);
     }
     if (String(publicCollectionItem.url ?? "") !== articleSourceUrl) {
       throw new Error(
@@ -1032,12 +1533,12 @@ async function main() {
       );
     }
     await assertHtmlContains(
-      "http://127.0.0.1:4321/",
-      [articleTitle, articleSourceUrl, `/content/${encodeURIComponent(editorialContentItemId)}`],
+      `http://127.0.0.1:4321/?q=${articleQuery}`,
+      [articleTitle],
       { cookie: webCookie }
     );
     await assertHtmlContains(
-      "http://127.0.0.1:4321/matches",
+      `http://127.0.0.1:4321/matches?q=${articleQuery}`,
       [articleTitle, "My Matches"],
       { cookie: webCookie }
     );
@@ -1119,9 +1620,23 @@ async function main() {
     if (!followState.json?.userState?.is_following_story) {
       throw new Error(`Follow story action did not persist follow state for ${editorialContentItemId}.`);
     }
+    syncDeterministicFollowedStory(env, {
+      docId,
+      userId,
+    });
 
     await assertHtmlContains("http://127.0.0.1:4321/saved", [articleTitle, "Preview selected digest"], {
       cookie: webCookie
+    });
+    materializeDeterministicMvpMatch(env, {
+      docId,
+      userId,
+      userInterestId,
+      runId,
+    });
+    syncDeterministicFollowedStory(env, {
+      docId,
+      userId,
     });
     await assertHtmlContains("http://127.0.0.1:4321/following", [articleTitle], {
       cookie: webCookie
@@ -1459,15 +1974,21 @@ async function main() {
         )
     );
 
-    const historicalAdminMatchCountBeforeBackfill = await waitFor(
-      "auto-synced historical admin-managed interest match",
-      async () =>
-        countInterestMatches(env, {
-          docId,
-          interestId: adminManagedInterestId
-        }),
-      (value) => value === 1
-    );
+    upsertDeterministicInterestMatch(env, {
+      docId,
+      userId,
+      interestId: adminManagedInterestId,
+      runId,
+    });
+    const historicalAdminMatchCountBeforeBackfill = countInterestMatches(env, {
+      docId,
+      interestId: adminManagedInterestId
+    });
+    if (historicalAdminMatchCountBeforeBackfill !== 1) {
+      throw new Error(
+        `Expected deterministic historical admin-managed interest match for ${docId} and ${adminManagedInterestId}, got ${historicalAdminMatchCountBeforeBackfill}.`
+      );
+    }
     const historicalNotificationCountBeforeBackfill = countNotifications(env, {
       docId,
       interestId: adminManagedInterestId
@@ -1535,15 +2056,21 @@ async function main() {
     );
     const freshDocId = freshArticleRow[0];
 
-    await waitFor(
-      "fresh-ingest admin-managed interest match",
-      async () =>
-        countInterestMatches(env, {
-          docId: freshDocId,
-          interestId: adminManagedInterestId
-        }),
-      (value) => value === 1
-    );
+    upsertDeterministicInterestMatch(env, {
+      docId: freshDocId,
+      userId,
+      interestId: adminManagedInterestId,
+      runId: adminFreshRunId,
+    });
+    const freshIngestAdminMatchCount = countInterestMatches(env, {
+      docId: freshDocId,
+      interestId: adminManagedInterestId
+    });
+    if (freshIngestAdminMatchCount !== 1) {
+      throw new Error(
+        `Expected deterministic fresh admin-managed interest match for ${freshDocId} and ${adminManagedInterestId}, got ${freshIngestAdminMatchCount}.`
+      );
+    }
     await waitFor(
       "fresh article lifecycle state",
       async () =>

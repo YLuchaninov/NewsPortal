@@ -13,6 +13,12 @@ from .content_analysis_heuristic_terms import (
     TITLECASE_PATTERN,
     WORD_PATTERN,
 )
+from .content_analysis_runtime import (
+    merge_terms,
+    normalize_key,
+    read_config_float,
+    read_config_int,
+)
 
 DEFAULT_MAX_TEXT_CHARS = 50_000
 
@@ -45,7 +51,7 @@ def extract_heuristic_entities(
     *,
     max_chars: int = DEFAULT_MAX_TEXT_CHARS,
     config: Mapping[str, Any] | None = None,
-    normalize_key_func: Callable[[str], str],
+    normalize_key_func: Callable[[str], str] = normalize_key,
 ) -> list[dict[str, Any]]:
     config = config or {}
     bounded_text = text[:max_chars]
@@ -107,9 +113,9 @@ def analyze_sentiment(
     *,
     max_chars: int = DEFAULT_MAX_TEXT_CHARS,
     config: Mapping[str, Any] | None = None,
-    merge_terms_func: Callable[[set[str], Mapping[str, Any], str], set[str]],
-    read_config_float_func: Callable[[Mapping[str, Any], str, float], float],
-    read_config_int_func: Callable[[Mapping[str, Any], str, int], int],
+    merge_terms_func: Callable[[set[str], Mapping[str, Any], str], set[str]] = merge_terms,
+    read_config_float_func: Callable[[Mapping[str, Any], str, float], float] = read_config_float,
+    read_config_int_func: Callable[[Mapping[str, Any], str, int], int] = read_config_int,
 ) -> dict[str, Any]:
     config = config or {}
     tokens = tokenize(text, max_chars=max_chars)
@@ -164,9 +170,9 @@ def analyze_categories(
     *,
     max_chars: int = DEFAULT_MAX_TEXT_CHARS,
     config: Mapping[str, Any] | None = None,
-    normalize_key_func: Callable[[str], str],
-    read_config_float_func: Callable[[Mapping[str, Any], str, float], float],
-    read_config_int_func: Callable[[Mapping[str, Any], str, int], int],
+    normalize_key_func: Callable[[str], str] = normalize_key,
+    read_config_float_func: Callable[[Mapping[str, Any], str, float], float] = read_config_float,
+    read_config_int_func: Callable[[Mapping[str, Any], str, int], int] = read_config_int,
 ) -> dict[str, Any]:
     config = config or {}
     tokens = tokenize(text, max_chars=max_chars)

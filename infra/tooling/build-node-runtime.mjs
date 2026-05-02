@@ -1,0 +1,115 @@
+/* global console, process */
+
+import { rm } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { build } from "esbuild";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+const services = {
+  relay: {
+    root: "services/relay",
+    entries: {
+      "main.mjs": "src/main.ts",
+      "cli/migrate.mjs": "src/cli/migrate.ts",
+    },
+    external: ["bullmq", "fastify", "ioredis", "pg"],
+  },
+  fetchers: {
+    root: "services/fetchers",
+    entries: {
+      "main.mjs": "src/main.ts",
+      "cli/article-yield-diagnostics.mjs": "src/cli/article-yield-diagnostics.ts",
+      "cli/article-yield-remediate.mjs": "src/cli/article-yield-remediate.ts",
+      "cli/replay-website-projections.mjs": "src/cli/replay-website-projections.ts",
+      "cli/run-once.mjs": "src/cli/run-once.ts",
+    },
+    external: [
+      "@extractus/article-extractor",
+      "@extractus/oembed-extractor",
+      "fast-xml-parser",
+      "fastify",
+      "feedsmith",
+      "htmlparser2",
+      "imapflow",
+      "pg",
+      "playwright",
+    ],
+  },
+  mcp: {
+    root: "services/mcp",
+    entries: {
+      "main.mjs": "src/main.ts",
+    },
+    external: ["fastify", "pg"],
+  },
+};
+
+function parseRequestedServices(argv) {
+  const selected = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--service") {
+      selected.push(argv[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--service=")) {
+      selected.push(arg.slice("--service=".length));
+    }
+  }
+
+  if (selected.length === 0) {
+    return Object.keys(services);
+  }
+
+  for (const service of selected) {
+    if (!services[service]) {
+      throw new Error(
+        `Unknown service "${service}". Expected one of: ${Object.keys(services).join(", ")}.`
+      );
+    }
+  }
+
+  return selected;
+}
+
+function externalPatterns(names) {
+  return [...new Set(names)].flatMap((name) => [name, `${name}/*`]);
+}
+
+async function buildService(name) {
+  const service = services[name];
+  const serviceRoot = path.join(repoRoot, service.root);
+  const outdir = path.join(serviceRoot, "dist");
+
+  await rm(outdir, { recursive: true, force: true });
+
+  for (const [outfile, entry] of Object.entries(service.entries)) {
+    await build({
+      absWorkingDir: serviceRoot,
+      bundle: true,
+      entryPoints: [entry],
+      external: externalPatterns(service.external),
+      format: "esm",
+      legalComments: "none",
+      logLevel: "silent",
+      outfile: path.join(outdir, outfile),
+      platform: "node",
+      sourcemap: false,
+      target: "node22",
+    });
+  }
+
+  console.log(
+    `Built ${name}: ${Object.keys(service.entries)
+      .map((entry) => path.posix.join(service.root, "dist", entry))
+      .join(", ")}`
+  );
+}
+
+for (const service of parseRequestedServices(process.argv.slice(2))) {
+  await buildService(service);
+}

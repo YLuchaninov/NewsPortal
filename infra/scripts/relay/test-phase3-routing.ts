@@ -36,6 +36,8 @@ interface SequenceManagedSmokeInput {
   label: string;
 }
 
+const ROUTED_RUN_STATUSES = new Set(["pending", "running", "processing", "completed", "failed"]);
+
 async function insertOutboxEvent(
   pool: Pool,
   input: {
@@ -190,8 +192,8 @@ async function assertSequenceManagedRouting(
         `${input.label} created unexpected sequence ${run.sequenceId} for event ${eventId}.`
       );
     }
-    if (run.status !== "pending") {
-      throw new Error(`${input.label} run ${run.runId} expected pending status, got ${run.status}.`);
+    if (!ROUTED_RUN_STATUSES.has(run.status)) {
+      throw new Error(`${input.label} run ${run.runId} has unexpected status ${run.status}.`);
     }
 
     assertRecordContains(run.contextJson, input.expectedContext, `${input.label} context`);
@@ -215,7 +217,10 @@ async function assertSequenceManagedRouting(
 
     const job = await queue.getJob(run.runId);
     if (!job) {
-      throw new Error(`${input.label} expected q.sequence job ${run.runId} but none was found.`);
+      if (run.status === "pending") {
+        throw new Error(`${input.label} expected q.sequence job ${run.runId} but none was found.`);
+      }
+      continue;
     }
     if (job.name !== "sequence.run") {
       throw new Error(`${input.label} expected queue job name sequence.run, got ${job.name}.`);

@@ -1,3 +1,4 @@
+import { assertAdminChannelPayload } from "@newsportal/contracts";
 import type { Pool } from "pg";
 
 import {
@@ -38,6 +39,15 @@ type ChannelWriteResult = {
   authConfiguredChannelIds: string[];
   authClearedChannelIds: string[];
 };
+
+function stripAdminActionEnvelope(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const channelPayload = { ...payload };
+  delete channelPayload.intent;
+  delete channelPayload.redirectTo;
+  return channelPayload;
+}
 
 function resolveProviderType(payload: Record<string, unknown>): AdminChannelProviderType {
   const normalized = String(payload.providerType ?? "rss").trim();
@@ -107,8 +117,12 @@ export async function saveChannelFromPayload(
   actorUserId: string,
   payload: Record<string, unknown>
 ): Promise<SavedChannelResult> {
-  const providerType = resolveProviderType(payload);
-  const channel = parseChannelInput(providerType, payload);
+  const channelPayload = stripAdminActionEnvelope(payload);
+  assertAdminChannelPayload(channelPayload, {
+    boundaryName: "control-plane channel payload",
+  });
+  const providerType = resolveProviderType(channelPayload);
+  const channel = parseChannelInput(providerType, channelPayload);
   const result = await upsertChannelInput(pool, providerType, channel);
   const channelId = channel.channelId ?? result.createdChannelIds[0] ?? null;
   const providerLabel = formatAdminChannelProviderLabel(channel.providerType);

@@ -1,13 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
-const migrationsDirectory = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../database/migrations"
-);
+import { findRepoRoot } from "./runtime-paths";
 
 interface ApplyPendingMigrationsOptions {
   schema?: string;
@@ -40,6 +36,7 @@ export async function applyPendingMigrations(
     `select name from ${schemaTableName}`
   );
   const appliedNames = new Set(appliedResult.rows.map((row) => row.name));
+  const migrationsDirectory = path.join(await findRepoRoot(), "database/migrations");
   const migrationFiles = (await readdir(migrationsDirectory))
     .filter((entry) => entry.endsWith(".sql"))
     .sort();

@@ -44,6 +44,7 @@ import {
   inferResourceKindsFromUrl,
 } from "./web-ingestion";
 import { canonicalizeUrl } from "./rss";
+import { validateAcquisitionUrl } from "./probe-url-guard";
 
 export {
   buildWebsiteResourceClassificationJson,
@@ -245,17 +246,22 @@ export class ResourceEnrichmentService {
   }
 
   private async extractResource(resource: WebResourceRow): Promise<ExtractionPersistShape> {
+    const guardedResourceUrl = await validateAcquisitionUrl(resource.url, { resolveDns: true });
+    if (!guardedResourceUrl.url) {
+      throw new Error(guardedResourceUrl.error ?? "Resource URL is not allowed.");
+    }
+    const resourceUrl = guardedResourceUrl.url;
     const policy = await this.crawlPolicyCache.getPolicy(
-      resource.url,
+      resourceUrl,
       resource.userAgent,
       resource.requestTimeoutMs,
     );
-    if (!policy.isAllowed(resource.url, resource.userAgent)) {
+    if (!policy.isAllowed(resourceUrl, resource.userAgent)) {
       throw new Error("robots.txt disallows crawling this resource URL.");
     }
 
-    const response = await this.withExternalFetchSlot(resource.url, async () =>
-      fetch(resource.url, {
+    const response = await this.withExternalFetchSlot(resourceUrl, async () =>
+      fetch(resourceUrl, {
         headers: {
           "user-agent": resource.userAgent,
           accept: "text/html,application/xhtml+xml,application/json,application/xml,text/plain,*/*;q=0.8",
@@ -269,7 +275,11 @@ export class ResourceEnrichmentService {
       throw new Error(`Resource fetch failed with ${response.status} ${response.statusText}.`);
     }
 
-    const finalUrl = canonicalizeUrl(response.url);
+    const guardedFinalUrl = await validateAcquisitionUrl(response.url || resourceUrl);
+    if (!guardedFinalUrl.url) {
+      throw new Error(guardedFinalUrl.error ?? "Resource final URL is not allowed.");
+    }
+    const finalUrl = canonicalizeUrl(guardedFinalUrl.url);
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
     const modifiedAt = response.headers.get("last-modified");
     const contentLanguage = response.headers.get("content-language");

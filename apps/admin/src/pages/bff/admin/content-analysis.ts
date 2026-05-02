@@ -4,17 +4,12 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  insertAdminAuditLog,
+  prepareAdminAction,
+} from "../../../lib/server/admin-action";
 import { getPool } from "../../../lib/server/db";
-import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
@@ -27,27 +22,15 @@ function readBooleanField(value: unknown): boolean {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    request.headers.get("referer"),
-    "/analysis"
-  );
-  const session = await resolveAdminSession(request);
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/analysis",
+    actionToken: { scope: "content-analysis" },
+  });
+  if (!action.ok) {
+    return action.response;
   }
 
-  const payload = await readRequestPayload(request);
+  const { payload, session } = action.context;
   const runtimeConfig = readRuntimeConfig(process.env, {
     defaultAppBaseUrl: "http://127.0.0.1:4322/",
   });
@@ -91,44 +74,25 @@ export const POST: APIRoute = async ({ request }) => {
     const queued = await sdk.requestContentAnalysisBackfill<Record<string, unknown>>(
       requestPayload
     );
-    await getPool().query(
-      `
-        insert into audit_log (
-          actor_user_id,
-          action_type,
-          entity_type,
-          entity_id,
-          payload_json
-        )
-        values ($1, 'content_analysis_backfill_requested', 'reindex_job', $2, $3::jsonb)
-      `,
-      [
-        session.userId,
-        String(queued.reindexJobId ?? ""),
-        JSON.stringify({ request: requestPayload, queued }),
-      ]
-    );
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "analysis",
-        status: "success",
-        message: "Content analysis backfill queued",
-        redirectTo,
-      });
-    }
-    return Response.json(queued, { status: 202 });
+    await insertAdminAuditLog(getPool(), {
+      actorUserId: session.userId,
+      actionType: "content_analysis_backfill_requested",
+      entityType: "reindex_job",
+      entityId: String(queued.reindexJobId ?? ""),
+      payloadJson: { request: requestPayload, queued },
+    });
+    return adminActionSuccess(action.context, {
+      section: "analysis",
+      message: "Content analysis backfill queued",
+      status: 202,
+      json: queued,
+    });
   } catch (error) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "analysis",
-        status: "error",
-        message: "Unable to queue content analysis backfill right now.",
-        redirectTo,
-      });
-    }
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Failed to queue backfill." },
-      { status: 500 }
-    );
+    return adminActionError(action.context, {
+      section: "analysis",
+      message: "Unable to queue content analysis backfill right now.",
+      status: 500,
+      json: { error: error instanceof Error ? error.message : "Failed to queue backfill." },
+    });
   }
 };

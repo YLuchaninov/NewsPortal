@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from services.workers.app.task_engine.models import normalize_task_graph_payload
 
 
 class SequenceCreatePayload(BaseModel):
@@ -19,6 +21,11 @@ class SequenceCreatePayload(BaseModel):
     tags: list[str] = Field(default_factory=list)
     created_by: str | None = Field(default=None, alias="createdBy")
 
+    @field_validator("task_graph", mode="before")
+    @classmethod
+    def _validate_task_graph(cls, value: Any) -> list[dict[str, Any]]:
+        return normalize_task_graph_payload(value)
+
 
 class SequenceUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -33,6 +40,13 @@ class SequenceUpdatePayload(BaseModel):
     max_runs: int | None = Field(default=None, ge=1, alias="maxRuns")
     tags: list[str] | None = None
     created_by: str | None = Field(default=None, alias="createdBy")
+
+    @field_validator("task_graph", mode="before")
+    @classmethod
+    def _validate_task_graph(cls, value: Any) -> list[dict[str, Any]] | None:
+        if value is None:
+            return None
+        return normalize_task_graph_payload(value)
 
 
 class SequenceManualRunPayload(BaseModel):
@@ -65,6 +79,11 @@ class AgentSequenceCreatePayload(BaseModel):
     context_json: dict[str, Any] = Field(default_factory=dict, alias="contextJson")
     trigger_meta: dict[str, Any] = Field(default_factory=dict, alias="triggerMeta")
     run_now: bool = Field(default=True, alias="runNow")
+
+    @field_validator("task_graph", mode="before")
+    @classmethod
+    def _validate_task_graph(cls, value: Any) -> list[dict[str, Any]]:
+        return normalize_task_graph_payload(value)
 
 
 class SequenceCancelPayload(BaseModel):

@@ -7,6 +7,7 @@ import { loadFetchersConfig } from "../../../services/fetchers/src/config";
 import { createPgPool } from "../../../services/fetchers/src/db";
 import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
 import { ResourceEnrichmentService } from "../../../services/fetchers/src/resource-enrichment";
+import { probeWebsitesForDiscovery } from "../../../services/fetchers/src/web-ingestion";
 
 interface WaitOptions {
   timeoutMs: number;
@@ -33,7 +34,7 @@ interface SmokeLogger {
   error(payload: unknown, message?: string): void;
 }
 
-const HARD_SITE_FIXTURE_HOST = "127.0.0.3";
+const HARD_SITE_FIXTURE_HOST = "127.0.0.1";
 const RESOURCE_INGEST_TRIGGER_EVENT = "resource.ingest.requested";
 const ARTICLE_INGEST_TRIGGER_EVENT = "article.ingest.requested";
 
@@ -539,25 +540,15 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
 }
 
 async function assertProbeRecommendation(
-  baseUrl: string,
+  pool: Pool,
   hardSiteUrl: string,
   blockedSiteUrl: string
 ): Promise<void> {
-  const response = await fetch(`${baseUrl}/internal/discovery/websites/probe`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify({
-      urls: [hardSiteUrl, blockedSiteUrl],
-      sampleCount: 4,
-    }),
+  const payload = await probeWebsitesForDiscovery({
+    pool,
+    urls: [hardSiteUrl, blockedSiteUrl],
+    sampleCount: 4,
   });
-  if (!response.ok) {
-    throw new Error(`Expected hard-site discovery probe endpoint to return 200, got ${response.status}.`);
-  }
-  const payload = await response.json() as { probed_websites?: Array<Record<string, unknown>> };
   const rows = Array.isArray(payload.probed_websites) ? payload.probed_websites : [];
   const hardSite = rows.find((row) => String(row.url ?? "") === hardSiteUrl);
   const blockedSite = rows.find((row) => String(row.url ?? "") === blockedSiteUrl);
@@ -680,11 +671,7 @@ async function main(): Promise<void> {
 
   try {
     await pool.query(`delete from crawl_policy_cache where domain = $1`, [fixtureDomain]);
-    await assertProbeRecommendation(
-      `http://127.0.0.1:${config.fetchersPort}`,
-      fixtureServer.hardSiteUrl,
-      fixtureServer.blockedSiteUrl
-    );
+    await assertProbeRecommendation(pool, fixtureServer.hardSiteUrl, fixtureServer.blockedSiteUrl);
 
     const hardSiteChannelId = await seedWebsiteChannel(
       pool,

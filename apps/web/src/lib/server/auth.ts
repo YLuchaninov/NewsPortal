@@ -1,9 +1,14 @@
 import type { AuthIdentity, AuthSession } from "@newsportal/contracts";
+import { shouldMarkCookieSecure } from "@newsportal/config";
 
 import { queryOne, queryRows } from "./db";
 
 const WEB_SESSION_COOKIE = "np_web_session";
 const WEB_REFRESH_COOKIE = "np_web_refresh";
+
+interface AuthCookieOptions {
+  request?: Request | null;
+}
 
 interface FirebaseLookupUser {
   localId: string;
@@ -289,21 +294,33 @@ export async function resolveWebSession(request: Request): Promise<(AuthSession 
   }
 }
 
-export function buildSessionCookie(value: string): string {
-  return `${WEB_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
+function buildCookieSuffix(options: AuthCookieOptions = {}): string {
+  return shouldMarkCookieSecure({
+    env: process.env,
+    request: options.request ?? null
+  })
+    ? "; Secure"
+    : "";
 }
 
-export function buildRefreshCookie(value: string): string {
-  return `${WEB_REFRESH_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
+export function buildSessionCookie(value: string, options: AuthCookieOptions = {}): string {
+  return `${WEB_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${buildCookieSuffix(options)}`;
+}
+
+export function buildRefreshCookie(value: string, options: AuthCookieOptions = {}): string {
+  return `${WEB_REFRESH_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${buildCookieSuffix(options)}`;
 }
 
 export function buildWebAuthCookies(tokens: {
   idToken: string;
   refreshToken: string;
-}): string[] {
-  return [buildSessionCookie(tokens.idToken), buildRefreshCookie(tokens.refreshToken)];
+}, options: AuthCookieOptions = {}): string[] {
+  return [
+    buildSessionCookie(tokens.idToken, options),
+    buildRefreshCookie(tokens.refreshToken, options)
+  ];
 }
 
-export function buildExpiredSessionCookie(): string {
-  return `${WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+export function buildExpiredSessionCookie(options: AuthCookieOptions = {}): string {
+  return `${WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${buildCookieSuffix(options)}`;
 }

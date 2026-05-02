@@ -4,7 +4,7 @@
 
 ## Свежесть архива
 
-- Последняя проверка архива: 2026-04-25
+- Последняя проверка архива: 2026-05-02
 - Проверил: Codex
 - Следующий trigger пересмотра: завершение нового work item/capability или обнаружение stale live detail в `.aidp/work.md`.
 
@@ -45,8 +45,784 @@
 - `AIDP-DOCS-CONTRACTS-DELETE-2026-04-25` — удаление старых duplicate `docs/contracts/*` после переноса canonical truth в `.aidp/contracts/*`.
 - `AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1` — мягкая migration AIDP OS 1.6.1 -> 1.7.2 через двухуровневую маршрутизацию и docs-operator route.
 - `AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1` — мягкая migration AIDP OS 1.7.2 -> 1.7.3 через tool-independent planning/specification layer.
+- `NEWSPORTAL-ARCHITECTURE-AUDIT-REMEDIATION-SWEEP-1` — реализация четырех принятых architecture/engineering audit findings.
+- `NEWSPORTAL-FEED-PARSER-HARDENING-SWEEP-1` — укрепление локального RSS/Atom/JSON Feed parser после удаления deprecated feed extractor dependency.
+- `NEWSPORTAL-CONTENT-SAFETY-FEED-TASK-BOUNDARY-SWEEP-1` — shared HTML sanitizer, fetchers-owned feed probe parity and task-engine boundary split.
+- `NEWSPORTAL-POST-SWEEP-HARDENING-NO-COMPAT-SWEEP-1` — post-sweep hardening without internal compatibility shims.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-13` — non-root Node runtime images and web/admin runtime-only contour.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-14` — non-root Python API/worker runtime image and derived-data payload cleanup.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-15` — hash-first Python ML dependency contour and image-size guard.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-16` — runtime image inventory and size budgets.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-17` — derived-vector/HNSW consistency diagnostics.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-18` — deterministic supply-chain inventory proof.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-19` — shared admin action kit for mutating BFF routes.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-20` — broader admin action-kit migration for small/medium mutating BFF routes.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-21` — action-kit migration for large automation/discovery admin BFF dispatchers.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-22` — compose UI-audit acquisition fixture repair and admin channel envelope regression fix.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-23` — shared admin action-kit CSRF metadata guard.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-24` — request-aware auth cookie Secure/proxy policy.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-25` — signed admin action-token foundation and MCP-token enforcement slice.
+- `NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-26` — signed admin action-token enforcement for reindex maintenance writes.
+- `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-27` — signed admin action-token coverage for all mutating admin BFF routes.
+- `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-28` — shared web BFF action kit and CSRF metadata guard.
+- `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-29` — TypeScript runtime schema registry expansion.
+- `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-30` — Python task-engine and sequence maintenance typed boundaries.
+- `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-31` — deterministic API and Email IMAP provider proof lanes.
+- `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-32` — repo-owned non-deploy release verification gate.
 
 ## Завершенные items
+
+### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-32 — Repo-owned non-deploy release verification gate
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the stage closes the release-ready compliance gap with a real repo-owned local release gate instead of an imagined production deploy path; source `external-spec`; accepted artifact was the release-ready compliance backlog plan, narrowed to the Stage 32 release-verification slice in `.aidp/work.md`.
+- Risk: high
+- Approval: user explicitly requested continuing implementation; no production deploy, external publish, registry push, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY
+- Почему существовало: after Stage 31 promoted API and Email IMAP into deterministic provider proof lanes, the remaining release-ready gap was a top-level command that proves a locally releasable artifact contour and records that production deployment is absent by design.
+- Что изменилось:
+  - added and wired `pnpm release:verify` as the repo-owned non-deploy release gate;
+  - added production image content smoke checks so production images fail if they contain blocked payload classes such as tests, fixtures, AIDP state, env files or derived data;
+  - wired release verification through compliance, lint, typecheck, unit tests, app/runtime builds, production compose image build, runtime image size/content checks, supply-chain inventory/artifact generation, product-local core/full proof and product-local cleanup/down;
+  - updated release verification metadata/docs so the durable contract is "release verification exists; production deploy remains absent by design";
+  - repaired deterministic MVP proof seed state in `infra/scripts/test-mvp-internal.mjs` by upserting matching `canonical_documents` and `document_observations` rows for manually materialized canonical articles, preventing the reindex/backfill release proof from hitting canonical-document foreign-key drift.
+- Выполненный proof:
+  - `node --check infra/scripts/test-mvp-internal.mjs` passed;
+  - `pnpm test:cluster-match-notify:compose` passed;
+  - `pnpm test:mvp:internal` passed;
+  - `pnpm test:product:local:core` passed;
+  - `pnpm release:verify` passed, including compliance, lint, typecheck, unit tests, builds, production image build/checks, supply-chain proof, product-local core/full and cleanup/down;
+  - `docker ps --format '{{.Names}}'` returned empty output after release cleanup;
+  - `git diff --check --` passed.
+- Evidence artifacts:
+  - release summary directory: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/newsportal-release-verify-d2ad9d46`;
+  - release summary JSON: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/newsportal-release-verify-d2ad9d46/release-verify-summary.json`;
+  - product-local full artifact: `/tmp/newsportal-product-local-full-c104942a.json` and `/tmp/newsportal-product-local-full-c104942a.md`;
+  - product-local cleanup artifact: `/tmp/newsportal-product-local-cleanup-358b0f85.json` and `/tmp/newsportal-product-local-cleanup-358b0f85.md`.
+- Cleanup:
+  - release verification ran product-local cleanup and `pnpm dev:mvp:internal:down`;
+  - final `docker ps --format '{{.Names}}'` returned no running containers;
+  - no volumes were manually removed and no commit/stage/branch action was performed.
+- Оставшиеся risks/gaps:
+  - production deployment remains absent by design because the repository has no real deployment target/command;
+  - live-provider proof remains time/network dependent, and the release gate accepts truthful external-runtime residuals only when the harness classifies them explicitly;
+  - no follow-up item was opened.
+- Archived on: 2026-05-02
+
+### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-31 — Deterministic API and Email IMAP provider proof lanes
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change promotes API source and Email IMAP ingestion from parked wording into first-class deterministic proof lanes; source `external-spec`; accepted artifact was the release-ready compliance backlog plan, narrowed to the Stage 31 provider-universality slice in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continuing implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY
+- Почему существовало: after Stage 30 closed Python typed boundaries, API and Email IMAP had admin/schema/unit coverage but product-local and verification wording still treated them as parked ingestion lanes instead of deterministic provider proof surfaces.
+- Что изменилось:
+  - added `infra/scripts/fetchers/test-provider-universality-smoke.ts`, a fetchers-owned deterministic smoke that seeds and cleans API and Email IMAP channels against local PostgreSQL and fixture providers;
+  - the API lane proves POST method handling, authorization/custom header policy, pagination via `next_url`, article creation and cursor persistence;
+  - the Email IMAP lane proves injected IMAP client execution, UID/UIDVALIDITY cursor persistence, Message-ID/article creation, sender filtering metrics, HTML body/link extraction and logout cleanup;
+  - added root `pnpm test:providers:compose` and fetchers `test:provider-universality-smoke` scripts;
+  - product-local proof metadata now includes `api-source-ingestion` and `email-imap-ingestion`, with only Telegram and YouTube left outside the deterministic local contour;
+  - updated `.aidp/os.yaml`, `.aidp/verification.md`, `.aidp/contracts/test-access-and-fixtures.md` and `docs/product/operator/local-product-testing.md` to make the provider proof lane discoverable and durable.
+- Выполненный proof:
+  - targeted `pnpm --filter @newsportal/fetchers typecheck` passed;
+  - targeted `pnpm unit_tests:ts` passed TypeScript 307/307;
+  - `pnpm dev:mvp:internal:no-build` started the local compose stack for stateful PostgreSQL/Redis-backed proof;
+  - targeted `pnpm test:providers:compose` passed and reported `provider-universality-ok` for providers `api` and `email_imap`;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and existing Astro/React hints only;
+  - `pnpm unit_tests` passed: TypeScript 307/307 and Python 337/337;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks over 791 tracked files;
+  - `git diff --check --` passed;
+  - `docker ps --format '{{.Names}}'` was checked before cleanup and showed the local compose stack running;
+  - `pnpm dev:mvp:internal:down` stopped the compose stack without removing volumes;
+  - final `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - the provider smoke script deletes its seeded API/IMAP channels, articles, runs, cursors and related state in `finally`;
+  - the local compose stack was stopped with `pnpm dev:mvp:internal:down`;
+  - no commit, staging, branch change, production deployment, destructive cleanup or volume removal was performed.
+- Оставшиеся risks/gaps:
+  - Telegram ingestion and YouTube provider remain outside the deterministic local product contour;
+  - the non-deploy `pnpm release:verify` gate remains the next release-ready compliance stage;
+  - external live provider credentials remain intentionally outside this deterministic proof lane.
+- Follow-up created: none.
+- Archived on: 2026-05-02
+
+### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-30 — Python task-engine and sequence maintenance typed boundaries
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches Python runtime boundary validation for sequence/task-engine writes and worker execution; source `external-spec`; accepted artifact was the release-ready compliance backlog plan, narrowed to the Stage 30 Python-typed-boundary slice in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continuing implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY
+- Почему существовало: after Stage 29 covered TypeScript schemas, the remaining release-ready schema gap was Python task-engine and sequence maintenance payloads, where task graph shape and plugin options could still remain loosely typed until late execution.
+- Что изменилось:
+  - added Pydantic task-engine payload models for task graph nodes and retry policy, with public camel-case alias normalization, strict extra-field rejection and worker materialization through the same shape contract;
+  - sequence maintenance API payloads now validate and normalize `taskGraph` through the task-engine boundary before command handlers persist or run sequences;
+  - task plugin contracts now include declared context/input schema alongside options, output schema, output caps, retry classification and error taxonomy;
+  - task runtime now revalidates plugin options immediately before `execute(...)`, converting invalid persisted/runtime options into non-retryable `task_plugin.invalid_options` diagnostics instead of letting arbitrary plugin code fail later;
+  - added Python unit coverage for task graph schema rejection, public alias normalization, API sequence boundary validation, plugin contract schema declaration and runtime invalid-options failure behavior;
+  - updated `.aidp/contracts/universal-task-engine.md` with the durable task graph/plugin validation contract.
+- Выполненный proof:
+  - targeted `PYTHONPATH=. python -m unittest tests.unit.python.test_task_engine tests.unit.python.test_task_engine_pipeline_plugins tests.unit.python.test_api_sequence_management` passed: 48 tests;
+  - `pnpm unit_tests:py` passed: Python 337/337;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and existing Astro/React hints only;
+  - `pnpm unit_tests` passed: TypeScript 307/307 and Python 337/337;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks over 791 tracked files;
+  - `git diff --check --` passed;
+  - `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - API and IMAP provider first-class compose proof lanes remain future stages of the parent capability;
+  - the non-deploy `pnpm release:verify` gate remains a future stage;
+  - API still imports selected task-engine control-plane surfaces through the existing sequence worker boundary; a future module-ownership stage can move that into a dedicated shared control-plane owner if desired.
+- Follow-up created: none.
+- Archived on: 2026-05-02
+
+### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-29 — TypeScript runtime schema registry expansion
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches TS runtime boundary validation across BFF, MCP and provider config surfaces; source `external-spec`; accepted artifact was the release-ready compliance backlog plan, narrowed to the Stage 29 TS-runtime-schema slice in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continuing implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY
+- Почему существовало: after admin and web write guards were centralized, the TS side still needed a broader executable schema registry so new BFF/provider/MCP write surfaces cannot silently accept untyped extra fields.
+- Что изменилось:
+  - extended `packages/contracts/src/schema.ts` with shared web BFF action payload schemas, admin BFF action payload schema inventory, source provider config schema aliases and mutation-result schema helpers;
+  - web action-kit payload validation now runs at the shared boundary for mutating routes that read payload through `prepareWebAction(...)`;
+  - saved-digest form handling validates its declared schema before using the raw `FormData`;
+  - MCP write tool definitions now carry an `outputSchema`, and `executeMcpTool(...)` validates mutating tool results before returning them;
+  - schema-registry tests now prove source provider config coverage for RSS/website/API/IMAP, admin action-scope coverage, web BFF payload rejection and MCP write input/output schema declaration;
+  - web action-kit route invariant now fails if a mutating web POST route uses the kit without a declared payload schema or explicit schema assertion;
+  - updated `.aidp/contracts/auth-session-boundary.md` and `.aidp/contracts/mcp-control-plane.md` for the durable schema-validation behavior.
+- Выполненный proof:
+  - targeted `pnpm --filter @newsportal/contracts typecheck` passed;
+  - targeted `pnpm --filter @newsportal/web typecheck` passed with zero errors and existing React `FormEvent` hints only;
+  - targeted `pnpm --filter @newsportal/mcp typecheck` passed;
+  - targeted `pnpm unit_tests:ts` passed TypeScript 307/307;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and existing Astro/React hints only;
+  - `pnpm unit_tests` passed TypeScript 307/307 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks over 791 tracked files;
+  - `git diff --check --` passed;
+  - `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - Python/Pydantic task-plugin and API maintenance typed boundaries remain a future stage;
+  - API/IMAP provider first-class compose proof lanes and the non-deploy release verification gate remain future stages of the parent capability;
+  - admin BFF schemas are inventoried at route-scope level in this stage, but tighter per-intent admin payload schemas can be added incrementally as those domains change.
+- Follow-up created: none.
+- Archived on: 2026-05-02
+
+### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-28 — Shared web BFF action kit and CSRF metadata guard
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches the public web auth/session write boundary; source `external-spec`; accepted artifact was the release-ready compliance backlog plan, narrowed to the Stage 28 web-BFF-action-kit slice in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continuing implementation of the release-ready compliance backlog plan; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY
+- Почему существовало: after Stage 27 closed the admin write boundary, the release-ready compliance backlog still required equivalent CSRF/action-kit coverage for mutating public web BFF routes.
+- Что изменилось:
+  - added `apps/web/src/lib/server/web-action.ts` with `prepareWebAction(...)` and `validateWebActionCsrfMetadata(...)`;
+  - the web action kit rejects explicit cross-site browser metadata before resolving a web session or reading request payloads;
+  - migrated mutating public web BFF routes to the kit: content state, reactions, saved digest, story follow, feedback, preferences, digest settings, notification channels, interest create/update/delete/clone, auth bootstrap and auth logout;
+  - kept bootstrap and logout as sessionless special cases while still applying the metadata guard;
+  - kept read-only web BFF routes as explicit non-mutating surfaces (`session`, `live-updates`);
+  - added a static/unit invariant that scans web BFF POST routes and fails when a mutating route lacks the shared web action kit;
+  - updated `.aidp/contracts/auth-session-boundary.md` to record the durable web action-kit CSRF policy.
+- Выполненный proof:
+  - targeted `pnpm unit_tests:ts` passed TypeScript 303/303 with the new web action-kit and route coverage invariants;
+  - `pnpm --filter @newsportal/web typecheck` passed with zero errors and existing React `FormEvent` hints only;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and existing Astro/React hints only;
+  - `pnpm unit_tests` passed TypeScript 303/303 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks over 791 tracked files;
+  - `git diff --check --` passed;
+  - `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - provider universality closure and the non-deploy release verification gate remain future stages of the parent capability;
+  - browser-level smoke for every user form was not part of this static/unit stage and can be added as a later UI proof layer if product behavior changes.
+- Follow-up created: none.
+- Archived on: 2026-05-02
+
+### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-27 — Signed admin action-token coverage for all mutating admin BFF routes
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches the admin write/auth boundary; source `external-spec`; accepted artifact was the release-ready compliance backlog plan, narrowed to the Stage 27 admin-write-boundary slice in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested implementation of the release-ready compliance backlog plan; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY
+- Почему существовало: the release-ready compliance backlog required completing the signed admin write boundary after prior stages protected only MCP-token and reindex writes.
+- Что изменилось:
+  - added shared admin token-set helpers in `apps/admin/src/lib/server/admin-action.ts`: route-level target inventory, `buildAdminActionTokenSet(...)`, and `readAdminActionTokenForScope(...)`;
+  - AdminShell now publishes a scoped token set for the active admin session and injects the correct token into known same-origin admin POST forms and fetch requests;
+  - every mutating admin BFF route already using `prepareAdminAction` now requires a route-level `actionToken` scope, including channels, bulk import/preflight/schedule, templates, user interests, moderation, content-analysis, content-analysis policies, content-filter policies, article enrichment retry, automation and discovery;
+  - read-only admin BFF routes remain explicit exceptions (`session`, `live-updates`);
+  - added a static/unit invariant that scans admin BFF POST route files and fails when a mutating route lacks the expected signed action-token scope;
+  - updated `.aidp/contracts/auth-session-boundary.md` to record the durable admin action-token policy.
+- Выполненный proof:
+  - targeted `pnpm unit_tests:ts` passed TypeScript 298/298 with the new helper and admin POST coverage invariants;
+  - `pnpm --filter @newsportal/admin typecheck` passed with zero errors and existing Astro hints only;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and existing Astro hints only;
+  - `pnpm unit_tests` passed TypeScript 298/298 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks over 791 tracked files;
+  - `git diff --check --` passed;
+  - `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - runtime schema registry expansion, provider universality closure and the non-deploy release verification gate remain future stages of the parent capability;
+  - database-backed one-time nonce/replay storage remains out of scope and would need its own storage/proof stage;
+  - AdminShell supplies broad form/fetch token coverage through client-side enhancement; a separate no-JS hardening stage could add explicit hidden inputs to every server-rendered mutating form if needed.
+- Follow-up created: none.
+- Archived on: 2026-05-02
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-26 — Signed admin action-token enforcement for reindex maintenance writes
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches the admin write/auth boundary; source `AIDP-native`; accepted artifact was the Stage 26 live plan in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continued implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: after Stage 25 introduced signed action tokens for MCP-token writes, the next small high-sensitivity admin maintenance write to protect was reindex queueing.
+- Что изменилось:
+  - the reindex admin page now generates a short-lived signed `reindex` action token for the normalized `/bff/admin/reindex` target;
+  - the reindex POST form includes the token in a hidden `adminActionToken` field;
+  - the reindex BFF handler now requires `actionToken: { scope: "reindex" }` through the shared admin action kit before queueing work;
+  - added focused unit coverage that admin-prefixed `/admin/bff/...` form targets validate against the signed reindex token path normalization;
+  - updated `.aidp/contracts/auth-session-boundary.md` to record that reindex maintenance writes require signed action tokens.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/admin typecheck` passed with zero errors and existing Astro hints only;
+  - targeted `pnpm unit_tests:ts` passed TypeScript 296/296 with the new reindex action-token coverage;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and existing Astro hints only;
+  - `pnpm unit_tests` passed TypeScript 296/296 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, env-sync and secret-leak checks over 791 tracked files;
+  - `git diff --check --` passed;
+  - `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - remaining admin mutating BFF routes are not yet all protected by signed action tokens;
+  - database-backed one-time nonce/replay storage remains out of scope and would need its own storage/proof stage;
+  - read-only direct session checks should be reviewed separately before deciding whether they need a dedicated read-action helper.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-25 — Signed admin action-token foundation and MCP-token enforcement slice
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches the admin write/auth boundary; source `AIDP-native`; accepted artifact was the Stage 25 live plan in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continued implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: after admin writes were centralized and protected by browser metadata checks plus cookie policy, the next high-value layer was an explicit server-signed action token for high-sensitivity admin JSON writes.
+- Что изменилось:
+  - added stateless HMAC-signed admin action tokens in `apps/admin/src/lib/server/admin-action.ts`;
+  - tokens are signed with `APP_SECRET`, short-lived, and bound to admin user id, normalized BFF target path and action scope;
+  - `prepareAdminAction` now supports opt-in `actionToken` enforcement before route handler work;
+  - MCP token issue/revoke writes now require `actionToken: { scope: "mcp-tokens" }`;
+  - the MCP token admin page generates a signed token for `/bff/admin/mcp-tokens` and passes it into the React island;
+  - the React island includes the token in both issue and revoke JSON payloads;
+  - added unit coverage for valid, missing, tampered, expired, wrong-user, wrong-path and wrong-scope tokens;
+  - updated `.aidp/contracts/auth-session-boundary.md` with the durable signed action-token policy.
+- Выполненный proof:
+  - `pnpm unit_tests:ts` passed TypeScript 295/295 with new action-token coverage;
+  - `pnpm --filter @newsportal/admin typecheck` passed with zero errors and existing Astro hints only;
+  - initial `pnpm lint` caught a local `no-useless-assignment` issue in the new path-normalizer; fixed immediately;
+  - `pnpm lint` passed after the fix;
+  - `pnpm typecheck` passed with zero errors and existing Astro hints only;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, env-sync and secret-leak checks over 791 tracked files;
+  - `pnpm unit_tests` passed TypeScript 295/295 and Python 333/333;
+  - `git diff --check --` passed.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - this stage deliberately enforced action tokens only on the high-sensitivity MCP token issue/revoke surface;
+  - mass migration of every admin form and JSON island to required action tokens remains future staged work;
+  - database-backed one-time nonce/replay storage remains out of scope and would need its own storage/proof stage.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-24 — Request-aware auth cookie Secure/proxy policy
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches web/admin auth cookies and proxy/runtime behavior; source `AIDP-native`; accepted artifact was the Stage 24 live plan in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continued implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: web/admin auth cookies were already server-side, `HttpOnly` and `SameSite=Strict`, but lacked a shared `Secure` policy that could distinguish local HTTP development from HTTPS/proxy deployments.
+- Что изменилось:
+  - added `readCookieSecurePolicy` and `shouldMarkCookieSecure` to `@newsportal/config`;
+  - introduced `NEWSPORTAL_COOKIE_SECURE_POLICY=auto` in `.env.example` and `.env.dev`;
+  - wired the policy into compose web/admin environments;
+  - made web session/refresh cookies and admin session cookies request-aware, marking `Secure` for HTTPS requests or `X-Forwarded-Proto: https` under `auto`;
+  - preserved local HTTP behavior by default and added `always`/`never` overrides for deployment/debug cases;
+  - passed request-aware cookie options through web/admin sign-in, bootstrap, logout and stale-session expiration call sites;
+  - updated `.aidp/contracts/auth-session-boundary.md` with the durable cookie Secure/proxy policy.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/config typecheck` passed;
+  - `pnpm check:env-sync` passed with 85 matching keys;
+  - initial `pnpm unit_tests:ts` exposed a test import-resolution issue for direct root import of `@newsportal/config`; fixed by importing the package source in the unit test;
+  - `pnpm unit_tests:ts` passed TypeScript 293/293 with new cookie-policy coverage;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and only existing Astro hints;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, env-sync and secret-leak checks over 791 tracked files;
+  - `pnpm unit_tests` passed TypeScript 293/293 and Python 333/333;
+  - `git diff --check --` passed before archive sync.
+- Cleanup:
+  - no compose stack, browser session, database migration, external service, container cleanup or volume cleanup was needed;
+  - no commit, staging, branch change, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - per-form/action-token rollout remains a future admin security stage;
+  - web-user BFF CSRF hardening remains separate from this cookie-policy stage;
+  - HTTPS deployment should set or verify `X-Forwarded-Proto` at the front door so `auto` can mark cookies `Secure`.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-23 — Shared admin action-kit CSRF metadata guard
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required because the change touches the admin auth/session and UI/BFF boundary; source `AIDP-native`; accepted artifact was the Stage 23 live plan in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continued implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: after mutating admin BFF writes were centralized through `prepareAdminAction`, the shared action boundary could reject explicit browser cross-site metadata before request-body reads instead of relying only on SameSite cookies and route-local patterns.
+- Что изменилось:
+  - added `validateAdminActionCsrfMetadata` to the shared admin action kit;
+  - `prepareAdminAction` now rejects explicit `Sec-Fetch-Site: cross-site`, mismatched `Origin`, and mismatched absolute `Referer` before session resolution or payload reads;
+  - same-origin, same-site and forwarded-origin admin requests remain accepted;
+  - local/scripted requests without browser site metadata remain compatible for proof harnesses and server-side callers;
+  - browser denials return the existing flash redirect shape, while JSON/API denials return `403` with a stable error payload;
+  - updated `.aidp/contracts/auth-session-boundary.md` to record the confirmed admin CSRF metadata policy.
+- Выполненный proof:
+  - `pnpm unit_tests:ts` passed TypeScript 290/290 with new CSRF metadata guard tests;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with zero errors and only existing Astro hints;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, env-sync and secret-leak checks over 791 tracked files;
+  - `pnpm unit_tests` passed TypeScript 290/290 and Python 333/333;
+  - `pnpm test:web:ui-audit` passed with `status: ui-button-audit-ok`, run id `14142ba6`, and 40 checked web/admin actions on a freshly rebuilt admin image;
+  - `git diff --check --` passed;
+  - final `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - no local data, images, caches or volumes were deleted;
+  - no commit, staging, branch change, schema migration, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - per-form/action-token rollout remains a future security stage;
+  - web-user BFF CSRF hardening remains out of scope for this admin-only stage;
+  - cookie `Secure`/proxy policy changes remain a separate future stage;
+  - UI audit still records Web Push as skipped in headless Chromium when no active Service Worker is available.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-22 — Compose UI-audit acquisition fixture repair and admin channel envelope regression fix
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: bugfix
+- Planning/source: required because the failure crossed test/runtime and admin schema boundaries; source `AIDP-native`; accepted artifact was the Stage 22 live plan in `.aidp/work.md`.
+- Risk: medium
+- Approval: user explicitly requested continued implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: after acquisition hardening, `pnpm test:web:ui-audit` could not use repo-owned compose fixture feeds because `http://web:4321/...` resolves to a private Docker address; while proving the fix, the same audit surfaced missing deterministic `/matches` fixture data and an admin channel create regression where action-envelope fields were validated as domain channel payload.
+- Что изменилось:
+  - added an explicit fetchers acquisition private-host allowlist for exact dev/test fixture origins through `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST`, leaving production/default URL guard behavior strict;
+  - wired the allowlist through `.env.example`, `.env.dev` and `infra/docker/compose.yml`;
+  - added focused acquisition-guard unit coverage proving exact `web:4321` fixture allowance and continued rejection of nearby/private variants;
+  - made the UI button audit rebuild current admin and fetchers images before compose proof;
+  - made the UI button audit seed a deterministic `interest_match_results` `notify` row and wait for `/matches` state controls before clicking them;
+  - fixed `packages/control-plane/src/channels.ts` so `saveChannelFromPayload` strips admin action-envelope fields such as `intent` and `redirectTo` before validating the domain channel schema;
+  - added a regression test proving browser-form channel payloads can pass through the control-plane save path while the domain schema remains strict.
+- Выполненный proof:
+  - `pnpm unit_tests:ts` passed TypeScript 287/287 after the new admin channel and acquisition guard regressions;
+  - `pnpm lint` passed;
+  - `pnpm --filter @newsportal/fetchers typecheck` passed;
+  - `pnpm check:env-sync` passed, confirming `.env.example` and `.env.dev` expose 84 matching keys;
+  - `pnpm typecheck` passed with zero errors and only existing Astro hints;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, env-sync and secret-leak checks over 791 tracked files;
+  - `pnpm unit_tests` passed TypeScript 287/287 and Python 333/333;
+  - `pnpm test:web:ui-audit` passed with `status: ui-button-audit-ok`, run id `a2dbed94`, and 40 checked web/admin button actions including `/matches`, admin channel create/edit/import/list, article moderation/retry, reindex, automation and discovery smoke;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches;
+  - `git diff --check --` passed;
+  - final `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - no local data, images, caches or volumes were deleted;
+  - no commit, staging, branch change, schema migration, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST` is intentionally for local proof fixtures only and must remain blank outside repo-owned dev/test compose contexts;
+  - the UI audit still records Web Push as skipped in headless Chromium when no active Service Worker is available;
+  - broader CSRF/action-token rollout and cookie proxy-policy changes remain future security stages.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-21 — Action-kit migration for large automation/discovery admin BFF dispatchers
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required by capability; source `AIDP-native`; accepted artifact was the Stage 21 live plan in `.aidp/work.md` after the user asked to continue maximum compliance.
+- Risk: medium
+- Approval: user explicitly requested implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: the large automation and discovery admin BFF dispatchers still read request payloads and built auth/error/success responses outside the shared admin action kit, leaving the highest-risk remaining admin write surfaces with duplicated boundary code.
+- Что изменилось:
+  - migrated `apps/admin/src/pages/bff/admin/automation.ts` to `prepareAdminAction`, authorizing before request-body reads and preserving existing sequence branch behavior, API payload builders, statuses and success/error copy;
+  - migrated `apps/admin/src/pages/bff/admin/discovery.ts` to `prepareAdminAction`, authorizing before request-body reads and preserving existing discovery profile/mission/class/recall/candidate/feedback branch behavior, statuses and route-specific redirect targets;
+  - routed automation/discovery browser and JSON success/error responses through `adminActionSuccess` and `adminActionError`;
+  - routed automation/discovery audit writes through `insertAdminAuditLog`, while keeping discovery's existing `normalizeAuditEntityId` behavior;
+  - relaxed shared action-kit JSON response typing to accept arbitrary JSON payloads from maintenance APIs and relaxed audit entity ids to allow `null`;
+  - confirmed direct auth/payload/flash patterns no longer remain in the large automation/discovery dispatcher files.
+- Выполненный proof:
+  - `pnpm unit_tests:ts` passed TypeScript 285/285;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with existing Astro hints only and zero errors;
+  - `pnpm unit_tests` passed TypeScript 285/285 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks;
+  - targeted `rg "resolveAdminSession|readRequestPayload|buildFlashRedirect|buildAdminSignInPath|buildExpiredAdminSessionCookie|requestPrefersHtmlNavigation|resolveAdminRedirectPath" apps/admin/src/pages/bff/admin/automation.ts apps/admin/src/pages/bff/admin/discovery.ts -n` returned no matches;
+  - `pnpm test:automation:admin:compose` passed after rebuilding the current admin image, returning `status: automation-admin-ok`;
+  - `pnpm test:discovery:admin:compose` passed after rebuilding current compose images, returning `status: discovery-admin-ok`;
+  - `git diff --check --` passed;
+  - `.aidp/os.yaml` and `package.json` parsed successfully;
+  - final `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - no local data, images, caches or volumes were deleted;
+  - no commit, staging, branch change, schema migration, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - read-only BFF routes still use direct local session checks where appropriate; a future stage can decide whether a read-action helper is worth adding;
+  - route-specific compatibility code remains for bulk preflight denied JSON and template redirect normalization;
+  - broader CSRF/action-token rollout and cookie proxy-policy changes remain future security stages;
+  - the `pnpm test:web:ui-audit` fixture/acquisition-guard mismatch recorded in Stage 20 remains open and should be repaired separately.
+- Follow-up created: open the next capability stage for web UI audit fixture repair, read-only admin helper consolidation, or CSRF/action-token hardening.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-20 — Broader admin action-kit migration for small/medium mutating BFF routes
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required by capability; source `AIDP-native`; accepted artifact was the Stage 20 live plan in `.aidp/work.md` after the user asked to continue maximum compliance.
+- Risk: medium
+- Approval: user explicitly requested implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: after Stage 19, several small/medium mutating admin BFF routes still duplicated admin auth, payload reading, redirect/error and audit behavior; the privilege boundary needed one canonical action path before more admin writes accumulate.
+- Что изменилось:
+  - extended `apps/admin/src/lib/server/admin-action.ts` with route-specific denied JSON support while preserving the default browser/JSON unauthorized behavior;
+  - widened custom payload-reader typing so routes with validated structured payloads can still authorize before reading request bodies;
+  - migrated channel create/update/delete, channel schedule, bulk import and bulk preflight routes to the shared action kit;
+  - migrated content-analysis backfill, content-analysis policy writes and content-filter policy writes to the shared action kit;
+  - migrated template writes and user-interest create/update/delete writes to the shared action kit while preserving existing redirect destinations and audit records;
+  - added focused unit coverage proving a route can keep its legacy denied JSON shape and that payload readers are not called before admin authorization;
+  - compressed `.aidp/work.md` back to live state only after archiving this stage.
+- Выполненный proof:
+  - `pnpm unit_tests:ts` passed TypeScript 285/285;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with existing Astro hints only and zero errors;
+  - `pnpm unit_tests` passed TypeScript 285/285 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks;
+  - `pnpm test:automation:admin:compose` passed after rebuilding current workspace admin/runtime images, returning `status: automation-admin-ok` and exercising the admin automation/reindex surface;
+  - `git diff --check --` passed;
+  - final `docker ps --format '{{.Names}}'` returned no running containers.
+- Cleanup:
+  - `pnpm test:automation:admin:compose` started the local compose stack; `pnpm dev:mvp:internal:down` stopped it without removing volumes;
+  - no local data, images, caches or volumes were deleted;
+  - no commit, staging, branch change, schema migration, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - large dispatcher routes `apps/admin/src/pages/bff/admin/automation.ts` and `apps/admin/src/pages/bff/admin/discovery.ts` still contain direct admin-session/payload/redirect handling and should be handled in a separate focused stage;
+  - direct session checks in read-only routes remain intentional and were not part of the mutating action-kit migration;
+  - broader CSRF/action-token rollout and cookie proxy-policy changes remain future security stages;
+  - attempted `pnpm test:web:ui-audit` failed before admin button checks because the Stage 1 acquisition guard blocked the compose fixture URL `http://web:4321/internal-mvp-feed.xml?...` after DNS resolution to a private Docker IP such as `192.168.97.6`; this is a proof-harness/fixture issue to repair separately, not a Stage 20 action-kit regression.
+- Follow-up created: open the next capability stage for `automation.ts`/`discovery.ts` or for the web UI audit fixture/acquisition-guard mismatch before continuing admin compliance proof.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-19 — Shared admin action kit for mutating BFF routes
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required by capability; source `external-spec`; accepted artifact was the user-provided system hardening plan and the follow-on request to continue maximum compliance.
+- Risk: medium
+- Approval: user explicitly requested implementation; no production deploy, schema migration, destructive cleanup, staging, commit or branch action was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Почему существовало: admin mutating BFF routes repeated auth, redirect, error and audit patterns, creating drift risk at a privilege boundary.
+- Что изменилось:
+  - added `apps/admin/src/lib/server/admin-action.ts` as the canonical server-side action kit for admin BFF writes;
+  - centralized admin-session enforcement before payload reads, browser-vs-JSON unauthorized responses, safe redirect resolution, success/error flash/JSON responses, required-text validation, intent validation and canonical audit-log insertion;
+  - migrated representative high-risk routes to the kit: reindex requests, article moderation writes, article enrichment retry and MCP token issue/revoke writes;
+  - added focused unit coverage in `tests/unit/ts/admin-action-kit.test.ts`.
+- Выполненный proof:
+  - `pnpm unit_tests:ts` passed TypeScript 284/284;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with existing Astro hints only and zero errors;
+  - `pnpm unit_tests` passed TypeScript 284/284 and Python 333/333;
+  - `pnpm check:compliance` passed, including scaffold, test-layout, runtime-artifacts, dependency-compliance, supply-chain inventory, `.env.example`/`.env.dev` sync and secret-leak checks;
+  - `git diff --check --` passed;
+  - `pnpm test:automation:admin:compose` passed after rebuilding current workspace admin/runtime images, returning `status: automation-admin-ok` and creating a reindex job through the admin surface.
+- Cleanup:
+  - `pnpm test:automation:admin:compose` started the local compose stack; `pnpm dev:mvp:internal:down` stopped it without removing volumes;
+  - final `docker ps --format '{{.Names}}'` returned no running containers;
+  - no commit, staging, branch change, schema migration, production deployment or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - not every admin mutating BFF route was migrated in this stage; future admin write work should start from the new action kit;
+  - broader CSRF token rollout and cookie-policy changes remain future security stages;
+  - attempted `pnpm test:website:admin:compose` reached fetch/projection waiting but timed out on website resources in the maintenance API and hit a `/tmp` fixture cleanup permission error; this was recorded as a residual website projection/proof-harness issue, not counted as the Stage 19 acceptance proof.
+- Follow-up created: continue migrating remaining admin BFF write routes to the action kit and add a separate focused repair for website-admin projection timeout if it reproduces.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-POST-SWEEP-HARDENING-NO-COMPAT-SWEEP-1 — Post-sweep hardening without internal compatibility shims
+
+- Archive outcome: completed
+- Kind: Sweep
+- Финальный status: archived
+- Work route: sweep
+- Lifecycle mode: normal
+- Planning/source: required by sweep; source `external-spec`; accepted artifact was the user-provided post-sweep hardening plan with no internal backward compatibility and no commit.
+- Parent capability: content/source ingestion and rendering hardening
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил выполнить дополнительные hardening-работы after the previous HTML/feed/task-engine sweep, explicitly allowing removal of internal compatibility imports/shims while preserving external HTTP contracts, persisted DB shape and user flows.
+- Что изменилось:
+  - Added fetchers-owned probe URL guard for initial and final redirect URLs: only `http`/`https`, no credentials, no malformed/protocol-relative/overlong URLs and no localhost/private/link-local/reserved IP literals.
+  - Applied URL dedupe and batch limit `10` to fetchers discovery feed/website probe paths, returning invalid diagnostics for rejected probe targets instead of fetching them.
+  - Replaced regex feed alternate extraction in feed probe with parser-based HTML traversal via explicit `htmlparser2` dependency.
+  - Removed internal compatibility modules `services/fetchers/src/feed-parser.ts` and `services/workers/app/task_engine/pipeline_plugins.py`; production/tests now import canonical owner modules.
+  - Moved remaining article and enrichment/resource task plugins into focused owner modules and made `pipeline_registry.py` the canonical builtin plugin registration surface.
+  - Updated `content_sampler` so live sampling tries fetchers feed probe before HTML/trafilatura fallback; Python `feedparser` remains only as explicit env-selected RSS probe fallback.
+  - Expanded sanitizer/render-path proof with XSS corpus coverage and invariants for public/admin content detail sanitizer usage and static trusted admin SVG icon sourcing.
+  - Updated AIDP contracts with durable guardrails for probe safety, canonical feed parser ownership, task plugin registry ownership and shared content sanitizer usage.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/fetchers typecheck` passed.
+  - `pnpm --filter @newsportal/content-safety typecheck` passed.
+  - `pnpm unit_tests:ts` passed.
+  - `pnpm unit_tests:py` passed.
+  - `pnpm test:feed-ingress-adapters:smoke` passed.
+  - `pnpm lint` passed.
+  - `pnpm typecheck` passed with existing Astro hints only and zero errors.
+  - `pnpm unit_tests` passed.
+  - `pnpm test:discovery:admin:compose` passed with `status: discovery-admin-ok`.
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` found no matches.
+  - `rg "from services\\.workers\\.app\\.task_engine\\.pipeline_plugins|task_engine\\.pipeline_plugins|services/fetchers/src/feed-parser\\.ts|from \\\"\\./feed-parser\\\"|from \\\"\\.\\./feed-parser\\\"" services tests apps packages -S --glob '!node_modules/**'` found no matches.
+  - `git diff --check --` passed.
+  - `.aidp/os.yaml` parsed successfully.
+  - `wc -l` confirmed owner modules are split: `pipeline_article_plugins.py` 420, `pipeline_enrichment_plugins.py` 239, `pipeline_registry.py` 58, `pipeline_maintenance_plugins.py` 282, `feed-parser/index.ts` 637, `feed-parser/helpers.ts` 475 and `probe-url-guard.ts` 111.
+- Cleanup:
+  - `pnpm test:discovery:admin:compose` started the local compose stack for proof; `pnpm dev:mvp:internal:down` stopped it without removing volumes.
+  - No commit, staging, branch change, schema migration, production deployment, broad UI redesign or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - Product/runtime contracts were preserved, but internal old import paths are intentionally gone.
+  - `services/api/app/main.py`, `services/workers/app/content_analysis.py`, large admin modules, feed parser/helpers and broad fetchers discovery modules remain follow-up pressure zones for future focused sweeps rather than this no-compat hardening.
+  - Existing Astro typecheck hints unrelated to this sweep remain visible but non-failing.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-18 — Deterministic supply-chain inventory proof
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: dependency compliance already checked direct dependency policies, but the compliance track still lacked a deterministic local SBOM-lite evidence artifact for review/audit without relying on network vulnerability scanners.
+- Что изменилось:
+  - added `infra/scripts/check-supply-chain-inventory.mjs`;
+  - added root script `pnpm check:supply-chain-inventory`;
+  - integrated supply-chain inventory into `pnpm check:compliance`;
+  - inventory covers workspace package manifests, direct installed Node dependency metadata, Python requirements and SHA-256 hashes for manifests/lockfile/requirements;
+  - inventory JSON omits timestamps so identical dependency state produces stable output;
+  - synced `.aidp/os.yaml` and `.aidp/verification.md` with the new guard.
+- Выполненный proof:
+  - `node --check infra/scripts/check-supply-chain-inventory.mjs`;
+  - `pnpm check:supply-chain-inventory`;
+  - `pnpm check:supply-chain-inventory -- --output /tmp/newsportal-supply-chain-inventory-stage18.json`;
+  - parsed `/tmp/newsportal-supply-chain-inventory-stage18.json` and confirmed schema version 1, 12 workspace manifests, 53 direct external Node dependencies, 14 Python requirement entries and 17 hashed files;
+  - `pnpm check:compliance` passed with `check:supply-chain-inventory` included;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm unit_tests` passed TypeScript 278/278 and Python 333/333;
+  - final `pnpm check:compliance`;
+  - final `pnpm lint`;
+  - `git diff --check --`;
+  - `package.json` parsed successfully;
+  - `.aidp/os.yaml` parsed successfully;
+  - compose `ps` showed no services.
+- Cleanup:
+  - no compose/runtime stack was started;
+  - generated proof artifact is outside the repository at `/tmp/newsportal-supply-chain-inventory-stage18.json` and can be regenerated;
+  - no dependency versions, lockfiles beyond already accepted dependency work, production images, staging or commits were changed by this stage.
+- Оставшиеся risks/gaps:
+  - this is not a vulnerability scan and does not query OSV/npm/PyPI/advisory databases;
+  - legal/license interpretation remains outside repository automation.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-CONTENT-SAFETY-FEED-TASK-BOUNDARY-SWEEP-1 — HTML safety, feed discovery parity and task-engine boundaries
+
+- Archive outcome: completed
+- Kind: Sweep
+- Финальный status: archived
+- Work route: sweep
+- Lifecycle mode: normal
+- Planning/source: required by sweep; source `external-spec`; accepted artifact was the user-provided implementation plan for HTML safety, feed parser/discovery parity, task-engine boundaries and AIDP sync.
+- Parent capability: content/source ingestion and rendering hardening
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил реализовать accepted hardening plan after architecture review findings around regex HTML sanitization, feed probe parser drift, task-engine god module pressure and stale active contracts.
+- Что изменилось:
+  - Added `packages/content-safety` with `sanitizeHtmlFragment(raw, { baseUrl, profile })`, backed by explicit `sanitize-html` dependency and allowlisted article-prose policy.
+  - Public content and admin article/resource detail rendering now use the shared sanitizer instead of local regex stripping; trusted admin shell SVG icons remain separate static trusted UI.
+  - Feed parsing remains under the NewsPortal `parseFeed(input)` contract, with `services/fetchers/src/feed-parser.ts` reduced to a compatibility export and parser internals split under `services/fetchers/src/feed-parser/*`.
+  - Added `feedsmith` as the fetchers-owned parser engine/oracle behind NewsPortal normalization, including RDF coverage while preserving canonical URL, diagnostics, category/media/date precedence and output shape.
+  - Added fetchers internal `/internal/discovery/feeds/probe` and worker `FetchersRssProbeAdapter`; live discovery now probes feeds through fetchers by default, with Python `feedparser` retained as env-selected fallback.
+  - `content_sampler` now asks fetchers for feed-like URL samples before falling back to HTML/trafilatura for non-feed pages.
+  - Split task-engine plugin pressure into focused owner modules for legacy handler shim, fetchers internal client/retry policy and maintenance plugins while keeping `pipeline_plugins.py` as compatibility/register surface.
+  - Synchronized `.aidp/os.yaml` `deep_contract_docs.active_contracts` with `.aidp/contracts/content-analysis-and-gating.md` and recorded durable HTML/feed ownership decisions in existing contracts.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/content-safety typecheck` passed.
+  - `pnpm --filter @newsportal/fetchers typecheck` passed.
+  - `pnpm unit_tests:ts` passed.
+  - `pnpm unit_tests:py` passed.
+  - `pnpm lint` passed.
+  - `pnpm typecheck` passed with existing Astro hints only and zero errors.
+  - `pnpm unit_tests` passed.
+  - `pnpm test:feed-ingress-adapters:smoke` passed.
+  - `pnpm test:discovery:admin:compose` passed with `status: discovery-admin-ok`.
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra .aidp --glob '!node_modules/**'` found no package/runtime dependency references; remaining matches are AIDP historical/work text.
+  - `git diff --check --` passed.
+  - `wc -l` confirmed `services/fetchers/src/feed-parser/index.ts` is 638 lines with helpers/types extracted, and `services/workers/app/task_engine/pipeline_plugins.py` is 694 lines with client/legacy/maintenance modules extracted.
+- Cleanup:
+  - no database schema migration, production deployment, secret access or production state change was performed;
+  - compose discovery proof built/started the local test stack as expected for that harness, then `pnpm dev:mvp:internal:down` stopped it without removing volumes.
+- Оставшиеся risks/gaps:
+  - The feed parser still intentionally rejects truly malformed XML instead of implementing Universal Feed Parser-style salvage.
+  - `pipeline_plugins.py` is now a compatibility/register module but still owns article/enrichment plugin classes; future task-engine changes should continue extracting plugin families before adding more concrete plugins.
+  - Existing Astro typecheck hints unrelated to this sweep remain visible but non-failing.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-FEED-PARSER-HARDENING-SWEEP-1 — Local feed parser hardening
+
+- Archive outcome: completed
+- Kind: Sweep
+- Финальный status: archived
+- Work route: sweep
+- Lifecycle mode: normal
+- Planning/source: required by sweep; source `external-spec`; accepted artifact was the user-provided parser-hardening plan based on local review and comparison with common feed parsers.
+- Parent capability: feed ingress hardening / parser ownership
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: после удаления deprecated `@extractus/feed-extractor` пользователь попросил максимально укрепить локальный parser, не возвращая dependency and not adding `feedsmith` yet.
+- Что изменилось:
+  - `services/fetchers/src/feed-parser.ts` now accepts optional `feedUrl` and `baseUrl`, keeps strict invalid XML rejection and exposes optional feed-level diagnostics.
+  - Parser now has namespace-aware lookup for common RSS/Atom/RDF/Dublin Core/content/media aliases, including custom namespace prefixes.
+  - Entry normalization now covers guid permalink URL fallback, RSS `atom:link rel=alternate`, Atom non-enclosure link precedence, Atom enclosure links, JSON Feed `content_text`, numeric IDs, `dc:*`/`dcterms:*` dates and subjects, media keywords/content and multi-value category/media handling.
+  - Relative URLs now resolve from `xml:base`, feed/channel link, `feedUrl` or `baseUrl`, then pass through existing canonicalization.
+  - Feed ingress and static website feed discovery pass feed URLs into the parser for safer relative URL resolution.
+  - TS tests now cover generic RSS/Atom/JSON parser hardening and generic adapter regression for guid-permalink-only items.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/fetchers typecheck` passed.
+  - `pnpm unit_tests:ts` passed.
+  - `pnpm lint` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm unit_tests` passed.
+  - `pnpm test:feed-ingress-adapters:smoke` passed.
+  - `pnpm check:test-layout` passed.
+  - `pnpm check:scaffold` passed.
+  - `rg "@extractus/feed-extractor|feed-extractor" -S . --glob '!node_modules/**'` returned no tracked usage.
+  - `git diff --check --` passed.
+- Cleanup:
+  - no runtime/database/external state changed;
+  - only normal test/typecheck caches may have been touched.
+- Оставшиеся risks/gaps:
+  - Parser is intentionally still not a fully tolerant universal feed parser; malformed XML remains rejected.
+  - `feedsmith` remains the preferred future candidate if project requirements grow beyond NewsPortal-owned normalization.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-ARCHITECTURE-AUDIT-REMEDIATION-SWEEP-1 — Architecture/engineering audit remediation
+
+- Archive outcome: completed
+- Kind: Sweep
+- Финальный status: archived
+- Work route: sweep
+- Lifecycle mode: normal
+- Planning/source: required by sweep; source `AIDP-native`; accepted artifact was the previous read-only audit findings explicitly approved by the user for implementation.
+- Parent capability: architecture hardening / engineering audit remediation
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь запросил реализацию четырех findings из read-only architecture audit: API/worker boundary, cohesion of content-analysis module, stale AIDP installed_files, and deprecated `@extractus/feed-extractor` warning.
+- Что изменилось:
+  - API no longer imports worker orchestration/runtime internals directly from `services/api/app/main.py`; explicit API boundary modules now isolate discovery and sequence worker coupling.
+  - `services/workers/app/content_analysis.py` was reduced from the accepted pressure-zone size by extracting runtime/policy/config helpers and subject loading into focused modules, while preserving compatibility for existing tests.
+  - `.aidp/os.yaml` `core.installed_files` now includes `.aidp/contracts/content-analysis-and-gating.md`.
+  - Fetcher RSS/Atom/JSON parsing no longer depends on deprecated `@extractus/feed-extractor`; equivalent normalized parsing is local to `services/fetchers/src/feed-parser.ts`, and `pnpm-lock.yaml` no longer contains that package.
+- Выполненный proof:
+  - `python -m py_compile services/api/app/main.py services/api/app/discovery_worker_boundary.py services/api/app/sequence_worker_boundary.py services/workers/app/content_analysis.py services/workers/app/content_analysis_runtime.py services/workers/app/content_analysis_subjects.py services/workers/app/content_analysis_heuristics.py` passed.
+  - `pnpm --filter @newsportal/fetchers typecheck` passed.
+  - `pnpm unit_tests:ts` passed without the previous `@extractus/feed-extractor` CJS deprecation warning.
+  - `pnpm unit_tests:py` passed.
+  - `pnpm lint` passed.
+  - `pnpm typecheck` passed.
+  - `pnpm unit_tests` passed.
+  - `rg "@extractus/feed-extractor|feed-extractor" -S . --glob '!node_modules/**'` returned no tracked usage.
+  - `rg "services\\.workers" services/api/app/main.py services/api/app/*boundary.py` confirmed `main.py` only depends on the new boundary modules; worker imports remain localized to those boundary files.
+  - `wc -l` confirmed `content_analysis.py` is now 1452 lines, with extracted helper modules `content_analysis_runtime.py`, `content_analysis_subjects.py`, and `content_analysis_heuristics.py`.
+- Cleanup:
+  - no runtime/database/external state changed;
+  - dependency graph and lockfile were updated by `pnpm install`.
+- Оставшиеся risks/gaps:
+  - API still has explicit worker coupling by design through `services/api/app/*_worker_boundary.py`; a future queue/outbox control-plane cutover can further reduce this to async dispatch, but the direct import from `main.py` finding is remediated.
+  - `content_analysis.py` is still large because persistence and orchestration remain together; the module is now below the audited pressure threshold and has clear extraction points for future work.
+- Follow-up created: none.
+- Archived on: 2026-05-01
 
 ### AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1 — Migration AIDP OS 1.7.2 -> 1.7.3
 
@@ -213,6 +989,691 @@
   - canonical runtime contracts now live only under `.aidp/contracts/*`.
 - Follow-up created: none.
 - Archived on: 2026-04-25
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-17 — Derived-vector/HNSW consistency diagnostics
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: Stage 15 changed the baseline embedding contour to hash-first and Stage 16 added runtime image budgets; HNSW registry/files needed a stronger read-only check so derived vector state cannot masquerade as durable truth after model, file or registry drift.
+- Что изменилось:
+  - enriched `services/indexer` HNSW consistency checks with explicit registry/file/count/label/dirty-state checks, runtime-default model/dimension drift diagnostics, and suggested repair commands;
+  - added `pnpm index:check:derived-vectors` as a combined read-only gate over interest centroid and event-cluster centroid indexes;
+  - added host/container runtime path translation so registry paths such as `/workspace/data/...` remain runtime-visible while host-side proof checks the bind-mounted `./data` files;
+  - kept rebuild commands explicit and separate; the combined check never rebuilds or deletes derived artifacts;
+  - added focused Python unit coverage for empty registry, missing files, dirty registry, count/label mismatch and model/dimension drift behavior;
+  - synced `.aidp/os.yaml`, `.aidp/verification.md` and `.aidp/contracts/runtime-migrations-and-derived-state.md`.
+- Выполненный proof:
+  - `pnpm unit_tests:py` passed Python 333/333;
+  - `pnpm lint:py`;
+  - `python -m services.indexer.app.main --help`;
+  - `pnpm check:compliance`;
+  - `package.json` parsed successfully;
+  - `.aidp/os.yaml` parsed successfully;
+  - `pnpm dev:mvp:internal:no-build` started the local compose stack and nginx health returned `ok`;
+  - escalated `pnpm index:check:derived-vectors` first produced actionable diagnostics: interest centroid files were present but carried the old neural model key, while event-cluster centroids had active vectors with no registry row;
+  - escalated `pnpm index:rebuild:event-cluster-centroids` rebuilt 5 local derived event-cluster centroids using `hnswlib`;
+  - escalated `pnpm index:check:derived-vectors` then passed with `isConsistent: true` and no repair commands; remaining model-key drift is informational because existing active vectors are still 384-dimensional;
+  - `pnpm dev:mvp:internal:down` stopped the stack and final compose `ps` showed no services;
+  - final `pnpm check:compliance`;
+  - final `pnpm lint`;
+  - final `pnpm typecheck`;
+  - final `pnpm unit_tests` passed TypeScript 278/278 and Python 333/333;
+  - `git diff --check --`;
+  - final `package.json` and `.aidp/os.yaml` parse checks passed.
+- Cleanup:
+  - compose stack was stopped without removing volumes;
+  - local derived event-cluster HNSW index and snapshot were intentionally rebuilt under `data`, with registry paths kept as `/workspace/data/...` for container runtime compatibility;
+  - no staging, commit, production deploy, schema migration or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - active interest/event vectors in the local DB still use the previous neural model key while the runtime default is hash-first; this is reported as informational drift and should be handled by an explicit recompile/reindex stage if the operator wants the local vector corpus migrated to hash embeddings;
+  - production/staging vector rebuild was not attempted.
+- Follow-up created: none.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-2 — API provider request/pagination universality
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: после Stage 1 URL/network safety пользователь попросил продолжать системное укрепление универсальности и edge-case покрытия; API provider path оставался фактически single-page GET JSON интеграцией.
+- Что изменилось:
+  - `packages/contracts/src/source.ts` теперь валидирует расширенный API source config: `GET|POST`, safe custom headers, optional JSON body and bounded pagination modes `none`, `next_url`, `page`;
+  - unsafe caller-owned headers such as `Authorization`, `Cookie`, `Host`, `Content-Length`, `Connection`, `User-Agent` and `Accept` are rejected at the config boundary;
+  - `services/fetchers/src/fetcher-api-poller.ts` now applies the acquisition URL guard per page, caps response body size, supports POST JSON requests, resolves relative item URLs, follows bounded `next_url` pagination and persists `api_page_token` cursors for API paging;
+  - fetcher wiring now passes `loadCursorMap` into the API poller so pagination can resume deterministically;
+  - admin server-side API channel normalization/persistence now carries the new config fields while preserving current default behavior for existing simple GET channels;
+  - focused unit coverage was added for API config parsing, header rejection, POST next-url pagination and relative item URL normalization.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/contracts typecheck`;
+  - `pnpm --filter @newsportal/fetchers typecheck`;
+  - `pnpm unit_tests:ts`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 268/268, Python 322/322;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor|feedparser|DISCOVERY_RSS_PROBE_ADAPTER" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches.
+- Cleanup:
+  - no compose stack, browser session, database migration, production deploy, staging or commit was performed;
+  - `.env.dev` remains intentionally synced from the earlier Stage 1 requirement but is ignored by git.
+- Оставшиеся risks/gaps:
+  - admin UI controls for every new API provider option were not added in this stage; server-side/bulk normalization supports the fields;
+  - API provider compose/live proof was not run because this slice stayed at typed/unit proof;
+  - IMAP hardening, MCP/schema registry, control-plane module split, broader observability taxonomy, runtime/SBOM/image checks and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-3 — Email IMAP provider edge hardening
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: после API provider slice пользователь попросил продолжать системное укрепление; inbound Email IMAP lane still had minimal UID-only polling, weak scan bounds and raw body handling.
+- Что изменилось:
+  - `packages/contracts/src/source.ts` now validates bounded Email IMAP options: `searchSinceHours`, `maxMessageBytes` capped to 5 MiB, and `bodyPreference`;
+  - admin server-side Email IMAP normalization/persistence now carries those fields for single and bulk channel writes while preserving existing persisted DB shape;
+  - `services/fetchers/src/fetcher-email-imap-poller.ts` now opens mailboxes read-only, tracks `UIDVALIDITY` in existing `imap_uid` cursor JSON, resets the UID window on UIDVALIDITY changes, fetches via bounded UID/search windows, skips oversized messages and records provider metrics;
+  - IMAP article identity now prefers normalized `Message-ID` and falls back to `uidValidity + uid`, reducing duplicate ingest risk across mailbox UID resets;
+  - email body extraction now handles simple multipart MIME, text/html preference, base64/quoted-printable basics, active HTML stripping, link extraction and bounded attachment metadata without adding a new runtime dependency;
+  - focused unit coverage was added for Email IMAP config parsing, UIDVALIDITY reset behavior, Message-ID dedupe, source size caps, MIME extraction, attachment/link metadata and stable UID-range polling.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/contracts typecheck`;
+  - `pnpm --filter @newsportal/fetchers typecheck`;
+  - `pnpm unit_tests:ts` passed: TypeScript 273/273;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 273/273, Python 322/322;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `git diff --check --`.
+- Cleanup:
+  - no compose stack, browser session, database migration, production deploy, staging or commit was performed;
+  - no live mailbox credentials or external IMAP provider were used.
+- Оставшиеся risks/gaps:
+  - live IMAP provider/compose proof remains parked for a dedicated stage because this slice used deterministic unit proof only;
+  - admin UI controls for all advanced IMAP options were not added; server-side and bulk payload paths support the fields;
+  - full MIME parsing remains intentionally lightweight; add a dedicated parser dependency only if future live evidence shows the local extraction is insufficient;
+  - MCP/schema registry, control-plane module split, broader observability taxonomy, runtime/SBOM/image checks and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-4 — Shared schema registry and MCP/control-plane boundary validation
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: after URL/network, API and IMAP provider hardening, the MCP/admin/control-plane write paths still trusted loosely typed `Record<string, unknown>` payloads and exposed declared MCP `inputSchema` only as metadata.
+- Что изменилось:
+  - `packages/contracts/src/schema.ts` now provides a repo-owned executable JSON Schema subset plus validation issue reporting and assertion helpers;
+  - the same registry owns admin/source channel payload schemas for `rss`, `website`, `api` and `email_imap`, including explicit provider selection and unknown-field rejection;
+  - `packages/control-plane/src/channels.ts` now validates channel write payload shape before provider-specific parsing or database write work;
+  - `services/mcp/src/tools/shared.ts` types MCP `inputSchema` as the shared schema contract, and `services/mcp/src/tools.ts` enforces each tool schema before handler execution;
+  - `services/mcp/src/main.ts` no longer silently converts non-object `tools/call` or prompt arguments to `{}`; malformed arguments fail as JSON-RPC invalid params;
+  - `services/mcp/package.json` and `pnpm-lock.yaml` now declare the direct `@newsportal/contracts` dependency used by MCP schema enforcement;
+  - focused TS tests cover the shared schema validator, admin channel schema registry, non-object MCP arguments and MCP schema rejection before handler/fetch work.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/contracts typecheck`;
+  - `pnpm --filter @newsportal/control-plane typecheck`;
+  - `pnpm --filter @newsportal/mcp typecheck`;
+  - `pnpm unit_tests:ts` passed: TypeScript 276/276;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 276/276, Python 322/322;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches.
+- Cleanup:
+  - no compose stack, browser session, database migration, production deploy, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - Python/Pydantic schema registry, task-engine plugin contract registry, API `main.py` modular split, live provider compose proof, production image/SBOM proof and delivery/timezone/idempotency corpus remain future stages of the parent capability;
+  - the local JSON Schema subset intentionally covers current NewsPortal boundaries, not full JSON Schema draft semantics.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-5 — Task-engine plugin contracts and output caps
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: after the task-engine plugin module split, builtin plugins still lacked machine-readable contracts for options/context/output boundaries, retry classification and result-size caps.
+- Что изменилось:
+  - added `services/workers/app/task_engine/plugin_contracts.py` with Pydantic models for `TaskPluginContract`, output caps and retry classification;
+  - `TaskPlugin` now exposes a `contract()` API with options schema, context requirements, output schema, output caps, retry classification and error codes;
+  - `TaskPluginRegistry.list_all()` now includes contract metadata for every registered plugin while preserving existing module/category/input/output metadata;
+  - `SequenceExecutor` now validates plugin output caps before merging task results into the durable run context;
+  - focused Python coverage verifies registry contract metadata and hard failure on excessive plugin output keys/bytes.
+- Выполненный proof:
+  - `pnpm unit_tests:py` passed: Python 323/323;
+  - `pnpm lint:py`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 276/276, Python 323/323;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `git diff --check --`.
+- Cleanup:
+  - no compose stack, browser session, database migration, production deploy, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - plugin option schemas are generic by default; future plugin-family work should replace them with tighter per-plugin schemas;
+  - API `main.py` modular split, live provider compose proof, production image/SBOM proof, broad observability taxonomy and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-6 — API app context and route dependency boundary
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: `services/api/app/main.py` remained a god entrypoint with FastAPI app creation in the middle of the file and route registration wired through a raw `globals()` dependency dict.
+- Что изменилось:
+  - added `services/api/app/api_app.py` with explicit `ApiAppContext` and `create_api_app`;
+  - `services/api/app/main.py` now creates the FastAPI app through the context owner at the bottom of the module after handler definitions are available;
+  - `services/api/app/route_deps.py` now returns `ApiRouteDependencies`, a declared-key Mapping that fails fast for missing or undeclared route dependency lookups;
+  - route registration accepts the dependency Mapping rather than relying on a plain dict contract;
+  - focused Python coverage verifies missing dependency detection, undeclared lookup rejection and app registration through explicit context.
+- Выполненный proof:
+  - `pnpm unit_tests:py` passed: Python 326/326;
+  - `pnpm lint:py`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 276/276, Python 326/326;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `git diff --check --`.
+- Cleanup:
+  - no compose stack, browser session, database migration, production deploy, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - domain handlers still need staged extraction from `services/api/app/main.py` into owner modules;
+  - live/provider compose proof, production image/SBOM proof, broad observability taxonomy and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-7 — Shared error taxonomy and classifiable diagnostics
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: acquisition/discovery/provider and task-plugin failures still exposed mostly free-text `error_text`/exception strings, which made retry policy, UI diagnostics and observability classification drift-prone.
+- Что изменилось:
+  - added `packages/contracts/src/error-taxonomy.ts` with shared error domains, severities, retry hints, known codes and diagnostic factory/classifier helpers;
+  - exported the taxonomy from `@newsportal/contracts`;
+  - `services/fetchers/src/url-validation.ts` now returns `error_code` and `error_diagnostic` next to existing `error_text` for blocked initial URLs, blocked final redirect URLs and fetch failures;
+  - `services/fetchers/src/feed-probe.ts` now emits the same diagnostic shape for acquisition guard denials, fetch/body-size failures, no-valid-feed outcomes and unexpected probe failures, while preserving success/result shape and human-readable error text;
+  - added `services/workers/app/error_taxonomy.py` with Pydantic diagnostic model and matching code defaults for Python surfaces;
+  - `TaskExecutionError` now carries `error_code`, error domain and retry hint metadata and can render a structured diagnostic;
+  - task-plugin output cap failures now use stable `task_plugin.output_*` codes, and focused tests cover TS/Python classification behavior.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/contracts typecheck`;
+  - `pnpm --filter @newsportal/fetchers typecheck`;
+  - `pnpm unit_tests:ts` passed: TypeScript 278/278;
+  - `pnpm unit_tests:py` passed: Python 326/326;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches.
+- Cleanup:
+  - no compose stack, browser session, database migration, production deploy, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - persisted database rows still store only legacy `error_text`; a later stage can add structured persisted error metadata if product UI/retry workflows need it;
+  - website/API/IMAP/content-analysis/delivery diagnostics should progressively adopt the same taxonomy as those domains are touched;
+  - live provider compose proof, production image/SBOM proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-8 — Runtime artifact and supply-chain static proof
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: runtime/SBOM hardening needed a deterministic baseline proof that production Docker/compose artifacts do not silently include tests, proof payloads, hidden AIDP state, local env files or deprecated feed parser dependencies.
+- Что изменилось:
+  - added `infra/scripts/check-runtime-artifacts.mjs`, a static runtime artifact guard over production Dockerfiles, compose host bind mounts, package manifests and `pnpm-lock.yaml`;
+  - the guard fails on forbidden Docker COPY/ADD sources such as `.aidp`, `.env*`, tests, docs, infra scripts, dev Python requirements, local caches, `node_modules`, `.astro` and `dist`;
+  - the guard allows only the current intentional compose bind mounts for `/workspace/data` and nginx config;
+  - the guard scans workspace package manifests and lockfile for the deprecated feed extractor dependency without reintroducing it as a literal searchable runtime dependency;
+  - added root script `pnpm check:runtime-artifacts`.
+- Выполненный proof:
+  - `pnpm check:runtime-artifacts`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches after the guard literal was split.
+- Cleanup:
+  - no compose stack, browser session, database migration, production image build, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - Node runtime images still run TypeScript source through the existing TS runner; moving to compiled JS and production-only dependency installs remains a separate runtime hardening stage;
+  - this is static artifact proof, not a full SBOM/license attestation or container vulnerability scan;
+  - live provider compose proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-9 — Fast compliance gate and env/secret guards
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: после runtime artifact guard compliance оставался набором отдельных команд, а `.env.dev` мог дрейфовать от `.env.example`; нужен был быстрый единый локальный gate, который не печатает secret values.
+- Что изменилось:
+  - added `infra/scripts/check-env-sync.mjs` and root script `pnpm check:env-sync`;
+  - `.env.dev` now has the same key set as `.env.example` while keeping local values local/ignored;
+  - added `infra/scripts/check-secret-leaks.mjs` and root script `pnpm check:secret-leaks`, scanning tracked files only for common high-risk token/key shapes;
+  - added `infra/scripts/check-compliance.mjs` and root script `pnpm check:compliance`, which runs scaffold, test-layout, runtime-artifact, env-sync and secret-leak guards as one deterministic fast gate;
+  - updated `.aidp/os.yaml` command map and `.aidp/verification.md` baseline proof map for the new compliance, env-sync, runtime-artifact and secret-leak guards.
+- Выполненный proof:
+  - `pnpm check:env-sync` passed: `.env.example` and `.env.dev` expose 81 matching keys;
+  - `pnpm check:secret-leaks` passed: 791 tracked files scanned;
+  - `pnpm check:compliance`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `git diff --check --`.
+- Cleanup:
+  - no compose stack, browser session, database migration, production image build, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - `pnpm check:secret-leaks` is a pragmatic static pattern guard, not a full secret-scanning product;
+  - `.env.dev` remains intentionally ignored and local; future key additions must update `.env.example` and local `.env.dev` together;
+  - compiled JS/production-only Node images, full SBOM/license/vulnerability attestation, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-10 — Dependency compliance guard
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: compliance still lacked a local, deterministic supply-chain gate for direct dependency license families, unsafe dependency specs and runtime Python requirement pinning.
+- Что изменилось:
+  - added `infra/scripts/check-dependency-compliance.mjs` and root script `pnpm check:dependency-compliance`;
+  - direct Node dependencies are checked through installed package metadata relative to each workspace package, with missing metadata treated as a failed local compliance setup;
+  - direct Node dependency specs now fail if they are floating (`*`/`latest`) or network/git URL specs;
+  - approved direct dependency license families are currently MIT, Apache-2.0 and ISC, matching the repository's direct dependency inventory;
+  - runtime Python requirements in `infra/docker/python.requirements.txt` must remain exactly pinned with `==`, while dev Python requirements may keep bounded ranges;
+  - forbidden feed extractor dependency guard is now part of dependency compliance as well as runtime artifact checks;
+  - `pnpm check:compliance` now runs the dependency compliance guard;
+  - `.aidp/os.yaml` and `.aidp/verification.md` were updated with the new command and proof meaning.
+- Выполненный proof:
+  - `pnpm check:dependency-compliance` passed: 52 direct Node dependencies checked; licenses Apache-2.0, ISC and MIT; Python runtime requirements pinned;
+  - `pnpm check:compliance`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `git diff --check --`.
+- Cleanup:
+  - no compose stack, browser session, database migration, production image build, network audit, staging or commit was performed.
+- Оставшиеся risks/gaps:
+  - this is local SBOM-lite direct dependency proof, not a full transitive SBOM, vulnerability scan or legal review;
+  - Python package license metadata is not checked yet because no local/offline Python package metadata guard exists;
+  - compiled JS/production-only Node images, full SBOM/license/vulnerability attestation, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-11 — Compiled Node runtime startup contour
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: production Node service startup still depended on `node --import tsx src/*.ts`, leaving Docker/compose runtime tied to TypeScript loader/dev tooling and source-layout resolution.
+- Что изменилось:
+  - added explicit root command `pnpm build:node-runtime` backed by `infra/tooling/build-node-runtime.mjs`;
+  - added direct root dev dependency `esbuild` as the declared builder instead of relying on transitive Astro/Vite tooling;
+  - build output now emits compiled `.mjs` entrypoints for relay, fetchers and MCP service startup plus relay/fetchers operator CLIs;
+  - relay/fetchers/MCP service `start` scripts and selected runtime/operator scripts now run `dist/*.mjs` entries, while test harness scripts that intentionally use `tsx` remain unchanged;
+  - Dockerfiles copy the tracked build utility, build compiled Node runtime outputs during image build, and default to direct `node services/*/dist/*.mjs` commands;
+  - compose overrides for migrate, relay, fetchers and MCP now run compiled `.mjs` entries directly;
+  - relay migrations and fetchers article-yield utilities now locate the repository root through a runtime path helper so bundled CLI location does not break database migration or `.env.dev` loading;
+  - `pnpm check:runtime-artifacts` now fails if production Node service startup returns to TS source loaders;
+  - `.aidp/os.yaml` and `.aidp/verification.md` were updated with the Node runtime build command and proof meaning.
+- Выполненный proof:
+  - `pnpm build:node-runtime` passed and emitted relay, fetchers and MCP compiled entrypoints;
+  - `node --check` passed for representative compiled relay/fetchers/MCP entrypoints;
+  - `pnpm --filter @newsportal/relay build`, `pnpm --filter @newsportal/fetchers build` and `pnpm --filter @newsportal/mcp build` passed;
+  - `pnpm check:runtime-artifacts`;
+  - `pnpm check:dependency-compliance` passed: 53 direct Node dependencies checked; licenses Apache-2.0, ISC and MIT; Python runtime requirements pinned;
+  - `pnpm check:compliance`;
+  - `pnpm lint`;
+  - `pnpm build`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches.
+- Cleanup:
+  - no compose stack, browser session, database migration, production image publish, staging or commit was performed;
+  - local ignored `services/{relay,fetchers,mcp}/dist` and Astro `apps/*/dist` outputs were produced by proof and are regenerable.
+- Оставшиеся risks/gaps:
+  - Docker images still install dev dependencies and keep build/source inputs in the image; production-only multi-stage image pruning is a separate delivery-hardening stage;
+  - no compose startup/image build proof was run in this stage beyond static Docker/compose guardrails and local compiled build proof;
+  - full SBOM/vulnerability attestation, Python package license metadata, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-12 — Production-only multi-stage Node images
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: Stage 11 moved Node service startup to compiled `.mjs` outputs, but production Docker images still had a single-stage builder/runtime shape and could retain source/build-only inputs and dev dependency contour.
+- Что изменилось:
+  - relay, fetchers and MCP Dockerfiles now use explicit builder/runtime stages;
+  - builder stages install full workspace dependencies, copy TypeScript source/build tooling and emit compiled runtime outputs through `infra/tooling/build-node-runtime.mjs`;
+  - runtime stages install production dependencies only with `pnpm install --prod --filter ...`;
+  - runtime stages copy only package manifests, compiled service `dist` outputs and the relay database migrations required by runtime operations;
+  - fetchers installs Playwright Chromium in the runtime stage after production dependency install, keeping browser payload available without copying fetcher source;
+  - `pnpm check:runtime-artifacts` now verifies Node Dockerfiles have a final `runtime` stage, production filtered install and no final-stage source/build-tooling copies;
+  - `.aidp/verification.md` was updated so the runtime artifact guard records this production-only final-image invariant.
+- Выполненный proof:
+  - `pnpm check:runtime-artifacts`;
+  - `pnpm check:dependency-compliance` passed: 53 direct Node dependencies checked; licenses Apache-2.0, ISC and MIT; Python runtime requirements pinned;
+  - `pnpm check:compliance`;
+  - `pnpm lint`;
+  - `pnpm build:node-runtime`;
+  - `docker build -f infra/docker/relay.Dockerfile -t newsportal-relay-stage12-proof .`;
+  - `docker run --rm newsportal-relay-stage12-proof ...` verified relay runtime image has `services/relay/dist/main.mjs`, has `database/migrations`, and does not have `services/relay/src`, `infra/tooling` or `tsx`;
+  - `docker build -f infra/docker/mcp.Dockerfile -t newsportal-mcp-stage12-proof .`;
+  - `docker run --rm newsportal-mcp-stage12-proof ...` verified MCP runtime image has `services/mcp/dist/main.mjs` and does not have `services/mcp/src`, `infra/tooling` or `tsx`;
+  - `docker build -f infra/docker/fetchers.Dockerfile -t newsportal-fetchers-stage12-proof .`;
+  - `docker run --rm newsportal-fetchers-stage12-proof ...` verified fetchers runtime image has `services/fetchers/dist/main.mjs`, Playwright browser cache and no `services/fetchers/src`, `infra/tooling` or `tsx`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `pnpm build`;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` returned no matches.
+- Cleanup:
+  - no compose stack, browser session, database migration, production image publish, staging, commit or destructive cleanup was performed;
+  - local ignored `services/{relay,fetchers,mcp}/dist` and Astro `apps/*/dist` outputs were produced by proof and are regenerable;
+  - local Docker proof images remain: `newsportal-relay-stage12-proof`, `newsportal-mcp-stage12-proof` and `newsportal-fetchers-stage12-proof`.
+- Оставшиеся risks/gaps:
+  - images still run under the base image default user; non-root runtime user and image-size trimming remain a future delivery-hardening stage;
+  - no compose startup health proof was run in this stage;
+  - full SBOM/vulnerability attestation, persisted error metadata, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-13 — Non-root Node runtime images and web/admin runtime-only contour
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: Stage 12 made relay, fetchers and MCP production-only multi-stage images, but Node runtime containers still used the base image default-root contour and web/admin still lacked the same runtime-only compiled image shape.
+- Что изменилось:
+  - web/admin Dockerfiles now use explicit builder/runtime stages;
+  - web/admin runtime stages install production dependencies only, copy only package manifests plus compiled `apps/*/dist`, and run direct `node apps/*/dist/server/entry.mjs`;
+  - relay, fetchers and MCP runtime stages now copy dist/runtime artifacts with `node` ownership and drop privileges with `USER node`;
+  - fetchers uses `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` and chowns the browser payload for non-root Playwright runtime;
+  - compose web/admin commands now run direct compiled entrypoints with explicit `HOST` and `PORT` env;
+  - `pnpm check:runtime-artifacts` now verifies Node final runtime stages are explicit, production-filtered, source/tooling-free, direct-node and non-root;
+  - `.aidp/verification.md` was updated with the non-root Node runtime guard meaning.
+- Выполненный proof:
+  - `pnpm check:runtime-artifacts`;
+  - `docker build -f infra/docker/web.Dockerfile -t newsportal-web-stage13-proof .`;
+  - `docker build -f infra/docker/admin.Dockerfile -t newsportal-admin-stage13-proof .`;
+  - `docker build -f infra/docker/relay.Dockerfile -t newsportal-relay-stage13-proof .`;
+  - `docker build -f infra/docker/mcp.Dockerfile -t newsportal-mcp-stage13-proof .`;
+  - `docker build -f infra/docker/fetchers.Dockerfile -t newsportal-fetchers-stage13-proof .`;
+  - targeted `docker run` checks verified web/admin/relay/MCP/fetchers runtime images run as `uid=1000(node)`, include expected `dist` entrypoints and omit service/app source plus `infra/tooling`;
+  - targeted relay/MCP/fetchers runtime checks also verified no `tsx` package is present; fetchers has readable `/ms-playwright`;
+  - `pnpm check:compliance`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `pnpm build`;
+  - `pnpm dev:mvp:internal`;
+  - compose `ps` showed web/admin/relay/fetchers/MCP/nginx/API/worker and backing services healthy, with migrate completed;
+  - compose `exec` checks verified Node services run as `uid=1000(node)`, source is absent and compiled dist exists;
+  - `curl -sS http://127.0.0.1:8080/health` returned `ok`;
+  - `pnpm dev:mvp:internal:down` stopped the stack without removing volumes.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - no production deploy/publish, database schema migration, staging, commit or destructive cleanup was performed;
+  - local Docker proof images remain: `newsportal-web-stage13-proof`, `newsportal-admin-stage13-proof`, `newsportal-relay-stage13-proof`, `newsportal-mcp-stage13-proof`, `newsportal-fetchers-stage13-proof`;
+  - compose-built local images and ignored dist/build outputs remain as regenerable proof artifacts.
+- Оставшиеся risks/gaps:
+  - `infra/docker/python-app.Dockerfile` still runs as root; converting API/worker safely needs a separate volume-permission strategy for `/workspace/data` model/index/log mounts;
+  - web/admin runtime keeps Astro's production dependency tree, including transitive `tsx`; startup is direct compiled `node dist`, but image-size trimming remains future work;
+  - full SBOM/vulnerability attestation, image size budgets, persisted error metadata, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-14 — Non-root Python API/worker runtime image and derived-data payload cleanup
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: Stage 13 closed Node runtime root privileges, leaving the shared Python API/worker image as the main remaining runtime privilege and derived-data packaging gap.
+- Что изменилось:
+  - `infra/docker/python-app.Dockerfile` now uses explicit `builder` and `runtime` stages;
+  - Python dependencies are built as wheels in the builder stage where `build-essential` is available, then installed in the final runtime stage from local wheels without keeping the wheel cache;
+  - final Python runtime stage creates a dedicated `newsportal` user and runs with `USER newsportal`;
+  - `PYTHON_APP_UID` and `PYTHON_APP_GID` build args let operators align the image user with host-owned bind-mounted `data` when needed;
+  - API/worker compose build config passes `PYTHON_APP_UID`/`PYTHON_APP_GID` with safe defaults;
+  - `.env.example` and `.env.dev` now include matching Python runtime UID/GID keys;
+  - Python image no longer copies local `data` into the image, so HNSW snapshots, model cache, logs and `.DS_Store` stay runtime/mounted artifacts;
+  - runtime artifact guard now rejects `data` copies and enforces the Python final-stage wheel/non-root/no-build-essential contour;
+  - `.aidp/verification.md` and `.aidp/contracts/runtime-migrations-and-derived-state.md` record the durable Python image invariant.
+- Выполненный proof:
+  - `pnpm check:runtime-artifacts`;
+  - `pnpm check:env-sync`;
+  - `docker build -f infra/docker/python-app.Dockerfile -t newsportal-python-stage14-proof .`;
+  - targeted `docker run` check verified the Python proof image runs as `uid=10001(newsportal)`, has no baked local HNSW/data payload, removes `/tmp/wheels`, omits compiler commands, has writable runtime data dirs and imports representative API/worker modules;
+  - `docker images newsportal-python-stage14-proof --format '{{.Repository}} {{.Tag}} {{.Size}}'` observed proof image size `8.32GB`;
+  - `pnpm check:compliance`;
+  - `pnpm lint`;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 326/326;
+  - `pnpm build`;
+  - `pnpm dev:mvp:internal`;
+  - compose `ps` showed API, worker, web/admin, relay, fetchers, MCP, nginx and backing services healthy, with migrate completed;
+  - compose `exec` checks verified API/worker run as `uid=10001(newsportal)`, have no `/tmp/wheels`, omit `gcc`, import representative modules and can write/delete files under mounted `/workspace/data/logs`;
+  - `curl -sS http://127.0.0.1:8080/health` returned `ok`;
+  - `pnpm dev:mvp:internal:down` stopped the stack without removing volumes.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - temporary write-proof files under mounted `/workspace/data/logs` were deleted inside the checks;
+  - no production deploy/publish, database schema migration, staging, commit or destructive cleanup was performed;
+  - local Docker proof image remains: `newsportal-python-stage14-proof`;
+  - compose-built local images and ignored dist/build outputs remain as regenerable proof artifacts.
+- Оставшиеся risks/gaps:
+  - Python image remains very large at `8.32GB`, driven by `sentence-transformers`/`torch` pulling CUDA/NVIDIA dependency payloads; CPU-only or optional ML dependency contour and image-size budgets should be the next runtime hardening stage;
+  - build stage still needs network/package registry access unless Docker cache is warm; SBOM/vulnerability attestation remains future work;
+  - full persisted error metadata, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-15 — Hash-first Python ML dependency contour and image-size guard
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required by capability; source `external-spec`; accepted artifact was the user-provided universal edge hardening plan plus Stage 14 proof finding that the Python image was 8.32GB due to baseline neural dependencies.
+- Risk: medium
+- Approval: user explicitly asked to continue the accepted compliance/hardening track; no production deploy, schema migration, staging or commit was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: Stage 14 made the Python API/worker image non-root and source/toolchain-clean, but its proof image still weighed `8.32GB` because baseline runtime requirements pulled `sentence-transformers`, `torch` and CUDA/NVIDIA payloads even when deterministic hash embeddings are sufficient for local/runtime proof.
+- Что изменилось:
+  - removed `sentence-transformers` from baseline `infra/docker/python.requirements.txt`;
+  - added `infra/docker/python.optional-ml-requirements.txt` as the explicit neural embedding contour;
+  - changed `.env.example`, `.env.dev` and compose worker defaults to `EMBEDDING_BACKEND=hash` and `EMBEDDING_MODEL=hash://deterministic/384`;
+  - made `services/ml/app/embedding.py` default to deterministic hash embeddings, keep `auto` as a lazy optional-neural mode and make explicit `sentence-transformers` strict;
+  - changed indexer default model key to the hash model key so derived HNSW state no longer assumes a neural model in baseline;
+  - added Python unit coverage for hash default, auto fallback when neural packages are missing and strict explicit neural backend construction;
+  - extended dependency/runtime artifact guards to reject `sentence-transformers`, `torch`, CUDA/NVIDIA and `triton` packages in baseline Python runtime requirements;
+  - added root `pnpm check:python-image-size` and `infra/scripts/check-python-image-size.mjs` with a default `2.5GB` ceiling for built Python proof images;
+  - updated `.aidp/os.yaml`, `.aidp/verification.md` and `.aidp/contracts/runtime-migrations-and-derived-state.md` with the durable optional-ML and image-size guard invariants.
+- Выполненный proof:
+  - `pnpm check:dependency-compliance` passed;
+  - `pnpm check:runtime-artifacts` passed;
+  - `pnpm check:env-sync` passed;
+  - `pnpm unit_tests:py` passed: Python 329/329;
+  - `docker build -f infra/docker/python-app.Dockerfile -t newsportal-python-stage15-proof .` passed;
+  - `pnpm check:python-image-size newsportal-python-stage15-proof` passed with proof image size `435 MiB` under the `2.33 GiB` limit;
+  - targeted `docker run` check verified the Python proof image runs as `uid=10001(newsportal)`, defaults to `HashEmbeddingProvider hash://deterministic/384`, omits `sentence_transformers` and `torch`, and imports representative API/worker/indexer modules;
+  - `pnpm check:compliance` passed;
+  - `pnpm lint` passed;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 329/329;
+  - `pnpm build` passed;
+  - `pnpm dev:mvp:internal` built and started the local stack;
+  - compose `ps` showed API, worker, web/admin, relay, fetchers, MCP, nginx and backing services healthy, with migrate completed;
+  - compose `exec` checks verified API/worker run as `uid=10001(newsportal)`, default to `HashEmbeddingProvider hash://deterministic/384` and omit `sentence_transformers`/`torch`;
+  - `curl -sS http://127.0.0.1:8080/health` returned `ok`;
+  - `pnpm dev:mvp:internal:down` stopped the stack without removing volumes;
+  - final compose `ps` showed no running compose services;
+  - `git diff --check --` passed;
+  - `rg "@extractus/feed-extractor|feed-extractor" -S package.json pnpm-lock.yaml services apps packages tests infra --glob '!node_modules/**'` found no matches.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - no local `data` artifacts were deleted;
+  - no production deploy/publish, database schema migration, staging, commit or destructive cleanup was performed;
+  - local Docker proof image remains: `newsportal-python-stage15-proof`;
+  - compose-built local images and ignored dist/build outputs remain as regenerable proof artifacts.
+- Оставшиеся risks/gaps:
+  - existing HNSW/vector artifacts may still have neural model metadata and remain derived state; rebuild/check them only in a dedicated indexer/reindex stage;
+  - neural embeddings remain available only when the optional requirements contour is installed intentionally and `EMBEDDING_BACKEND=sentence-transformers` is set with a compatible model;
+  - SBOM/vulnerability attestation, Node/fetchers image size budgets, production image publish proof, persisted error metadata, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-16 — Runtime image inventory and size budgets
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Work route: capability
+- Planning/source: required by capability; source `external-spec`; accepted artifact was the user-provided universal edge hardening plan plus the Stage 15 follow-up to extend image-size proof beyond Python.
+- Risk: medium
+- Approval: user explicitly asked to continue the accepted compliance/hardening track; no production deploy, schema migration, staging or commit was performed.
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: Stage 15 made Python runtime image size explicit and small, but the rest of the compose image set still had no Docker-backed size/user/CMD inventory guard. Fetchers is intentionally heavy because browser-assisted ingestion includes Playwright/Chromium, so that exception needed an explicit budget rather than quiet drift.
+- Что изменилось:
+  - added `infra/scripts/check-runtime-image-sizes.mjs`;
+  - added root `pnpm check:runtime-image-sizes`;
+  - recorded the command in `.aidp/os.yaml`;
+  - updated `.aidp/verification.md` with the runtime image size guard and proof expectations;
+  - updated `.aidp/contracts/runtime-migrations-and-derived-state.md` with the durable service-specific image-budget invariant;
+  - the guard inspects compose-built images `docker-web`, `docker-admin`, `docker-relay`, `docker-migrate`, `docker-fetchers`, `docker-mcp`, `docker-api` and `docker-worker`;
+  - the guard enforces service-specific size ceilings, expected non-root image users and direct runtime `CMD` values rather than package-manager wrappers;
+  - fetchers has an explicit `3.00 GiB` budget with an inventory note that its size includes Playwright/Chromium for browser-assisted ingestion.
+- Выполненный proof:
+  - `node --check infra/scripts/check-runtime-image-sizes.mjs` passed;
+  - `pnpm check:runtime-image-sizes` passed against already built compose images;
+  - observed inventory: web `831 MiB / 1.20 GiB`, admin `842 MiB / 1.20 GiB`, relay `238 MiB / 350 MiB`, migrate `238 MiB / 350 MiB`, fetchers `2.44 GiB / 3.00 GiB`, MCP `208 MiB / 350 MiB`, API `435 MiB / 700 MiB`, worker `435 MiB / 700 MiB`;
+  - `pnpm check:runtime-artifacts` passed;
+  - `pnpm check:compliance` passed;
+  - first `pnpm lint` surfaced a `preserve-caught-error` issue in the new script; it was fixed by attaching the caught error as `cause`;
+  - `pnpm lint` passed after the fix;
+  - `pnpm typecheck` passed with existing Astro hints and zero errors;
+  - `pnpm unit_tests` passed: TypeScript 278/278, Python 329/329;
+  - `pnpm build` passed;
+  - `pnpm dev:mvp:internal:no-build` started the local stack from built images;
+  - compose `ps` showed API, worker, web/admin, relay, fetchers, MCP, nginx and backing services healthy or starting while nginx health endpoint already returned `ok`;
+  - `curl -sS http://127.0.0.1:8080/health` returned `ok`;
+  - `pnpm check:runtime-image-sizes` passed again on the running compose image set;
+  - `pnpm dev:mvp:internal:down` stopped the stack without removing volumes;
+  - final compose `ps` showed no running compose services;
+  - `git diff --check --` passed;
+  - `.aidp/os.yaml` and `package.json` parsed successfully.
+- Cleanup:
+  - compose stack was stopped with `pnpm dev:mvp:internal:down` without removing volumes;
+  - no local Docker proof images were deleted;
+  - no local `data` artifacts were deleted;
+  - no production deploy/publish, database schema migration, staging, commit or destructive cleanup was performed.
+- Оставшиеся risks/gaps:
+  - budgets are local compose-image ceilings, not signed production release attestations;
+  - fetchers remains intentionally heavy because browser-assisted ingestion carries Playwright/Chromium; any future browser split or remote-browser architecture should open a dedicated stage;
+  - vulnerability scanning, full SBOM export, production image publish proof, derived-vector reindex proof, persisted error metadata, live provider proof and delivery/timezone/idempotency corpus remain future stages of the parent capability.
+- Follow-up created: parent capability remains open; create a new stage before further implementation.
+- Archived on: 2026-05-01
+
+### NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY-STAGE-1 — P0 acquisition URL/network safety and env sync
+
+- Archive outcome: completed
+- Kind: Stage
+- Финальный status: archived
+- Parent capability: NEWSPORTAL-UNIVERSAL-EDGE-HARDENING-CAPABILITY
+- Superseded by: n/a
+- Cancelled because: n/a
+- Почему существовало: пользователь попросил реализовать системный план укрепления универсальности и edge-case покрытия; Stage 1 закрывает самый высокий риск SSRF/private-network drift на внешних acquisition/discovery путях.
+- Что изменилось:
+  - expanded the fetchers-owned URL guard to reject malformed/protocol-relative/credentialed/overlong URLs, localhost/private/link-local/reserved IP literals, alternate IPv4 notation, IPv4-mapped IPv6 and DNS resolutions to blocked addresses;
+  - added fetchers internal `/internal/discovery/urls/validate` and a typed validation module for discovery URL classification;
+  - applied the guard to feed and website discovery probes, RSS/API poller fetch URLs, article/resource enrichment entry fetches and selected canonicalization fetches;
+  - removed the Python `feedparser` discovery fallback and its dependency; live RSS probe ownership now stays with fetchers;
+  - replaced workers discovery direct `httpx` URL validation/content sampling with fetchers-backed adapters;
+  - added URL safety conformance seed fixture under `infra/fixtures/conformance`;
+  - synchronized `FETCHERS_INTERNAL_BASE_URL` and `FETCHERS_INTERNAL_TIMEOUT_SECONDS` in `.env.example`, `.env.dev` and compose worker env.
+- Выполненный proof:
+  - `pnpm --filter @newsportal/fetchers typecheck`;
+  - `pnpm unit_tests:ts`;
+  - `pnpm unit_tests:py`;
+  - `pnpm typecheck`;
+  - `pnpm lint`;
+  - `pnpm unit_tests`;
+  - `pnpm check:test-layout`;
+  - `pnpm check:scaffold`;
+  - `pnpm test:feed-ingress-adapters:smoke`;
+  - `git diff --check --`;
+  - `rg "@extractus/feed-extractor|feed-extractor|feedparser|DISCOVERY_RSS_PROBE_ADAPTER" -S package.json pnpm-lock.yaml services apps packages tests infra .env.example .env.dev --glob '!node_modules/**'` returned no matches.
+- Оставшиеся risks/gaps:
+  - broader capability remains open: API/IMAP provider universality, shared schema registry, control-plane modularity, CSRF/cookie/render smoke expansion, runtime image/SBOM proof and observability taxonomy are not implemented in this stage;
+  - DNS checks protect pre-fetch acquisition hosts; synthetic adapter redirect targets keep syntax/IP-literal guard to avoid making tests depend on public DNS for fixture-only domains;
+  - no compose discovery/admin proof was run in this stage.
+- Follow-up created: open next capability stage before further implementation.
+- Archived on: 2026-05-01
 
 ### AIDP-SOURCE-AUDIT-2026-04-24 — Source-code audit пропущенной runtime truth
 

@@ -4,6 +4,10 @@ import {
   type McpAccessTokenRecord,
   type McpScope,
 } from "@newsportal/control-plane";
+import {
+  MUTATION_RESULT_SCHEMA,
+  type JsonSchema,
+} from "@newsportal/contracts";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import type { Pool } from "pg";
 
@@ -34,7 +38,8 @@ export interface McpToolContext {
 export interface McpToolDefinition {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
+  inputSchema: JsonSchema;
+  outputSchema?: JsonSchema;
   requiredScope: McpScope | "read";
   destructive?: boolean;
   handler: (context: McpToolContext, args: Record<string, unknown>) => Promise<unknown>;
@@ -138,12 +143,12 @@ export const pagingSchema = {
     pageSize: { type: "number" },
   },
   additionalProperties: true,
-} satisfies Record<string, unknown>;
+} satisfies JsonSchema;
 
 export const detailSchema = {
   type: "object",
   additionalProperties: true,
-} satisfies Record<string, unknown>;
+} satisfies JsonSchema;
 
 export const contentDetailSchema = {
   type: "object",
@@ -156,7 +161,7 @@ export const contentDetailSchema = {
     includeMediaAssets: { type: "boolean" },
   },
   additionalProperties: false,
-} satisfies Record<string, unknown>;
+} satisfies JsonSchema;
 
 function isFlagEnabled(value: unknown): boolean {
   return value === true || String(value ?? "").trim().toLowerCase() === "true";
@@ -237,7 +242,7 @@ export function shapeExplainPayload(
 export function createReadTool(
   name: string,
   description: string,
-  inputSchema: Record<string, unknown>,
+  inputSchema: JsonSchema,
   handler: McpToolDefinition["handler"]
 ): McpToolDefinition {
   return {
@@ -253,7 +258,7 @@ export function createWriteTool(
   name: string,
   description: string,
   requiredScope: McpScope,
-  inputSchema: Record<string, unknown>,
+  inputSchema: JsonSchema,
   handler: McpToolDefinition["handler"],
   destructive = false
 ): McpToolDefinition {
@@ -261,6 +266,7 @@ export function createWriteTool(
     name,
     description,
     inputSchema,
+    outputSchema: MUTATION_RESULT_SCHEMA,
     requiredScope,
     destructive,
     handler,

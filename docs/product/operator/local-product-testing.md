@@ -2,19 +2,29 @@
 
 Этот документ отвечает на один вопрос: какие команды доказывают, что локальный product contour жив.
 
+## Release verification
+
+```sh
+pnpm release:verify
+```
+
+Это полный локальный release-ready gate без deployment: compliance, lint/typecheck/unit, builds, production compose image build, image size/content checks, supply-chain inventory artifact and product-local core/full/cleanup.
+
 ## Быстрый контур
 
 ```sh
 pnpm test:product:local:core
 ```
 
-Он покрывает обычный локальный продуктовый путь без parked external lanes.
+Он покрывает обычный локальный продуктовый путь без внешних live credentials. RSS, website, API source и Email IMAP ingest проверяются детерминированными fixtures; Telegram и YouTube остаются вне локального product contour.
 
 Ожидаемые части:
 
 - lint/typecheck/unit;
 - compose startup;
 - RSS ingest;
+- API source ingest;
+- Email IMAP ingest;
 - website ingest/admin flow;
 - automation admin flow;
 - MCP compose;
@@ -60,6 +70,13 @@ Website:
 pnpm test:website:compose
 pnpm test:website:admin:compose
 pnpm test:hard-sites:compose
+```
+
+Providers:
+
+```sh
+pnpm test:providers:compose
+pnpm test:channel-auth:compose
 ```
 
 Discovery:

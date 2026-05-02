@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "owner": "fetchers-acquisition-url-guard",
+  "cases": [
+    {
+      "name": "metadata-service-link-local",
+      "url": "http://169.254.169.254/latest/meta-data",
+      "allowed": false,
+      "reason": "link-local metadata endpoints must not be fetched"
+    },
+    {
+      "name": "localhost-decimal-ipv4",
+      "url": "http://2130706433/feed.xml",
+      "allowed": false,
+      "reason": "alternate IPv4 notation must normalize before private-range checks"
+    },
+    {
+      "name": "localhost-ipv4-mapped-ipv6",
+      "url": "http://[::ffff:127.0.0.1]/feed.xml",
+      "allowed": false,
+      "reason": "IPv4-mapped IPv6 must inherit IPv4 private-range checks"
+    },
+    {
+      "name": "public-https-feed",
+      "url": "https://example.com/feed.xml",
+      "allowed": true,
+      "reason": "public http/https sources remain valid acquisition targets"
+    }
+  ]
+}

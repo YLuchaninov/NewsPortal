@@ -4,17 +4,12 @@ import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  insertAdminAuditLog,
+  prepareAdminAction,
+} from "../../../lib/server/admin-action";
 import { getPool } from "../../../lib/server/db";
-import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
@@ -39,40 +34,24 @@ function parseConfigJson(value: unknown): Record<string, unknown> {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    request.headers.get("referer"),
-    "/analysis-policies"
-  );
-  const session = await resolveAdminSession(request);
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/analysis-policies",
+    actionToken: { scope: "content-analysis-policies" },
+  });
+  if (!action.ok) {
+    return action.response;
   }
 
-  const payload = await readRequestPayload(request);
+  const { payload, session } = action.context;
   const intent = String(payload.intent ?? "create").trim();
   const mode = String(payload.mode ?? "observe").trim();
   if (mode === "enforce" && !readBooleanField(payload.confirmEnforce)) {
     const message = "Confirm enforce mode before saving this analysis policy.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "analysis-policies",
-        status: "error",
-        message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: 400 });
+    return adminActionError(action.context, {
+      section: "analysis-policies",
+      message,
+      status: 400,
+    });
   }
 
   try {
@@ -110,45 +89,28 @@ export const POST: APIRoute = async ({ request }) => {
             scopeType: "global",
             version: 1,
           });
-    await getPool().query(
-      `
-        insert into audit_log (
-          actor_user_id,
-          action_type,
-          entity_type,
-          entity_id,
-          payload_json
-        )
-        values ($1, $2, 'content_analysis_policy', $3, $4::jsonb)
-      `,
-      [
-        session.userId,
+    await insertAdminAuditLog(getPool(), {
+      actorUserId: session.userId,
+      actionType:
         intent === "update"
           ? "content_analysis_policy_updated"
           : "content_analysis_policy_created",
-        String(saved.policy_id ?? payload.policyId ?? ""),
-        JSON.stringify({ intent, payload: requestPayload, saved }),
-      ]
-    );
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "analysis-policies",
-        status: "success",
-        message: intent === "update" ? "Analysis policy updated" : "Analysis policy created",
-        redirectTo,
-      });
-    }
-    return Response.json(saved, { status: intent === "update" ? 200 : 201 });
+      entityType: "content_analysis_policy",
+      entityId: String(saved.policy_id ?? payload.policyId ?? ""),
+      payloadJson: { intent, payload: requestPayload, saved },
+    });
+    return adminActionSuccess(action.context, {
+      section: "analysis-policies",
+      message: intent === "update" ? "Analysis policy updated" : "Analysis policy created",
+      status: intent === "update" ? 200 : 201,
+      json: saved,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to save analysis policy.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "analysis-policies",
-        status: "error",
-        message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: 400 });
+    return adminActionError(action.context, {
+      section: "analysis-policies",
+      message,
+      status: 400,
+    });
   }
 };

@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import os
-
 from ..discovery_runtime import DiscoveryRuntime
 from .article_enricher import PostgresArticleEnricherAdapter
 from .article_loader import PostgresArticleLoaderAdapter
-from .content_sampler import HttpxContentSamplerAdapter
+from .content_sampler import FetchersContentSamplerAdapter
 from .db_store import PostgresDbStoreAdapter
+from .fetchers_rss_probe import FetchersRssProbeAdapter
 from .llm_analyzer import GeminiLlmAnalyzerAdapter
-from .rss_probe import FeedparserRssProbeAdapter
 from .source_registrar import PostgresSourceRegistrarAdapter
-from .url_validator import HttpxUrlValidatorAdapter
+from .url_validator import FetchersUrlValidatorAdapter
 from .web_search import (
     BraveWebSearchAdapter,
     DdgsWebSearchAdapter,
@@ -21,10 +19,14 @@ from .website_probe import FetchersWebsiteProbeAdapter
 
 
 def discovery_enabled() -> bool:
+    import os
+
     return os.getenv("DISCOVERY_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def resolve_discovery_search_provider() -> str:
+    import os
+
     return os.getenv("DISCOVERY_SEARCH_PROVIDER", "ddgs").strip().lower() or "ddgs"
 
 
@@ -42,11 +44,12 @@ def build_discovery_web_search_adapter() -> object:
 
 
 def build_live_discovery_runtime() -> DiscoveryRuntime:
+    rss_probe_adapter = FetchersRssProbeAdapter()
     return DiscoveryRuntime(
         web_search=build_discovery_web_search_adapter(),
-        url_validator=HttpxUrlValidatorAdapter(),
-        rss_probe=FeedparserRssProbeAdapter(),
-        content_sampler=HttpxContentSamplerAdapter(),
+        url_validator=FetchersUrlValidatorAdapter(),
+        rss_probe=rss_probe_adapter,
+        content_sampler=FetchersContentSamplerAdapter(rss_probe=rss_probe_adapter),
         llm_analyzer=GeminiLlmAnalyzerAdapter(),
         source_registrar=PostgresSourceRegistrarAdapter(),
         db_store=PostgresDbStoreAdapter(),

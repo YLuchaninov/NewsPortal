@@ -108,6 +108,21 @@ export function asArguments(value: unknown): Record<string, unknown> {
   return asRecord(value);
 }
 
+export function readOptionalArgumentsObject(
+  value: unknown,
+  fieldName = "arguments"
+): Record<string, unknown> {
+  if (value == null) {
+    return {};
+  }
+  if (value != null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  throw new JsonRpcError(-32602, `MCP ${fieldName} must be an object.`, {
+    statusCode: 400,
+  });
+}
+
 export function readRequiredString(
   value: unknown,
   fieldName: string

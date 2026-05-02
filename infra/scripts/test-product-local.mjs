@@ -11,6 +11,7 @@ const CORE_COMMANDS = [
   command("unit_tests", "deterministic", ["unit_tests"]),
   command("integration_tests", "stateful-core", ["integration_tests"]),
   command("local-stack-start", "stateful-core", ["dev:mvp:internal"]),
+  command("provider-universality-compose", "stateful-core", ["test:providers:compose"]),
   command("website-compose", "stateful-core", ["test:website:compose"]),
   command("website-admin-compose", "stateful-core", ["test:website:admin:compose"]),
   command("automation-admin-compose", "stateful-core", ["test:automation:admin:compose"]),
@@ -40,7 +41,7 @@ const CORE_REQUIRED_ENV = [
   "EMAIL_DIGEST_SMTP_URL",
 ];
 
-const PARKED_ENV = ["IMAP_HOST", "IMAP_USERNAME", "IMAP_PASSWORD", "TELEGRAM_BOT_TOKEN"];
+const OPTIONAL_EXTERNAL_ENV = ["IMAP_HOST", "IMAP_USERNAME", "IMAP_PASSWORD", "TELEGRAM_BOT_TOKEN"];
 
 function command(key, lane, args) {
   return {
@@ -137,9 +138,9 @@ function validateEnv(env, mode) {
     }
   }
 
-  for (const key of PARKED_ENV) {
+  for (const key of OPTIONAL_EXTERNAL_ENV) {
     if (hasConfiguredValue(env, key)) {
-      warnings.push(`${key} is configured but not required; parked ingestion/delivery lanes are outside this product contour.`);
+      warnings.push(`${key} is configured but not required by the deterministic local product contour.`);
     }
   }
 
@@ -148,7 +149,7 @@ function validateEnv(env, mode) {
     failures,
     warnings,
     required: CORE_REQUIRED_ENV.map((key) => maskedPresence(env, key)),
-    parked: PARKED_ENV.map((key) => maskedPresence(env, key)),
+    optionalExternal: OPTIONAL_EXTERNAL_ENV.map((key) => maskedPresence(env, key)),
   };
 }
 
@@ -196,6 +197,8 @@ function buildIncludedLanes(mode) {
   const coreLanes = [
     "rss-ingestion",
     "website-ingestion",
+    "api-source-ingestion",
+    "email-imap-ingestion",
     "website-resources",
     "web-user-flow",
     "admin-operator-flow",
@@ -335,7 +338,7 @@ async function main() {
     commands,
     skippedCommands,
     cleanupChecklist: args.mode === "cleanup" ? buildCleanupChecklist() : [],
-    parkedLanes: ["telegram-ingestion", "email-imap-ingestion", "api-source-ingestion"],
+    parkedLanes: ["telegram-ingestion", "youtube-provider"],
     includedLanes: buildIncludedLanes(args.mode),
     artifacts: null,
   });

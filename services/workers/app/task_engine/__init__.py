@@ -37,7 +37,7 @@ from .models import (
     TaskDefinition,
     TaskRetryPolicy,
 )
-from .pipeline_plugins import (
+from .pipeline_registry import (
     BUILTIN_PLUGIN_CLASSES as PIPELINE_BUILTIN_PLUGIN_CLASSES,
     CORE_PIPELINE_PLUGIN_CLASSES,
     MAINTENANCE_PLUGIN_CLASSES,

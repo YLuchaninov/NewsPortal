@@ -35,6 +35,9 @@ export interface NormalizedEmailImapAdminChannelInput {
   passwordUpdate: PasswordUpdate;
   mailbox: string;
   searchFrom: string | null;
+  searchSinceHours: number | null;
+  maxMessageBytes: number;
+  bodyPreference: EmailImapChannelConfig["bodyPreference"];
   maxItemsPerPoll: number;
   enrichmentEnabled: boolean;
   enrichmentMinBodyLength: number;
@@ -133,6 +136,22 @@ function readOptionalPositiveInteger(value: unknown, fieldName: string): number 
   return parsed;
 }
 
+function readEmailBodyPreference(
+  value: unknown,
+  fallback: EmailImapChannelConfig["bodyPreference"]
+): EmailImapChannelConfig["bodyPreference"] {
+  if (value == null || value === "") {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "text" || normalized === "html") {
+    return normalized;
+  }
+
+  throw new Error('Email IMAP channel field "bodyPreference" must be "text" or "html".');
+}
+
 function normalizeHost(value: unknown): string {
   const host = readRequiredString(value, "host");
   if (/\s/.test(host)) {
@@ -158,6 +177,17 @@ function normalizeEmailImapConfig(
     password,
     mailbox: readRequiredString(payload.mailbox ?? DEFAULT_EMAIL_IMAP_CONFIG.mailbox, "mailbox"),
     searchFrom: readOptionalString(payload.searchFrom),
+    searchSinceHours: readOptionalPositiveInteger(payload.searchSinceHours, "searchSinceHours")
+      ?? DEFAULT_EMAIL_IMAP_CONFIG.searchSinceHours,
+    maxMessageBytes: readPositiveInteger(
+      payload.maxMessageBytes,
+      DEFAULT_EMAIL_IMAP_CONFIG.maxMessageBytes,
+      "maxMessageBytes"
+    ),
+    bodyPreference: readEmailBodyPreference(
+      payload.bodyPreference,
+      DEFAULT_EMAIL_IMAP_CONFIG.bodyPreference
+    ),
     maxItemsPerPoll: readPositiveInteger(
       payload.maxItemsPerPoll,
       DEFAULT_EMAIL_IMAP_CONFIG.maxItemsPerPoll,
@@ -239,6 +269,9 @@ export function parseEmailImapAdminChannelInput(
     passwordUpdate,
     mailbox: config.mailbox,
     searchFrom: config.searchFrom ?? null,
+    searchSinceHours: config.searchSinceHours,
+    maxMessageBytes: config.maxMessageBytes,
+    bodyPreference: config.bodyPreference,
     maxItemsPerPoll: config.maxItemsPerPoll,
     enrichmentEnabled: readBoolean(payload.enrichmentEnabled, true, "enrichmentEnabled"),
     enrichmentMinBodyLength: readPositiveInteger(
@@ -413,6 +446,9 @@ export async function upsertEmailImapChannels(
         password: persistedPassword,
         mailbox: channel.mailbox,
         searchFrom: channel.searchFrom,
+        searchSinceHours: channel.searchSinceHours,
+        maxMessageBytes: channel.maxMessageBytes,
+        bodyPreference: channel.bodyPreference,
         maxItemsPerPoll: channel.maxItemsPerPoll,
       });
       const fetchUrl = buildImapFetchUrl(

@@ -1,11 +1,8 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import { getPool } from "../../lib/server/db";
-import { readRequestPayload } from "../../lib/server/request";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession,
-} from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 import {
   markContentItemSeen,
   markContentItemUnread,
@@ -15,24 +12,23 @@ import {
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const session = await resolveWebSession(request);
-  if (!session) {
-    return Response.json(
-      { error: "Unauthorized." },
-      {
-        status: 401,
-        headers: {
-          "Set-Cookie": buildExpiredSessionCookie(),
-        },
-      }
-    );
+  const prepared = await prepareWebAction(request, {
+    authSetCookie: true,
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["content-state"],
+    payloadBoundaryName: "content-state payload",
+  });
+  if (!prepared.ok) {
+    return prepared.response;
   }
 
-  const payload = await readRequestPayload(request);
+  const { payload, session } = prepared.context;
+  if (!session) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
   const contentItemId = String(payload.contentItemId ?? "").trim();
-  const action = String(payload.action ?? "").trim();
+  const actionType = String(payload.action ?? "").trim();
 
-  if (!contentItemId || !action) {
+  if (!contentItemId || !actionType) {
     return Response.json(
       { error: "contentItemId and action are required." },
       { status: 400 }
@@ -42,20 +38,20 @@ export const POST: APIRoute = async ({ request }) => {
   const pool = getPool();
   try {
     const userState =
-      action === "mark_seen"
+      actionType === "mark_seen"
         ? await markContentItemSeen(pool, session.userId, contentItemId)
-        : action === "mark_unread"
+        : actionType === "mark_unread"
           ? await markContentItemUnread(pool, session.userId, contentItemId)
-          : action === "save"
+          : actionType === "save"
             ? await setContentItemSavedState(pool, session.userId, contentItemId, "saved")
-            : action === "unsave"
+            : actionType === "unsave"
               ? await setContentItemSavedState(pool, session.userId, contentItemId, "none")
-              : action === "archive"
+              : actionType === "archive"
                 ? await setContentItemSavedState(pool, session.userId, contentItemId, "archived")
                 : null;
 
     if (!userState) {
-      return Response.json({ error: `Unsupported action "${action}".` }, { status: 400 });
+      return Response.json({ error: `Unsupported action "${actionType}".` }, { status: 400 });
     }
 
     return Response.json({ ok: true, userState });

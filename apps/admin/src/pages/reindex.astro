@@ -16,6 +16,7 @@ import {
   ADMIN_HERO_CARD_CLASS,
   ADMIN_SMALL_CARD_CLASS,
 } from "../lib/admin-ui-classes";
+import { buildAdminActionToken } from "../lib/server/admin-action";
 import { parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
@@ -31,6 +32,12 @@ if (!session) {
 const flash = readFlash(Astro.url);
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const reindexBffPath = appPath("/bff/admin/reindex");
+const reindexActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: reindexBffPath,
+  scope: "reindex",
+});
 const pagePaths = { dashboard: appPath("/") };
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 
@@ -221,6 +228,7 @@ const initialJobs = {
         </div>
         <form method="post" action={reindexBffPath} class="grid gap-3">
           <input type="hidden" name="redirectTo" value={currentPath} />
+          <input type="hidden" name="adminActionToken" value={reindexActionToken} />
           <div class="grid gap-1.5">
             <label class="text-sm font-medium" for="indexName">Index name</label>
             <select id="indexName" name="indexName"

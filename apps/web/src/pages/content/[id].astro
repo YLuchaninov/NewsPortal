@@ -1,6 +1,7 @@
 ---
 import type { ContentItemDetail } from "@newsportal/contracts";
 import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
+import { sanitizeHtmlFragment } from "@newsportal/content-safety";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 
 import Shell from "../../layouts/Shell.astro";
@@ -77,19 +78,6 @@ function resolveSafeHref(rawValue: unknown): string | null {
   }
 }
 
-function sanitizeHtml(rawValue: unknown): string | null {
-  if (typeof rawValue !== "string" || !rawValue.trim()) {
-    return null;
-  }
-
-  return rawValue
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
-    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
-    .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
-}
-
 function formatTimestamp(rawValue: unknown): string | null {
   if (!rawValue) {
     return null;
@@ -134,7 +122,7 @@ const mediaItems = [
 ];
 const heroAsset = mediaItems[0] ?? null;
 const heroMediaUrl = resolveSafeHref(heroAsset?.thumbnail_url ?? heroAsset?.source_url ?? contentItem.primary_media_url ?? null);
-const renderedHtml = sanitizeHtml(contentItem.body_html ?? null);
+const renderedHtml = sanitizeHtmlFragment(contentItem.body_html ?? null, { baseUrl: sourceHref });
 const summary = String(contentItem.summary ?? contentItem.lead ?? "").trim() || null;
 const sourceLabel = String(contentItem.source_name ?? contentItem.channel_name ?? "Source").trim();
 const authorLabel = String(contentItem.author_name ?? "").trim();

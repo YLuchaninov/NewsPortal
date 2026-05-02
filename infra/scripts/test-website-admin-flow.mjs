@@ -719,7 +719,8 @@ async function main() {
           projectedArticleId: projectedEditorial.projected_article_id,
           projectedArticleTitle: projectedArticle.title,
           providerChannelsVerified: ["website"],
-          parkedIngestionLanes: ["api", "email_imap", "telegram"],
+          providerProofNote: "API and Email IMAP ingestion are covered by pnpm test:providers:compose.",
+          outOfScopeLanes: ["telegram", "youtube"],
         },
         null,
         2

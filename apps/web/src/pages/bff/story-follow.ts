@@ -1,34 +1,30 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import { getPool } from "../../lib/server/db";
-import { readRequestPayload } from "../../lib/server/request";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession,
-} from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 import { setStoryFollowState } from "../../lib/server/user-content-state";
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const session = await resolveWebSession(request);
-  if (!session) {
-    return Response.json(
-      { error: "Unauthorized." },
-      {
-        status: 401,
-        headers: {
-          "Set-Cookie": buildExpiredSessionCookie(),
-        },
-      }
-    );
+  const prepared = await prepareWebAction(request, {
+    authSetCookie: true,
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["story-follow"],
+    payloadBoundaryName: "story-follow payload",
+  });
+  if (!prepared.ok) {
+    return prepared.response;
   }
 
-  const payload = await readRequestPayload(request);
+  const { payload, session } = prepared.context;
+  if (!session) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
   const contentItemId = String(payload.contentItemId ?? "").trim();
-  const action = String(payload.action ?? "").trim();
+  const actionType = String(payload.action ?? "").trim();
 
-  if (!contentItemId || !["follow", "unfollow"].includes(action)) {
+  if (!contentItemId || !["follow", "unfollow"].includes(actionType)) {
     return Response.json(
       { error: "contentItemId and a valid follow action are required." },
       { status: 400 }
@@ -40,7 +36,7 @@ export const POST: APIRoute = async ({ request }) => {
       getPool(),
       session.userId,
       contentItemId,
-      action === "follow"
+      actionType === "follow"
     );
     return Response.json({ ok: true, userState });
   } catch (error) {

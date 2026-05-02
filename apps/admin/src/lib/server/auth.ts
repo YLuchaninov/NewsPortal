@@ -1,8 +1,13 @@
 import type { AuthIdentity, AuthSession } from "@newsportal/contracts";
+import { shouldMarkCookieSecure } from "@newsportal/config";
 
 import { queryRows, getPool } from "./db";
 
 const ADMIN_SESSION_COOKIE = "np_admin_session";
+
+interface AuthCookieOptions {
+  request?: Request | null;
+}
 
 interface FirebaseLookupUser {
   localId: string;
@@ -268,10 +273,19 @@ export async function createAdminSession(
   };
 }
 
-export function buildAdminSessionCookie(value: string): string {
-  return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`;
+function buildCookieSuffix(options: AuthCookieOptions = {}): string {
+  return shouldMarkCookieSecure({
+    env: process.env,
+    request: options.request ?? null
+  })
+    ? "; Secure"
+    : "";
 }
 
-export function buildExpiredAdminSessionCookie(): string {
-  return `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+export function buildAdminSessionCookie(value: string, options: AuthCookieOptions = {}): string {
+  return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${buildCookieSuffix(options)}`;
+}
+
+export function buildExpiredAdminSessionCookie(options: AuthCookieOptions = {}): string {
+  return `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${buildCookieSuffix(options)}`;
 }

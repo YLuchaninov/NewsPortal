@@ -91,6 +91,12 @@ Discovery по умолчанию выключен.
    pnpm test:discovery:examples:compose
    ```
 
+5. Для мега-комплексного A/B/C discovery matrix, когда нужно проверить repeated live yield по профильным доменам:
+
+   ```sh
+   pnpm test:discovery:mega:compose
+   ```
+
 После этого можно проверять `/admin/discovery`: profiles, missions, recall, candidates, sources and costs.
 
 ## MCP lane

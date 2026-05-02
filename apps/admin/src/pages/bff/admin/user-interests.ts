@@ -2,18 +2,13 @@ import type { APIRoute } from "astro";
 import type { PoolClient } from "pg";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  prepareAdminAction,
+} from "../../../lib/server/admin-action";
+import { resolveAdminSession } from "../../../lib/server/auth";
 import { getPool } from "../../../lib/server/db";
 import { insertOutboxEvent } from "../../../lib/server/outbox";
-import { readRequestPayload } from "../../../lib/server/request";
 import {
   createAdminUserInterest,
   findAdminUserInterestTarget,
@@ -88,43 +83,27 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const payload = await readRequestPayload(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
-    "/"
-  );
-  const session = await resolveAdminSession(request);
-
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/",
+    authFlashSection: "user-interests",
+    actionToken: { scope: "user-interests" },
+  });
+  if (!action.ok) {
+    return action.response;
   }
 
+  const { payload, session } = action.context;
   let interestInput;
   try {
     interestInput = parseUserInterestCreateInput(payload);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Description is required.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "error",
-        message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: resolveErrorStatus(message) });
+    return adminActionError(action.context, {
+      section: "user-interests",
+      message,
+      status: resolveErrorStatus(message),
+    });
   }
 
   const pool = getPool();
@@ -141,38 +120,28 @@ export const POST: APIRoute = async ({ request }) => {
     });
     await client.query("commit");
 
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "success",
-        message: "User interest created. Compilation and background match sync started.",
-        redirectTo,
-      });
-    }
-
-    return Response.json(
-      {
+    return adminActionSuccess(action.context, {
+      section: "user-interests",
+      message: "User interest created. Compilation and background match sync started.",
+      status: 201,
+      json: {
         interestId: result.interestId,
         target,
       },
-      { status: 201 }
-    );
+    });
   } catch (error) {
     await client.query("rollback");
     const message =
       error instanceof Error ? error.message : "Unable to create user interest.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "error",
-        message:
-          resolveErrorStatus(message) === 500
-            ? "Unable to create user interest right now."
-            : message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: resolveErrorStatus(message) });
+    return adminActionError(action.context, {
+      section: "user-interests",
+      message:
+        resolveErrorStatus(message) === 500
+          ? "Unable to create user interest right now."
+          : message,
+      status: resolveErrorStatus(message),
+      json: { error: message },
+    });
   } finally {
     client.release();
   }

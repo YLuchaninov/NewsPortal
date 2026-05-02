@@ -41,6 +41,13 @@ export interface RuntimeConfigOptions {
   defaultApiBaseUrl?: string;
 }
 
+export type CookieSecurePolicy = "auto" | "always" | "never";
+
+export interface CookieSecureOptions {
+  env?: Record<string, string | undefined>;
+  request?: Request | null;
+}
+
 function normalizeBaseUrl(rawValue: string): string {
   const normalized = new URL(rawValue);
   if (!normalized.pathname.endsWith("/")) {
@@ -64,6 +71,47 @@ export function resolveAppUrl(appBaseUrl: string, target = "/"): URL {
 export function resolveAppHref(appBaseUrl: string, target = "/"): string {
   const resolvedUrl = resolveAppUrl(appBaseUrl, target);
   return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
+}
+
+function readFirstHeaderValue(request: Request | null | undefined, name: string): string {
+  const rawValue = request?.headers.get(name) ?? "";
+  return rawValue.split(",")[0]?.trim().toLowerCase() ?? "";
+}
+
+export function readCookieSecurePolicy(
+  env: Record<string, string | undefined> = {}
+): CookieSecurePolicy {
+  const normalized = String(env.NEWSPORTAL_COOKIE_SECURE_POLICY ?? "auto")
+    .trim()
+    .toLowerCase();
+  if (normalized === "always" || normalized === "never" || normalized === "auto") {
+    return normalized;
+  }
+  return "auto";
+}
+
+export function shouldMarkCookieSecure(options: CookieSecureOptions = {}): boolean {
+  const policy = readCookieSecurePolicy(options.env);
+  if (policy === "always") {
+    return true;
+  }
+  if (policy === "never") {
+    return false;
+  }
+
+  const forwardedProto = readFirstHeaderValue(options.request, "x-forwarded-proto");
+  if (forwardedProto === "https") {
+    return true;
+  }
+  if (forwardedProto === "http") {
+    return false;
+  }
+
+  try {
+    return options.request ? new URL(options.request.url).protocol === "https:" : false;
+  } catch {
+    return false;
+  }
 }
 
 export function readRuntimeConfig(

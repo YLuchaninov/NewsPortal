@@ -9,7 +9,20 @@ SERVICES_ROOT = Path(__file__).resolve().parents[2]
 if str(SERVICES_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICES_ROOT))
 
-from ml.app.embedding import DEFAULT_SENTENCE_TRANSFORMER_MODEL
+from ml.app.embedding import DEFAULT_HASH_MODEL_KEY
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+WORKSPACE_ROOT = Path("/workspace")
+
+
+def resolve_runtime_path(path: str | Path) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute() and not WORKSPACE_ROOT.exists():
+        try:
+            return REPO_ROOT / candidate.relative_to(WORKSPACE_ROOT)
+        except ValueError:
+            return candidate
+    return candidate
 
 
 @dataclass(frozen=True)
@@ -44,7 +57,7 @@ def load_indexer_config() -> IndexerConfig:
         database_url=_build_database_url(),
         index_root=os.getenv("HNSW_INDEX_ROOT", "/workspace/data/indices"),
         snapshot_root=os.getenv("HNSW_SNAPSHOT_ROOT", "/workspace/data/snapshots"),
-        default_model_key=os.getenv("EMBEDDING_MODEL", DEFAULT_SENTENCE_TRANSFORMER_MODEL),
+        default_model_key=os.getenv("EMBEDDING_MODEL", DEFAULT_HASH_MODEL_KEY),
         default_dimensions=int(os.getenv("EMBEDDING_HASH_DIMENSIONS", "384")),
         hnsw_m=int(os.getenv("HNSW_M", "16")),
         hnsw_ef_construction=int(os.getenv("HNSW_EF_CONSTRUCTION", "200")),

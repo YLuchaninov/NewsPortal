@@ -18,6 +18,7 @@ core:
   - .aidp/contracts/article-pipeline-core.md
   - .aidp/contracts/auth-session-boundary.md
   - .aidp/contracts/browser-assisted-websites.md
+  - .aidp/contracts/content-analysis-and-gating.md
   - .aidp/contracts/content-model.md
   - .aidp/contracts/discovery-agent.md
   - .aidp/contracts/feed-ingress-adapters.md
@@ -158,8 +159,18 @@ commands:
   dev_down_volumes: pnpm dev:mvp:internal:down:volumes
   dev_logs: pnpm dev:mvp:internal:logs
   check_scaffold: pnpm check:scaffold
+  check_compliance: pnpm check:compliance
+  check_dependency_compliance: pnpm check:dependency-compliance
+  check_supply_chain_inventory: pnpm check:supply-chain-inventory
+  check_env_sync: pnpm check:env-sync
+  check_production_image_contents: pnpm check:production-image-contents
+  check_python_image_size: pnpm check:python-image-size
+  check_runtime_image_sizes: pnpm check:runtime-image-sizes
+  check_runtime_artifacts: pnpm check:runtime-artifacts
+  check_secret_leaks: pnpm check:secret-leaks
   check_test_layout: pnpm check:test-layout
   build: pnpm build
+  build_node_runtime: pnpm build:node-runtime
   lint: pnpm lint
   lint_ts: pnpm lint:ts
   lint_py: pnpm lint:py
@@ -171,6 +182,7 @@ commands:
   product_local_core: pnpm test:product:local:core
   product_local_full: pnpm test:product:local:full
   product_local_cleanup: pnpm test:product:local:cleanup
+  release_verify: pnpm release:verify
   smoke: pnpm test:mvp:internal
   relay_tests: pnpm test:relay
   relay_compose: pnpm test:relay:compose
@@ -192,6 +204,8 @@ commands:
   discovery_enabled_compose: pnpm test:discovery-enabled:compose
   discovery_enabled_smoke: pnpm test:discovery-enabled:smoke
   discovery_admin_compose: pnpm test:discovery:admin:compose
+  discovery_domains_compose: pnpm test:discovery:domains:compose
+  discovery_mega_compose: pnpm test:discovery:mega:compose
   discovery_examples_compose: pnpm test:discovery:examples:compose
   discovery_nonregression_compose: pnpm test:discovery:nonregression:compose
   discovery_yield_compose: pnpm test:discovery:yield:compose
@@ -209,6 +223,7 @@ commands:
   article_yield_remediate: pnpm article:yield:remediate
   feed_ingress_adapters_smoke: pnpm test:feed-ingress-adapters:smoke
   channel_auth_compose: pnpm test:channel-auth:compose
+  providers_compose: pnpm test:providers:compose
   criterion_compile_smoke: pnpm test:criterion-compile:smoke
   criterion_compile_compose: pnpm test:criterion-compile:compose
   cluster_match_notify_smoke: pnpm test:cluster-match-notify:smoke
@@ -224,6 +239,7 @@ commands:
   interest_compile_compose: pnpm test:interest-compile:compose
   normalize_dedup_smoke: pnpm test:normalize-dedup:smoke
   normalize_dedup_compose: pnpm test:normalize-dedup:compose
+  index_check_derived_vectors: pnpm index:check:derived-vectors
   index_check_interest_centroids: pnpm index:check:interest-centroids
   index_check_event_cluster_centroids: pnpm index:check:event-cluster-centroids
   index_rebuild_interest_centroids: pnpm index:rebuild:interest-centroids
@@ -486,6 +502,7 @@ deep_contract_docs:
   - .aidp/contracts/article-pipeline-core.md
   - .aidp/contracts/auth-session-boundary.md
   - .aidp/contracts/browser-assisted-websites.md
+  - .aidp/contracts/content-analysis-and-gating.md
   - .aidp/contracts/content-model.md
   - .aidp/contracts/discovery-agent.md
   - .aidp/contracts/feed-ingress-adapters.md

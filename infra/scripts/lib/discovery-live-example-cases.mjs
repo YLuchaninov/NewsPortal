@@ -761,6 +761,11 @@ export const DISCOVERY_LIVE_CASES = [
       minChannelsWithDownstreamEvidence: 1,
       minBaselineSuccessfulFetches: 1,
     },
+    domainMatrixTargets: [
+      { domain: "hnrss.org", label: "HNRSS hiring" },
+      { domain: "weworkremotely.com", label: "We Work Remotely" },
+      { domain: "remoteok.com", label: "RemoteOK" },
+    ],
     yieldBenchmark: {
       domains: [
         "hnrss.org",
@@ -979,6 +984,11 @@ export const DISCOVERY_LIVE_CASES = [
     yieldAcceptance: {
       minChannelsWithDownstreamEvidence: 1,
     },
+    domainMatrixTargets: [
+      { domain: "infoq.com", label: "InfoQ" },
+      { domain: "github.blog", label: "GitHub Blog" },
+      { domain: "blog.cloudflare.com", label: "Cloudflare Blog" },
+    ],
     yieldBenchmark: {
       domains: [
         "infoq.com",
@@ -1223,6 +1233,11 @@ export const DISCOVERY_LIVE_CASES = [
     yieldAcceptance: {
       minChannelsWithDownstreamEvidence: 1,
     },
+    domainMatrixTargets: [
+      { domain: "sam.gov", label: "SAM.gov" },
+      { domain: "ted.europa.eu", label: "TED Europa" },
+      { domain: "contractsfinder.service.gov.uk", label: "Contracts Finder" },
+    ],
     yieldBenchmark: {
       domains: [
         "sam.gov",

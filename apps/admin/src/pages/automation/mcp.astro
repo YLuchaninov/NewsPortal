@@ -2,6 +2,7 @@
 import { McpTokenWorkspace } from "../../components/McpTokenWorkspace";
 import AdminShell from "../../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../../lib/server/auth";
+import { buildAdminActionToken } from "../../lib/server/admin-action";
 import {
   buildAdminSignInPath,
   readFlash,
@@ -23,6 +24,13 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const data = await loadMcpTokenWorkspaceData();
+const mcpBffPath = appPath("/bff/admin/mcp-tokens");
+const mcpActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: mcpBffPath,
+  scope: "mcp-tokens",
+});
 ---
 
 <AdminShell title="MCP Tokens — Admin" session={session} flash={flash} activeNav="automation">
@@ -37,7 +45,8 @@ const data = await loadMcpTokenWorkspaceData();
   </Fragment>
 
   <McpTokenWorkspace
-    mcpBffPath={appPath("/bff/admin/mcp-tokens")}
+    mcpBffPath={mcpBffPath}
+    adminActionToken={mcpActionToken}
     initialTokens={data.tokens}
     scopeOptions={data.scopeOptions}
     client:load

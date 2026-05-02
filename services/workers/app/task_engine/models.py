@@ -3,9 +3,51 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 DEFAULT_TASK_TIMEOUT_MS = 60_000
 DEFAULT_RETRY_ATTEMPTS = 1
 DEFAULT_RETRY_DELAY_MS = 1_000
+
+
+class TaskRetryPolicyPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    attempts: int = Field(default=DEFAULT_RETRY_ATTEMPTS, ge=1)
+    delay_ms: int = Field(default=DEFAULT_RETRY_DELAY_MS, ge=0, alias="delayMs")
+
+
+class TaskDefinitionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    key: str = Field(min_length=1)
+    module: str = Field(min_length=1)
+    options: dict[str, Any] = Field(default_factory=dict)
+    label: str | None = None
+    notes: str | None = None
+    enabled: bool = True
+    retry: TaskRetryPolicyPayload = Field(default_factory=TaskRetryPolicyPayload)
+    timeout_ms: int = Field(default=DEFAULT_TASK_TIMEOUT_MS, ge=1, alias="timeoutMs")
+
+    def to_task_record(self) -> dict[str, Any]:
+        return self.model_dump(mode="json", by_alias=False)
+
+
+def normalize_task_graph_payload(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError("task_graph must be an array.")
+    return [
+        TaskDefinitionPayload.model_validate(node).to_task_record()
+        for node in value
+    ]
+
+
+def format_task_definition_validation_errors(error: ValidationError) -> list[str]:
+    messages: list[str] = []
+    for item in error.errors():
+        location = ".".join(str(part) for part in item.get("loc", ())) or "task"
+        messages.append(f"{location}: {item.get('msg', 'invalid task definition')}")
+    return messages
 
 
 @dataclass(frozen=True)
@@ -15,14 +57,10 @@ class TaskRetryPolicy:
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> "TaskRetryPolicy":
-        if value is None:
-            return cls()
-
-        attempts = int(value.get("attempts", DEFAULT_RETRY_ATTEMPTS))
-        delay_ms = int(value.get("delay_ms", DEFAULT_RETRY_DELAY_MS))
+        payload = TaskRetryPolicyPayload.model_validate(value or {})
         return cls(
-            attempts=max(1, attempts),
-            delay_ms=max(0, delay_ms),
+            attempts=payload.attempts,
+            delay_ms=payload.delay_ms,
         )
 
 
@@ -39,24 +77,16 @@ class TaskDefinition:
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "TaskDefinition":
-        key = str(value["key"])
-        module = str(value["module"])
-        options_value = value.get("options", {})
-        if not isinstance(options_value, Mapping):
-            raise ValueError(f"Task {key} options must be an object.")
-
-        timeout_ms = int(value.get("timeout_ms", DEFAULT_TASK_TIMEOUT_MS))
+        payload = TaskDefinitionPayload.model_validate(value)
         return cls(
-            key=key,
-            module=module,
-            options=dict(options_value),
-            label=str(value["label"]) if value.get("label") is not None else None,
-            notes=str(value["notes"]) if value.get("notes") is not None else None,
-            enabled=bool(value.get("enabled", True)),
-            retry=TaskRetryPolicy.from_mapping(
-                value.get("retry") if isinstance(value.get("retry"), Mapping) else None
-            ),
-            timeout_ms=max(1, timeout_ms),
+            key=payload.key,
+            module=payload.module,
+            options=dict(payload.options),
+            label=payload.label,
+            notes=payload.notes,
+            enabled=payload.enabled,
+            retry=TaskRetryPolicy.from_mapping(payload.retry.model_dump(by_alias=False)),
+            timeout_ms=payload.timeout_ms,
         )
 
 

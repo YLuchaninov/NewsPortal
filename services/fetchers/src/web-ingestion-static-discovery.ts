@@ -1,6 +1,6 @@
 import type { WebsiteChannelConfig } from "@newsportal/contracts";
 
-import { parseFeed } from "./feed-parser";
+import { parseFeed } from "./feed-parser/index";
 import { inferResourceKindsFromUrl } from "./web-ingestion-classification";
 import {
   DOWNLOAD_EXTENSION_PATTERN,
@@ -197,6 +197,7 @@ export async function discoverFromFeeds(input: {
       const parsedFeed = parseFeed({
         body: response.text,
         contentType: response.contentType,
+        feedUrl,
       });
       for (const entry of parsedFeed.entries.slice(0, input.config.maxResourcesPerPoll)) {
         if (!entry.url) {

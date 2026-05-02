@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 ROUTE_DEPENDENCY_KEYS = (
@@ -115,9 +116,31 @@ ROUTE_DEPENDENCY_KEYS = (
 )
 
 
-def build_route_deps(namespace: Mapping[str, Any]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class ApiRouteDependencies(Mapping[str, Any]):
+    values: Mapping[str, Any]
+
+    def __getitem__(self, key: str) -> Any:
+        if key not in ROUTE_DEPENDENCY_KEYS:
+            raise KeyError(f"API route dependency {key} is not declared.")
+        try:
+            return self.values[key]
+        except KeyError as error:
+            raise KeyError(f"API route dependency {key} is missing.") from error
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(ROUTE_DEPENDENCY_KEYS)
+
+    def __len__(self) -> int:
+        return len(ROUTE_DEPENDENCY_KEYS)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {key: self[key] for key in ROUTE_DEPENDENCY_KEYS}
+
+
+def build_route_deps(namespace: Mapping[str, Any]) -> ApiRouteDependencies:
     missing = [key for key in ROUTE_DEPENDENCY_KEYS if key not in namespace]
     if missing:
         missing_text = ", ".join(missing)
         raise RuntimeError(f"API route dependency map is missing: {missing_text}")
-    return {key: namespace[key] for key in ROUTE_DEPENDENCY_KEYS}
+    return ApiRouteDependencies({key: namespace[key] for key in ROUTE_DEPENDENCY_KEYS})

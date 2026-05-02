@@ -1,0 +1,2 @@
+# Optional neural embedding backend. Do not install this in the baseline API/worker image.
+sentence-transformers==5.1.2

@@ -1,16 +1,13 @@
 import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import {
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
 } from "../../lib/server/browser-flow";
 import { getPool, queryRows } from "../../lib/server/db";
-import { readRequestPayload } from "../../lib/server/request";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession
-} from "../../lib/server/auth";
+import { resolveWebSession } from "../../lib/server/auth";
+import { prepareWebAction } from "../../lib/server/web-action";
 import {
   parseNotificationChannelConfig,
   type NotificationChannelType
@@ -56,21 +53,18 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const session = await resolveWebSession(request);
+  const action = await prepareWebAction(request, {
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["notification-channels"],
+    payloadBoundaryName: "notification-channels payload",
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+  const { browserRequest, payload, session } = action.context;
   if (!session) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please start a session to continue.",
-        setCookie: buildExpiredSessionCookie()
-      });
-    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const payload = await readRequestPayload(request);
   const channelType = String(payload.channelType ?? "") as NotificationChannelType;
   if (!["web_push", "telegram", "email_digest"].includes(channelType)) {
     if (browserRequest) {

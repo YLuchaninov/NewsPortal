@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import re
 import uuid
-import os
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import psycopg
-from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from .content_analysis_structured import (
@@ -31,439 +26,45 @@ from .content_analysis_heuristic_terms import (
     MONEY_PATTERN,
     URL_PATTERN,
 )
-from . import content_analysis_heuristics as _content_analysis_heuristics
+from .content_analysis_heuristics import (
+    analyze_categories,
+    analyze_sentiment,
+    extract_heuristic_entities,
+    tokenize as _tokenize,
+)
+from .content_analysis_runtime import (
+    CLUSTER_SUMMARY_MODEL_KEY,
+    CLUSTER_SUMMARY_MODEL_VERSION,
+    CLUSTER_SUMMARY_PROVIDER,
+    CONTENT_FILTER_MODEL_KEY,
+    CONTENT_FILTER_MODEL_VERSION,
+    CONTENT_FILTER_PROVIDER,
+    DEFAULT_CONTENT_FILTER_POLICY_KEY,
+    DEFAULT_MAX_TEXT_CHARS,
+    SYSTEM_LABEL_MODEL_KEY,
+    SYSTEM_LABEL_MODEL_VERSION,
+    SYSTEM_LABEL_PROVIDER,
+    ContentSubject,
+    RuntimeAnalysisPolicy,
+    analysis_source_hash as _analysis_source_hash,
+    connect as _connect,
+    default_model_for_module as _default_model_for_module,
+    normalize_key as _normalize_key,
+    policy_supports_local_runtime as _runtime_policy_supports_local_runtime,
+    policy_result_json as _policy_result_json,
+    read_config_bool as _read_config_bool,
+    resolve_max_text_chars as _resolve_max_text_chars,
+    resolve_policy_for_module as _resolve_policy_for_module,
+    source_hash as _source_hash,
+)
+from .content_analysis_subjects import (
+    coerce_datetime as _coerce_datetime,
+    load_content_subject,
+)
 from .gemini import review_with_gemini
 
-HEURISTIC_NER_PROVIDER = "heuristic"
-HEURISTIC_NER_MODEL_KEY = "newsportal-titlecase-v1"
-HEURISTIC_NER_MODEL_VERSION = "1"
-SYSTEM_LABEL_PROVIDER = "newsportal"
-SYSTEM_LABEL_MODEL_KEY = "interest-filter-projection"
-SYSTEM_LABEL_MODEL_VERSION = "1"
-CONTENT_FILTER_PROVIDER = "newsportal"
-CONTENT_FILTER_MODEL_KEY = "content-filter-policy"
-CONTENT_FILTER_MODEL_VERSION = "1"
-SENTIMENT_PROVIDER = "newsportal"
-SENTIMENT_MODEL_KEY = "lexicon-sentiment-v1"
-SENTIMENT_MODEL_VERSION = "1"
-CATEGORY_PROVIDER = "newsportal"
-CATEGORY_MODEL_KEY = "lexicon-taxonomy-v1"
-CATEGORY_MODEL_VERSION = "1"
-CLUSTER_SUMMARY_PROVIDER = "newsportal"
-CLUSTER_SUMMARY_MODEL_KEY = "story-cluster-summary-v1"
-CLUSTER_SUMMARY_MODEL_VERSION = "1"
-STRUCTURED_EXTRACTION_PROVIDER = "gemini"
-STRUCTURED_EXTRACTION_MODEL_VERSION = "1"
-DEFAULT_CONTENT_FILTER_POLICY_KEY = "default_recent_content_gate"
-DEFAULT_MAX_TEXT_CHARS = 50_000
 
-
-def build_database_url() -> str:
-    if os.getenv("DATABASE_URL"):
-        return os.environ["DATABASE_URL"]
-
-    user = os.getenv("POSTGRES_USER", "newsportal")
-    password = os.getenv("POSTGRES_PASSWORD", "newsportal")
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv(
-        "POSTGRES_PORT",
-        "55432" if host in {"127.0.0.1", "localhost"} else "5432",
-    )
-    database = os.getenv("POSTGRES_DB", "newsportal")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
-
-
-@dataclass(frozen=True)
-class ContentSubject:
-    subject_type: str
-    subject_id: str
-    title: str
-    lead: str
-    body: str
-    language: str | None
-    source_channel_id: str | None
-    canonical_document_id: str | None
-    dates: dict[str, datetime | None]
-
-    @property
-    def text(self) -> str:
-        return " ".join(part.strip() for part in (self.title, self.lead, self.body) if part.strip())
-
-
-@dataclass(frozen=True)
-class RuntimeAnalysisPolicy:
-    policy_id: str
-    policy_key: str
-    module: str
-    enabled: bool
-    mode: str
-    provider: str | None
-    model_key: str | None
-    model_version: str | None
-    config: Mapping[str, Any]
-    failure_policy: str
-    version: int
-
-
-def _connect() -> psycopg.Connection[Any]:
-    return psycopg.connect(build_database_url(), row_factory=dict_row)
-
-
-def _normalize_key(value: str) -> str:
-    lowered = value.strip().casefold()
-    return re.sub(r"[^0-9a-zа-яіїєґ]+", "_", lowered).strip("_")
-
-
-def _source_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _analysis_source_hash(source: Any, policy: RuntimeAnalysisPolicy | None = None) -> str:
-    payload: dict[str, Any] = {"source": source}
-    if policy is not None:
-        payload["policy"] = {
-            "policyKey": policy.policy_key,
-            "version": policy.version,
-            "config": dict(policy.config),
-        }
-    return _source_hash(json.dumps(payload, default=str, sort_keys=True))
-
-
-def _policy_result_json(policy: RuntimeAnalysisPolicy | None) -> dict[str, Any] | None:
-    if policy is None:
-        return None
-    return {
-        "policyId": policy.policy_id,
-        "policyKey": policy.policy_key,
-        "policyVersion": policy.version,
-        "mode": policy.mode,
-        "failurePolicy": policy.failure_policy,
-    }
-
-
-def _default_model_for_module(module: str) -> tuple[str, str, str]:
-    structured_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
-    defaults = {
-        "ner": (HEURISTIC_NER_PROVIDER, HEURISTIC_NER_MODEL_KEY, HEURISTIC_NER_MODEL_VERSION),
-        "sentiment": (SENTIMENT_PROVIDER, SENTIMENT_MODEL_KEY, SENTIMENT_MODEL_VERSION),
-        "category": (CATEGORY_PROVIDER, CATEGORY_MODEL_KEY, CATEGORY_MODEL_VERSION),
-        "system_interest_label": (SYSTEM_LABEL_PROVIDER, SYSTEM_LABEL_MODEL_KEY, SYSTEM_LABEL_MODEL_VERSION),
-        "cluster_summary": (CLUSTER_SUMMARY_PROVIDER, CLUSTER_SUMMARY_MODEL_KEY, CLUSTER_SUMMARY_MODEL_VERSION),
-        "clustering": (CLUSTER_SUMMARY_PROVIDER, CLUSTER_SUMMARY_MODEL_KEY, CLUSTER_SUMMARY_MODEL_VERSION),
-        "structured_extraction": (
-            STRUCTURED_EXTRACTION_PROVIDER,
-            structured_model,
-            STRUCTURED_EXTRACTION_MODEL_VERSION,
-        ),
-    }
-    return defaults[module]
-
-
-def _policy_supports_local_runtime(policy: RuntimeAnalysisPolicy) -> bool:
-    if policy.module == "structured_extraction":
-        return policy.provider in {None, STRUCTURED_EXTRACTION_PROVIDER}
-    provider, model_key, _model_version = _default_model_for_module(policy.module)
-    if policy.provider and policy.provider != provider:
-        return False
-    return not (policy.model_key and policy.model_key != model_key)
-
-
-def _merge_terms(base_terms: set[str], config: Mapping[str, Any], key: str) -> set[str]:
-    raw_terms = config.get(key)
-    if not isinstance(raw_terms, list):
-        return set(base_terms)
-    merged = set(base_terms)
-    for item in raw_terms:
-        term = str(item).strip().casefold()
-        if term:
-            merged.add(term)
-    return merged
-
-
-def _read_config_float(config: Mapping[str, Any], key: str, default: float) -> float:
-    value = config.get(key)
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _read_config_int(config: Mapping[str, Any], key: str, default: int) -> int:
-    value = config.get(key)
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _read_config_bool(config: Mapping[str, Any], key: str, default: bool) -> bool:
-    value = config.get(key)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        lowered = value.strip().casefold()
-        if lowered in {"true", "1", "yes", "on"}:
-            return True
-        if lowered in {"false", "0", "no", "off"}:
-            return False
-    return default
-
-
-def _resolve_max_text_chars(
-    *,
-    explicit_max_text_chars: int | None,
-    policy: RuntimeAnalysisPolicy | None,
-) -> int:
-    if explicit_max_text_chars is not None:
-        return max(1, int(explicit_max_text_chars))
-    if policy is not None:
-        return max(1, _read_config_int(policy.config, "maxTextChars", DEFAULT_MAX_TEXT_CHARS))
-    return DEFAULT_MAX_TEXT_CHARS
-
-
-def load_analysis_policy(module: str, subject: ContentSubject | None = None) -> RuntimeAnalysisPolicy | None:
-    module_aliases = [module]
-    if module == "cluster_summary":
-        module_aliases.append("clustering")
-    elif module == "clustering":
-        module_aliases.append("cluster_summary")
-    params: list[Any] = [module_aliases]
-    scope_clause = "scope_type = 'global'"
-    if subject is not None and subject.source_channel_id:
-        scope_clause = "(scope_type = 'global' or (scope_type = 'source_channel' and scope_id = %s::uuid))"
-        params.append(subject.source_channel_id)
-    with _connect() as connection:
-        row = connection.execute(
-            f"""
-            select
-              policy_id::text as policy_id,
-              policy_key,
-              module,
-              enabled,
-              mode,
-              provider,
-              model_key,
-              model_version,
-              config_json,
-              failure_policy,
-              version
-            from content_analysis_policies
-            where module = any(%s)
-              and is_active = true
-              and {scope_clause}
-            order by
-              case when scope_type = 'source_channel' then 0 else 1 end,
-              priority asc,
-              version desc
-            limit 1
-            """,
-            tuple(params),
-        ).fetchone()
-    if row is None:
-        return None
-    config = row.get("config_json") if isinstance(row.get("config_json"), Mapping) else {}
-    return RuntimeAnalysisPolicy(
-        policy_id=str(row["policy_id"]),
-        policy_key=str(row["policy_key"]),
-        module=str(row["module"]),
-        enabled=bool(row["enabled"]),
-        mode=str(row["mode"]),
-        provider=str(row["provider"]) if row.get("provider") else None,
-        model_key=str(row["model_key"]) if row.get("model_key") else None,
-        model_version=str(row["model_version"]) if row.get("model_version") else None,
-        config=config,
-        failure_policy=str(row["failure_policy"]),
-        version=int(row["version"]),
-    )
-
-
-def _policy_skipped(policy: RuntimeAnalysisPolicy, reason: str) -> dict[str, Any]:
-    return {
-        "skipped": True,
-        "reason": reason,
-        "policyKey": policy.policy_key,
-        "policyVersion": policy.version,
-        "failurePolicy": policy.failure_policy,
-    }
-
-
-def _resolve_policy_for_module(module: str, subject: ContentSubject) -> RuntimeAnalysisPolicy | dict[str, Any] | None:
-    policy = load_analysis_policy(module, subject)
-    if policy is None:
-        return None
-    if not policy.enabled or policy.mode == "disabled":
-        return _policy_skipped(policy, "disabled_policy")
-    if not _policy_supports_local_runtime(policy):
-        return _policy_skipped(policy, "unsupported_policy_provider")
-    return policy
-
-
-def _coerce_datetime(value: Any) -> datetime | None:
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    if value is None:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-
-
-def _classify_entity(text: str) -> str:
-    return _content_analysis_heuristics.classify_entity(text)
-
-
-def _tokenize(text: str, *, max_chars: int = DEFAULT_MAX_TEXT_CHARS) -> list[str]:
-    return _content_analysis_heuristics.tokenize(text, max_chars=max_chars)
-
-
-def _score_terms(tokens: list[str], terms: set[str]) -> tuple[int, list[str]]:
-    return _content_analysis_heuristics.score_terms(tokens, terms)
-
-
-def extract_heuristic_entities(
-    text: str,
-    *,
-    max_chars: int = DEFAULT_MAX_TEXT_CHARS,
-    config: Mapping[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    return _content_analysis_heuristics.extract_heuristic_entities(
-        text,
-        max_chars=max_chars,
-        config=config,
-        normalize_key_func=_normalize_key,
-    )
-
-
-def load_content_subject(subject_type: str, subject_id: str) -> ContentSubject | None:
-    if subject_type == "article":
-        sql = """
-            select
-              a.doc_id::text as subject_id,
-              a.title,
-              a.lead,
-              a.body,
-              a.lang,
-              a.channel_id::text as source_channel_id,
-              coalesce(obs.canonical_document_id, a.canonical_doc_id)::text as canonical_document_id,
-              a.published_at,
-              a.ingested_at,
-              a.updated_at,
-              a.extracted_published_at
-            from articles a
-            left join document_observations obs
-              on obs.origin_type = 'article'
-             and obs.origin_id = a.doc_id
-            where a.doc_id = %s
-        """
-        with _connect() as connection:
-            row = connection.execute(sql, (subject_id,)).fetchone()
-        if row is None:
-            return None
-        return ContentSubject(
-            subject_type="article",
-            subject_id=str(row["subject_id"]),
-            title=str(row.get("title") or ""),
-            lead=str(row.get("lead") or ""),
-            body=str(row.get("body") or ""),
-            language=str(row.get("lang") or "") or None,
-            source_channel_id=str(row.get("source_channel_id") or "") or None,
-            canonical_document_id=str(row.get("canonical_document_id") or "") or None,
-            dates={
-                "published_at": _coerce_datetime(row.get("extracted_published_at") or row.get("published_at")),
-                "source_lastmod_at": None,
-                "discovered_at": _coerce_datetime(row.get("ingested_at")),
-                "ingested_at": _coerce_datetime(row.get("ingested_at")),
-                "updated_at": _coerce_datetime(row.get("updated_at")),
-            },
-        )
-    if subject_type == "web_resource":
-        sql = """
-            select
-              wr.resource_id::text as subject_id,
-              wr.title,
-              wr.summary,
-              wr.body,
-              wr.lang,
-              wr.channel_id::text as source_channel_id,
-              wr.projected_article_id::text as canonical_document_id,
-              wr.published_at,
-              wr.discovered_at,
-              wr.updated_at,
-              wr.raw_payload_json
-            from web_resources wr
-            where wr.resource_id = %s
-        """
-        with _connect() as connection:
-            row = connection.execute(sql, (subject_id,)).fetchone()
-        if row is None:
-            return None
-        raw_payload = row.get("raw_payload_json") if isinstance(row.get("raw_payload_json"), Mapping) else {}
-        source_lastmod = None
-        if isinstance(raw_payload, Mapping):
-            source_lastmod = raw_payload.get("lastmod") or raw_payload.get("sourceLastmodAt")
-        return ContentSubject(
-            subject_type="web_resource",
-            subject_id=str(row["subject_id"]),
-            title=str(row.get("title") or ""),
-            lead=str(row.get("summary") or ""),
-            body=str(row.get("body") or ""),
-            language=str(row.get("lang") or "") or None,
-            source_channel_id=str(row.get("source_channel_id") or "") or None,
-            canonical_document_id=str(row.get("canonical_document_id") or "") or None,
-            dates={
-                "published_at": _coerce_datetime(row.get("published_at")),
-                "source_lastmod_at": _coerce_datetime(source_lastmod),
-                "discovered_at": _coerce_datetime(row.get("discovered_at")),
-                "ingested_at": _coerce_datetime(row.get("discovered_at")),
-                "updated_at": _coerce_datetime(row.get("updated_at")),
-            },
-        )
-    if subject_type == "story_cluster":
-        sql = """
-            select
-              story_cluster_id::text as subject_id,
-              primary_title,
-              top_entities,
-              top_places,
-              min_published_at,
-              max_published_at,
-              created_at,
-              updated_at
-            from story_clusters
-            where story_cluster_id = %s
-        """
-        with _connect() as connection:
-            row = connection.execute(sql, (subject_id,)).fetchone()
-        if row is None:
-            return None
-        top_entities = row.get("top_entities") if isinstance(row.get("top_entities"), list) else []
-        top_places = row.get("top_places") if isinstance(row.get("top_places"), list) else []
-        return ContentSubject(
-            subject_type="story_cluster",
-            subject_id=str(row["subject_id"]),
-            title=str(row.get("primary_title") or ""),
-            lead=" ".join(str(item) for item in top_entities[:10]),
-            body=" ".join(str(item) for item in top_places[:10]),
-            language=None,
-            source_channel_id=None,
-            canonical_document_id=None,
-            dates={
-                "published_at": _coerce_datetime(row.get("max_published_at")),
-                "source_lastmod_at": None,
-                "discovered_at": _coerce_datetime(row.get("created_at")),
-                "ingested_at": _coerce_datetime(row.get("created_at")),
-                "updated_at": _coerce_datetime(row.get("updated_at")),
-                "min_published_at": _coerce_datetime(row.get("min_published_at")),
-                "max_published_at": _coerce_datetime(row.get("max_published_at")),
-            },
-        )
-    return None
+_policy_supports_local_runtime = _runtime_policy_supports_local_runtime
 
 
 def persist_ner_analysis(subject: ContentSubject, *, max_text_chars: int | None = None) -> dict[str, Any]:
@@ -639,38 +240,6 @@ def _replace_analysis_result(
         ),
     ).fetchone()
     return uuid.UUID(str(row["analysis_id"]))
-
-
-def analyze_sentiment(
-    text: str,
-    *,
-    max_chars: int = DEFAULT_MAX_TEXT_CHARS,
-    config: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    return _content_analysis_heuristics.analyze_sentiment(
-        text,
-        max_chars=max_chars,
-        config=config,
-        merge_terms_func=_merge_terms,
-        read_config_float_func=_read_config_float,
-        read_config_int_func=_read_config_int,
-    )
-
-
-def analyze_categories(
-    text: str,
-    *,
-    max_chars: int = DEFAULT_MAX_TEXT_CHARS,
-    config: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    return _content_analysis_heuristics.analyze_categories(
-        text,
-        max_chars=max_chars,
-        config=config,
-        normalize_key_func=_normalize_key,
-        read_config_float_func=_read_config_float,
-        read_config_int_func=_read_config_int,
-    )
 
 
 def persist_sentiment_analysis(

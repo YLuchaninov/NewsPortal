@@ -9,6 +9,7 @@ import {
   resolveRssChannelDeleteMode,
   upsertRssChannels
 } from "../../../apps/admin/src/lib/server/rss-channels.ts";
+import { saveChannelFromPayload } from "../../../packages/control-plane/src/channels.ts";
 
 test("parseRssAdminChannelInput normalizes RSS admin payload fields", () => {
   const channel = parseRssAdminChannelInput({
@@ -129,6 +130,50 @@ test("parseRssAdminChannelInput rejects non-RSS providers and invalid fetch URLs
       }),
     /must be a valid absolute URL/
   );
+});
+
+test("saveChannelFromPayload strips admin action envelope before channel schema validation", async () => {
+  const clientQueries: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const fakeClient = {
+    async query(sql: string, params?: unknown[]) {
+      clientQueries.push({ sql, params });
+      return { rowCount: 1, rows: [] };
+    },
+    release() {}
+  };
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("from source_providers")) {
+        return { rows: [{ provider_id: "provider-1" }] };
+      }
+      if (sql.includes("insert into audit_log")) {
+        assert.deepEqual(params?.[1], "channel_created");
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    async connect() {
+      return fakeClient;
+    }
+  };
+
+  const result = await saveChannelFromPayload(fakePool as never, "actor-1", {
+    intent: "save",
+    redirectTo: "/channels/new?providerType=rss",
+    providerType: "rss",
+    name: "Browser form RSS",
+    fetchUrl: "https://example.com/browser.xml",
+  });
+
+  assert.equal(result.created, true);
+  assert.ok(result.channelId);
+
+  const insertSourceChannel = clientQueries.find(({ sql }) =>
+    sql.includes("insert into source_channels")
+  );
+  assert.ok(insertSourceChannel, "Expected channel create to reach the RSS upsert.");
+  assert.deepEqual(insertSourceChannel.params?.[2], "Browser form RSS");
+  assert.deepEqual(insertSourceChannel.params?.[3], "https://example.com/browser.xml");
 });
 
 test("parseBulkRssAdminChannelInputs rejects partially invalid payloads", () => {

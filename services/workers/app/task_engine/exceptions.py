@@ -1,12 +1,38 @@
 from __future__ import annotations
 
+from services.workers.app.error_taxonomy import (
+    NewsPortalErrorDiagnostic,
+    NewsPortalErrorDomain,
+    NewsPortalRetryHint,
+    create_error_diagnostic,
+)
+
 
 class TaskExecutionError(Exception):
     """Expected task execution failure."""
 
-    def __init__(self, message: str, *, retryable: bool = False):
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool = False,
+        error_code: str | None = None,
+        error_domain: NewsPortalErrorDomain = "task_plugin",
+        retry_hint: NewsPortalRetryHint | None = None,
+    ):
         super().__init__(message)
         self.retryable = retryable
+        self.error_code = error_code or "task_plugin.failed"
+        self.error_domain = error_domain
+        self.retry_hint = retry_hint or ("retry" if retryable else None)
+
+    def to_diagnostic(self) -> NewsPortalErrorDiagnostic:
+        return create_error_diagnostic(
+            code=self.error_code,
+            message=str(self),
+            domain=self.error_domain,
+            retry_hint=self.retry_hint,
+        )
 
 
 class TaskValidationError(Exception):

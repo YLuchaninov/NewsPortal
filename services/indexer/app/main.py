@@ -16,6 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("rebuild-event-cluster-centroids")
     subparsers.add_parser("check-interest-centroids")
     subparsers.add_parser("check-event-cluster-centroids")
+    subparsers.add_parser("check-derived-vectors")
     return parser
 
 
@@ -41,6 +42,11 @@ async def run() -> int:
 
     if args.command == "check-event-cluster-centroids":
         result = await indexer.check_event_cluster_centroids()
+        print(json.dumps(result, ensure_ascii=True))
+        return 0 if result["isConsistent"] else 1
+
+    if args.command == "check-derived-vectors":
+        result = await indexer.check_derived_vectors()
         print(json.dumps(result, ensure_ascii=True))
         return 0 if result["isConsistent"] else 1
 

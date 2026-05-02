@@ -21,6 +21,16 @@
 - Python lint only: `pnpm lint:py`
 - Typecheck: `pnpm typecheck`
 - Build/no-emit package checks: `pnpm build`
+- Node runtime build: `pnpm build:node-runtime`
+- Fast compliance gate: `pnpm check:compliance`
+- Dependency compliance guard: `pnpm check:dependency-compliance`
+- Supply-chain inventory guard: `pnpm check:supply-chain-inventory`
+- Env key sync guard: `pnpm check:env-sync`
+- Production image content guard: `pnpm check:production-image-contents`
+- Python image size guard: `pnpm check:python-image-size`
+- Runtime image size guard: `pnpm check:runtime-image-sizes`
+- Runtime artifact guard: `pnpm check:runtime-artifacts`
+- Secret leak guard: `pnpm check:secret-leaks`
 - Test/runtime layout guard: `pnpm check:test-layout`
 
 ### Unit proof
@@ -32,7 +42,7 @@
 ### Integration/smoke proof
 
 - Canonical full local acceptance alias: `pnpm integration_tests`
-- Local product core contour without parked Telegram/email/API ingestion: `pnpm test:product:local:core`
+- Local product core contour with deterministic RSS/website/API/IMAP acquisition proof and without Telegram/YouTube ingestion: `pnpm test:product:local:core`
 - Local product full contour with discovery/live-provider evidence: `pnpm test:product:local:full`
 - Local product cleanup checklist artifact: `pnpm test:product:local:cleanup`
 - Internal MVP smoke path: `pnpm test:mvp:internal`
@@ -44,7 +54,7 @@
 - RSS ingest compose smoke: `pnpm test:ingest:compose`
 - RSS ingest multi/soak: `pnpm test:ingest:multi:compose`, `pnpm test:ingest:soak:compose`
 - Website compose smoke: `pnpm test:website:compose`
-- Website admin/operator flow: `pnpm test:website:admin:compose`; mandatory scope is current RSS/website contour, while API source ingestion, inbound Email IMAP ingestion and Telegram ingestion are parked unless a separate item opens them.
+- Website admin/operator flow: `pnpm test:website:admin:compose`; mandatory scope is website/resource operator flow. API and Email IMAP provider ingestion are covered by `pnpm test:providers:compose`; Telegram and YouTube remain outside the local product contour.
 - Automation admin/operator flow: `pnpm test:automation:admin:compose`
 - Website live matrix: `pnpm test:website:matrix:compose`
 - Web viewport proof: `pnpm test:web:viewports`
@@ -53,19 +63,22 @@
 - Discovery local smoke: `pnpm test:discovery-enabled:smoke`
 - Discovery admin flow: `pnpm test:discovery:admin:compose`
 - Discovery example proof: `pnpm test:discovery:examples:compose`
+- Discovery mega comprehensive matrix proof: `pnpm test:discovery:mega:compose` (`pnpm test:discovery:domains:compose` is a compatibility alias)
 - Discovery nonregression proof: `pnpm test:discovery:nonregression:compose`
 - Discovery yield proof: `pnpm test:discovery:yield:compose`
 - MCP compose proof: `pnpm test:mcp:compose`
 - MCP HTTP groups: `pnpm test:mcp:http:matrix`, `pnpm test:mcp:http:auth`, `pnpm test:mcp:http:reads`, `pnpm test:mcp:http:writes`, `pnpm test:mcp:http:discovery`
 - MCP live HTTP proof: `pnpm test:mcp:http:live`
-- Fetcher/provider smoke: `pnpm test:feed-ingress-adapters:smoke`, `pnpm test:channel-auth:compose`, `pnpm test:enrichment:compose`, `pnpm test:hard-sites:compose`
+- Fetcher/provider smoke: `pnpm test:feed-ingress-adapters:smoke`, `pnpm test:channel-auth:compose`, `pnpm test:providers:compose`, `pnpm test:enrichment:compose`, `pnpm test:hard-sites:compose`
 - Worker local smoke: `pnpm test:criterion-compile:smoke`, `pnpm test:cluster-match-notify:smoke`, `pnpm test:discovery-enabled:smoke`, `pnpm test:embed:smoke`, `pnpm test:interest-compile:smoke`, `pnpm test:llm-budget-stop:smoke`, `pnpm test:normalize-dedup:smoke`
 - Worker compose smoke: `pnpm test:criterion-compile:compose`, `pnpm test:cluster-match-notify:compose`, `pnpm test:embed:compose`, `pnpm test:interest-compile:compose`, `pnpm test:llm-budget-stop:compose`, `pnpm test:normalize-dedup:compose`, `pnpm test:reindex-backfill:compose`
+- HNSW combined derived-vector check: `pnpm index:check:derived-vectors`
 - HNSW interest-centroid check: `pnpm index:check:interest-centroids`
 - HNSW event-cluster-centroid check: `pnpm index:check:event-cluster-centroids`
 
 ### Runtime/delivery proof
 
+- Non-deploy release verification gate: `pnpm release:verify`
 - Start full local stack: `pnpm dev:mvp:internal`
 - Start without rebuild: `pnpm dev:mvp:internal:no-build`
 - Stop/down/log lifecycle: `pnpm dev:mvp:internal:stop`, `pnpm dev:mvp:internal:down`, `pnpm dev:mvp:internal:logs`
@@ -76,12 +89,22 @@
 ## Test surface taxonomy
 
 - Static gates: lint, typecheck and build prove source shape and package contracts without runtime state.
+- Node runtime build: `pnpm build:node-runtime` proves compiled `.mjs` entrypoints for Node services before Docker/compose startup consumes them.
+- Compliance guard: `pnpm check:compliance` proves scaffold, test/runtime layout, runtime artifact, dependency, supply-chain inventory, env key-sync and secret-leak invariants without starting compose services or printing secret values.
+- Dependency compliance guard: `pnpm check:dependency-compliance` proves direct Node dependencies have locally installed package metadata with approved license families, direct specs avoid floating/git/url sources, forbidden parser dependencies stay out, and runtime Python requirements remain exactly pinned.
+- Supply-chain inventory guard: `pnpm check:supply-chain-inventory` proves a deterministic SBOM-lite inventory can be built from local workspace manifests, installed direct Node package metadata, Python requirement files and dependency source file hashes without network access.
 - Layout guard: `pnpm check:test-layout` proves tracked test/proof files are outside production source trees.
+- Runtime artifact guard: `pnpm check:runtime-artifacts` proves production Dockerfiles/compose do not pull tests/proofs/local envs/AIDP hidden state or derived `data` payloads into runtime artifacts, forbidden parser dependencies stay out of manifests, Node service runtime startup does not depend on TS source loaders, Node final image stages avoid source/build-only inputs while installing production dependencies and dropping root privileges, and the Python API/worker final image stage runs non-root from builder-produced wheels without build-essential.
+- Production image content guard: `pnpm check:production-image-contents` proves already-built production compose images do not contain repo-owned `tests/**`, `infra/scripts/**`, `infra/fixtures/**`, `.aidp/**`, `.env*` files or derived `data/**` files.
+- Python image size guard: `pnpm check:python-image-size` proves a built Python API/worker proof image stays below the configured size ceiling after optional ML payloads are kept out of the baseline runtime.
+- Runtime image size guard: `pnpm check:runtime-image-sizes` proves compose-built service images stay below service-specific size ceilings, keep expected non-root runtime users and expose direct runtime commands rather than package-manager wrappers.
+- Env sync guard: `pnpm check:env-sync` proves `.env.dev` exposes the same key set as `.env.example` without comparing or printing values.
+- Secret leak guard: `pnpm check:secret-leaks` scans tracked files only and proves common high-risk token/key shapes are not committed, while ignored local env files remain outside the scan.
 - Unit gates: `tests/unit/ts/**/*.test.ts` and `tests/unit/python/test_*.py` prove deterministic local logic.
 - Local smoke gates: direct Python/Node smoke commands under `infra/scripts/**` that can run outside compose when dependencies are available.
 - Compose smoke gates: commands that assume local Docker Compose services, use the dev/test compose overlay for `infra/scripts/**` and `infra/fixtures/**`, and may create persistent PostgreSQL/Mailpit/Redis state.
 - Full acceptance gates: `pnpm test:mvp:internal`, website/admin/discovery/MCP live harnesses and multi/soak ingest.
-- Diagnostic/remediation utilities: commands that inspect or repair runtime-derived state; they are not default close gates unless the active item touches their area.
+- Diagnostic/remediation utilities: commands that inspect or repair runtime-derived state; they are not default close gates unless the active item touches their area. `pnpm index:check:derived-vectors` is the read-only combined HNSW consistency gate when vector index/registry behavior is touched.
 - Live/external-provider gates: discovery live examples/yield, website live matrix and MCP live proof may involve external networks/providers or nondeterminism; residual gaps must be explicit if skipped.
 
 ## Таксономия gates
@@ -90,7 +113,7 @@
 - Structural gate: required for boundaries, refactors, shared contracts, migrations, queue routing or cross-surface changes.
 - Runtime smoke gate: required when startup, compose integration or service health matters.
 - Delivery gate: required for Docker/compose/nginx/env/runtime delivery changes.
-- Release gate: not separately declared yet; no repository-specific release command exists.
+- Release gate: `pnpm release:verify` is the repository-owned non-deploy release gate. It runs compliance, lint, typecheck, unit tests, workspace build, Node runtime build, production compose image build, runtime image checks, production image content smoke, supply-chain artifact generation and product-local core/full/cleanup proof. Production deployment remains absent by design because the repository has no declared deployment target.
 
 ## Proof по типу работы
 
@@ -178,6 +201,7 @@ External spec/tool plan acceptance is scoped to the active item. It must be chec
 - MCP/control-plane changes: `pnpm test:mcp:compose` or targeted MCP HTTP group proof.
 - Automation/control-plane changes: `pnpm test:automation:admin:compose` plus targeted unit/control-plane proof.
 - Delivery/compose changes: compose startup/health proof or an explicit blocked proof gap; scaffold changes should run `pnpm check:scaffold`.
+- Runtime image budget changes: build or compose-start the affected images first, then run `pnpm check:runtime-image-sizes`; if a budget increase is intentional, record the reason in `.aidp/contracts/runtime-migrations-and-derived-state.md` or the active stage archive.
 - Test/runtime layout changes: `pnpm check:test-layout`, lint/typecheck/unit proof, representative moved smoke commands, dev/test compose availability proof, and production image absence checks for `tests/**`, `infra/scripts/**` and `infra/fixtures/**`.
 - Notification/digest changes: affected BFF/worker proof plus Mailpit-local or explicit external-provider residual gap.
 - HNSW/index changes: affected rebuild/check command, plus worker/API proof if matching or search behavior changed.

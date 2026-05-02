@@ -1,15 +1,10 @@
 import type { APIRoute } from "astro";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession
-} from "../../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  prepareAdminAction,
+} from "../../../../lib/server/admin-action";
 import {
   executeBulkImport,
   formatBulkImportSuccessMessage,
@@ -21,33 +16,17 @@ import {
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  let redirectTo = resolveAdminRedirectPath(
-    request,
-    request.headers.get("referer"),
-    "/channels/import"
-  );
-  const session = await resolveAdminSession(request);
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo)
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/channels/import",
+    actionToken: { scope: "channels.bulk" },
+    payloadReader: readBulkPayload,
+  });
+  if (!action.ok) {
+    return action.response;
   }
 
   try {
-    const bulkPayload = await readBulkPayload(request);
-    redirectTo = resolveAdminRedirectPath(
-      request,
-      String(bulkPayload.redirectTo ?? request.headers.get("referer") ?? ""),
-      "/channels/import"
-    );
+    const bulkPayload = action.context.payload;
     const channels = parseBulkChannels(bulkPayload.channelsPayload);
     const importPlan = await planBulkImport(channels);
     const overwriteCount = importPlan.wouldUpdate;
@@ -61,43 +40,27 @@ export const POST: APIRoute = async ({ request }) => {
 
     const result = await executeBulkImport(importPlan.channels);
 
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "channels",
-        status: "success",
-        message: formatBulkImportSuccessMessage(result),
-        redirectTo
-      });
-    }
-
-    return Response.json({
-      createdChannelIds: result.createdChannelIds,
-      updatedChannelIds: result.updatedChannelIds,
-      createdCount: result.createdChannelIds.length,
-      updatedCount: result.updatedChannelIds.length,
-      overwriteCount,
-      matchedByChannelId: importPlan.matchedByChannelId,
-      matchedByFetchUrl: importPlan.matchedByFetchUrl,
-      providerBreakdown: result.providerBreakdown
+    return adminActionSuccess(action.context, {
+      section: "channels",
+      message: formatBulkImportSuccessMessage(result),
+      json: {
+        createdChannelIds: result.createdChannelIds,
+        updatedChannelIds: result.updatedChannelIds,
+        createdCount: result.createdChannelIds.length,
+        updatedCount: result.updatedChannelIds.length,
+        overwriteCount,
+        matchedByChannelId: importPlan.matchedByChannelId,
+        matchedByFetchUrl: importPlan.matchedByFetchUrl,
+        providerBreakdown: result.providerBreakdown,
+      },
     });
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to import channels.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "channels",
-        status: "error",
-        message: errorMessage,
-        redirectTo
-      });
-    }
-    return Response.json(
-      {
-        error: errorMessage
-      },
-      {
-        status: 400
-      }
-    );
+    return adminActionError(action.context, {
+      section: "channels",
+      message: errorMessage,
+      status: 400,
+    });
   }
 };

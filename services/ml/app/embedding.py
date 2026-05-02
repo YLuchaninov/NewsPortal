@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import logging
 import math
 import os
@@ -10,6 +11,9 @@ from typing import Any
 DEFAULT_SENTENCE_TRANSFORMER_MODEL = (
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
+DEFAULT_HASH_DIMENSIONS = 384
+DEFAULT_HASH_MODEL_KEY = f"hash://deterministic/{DEFAULT_HASH_DIMENSIONS}"
+DEFAULT_EMBEDDING_BACKEND = "hash"
 
 LOGGER = logging.getLogger("newsportal.ml.embedding")
 
@@ -150,15 +154,29 @@ class SentenceTransformerEmbeddingProvider:
         return self._model
 
 
-def load_embedding_provider() -> HashEmbeddingProvider | SentenceTransformerEmbeddingProvider:
-    backend = os.getenv("EMBEDDING_BACKEND", "auto").strip().lower()
-    dimensions = int(os.getenv("EMBEDDING_HASH_DIMENSIONS", "384"))
+def is_sentence_transformers_available() -> bool:
+    return importlib.util.find_spec("sentence_transformers") is not None
 
-    if backend == "hash":
+
+def load_embedding_provider() -> HashEmbeddingProvider | SentenceTransformerEmbeddingProvider:
+    backend = os.getenv("EMBEDDING_BACKEND", DEFAULT_EMBEDDING_BACKEND).strip().lower()
+    dimensions = int(os.getenv("EMBEDDING_HASH_DIMENSIONS", str(DEFAULT_HASH_DIMENSIONS)))
+
+    if backend in {"", "hash"}:
         return HashEmbeddingProvider(dimensions)
 
     model_name = os.getenv("EMBEDDING_MODEL", DEFAULT_SENTENCE_TRANSFORMER_MODEL)
-    fallback_to_hash = backend in {"auto", "", "sentence-transformers"}
+
+    if backend == "auto" and not is_sentence_transformers_available():
+        LOGGER.info(
+            "Using deterministic hash embeddings because sentence-transformers is not installed."
+        )
+        return HashEmbeddingProvider(dimensions)
+
+    if backend not in {"auto", "sentence-transformers"}:
+        raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
+
+    fallback_to_hash = backend == "auto"
     return SentenceTransformerEmbeddingProvider(
         model_name=model_name,
         fallback_to_hash=fallback_to_hash,

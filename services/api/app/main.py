@@ -5,9 +5,10 @@ import uuid
 from typing import Any, Literal, Mapping
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import HTTPException, Query
 from psycopg.rows import dict_row
 
+from services.api.app.api_app import ApiAppContext, create_api_app
 from services.api.app.database import (
     build_database_url,
     query_all,
@@ -81,7 +82,6 @@ from services.api.app.content_selection_read_model import (
 from services.api.app.pagination import build_paginated_response, resolve_pagination
 from services.api.app import discovery_error_mapping as _discovery_error_mapping
 from services.api.app.route_deps import build_route_deps
-from services.api.app.routes import register_api_routes
 from services.api.app.llm_review_budget import (
     coerce_llm_review_cost_usd,
     llm_review_accept_gray_zone_on_budget_exhaustion,
@@ -102,33 +102,27 @@ from services.api.app.status_constants import (
     DISCOVERY_RECALL_MISSION_STATUSES,
     SEQUENCE_RUN_CANCELLABLE_STATUSES,
 )
-from services.workers.app.discovery_orchestrator import (
+from services.api.app.discovery_worker_boundary import (
     DISCOVERY_ORCHESTRATOR_SEQUENCE_ID,
     DiscoveryCoordinatorRepository,
+    PostgresSourceRegistrarAdapter,
     acquire_recall_missions,
+    canonical_domain,
     compile_interest_graph_for_mission,
+    configure_api_discovery_runtime,
     coerce_discovery_cost_usd,
     discovery_cost_usd_to_cents,
     discovery_month_start_utc,
     load_discovery_settings,
     re_evaluate_sources,
 )
-from services.workers.app.source_scoring import canonical_domain
-from services.workers.app.task_engine.adapters.source_registrar import (
-    PostgresSourceRegistrarAdapter,
-)
-from services.workers.app.task_engine import (
-    configure_discovery_runtime,
-    enqueue_sequence_run_job as dispatch_sequence_run_job,
+from services.api.app.sequence_worker_boundary import (
+    RESERVED_CONTEXT_KEYS,
     parse_cron_expression,
+    dispatch_sequence_run_job,
     SequenceQueueDispatchError,
     TASK_REGISTRY,
 )
-from services.workers.app.task_engine.adapters import (
-    build_live_discovery_runtime,
-    discovery_enabled,
-)
-from services.workers.app.task_engine.context import RESERVED_CONTEXT_KEYS
 
 
 discovery_mission_select_sql = _discovery_selects.discovery_mission_select_sql
@@ -209,8 +203,7 @@ def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
     return _content_selection_query_count(sql, params, query_one_func=query_one)
 
 
-if discovery_enabled():
-    configure_discovery_runtime(build_live_discovery_runtime())
+configure_api_discovery_runtime()
 
 
 def resolve_discovery_canonical_domain(url: str | None) -> str:
@@ -1554,9 +1547,6 @@ def get_discovery_cost_summary() -> dict[str, Any]:
     )
 
 
-app = FastAPI(title="NewsPortal API MVP")
-
-
 def list_articles(
     limit: int = Query(default=20, ge=1, le=100),
     entity_type: str | None = Query(default=None, alias="entityType"),
@@ -2830,4 +2820,4 @@ def get_discovery_cost_summary_route() -> dict[str, Any]:
     return get_discovery_cost_summary()
 
 
-register_api_routes(app, build_route_deps(globals()))
+app = create_api_app(ApiAppContext(route_deps=build_route_deps(globals())))

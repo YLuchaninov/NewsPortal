@@ -16,6 +16,7 @@ import {
   buildToolResult,
   JsonRpcError,
   parseJsonRpcRequest,
+  readOptionalArgumentsObject,
 } from "../../../services/mcp/src/protocol.ts";
 import { listMcpPrompts, resolveMcpPrompt } from "../../../services/mcp/src/prompts.ts";
 import { listMcpResources, resolveMcpResource } from "../../../services/mcp/src/resources.ts";
@@ -190,9 +191,11 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
         id: "req-2",
         method: "tools/call",
         params: [],
-      }),
+    }),
     JsonRpcError
   );
+  assert.deepEqual(readOptionalArgumentsObject(undefined), {});
+  assert.throws(() => readOptionalArgumentsObject("not-json-object"), /arguments must be an object/i);
 
   const toolNames = listMcpTools().map((tool) => tool.name);
   assert.ok(toolNames.includes("admin.summary.get"));
@@ -361,6 +364,64 @@ test("MCP tool execution enforces scope and destructive confirmation before hand
         }
       ),
     /write\.destructive/i
+  );
+});
+
+test("MCP tool execution validates declared input schemas before handler work", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("fetch should not be called when schema checks fail");
+    }) as typeof fetch,
+  });
+  const readToken = {
+    tokenId: "token-schema",
+    label: "reader",
+    tokenPrefix: "npmcp_token-schema",
+    scopes: ["read"],
+    status: "active",
+    issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+    revokedByUserId: null,
+    revokedAt: null,
+    expiresAt: null,
+    lastUsedAt: null,
+    lastUsedIp: null,
+    lastUsedUserAgent: null,
+    createdAt: "2026-04-23T10:00:00.000Z",
+    updatedAt: "2026-04-23T10:00:00.000Z",
+    recentRequestCount: 0,
+  } as const;
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: dummySdk,
+          pool: { query: async () => ({ rows: [] }) },
+          token: readToken,
+        },
+        "channels.list",
+        {
+          page: "1",
+        }
+      ),
+    /channels\.list.*page must be number/i
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: dummySdk,
+          pool: { query: async () => ({ rows: [] }) },
+          token: readToken,
+        },
+        "channels.list",
+        {
+          unexpected: true,
+        }
+      ),
+    /channels\.list.*unexpected is not allowed/i
   );
 });
 

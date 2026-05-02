@@ -59,7 +59,7 @@ interface SmokeLogger {
   error(payload: unknown, message?: string): void;
 }
 
-const WEBSITE_FIXTURE_HOST = "127.0.0.2";
+const WEBSITE_FIXTURE_HOST = "127.0.0.1";
 const RESOURCE_INGEST_TRIGGER_EVENT = "resource.ingest.requested";
 const ARTICLE_INGEST_TRIGGER_EVENT = "article.ingest.requested";
 
@@ -709,10 +709,9 @@ async function assertWebsiteRows(
   runId: string,
   resourceEnrichmentService: ResourceEnrichmentService
 ): Promise<void> {
-  await enrichDiscoveredResources(pool, resourceEnrichmentService, channelId, 4);
-
   await waitForCondition(
     async () => {
+      await enrichDiscoveredResources(pool, resourceEnrichmentService, channelId, 4);
       const [resources, articles] =
         await Promise.all([
           fetchResourceRows(pool, channelId),

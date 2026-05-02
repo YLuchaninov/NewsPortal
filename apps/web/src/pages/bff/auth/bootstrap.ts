@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import {
   bootstrapWebFirebaseSession,
@@ -7,18 +8,27 @@ import {
 } from "../../../lib/server/auth";
 import {
   buildFlashRedirect,
-  requestPrefersHtmlNavigation
 } from "../../../lib/server/browser-flow";
+import { prepareWebAction } from "../../../lib/server/web-action";
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
+  const action = await prepareWebAction(request, {
+    requireSession: false,
+    readPayload: false,
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["auth.bootstrap"],
+    payloadBoundaryName: "auth bootstrap payload",
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+  const { browserRequest } = action.context;
 
   try {
     const session = await bootstrapWebFirebaseSession(request);
     const localUser = await syncLocalUser(session.identity);
-    const authCookies = buildWebAuthCookies(session);
+    const authCookies = buildWebAuthCookies(session, { request });
     if (browserRequest) {
       const response = buildFlashRedirect(request, {
         section: "auth",

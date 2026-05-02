@@ -9,6 +9,10 @@ import { ADMIN_SIDEBAR_STORAGE_KEY } from "../components/admin-layout";
 import { ADMIN_THEME_STORAGE_KEY } from "../components/admin-theme";
 import { ADMIN_NAV_SECTIONS, findAdminNavSection } from "../lib/admin-ia";
 import { resolveAdminAppPath } from "../lib/server/browser-flow";
+import {
+  ADMIN_ACTION_TOKEN_TARGETS,
+  buildAdminActionTokenSet,
+} from "../lib/server/admin-action";
 import type { AdminLiveUpdateSurface } from "../lib/live-updates";
 
 export interface Props {
@@ -31,6 +35,16 @@ const {
 
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
 const activeSection = findAdminNavSection(activeNav ?? null);
+const adminActionTokens = session
+  ? buildAdminActionTokenSet({
+      request: Astro.request,
+      session,
+    })
+  : {};
+const adminActionTokenTargets = ADMIN_ACTION_TOKEN_TARGETS.map((target) => ({
+  scope: target.scope,
+  targetPath: appPath(target.targetPath),
+}));
 
 // Lucide-like SVG icons as inline strings
 const icons: Record<string, string> = {
@@ -323,7 +337,91 @@ const desktopNavSections = ADMIN_NAV_SECTIONS.map((group) => ({
       </div>
     </div>
 
+    <script is:inline type="application/json" id="admin-action-tokens" set:html={JSON.stringify(adminActionTokens)}></script>
+    <script is:inline type="application/json" id="admin-action-token-targets" set:html={JSON.stringify(adminActionTokenTargets)}></script>
+
     <script>
+      const adminActionTokensElement = document.getElementById("admin-action-tokens");
+      const adminActionTargetsElement = document.getElementById("admin-action-token-targets");
+      const adminActionTokens = JSON.parse(adminActionTokensElement?.textContent || "{}");
+      const adminActionTargets = JSON.parse(adminActionTargetsElement?.textContent || "[]");
+      const adminActionExactScopes = new Map();
+      const adminActionPrefixScopes = new Map([
+        ["/bff/admin/user-interests/", "user-interests"],
+        ["/admin/bff/admin/user-interests/", "user-interests"],
+      ]);
+
+      const normalizeAdminActionPath = (value: string) => {
+        try {
+          const pathname = new URL(value, window.location.href).pathname;
+          if (pathname === "/admin") return "/";
+          if (pathname.startsWith("/admin/bff/")) return pathname.slice("/admin".length);
+          if (pathname.startsWith("/admin/")) return pathname.slice("/admin".length) || "/";
+          return pathname.startsWith("/") ? pathname : `/${pathname}`;
+        } catch {
+          return "/";
+        }
+      };
+
+      for (const target of adminActionTargets) {
+        adminActionExactScopes.set(
+          normalizeAdminActionPath(target.targetPath),
+          String(target.scope || "")
+        );
+      }
+
+      const resolveAdminActionScope = (value: string) => {
+        const pathname = normalizeAdminActionPath(value);
+        const exact = adminActionExactScopes.get(pathname);
+        if (exact) return exact;
+        for (const [prefix, scope] of adminActionPrefixScopes.entries()) {
+          if (pathname.startsWith(prefix) || `/admin${pathname}`.startsWith(prefix)) {
+            return scope;
+          }
+        }
+        return "";
+      };
+
+      const tokenForAdminAction = (value: string) => {
+        const scope = resolveAdminActionScope(value);
+        return scope ? String(adminActionTokens[scope] || "") : "";
+      };
+
+      document.addEventListener("submit", (event) => {
+        const form = event.target instanceof HTMLFormElement ? event.target : null;
+        if (!form || String(form.method || "get").toLowerCase() !== "post") {
+          return;
+        }
+        const token = tokenForAdminAction(form.action);
+        if (!token) {
+          return;
+        }
+        let tokenInput = form.querySelector('input[name="adminActionToken"]') as HTMLInputElement | null;
+        if (!tokenInput) {
+          tokenInput = document.createElement("input");
+          tokenInput.type = "hidden";
+          tokenInput.name = "adminActionToken";
+          form.appendChild(tokenInput);
+        }
+        tokenInput.value = token;
+      });
+
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : null;
+        const method = String(init?.method || request?.method || "GET").toUpperCase();
+        if (method === "POST") {
+          const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+          const token = tokenForAdminAction(url);
+          if (token) {
+            const headers = new Headers(init?.headers || request?.headers || undefined);
+            headers.set("x-admin-action-token", token);
+            init = { ...init, headers };
+          }
+        }
+        return originalFetch(input, init);
+      };
+
       const btn = document.getElementById("mobile-sidebar-btn");
       const overlay = document.getElementById("mobile-sidebar-overlay");
       const closeBtn = document.getElementById("close-mobile-sidebar");

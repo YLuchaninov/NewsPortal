@@ -2,19 +2,15 @@ import type { APIRoute } from "astro";
 
 import { readRuntimeConfig } from "@newsportal/config";
 
+import type { AdminActionContext } from "../../../lib/server/admin-action";
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminAppPath,
-  resolveAdminRedirectPath,
-} from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  insertAdminAuditLog,
+  prepareAdminAction,
+} from "../../../lib/server/admin-action";
+import { resolveAdminAppPath } from "../../../lib/server/browser-flow";
 import { getPool } from "../../../lib/server/db";
-import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
@@ -82,62 +78,41 @@ async function writeAuditLog(
   entityId: string | null,
   payloadJson: Record<string, unknown>
 ): Promise<void> {
-  await getPool().query(
-    `
-      insert into audit_log (
-        actor_user_id,
-        action_type,
-        entity_type,
-        entity_id,
-        payload_json
-      )
-      values ($1, $2, $3, $4, $5::jsonb)
-    `,
-    [actorUserId, actionType, entityType, normalizeAuditEntityId(entityId), JSON.stringify(payloadJson)]
-  );
+  await insertAdminAuditLog(getPool(), {
+    actorUserId,
+    actionType,
+    entityType,
+    entityId: normalizeAuditEntityId(entityId),
+    payloadJson,
+  });
 }
 
 function respondDiscoverySuccess(
-  request: Request,
-  browserRequest: boolean,
+  context: AdminActionContext,
   redirectTo: string,
   message: string,
   payload: unknown,
   status = 200
 ): Response {
-  if (browserRequest) {
-    return buildFlashRedirect(request, {
-      section: "discovery",
-      status: "success",
-      message,
-      redirectTo,
-    });
-  }
-  return Response.json(payload, { status });
+  return adminActionSuccess(context, {
+    section: "discovery",
+    message,
+    json: payload,
+    status,
+    redirectTo,
+  });
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const payload = await readRequestPayload(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
-    "/discovery"
-  );
-  const session = await resolveAdminSession(request);
-
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/discovery",
+    actionToken: { scope: "discovery" },
+  });
+  if (!action.ok) {
+    return action.response;
   }
+  const context = action.context;
+  const { payload, session } = context;
 
   try {
     const intent = resolveDiscoveryIntent(payload);
@@ -156,9 +131,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Discovery profile created",
         result,
         201
@@ -186,9 +160,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Discovery profile updated",
         result
       );
@@ -219,9 +192,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         intent === "archive_profile" ? "Discovery profile archived" : "Discovery profile activated",
         result
       );
@@ -247,8 +219,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
+        context,
         resolveAdminAppPath(request, "/discovery?tab=profiles"),
         "Discovery profile deleted",
         result
@@ -269,9 +240,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Adaptive discovery mission created",
         result,
         201
@@ -299,9 +269,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Adaptive discovery mission updated",
         result
       );
@@ -332,9 +301,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         intent === "archive_mission"
           ? "Adaptive discovery mission archived"
           : "Adaptive discovery mission reactivated",
@@ -362,8 +330,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
+        context,
         resolveAdminAppPath(request, "/discovery?tab=missions"),
         "Adaptive discovery mission deleted",
         result
@@ -391,9 +358,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Adaptive discovery mission run requested",
         result,
         202
@@ -421,9 +387,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Interest graph compiled",
         result
       );
@@ -443,9 +408,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Hypothesis class created",
         result,
         201
@@ -473,9 +437,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Hypothesis class updated",
         result
       );
@@ -504,9 +467,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         intent === "archive_class" ? "Hypothesis class archived" : "Hypothesis class reactivated",
         result
       );
@@ -532,8 +494,7 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
+        context,
         resolveAdminAppPath(request, "/discovery?tab=classes"),
         "Hypothesis class deleted",
         result
@@ -557,9 +518,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Recall mission created",
         result,
         201
@@ -587,9 +547,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Recall mission updated",
         result
       );
@@ -616,9 +575,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Recall acquisition requested",
         result
       );
@@ -649,9 +607,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Recall candidate promotion requested",
         result
       );
@@ -679,9 +636,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         reviewStatus === "approved" ? "Discovery candidate approved" : "Discovery candidate updated",
         result
       );
@@ -701,9 +657,8 @@ export const POST: APIRoute = async ({ request }) => {
         buildDiscoveryAuditPayload(intent, payload, result)
       );
       return respondDiscoverySuccess(
-        request,
-        browserRequest,
-        redirectTo,
+        context,
+        context.redirectTo,
         "Discovery feedback recorded",
         result,
         201
@@ -725,22 +680,16 @@ export const POST: APIRoute = async ({ request }) => {
       buildDiscoveryAuditPayload(intent, payload, result)
     );
     return respondDiscoverySuccess(
-      request,
-      browserRequest,
-      redirectTo,
+      context,
+      context.redirectTo,
       "Discovery re-evaluation completed",
       result
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update discovery state.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "discovery",
-        status: "error",
-        message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: 400 });
+    return adminActionError(context, {
+      section: "discovery",
+      message,
+    });
   }
 };

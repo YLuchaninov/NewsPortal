@@ -8,7 +8,11 @@ from typing import Any
 from services.workers.app.task_engine.context import ContextManager
 from services.workers.app.task_engine.exceptions import TaskExecutionError
 from services.workers.app.task_engine.executor import SequenceExecutor
-from services.workers.app.task_engine.models import SequenceDefinition, SequenceRunRecord
+from services.workers.app.task_engine.models import (
+    SequenceDefinition,
+    SequenceRunRecord,
+    TaskDefinition,
+)
 from services.workers.app.task_engine.plugins import TaskPlugin, TaskPluginRegistry
 
 
@@ -332,6 +336,57 @@ class TaskPluginRegistryTests(unittest.TestCase):
         self.assertIn("Task key validated is duplicated.", errors)
         self.assertIn("Task validated references unknown module Missing.", errors)
 
+    def test_validate_task_graph_reports_payload_schema_errors(self) -> None:
+        registry = TaskPluginRegistry()
+        registry.register(ValidatedPlugin)
+
+        errors = registry.validate_task_graph(
+            [
+                {
+                    "key": "validated",
+                    "module": "Validated",
+                    "options": {"label": "ok"},
+                    "timeoutMs": 100,
+                    "unexpected": True,
+                },
+                {
+                    "key": "bad-options",
+                    "module": "Validated",
+                    "options": [],
+                },
+            ]
+        )
+
+        self.assertIn("Task at index 0: unexpected: Extra inputs are not permitted.", errors)
+        self.assertIn(
+            "Task at index 1: options: Input should be a valid dictionary.",
+            errors,
+        )
+
+    def test_task_definition_payload_accepts_public_aliases_and_forbids_extra_fields(self) -> None:
+        task = TaskDefinition.from_mapping(
+            {
+                "key": "validated",
+                "module": "Validated",
+                "options": {"label": "ok"},
+                "retry": {"attempts": 2, "delayMs": 25},
+                "timeoutMs": 500,
+            }
+        )
+
+        self.assertEqual(task.retry.delay_ms, 25)
+        self.assertEqual(task.timeout_ms, 500)
+
+        with self.assertRaisesRegex(ValueError, "Extra inputs are not permitted"):
+            TaskDefinition.from_mapping(
+                {
+                    "key": "validated",
+                    "module": "Validated",
+                    "options": {"label": "ok"},
+                    "unknown": True,
+                }
+            )
+
 
 class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
     async def test_executor_completes_run_and_persists_task_lifecycle(self) -> None:
@@ -448,6 +503,25 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.task_runs[0]["status"], "failed")
         self.assertIn("timed out", repository.task_runs[0]["error_text"])
 
+    async def test_executor_rejects_invalid_runtime_plugin_options(self) -> None:
+        executor, repository = self._build_executor(
+            task_graph=[
+                {
+                    "key": "validated",
+                    "module": "Validated",
+                    "options": {},
+                }
+            ]
+        )
+
+        with self.assertRaisesRegex(TaskExecutionError, "invalid options") as error:
+            await executor.execute_run("run-1")
+
+        self.assertEqual(error.exception.error_code, "task_plugin.invalid_options")
+        self.assertEqual(repository.runs["run-1"].status, "failed")
+        self.assertEqual(repository.task_runs[0]["status"], "failed")
+        self.assertIn("label must be a non-empty string", repository.task_runs[0]["error_text"])
+
     async def test_executor_retries_run_lookup_until_sequence_run_is_visible(self) -> None:
         slept_for: list[float] = []
 
@@ -500,6 +574,7 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
             FlakyPlugin,
             TransientDatabaseFlakyPlugin,
             TimeoutPlugin,
+            ValidatedPlugin,
         ):
             registry.register(plugin_class)
 

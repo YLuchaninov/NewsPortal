@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "error",
         message: "Email and password are required.",
-        setCookie: buildExpiredAdminSessionCookie(),
+        setCookie: buildExpiredAdminSessionCookie({ request }),
         redirectTo: buildAdminSignInPath(request, nextPath)
       });
     }
@@ -53,7 +53,7 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "success",
         message: "Signed in.",
-        setCookie: buildAdminSessionCookie(adminSession.idToken),
+        setCookie: buildAdminSessionCookie(adminSession.idToken, { request }),
         redirectTo: nextPath
       });
     }
@@ -66,7 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Set-Cookie": buildAdminSessionCookie(adminSession.idToken)
+          "Set-Cookie": buildAdminSessionCookie(adminSession.idToken, { request })
         }
       }
     );
@@ -78,7 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
         section: "auth",
         status: "error",
         message: toBrowserSignInErrorMessage(errorMessage),
-        setCookie: buildExpiredAdminSessionCookie(),
+        setCookie: buildExpiredAdminSessionCookie({ request }),
         redirectTo: buildAdminSignInPath(request, nextPath)
       });
     }

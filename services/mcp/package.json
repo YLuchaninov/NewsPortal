@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
-    "start": "node --import tsx src/main.ts",
+    "build": "tsc -p tsconfig.json --noEmit && pnpm build:runtime",
+    "build:runtime": "node ../../infra/tooling/build-node-runtime.mjs --service=mcp",
+    "start": "node dist/main.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@newsportal/config": "workspace:*",
+    "@newsportal/contracts": "workspace:*",
     "@newsportal/control-plane": "workspace:*",
     "@newsportal/sdk": "workspace:*",
     "fastify": "^5.6.0",

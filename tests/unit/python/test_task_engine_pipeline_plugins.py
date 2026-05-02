@@ -16,16 +16,41 @@ install_psycopg_stub(connection=SubscriptableConnection, json_wrapper=JsonValueW
 
 from services.workers.app.task_engine import TaskPluginRegistry, register_builtin_plugins
 from services.workers.app.task_engine.exceptions import TaskExecutionError
-from services.workers.app.task_engine.pipeline_plugins import (
-    ArticleExtractPlugin,
+from services.workers.app.task_engine.plugin_contracts import TaskPluginOutputCaps
+from services.workers.app.task_engine.pipeline_article_plugins import (
     EmbedArticlePlugin,
-    FeedbackIngestPlugin,
-    InterestCompilePlugin,
     LlmReviewPlugin,
     MatchInterestsPlugin,
-    ReindexPlugin,
+)
+from services.workers.app.task_engine.pipeline_enrichment_plugins import (
+    ArticleExtractPlugin,
     ResourceExtractPlugin,
 )
+from services.workers.app.task_engine.pipeline_maintenance_plugins import (
+    FeedbackIngestPlugin,
+    InterestCompilePlugin,
+    ReindexPlugin,
+)
+from services.workers.app.task_engine.plugins import (
+    TaskPlugin,
+    validate_plugin_output_contract,
+)
+
+
+class _TinyOutputPlugin(TaskPlugin):
+    name = "unit.tiny_output"
+    description = "Plugin with tiny output caps for contract tests."
+    category = "unit"
+
+    async def execute(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {}
+
+    def output_caps(self) -> TaskPluginOutputCaps:
+        return TaskPluginOutputCaps(max_keys=1, max_json_bytes=1024)
 
 
 class _FakeUrlopenResponse:
@@ -90,6 +115,39 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
                 "utility.db_store",
             },
         )
+        by_module = {item["module"]: item for item in registry.list_all()}
+        embed_contract = by_module["article.embed"]["contract"]
+        self.assertEqual(embed_contract["module"], "article.embed")
+        self.assertEqual(
+            embed_contract["retry_classification"],
+            "task_retry_with_transient_database_retry",
+        )
+        self.assertIn("doc_id", embed_contract["context_requirements"])
+        self.assertEqual(embed_contract["context_schema"]["type"], "object")
+        self.assertIn("doc_id", embed_contract["context_schema"]["properties"])
+        self.assertIn("doc_id", embed_contract["context_schema"]["required"])
+        self.assertGreaterEqual(embed_contract["output_caps"]["max_json_bytes"], 1024)
+
+        for item in by_module.values():
+            contract = item["contract"]
+            self.assertEqual(contract["options_schema"]["type"], "object")
+            self.assertEqual(contract["context_schema"]["type"], "object")
+            self.assertEqual(contract["output_schema"]["type"], "object")
+
+    def test_plugin_output_contract_caps_context_updates(self) -> None:
+        plugin = _TinyOutputPlugin()
+
+        validate_plugin_output_contract(plugin, {"status": "ok"})
+
+        with self.assertRaisesRegex(TaskExecutionError, "output keys") as key_context:
+            validate_plugin_output_contract(plugin, {"status": "ok", "extra": True})
+        self.assertEqual(key_context.exception.error_code, "task_plugin.output_too_many_keys")
+        self.assertEqual(key_context.exception.to_diagnostic().retry_hint, "after_operator_fix")
+
+        with self.assertRaisesRegex(TaskExecutionError, "output bytes") as bytes_context:
+            validate_plugin_output_contract(plugin, {"status": "x" * 2048})
+        self.assertEqual(bytes_context.exception.error_code, "task_plugin.output_too_large")
+        self.assertEqual(bytes_context.exception.to_diagnostic().domain, "task_plugin")
 
 
 class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
@@ -108,7 +166,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = EmbedArticlePlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.load_legacy_handler",
+            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -230,10 +288,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
             return _FakeUrlopenResponse('{"status":"enriched","enrichmentState":"enriched"}')
 
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=fake_urlopen,
         ), patch(
-            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             result = plugin._request_enrichment(
                 {
@@ -252,10 +310,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         plugin = ArticleExtractPlugin()
 
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=URLError(ConnectionRefusedError("Connection refused")),
         ), patch(
-            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             with self.assertRaises(TaskExecutionError) as context:
                 plugin._request_enrichment(
@@ -283,10 +341,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
             return _FakeUrlopenResponse('{"status":"enriched","resourceKind":"editorial"}')
 
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=fake_urlopen,
         ), patch(
-            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             result = plugin._request_enrichment(
                 {
@@ -312,10 +370,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.urlopen",
+            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=http_error,
         ), patch(
-            "services.workers.app.task_engine.pipeline_plugins._sleep_fetchers_internal_retry"
+            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             with self.assertRaises(RuntimeError) as context:
                 plugin._request_enrichment(
@@ -342,7 +400,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = MatchInterestsPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.load_legacy_handler",
+            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -390,7 +448,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = LlmReviewPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.load_legacy_handler",
+            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -446,7 +504,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = InterestCompilePlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.load_legacy_handler",
+            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -487,7 +545,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = FeedbackIngestPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.load_legacy_handler",
+            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -521,7 +579,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = ReindexPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_plugins.load_legacy_handler",
+            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(

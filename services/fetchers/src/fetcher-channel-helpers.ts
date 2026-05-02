@@ -113,12 +113,188 @@ export function normalizeExternalUrl(url: string): string {
 }
 
 export function rawEmailToBody(rawSource: string): string {
-  const separatorIndex = rawSource.search(/\r?\n\r?\n/);
-  const body = separatorIndex >= 0 ? rawSource.slice(separatorIndex + 4) : rawSource;
-  const cleaned = body
+  return extractEmailMessageContent(rawSource, { bodyPreference: "text" }).body;
+}
+
+export interface ExtractedEmailAttachment {
+  filename: string | null;
+  contentType: string | null;
+  disposition: string | null;
+}
+
+export interface ExtractedEmailContent {
+  body: string;
+  links: string[];
+  attachments: ExtractedEmailAttachment[];
+}
+
+interface ParsedEmailPart {
+  headers: Map<string, string>;
+  body: string;
+}
+
+function splitEmailHeaders(rawSource: string): ParsedEmailPart {
+  const separatorMatch = /\r?\n\r?\n/.exec(rawSource);
+  if (!separatorMatch || separatorMatch.index < 0) {
+    return {
+      headers: new Map(),
+      body: rawSource
+    };
+  }
+
+  const headerText = rawSource.slice(0, separatorMatch.index);
+  const bodyOffset = separatorMatch.index + separatorMatch[0].length;
+  const unfolded = headerText.replace(/\r?\n[ \t]+/g, " ");
+  const headers = new Map<string, string>();
+  for (const line of unfolded.split(/\r?\n/)) {
+    const colonIndex = line.indexOf(":");
+    if (colonIndex <= 0) {
+      continue;
+    }
+    const name = line.slice(0, colonIndex).trim().toLowerCase();
+    const value = line.slice(colonIndex + 1).trim();
+    if (name) {
+      headers.set(name, value);
+    }
+  }
+
+  return {
+    headers,
+    body: rawSource.slice(bodyOffset)
+  };
+}
+
+function readHeaderParameter(headerValue: string | null | undefined, parameterName: string): string | null {
+  if (!headerValue) {
+    return null;
+  }
+  const pattern = new RegExp(`${parameterName}\\*?=(?:"([^"]+)"|([^;]+))`, "i");
+  const match = pattern.exec(headerValue);
+  return (match?.[1] ?? match?.[2] ?? null)?.trim() ?? null;
+}
+
+function splitMultipartBody(body: string, boundary: string): ParsedEmailPart[] {
+  const marker = `--${boundary}`;
+  const parts: ParsedEmailPart[] = [];
+  for (const section of body.split(marker).slice(1)) {
+    if (section.startsWith("--")) {
+      break;
+    }
+    const trimmed = section.replace(/^\r?\n/, "").replace(/\r?\n$/, "");
+    if (!trimmed.trim()) {
+      continue;
+    }
+    parts.push(splitEmailHeaders(trimmed));
+  }
+  return parts;
+}
+
+function decodeEmailPartBody(body: string, encoding: string | null): string {
+  const normalizedEncoding = encoding?.trim().toLowerCase() ?? "";
+  if (normalizedEncoding === "base64") {
+    try {
+      return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf-8");
+    } catch {
+      return body;
+    }
+  }
+  if (normalizedEncoding === "quoted-printable") {
+    const softLineBreaksRemoved = body.replace(/=\r?\n/g, "");
+    return softLineBreaksRemoved.replace(/=([0-9a-f]{2})/gi, (_match, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16))
+    );
+  }
+  return body;
+}
+
+function collectEmailLeafParts(
+  part: ParsedEmailPart,
+  output: {
+    textBodies: string[];
+    htmlBodies: string[];
+    attachments: ExtractedEmailAttachment[];
+  }
+): void {
+  const contentType = part.headers.get("content-type") ?? "text/plain";
+  const disposition = part.headers.get("content-disposition") ?? null;
+  const boundary = readHeaderParameter(contentType, "boundary");
+  const normalizedContentType = contentType.split(";")[0]?.trim().toLowerCase() ?? "text/plain";
+  const normalizedDisposition = disposition?.split(";")[0]?.trim().toLowerCase() ?? null;
+  const filename =
+    readHeaderParameter(disposition, "filename") ??
+    readHeaderParameter(contentType, "name");
+
+  if (normalizedDisposition === "attachment" || filename) {
+    output.attachments.push({
+      filename,
+      contentType: normalizedContentType || null,
+      disposition: normalizedDisposition
+    });
+    return;
+  }
+
+  if (normalizedContentType.startsWith("multipart/") && boundary) {
+    for (const child of splitMultipartBody(part.body, boundary)) {
+      collectEmailLeafParts(child, output);
+    }
+    return;
+  }
+
+  const decodedBody = decodeEmailPartBody(
+    part.body,
+    part.headers.get("content-transfer-encoding") ?? null
+  );
+  if (normalizedContentType === "text/html") {
+    output.htmlBodies.push(decodedBody);
+    return;
+  }
+  if (normalizedContentType === "text/plain") {
+    output.textBodies.push(decodedBody);
+  }
+}
+
+function normalizeEmailBodyText(value: string, stripMarkup: boolean): string {
+  const withoutActiveContent = value
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ");
-  return normalizeWhitespace(stripHtmlTags(cleaned));
+  return normalizeWhitespace(stripMarkup ? stripHtmlTags(withoutActiveContent) : withoutActiveContent);
+}
+
+function extractEmailLinks(value: string): string[] {
+  const links = new Set<string>();
+  for (const match of value.matchAll(/\bhttps?:\/\/[^\s<>"')]+/gi)) {
+    links.add(match[0]);
+    if (links.size >= 20) {
+      break;
+    }
+  }
+  return [...links];
+}
+
+export function extractEmailMessageContent(
+  rawSource: string,
+  options: { bodyPreference: "text" | "html" }
+): ExtractedEmailContent {
+  const root = splitEmailHeaders(rawSource);
+  const collected = {
+    textBodies: [] as string[],
+    htmlBodies: [] as string[],
+    attachments: [] as ExtractedEmailAttachment[]
+  };
+  collectEmailLeafParts(root, collected);
+
+  const preferredBodies =
+    options.bodyPreference === "html" ? collected.htmlBodies : collected.textBodies;
+  const fallbackBodies =
+    options.bodyPreference === "html" ? collected.textBodies : collected.htmlBodies;
+  const rawBody = [...preferredBodies, ...fallbackBodies].find((value) => value.trim()) ?? root.body;
+  const body = normalizeEmailBodyText(rawBody, true);
+
+  return {
+    body,
+    links: extractEmailLinks([rawBody, ...collected.htmlBodies, ...collected.textBodies].join("\n")),
+    attachments: collected.attachments.slice(0, 20)
+  };
 }
 
 export function parseRetryAfterSeconds(value: string | null): number | null {

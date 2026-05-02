@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from tests.unit.python.support.stubs import install_gemini_stub, install_psycopg_stub
 
 install_psycopg_stub()
@@ -103,6 +105,42 @@ class ApiSequenceManagementTests(unittest.TestCase):
 
         self.assertEqual(result, created)
         create.assert_called_once_with(payload)
+
+    def test_sequence_payload_validates_task_graph_shape_at_boundary(self) -> None:
+        payload = api_main.SequenceCreatePayload.model_validate(
+            {
+                "title": "Sequence 1",
+                "taskGraph": [
+                    {
+                        "key": "normalize",
+                        "module": "article.normalize",
+                        "options": {},
+                        "retry": {"attempts": 2, "delayMs": 1500},
+                        "timeoutMs": 45_000,
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(payload.task_graph[0]["retry"]["delay_ms"], 1500)
+        self.assertEqual(payload.task_graph[0]["timeout_ms"], 45_000)
+
+        with self.assertRaises(ValidationError) as error:
+            api_main.SequenceCreatePayload.model_validate(
+                {
+                    "title": "Broken sequence",
+                    "taskGraph": [
+                        {
+                            "key": "normalize",
+                            "module": "article.normalize",
+                            "options": {},
+                            "unexpected": True,
+                        }
+                    ],
+                }
+            )
+
+        self.assertIn("Extra inputs are not permitted", str(error.exception))
 
     def test_create_sequence_route_maps_validation_to_422(self) -> None:
         payload = api_main.SequenceCreatePayload.model_validate(

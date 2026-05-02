@@ -2,18 +2,12 @@ import type { APIRoute } from "astro";
 import type { PoolClient } from "pg";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../../lib/server/auth";
+  adminActionError,
+  adminActionSuccess,
+  prepareAdminAction,
+} from "../../../../lib/server/admin-action";
 import { getPool } from "../../../../lib/server/db";
 import { insertOutboxEvent } from "../../../../lib/server/outbox";
-import { readRequestPayload } from "../../../../lib/server/request";
 import {
   buildUserInterestUpdatePatch,
   cloneAdminUserInterest,
@@ -63,42 +57,26 @@ async function resolveTargetOrThrow(
 }
 
 export const POST: APIRoute = async ({ request, params }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const payload = await readRequestPayload(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
-    "/"
-  );
-  const session = await resolveAdminSession(request);
-
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const adminAction = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/",
+    authFlashSection: "user-interests",
+    actionToken: { scope: "user-interests" },
+  });
+  if (!adminAction.ok) {
+    return adminAction.response;
   }
 
+  const { payload, session } = adminAction.context;
   const interestId = params.interestId;
   if (!interestId) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "error",
-        message: "Interest id is required.",
-        redirectTo,
-      });
-    }
-    return Response.json({ error: "Interest id is required." }, { status: 400 });
+    return adminActionError(adminAction.context, {
+      section: "user-interests",
+      message: "Interest id is required.",
+      status: 400,
+    });
   }
 
-  const action = String(payload._action ?? "update").trim();
+  const actionIntent = String(payload._action ?? "update").trim();
   const pool = getPool();
   const client = await pool.connect();
 
@@ -106,7 +84,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     await client.query("begin");
     const target = await resolveTargetOrThrow(client, payload);
 
-    if (action === "delete") {
+    if (actionIntent === "delete") {
       await deleteAdminUserInterest(client, {
         actorUserId: session.userId,
         target,
@@ -114,19 +92,14 @@ export const POST: APIRoute = async ({ request, params }) => {
       });
       await client.query("commit");
 
-      if (browserRequest) {
-        return buildFlashRedirect(request, {
-          section: "user-interests",
-          status: "success",
-          message: "User interest deleted",
-          redirectTo,
-        });
-      }
-
-      return Response.json({ deleted: true, target });
+      return adminActionSuccess(adminAction.context, {
+        section: "user-interests",
+        message: "User interest deleted",
+        json: { deleted: true, target },
+      });
     }
 
-    if (action === "clone") {
+    if (actionIntent === "clone") {
       const result = await cloneAdminUserInterest(client, {
         actorUserId: session.userId,
         target,
@@ -136,23 +109,16 @@ export const POST: APIRoute = async ({ request, params }) => {
       });
       await client.query("commit");
 
-      if (browserRequest) {
-        return buildFlashRedirect(request, {
-          section: "user-interests",
-          status: "success",
-          message: "User interest cloned. Compilation and background match sync started.",
-          redirectTo,
-        });
-      }
-
-      return Response.json(
-        {
+      return adminActionSuccess(adminAction.context, {
+        section: "user-interests",
+        message: "User interest cloned. Compilation and background match sync started.",
+        status: 201,
+        json: {
           cloned: true,
           interestId: result.interestId,
           target,
         },
-        { status: 201 }
-      );
+      });
     }
 
     const result = await updateAdminUserInterest(client, {
@@ -164,32 +130,24 @@ export const POST: APIRoute = async ({ request, params }) => {
     });
     await client.query("commit");
 
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "success",
-        message: "User interest updated. Compilation and background match sync started.",
-        redirectTo,
-      });
-    }
-
-    return Response.json({ updated: true, version: result.version, target });
+    return adminActionSuccess(adminAction.context, {
+      section: "user-interests",
+      message: "User interest updated. Compilation and background match sync started.",
+      json: { updated: true, version: result.version, target },
+    });
   } catch (error) {
     await client.query("rollback");
     const message =
       error instanceof Error ? error.message : "Unable to update user interest.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "user-interests",
-        status: "error",
-        message:
-          resolveErrorStatus(message) === 500
-            ? "Unable to update user interest right now."
-            : message,
-        redirectTo,
-      });
-    }
-    return Response.json({ error: message }, { status: resolveErrorStatus(message) });
+    return adminActionError(adminAction.context, {
+      section: "user-interests",
+      message:
+        resolveErrorStatus(message) === 500
+          ? "Unable to update user interest right now."
+          : message,
+      status: resolveErrorStatus(message),
+      json: { error: message },
+    });
   } finally {
     client.release();
   }

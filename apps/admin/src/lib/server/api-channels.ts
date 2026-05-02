@@ -41,6 +41,10 @@ export interface NormalizedApiAdminChannelInput {
   maxItemsPerPoll: number;
   requestTimeoutMs: number;
   userAgent: string;
+  requestMethod: ApiChannelConfig["requestMethod"];
+  requestHeaders: ApiChannelConfig["requestHeaders"];
+  requestBodyJson: ApiChannelConfig["requestBodyJson"];
+  pagination: ApiChannelConfig["pagination"];
   itemsPath: string;
   titleField: string;
   leadField: string;
@@ -94,6 +98,10 @@ function normalizeApiConfig(payload: Record<string, unknown>): ApiChannelConfig 
       "requestTimeoutMs"
     ),
     userAgent: readOptionalString(payload.userAgent) ?? DEFAULT_API_CONFIG.userAgent,
+    requestMethod: payload.requestMethod,
+    requestHeaders: payload.requestHeaders,
+    requestBodyJson: payload.requestBodyJson,
+    pagination: payload.pagination,
     itemsPath: readRequiredString(payload.itemsPath ?? DEFAULT_API_CONFIG.itemsPath, "itemsPath"),
     titleField: readRequiredString(payload.titleField ?? DEFAULT_API_CONFIG.titleField, "titleField"),
     leadField: readRequiredString(payload.leadField ?? DEFAULT_API_CONFIG.leadField, "leadField"),
@@ -144,6 +152,10 @@ export function parseApiAdminChannelInput(payload: Record<string, unknown>): Nor
     maxItemsPerPoll: config.maxItemsPerPoll,
     requestTimeoutMs: config.requestTimeoutMs,
     userAgent: config.userAgent,
+    requestMethod: config.requestMethod,
+    requestHeaders: config.requestHeaders,
+    requestBodyJson: config.requestBodyJson,
+    pagination: config.pagination,
     itemsPath: config.itemsPath,
     titleField: config.titleField,
     leadField: config.leadField,
@@ -299,6 +311,10 @@ export async function upsertApiChannels(
         maxItemsPerPoll: channel.maxItemsPerPoll,
         requestTimeoutMs: channel.requestTimeoutMs,
         userAgent: channel.userAgent,
+        requestMethod: channel.requestMethod,
+        requestHeaders: channel.requestHeaders,
+        requestBodyJson: channel.requestBodyJson,
+        pagination: channel.pagination,
         itemsPath: channel.itemsPath,
         titleField: channel.titleField,
         leadField: channel.leadField,

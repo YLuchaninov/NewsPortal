@@ -38,6 +38,38 @@ test("RSS adapter helpers infer aggregator strategies and default age gates", ()
   );
 });
 
+test("generic RSS adapter keeps guid permalink-only items", async () => {
+  const rss = `<?xml version="1.0"?>
+    <rss>
+      <channel>
+        <title>Guid permalink feed</title>
+        <item>
+          <guid isPermaLink="true">https://example.com/guid-only?utm_source=rss</guid>
+          <title>Guid-only story</title>
+          <pubDate>Tue, 07 Apr 2026 09:00:00 GMT</pubDate>
+        </item>
+      </channel>
+    </rss>`;
+
+  const adapted = await adaptFeedIngress({
+    fetchUrl: "https://example.com/feed.xml",
+    rssConfig: parseRssChannelConfig({
+      maxItemsPerPoll: 5,
+      requestTimeoutMs: 2000,
+      userAgent: "NewsPortalFetchers/Test",
+      preferContentEncoded: true
+    }),
+    fetchedAt: "2026-04-07T10:00:00.000Z",
+    contentType: "application/rss+xml",
+    responseBody: rss
+  });
+
+  assert.equal(adapted.strategy, "generic");
+  assert.equal(adapted.entries.length, 1);
+  assert.equal(adapted.droppedAdapterCount, 0);
+  assert.equal(adapted.entries[0]?.url, "https://example.com/guid-only");
+});
+
 test("Reddit adapter parses entity-heavy Atom feeds without the generic parser overflow", async () => {
   const repeatedEntities = "&amp;".repeat(1205);
   const atom = `<?xml version="1.0" encoding="UTF-8"?>

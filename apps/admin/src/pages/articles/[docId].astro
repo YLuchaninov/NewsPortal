@@ -1,6 +1,7 @@
 ---
 import type { ArticleDetail, ArticleMediaAsset } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
+import { sanitizeHtmlFragment } from "@newsportal/content-safety";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 
 import AdminShell from "../../layouts/AdminShell.astro";
@@ -65,19 +66,6 @@ function resolveSafeHref(rawValue: unknown): string | null {
   }
 }
 
-function sanitizeArticleHtml(rawValue: unknown): string | null {
-  if (typeof rawValue !== "string" || !rawValue.trim()) {
-    return null;
-  }
-
-  return rawValue
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
-    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
-    .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
-}
-
 function formatReadTime(rawValue: unknown): string {
   const seconds = Number(rawValue ?? NaN);
   if (!Number.isFinite(seconds) || seconds <= 0) {
@@ -96,9 +84,11 @@ function shortId(rawValue: unknown): string {
   return normalized ? normalized.slice(0, 8) : "—";
 }
 
-const articleHtml = sanitizeArticleHtml(article.full_content_html ?? null);
 const sourceHref = resolveSafeHref(article.url);
 const canonicalHref = resolveSafeHref(article.canonical_document_url);
+const articleHtml = sanitizeHtmlFragment(article.full_content_html ?? null, {
+  baseUrl: canonicalHref ?? sourceHref,
+});
 const mediaAssets = toMediaAssets(article.media_assets);
 const retryPath = appPath("/bff/admin/articles/enrichment-retry");
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;

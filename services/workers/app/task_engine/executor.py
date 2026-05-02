@@ -7,7 +7,12 @@ from typing import Any, Awaitable, Callable
 from .context import ContextManager
 from .exceptions import TaskExecutionError
 from .models import SequenceDefinition, TaskDefinition
-from .plugins import TaskPlugin, TaskPluginRegistry
+from .plugins import (
+    TaskPlugin,
+    TaskPluginRegistry,
+    require_valid_plugin_options,
+    validate_plugin_output_contract,
+)
 from .repository import SequenceRepository
 
 RUN_LOOKUP_RETRY_ATTEMPTS = 20
@@ -202,6 +207,7 @@ class SequenceExecutor:
 
         for attempt in range(1, transient_attempts + 1):
             try:
+                require_valid_plugin_options(plugin, task.options)
                 await plugin.on_before_execute(task.options, context)
                 result = await asyncio.wait_for(
                     plugin.execute(task.options, context),
@@ -212,6 +218,7 @@ class SequenceExecutor:
                         f"Task {task.key} must return a dict result.",
                         retryable=False,
                     )
+                validate_plugin_output_contract(plugin, result)
                 await plugin.on_after_execute(task.options, context, result)
                 return result
             except asyncio.TimeoutError as error:

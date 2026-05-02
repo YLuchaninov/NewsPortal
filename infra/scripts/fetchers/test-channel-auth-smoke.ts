@@ -597,91 +597,92 @@ async function fetchWebsiteResources(pool: Pool, channelId: string): Promise<Web
 }
 
 async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: string): Promise<void> {
-  if (channelIds.length === 0) {
-    return;
-  }
+  if (channelIds.length > 0) {
+    const articleIds = (
+      await pool.query<{ docId: string }>(
+        `
+          select doc_id::text as "docId"
+          from articles
+          where channel_id = any($1::uuid[])
+        `,
+        [channelIds]
+      )
+    ).rows.map((row) => row.docId);
+    const resourceIds = (
+      await pool.query<{ resourceId: string }>(
+        `
+          select resource_id::text as "resourceId"
+          from web_resources
+          where channel_id = any($1::uuid[])
+        `,
+        [channelIds]
+      )
+    ).rows.map((row) => row.resourceId);
 
-  const articleIds = (
-    await pool.query<{ docId: string }>(
-      `
-        select doc_id::text as "docId"
-        from articles
-        where channel_id = any($1::uuid[])
-      `,
-      [channelIds]
-    )
-  ).rows.map((row) => row.docId);
-  const resourceIds = (
-    await pool.query<{ resourceId: string }>(
-      `
-        select resource_id::text as "resourceId"
-        from web_resources
-        where channel_id = any($1::uuid[])
-      `,
-      [channelIds]
-    )
-  ).rows.map((row) => row.resourceId);
-
-  if (articleIds.length > 0 || resourceIds.length > 0) {
-    await pool.query(
-      `
-        delete from sequence_task_runs
-        where run_id in (
-          select run_id
-          from sequence_runs
+    if (articleIds.length > 0 || resourceIds.length > 0) {
+      await pool.query(
+        `
+          delete from sequence_task_runs
+          where run_id in (
+            select run_id
+            from sequence_runs
+            where
+              context_json ->> 'doc_id' = any($1::text[])
+              or context_json ->> 'resource_id' = any($1::text[])
+          )
+        `,
+        [[...articleIds, ...resourceIds]]
+      );
+      await pool.query(
+        `
+          delete from sequence_runs
           where
             context_json ->> 'doc_id' = any($1::text[])
             or context_json ->> 'resource_id' = any($1::text[])
-        )
+        `,
+        [[...articleIds, ...resourceIds]]
+      );
+      await pool.query(
+        `
+          delete from outbox_events
+          where aggregate_id::text = any($1::text[])
+        `,
+        [[...articleIds, ...resourceIds]]
+      );
+    }
+
+    await pool.query(
+      `
+        delete from web_resources
+        where channel_id = any($1::uuid[])
       `,
-      [[...articleIds, ...resourceIds]]
+      [channelIds]
     );
     await pool.query(
       `
-        delete from sequence_runs
-        where
-          context_json ->> 'doc_id' = any($1::text[])
-          or context_json ->> 'resource_id' = any($1::text[])
+        delete from articles
+        where channel_id = any($1::uuid[])
       `,
-      [[...articleIds, ...resourceIds]]
+      [channelIds]
     );
     await pool.query(
       `
-        delete from outbox_events
-        where aggregate_id::text = any($1::text[])
+        delete from source_channels
+        where channel_id = any($1::uuid[])
       `,
-      [[...articleIds, ...resourceIds]]
+      [channelIds]
     );
   }
 
-  await pool.query(
-    `
-      delete from web_resources
-      where channel_id = any($1::uuid[])
-    `,
-    [channelIds]
-  );
-  await pool.query(
-    `
-      delete from articles
-      where channel_id = any($1::uuid[])
-    `,
-    [channelIds]
-  );
-  await pool.query(
-    `
-      delete from source_channels
-      where channel_id = any($1::uuid[])
-    `,
-    [channelIds]
-  );
-  await pool.query(
-    `
-      delete from crawl_policy_cache
-      where domain = $1
-    `,
-    [domain]
-  );
+  if (domain) {
+    await pool.query(
+      `
+        delete from crawl_policy_cache
+        where domain = $1
+      `,
+      [domain]
+    );
+  }
 }
 
 async function main(): Promise<void> {
@@ -712,6 +713,7 @@ async function main(): Promise<void> {
       state: fixtureState
     });
     fixtureDomain = new URL(fixtureServer.baseUrl).hostname.toLowerCase();
+    await cleanupSmokeArtifacts(pool, [], fixtureDomain);
 
     const rssNoAuthChannelId = await seedRssChannel(pool, {
       name: `RSS no auth ${runId}`,

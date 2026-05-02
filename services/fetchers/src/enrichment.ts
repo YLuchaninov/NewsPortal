@@ -13,6 +13,7 @@ import type { Pool, PoolClient } from "pg";
 
 import { AsyncSemaphore } from "./async-semaphore";
 import type { FetchersConfig } from "./config";
+import { validateAcquisitionUrl } from "./probe-url-guard";
 import { canonicalizeUrl, collapseWhitespace, decodeHtmlEntities, stripHtmlTags } from "./rss";
 
 type EnrichmentState = "pending" | "skipped" | "enriched" | "failed";
@@ -380,9 +381,14 @@ export class ArticleEnrichmentService {
 
     if (skipReason === null) {
       try {
-        extracted = await this.withExternalFetchSlot(article.url, async () =>
+        const guardedArticleUrl = await validateAcquisitionUrl(article.url, { resolveDns: true });
+        if (!guardedArticleUrl.url) {
+          throw new Error(guardedArticleUrl.error ?? "Article enrichment URL is not allowed.");
+        }
+        const articleUrl = guardedArticleUrl.url;
+        extracted = await this.withExternalFetchSlot(articleUrl, async () =>
           extractArticle(
-            article.url,
+            articleUrl,
             buildArticleParserOptions(),
             {
               headers: {
@@ -542,9 +548,14 @@ export class ArticleEnrichmentService {
 
     for (const candidateUrl of limited) {
       try {
-        const oembed = await this.withExternalFetchSlot(candidateUrl, async () =>
+        const guardedCandidateUrl = await validateAcquisitionUrl(candidateUrl, { resolveDns: true });
+        if (!guardedCandidateUrl.url) {
+          throw new Error(guardedCandidateUrl.error ?? "oEmbed URL is not allowed.");
+        }
+        const candidateFetchUrl = guardedCandidateUrl.url;
+        const oembed = await this.withExternalFetchSlot(candidateFetchUrl, async () =>
           extractOEmbed(
-            candidateUrl,
+            candidateFetchUrl,
             { maxwidth: 800 },
             {
               headers: {
@@ -554,7 +565,7 @@ export class ArticleEnrichmentService {
             },
           ),
         );
-        const mapped = this.mapOEmbedCandidate(article, candidateUrl, oembed);
+        const mapped = this.mapOEmbedCandidate(article, candidateFetchUrl, oembed);
         if (mapped) {
           assets.push(mapped);
         }

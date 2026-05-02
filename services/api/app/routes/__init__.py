@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import FastAPI
@@ -15,7 +16,7 @@ from services.api.app.routes.observability_routes import register_observability_
 from services.api.app.routes.sequence_routes import register_sequence_routes
 
 
-def register_api_routes(app: FastAPI, deps: dict[str, Any]) -> None:
+def register_api_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     register_health_routes(app)
     register_content_routes(app, deps)
     register_catalog_routes(app, deps)

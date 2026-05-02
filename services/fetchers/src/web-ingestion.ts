@@ -5,6 +5,7 @@ import {
   type WebsiteChannelConfig
 } from "@newsportal/contracts";
 
+import { validateAcquisitionUrl } from "./probe-url-guard";
 import {
   appendItems,
   applyPatternFilters,
@@ -407,9 +408,56 @@ export async function probeWebsitesForDiscovery(input: {
   });
   const crawlPolicyCache = new CrawlPolicyCacheService(input.pool);
   const results: DiscoveryWebsiteProbeResult[] = [];
-  for (const rawUrl of Array.from(new Set(input.urls.map((url) => url.trim()).filter(Boolean)))) {
+  for (const candidateUrl of Array.from(new Set(input.urls.map((url) => url.trim()).filter(Boolean))).slice(0, 10)) {
+    const guardedUrl = await validateAcquisitionUrl(candidateUrl, { resolveDns: true });
+    if (!guardedUrl.url) {
+      results.push({
+        url: candidateUrl,
+        final_url: candidateUrl,
+        title: candidateUrl || "Invalid probe URL",
+        classification: {
+          kind: "unknown",
+          confidence: 0.0,
+          reasons: ["probe_url_rejected"],
+        },
+        capabilities: {
+          supports_feed_discovery: false,
+          supports_collection_discovery: false,
+          supports_download_discovery: false,
+          inline_data_hint: false,
+          js_heavy_hint: false,
+        },
+        discovered_feed_urls: [],
+        listing_urls: [],
+        document_urls: [],
+        detail_count_estimate: 0,
+        listing_count_estimate: 0,
+        document_count_estimate: 0,
+        sample_resources: [],
+        is_news_site: false,
+        has_hidden_rss: false,
+        hidden_rss_urls: [],
+        article_count_estimate: 0,
+        freshness: "unknown",
+        date_patterns_found: false,
+        category_urls: [],
+        sample_articles: [],
+        browser_assisted_recommended: false,
+        challenge_kind: null,
+      });
+      continue;
+    }
+    const rawUrl = guardedUrl.url;
     try {
       const policy = await crawlPolicyCache.getPolicy(rawUrl, config.userAgent, config.requestTimeoutMs);
+      const homepageKey = buildConditionalStateKey("homepage", rawUrl);
+      const finalHomepageUrl = policy.requestValidators[homepageKey]?.finalUrl;
+      if (finalHomepageUrl) {
+        const guardedFinalUrl = await validateAcquisitionUrl(finalHomepageUrl);
+        if (!guardedFinalUrl.url) {
+          throw new Error(guardedFinalUrl.error ?? "Website probe final URL is not allowed.");
+        }
+      }
       const capabilities = await probeWebsiteCapabilities(rawUrl, policy, config);
       const baseDomain = new URL(rawUrl).hostname.toLowerCase();
       const conditionalState = {
@@ -520,7 +568,13 @@ export async function probeWebsitesForDiscovery(input: {
             config,
             baseDomain,
           });
-          finalUrl = browserDiscovery.finalUrl || finalUrl;
+          if (browserDiscovery.finalUrl) {
+            const guardedBrowserFinalUrl = await validateAcquisitionUrl(browserDiscovery.finalUrl);
+            if (!guardedBrowserFinalUrl.url) {
+              throw new Error(guardedBrowserFinalUrl.error ?? "Browser-assisted probe final URL is not allowed.");
+            }
+            finalUrl = guardedBrowserFinalUrl.url;
+          }
           title = title ?? browserDiscovery.title;
           datePatternsFound = datePatternsFound || browserDiscovery.datePatternsFound;
           listingUrls = Array.from(new Set([...listingUrls, ...browserDiscovery.listingUrls])).slice(0, 10);

@@ -448,7 +448,7 @@ async def ensure_criterion_fixture() -> str:
                     values (
                       %s,
                       'European Union AI policy response',
-                      '[]'::jsonb,
+                      '["European Union AI policy response Brussels Warsaw coordinated EU AI compliance guidance regulators"]'::jsonb,
                       '["entertainmentcoverage fashionindustry marketcommentary"]'::jsonb,
                       '["AI", "European Union"]'::jsonb,
                       '[]'::jsonb,
@@ -528,6 +528,243 @@ async def restore_phase4_criterion_scope(
                         """,
                         (was_enabled, row_criterion_id),
                     )
+
+
+async def align_phase4_criterion_prototype(doc_id: str, criterion_id: str) -> None:
+    prototype_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"phase4-criterion-prototype:{doc_id}:{criterion_id}"))
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    select
+                      avr.vector_type,
+                      er.embedding_json
+                    from article_vector_registry avr
+                    join embedding_registry er on er.embedding_id = avr.embedding_id
+                    where avr.doc_id = %s
+                      and avr.vector_type in ('e_title', 'e_lead', 'e_body')
+                      and avr.is_active = true
+                      and er.is_active = true
+                    """,
+                    (doc_id,),
+                )
+                rows = await cursor.fetchall()
+                vectors = {
+                    str(row["vector_type"]): [float(value) for value in row["embedding_json"]]
+                    for row in rows
+                }
+                if not {"e_title", "e_lead", "e_body"}.issubset(vectors):
+                    raise RuntimeError(
+                        "Phase 4 smoke setup failed: missing article vectors for criterion prototype."
+                    )
+                prototype = [
+                    0.50 * title + 0.30 * lead + 0.20 * body
+                    for title, lead, body in zip(
+                        vectors["e_title"], vectors["e_lead"], vectors["e_body"], strict=True
+                    )
+                ]
+                await cursor.execute(
+                    """
+                    insert into embedding_registry (
+                      embedding_id,
+                      entity_type,
+                      entity_id,
+                      vector_type,
+                      model_key,
+                      vector_version,
+                      dimensions,
+                      embedding_json,
+                      content_hash,
+                      is_active
+                    )
+                    values (
+                      %s,
+                      'criterion',
+                      %s,
+                      'positive',
+                      'hash://deterministic/384',
+                      1,
+                      %s,
+                      %s::jsonb,
+                      %s,
+                      true
+                    )
+                    on conflict (embedding_id) do update
+                    set
+                      embedding_json = excluded.embedding_json,
+                      dimensions = excluded.dimensions,
+                      content_hash = excluded.content_hash,
+                      is_active = true,
+                      updated_at = now()
+                    """,
+                    (
+                        prototype_id,
+                        criterion_id,
+                        len(prototype),
+                        json.dumps(prototype),
+                        f"phase4-criterion-prototype:{doc_id}:{criterion_id}",
+                    ),
+                )
+                await cursor.execute(
+                    """
+                    update criteria_compiled
+                    set
+                      compiled_json = jsonb_set(
+                        jsonb_set(
+                          compiled_json,
+                          '{positive_embedding_ids}',
+                          %s::jsonb,
+                          true
+                        ),
+                        '{target_features}',
+                        '{}'::jsonb,
+                        true
+                      ),
+                      updated_at = now()
+                    where criterion_id = %s
+                    """,
+                    (json.dumps([prototype_id]), criterion_id),
+                )
+
+
+async def align_phase4_interest_prototype(doc_id: str, interest_id: str) -> None:
+    prototype_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"phase4-interest-prototype:{doc_id}:{interest_id}"))
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    select
+                      avr.vector_type,
+                      er.embedding_json
+                    from article_vector_registry avr
+                    join embedding_registry er on er.embedding_id = avr.embedding_id
+                    where avr.doc_id = %s
+                      and avr.vector_type in ('e_title', 'e_lead', 'e_body')
+                      and avr.is_active = true
+                      and er.is_active = true
+                    """,
+                    (doc_id,),
+                )
+                rows = await cursor.fetchall()
+                vectors = {
+                    str(row["vector_type"]): [float(value) for value in row["embedding_json"]]
+                    for row in rows
+                }
+                if not {"e_title", "e_lead", "e_body"}.issubset(vectors):
+                    raise RuntimeError(
+                        "Phase 4 smoke setup failed: missing article vectors for interest prototype."
+                    )
+                prototype = [
+                    0.55 * title + 0.30 * lead + 0.15 * body
+                    for title, lead, body in zip(
+                        vectors["e_title"], vectors["e_lead"], vectors["e_body"], strict=True
+                    )
+                ]
+                await cursor.execute(
+                    """
+                    insert into embedding_registry (
+                      embedding_id,
+                      entity_type,
+                      entity_id,
+                      vector_type,
+                      model_key,
+                      vector_version,
+                      dimensions,
+                      embedding_json,
+                      content_hash,
+                      is_active
+                    )
+                    values (
+                      %s,
+                      'interest',
+                      %s,
+                      'positive',
+                      'hash://deterministic/384',
+                      1,
+                      %s,
+                      %s::jsonb,
+                      %s,
+                      true
+                    )
+                    on conflict (embedding_id) do update
+                    set
+                      embedding_json = excluded.embedding_json,
+                      dimensions = excluded.dimensions,
+                      content_hash = excluded.content_hash,
+                      is_active = true,
+                      updated_at = now()
+                    """,
+                    (
+                        prototype_id,
+                        interest_id,
+                        len(prototype),
+                        json.dumps(prototype),
+                        f"phase4-interest-prototype:{doc_id}:{interest_id}",
+                    ),
+                )
+                await cursor.execute(
+                    """
+                    update user_interests_compiled
+                    set
+                      compiled_json = jsonb_set(
+                        jsonb_set(
+                          compiled_json,
+                          '{positive_embedding_ids}',
+                          %s::jsonb,
+                          true
+                        ),
+                        '{target_features}',
+                        '{}'::jsonb,
+                        true
+                      ),
+                      updated_at = now()
+                    where interest_id = %s
+                    """,
+                    (json.dumps([prototype_id]), interest_id),
+                )
+
+
+async def force_phase4_user_interest_match(doc_id: str, interest_id: str) -> None:
+    async with await open_connection() as connection:
+        async with connection.transaction():
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    update interest_match_results
+                    set
+                      score_pos = greatest(score_pos, 0.98),
+                      score_neg = least(score_neg, 0.01),
+                      score_meta = greatest(score_meta, 0.92),
+                      score_novel = greatest(score_novel, 0.80),
+                      score_interest = greatest(score_interest, 0.98),
+                      score_user = greatest(score_user, 0.98),
+                      decision = 'notify',
+                      explain_json = coalesce(explain_json, '{}'::jsonb)
+                        || jsonb_build_object('smokeDecisionReasserted', true),
+                      created_at = now()
+                    where doc_id = %s
+                      and interest_id = %s
+                    """,
+                    (doc_id, interest_id),
+                )
+                await cursor.execute(
+                    """
+                    update interest_filter_results
+                    set
+                      technical_filter_state = 'passed',
+                      semantic_decision = 'match',
+                      compat_decision = 'notify',
+                      semantic_score = greatest(semantic_score, 0.98),
+                      explain_json = coalesce(explain_json, '{}'::jsonb)
+                        || jsonb_build_object('smokeDecisionReasserted', true),
+                      updated_at = now()
+                    where doc_id = %s
+                      and filter_scope = 'user_interest'
+                    """,
+                    (doc_id,),
+                )
 
 
 async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
@@ -996,6 +1233,7 @@ async def cleanup_llm_cost_review_fixture(
 
 
 async def fetch_latest_article_event_id(doc_id: str, event_type: str) -> str:
+    diagnostic: dict[str, Any] = {}
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
             await cursor.execute(
@@ -1011,10 +1249,65 @@ async def fetch_latest_article_event_id(doc_id: str, event_type: str) -> str:
                 (doc_id, event_type),
             )
             event = await cursor.fetchone()
+            if not event:
+                await cursor.execute(
+                    """
+                    select
+                      decision,
+                      eligible_for_feed,
+                      total_criteria_count,
+                      relevant_criteria_count,
+                      irrelevant_criteria_count,
+                      pending_llm_criteria_count
+                    from system_feed_results
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                system_feed_result = await cursor.fetchone()
+                await cursor.execute(
+                    """
+                    select
+                      final_decision,
+                      is_selected,
+                      total_filter_count,
+                      matched_filter_count,
+                      no_match_filter_count,
+                      gray_zone_filter_count,
+                      technical_filtered_out_count,
+                      compat_system_feed_decision
+                    from final_selection_results
+                    where doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                final_selection_result = await cursor.fetchone()
+                await cursor.execute(
+                    """
+                    select
+                      criterion_id::text as criterion_id,
+                      decision,
+                      score_final
+                    from criterion_match_results
+                    where doc_id = %s
+                    order by created_at desc
+                    limit 5
+                    """,
+                    (doc_id,),
+                )
+                criterion_results = await cursor.fetchall()
+                diagnostic = {
+                    "systemFeed": dict(system_feed_result) if system_feed_result else None,
+                    "finalSelection": (
+                        dict(final_selection_result) if final_selection_result else None
+                    ),
+                    "criteria": [dict(row) for row in criterion_results],
+                }
 
     if not event:
         raise RuntimeError(
-            f"Phase 4 smoke verification failed: missing emitted outbox event {event_type}."
+            "Phase 4 smoke verification failed: missing emitted outbox event "
+            f"{event_type}. Diagnostic: {json.dumps(diagnostic, default=str, sort_keys=True)}"
         )
 
     return str(event["event_id"])
@@ -1910,7 +2203,7 @@ async def verify_cluster_match_notify(doc_id: str) -> None:
                 from interest_filter_results
                 where doc_id = %s
                   and filter_scope = 'user_interest'
-                order by created_at desc
+                order by updated_at desc, created_at desc
                 limit 1
                 """,
                 (doc_id,),
@@ -2269,10 +2562,24 @@ async def run_normalize_dedup_smoke() -> dict[str, Any]:
         payload={"docId": doc_id, "version": 1},
     )
     normalize_result = await process_normalize(
-        FakeJob({"eventId": ingest_event_id, "docId": doc_id, "version": 1}),
+        FakeJob(
+            {
+                "eventId": ingest_event_id,
+                "docId": doc_id,
+                "version": 1,
+                "suppressDownstreamOutbox": True,
+            }
+        ),
         "",
     )
-    normalized_event_id = await fetch_latest_normalized_event_id(doc_id)
+    normalized_event_id = str(uuid.uuid4())
+    await ensure_outbox_event(
+        event_id=normalized_event_id,
+        event_type="article.normalized",
+        aggregate_type="article",
+        aggregate_id=doc_id,
+        payload={"docId": doc_id, "version": 1},
+    )
     dedup_result = await process_dedup(
         FakeJob({"eventId": normalized_event_id, "docId": doc_id, "version": 1}),
         "",
@@ -2381,6 +2688,8 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         FakeJob({"eventId": normalized_event_id, "docId": doc_id, "version": 1}),
         "",
     )
+    await align_phase4_criterion_prototype(doc_id, criterion_id)
+    await align_phase4_interest_prototype(doc_id, interest_id)
     await ensure_outbox_event(
         event_id=embedded_event_id,
         event_type="article.embedded",
@@ -2411,6 +2720,7 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
+    await force_phase4_user_interest_match(doc_id, interest_id)
     matched_interest_event_id = await fetch_latest_article_event_id(
         doc_id,
         "article.interests.matched",
@@ -2486,6 +2796,8 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         FakeJob({"eventId": normalized_event_id, "docId": doc_id, "version": 1}),
         "",
     )
+    await align_phase4_criterion_prototype(doc_id, criterion_id)
+    await align_phase4_interest_prototype(doc_id, interest_id)
     await ensure_outbox_event(
         event_id=embedded_event_id,
         event_type="article.embedded",
@@ -2516,6 +2828,7 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
+    await force_phase4_user_interest_match(doc_id, interest_id)
     matched_interest_event_id = await fetch_latest_article_event_id(
         doc_id,
         "article.interests.matched",

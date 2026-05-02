@@ -6,58 +6,33 @@ import {
 } from "@newsportal/control-plane";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
-  resolveAdminRedirectPath,
-} from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
+  adminActionError,
+  prepareAdminAction,
+  readRequiredAdminText,
+  requireAdminIntent,
+} from "../../../lib/server/admin-action";
 import { getPool } from "../../../lib/server/db";
-import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
 type TokenIntent = "issue" | "revoke";
 
-function resolveTokenIntent(payload: Record<string, unknown>): TokenIntent {
-  return String(payload.intent ?? "issue").trim() === "revoke" ? "revoke" : "issue";
-}
-
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const payload = await readRequestPayload(request);
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
-    "/automation/mcp"
-  );
-  const session = await resolveAdminSession(request);
-
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/automation/mcp",
+    actionToken: { scope: "mcp-tokens" },
+  });
+  if (!action.ok) {
+    return action.response;
   }
 
   try {
+    const { payload, session } = action.context;
     const pool = getPool();
-    const intent = resolveTokenIntent(payload);
+    const intent = requireAdminIntent<TokenIntent>(payload, ["issue", "revoke"], "issue");
 
     if (intent === "revoke") {
-      const tokenId = String(payload.tokenId ?? "").trim();
-      if (!tokenId) {
-        throw new Error("MCP token ID is required.");
-      }
+      const tokenId = readRequiredAdminText(payload, "tokenId", "MCP token ID is required.");
       const tokenRecord = await revokeMcpAccessToken(pool, {
         tokenId,
         revokedByUserId: session.userId,
@@ -93,21 +68,10 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update MCP tokens.";
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "automation",
-        status: "error",
-        message: errorMessage,
-        redirectTo,
-      });
-    }
-    return Response.json(
-      {
-        error: errorMessage,
-      },
-      {
-        status: 400,
-      }
-    );
+    return adminActionError(action.context, {
+      section: "automation",
+      message: errorMessage,
+      status: 400,
+    });
   }
 };

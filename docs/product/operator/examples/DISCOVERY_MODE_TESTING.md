@@ -570,7 +570,9 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
    Доказывает operator/admin graph-first flow плюс bounded recall seeding/promotion acceptance.
 3. `pnpm test:discovery:examples:compose`
    Доказывает profile-backed Example A/B/C single-run flow, materialize-ит reusable `discovery_policy_profiles` и пишет canonical `manualReplaySettings` в artifact.
-4. Manual read checks:
+4. `pnpm test:discovery:mega:compose`
+   Мега-комплексный discovery proof: Example A/B/C по трем профильным доменам каждый, 3 повтора и acceptance 2 passing runs.
+5. Manual read checks:
    - `/maintenance/discovery/summary`
    - `/maintenance/discovery/costs/summary`
    - `/admin/discovery`
@@ -583,6 +585,8 @@ curl -sS -X POST http://127.0.0.1:8000/maintenance/discovery/recall-missions \
   это operator acceptance про admin/control-plane lifecycle, candidate review, feedback, re-evaluation и recall promotion shape
 - `pnpm test:discovery:examples:compose`
   это profile-backed Example A/B/C proof и source of truth для operator-replayable discovery settings из этого handbook
+- `pnpm test:discovery:mega:compose`
+  это мега-комплексный bounded live matrix proof поверх тех же profiles; он не заменяет single-run/manual replay baseline, а помогает найти доменный drift и repeated weak-yield cases
 
 Они дополняют друг друга, а не заменяют.
 
@@ -604,6 +608,20 @@ pnpm test:discovery:examples:compose
 ```
 
 Harness materialize-ит reusable `discovery_policy_profiles`, привязывает их к graph mission и recall mission и пишет `/tmp/newsportal-live-discovery-examples-<runId>.json|md`.
+
+Canonical mega comprehensive matrix proof command:
+
+```sh
+pnpm test:discovery:mega:compose
+```
+
+Mega comprehensive matrix harness переиспользует тот же profile-backed examples contour, но запускает derived domain-scoped case packs:
+
+- Example A: `hnrss.org`, `weworkremotely.com`, `remoteok.com`
+- Example B: `infoq.com`, `github.blog`, `blog.cloudflare.com`
+- Example C: `sam.gov`, `ted.europa.eu`, `contractsfinder.service.gov.uk`
+
+Он делает 3 повтора и требует 2 passing runs на каждый example/domain group. Artifact пишется в `/tmp/newsportal-live-discovery-domain-matrix-<runId>.json|md` и отдельно классифицирует generation, review-policy, registration and downstream residuals. Backward-compatible alias: `pnpm test:discovery:domains:compose`.
 
 Current freshest synced profile-backed proof artifacts:
 

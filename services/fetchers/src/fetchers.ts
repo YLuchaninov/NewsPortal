@@ -234,6 +234,7 @@ class FetcherService {
   private async pollApiChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
     await pollApiProviderChannel(channel, startedAt, {
       config: this.config,
+      loadCursorMap: this.loadCursorMap.bind(this),
       persistInputsWithPreflight: this.persistInputsWithPreflight.bind(this),
       markChannelSuccess: this.markChannelSuccess.bind(this)
     });

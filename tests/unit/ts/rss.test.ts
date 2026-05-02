@@ -7,7 +7,7 @@ import {
   decodeHtmlEntities,
   stripHtmlTags
 } from "../../../services/fetchers/src/rss.ts";
-import { parseFeed } from "../../../services/fetchers/src/feed-parser.ts";
+import { parseFeed } from "../../../services/fetchers/src/feed-parser/index.ts";
 
 test("parseFeed normalizes RSS channel metadata and items", () => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -139,6 +139,164 @@ test("parseFeed supports Atom and JSON Feed extras", () => {
     type: "image/jpeg",
     length: 42,
   });
+});
+
+test("parseFeed hardens generic RSS and Atom URL/date/category fallbacks", () => {
+  const rss = `<?xml version="1.0"?>
+    <rss
+      xmlns:atom="http://www.w3.org/2005/Atom"
+      xmlns:xdc="http://purl.org/dc/elements/1.1/"
+      xmlns:media="http://search.yahoo.com/mrss/"
+    >
+      <channel>
+        <title>Fallback feed</title>
+        <link>https://example.com/news/</link>
+        <item xml:base="https://example.com/base/">
+          <guid isPermaLink="true">https://example.com/guid-story?utm_source=feed</guid>
+          <title>Guid permalink</title>
+          <xdc:date>2026-04-07T09:00:00Z</xdc:date>
+          <xdc:subject>policy</xdc:subject>
+          <category>policy</category>
+          <media:keywords>ai, procurement</media:keywords>
+        </item>
+        <item>
+          <guid>atom-link-item</guid>
+          <title>Atom link item</title>
+          <atom:link rel="alternate" href="relative-atom-story?utm_campaign=drop" />
+        </item>
+      </channel>
+    </rss>`;
+
+  const parsed = parseFeed({
+    body: rss,
+    contentType: "application/rss+xml",
+    feedUrl: "https://example.com/feed.xml"
+  });
+
+  assert.equal(parsed.entries[0]?.url, "https://example.com/guid-story");
+  assert.equal(parsed.entries[0]?.publishedAt, "2026-04-07T09:00:00.000Z");
+  assert.deepEqual(parsed.entries[0]?.categories, ["policy", "ai, procurement"]);
+  assert.equal(parsed.entries[1]?.url, "https://example.com/news/relative-atom-story");
+  assert.ok(parsed.diagnostics?.some((diagnostic) => diagnostic.code === "guid_permalink_used"));
+  assert.ok(parsed.diagnostics?.some((diagnostic) => diagnostic.code === "relative_url_resolved"));
+});
+
+test("parseFeed resolves relative links from xml:base and feedUrl", () => {
+  const xmlBaseFeed = `<?xml version="1.0"?>
+    <rss>
+      <channel xml:base="https://example.com/xml-base/">
+        <item>
+          <guid>relative-xml-base</guid>
+          <title>Relative XML base</title>
+          <link>story-a?utm_medium=rss</link>
+        </item>
+      </channel>
+    </rss>`;
+  const feedUrlOnlyFeed = `<?xml version="1.0"?>
+    <rss>
+      <channel>
+        <item>
+          <guid>relative-feed-url</guid>
+          <title>Relative feed URL</title>
+          <link>story-b?utm_source=rss</link>
+        </item>
+      </channel>
+    </rss>`;
+
+  const xmlBaseParsed = parseFeed({
+    body: xmlBaseFeed,
+    contentType: "application/rss+xml",
+    feedUrl: "https://feeds.example.com/root/feed.xml"
+  });
+  const feedUrlParsed = parseFeed({
+    body: feedUrlOnlyFeed,
+    contentType: "application/rss+xml",
+    feedUrl: "https://feeds.example.com/root/feed.xml"
+  });
+
+  assert.equal(xmlBaseParsed.entries[0]?.url, "https://example.com/xml-base/story-a");
+  assert.equal(feedUrlParsed.entries[0]?.url, "https://feeds.example.com/root/story-b");
+});
+
+test("parseFeed supports Atom enclosures and JSON Feed content_text", () => {
+  const atom = `<?xml version="1.0"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <id>atom-media</id>
+        <title>Atom media</title>
+        <link rel="alternate" href="https://example.com/atom-media" />
+        <link rel="enclosure" href="/media/audio.mp3" type="audio/mpeg" length="12" />
+        <updated>2026-04-08T10:00:00Z</updated>
+      </entry>
+    </feed>`;
+  const jsonFeed = JSON.stringify({
+    version: "https://jsonfeed.org/version/1.1",
+    title: "Text feed",
+    items: [
+      {
+        id: 123,
+        url: "/json-text?utm_source=json",
+        title: "JSON text item",
+        content_text: "Plain text body",
+        date_modified: "2026-04-09T11:00:00Z"
+      }
+    ]
+  });
+
+  const parsedAtom = parseFeed({
+    body: atom,
+    contentType: "application/atom+xml",
+    feedUrl: "https://example.com/feed.atom"
+  });
+  const parsedJson = parseFeed({
+    body: jsonFeed,
+    contentType: "application/feed+json",
+    feedUrl: "https://example.com/feeds/feed.json"
+  });
+
+  assert.deepEqual(parsedAtom.entries[0]?.enclosure, {
+    url: "https://example.com/media/audio.mp3",
+    type: "audio/mpeg",
+    length: 12
+  });
+  assert.equal(parsedJson.entries[0]?.guid, "123");
+  assert.equal(parsedJson.entries[0]?.url, "https://example.com/json-text");
+  assert.equal(parsedJson.entries[0]?.contentHtml, "Plain text body");
+  assert.equal(parsedJson.entries[0]?.publishedAt, "2026-04-09T11:00:00.000Z");
+});
+
+test("parseFeed supports RDF feeds through the Feedsmith-backed parser path", () => {
+  const rdf = `<?xml version="1.0"?>
+    <rdf:RDF
+      xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+      xmlns="http://purl.org/rss/1.0/"
+      xmlns:dc="http://purl.org/dc/elements/1.1/"
+    >
+      <channel rdf:about="https://example.com/">
+        <title>RDF feed</title>
+        <link>https://example.com/</link>
+      </channel>
+      <item rdf:about="https://example.com/rdf-story?utm_source=rdf">
+        <title>RDF story</title>
+        <link>https://example.com/rdf-story?utm_source=rdf</link>
+        <description>RDF summary</description>
+        <dc:date>2026-04-10T12:00:00Z</dc:date>
+        <dc:subject>rdf-topic</dc:subject>
+      </item>
+    </rdf:RDF>`;
+
+  const parsed = parseFeed({
+    body: rdf,
+    contentType: "application/rdf+xml",
+    feedUrl: "https://example.com/rss1.xml",
+  });
+
+  assert.equal(parsed.format, "rss1");
+  assert.equal(parsed.title, "RDF feed");
+  assert.equal(parsed.entries[0]?.url, "https://example.com/rdf-story");
+  assert.equal(parsed.entries[0]?.summaryHtml, "RDF summary");
+  assert.equal(parsed.entries[0]?.publishedAt, "2026-04-10T12:00:00.000Z");
+  assert.deepEqual(parsed.entries[0]?.categories, ["rdf-topic"]);
 });
 
 test("parseFeed rejects invalid non-feed payloads", () => {

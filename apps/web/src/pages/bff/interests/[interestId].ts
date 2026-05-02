@@ -1,12 +1,9 @@
 import type { APIRoute } from "astro";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
-import {
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation
-} from "../../../lib/server/browser-flow";
+import { buildFlashRedirect } from "../../../lib/server/browser-flow";
 import { getPool } from "../../../lib/server/db";
 import { insertOutboxEvent } from "../../../lib/server/outbox";
-import { readRequestPayload } from "../../../lib/server/request";
 import {
   buildInterestCompileRequestedEvent,
   buildUserInterestUpdatePatch,
@@ -14,24 +11,19 @@ import {
   deleteUserInterest,
   updateUserInterest
 } from "../../../lib/server/user-interests";
-import {
-  buildExpiredSessionCookie,
-  resolveWebSession
-} from "../../../lib/server/auth";
+import { prepareWebAction } from "../../../lib/server/web-action";
 
 export const prerender = false;
 export const POST: APIRoute = async ({ request, params }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const session = await resolveWebSession(request);
+  const prepared = await prepareWebAction(request, {
+    payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["interests.update"],
+    payloadBoundaryName: "interest mutation payload",
+  });
+  if (!prepared.ok) {
+    return prepared.response;
+  }
+  const { browserRequest, payload, session } = prepared.context;
   if (!session) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please start a session to continue.",
-        setCookie: buildExpiredSessionCookie()
-      });
-    }
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -47,15 +39,14 @@ export const POST: APIRoute = async ({ request, params }) => {
     return Response.json({ error: "Interest id is required." }, { status: 400 });
   }
 
-  const payload = await readRequestPayload(request);
-  const action = String(payload._action ?? "update");
+  const actionType = String(payload._action ?? "update");
   const pool = getPool();
   const client = await pool.connect();
 
   try {
     await client.query("begin");
 
-    if (action === "delete") {
+    if (actionType === "delete") {
       await deleteUserInterest(client, interestId, session.userId);
       await client.query("commit");
       if (browserRequest) {
@@ -68,7 +59,7 @@ export const POST: APIRoute = async ({ request, params }) => {
       return Response.json({ deleted: true });
     }
 
-    if (action === "clone") {
+    if (actionType === "clone") {
       const result = await cloneUserInterest(
         client,
         interestId,

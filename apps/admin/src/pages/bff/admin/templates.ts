@@ -8,18 +8,15 @@ import {
 } from "@newsportal/control-plane";
 
 import {
-  buildAdminSignInPath,
-  buildFlashRedirect,
-  requestPrefersHtmlNavigation,
+  adminActionError,
+  adminActionSuccess,
+  prepareAdminAction,
+} from "../../../lib/server/admin-action";
+import {
   resolveAdminAppPath,
   resolveAdminRedirectPath,
 } from "../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession,
-} from "../../../lib/server/auth";
 import { getPool } from "../../../lib/server/db";
-import { readRequestPayload } from "../../../lib/server/request";
 
 export const prerender = false;
 
@@ -82,8 +79,15 @@ export function formatTemplateBrowserErrorMessage(
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const browserRequest = requestPrefersHtmlNavigation(request);
-  const payload = await readRequestPayload(request);
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/templates/llm",
+    actionToken: { scope: "templates" },
+  });
+  if (!action.ok) {
+    return action.response;
+  }
+
+  const { payload, session } = action.context;
   const kind = resolveTemplateKind(payload);
   const listPath = resolveTemplateListPath(request, kind);
   const redirectTo = resolveAdminRedirectPath(
@@ -91,20 +95,6 @@ export const POST: APIRoute = async ({ request }) => {
     String(payload.redirectTo ?? request.headers.get("referer") ?? ""),
     listPath
   );
-  const session = await resolveAdminSession(request);
-
-  if (!session || !session.roles.includes("admin")) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "auth",
-        status: "error",
-        message: "Please sign in as an admin to continue.",
-        setCookie: buildExpiredAdminSessionCookie(),
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-      });
-    }
-    return Response.json({ error: "Forbidden." }, { status: 403 });
-  }
 
   try {
     const pool = getPool();
@@ -114,34 +104,29 @@ export const POST: APIRoute = async ({ request }) => {
       const result = await saveTemplateFromPayload(pool, session.userId, payload);
       const entityPath = resolveTemplateEditPath(request, result.kind, result.entityId);
 
-      if (browserRequest) {
-        return buildFlashRedirect(request, {
-          section: "templates",
-          status: "success",
-          message:
-            kind === "interest"
-              ? result.created
-                ? "System interest created"
-                : "System interest updated"
-              : result.created
-                ? "LLM template created"
-                : "LLM template updated",
-          redirectTo: entityPath,
-        });
-      }
-
-      return Response.json(
-        kind === "interest"
-          ? {
-              interestTemplateId: result.entityId,
-              created: result.created,
-            }
-          : {
-              promptTemplateId: result.entityId,
-              created: result.created,
-            },
-        { status: result.created ? 201 : 200 }
-      );
+      return adminActionSuccess(action.context, {
+        section: "templates",
+        message:
+          kind === "interest"
+            ? result.created
+              ? "System interest created"
+              : "System interest updated"
+            : result.created
+              ? "LLM template created"
+              : "LLM template updated",
+        redirectTo: entityPath,
+        status: result.created ? 201 : 200,
+        json:
+          kind === "interest"
+            ? {
+                interestTemplateId: result.entityId,
+                created: result.created,
+              }
+            : {
+                promptTemplateId: result.entityId,
+                created: result.created,
+              },
+      });
     }
 
     const templateId = String(
@@ -163,50 +148,37 @@ export const POST: APIRoute = async ({ request }) => {
         templateId,
         intent === "activate"
       );
-      if (browserRequest) {
-        return buildFlashRedirect(request, {
-          section: "templates",
-          status: "success",
-          message:
-            kind === "interest"
-              ? intent === "activate"
-                ? "System interest reactivated"
-                : "System interest archived"
-              : intent === "activate"
-                ? "LLM template reactivated"
-                : "LLM template archived",
-          redirectTo,
-        });
-      }
-      return Response.json({ ok: true });
+      return adminActionSuccess(action.context, {
+        section: "templates",
+        message:
+          kind === "interest"
+            ? intent === "activate"
+              ? "System interest reactivated"
+              : "System interest archived"
+            : intent === "activate"
+              ? "LLM template reactivated"
+              : "LLM template archived",
+        redirectTo,
+        json: { ok: true },
+      });
     }
 
     await deleteTemplateWithAudit(pool, session.userId, kind, templateId);
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "templates",
-        status: "success",
-        message: kind === "interest" ? "System interest deleted" : "LLM template deleted",
-        redirectTo: listPath,
-      });
-    }
-    return Response.json({ ok: true });
+    return adminActionSuccess(action.context, {
+      section: "templates",
+      message: kind === "interest" ? "System interest deleted" : "LLM template deleted",
+      redirectTo: listPath,
+      json: { ok: true },
+    });
   } catch (error) {
-    if (browserRequest) {
-      return buildFlashRedirect(request, {
-        section: "templates",
-        status: "error",
-        message: formatTemplateBrowserErrorMessage(error, kind),
-        redirectTo,
-      });
-    }
-    return Response.json(
-      {
+    return adminActionError(action.context, {
+      section: "templates",
+      message: formatTemplateBrowserErrorMessage(error, kind),
+      status: 500,
+      redirectTo,
+      json: {
         error: error instanceof Error ? error.message : "Failed to save template.",
       },
-      {
-        status: 500,
-      }
-    );
+    });
   }
 };

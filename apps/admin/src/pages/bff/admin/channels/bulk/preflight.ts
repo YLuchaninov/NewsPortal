@@ -1,41 +1,33 @@
 import type { APIRoute } from "astro";
 
-import {
-  buildAdminSignInPath,
-  resolveAdminRedirectPath
-} from "../../../../../lib/server/browser-flow";
-import {
-  buildExpiredAdminSessionCookie,
-  resolveAdminSession
-} from "../../../../../lib/server/auth";
+import { buildAdminSignInPath } from "../../../../../lib/server/browser-flow";
+import { buildExpiredAdminSessionCookie } from "../../../../../lib/server/auth";
+import { prepareAdminAction } from "../../../../../lib/server/admin-action";
 import {
   parseBulkChannels,
   planBulkImport,
-  readBulkPayload
+  readBulkPayload,
 } from "./shared";
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request }) => {
-  const redirectTo = resolveAdminRedirectPath(
-    request,
-    request.headers.get("referer"),
-    "/channels/import"
-  );
-  const session = await resolveAdminSession(request);
-  if (!session || !session.roles.includes("admin")) {
-    return Response.json(
-      {
-        error: "Please sign in as an admin to continue.",
-        redirectTo: buildAdminSignInPath(request, redirectTo),
-        setCookie: buildExpiredAdminSessionCookie()
-      },
-      { status: 403 }
-    );
+  const action = await prepareAdminAction(request, {
+    fallbackRedirectPath: "/channels/import",
+    actionToken: { scope: "channels.bulk.preflight" },
+    payloadReader: readBulkPayload,
+    authJson: (authRequest, redirectTo) => ({
+      error: "Please sign in as an admin to continue.",
+      redirectTo: buildAdminSignInPath(authRequest, redirectTo),
+      setCookie: buildExpiredAdminSessionCookie({ request: authRequest }),
+    }),
+  });
+  if (!action.ok) {
+    return action.response;
   }
 
   try {
-    const bulkPayload = await readBulkPayload(request);
+    const bulkPayload = action.context.payload;
     const channels = parseBulkChannels(bulkPayload.channelsPayload);
     const importPlan = await planBulkImport(channels);
 
@@ -46,7 +38,7 @@ export const POST: APIRoute = async ({ request }) => {
       matchedByChannelId: importPlan.matchedByChannelId,
       matchedByFetchUrl: importPlan.matchedByFetchUrl,
       items: importPlan.items,
-      providerBreakdown: importPlan.providerBreakdown
+      providerBreakdown: importPlan.providerBreakdown,
     });
   } catch (error) {
     return Response.json(
@@ -54,10 +46,10 @@ export const POST: APIRoute = async ({ request }) => {
         error:
           error instanceof Error
             ? error.message
-            : "Bulk import preflight failed."
+            : "Bulk import preflight failed.",
       },
       {
-        status: 400
+        status: 400,
       }
     );
   }

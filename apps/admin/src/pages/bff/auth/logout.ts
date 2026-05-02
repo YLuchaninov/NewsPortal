@@ -15,7 +15,7 @@ export const POST: APIRoute = async ({ request }) => {
       section: "auth",
       status: "success",
       message: "Signed out.",
-      setCookie: buildExpiredAdminSessionCookie(),
+      setCookie: buildExpiredAdminSessionCookie({ request }),
       redirectTo: buildAdminSignInPath(request)
     });
   }
@@ -23,7 +23,7 @@ export const POST: APIRoute = async ({ request }) => {
   return new Response(null, {
     status: 204,
     headers: {
-      "Set-Cookie": buildExpiredAdminSessionCookie()
+      "Set-Cookie": buildExpiredAdminSessionCookie({ request })
     }
   });
 };

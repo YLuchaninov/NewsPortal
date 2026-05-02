@@ -5,7 +5,7 @@ import {
   pickLanguageHint,
 } from "./fetcher-channel-helpers";
 import type { AdaptedFeedEntry } from "./feed-ingress-adapters";
-import type { ParsedFeed } from "./feed-parser";
+import type { ParsedFeed } from "./feed-parser/index";
 import type {
   PersistArticleInput,
   PersistResourceInput,

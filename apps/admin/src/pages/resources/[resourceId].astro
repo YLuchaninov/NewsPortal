@@ -1,6 +1,7 @@
 ---
 import type { WebResourceDetail } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
+import { sanitizeHtmlFragment } from "@newsportal/content-safety";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../../lib/server/auth";
@@ -61,19 +62,6 @@ function resolveSafeHref(rawValue: unknown): string | null {
   }
 }
 
-function sanitizeHtml(rawValue: unknown): string | null {
-  if (typeof rawValue !== "string" || !rawValue.trim()) {
-    return null;
-  }
-
-  return rawValue
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, "")
-    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "")
-    .replace(/(href|src)\s*=\s*(["'])javascript:[\s\S]*?\2/gi, '$1="#"');
-}
-
 function toArray<T>(rawValue: unknown): T[] {
   return Array.isArray(rawValue) ? (rawValue as T[]) : [];
 }
@@ -107,7 +95,7 @@ const sourceHref = resolveSafeHref(resource.final_url ?? resource.url);
 const projectedArticleHref = resource.projected_article_id
   ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
   : null;
-const resourceHtml = sanitizeHtml(resource.body_html ?? null);
+const resourceHtml = sanitizeHtmlFragment(resource.body_html ?? null, { baseUrl: sourceHref });
 const documents = toArray<Record<string, unknown>>(resource.documents_json);
 const mediaAssets = toArray<Record<string, unknown>>(resource.media_json);
 const linksOut = toArray<Record<string, unknown>>(resource.links_out_json);

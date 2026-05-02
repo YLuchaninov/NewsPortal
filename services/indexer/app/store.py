@@ -5,31 +5,209 @@ import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import psycopg
 from psycopg.rows import dict_row
 
 from ml.app.interfaces import HnswIndexStore, HnswSnapshotStore
 
-from .config import IndexerConfig
+from .config import IndexerConfig, resolve_runtime_path
 
 LOGGER = logging.getLogger("newsportal.indexer")
 INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
 EVENT_CLUSTER_CENTROIDS_INDEX_NAME = "event_cluster_centroids"
+INTEREST_CENTROIDS_REBUILD_COMMAND = "pnpm index:rebuild:interest-centroids"
+EVENT_CLUSTER_CENTROIDS_REBUILD_COMMAND = "pnpm index:rebuild:event-cluster-centroids"
+
+
+def _diagnostic(
+    code: str,
+    *,
+    severity: str,
+    message: str,
+    repair_command: str | None = None,
+) -> dict[str, str]:
+    result = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+    }
+    if repair_command:
+        result["repairCommand"] = repair_command
+    return result
+
+
+def _build_index_consistency_result(
+    *,
+    index_name: str,
+    active_count: int,
+    max_label: int,
+    registry_row: Mapping[str, Any] | None,
+    config: IndexerConfig,
+    rebuild_command: str,
+) -> dict[str, Any]:
+    registry = dict(registry_row) if registry_row is not None else None
+    registry_exists = registry is not None
+    registry_entry_count = int(registry.get("entry_count") or 0) if registry else None
+    registry_last_label = int(registry.get("last_assigned_label") or 0) if registry else None
+    registry_is_dirty = bool(registry.get("is_dirty")) if registry else False
+    index_path = Path(str(registry["active_index_path"])) if registry and registry.get("active_index_path") else None
+    snapshot_path = (
+        Path(str(registry["active_snapshot_path"]))
+        if registry and registry.get("active_snapshot_path")
+        else None
+    )
+    index_path_exists = bool(index_path and resolve_runtime_path(index_path).exists())
+    snapshot_path_exists = bool(snapshot_path and resolve_runtime_path(snapshot_path).exists())
+    empty_without_registry = active_count == 0 and not registry_exists
+    entry_count_matches = bool(
+        empty_without_registry
+        or (registry_exists and registry_entry_count == active_count)
+    )
+    label_coverage_ok = bool(
+        empty_without_registry
+        or (registry_exists and registry_last_label is not None and registry_last_label >= max_label)
+    )
+    files_ok = bool(
+        empty_without_registry
+        or (registry_exists and index_path_exists and snapshot_path_exists)
+    )
+    registry_ok = bool(registry_exists or active_count == 0)
+    model_key_matches_runtime_default = (
+        None
+        if not registry
+        else str(registry.get("model_key")) == config.default_model_key
+    )
+    dimensions_match_runtime_default = (
+        None
+        if not registry
+        else int(registry.get("dimensions") or 0) == config.default_dimensions
+    )
+    checks = {
+        "registryExists": registry_exists,
+        "entryCountMatches": entry_count_matches,
+        "labelCoverageOk": label_coverage_ok,
+        "indexPathExists": index_path_exists,
+        "snapshotPathExists": snapshot_path_exists,
+        "registryDirty": registry_is_dirty,
+        "modelKeyMatchesRuntimeDefault": model_key_matches_runtime_default,
+        "dimensionsMatchRuntimeDefault": dimensions_match_runtime_default,
+    }
+    diagnostics: list[dict[str, str]] = []
+    if empty_without_registry:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_empty_index_without_registry",
+                severity="info",
+                message="No active vectors exist, so a missing HNSW registry row is acceptable.",
+            )
+        )
+    elif not registry_exists:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_registry_missing",
+                severity="error",
+                message="Active vectors exist but no HNSW registry row was found.",
+                repair_command=rebuild_command,
+            )
+        )
+    if registry_exists and not entry_count_matches:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_entry_count_mismatch",
+                severity="error",
+                message="HNSW registry entry_count does not match active vector rows.",
+                repair_command=rebuild_command,
+            )
+        )
+    if registry_exists and not label_coverage_ok:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_label_coverage_mismatch",
+                severity="error",
+                message="HNSW registry last_assigned_label is below active vector labels.",
+                repair_command=rebuild_command,
+            )
+        )
+    if registry_exists and not index_path_exists:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_index_file_missing",
+                severity="error",
+                message="HNSW registry points at an index file that is absent.",
+                repair_command=rebuild_command,
+            )
+        )
+    if registry_exists and not snapshot_path_exists:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_snapshot_file_missing",
+                severity="error",
+                message="HNSW registry points at a snapshot file that is absent.",
+                repair_command=rebuild_command,
+            )
+        )
+    if registry_is_dirty:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_registry_dirty",
+                severity="error",
+                message="HNSW registry is marked dirty and needs an explicit rebuild.",
+                repair_command=rebuild_command,
+            )
+        )
+    if model_key_matches_runtime_default is False:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_model_differs_from_runtime_default",
+                severity="info",
+                message="HNSW registry model_key differs from the current runtime embedding default.",
+            )
+        )
+    if dimensions_match_runtime_default is False:
+        diagnostics.append(
+            _diagnostic(
+                "hnsw_dimensions_differ_from_runtime_default",
+                severity="warning",
+                message="HNSW registry dimensions differ from the current runtime embedding default.",
+            )
+        )
+    is_consistent = bool(
+        registry_ok
+        and entry_count_matches
+        and label_coverage_ok
+        and files_ok
+        and not registry_is_dirty
+    )
+    return {
+        "indexName": index_name,
+        "activeCount": active_count,
+        "maxLabel": max_label,
+        "registry": registry,
+        "expectedRuntime": {
+            "modelKey": config.default_model_key,
+            "dimensions": config.default_dimensions,
+        },
+        "checks": checks,
+        "diagnostics": diagnostics,
+        "recommendedRepairCommand": rebuild_command if not is_consistent else None,
+        "isConsistent": is_consistent,
+    }
 
 
 class LocalSnapshotStore(HnswSnapshotStore):
     def __init__(self, snapshot_root: str) -> None:
-        self.snapshot_root = Path(snapshot_root)
+        self.logical_snapshot_root = Path(snapshot_root)
+        self.snapshot_root = resolve_runtime_path(snapshot_root)
         self.snapshot_root.mkdir(parents=True, exist_ok=True)
 
     def create_snapshot(self, source_path: str, snapshot_name: str) -> str:
-        source = Path(source_path)
+        source = resolve_runtime_path(source_path)
         destination = self.snapshot_root / snapshot_name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
-        return str(destination)
+        return str(self.logical_snapshot_root / snapshot_name)
 
 
 class InterestCentroidIndexer(HnswIndexStore):
@@ -37,7 +215,8 @@ class InterestCentroidIndexer(HnswIndexStore):
         self.config = config
         self.snapshot_store = LocalSnapshotStore(config.snapshot_root)
         self.index_root = Path(config.index_root)
-        self.index_root.mkdir(parents=True, exist_ok=True)
+        self.physical_index_root = resolve_runtime_path(config.index_root)
+        self.physical_index_root.mkdir(parents=True, exist_ok=True)
 
     async def rebuild_interest_centroids(self) -> dict[str, Any]:
         async with await psycopg.AsyncConnection.connect(
@@ -58,6 +237,7 @@ class InterestCentroidIndexer(HnswIndexStore):
     async def check_interest_centroids(self) -> dict[str, Any]:
         return await self._check_index_consistency(
             index_name=INTEREST_CENTROIDS_INDEX_NAME,
+            rebuild_command=INTEREST_CENTROIDS_REBUILD_COMMAND,
             count_query="""
                 select
                   count(*)::int as active_count,
@@ -88,6 +268,7 @@ class InterestCentroidIndexer(HnswIndexStore):
     async def check_event_cluster_centroids(self) -> dict[str, Any]:
         return await self._check_index_consistency(
             index_name=EVENT_CLUSTER_CENTROIDS_INDEX_NAME,
+            rebuild_command=EVENT_CLUSTER_CENTROIDS_REBUILD_COMMAND,
             count_query="""
                 select
                   count(*)::int as active_count,
@@ -99,10 +280,33 @@ class InterestCentroidIndexer(HnswIndexStore):
             """,
         )
 
+    async def check_derived_vectors(self) -> dict[str, Any]:
+        interest_result = await self.check_interest_centroids()
+        event_result = await self.check_event_cluster_centroids()
+        results = {
+            "interestCentroids": interest_result,
+            "eventClusterCentroids": event_result,
+        }
+        repair_commands = [
+            command
+            for command in {
+                result.get("recommendedRepairCommand")
+                for result in results.values()
+                if not result.get("isConsistent")
+            }
+            if command
+        ]
+        return {
+            "isConsistent": all(result["isConsistent"] for result in results.values()),
+            "checks": results,
+            "repairCommands": sorted(repair_commands),
+        }
+
     async def _check_index_consistency(
         self,
         *,
         index_name: str,
+        rebuild_command: str,
         count_query: str,
     ) -> dict[str, Any]:
         async with await psycopg.AsyncConnection.connect(
@@ -118,8 +322,11 @@ class InterestCentroidIndexer(HnswIndexStore):
                       index_name,
                       active_index_path,
                       active_snapshot_path,
+                      model_key,
+                      dimensions,
                       entry_count,
                       last_assigned_label,
+                      is_dirty,
                       metadata_json
                     from hnsw_registry
                     where index_name = %s
@@ -130,32 +337,14 @@ class InterestCentroidIndexer(HnswIndexStore):
 
         active_count = int(active_row["active_count"] or 0) if active_row else 0
         max_label = int(active_row["max_label"] or 0) if active_row else 0
-        index_path = (
-            Path(str(registry_row["active_index_path"]))
-            if registry_row and registry_row["active_index_path"]
-            else None
+        return _build_index_consistency_result(
+            index_name=index_name,
+            active_count=active_count,
+            max_label=max_label,
+            registry_row=registry_row,
+            config=self.config,
+            rebuild_command=rebuild_command,
         )
-        snapshot_path = (
-            Path(str(registry_row["active_snapshot_path"]))
-            if registry_row and registry_row["active_snapshot_path"]
-            else None
-        )
-        is_consistent = bool(
-            registry_row
-            and registry_row["entry_count"] == active_count
-            and registry_row["last_assigned_label"] >= max_label
-            and index_path is not None
-            and index_path.exists()
-            and snapshot_path is not None
-            and snapshot_path.exists()
-        )
-        return {
-            "indexName": index_name,
-            "activeCount": active_count,
-            "maxLabel": max_label,
-            "registry": registry_row,
-            "isConsistent": is_consistent,
-        }
 
     async def _load_interest_centroids(
         self,
@@ -326,8 +515,9 @@ class InterestCentroidIndexer(HnswIndexStore):
         )
         model_key = str(rows[0]["model_key"]) if rows else self.config.default_model_key
         active_index_path = self.index_root / f"{index_name}.hnsw"
+        physical_index_path = resolve_runtime_path(active_index_path)
         engine = self._write_index_file(
-            active_index_path,
+            physical_index_path,
             rows,
             dimensions,
             entity_id_field=entity_id_field,
