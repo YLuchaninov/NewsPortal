@@ -1,5 +1,5 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
+import { DEFAULT_PAGE } from "@newsportal/contracts";
 import type { ContentItemPreview, WebContentListSort } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
@@ -12,7 +12,7 @@ import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap } from "../lib/server/user-content-state";
-import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
+import { WEB_CARD_GRID_PAGE_SIZE, createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const WEB_CONTENT_SORT_OPTIONS: Array<{ value: WebContentListSort; label: string }> = [
@@ -64,7 +64,7 @@ const hasActiveFilters = searchQuery.length > 0 || selectedSort !== "latest";
 const [matches, profile] = await Promise.all([
   sdk.listMatchesPage<ContentItemPreview>(session.userId, {
     page,
-    pageSize: DEFAULT_PAGE_SIZE,
+    pageSize: WEB_CARD_GRID_PAGE_SIZE,
     sort: selectedSort,
     q: searchQuery || undefined,
   }),

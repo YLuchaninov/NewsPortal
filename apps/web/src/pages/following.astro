@@ -1,5 +1,5 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type ContentItemDetail } from "@newsportal/contracts";
+import { DEFAULT_PAGE, type ContentItemDetail } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
@@ -10,7 +10,7 @@ import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
 import { getUserContentStateMap, listFollowedStoryRefs } from "../lib/server/user-content-state";
-import { createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
+import { WEB_CARD_GRID_PAGE_SIZE, createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
 export const prerender = false;
 const session = await resolveWebSession(Astro.request);
@@ -43,7 +43,7 @@ const bffPaths = {
 
 const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
 const [followingRefs, profile] = await Promise.all([
-  listFollowedStoryRefs(getPool(), session.userId, page, DEFAULT_PAGE_SIZE),
+  listFollowedStoryRefs(getPool(), session.userId, page, WEB_CARD_GRID_PAGE_SIZE),
   queryOne<Record<string, unknown>>(`select theme_preference from user_profiles where user_id = $1`, [session.userId]),
 ]);
 const followingItems = await Promise.all(

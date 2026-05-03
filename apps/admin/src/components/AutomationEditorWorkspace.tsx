@@ -7,6 +7,16 @@ import {
   type Node,
   type Viewport,
 } from "@xyflow/react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@newsportal/ui";
 
 import {
   buildEditorStateFromNodes,
@@ -88,6 +98,7 @@ export function AutomationEditorWorkspace({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runContextJson, setRunContextJson] = useState("{}");
   const [runTriggerMetaJson, setRunTriggerMetaJson] = useState("{}");
   const [advancedJson, setAdvancedJson] = useState(
@@ -329,9 +340,6 @@ export function AutomationEditorWorkspace({
   }
 
   async function handleArchive(): Promise<void> {
-    if (!window.confirm("Archive this workflow? Existing history stays, but new runs will stop.")) {
-      return;
-    }
     setErrorMessage(null);
     try {
       await postJson(automationBffPath, {
@@ -397,7 +405,7 @@ export function AutomationEditorWorkspace({
         saveState={saveState}
         onRunNow={() => setRunDialogOpen(true)}
         onSave={() => void handleSave()}
-        onArchive={() => void handleArchive()}
+        onArchive={() => setArchiveDialogOpen(true)}
       />
 
       {errorMessage && (
@@ -481,6 +489,24 @@ export function AutomationEditorWorkspace({
         onRunTriggerMetaJsonChange={setRunTriggerMetaJson}
         onSubmit={() => void handleRunNow()}
       />
+
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive workflow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existing history stays available, but new runs will stop until the workflow is
+              restored or replaced.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleArchive()}>
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

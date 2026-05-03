@@ -1,3 +1,5 @@
+export const WEB_CARD_GRID_PAGE_SIZE = 21;
+
 export function parsePositivePage(
   url: URL,
   paramName: string,

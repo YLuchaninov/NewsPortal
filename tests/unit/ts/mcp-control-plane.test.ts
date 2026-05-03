@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  deleteRevokedMcpAccessToken,
   hasMcpScope,
   issueMcpAccessToken,
   listMcpAccessTokens,
@@ -97,6 +98,30 @@ function createFakeMcpPool() {
         };
       }
 
+      if (/delete from mcp_access_tokens/i.test(sql)) {
+        if (
+          !state.token ||
+          state.token.token_id !== String(params[0]) ||
+          state.token.status !== "revoked"
+        ) {
+          return { rows: [] };
+        }
+        const deleted = state.token;
+        state.token = null;
+        return {
+          rows: [{ ...deleted }],
+        };
+      }
+
+      if (/select status\s+from mcp_access_tokens/i.test(sql)) {
+        return {
+          rows:
+            state.token && state.token.token_id === String(params[0])
+              ? [{ status: state.token.status }]
+              : [],
+        };
+      }
+
       if (/update mcp_access_tokens\s+set\s+last_used_at = now\(\)/i.test(sql)) {
         if (state.token && state.token.token_id === String(params[0])) {
           state.token = {
@@ -174,6 +199,34 @@ test("MCP token helpers issue, resolve, list, touch, revoke, and log request met
   });
   assert.equal(revoked.status, "revoked");
   assert.equal(pool.state.auditRows.length, 2);
+
+  const deleted = await deleteRevokedMcpAccessToken(pool, {
+    tokenId: issued.tokenId,
+    deletedByUserId: "550e8400-e29b-41d4-a716-446655440002",
+  });
+  assert.equal(deleted.tokenId, issued.tokenId);
+  assert.equal(pool.state.token, null);
+  assert.equal(pool.state.auditRows.length, 3);
+});
+
+test("MCP token delete is limited to already revoked records", async () => {
+  const pool = createFakeMcpPool();
+
+  const issued = await issueMcpAccessToken(pool, {
+    label: "Active token",
+    scopes: "read",
+    issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+  });
+
+  await assert.rejects(
+    () =>
+      deleteRevokedMcpAccessToken(pool, {
+        tokenId: issued.tokenId,
+        deletedByUserId: "550e8400-e29b-41d4-a716-446655440001",
+      }),
+    /Only revoked MCP tokens can be deleted/
+  );
+  assert.equal(pool.state.token?.status, "active");
 });
 
 test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP foundation metadata", () => {

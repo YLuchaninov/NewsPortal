@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 
 import {
+  deleteRevokedMcpAccessToken,
   issueMcpAccessToken,
   revokeMcpAccessToken,
 } from "@newsportal/control-plane";
@@ -15,7 +16,7 @@ import { getPool } from "../../../lib/server/db";
 
 export const prerender = false;
 
-type TokenIntent = "issue" | "revoke";
+type TokenIntent = "issue" | "revoke" | "delete";
 
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareAdminAction(request, {
@@ -29,13 +30,22 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const { payload, session } = action.context;
     const pool = getPool();
-    const intent = requireAdminIntent<TokenIntent>(payload, ["issue", "revoke"], "issue");
+    const intent = requireAdminIntent<TokenIntent>(payload, ["issue", "revoke", "delete"], "issue");
 
     if (intent === "revoke") {
       const tokenId = readRequiredAdminText(payload, "tokenId", "MCP token ID is required.");
       const tokenRecord = await revokeMcpAccessToken(pool, {
         tokenId,
         revokedByUserId: session.userId,
+      });
+      return Response.json({ ok: true, tokenRecord });
+    }
+
+    if (intent === "delete") {
+      const tokenId = readRequiredAdminText(payload, "tokenId", "MCP token ID is required.");
+      const tokenRecord = await deleteRevokedMcpAccessToken(pool, {
+        tokenId,
+        deletedByUserId: session.userId,
       });
       return Response.json({ ok: true, tokenRecord });
     }

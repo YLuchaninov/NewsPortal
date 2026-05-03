@@ -1,6 +1,23 @@
 import { useState } from "react";
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@newsportal/ui";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from "@newsportal/ui";
 
 import { formatUtcTimestamp, postJson, readText } from "./admin-client-helpers";
 import { ADMIN_HERO_CARD_CLASS } from "../lib/admin-ui-classes";
@@ -36,6 +53,7 @@ export function McpTokenWorkspace({
   const [expiresAt, setExpiresAt] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<string[]>(["read"]);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -47,10 +65,30 @@ export function McpTokenWorkspace({
     );
   }
 
+  async function writeClipboardText(text: string): Promise<void> {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("Clipboard API is unavailable.");
+    }
+    await navigator.clipboard.writeText(text);
+  }
+
+  async function handleCopyCreatedToken(): Promise<void> {
+    if (!createdToken) {
+      return;
+    }
+    try {
+      await writeClipboardText(createdToken);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
   async function handleIssueToken(): Promise<void> {
     setSubmitting(true);
     setErrorMessage(null);
     setCreatedToken(null);
+    setCopyStatus("idle");
     try {
       const response = await postJson(mcpBffPath, {
         intent: "issue",
@@ -94,6 +132,23 @@ export function McpTokenWorkspace({
       );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to revoke MCP token.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteToken(tokenId: string): Promise<void> {
+    setSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await postJson(mcpBffPath, {
+        intent: "delete",
+        adminActionToken,
+        tokenId,
+      });
+      setTokens((current) => current.filter((token) => token.tokenId !== tokenId));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to delete MCP token.");
     } finally {
       setSubmitting(false);
     }
@@ -193,10 +248,27 @@ export function McpTokenWorkspace({
               </Button>
               {createdToken && (
                 <div className="rounded-[1.2rem] border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <p className="text-sm font-medium text-emerald-200">Copy this token now</p>
-                  <p className="mt-2 text-xs leading-6 text-emerald-100/90">
-                    It will not be shown again after this browser state is lost.
-                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-emerald-200">Copy this token now</p>
+                      <p className="mt-2 text-xs leading-6 text-emerald-100/90">
+                        It will not be shown again after this browser state is lost.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleCopyCreatedToken()}
+                      className="border border-emerald-500/30 bg-background text-foreground hover:bg-muted"
+                    >
+                      {copyStatus === "copied" ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                  {copyStatus === "failed" && (
+                    <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                      Clipboard copy was blocked by the browser.
+                    </p>
+                  )}
                   <pre className="mt-3 overflow-x-auto rounded-xl bg-background/90 p-3 text-xs text-foreground">
                     {createdToken}
                   </pre>
@@ -274,6 +346,38 @@ export function McpTokenWorkspace({
                       >
                         Revoke
                       </Button>
+                    )}
+                    {token.status === "revoked" && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={submitting}
+                            className="border border-rose-500/30 bg-background text-rose-200 hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete revoked MCP token?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This removes the revoked token record from this list. Existing audit
+                              and request-log history remains available without restoring access.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-rose-600 text-white hover:bg-rose-700"
+                              onClick={() => void handleDeleteToken(token.tokenId)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     )}
                   </div>
                 </div>

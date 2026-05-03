@@ -296,6 +296,69 @@ export async function revokeMcpAccessToken(
   return mapTokenRow(row);
 }
 
+export async function deleteRevokedMcpAccessToken(
+  pool: Pool,
+  input: {
+    tokenId: string;
+    deletedByUserId: string;
+  }
+): Promise<McpAccessTokenRecord> {
+  const result = await pool.query<McpAccessTokenRow>(
+    `
+      delete from mcp_access_tokens
+      where token_id = $1
+        and status = 'revoked'
+      returning
+        token_id,
+        label,
+        token_prefix,
+        scopes,
+        status,
+        issued_by_user_id,
+        revoked_by_user_id,
+        revoked_at,
+        expires_at,
+        last_used_at,
+        last_used_ip,
+        last_used_user_agent,
+        created_at,
+        updated_at
+    `,
+    [input.tokenId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    const statusResult = await pool.query<{ status: McpAccessTokenStatus }>(
+      `
+        select status
+        from mcp_access_tokens
+        where token_id = $1
+        limit 1
+      `,
+      [input.tokenId]
+    );
+    const status = statusResult.rows[0]?.status;
+    if (status === "active") {
+      throw new Error("Only revoked MCP tokens can be deleted.");
+    }
+    throw new Error(`MCP token ${input.tokenId} was not found.`);
+  }
+
+  await writeAuditLog(pool, {
+    actorUserId: input.deletedByUserId,
+    actionType: "mcp_token_deleted",
+    entityType: "mcp_access_token",
+    entityId: input.tokenId,
+    payloadJson: {
+      label: row.label,
+      tokenPrefix: row.token_prefix,
+      status: row.status,
+    },
+  });
+
+  return mapTokenRow(row);
+}
+
 export async function resolveMcpAccessTokenBySecret(
   pool: Pool,
   token: string

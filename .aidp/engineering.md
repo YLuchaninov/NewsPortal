@@ -104,6 +104,7 @@ Security является частью архитектуры, а не позд�
 - User/provider content that can render in web/admin surfaces must preserve validation/sanitization ownership and must not bypass existing BFF/API boundaries.
 - External callbacks, provider payloads and imported JSON should be parsed at the edge, normalized into narrow shapes and treated as untrusted until validated.
 - Security-sensitive behavior changes require proof that covers both the intended success path and a denied/invalid path.
+- Admin/product UI must not use native browser dialogs (`window.confirm`, `window.alert`, `window.prompt`) for user-facing confirmation, notice, or input flows. Use app-owned UI such as shared `AlertDialog`, `Dialog`, forms, toasts or inline states so destructive actions keep consistent copy, styling, accessibility and proofable behavior.
 
 ## Dependency, supply-chain and release integrity
 

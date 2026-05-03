@@ -12,24 +12,24 @@
 
 - Workflow mode: normal
 - Разрешенные workflow modes: setup | normal | repair
-- Work route: capability
+- Work route: micro-patch
 - Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
 - Route phase: completed
-- Route-specific next step: report the implemented `pnpm test:product:total-live:compose` audit layer and latest required-live proof results.
-- Route-specific proof: completed targeted TS unit coverage, syntax checks, `pnpm unit_tests:ts -- product-total-live`, targeted browser/worker reruns, and required-live `pnpm test:product:total-live:compose -- --skip-diagnostics --skip-stack-build`.
-- Planning required by route: yes
-- Planning source: tool-native
-- Plan/spec status: accepted-for-this-item
+- Route-specific next step: hand off the admin sign-in form-only micro-patch.
+- Route-specific proof: completed targeted `rg`, `pnpm lint:ts`, `pnpm typecheck`, and `git diff --check --`.
+- Planning required by route: no
+- Planning source: none
+- Plan/spec status: absent
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: user accepted and requested implementation of the Total Live Product Audit Layer plan.
-- Active item id: NEWSPORTAL-PRODUCT-TOTAL-LIVE-AUDIT-CAPABILITY-1
+- Почему сейчас: user requested removing the admin login information block headed `Admin operations` and leaving only the login form.
+- Active item id: NEWSPORTAL-ADMIN-SIGN-IN-FORM-ONLY-MICRO-PATCH-1
 - Active item status: done
 - Item status: done
-- Risk: medium
+- Risk: low
 - Approval required: no
-- Approval reason: bounded local/live proof harness and docs/root script work; no production deploy, secrets, schema migration, destructive cleanup or off-repo state is in scope.
+- Approval reason: bounded admin sign-in layout/content removal; no auth/session behavior, schema, deploy, secret or production state changes are in scope.
 
 ## Проверки закрытия route
 
@@ -38,8 +38,8 @@
 - Setup route: закрыт 2026-04-24
 - Repair route: закрыт 2026-04-25 after live-state/docs cleanup repair
 - Current lifecycle mode: `normal`
-- Current work route: capability
-- Last completed work route: `capability` for `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-32`.
+- Current work route: micro-patch
+- Last completed work route: `sweep` for `NEWSPORTAL-NON-NATIVE-ADMIN-CONFIRMATION-SWEEP-1`.
 - Normal mode note: `normal` не является work route; next work must select an explicit route.
 
 ## Item state machine
@@ -62,9 +62,9 @@
 
 ### Primary active item
 
-- ID: NEWSPORTAL-PRODUCT-TOTAL-LIVE-AUDIT-CAPABILITY-1
-- Parent capability: Product full-flow proof hardening.
-- Почему это primary active work: implement the requested total-live audit layer above the strict A/B/C mega-flow proof.
+- ID: NEWSPORTAL-ADMIN-SIGN-IN-FORM-ONLY-MICRO-PATCH-1
+- Parent capability: Admin authentication UI.
+- Почему это primary active work: remove the non-form informational panel from the admin sign-in screen as requested.
 
 ### Secondary active item
 
@@ -75,19 +75,25 @@
 
 ### Согласованность worktree
 
-- Existing dirty worktree contains the accepted and implemented architecture/feed/content-safety/post-sweep/universal hardening work; do not revert unrelated changes.
+- Existing dirty worktree contains prior AIDP/admin/control-plane changes; do not revert unrelated changes.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - No commit/stage/branch changes were requested or performed for the latest sweep/stages.
 
 ### Active stage scope
 
-- In scope: new total-live audit harness/helpers under `infra/scripts/**`, root `package.json` script, targeted TS unit tests, product/discovery operator docs, and AIDP sync for changed proof command.
-- Out of scope: schema migrations, production/deploy changes, external paid provider rollout, broad discovery policy retuning, making API/Email IMAP look externally live without real targets, and destructive cleanup.
-- Allowed paths: `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `.aidp/contracts/test-access-and-fixtures.md`, `package.json`, `infra/scripts/**`, `tests/unit/ts/**`, `docs/product/operator/**`.
-- Accepted plan summary: add `pnpm test:product:total-live:compose` as the broadest local/live audit layer above `pnpm test:product:mega-flow:compose`; require strict A/B/C mega-flow and core runtime gates, classify live-internet diagnostic weak lanes, and record API/Email IMAP external live as `not_applicable_with_reason` while requiring deterministic provider fixture evidence; emit `/tmp/newsportal-product-total-live-<runId>.json|md`.
-- Blueprint context checked: `Runtime-поверхности`, `Source/content pipeline`, `Selection/personalization/discovery`, `Operator/admin control plane`, `Test/runtime boundary`, `.aidp/contracts/test-access-and-fixtures.md`.
-- Required proof: targeted TS unit tests for total-live verdict/residual logic, syntax checks for new scripts, `pnpm unit_tests:ts -- product-total-live`; runtime proof with `pnpm test:product:total-live:compose` when feasible, otherwise document blocker/residual and run targeted child gates.
-- Proof passed: yes; implemented total-live audit layer and passed the required-live contour with diagnostics skipped.
+- In scope: `.aidp/work.md` and `apps/admin/src/pages/sign-in.astro`.
+- Out of scope: auth/session logic, BFF endpoints, redirects, credentials handling, shared layout components, production/deploy changes.
+- Allowed paths: `.aidp/work.md`, `apps/admin/src/pages/sign-in.astro`.
+- Accepted plan summary: remove the left informational `Admin operations` panel and simplify the sign-in page layout so the existing login form is the only visible page content.
+- Blueprint context checked: not applicable; local presentation-only admin sign-in page change with no durable boundary change.
+- Required proof: `rg` confirms the removed information-block copy is absent from the sign-in page; static/type proof for the touched Astro page.
+- Proof passed: yes; admin sign-in page now renders only the login form card, with the former `Admin operations` informational panel removed.
+- Admin sign-in form-only proof completed: `rg -n "Admin operations|Manage sources, templates, and moderation without losing your place|Dedicated CRUD flows|Safer operations|Context preserved" apps/admin/src/pages/sign-in.astro` returned no matches; `pnpm lint:ts` passed; `pnpm typecheck` passed with existing Astro hints and 0 errors; `git diff --check -- apps/admin/src/pages/sign-in.astro .aidp/work.md` passed.
+- Web card-grid page-size proof completed: `rg -n "DEFAULT_PAGE_SIZE|WEB_CARD_GRID_PAGE_SIZE|pageSize:" apps/web/src/pages/index.astro apps/web/src/pages/matches.astro apps/web/src/pages/following.astro apps/web/src/lib/view-helpers.ts` confirmed the three 3-column card-grid pages use `WEB_CARD_GRID_PAGE_SIZE`; `pnpm lint:ts` passed; `pnpm typecheck` passed with existing Astro hints and 0 errors.
+- Non-native admin confirmation proof completed: `rg -n "window\\.confirm|window\\.alert|window\\.prompt|\\bconfirm\\(|\\balert\\(|\\bprompt\\(" apps packages services infra` returned no real app/runtime matches; broader scan only finds intentional test XSS payload strings plus the newly documented AIDP rule. `pnpm lint:ts`, `pnpm typecheck`, and `git diff --check --` passed.
+- MCP token admin UX proof completed: `pnpm unit_tests:ts -- mcp-control-plane` passed 323/323 TS tests including revoked-only delete guard and audit row coverage; `pnpm lint:ts` passed; `pnpm typecheck` passed with existing Astro hints and 0 errors.
+- Runtime availability proof completed: `pnpm dev:mvp:internal:no-build` completed against the existing local compose stack; `curl -sS http://127.0.0.1:4322/api/health` returned admin `status:"ok"`; `curl -sS -I http://127.0.0.1:4322/automation/mcp` returned `302` to `/sign-in?next=%2Fautomation%2Fmcp` as expected without an admin session.
+- Cleanup status: compose stack is intentionally left running so the admin change can be tried locally; no destructive cleanup was run.
 - Product total-live proof completed: `pnpm test:product:total-live:compose -- --skip-diagnostics --skip-stack-build` run id `38128383` passed with `runtimeVerdict=pass`, `finalVerdict=pass`; artifact `/tmp/newsportal-product-total-live-38128383.json` and `.md`; strict nested mega-flow artifact `/tmp/newsportal-product-mega-flow-695b3c2b.json` passed with `runtimeVerdict=pass`, `yieldVerdict=pass`, `finalVerdict=pass`.
 - Product total-live coverage evidence: strict A/B/C live selected product proof passed; providers/channel auth/website-admin/automation-admin/MCP/Web viewport/Web UI audit/relay phase 3/4/5/ingest/normalize-dedup/interest compile/criterion compile/cluster-match-notify/embed/reindex-backfill/LLM-budget-stop required commands passed; RSS and Website provider evidence passed; API and Email IMAP deterministic fixtures passed and external live lanes were recorded as `not_applicable_with_reason` because no real external target is available.
 - Product total-live live-selected evidence: Example A selected `Boulevard: Staff Product Designer, Platform` from `We Work Remotely — Programming`; Example B selected `How GitHub uses eBPF to improve deployment safety` from `GitHub Blog`; Example C selected `Why Tokyo is the most important tech destination of 2026` from `TechCrunch — Startups`; all had `finalDecision=selected` and `matchedFilterCount=1`.
