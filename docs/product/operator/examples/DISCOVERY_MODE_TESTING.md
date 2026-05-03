@@ -631,6 +631,14 @@ pnpm test:product:mega-flow:compose
 
 Он проверяет продуктовые Examples A/B/C как live-pass gate и требует, чтобы в каждом Example A/B/C минимум одна live-discovery статья/новость дошла до `final_selection_results` как selected. Deterministic evidence остается для provider-каналов, negative/filter buckets, sequence paths и Web/Admin/MCP read surfaces, но не засчитывается как live-selected-article proof. 9-domain matrix и multi-run yield при этом остаются отдельными residual/yield diagnostic proofs, а не acceptance layer для product mega-flow.
 
+Total live product audit command:
+
+```sh
+pnpm test:product:total-live:compose
+```
+
+Это надстройка над strict A/B/C mega-flow. Она добавляет website/admin, automation, relay, worker smoke, browser UI, MCP and live diagnostic lanes. API and Email IMAP external live targets сейчас отсутствуют, поэтому total-live требует deterministic provider fixture evidence and records external API/IMAP as `not_applicable_with_reason` / `no_real_external_target_available`.
+
 Current freshest synced profile-backed proof artifacts:
 
 - single-run replay baseline:

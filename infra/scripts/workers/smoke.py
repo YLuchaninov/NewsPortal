@@ -2850,16 +2850,20 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         aggregate_id=reindex_job_id,
         payload={"reindexJobId": reindex_job_id, "indexName": "interest_centroids", "version": 1},
     )
-    reindex_result = await process_reindex(
-        FakeJob(
-            {
-                "eventId": reindex_event_id,
-                "reindexJobId": reindex_job_id,
-                "indexName": "interest_centroids",
-            }
-        ),
-        "",
-    )
+    reindex_criterion_scope = await isolate_phase4_criterion_scope(criterion_id)
+    try:
+        reindex_result = await process_reindex(
+            FakeJob(
+                {
+                    "eventId": reindex_event_id,
+                    "reindexJobId": reindex_job_id,
+                    "indexName": "interest_centroids",
+                }
+            ),
+            "",
+        )
+    finally:
+        await restore_phase4_criterion_scope(reindex_criterion_scope)
     backfill_result = dict(reindex_result.get("backfill") or {})
     if int(backfill_result.get("interestLlmReviews") or 0) != 0:
         raise RuntimeError(

@@ -56,6 +56,22 @@ pnpm test:product:mega-flow:compose
 
 Важно: это не замена 9-domain discovery matrix. `pnpm test:discovery:mega:compose` остается отдельным residual/yield diagnostic proof, где `yield_weak` может быть допустимой классификацией live internet residuals.
 
+## Total Live Product Audit
+
+```sh
+pnpm test:product:total-live:compose
+```
+
+Это самый широкий local/live audit layer. Он запускает strict A/B/C mega-flow как hard gate, затем расширяет proof на website/admin, automation admin, relay phases, worker smokes, browser UI audit, MCP and live diagnostic lanes.
+
+Команда пишет `/tmp/newsportal-product-total-live-<runId>.json|md`. Возможные итоговые состояния:
+
+- `pass`: strict A/B/C mega-flow, required core/runtime/provider/surface lanes and deterministic provider fixtures passed;
+- `weak`: required lanes passed, but live-internet diagnostic lanes have classified residuals;
+- `fail`: preflight, compose, strict A/B/C selection, provider fixtures, required runtime/surface lanes or unclassified diagnostics failed.
+
+API and Email IMAP сейчас честно fixture-backed: `test:providers:compose` обязателен, а external live API/IMAP помечаются как `not_applicable_with_reason` / `no_real_external_target_available`, пока нет реальных внешних test targets.
+
 ## Cleanup
 
 ```sh

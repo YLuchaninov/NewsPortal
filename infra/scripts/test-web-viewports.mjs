@@ -462,7 +462,12 @@ async function main() {
               );
           `
         ),
-      (count) => count >= 1
+      (count) => count >= 1,
+      {
+        timeoutMs: 180000,
+        intervalMs: 2000,
+        describeLastValue: (count) => `processed criteria event count=${String(count)}`,
+      }
     );
 
     firstResultLine(queryPostgres(

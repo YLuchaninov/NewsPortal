@@ -183,6 +183,7 @@ commands:
   product_local_full: pnpm test:product:local:full
   product_local_cleanup: pnpm test:product:local:cleanup
   product_mega_flow_compose: pnpm test:product:mega-flow:compose
+  product_total_live_compose: pnpm test:product:total-live:compose
   release_verify: pnpm release:verify
   smoke: pnpm test:mvp:internal
   relay_tests: pnpm test:relay

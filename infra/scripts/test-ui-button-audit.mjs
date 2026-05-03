@@ -113,6 +113,47 @@ async function clickAndWaitForToggle(locator, labels) {
   return { initial, expected };
 }
 
+function isRetryablePostgresConcurrencyError(error) {
+  const message = [
+    error instanceof Error ? error.message : String(error),
+    typeof error?.stderr === "string" ? error.stderr : "",
+    typeof error?.stdout === "string" ? error.stdout : "",
+  ].join("\n");
+  return /deadlock detected|could not serialize access|canceling statement due to conflict/iu.test(message);
+}
+
+async function queryPostgresWithConcurrencyRetry(env, sql, label, { maxAttempts = 4 } = {}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return queryPostgres(env, sql);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryablePostgresConcurrencyError(error) || attempt >= maxAttempts) {
+        throw error;
+      }
+      log(`${label} hit a retryable Postgres concurrency error; retrying ${attempt + 1}/${maxAttempts}.`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  }
+  throw lastError ?? new Error(`${label} failed without a captured error.`);
+}
+
+async function markArticleAsRecentFailure(env, docId, runId) {
+  await queryPostgresWithConcurrencyRetry(
+    env,
+    `
+      update articles
+      set
+        enrichment_state = 'failed',
+        visibility_state = 'visible',
+        updated_at = now()
+      where doc_id = ${sqlLiteral(docId)}::uuid;
+    `,
+    `mark article ${docId} as recent failure for ${runId}`
+  );
+}
+
 async function readJsonResponse(response) {
   return await response.json().catch(async () => ({
     body: await response.text().catch(() => ""),
@@ -289,6 +330,29 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
   const primaryArticle = articleRows[0];
   const primaryNotificationDocId = primaryArticle.docId;
   const primaryContentItemId = `editorial:${primaryNotificationDocId}`;
+  await waitFor(
+    "primary article worker pipeline before deterministic selection seed",
+    async () =>
+      queryPostgresInt(
+        env,
+        `
+          select count(*)::int
+          from articles a
+          left join final_selection_results final on final.doc_id = a.doc_id
+          where a.doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
+            and (
+              final.doc_id is not null
+              or a.processing_state in ('matched', 'embedded')
+            );
+        `
+      ),
+    (count) => count >= 1,
+    {
+      timeoutMs: 180000,
+      intervalMs: 2000,
+      describeLastValue: (count) => `stable primary article count=${String(count)}`,
+    }
+  );
   firstResultLine(queryPostgres(
     env,
     `
@@ -433,7 +497,7 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
     Boolean
   );
   log(`Web seed: using content item ${primaryContentItemId}.`);
-  firstResultLine(queryPostgres(
+  firstResultLine(await queryPostgresWithConcurrencyRetry(
     env,
     `
       insert into interest_match_results (
@@ -484,7 +548,8 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
         explain_json = excluded.explain_json,
         created_at = now()
       returning interest_match_id::text;
-    `
+    `,
+    "seeded interest match upsert"
   ));
   await waitFor(
     "seeded user match row",
@@ -903,12 +968,12 @@ async function seedAdminFixtures(env, adminCookie, runId) {
   };
 }
 
-function reassertWebMatchSeed(env, runId, scenario) {
+async function reassertWebMatchSeed(env, runId, scenario) {
   const docId = String(scenario.contentItemId ?? "").replace(/^editorial:/, "");
   if (!docId || !scenario.targetUserId || !scenario.userInterestId) {
     throw new Error("Web match seed cannot be reasserted without content, user, and interest identifiers.");
   }
-  firstResultLine(queryPostgres(
+  firstResultLine(await queryPostgresWithConcurrencyRetry(
     env,
     `
       update articles
@@ -976,7 +1041,8 @@ function reassertWebMatchSeed(env, runId, scenario) {
         decision = excluded.decision,
         explain_json = excluded.explain_json,
         created_at = now();
-    `
+    `,
+    "web match reassert"
   ));
 }
 
@@ -984,7 +1050,7 @@ async function auditWebButtons(page, env, runId, scenario, result) {
   log("Auditing web buttons.");
 
   log("Web: collection save/unsave.");
-  reassertWebMatchSeed(env, runId, scenario);
+  await reassertWebMatchSeed(env, runId, scenario);
   await openPage(page, `/?q=${encodeURIComponent(scenario.articleTitles[0] ?? "")}`);
   await waitFor(
     "collection save toggle",
@@ -1384,8 +1450,16 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   result.checked.push("admin:/user-interests delete");
 
   log("Admin: article moderation and retry buttons.");
+  await markArticleAsRecentFailure(env, fixtures.articleDocId, runId);
   await openPage(page, `/articles?view=recent-failures&selected=${encodeURIComponent(fixtures.articleDocId)}`);
   const blockButton = page.getByRole("button", { name: /Block|Unblock/ }).first();
+  await blockButton.waitFor({ state: "visible", timeout: 60000 }).catch(async (error) => {
+    const currentUrl = page.url();
+    const bodyText = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+    throw new Error(
+      `Timed out waiting for admin block/unblock button on ${currentUrl}. Visible page text: ${bodyText.slice(0, 1200)}. ${error instanceof Error ? error.message : String(error)}`
+    );
+  });
   const initialBlockLabel = String((await blockButton.textContent()) ?? "").trim();
   if (/Block/.test(initialBlockLabel)) {
     await clickConfirmAction(page, blockButton, "Block article");

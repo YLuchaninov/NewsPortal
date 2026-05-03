@@ -46,6 +46,7 @@
 - Local product full contour with discovery/live-provider evidence: `pnpm test:product:local:full`
 - Local product cleanup checklist artifact: `pnpm test:product:local:cleanup`
 - Product mega-flow live-pass proof for Examples A/B/C with strict live-selected-article acceptance and deterministic provider/filter/sequence/Web/Admin/MCP buckets: `pnpm test:product:mega-flow:compose`
+- Product total-live audit layer above mega-flow, with required core/runtime/surface lanes, classified live diagnostic residuals, and fixture-backed API/Email IMAP external-live residual truth: `pnpm test:product:total-live:compose`
 - Internal MVP smoke path: `pnpm test:mvp:internal`
 - Scaffold sanity: `pnpm check:scaffold`
 - Relay local proof: `pnpm test:relay`
