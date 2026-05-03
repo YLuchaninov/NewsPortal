@@ -55,6 +55,22 @@ class SelectionProfileRuntimeTests(unittest.TestCase):
         self.assertTrue(selection_profile_allows_llm_review(runtime))
         self.assertEqual(resolve_profile_gray_zone_decision(runtime), "irrelevant")
 
+    def test_broad_hold_profile_accepts_gray_zone_as_relevant(self) -> None:
+        runtime = coerce_selection_profile_runtime(
+            {
+                "selection_profile_id": "profile-broad",
+                "selection_profile_family": "compatibility_interest_template",
+                "selection_profile_policy_json": {
+                    "llmReviewMode": "disabled",
+                    "unresolvedDecision": "hold",
+                    "strictness": "broad",
+                },
+            }
+        )
+
+        self.assertFalse(selection_profile_allows_llm_review(runtime))
+        self.assertEqual(resolve_profile_gray_zone_decision(runtime), "relevant")
+
     def test_non_compatibility_profiles_keep_cheap_hold_default(self) -> None:
         runtime = coerce_selection_profile_runtime(
             {

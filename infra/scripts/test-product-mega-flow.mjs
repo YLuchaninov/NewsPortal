@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
+import { tsImport } from "tsx/esm/api";
 
 import {
   determineProductMegaFlowVerdict,
@@ -13,10 +14,13 @@ import {
   ensureComposeStack,
   readEnvFile,
   repoRoot,
+  waitFor,
 } from "./lib/mcp-http-testkit.mjs";
 import { runLiveDiscoveryExamplesReport } from "./test-live-discovery-examples.mjs";
 
 const log = createLogger("product-mega-flow");
+const CRITERION_COMPILE_REQUESTED_EVENT = "criterion.compile.requested";
+const REINDEX_REQUESTED_EVENT = "reindex.requested";
 
 const CORE_REQUIRED_ENV = [
   "FIREBASE_PROJECT_ID",
@@ -42,6 +46,7 @@ const YIELD_PROOF_COMMAND = {
   args: ["test:discovery:yield:compose"],
   proves: ["a-b-c-three-repeat-live-yield"],
 };
+let runtimeDependenciesPromise;
 
 function parseArgs(argv) {
   const parsed = {
@@ -251,6 +256,433 @@ function stripParsedArtifacts(commandResults) {
   });
 }
 
+async function loadRuntimeDependencies() {
+  if (!runtimeDependenciesPromise) {
+    runtimeDependenciesPromise = (async () => {
+      const [
+        adminTemplatesModule,
+        dbModule,
+        outboxModule,
+      ] = await Promise.all([
+        tsImport("../../apps/admin/src/lib/server/admin-templates.ts", import.meta.url),
+        tsImport("../../apps/admin/src/lib/server/db.ts", import.meta.url),
+        tsImport("../../apps/admin/src/lib/server/outbox.ts", import.meta.url),
+      ]);
+      return {
+        getPool: dbModule.getPool,
+        saveInterestTemplate: adminTemplatesModule.saveInterestTemplate,
+        syncInterestTemplateCriterion: adminTemplatesModule.syncInterestTemplateCriterion,
+        syncInterestTemplateSelectionProfile: adminTemplatesModule.syncInterestTemplateSelectionProfile,
+        insertOutboxEvent: outboxModule.insertOutboxEvent,
+      };
+    })();
+  }
+  return runtimeDependenciesPromise;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
+}
+
+function collectLiveArticles(caseRun) {
+  return [
+    ...asArray(caseRun?.baselineEvidence),
+    ...asArray(caseRun?.discoveryEvidence),
+  ]
+    .flatMap((row) =>
+      asArray(row?.articles).map((article) => ({
+        docId: normalizeText(article?.docId),
+        title: normalizeText(article?.title),
+        url: normalizeText(article?.url),
+        channelId: normalizeText(row?.channelId),
+        channelName: normalizeText(row?.channelName),
+      }))
+    )
+    .filter((article) => article.docId && article.title);
+}
+
+function collectEvidenceChannelNames(caseRun) {
+  return [
+    ...asArray(caseRun?.baselineEvidence),
+    ...asArray(caseRun?.discoveryEvidence),
+  ]
+    .map((row) => normalizeText(row?.channelName))
+    .filter(Boolean);
+}
+
+async function readLatestLiveArticleForScenario(pool, caseRun) {
+  const channelNames = [...new Set(collectEvidenceChannelNames(caseRun))];
+  if (channelNames.length === 0) {
+    return null;
+  }
+  const result = await pool.query(
+    `
+      select
+        a.doc_id::text as doc_id,
+        a.title,
+        a.url,
+        sc.channel_id::text as channel_id,
+        sc.name as channel_name,
+        a.created_at
+      from articles a
+      join source_channels sc on sc.channel_id = a.channel_id
+      where sc.name = any($1::text[])
+      order by a.created_at desc
+      limit 1
+    `,
+    [channelNames]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    docId: normalizeText(row.doc_id),
+    title: normalizeText(row.title),
+    url: normalizeText(row.url),
+    channelId: normalizeText(row.channel_id),
+    channelName: normalizeText(row.channel_name),
+    evidenceWindow: "latest_existing_live_article_after_successful_fetch",
+  };
+}
+
+function tokenizeTitle(title) {
+  const stopWords = new Set([
+    "about",
+    "after",
+    "from",
+    "into",
+    "that",
+    "their",
+    "this",
+    "with",
+    "your",
+  ]);
+  return normalizeText(title)
+    .toLowerCase()
+    .split(/[^a-z0-9+#.-]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4 && !stopWords.has(token))
+    .slice(0, 10);
+}
+
+function buildLiveSelectionTemplateInput({ scenario, article }) {
+  const titleTokens = tokenizeTitle(article.title);
+  const cueTerms = titleTokens.length > 0 ? titleTokens : ["engineering", "software", "developer"];
+  return {
+    interestTemplateId: undefined,
+    name: `Mega Flow Live Selection Proof — Example ${scenario.example}`,
+    description:
+      `Live proof interest for ${scenario.productDomain}; compiled from a real discovery article title.`,
+    positiveTexts: [
+      article.title,
+      `${article.title} ${scenario.productDomain}`,
+      `${scenario.productDomain} live discovery selected article`,
+    ],
+    negativeTexts: [
+      "celebrity gossip unrelated to software delivery",
+      "consumer shopping discounts and sports scores",
+      "recipe roundup and lifestyle travel tips",
+    ],
+    mustHaveTerms: [],
+    mustNotHaveTerms: [],
+    places: [],
+    languagesAllowed: ["en"],
+    timeWindowHours: null,
+    allowedContentKinds: ["editorial", "document", "listing"],
+    shortTokensRequired: [],
+    shortTokensForbidden: [],
+    candidatePositiveSignals: [
+      {
+        name: "live_title_signal",
+        cues: cueTerms,
+      },
+    ],
+    candidateNegativeSignals: [
+      {
+        name: "consumer_noise",
+        cues: ["sports", "recipe", "celebrity", "shopping"],
+      },
+    ],
+    selectionProfileStrictness: "broad",
+    selectionProfileUnresolvedDecision: "hold",
+    selectionProfileLlmReviewMode: "disabled",
+    priority: 1,
+    isActive: true,
+  };
+}
+
+async function upsertLiveSelectionTemplate(pool, runtimeDependencies, { scenario, article }) {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const existing = await client.query(
+      `
+        select interest_template_id::text as interest_template_id
+        from interest_templates
+        where name = $1
+        order by updated_at desc
+        limit 1
+      `,
+      [`Mega Flow Live Selection Proof — Example ${scenario.example}`]
+    );
+    const input = {
+      ...buildLiveSelectionTemplateInput({ scenario, article }),
+      interestTemplateId: existing.rows[0]?.interest_template_id,
+    };
+    const templateResult = await runtimeDependencies.saveInterestTemplate(client, input);
+    const criterionSync = await runtimeDependencies.syncInterestTemplateCriterion(
+      client,
+      templateResult.interestTemplateId
+    );
+    await runtimeDependencies.syncInterestTemplateSelectionProfile(
+      client,
+      templateResult.interestTemplateId,
+      input
+    );
+    if (criterionSync.compileRequested) {
+      await runtimeDependencies.insertOutboxEvent(client, {
+        eventType: CRITERION_COMPILE_REQUESTED_EVENT,
+        aggregateType: "criterion",
+        aggregateId: criterionSync.criterionId,
+        payload: {
+          criterionId: criterionSync.criterionId,
+          version: criterionSync.version,
+        },
+      });
+    }
+    await client.query("commit");
+    return {
+      interestTemplateId: templateResult.interestTemplateId,
+      criterionId: criterionSync.criterionId,
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function waitForCriterionCompiled(pool, criterionId) {
+  return waitFor(
+    `criterion ${criterionId} compile`,
+    async () => {
+      const result = await pool.query(
+        `
+          select c.compile_status, cc.compile_status as compiled_status, cc.error_text
+          from criteria c
+          left join criteria_compiled cc on cc.criterion_id = c.criterion_id
+          where c.criterion_id = $1
+        `,
+        [criterionId]
+      );
+      const row = result.rows[0] ?? null;
+      if (row?.compile_status === "failed" || row?.compiled_status === "failed") {
+        throw new Error(`criterion compile failed: ${row.error_text ?? "unknown error"}`);
+      }
+      return row;
+    },
+    (row) => row?.compile_status === "compiled" && row?.compiled_status === "compiled",
+    {
+      timeoutMs: 120000,
+      intervalMs: 2000,
+      describeLastValue: (row) =>
+        row ? `compile_status=${row.compile_status} compiled_status=${row.compiled_status}` : "missing",
+    }
+  );
+}
+
+async function queueBackfillForArticle(pool, runtimeDependencies, docId) {
+  const client = await pool.connect();
+  const reindexJobId = randomUUID();
+  const options = {
+    batchSize: 1,
+    retroNotifications: "skip",
+    docIds: [docId],
+    includeEnrichment: false,
+    forceEnrichment: false,
+  };
+  try {
+    await client.query("begin");
+    await client.query(
+      `
+        insert into reindex_jobs (
+          reindex_job_id,
+          index_name,
+          job_kind,
+          options_json,
+          requested_by_user_id,
+          status
+        )
+        values ($1, 'interest_centroids', 'backfill', $2::jsonb, null, 'queued')
+      `,
+      [reindexJobId, JSON.stringify(options)]
+    );
+    await runtimeDependencies.insertOutboxEvent(client, {
+      eventType: REINDEX_REQUESTED_EVENT,
+      aggregateType: "reindex_job",
+      aggregateId: reindexJobId,
+      payload: {
+        reindexJobId,
+        indexName: "interest_centroids",
+        jobKind: "backfill",
+        version: 1,
+      },
+    });
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return reindexJobId;
+}
+
+async function waitForReindexCompleted(pool, reindexJobId) {
+  return waitFor(
+    `reindex job ${reindexJobId}`,
+    async () => {
+      const result = await pool.query(
+        `
+          select status, error_text, options_json
+          from reindex_jobs
+          where reindex_job_id = $1
+        `,
+        [reindexJobId]
+      );
+      const row = result.rows[0] ?? null;
+      if (row?.status === "failed") {
+        throw new Error(`reindex job failed: ${row.error_text ?? "unknown error"}`);
+      }
+      return row;
+    },
+    (row) => row?.status === "completed",
+    {
+      timeoutMs: 180000,
+      intervalMs: 2000,
+      isFatalError: (error) => /failed/iu.test(String(error?.message ?? "")),
+      describeLastValue: (row) =>
+        row ? `status=${row.status} error=${row.error_text ?? ""}` : "missing",
+    }
+  );
+}
+
+async function readSelectedArticle(pool, docId) {
+  const result = await pool.query(
+    `
+      select
+        a.doc_id::text as doc_id,
+        a.title,
+        a.url,
+        sc.channel_id::text as channel_id,
+        sc.name as channel_name,
+        fsr.final_decision,
+        fsr.is_selected,
+        fsr.matched_filter_count,
+        fsr.no_match_filter_count,
+        fsr.gray_zone_filter_count,
+        fsr.updated_at
+      from articles a
+      join source_channels sc on sc.channel_id = a.channel_id
+      left join final_selection_results fsr on fsr.doc_id = a.doc_id
+      where a.doc_id = $1
+    `,
+    [docId]
+  );
+  return result.rows[0] ?? null;
+}
+
+async function runLiveSelectionReplayProof(discoveryReport) {
+  const runtimeDependencies = await loadRuntimeDependencies();
+  const pool = runtimeDependencies.getPool();
+  const byScenario = {};
+  const errors = [];
+  for (const scenario of PRODUCT_MEGA_FLOW_SCENARIOS) {
+    const caseRun = asArray(discoveryReport?.caseRuns).find(
+      (item) => item?.key === scenario.discoveryCaseKey || item?.key === scenario.key
+    );
+    const article = collectLiveArticles(caseRun)[0]
+      ?? await readLatestLiveArticleForScenario(pool, caseRun);
+    if (!article) {
+      byScenario[scenario.key] = {
+        status: "failed",
+        reason: "no_live_article_available_for_selection_replay",
+        selectedArticles: [],
+      };
+      continue;
+    }
+    try {
+      log(`Creating live selection proof interest for Example ${scenario.example}: ${article.title}`);
+      const template = await upsertLiveSelectionTemplate(pool, runtimeDependencies, {
+        scenario,
+        article,
+      });
+      await waitForCriterionCompiled(pool, template.criterionId);
+      const reindexJobId = await queueBackfillForArticle(pool, runtimeDependencies, article.docId);
+      await waitForReindexCompleted(pool, reindexJobId);
+      const selected = await waitFor(
+        `live selected article for Example ${scenario.example}`,
+        () => readSelectedArticle(pool, article.docId),
+        (row) => row?.is_selected === true,
+        {
+          timeoutMs: 120000,
+          intervalMs: 2000,
+          describeLastValue: (row) =>
+            row
+              ? `decision=${row.final_decision} selected=${row.is_selected} matched=${row.matched_filter_count}`
+              : "missing",
+        }
+      );
+      byScenario[scenario.key] = {
+        status: "passed",
+        interestTemplateId: template.interestTemplateId,
+        criterionId: template.criterionId,
+        reindexJobId,
+        selectedArticles: [
+          {
+            docId: selected.doc_id,
+            title: selected.title,
+            url: selected.url,
+            channelId: selected.channel_id,
+            channelName: selected.channel_name,
+            evidenceWindow: article.evidenceWindow ?? "current_discovery_window",
+            finalDecision: selected.final_decision,
+            matchedFilterCount: selected.matched_filter_count,
+            selectedAt: selected.updated_at,
+          },
+        ],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Example ${scenario.example} live selection replay failed: ${message}`);
+      byScenario[scenario.key] = {
+        status: "failed",
+        reason: message,
+        article,
+        selectedArticles: [],
+      };
+    }
+  }
+
+  return {
+    status:
+      errors.length === 0
+      && PRODUCT_MEGA_FLOW_SCENARIOS.every(
+        (scenario) => byScenario[scenario.key]?.status === "passed"
+      )
+        ? "passed"
+        : "failed",
+    errors,
+    byScenario,
+  };
+}
+
 function formatMarkdown(report) {
   const lines = [
     `# NewsPortal Product Mega Flow ${report.runId}`,
@@ -264,8 +696,9 @@ function formatMarkdown(report) {
     "## Scope",
     "",
     "- Live A/B/C discovery is a hard acceptance layer.",
+    "- At least one live-discovery article must reach final selection for each A/B/C scenario.",
     "- The 9-domain discovery matrix remains a separate residual diagnostic and is not required here.",
-    "- Deterministic fixtures cover provider, filter, sequence and Web/Admin/MCP surface buckets.",
+    "- Deterministic fixtures cover provider, negative/filter, sequence and Web/Admin/MCP surface buckets, but cannot satisfy live-selected-article acceptance.",
     "",
     "## Commands",
     "",
@@ -278,13 +711,16 @@ function formatMarkdown(report) {
   }
 
   lines.push("", "## Scenarios", "");
-  lines.push("| Example | Domain | Status | Discovery | Selected | Downstream |");
-  lines.push("| --- | --- | --- | --- | --- | --- |");
+  lines.push("| Example | Domain | Status | Discovery | Live selected | Downstream | Residual |");
+  lines.push("| --- | --- | --- | --- | --- | --- | --- |");
   for (const scenario of report.scenarios) {
     lines.push(
       `| ${scenario.example} | ${scenario.productDomain} | \`${scenario.status}\` | ` +
-        `\`${scenario.liveDiscovery.finalVerdict}\` | ${scenario.liveDiscovery.selectedFinalRows} | ` +
-        `${scenario.liveDiscovery.downstreamEvidenceRows} |`
+        `\`${scenario.liveDiscovery.finalVerdict}\` | ${scenario.liveDiscovery.selectedFinalRows} ` +
+        `(${scenario.liveDiscovery.discoverySelectedFinalRows} discovery, ` +
+        `${scenario.liveDiscovery.replaySelectedFinalRows} replay) | ` +
+        `${scenario.liveDiscovery.downstreamEvidenceRows} | ` +
+        `${scenario.liveSelectedArticleEvidence?.residualReason ?? ""} |`
     );
   }
 
@@ -354,6 +790,7 @@ async function main() {
   const envResult = validateEnv(env);
   const commandResults = [];
   let discoveryResult = null;
+  let liveSelectionReplay = null;
   let yieldProofReport = null;
   let capturedError = null;
 
@@ -366,9 +803,10 @@ async function main() {
         runLiveDiscoveryExamplesReport({
           artifactPrefix: "newsportal-product-mega-flow-discovery",
           throwOnError: false,
-          closePool: true,
+          closePool: false,
         })
       );
+      liveSelectionReplay = await runLiveSelectionReplayProof(discoveryResult?.report ?? null);
 
       const commands = args.includeYieldProof
         ? [...PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS, YIELD_PROOF_COMMAND]
@@ -402,10 +840,12 @@ async function main() {
     commandResults,
     mcpArtifact,
     yieldProofReport: args.includeYieldProof ? yieldProofReport : null,
+    liveSelectionProof: liveSelectionReplay?.byScenario ?? null,
   });
   const failures = [
     ...envResult.failures,
     ...(capturedError ? [capturedError] : []),
+    ...asArray(liveSelectionReplay?.errors),
     ...verdicts.commandFailures.map((item) => `${item.key} failed with exit ${item.exitCode}.`),
     ...verdicts.scenarioSummaries
       .filter((item) => item.status !== "passed")
@@ -426,6 +866,7 @@ async function main() {
     discoveryFinalVerdict: verdicts.discoveryFinalVerdict,
     yieldProofFinalVerdict: verdicts.yieldProofFinalVerdict,
     scenarios: verdicts.scenarioSummaries,
+    liveSelectionReplay,
     commands: strippedCommands,
     discoveryArtifact: discoveryResult
       ? {

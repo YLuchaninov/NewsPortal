@@ -430,6 +430,15 @@ def summarize_final_selection_result(
         compat_system_feed_decision = "eligible"
         is_selected = True
         selection_reason = "strong_gray_zone_consensus"
+    elif matched > 0 and normalized_verification_state == "conflicting":
+        decision = "gray_zone"
+        compat_system_feed_decision = "filtered_out"
+        is_selected = False
+        selection_reason = "verification_conflict"
+    elif matched > 0:
+        decision = "selected"
+        compat_system_feed_decision = "eligible"
+        is_selected = True
     elif gray_zone > 0:
         decision = "gray_zone"
         compat_system_feed_decision = "pending_llm" if llm_review_pending > 0 else "filtered_out"
@@ -442,20 +451,11 @@ def summarize_final_selection_result(
             )
         else:
             selection_reason = "semantic_gray_zone" if llm_review_pending > 0 else "semantic_hold"
-    elif matched > 0 and normalized_verification_state == "conflicting":
-        decision = "gray_zone"
-        compat_system_feed_decision = "filtered_out"
-        is_selected = False
-        selection_reason = "verification_conflict"
     elif total == 0:
         decision = "selected"
         compat_system_feed_decision = "pass_through"
         is_selected = True
         selection_reason = "pass_through"
-    elif matched > 0:
-        decision = "selected"
-        compat_system_feed_decision = "eligible"
-        is_selected = True
     else:
         decision = "rejected"
         compat_system_feed_decision = "filtered_out"

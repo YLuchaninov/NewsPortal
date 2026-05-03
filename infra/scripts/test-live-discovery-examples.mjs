@@ -1018,12 +1018,20 @@ async function waitForChannelEvidence(pool, channelId, startedAtIso, interestNam
   return waitFor(
     `downstream evidence for channel ${channelId}`,
     async () => readChannelEvidence(pool, channelId, startedAtIso, interestNames),
-    (snapshot) =>
-      snapshot.fetchRuns.length > 0 ||
-      snapshot.articles.length > 0 ||
-      snapshot.interestFilterResults.length > 0 ||
-      snapshot.finalSelection.total > 0 ||
-      snapshot.systemFeed.total > 0,
+    (snapshot) => {
+      const fetchRuns = asArray(snapshot.fetchRuns);
+      const expectedNewArticles = fetchRuns.reduce(
+        (total, run) => total + asInt(run?.newArticleCount, 0),
+        0
+      );
+      if (snapshot.finalSelection.total > 0 || snapshot.systemFeed.total > 0) {
+        return true;
+      }
+      if (expectedNewArticles > 0) {
+        return snapshot.interestFilterResults.length > 0;
+      }
+      return fetchRuns.length > 0 || snapshot.articles.length > 0;
+    },
     {
       timeoutMs: DISCOVERY_LIVE_DEFAULTS.downstreamPollTimeoutMs,
       intervalMs: DISCOVERY_LIVE_DEFAULTS.pollIntervalMs,

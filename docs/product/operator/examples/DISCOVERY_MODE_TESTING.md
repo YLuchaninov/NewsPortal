@@ -629,7 +629,7 @@ Full product mega-flow proof command:
 pnpm test:product:mega-flow:compose
 ```
 
-Он проверяет продуктовые Examples A/B/C как live-pass gate и дополнительно требует deterministic evidence для provider-каналов, filter buckets, sequence paths и Web/Admin/MCP read surfaces. 9-domain matrix и multi-run yield при этом остаются отдельными residual/yield diagnostic proofs, а не acceptance layer для product mega-flow.
+Он проверяет продуктовые Examples A/B/C как live-pass gate и требует, чтобы в каждом Example A/B/C минимум одна live-discovery статья/новость дошла до `final_selection_results` как selected. Deterministic evidence остается для provider-каналов, negative/filter buckets, sequence paths и Web/Admin/MCP read surfaces, но не засчитывается как live-selected-article proof. 9-domain matrix и multi-run yield при этом остаются отдельными residual/yield diagnostic proofs, а не acceptance layer для product mega-flow.
 
 Current freshest synced profile-backed proof artifacts:
 

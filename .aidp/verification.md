@@ -2,7 +2,7 @@
 
 ## Свежесть
 
-- Последняя проверка по реальности репозитория: 2026-05-01
+- Последняя проверка по реальности репозитория: 2026-05-03
 - Проверил: Codex
 - Следующий trigger пересмотра: изменение root scripts, test harnesses, compose baseline, migration process или delivery proof.
 
@@ -45,7 +45,7 @@
 - Local product core contour with deterministic RSS/website/API/IMAP acquisition proof and without Telegram/YouTube ingestion: `pnpm test:product:local:core`
 - Local product full contour with discovery/live-provider evidence: `pnpm test:product:local:full`
 - Local product cleanup checklist artifact: `pnpm test:product:local:cleanup`
-- Product mega-flow live-pass proof for Examples A/B/C with deterministic provider/filter/sequence/Web/Admin/MCP buckets: `pnpm test:product:mega-flow:compose`
+- Product mega-flow live-pass proof for Examples A/B/C with strict live-selected-article acceptance and deterministic provider/filter/sequence/Web/Admin/MCP buckets: `pnpm test:product:mega-flow:compose`
 - Internal MVP smoke path: `pnpm test:mvp:internal`
 - Scaffold sanity: `pnpm check:scaffold`
 - Relay local proof: `pnpm test:relay`

@@ -73,6 +73,11 @@ def selection_profile_allows_llm_review(runtime: Mapping[str, Any]) -> bool:
 
 
 def resolve_profile_gray_zone_decision(runtime: Mapping[str, Any]) -> str:
+    if (
+        str(runtime.get("strictness") or "balanced").strip() == "broad"
+        and str(runtime.get("unresolvedDecision") or "hold").strip() == "hold"
+    ):
+        return "relevant"
     return (
         "irrelevant"
         if str(runtime.get("unresolvedDecision") or "hold").strip() == "reject"

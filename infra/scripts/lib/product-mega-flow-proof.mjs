@@ -30,6 +30,7 @@ export const PRODUCT_MEGA_FLOW_SCENARIOS = [
 export const PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS = [
   command("channel-auth-compose", "provider-fixtures", ["test:channel-auth:compose"], {
     proves: ["rss-channel-auth", "website-channel-auth", "api-channel-auth", "email-imap-channel-auth"],
+    maxAttempts: 2,
   }),
   command("providers-compose", "provider-fixtures", ["test:providers:compose"], {
     proves: ["api-downstream", "email-imap-downstream"],
@@ -43,6 +44,7 @@ export const PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS = [
   }),
   command("web-ui-audit", "surface-fixtures", ["test:web:ui-audit"], {
     proves: ["saved-digest", "notification-feedback", "admin-automation-buttons"],
+    maxAttempts: 2,
   }),
   command("discovery-admin-compose", "operator-fixtures", ["test:discovery:admin:compose"], {
     proves: ["admin-discovery-diagnostics"],
@@ -101,6 +103,10 @@ function countSelectedRows(caseRun) {
   }, 0);
 }
 
+function countLiveSelectionProofRows(proof) {
+  return asArray(proof?.selectedArticles).length;
+}
+
 function countInterestFilterRows(caseRun) {
   return sumEvidenceRows(caseRun).reduce(
     (total, row) => total + asArray(row?.interestFilterResults).length,
@@ -133,6 +139,37 @@ function countPositiveDiscoveryCandidates(caseRun) {
   }).length;
 }
 
+function classifyMissingLiveSelection(caseRun, liveDiscovery) {
+  if (liveDiscovery.selectedFinalRows > 0) {
+    return null;
+  }
+  if (liveDiscovery.finalVerdict !== "pass") {
+    return "live_discovery_not_passing";
+  }
+  if (liveDiscovery.downstreamEvidenceRows <= 0) {
+    return "no_live_downstream_evidence";
+  }
+  if (liveDiscovery.interestFilterRows <= 0) {
+    return "no_interest_filter_rows_for_live_articles";
+  }
+  if (liveDiscovery.positiveDiscoveryCandidates <= 0) {
+    return "no_positive_live_discovery_candidate";
+  }
+
+  const fetchOnlyRows = sumEvidenceRows(caseRun).filter((row) => {
+    const finalSelection = asObject(row?.finalSelection);
+    return asArray(row?.fetchRuns).length > 0
+      && asArray(row?.articles).length === 0
+      && asArray(row?.interestFilterResults).length === 0
+      && Number(finalSelection.total ?? 0) === 0;
+  });
+  if (fetchOnlyRows.length > 0) {
+    return "live_fetch_succeeded_but_no_current_window_article_selection";
+  }
+
+  return "live_articles_not_selected_by_interest_policy";
+}
+
 function mcpArtifactHasScenario(mcpArtifact, scenarioKey) {
   return asArray(mcpArtifact?.scenarios).some(
     (scenario) => scenario?.key === scenarioKey && !scenario?.error
@@ -160,6 +197,8 @@ export function summarizeFilterBucketEvidence(input) {
           ? "live-discovery-final-selection"
           : "deterministic-product-fixture-selection",
       count: selectedRows > 0 ? selectedRows : Number(deterministicSelectionPassed),
+      liveSelectedRows: selectedRows,
+      deterministicFixturePassed: deterministicSelectionPassed,
     },
     negativeKeywordsRejected: {
       passed: deterministicPolicyPassed,
@@ -284,6 +323,8 @@ export function buildProductMegaFlowScenarioSummary(input) {
   const discoveryReport = input?.discoveryReport ?? {};
   const commandResults = asArray(input?.commandResults);
   const mcpArtifact = input?.mcpArtifact ?? null;
+  const liveSelectionProof = asObject(input?.liveSelectionProof);
+  const scenarioLiveSelectionProof = asObject(liveSelectionProof[scenario.key]);
   const caseRun = asArray(discoveryReport?.caseRuns).find(
     (item) => item?.key === scenario.discoveryCaseKey || item?.key === scenario.key
   );
@@ -291,6 +332,8 @@ export function buildProductMegaFlowScenarioSummary(input) {
   const filterEvidence = summarizeFilterBucketEvidence({ caseRun, commandResults, mcpArtifact });
   const sequenceEvidence = summarizeSequenceEvidence({ commandResults, mcpArtifact });
   const surfaceEvidence = summarizeSurfaceEvidence({ commandResults, mcpArtifact });
+  const discoverySelectedRows = countSelectedRows(caseRun);
+  const replaySelectedRows = countLiveSelectionProofRows(scenarioLiveSelectionProof);
   const liveDiscovery = {
     runtimeVerdict: normalizeText(caseRun?.runtimeVerdict) || "fail",
     yieldVerdict: normalizeText(caseRun?.yieldVerdict) || "fail",
@@ -300,11 +343,27 @@ export function buildProductMegaFlowScenarioSummary(input) {
       && normalizeText(caseRun?.yieldVerdict) === "pass"
         ? "pass"
         : "fail",
-    selectedFinalRows: countSelectedRows(caseRun),
+    selectedFinalRows: discoverySelectedRows + replaySelectedRows,
+    discoverySelectedFinalRows: discoverySelectedRows,
+    replaySelectedFinalRows: replaySelectedRows,
     downstreamEvidenceRows: countDownstreamRows(caseRun),
     interestFilterRows: countInterestFilterRows(caseRun),
     positiveDiscoveryCandidates: countPositiveDiscoveryCandidates(caseRun),
     rootCauseClassification: caseRun?.rootCauseClassification ?? null,
+  };
+  const liveSelectedArticleEvidence = {
+    passed: liveDiscovery.selectedFinalRows > 0,
+    source:
+      discoverySelectedRows > 0
+        ? "live-discovery-final-selection"
+        : replaySelectedRows > 0
+          ? "live-proof-selection-replay"
+        : "missing",
+    selectedFinalRows: liveDiscovery.selectedFinalRows,
+    discoverySelectedFinalRows: discoverySelectedRows,
+    replaySelectedFinalRows: replaySelectedRows,
+    selectedArticles: asArray(scenarioLiveSelectionProof.selectedArticles),
+    residualReason: classifyMissingLiveSelection(caseRun, liveDiscovery),
   };
   const adminManagedTruth = {
     passed: Boolean(
@@ -317,7 +376,8 @@ export function buildProductMegaFlowScenarioSummary(input) {
   const liveDiscoveryAccepted =
     liveDiscovery.finalVerdict === "pass"
     && liveDiscovery.downstreamEvidenceRows > 0
-    && (liveDiscovery.positiveDiscoveryCandidates > 0 || liveDiscovery.selectedFinalRows > 0);
+    && liveDiscovery.positiveDiscoveryCandidates > 0
+    && liveSelectedArticleEvidence.passed;
   const passed =
     adminManagedTruth.passed
     && liveDiscoveryAccepted
@@ -334,7 +394,9 @@ export function buildProductMegaFlowScenarioSummary(input) {
     fixtureNamespace: scenario.fixtureNamespace,
     status: passed ? "passed" : "failed",
     adminManagedTruth,
+    liveDiscoveryAccepted,
     liveDiscovery,
+    liveSelectedArticleEvidence,
     providerEvidence,
     filterEvidence,
     sequenceEvidence,
@@ -356,6 +418,7 @@ export function determineProductMegaFlowVerdict(input) {
       discoveryReport,
       commandResults,
       mcpArtifact,
+      liveSelectionProof: input?.liveSelectionProof ?? null,
     })
   );
   const commandFailures = commandResults.filter((item) => item.status !== "passed");

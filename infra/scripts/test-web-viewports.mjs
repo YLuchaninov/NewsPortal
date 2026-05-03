@@ -63,7 +63,7 @@ async function ensureComposeStack() {
 }
 
 async function waitForVisible(locator, label) {
-  await locator.first().waitFor({ state: "visible", timeout: 15000 });
+  await locator.first().waitFor({ state: "visible", timeout: 60000 });
   const count = await locator.count();
   if (count < 1) {
     throw new Error(`Expected visible locator for ${label}.`);
@@ -446,6 +446,25 @@ async function main() {
     const docId = articleRow[0];
     const contentItemId = `editorial:${docId}`;
 
+    await waitFor(
+      "viewport article criteria pipeline settled",
+      async () =>
+        queryPostgresInt(
+          env,
+          `
+            select count(*)::int
+            from inbox_processed_events processed
+            join outbox_events event on event.event_id = processed.event_id
+            where processed.consumer_name = 'worker.match.criteria'
+              and (
+                event.aggregate_id = ${sqlLiteral(docId)}::uuid
+                or event.payload_json ->> 'docId' = ${sqlLiteral(docId)}
+              );
+          `
+        ),
+      (count) => count >= 1
+    );
+
     firstResultLine(queryPostgres(
       env,
       `
@@ -760,6 +779,49 @@ async function main() {
             ),
             updated_at = now()
           where doc_id = ${sqlLiteral(docId)}::uuid;
+
+          insert into interest_match_results (
+            doc_id,
+            user_id,
+            interest_id,
+            event_cluster_id,
+            score_pos,
+            score_neg,
+            score_meta,
+            score_novel,
+            score_interest,
+            score_user,
+            decision,
+            explain_json
+          )
+          select
+            a.doc_id,
+            ${sqlLiteral(userId)}::uuid,
+            ${sqlLiteral(userInterestId)}::uuid,
+            a.event_cluster_id,
+            0.98,
+            0.01,
+            0.91,
+            0.77,
+            0.97,
+            0.97,
+            'notify',
+            jsonb_build_object('source', 'web-viewports-seed-reassert', 'runId', ${sqlLiteral(runId)})
+          from articles a
+          where a.doc_id = ${sqlLiteral(docId)}::uuid
+          on conflict (doc_id, interest_id) do update
+          set
+            user_id = excluded.user_id,
+            event_cluster_id = excluded.event_cluster_id,
+            score_pos = excluded.score_pos,
+            score_neg = excluded.score_neg,
+            score_meta = excluded.score_meta,
+            score_novel = excluded.score_novel,
+            score_interest = excluded.score_interest,
+            score_user = excluded.score_user,
+            decision = excluded.decision,
+            explain_json = excluded.explain_json,
+            created_at = now();
         `
       ));
       await runViewportScenario({

@@ -62,6 +62,7 @@ Reusable deterministic procedures:
 - `infra/scripts/test-live-discovery-examples.mjs`
 - `infra/scripts/test-live-discovery-domain-matrix.mjs`
 - `infra/scripts/test-product-mega-flow.mjs`
+  - `pnpm test:product:mega-flow:compose` is strict for live-selected article proof: each Example A/B/C must have at least one live-discovery article/news row selected in `final_selection_results`. Deterministic fixtures may prove provider/filter/sequence/Web/Admin/MCP buckets, but cannot substitute for live-selected-article acceptance.
 - `infra/scripts/test-discovery-pipeline-nonregression.mjs`
 - `infra/scripts/test-live-discovery-yield-proof.mjs`
 - `infra/scripts/release-verify.mjs`

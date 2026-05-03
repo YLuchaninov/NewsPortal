@@ -26,7 +26,7 @@ class FinalSelectionLogicTests(unittest.TestCase):
     def test_marks_semantic_gray_zone_as_non_selected_pending_projection(self) -> None:
         summary = summarize_final_selection_result(
             total_filter_count=2,
-            matched_filter_count=1,
+            matched_filter_count=0,
             no_match_filter_count=0,
             gray_zone_filter_count=1,
             llm_review_pending_filter_count=1,
@@ -42,7 +42,7 @@ class FinalSelectionLogicTests(unittest.TestCase):
     def test_marks_profile_hold_gray_zone_as_filtered_out_compatibility(self) -> None:
         summary = summarize_final_selection_result(
             total_filter_count=2,
-            matched_filter_count=1,
+            matched_filter_count=0,
             no_match_filter_count=0,
             gray_zone_filter_count=1,
             llm_review_pending_filter_count=0,
@@ -55,6 +55,23 @@ class FinalSelectionLogicTests(unittest.TestCase):
         self.assertFalse(summary["isSelected"])
         self.assertEqual(summary["compatSystemFeedDecision"], "filtered_out")
         self.assertEqual(summary["selectionReason"], "semantic_hold")
+
+    def test_match_selects_even_when_other_criteria_are_gray_zone(self) -> None:
+        summary = summarize_final_selection_result(
+            total_filter_count=3,
+            matched_filter_count=1,
+            no_match_filter_count=1,
+            gray_zone_filter_count=1,
+            llm_review_pending_filter_count=1,
+            hold_filter_count=0,
+            technical_filtered_out_count=0,
+            verification_state="medium",
+        )
+
+        self.assertEqual(summary["decision"], "selected")
+        self.assertTrue(summary["isSelected"])
+        self.assertEqual(summary["compatSystemFeedDecision"], "eligible")
+        self.assertEqual(summary["selectionReason"], "semantic_match")
 
     def test_marks_conflicting_verification_as_gray_zone_even_with_match(self) -> None:
         summary = summarize_final_selection_result(
