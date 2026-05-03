@@ -61,6 +61,7 @@ Reusable deterministic procedures:
 - `infra/scripts/test-live-website-matrix.mjs`
 - `infra/scripts/test-live-discovery-examples.mjs`
 - `infra/scripts/test-live-discovery-domain-matrix.mjs`
+- `infra/scripts/test-product-mega-flow.mjs`
 - `infra/scripts/test-discovery-pipeline-nonregression.mjs`
 - `infra/scripts/test-live-discovery-yield-proof.mjs`
 - `infra/scripts/release-verify.mjs`

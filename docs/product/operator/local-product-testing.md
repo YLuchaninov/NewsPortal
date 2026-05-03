@@ -40,6 +40,22 @@ pnpm test:product:local:full
 
 Используйте full contour перед крупным handoff или когда менялась область discovery/website/MCP/operator runtime.
 
+## Mega Flow для Examples A/B/C
+
+```sh
+pnpm test:product:mega-flow:compose
+```
+
+Это live-pass gate для трех продуктовых доменов из Examples A/B/C:
+
+- Example A: job board / hiring discovery;
+- Example B: developer news discovery;
+- Example C: outsourcing / procurement discovery.
+
+Команда пишет `/tmp/newsportal-product-mega-flow-<runId>.json|md`. Она требует `pass` от live discovery для A/B/C, а стабильные deterministic fixtures используют для provider-каналов, filter buckets, sequence cancel/fail/retry и согласованности Web/Admin/MCP read surfaces. Multi-run yield остается отдельным proof: `pnpm test:discovery:yield:compose`. Для диагностического запуска внутри parent-harness можно добавить `--with-yield-proof`.
+
+Важно: это не замена 9-domain discovery matrix. `pnpm test:discovery:mega:compose` остается отдельным residual/yield diagnostic proof, где `yield_weak` может быть допустимой классификацией live internet residuals.
+
 ## Cleanup
 
 ```sh

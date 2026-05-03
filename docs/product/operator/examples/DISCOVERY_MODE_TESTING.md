@@ -623,6 +623,14 @@ Mega comprehensive matrix harness переиспользует тот же profi
 
 Он делает 3 повтора и требует 2 passing runs на каждый example/domain group. Artifact пишется в `/tmp/newsportal-live-discovery-domain-matrix-<runId>.json|md` и отдельно классифицирует generation, review-policy, registration and downstream residuals. Backward-compatible alias: `pnpm test:discovery:domains:compose`.
 
+Full product mega-flow proof command:
+
+```sh
+pnpm test:product:mega-flow:compose
+```
+
+Он проверяет продуктовые Examples A/B/C как live-pass gate и дополнительно требует deterministic evidence для provider-каналов, filter buckets, sequence paths и Web/Admin/MCP read surfaces. 9-domain matrix и multi-run yield при этом остаются отдельными residual/yield diagnostic proofs, а не acceptance layer для product mega-flow.
+
 Current freshest synced profile-backed proof artifacts:
 
 - single-run replay baseline:
