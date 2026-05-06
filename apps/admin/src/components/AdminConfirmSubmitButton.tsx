@@ -12,6 +12,7 @@ import {
   buttonVariants,
   cn,
 } from "@newsportal/ui";
+import { submitAdminForm } from "./admin-form-submit";
 
 interface AdminConfirmSubmitButtonProps {
   title: string;
@@ -42,11 +43,7 @@ export function AdminConfirmSubmitButton({
     if (typeof form.reportValidity === "function" && !form.reportValidity()) {
       return;
     }
-    if (typeof form.requestSubmit === "function") {
-      form.requestSubmit();
-    } else {
-      form.submit();
-    }
+    submitAdminForm(form);
   }
 
   return (

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { readRuntimeConfig } from "@newsportal/config";
+import { MCP_SEQUENCE_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import type { AdminActionContext } from "../../../lib/server/admin-action";
 import {
@@ -9,6 +10,11 @@ import {
   insertAdminAuditLog,
   prepareAdminAction,
 } from "../../../lib/server/admin-action";
+import {
+  assertAdminPayloadHasNoNestedEnvelope,
+  assertAdminPayloadMatchesSchema,
+  assertNoUnexpectedAdminFields,
+} from "../../../lib/server/admin-payload-validation";
 import { getPool } from "../../../lib/server/db";
 import {
   buildSequenceAuditPayload,
@@ -104,13 +110,42 @@ export const POST: APIRoute = async ({ request }) => {
   const { payload, session } = context;
 
   try {
+    assertAdminPayloadHasNoNestedEnvelope(payload, "Automation action");
+    assertNoUnexpectedAdminFields(
+      payload,
+      [
+        "sequenceId",
+        "runId",
+        "title",
+        "description",
+        "taskGraph",
+        "editorState",
+        "status",
+        "triggerEvent",
+        "cron",
+        "maxRuns",
+        "tags",
+        "contextJson",
+        "triggerMeta",
+        "contextOverrides",
+        "reason",
+        "createdBy",
+      ],
+      "Automation action",
+    );
     const intent = resolveSequenceAdminIntent(payload);
 
     if (intent === "create_sequence") {
+      const requestPayload = buildSequenceCreateApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_SEQUENCE_PAYLOAD_SCHEMAS.create,
+        "Sequence create payload",
+      );
       const result = await callAutomationApi<Record<string, unknown>>("/maintenance/sequences", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildSequenceCreateApiPayload(payload, session.userId)),
+        body: JSON.stringify(requestPayload),
       });
       await writeAuditLog(
         session.userId,
@@ -132,12 +167,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!sequenceId) {
         throw new Error("Sequence ID is required.");
       }
+      const requestPayload = buildSequenceUpdateApiPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_SEQUENCE_PAYLOAD_SCHEMAS.update,
+        "Sequence update payload",
+      );
       const result = await callAutomationApi<Record<string, unknown>>(
         `/maintenance/sequences/${encodeURIComponent(sequenceId)}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildSequenceUpdateApiPayload(payload)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -184,12 +225,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!sequenceId) {
         throw new Error("Sequence ID is required.");
       }
+      const requestPayload = buildSequenceManualRunApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_SEQUENCE_PAYLOAD_SCHEMAS.run,
+        "Sequence run payload",
+      );
       const result = await callAutomationApi<Record<string, unknown>>(
         `/maintenance/sequences/${encodeURIComponent(sequenceId)}/runs`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildSequenceManualRunApiPayload(payload, session.userId)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -212,12 +259,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!runId) {
         throw new Error("Run ID is required.");
       }
+      const requestPayload = buildSequenceRetryApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_SEQUENCE_PAYLOAD_SCHEMAS.retryRun,
+        "Sequence retry payload",
+      );
       const result = await callAutomationApi<Record<string, unknown>>(
         `/maintenance/sequence-runs/${encodeURIComponent(runId)}/retry`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildSequenceRetryApiPayload(payload, session.userId)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -239,12 +292,18 @@ export const POST: APIRoute = async ({ request }) => {
     if (!runId) {
       throw new Error("Run ID is required.");
     }
+    const requestPayload = buildSequenceCancelApiPayload(payload);
+    assertAdminPayloadMatchesSchema(
+      requestPayload,
+      MCP_SEQUENCE_PAYLOAD_SCHEMAS.cancelRun,
+      "Sequence cancel payload",
+    );
     const result = await callAutomationApi<Record<string, unknown>>(
       `/maintenance/sequence-runs/${encodeURIComponent(runId)}/cancel`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildSequenceCancelApiPayload(payload)),
+        body: JSON.stringify(requestPayload),
       }
     );
     await writeAuditLog(

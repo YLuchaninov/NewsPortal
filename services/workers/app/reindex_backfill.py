@@ -6,6 +6,10 @@ from types import SimpleNamespace
 from typing import Any, Awaitable, Callable
 
 
+async def _never_cancel_requested(_reindex_job_id: str) -> bool:
+    return False
+
+
 @dataclass(frozen=True)
 class HistoricalBackfillDependencies:
     prepare_target_snapshot: Callable[..., Awaitable[int]]
@@ -21,6 +25,7 @@ class HistoricalBackfillDependencies:
     process_match_interests: Callable[[Any, str], Awaitable[dict[str, Any]]]
     is_article_eligible_for_personalization: Callable[..., Awaitable[bool]]
     replay_gray_zone_reviews_for_doc: Callable[..., Awaitable[int]]
+    is_cancel_requested: Callable[[str], Awaitable[bool]] = _never_cancel_requested
 
 
 def build_historical_backfill_progress_patch(
@@ -75,6 +80,16 @@ async def replay_historical_articles(
     )
 
     while True:
+        if await dependencies.is_cancel_requested(reindex_job_id):
+            return {
+                "status": "cancelled",
+                "mode": "historical_backfill",
+                "processedArticles": processed_articles,
+                "totalArticles": total_articles,
+                "retroNotifications": "skipped",
+                "batchSize": batch_size,
+            }
+
         batch_targets = await dependencies.list_target_batch(
             reindex_job_id=reindex_job_id,
             batch_size=batch_size,

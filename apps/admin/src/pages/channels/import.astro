@@ -13,6 +13,7 @@ import {
   ADMIN_HERO_CARD_CLASS,
   ADMIN_SECTION_CARD_CLASS,
 } from "../../lib/admin-ui-classes";
+import { buildAdminActionToken } from "../../lib/server/admin-action";
 
 export const prerender = false;
 
@@ -26,6 +27,18 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const pagePath = `${Astro.url.pathname}${Astro.url.search}`;
+const bulkImportActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: "/bff/admin/channels/bulk",
+  scope: "channels.bulk",
+});
+const bulkImportPreflightActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: "/bff/admin/channels/bulk/preflight",
+  scope: "channels.bulk.preflight",
+});
 ---
 
 <AdminShell title="Bulk Import Channels — Admin" session={session} flash={flash} activeNav="channels">
@@ -54,6 +67,8 @@ const pagePath = `${Astro.url.pathname}${Astro.url.search}`;
       <BulkChannelImport
         action={appPath("/bff/admin/channels/bulk")}
         preflightAction={appPath("/bff/admin/channels/bulk/preflight")}
+        adminActionToken={bulkImportActionToken}
+        preflightAdminActionToken={bulkImportPreflightActionToken}
         redirectTo={pagePath}
         exampleMode="mixed"
         client:load

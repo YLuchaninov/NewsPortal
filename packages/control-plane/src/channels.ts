@@ -210,3 +210,68 @@ export async function deleteChannelWithAudit(
     providerLabel,
   };
 }
+
+export async function setChannelActiveStateWithAudit(
+  pool: Pool,
+  actorUserId: string,
+  channelId: string,
+  isActive: boolean,
+  reason?: string | null
+): Promise<{
+  ok: true;
+  channelId: string;
+  name: string;
+  providerType: string;
+  providerLabel: string;
+  isActive: boolean;
+}> {
+  const result = await pool.query(
+    `
+      update source_channels
+         set is_active = $2,
+             updated_at = now()
+       where channel_id = $1::uuid
+       returning channel_id::text as "channelId",
+                 name,
+                 provider_type as "providerType",
+                 is_active as "isActive"
+    `,
+    [channelId, isActive]
+  );
+  const row = result.rows[0] as
+    | {
+        channelId: string;
+        name: string;
+        providerType: string;
+        isActive: boolean;
+      }
+    | undefined;
+  if (!row) {
+    throw new Error(`Channel ${channelId} was not found.`);
+  }
+
+  const providerLabel = isAdminChannelProviderType(row.providerType)
+    ? formatAdminChannelProviderLabel(row.providerType)
+    : row.providerType;
+
+  await writeAuditLog(pool, {
+    actorUserId,
+    actionType: isActive ? "channel_activated" : "channel_deactivated",
+    entityType: "channel",
+    entityId: channelId,
+    payloadJson: {
+      isActive,
+      providerType: row.providerType,
+      reason: reason ?? null,
+    },
+  });
+
+  return {
+    ok: true,
+    channelId: row.channelId,
+    name: row.name,
+    providerType: row.providerType,
+    providerLabel,
+    isActive: row.isActive,
+  };
+}

@@ -763,6 +763,38 @@ async function main() {
           updated_at = now();
       `
     );
+    const blockedRecallCandidate = (
+      await postJson(`${apiBaseUrl}/maintenance/discovery/recall-candidates`, {
+        recallMissionId,
+        sourceProfileId: recallSourceProfileId,
+        url: `https://recall-${runId}.example.test/opportunity`,
+        finalUrl: `https://recall-${runId}.example.test/opportunity`,
+        title: `Blocked recall candidate ${runId}`,
+        description: "HTML opportunity page intentionally mislabeled as RSS",
+        providerType: "rss",
+        status: "pending",
+        qualitySignalSource: "acceptance_manual",
+        evaluationJson: {
+          classification: "html",
+          normalizedReasonBucket: "manual_regression_guard",
+          recallScore: 0.91,
+        },
+        createdBy: adminEmail,
+      }, { expectStatus: 201 })
+    ).json;
+    const blockedRecallCandidateId = String(blockedRecallCandidate?.recall_candidate_id ?? "");
+    try {
+      await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
+        intent: "promote_recall_candidate",
+        redirectTo: `${discoveryPath}?tab=recall`,
+        recallCandidateId: blockedRecallCandidateId,
+      }, { cookie: adminCookie, timeoutMs: 60000 });
+      throw new Error("Admin recall candidate promotion accepted an RSS candidate without valid feed evidence.");
+    } catch (error) {
+      if (!String(error?.message ?? "").includes("no valid feed evidence")) {
+        throw error;
+      }
+    }
     const recallCandidate = (
       await postJson(`${apiBaseUrl}/maintenance/discovery/recall-candidates`, {
         recallMissionId,
@@ -776,6 +808,8 @@ async function main() {
         qualitySignalSource: "acceptance_manual",
         evaluationJson: {
           classification: "rss",
+          validFeed: true,
+          discoveredFeedUrls: [`https://recall-${runId}.example.test/feed.xml`],
           normalizedReasonBucket: "below_auto_promotion_threshold",
           recallScore: 0.73,
         },

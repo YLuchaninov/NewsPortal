@@ -116,6 +116,22 @@ async function main() {
   if (!sequenceId) {
     throw new Error("Sequence creation did not return a sequence_id.");
   }
+  try {
+    await postForm(
+      `${adminBaseUrl}/bff/admin/automation`,
+      {
+        intent: "run_sequence",
+        sequenceId,
+        target: "interest_centroids",
+      },
+      { cookie: adminCookie }
+    );
+    throw new Error("Automation admin action accepted an unsupported target field.");
+  } catch (error) {
+    if (!String(error?.message ?? "").includes('unsupported field "target"')) {
+      throw error;
+    }
+  }
 
   const updatedTitle = `${sequenceTitle} updated`;
   log("Updating the sequence through the admin surface.");

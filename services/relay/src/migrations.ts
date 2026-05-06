@@ -55,9 +55,7 @@ export async function applyPendingMigrations(
     try {
       await client.query("begin");
       if (options.schema) {
-        await client.query(
-          `set local search_path to ${quoteIdentifier(options.schema)}, public`
-        );
+        await client.query(`set local search_path to ${quoteIdentifier(options.schema)}`);
       }
       await client.query(sql);
       await client.query(`insert into ${schemaTableName} (name) values ($1)`, [

@@ -15,6 +15,7 @@ Use it when you need to:
 - connect a real MCP client to NewsPortal;
 - issue a NewsPortal MCP token and wire it into a client config;
 - smoke-test `GET /mcp` and JSON-RPC calls directly over HTTP;
+- return after setup to review ongoing operational health through `operator.system.health`, `operator.issue.explain`, `operator.tuning.recommend`, `operator.effect.verify`, `newsportal://guide/operating-model`, and `newsportal://ops/*`;
 - inspect, configure and replay content analysis evidence through `content_analysis.*`, `content_analysis_policies.*`, `content_analysis.backfill.request`, `content_entities.*`, `content_labels.*`, `content_filter_policies.*` and `content_filter_results.*`; default backfill modules include `ner`, `sentiment`, `category`, `cluster_summary`, `system_interest_labels` and `content_filter`; `structured_extraction` is available as an explicit opt-in module because active Gemini-backed templates can call an LLM; local analysis policies tune bounded deterministic `config_json` keys;
 - understand which checks are local-only and which ones are safe for shared or remote environments.
 
@@ -36,6 +37,22 @@ Use it when you need to:
 - Transport model:
   - `GET /mcp` for lightweight server metadata
   - `POST /mcp` for JSON-RPC methods like `initialize`, `tools/list`, `resources/list`, `prompts/list`, and `tools/call`
+  - `GET /mcp` with `Accept: text/event-stream` for clients that require SSE; the server returns an SSE `endpoint` event pointing at `/mcp/messages?sessionId=...`
+  - SSE clients may subscribe with `resources/subscribe` and receive `notifications/resources/updated` for operational resources after write tools; clients without subscriptions should follow `nextReadBack` in mutation responses
+- Context model:
+  - `initialize` returns server instructions with read-before-write, ongoing-operations, cleanup, destructive-confirmation, token-inventory and schema guidance
+  - `tools/list` returns titles, enriched descriptions, schemas and annotations so tool-only clients still get operational context
+  - `newsportal://guide/client-contract` is the high-priority resource for clients that expose resources
+  - `newsportal://guide/operating-model` and `newsportal://ops/health`, `newsportal://ops/issues`, `newsportal://ops/tuning-backlog`, `newsportal://ops/recent-changes` are the starting point for daily operation and fine-tuning sessions
+  - `operator.system.health`, `operator.issue.explain`, `operator.tuning.recommend`, and `operator.effect.verify` are read-only; tuning recommendations may include suggested guarded tool calls but never apply them
+  - `diagnose.mcp_error` helps classify transport, auth/scope, schema, backend validation and business-state errors
+  - write tools are strict: send `arguments.payload` as one JSON object, never a JSON string and never nested as `payload.payload`; unknown fields and guessed aliases should fail as MCP `-32602` before backend/API calls
+  - bulk source onboarding is MCP-native through `channels.bulk_onboard.plan`, `channels.bulk_onboard.apply`, and `channels.bulk_onboard.verify`; clients should plan first, apply only the current `planFingerprint`, use `confirm=true` for updates, and verify channel acquisition separately from website projection/selection outcomes
+  - final operator reports should be verified with `operator.report.verify` for setup reports and ongoing reports such as `system_health`, `channel_health`, `website_pipeline`, `selection_tuning`, `content_analysis`, `llm_budget`, `sequence_run`, or `discovery_yield` instead of relying only on mutation responses
+  - token lifecycle is MCP-native through `admin.mcp_tokens.list`, `admin.mcp_tokens.revoke`, and `admin.mcp_tokens.delete_revoked` when the token has `admin.tokens` plus destructive scope; clients should not call admin REST directly as a workaround
+  - migration-owned default/adaptive/system sequences are protected from MCP cleanup archive calls
+  - discovery recall promotion has semantic guards: RSS candidates need valid feed evidence; website candidates need supported website-kind evidence or explicit `overrideReason`; rejected candidates cannot be promoted silently
+  - reindex maintenance is MCP-native through `maintenance.reindex.request` plus `maintenance.reindex_jobs.list`; clients should not call `sequences.run` on `Default Reindex` unless they already have a valid reindex job/event context
 
 ## Before you configure a client
 

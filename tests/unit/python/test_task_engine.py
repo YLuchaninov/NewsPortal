@@ -120,6 +120,20 @@ class TimeoutPlugin(TaskPlugin):
         return {"timeout": False}
 
 
+class CancelledPlugin(TaskPlugin):
+    name = "Cancelled"
+    description = "Simulates cooperative cancellation."
+    category = "test"
+
+    async def execute(
+        self,
+        options: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        del options, context
+        raise asyncio.CancelledError()
+
+
 class ValidatedPlugin(TaskPlugin):
     name = "Validated"
     description = "Requires a label option."
@@ -503,6 +517,24 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.task_runs[0]["status"], "failed")
         self.assertIn("timed out", repository.task_runs[0]["error_text"])
 
+    async def test_executor_marks_cancelled_task_as_failed_before_reraising(self) -> None:
+        executor, repository = self._build_executor(
+            task_graph=[
+                {
+                    "key": "cancelled",
+                    "module": "Cancelled",
+                    "options": {},
+                }
+            ]
+        )
+
+        with self.assertRaises(asyncio.CancelledError):
+            await executor.execute_run("run-1")
+
+        self.assertEqual(repository.runs["run-1"].status, "failed")
+        self.assertEqual(repository.task_runs[0]["status"], "failed")
+        self.assertIn("cancelled before completion", repository.task_runs[0]["error_text"])
+
     async def test_executor_rejects_invalid_runtime_plugin_options(self) -> None:
         executor, repository = self._build_executor(
             task_graph=[
@@ -574,6 +606,7 @@ class SequenceExecutorTests(unittest.IsolatedAsyncioTestCase):
             FlakyPlugin,
             TransientDatabaseFlakyPlugin,
             TimeoutPlugin,
+            CancelledPlugin,
             ValidatedPlugin,
         ):
             registry.register(plugin_class)

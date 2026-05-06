@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { readRuntimeConfig } from "@newsportal/config";
+import { MCP_CONTENT_ANALYSIS_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 
 import {
@@ -9,6 +10,10 @@ import {
   insertAdminAuditLog,
   prepareAdminAction,
 } from "../../../lib/server/admin-action";
+import {
+  assertAdminPayloadHasNoNestedEnvelope,
+  assertAdminPayloadMatchesSchema,
+} from "../../../lib/server/admin-payload-validation";
 import { getPool } from "../../../lib/server/db";
 
 export const prerender = false;
@@ -55,6 +60,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
+    assertAdminPayloadHasNoNestedEnvelope(payload, "Content analysis policy action");
     const configJson = parseConfigJson(payload.configJson);
     const runtimeConfig = readRuntimeConfig(process.env, {
       defaultAppBaseUrl: "http://127.0.0.1:4322/",
@@ -77,18 +83,34 @@ export const POST: APIRoute = async ({ request }) => {
       isActive: readBooleanField(payload.isActive),
       priority: Number.parseInt(String(payload.priority ?? "100"), 10) || 100,
     };
-    const saved =
+    const saved = await (
       intent === "update"
-        ? await sdk.updateContentAnalysisPolicy<Record<string, unknown>>(
-            String(payload.policyId ?? ""),
-            requestPayload
-          )
-        : await sdk.createContentAnalysisPolicy<Record<string, unknown>>({
+        ? (() => {
+            assertAdminPayloadMatchesSchema(
+              requestPayload,
+              MCP_CONTENT_ANALYSIS_PAYLOAD_SCHEMAS.policyUpdate,
+              "Content analysis policy update payload",
+            );
+            return sdk.updateContentAnalysisPolicy<Record<string, unknown>>(
+              String(payload.policyId ?? ""),
+              requestPayload,
+            );
+          })()
+        : (() => {
+            const createPayload = {
             ...requestPayload,
             policyKey: String(payload.policyKey ?? "").trim(),
             scopeType: "global",
             version: 1,
-          });
+            };
+            assertAdminPayloadMatchesSchema(
+              createPayload,
+              MCP_CONTENT_ANALYSIS_PAYLOAD_SCHEMAS.policyCreate,
+              "Content analysis policy create payload",
+            );
+            return sdk.createContentAnalysisPolicy<Record<string, unknown>>(createPayload);
+          })()
+    );
     await insertAdminAuditLog(getPool(), {
       actorUserId: session.userId,
       actionType:

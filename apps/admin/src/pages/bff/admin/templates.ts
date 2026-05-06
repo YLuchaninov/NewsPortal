@@ -6,12 +6,18 @@ import {
   setTemplateActiveStateWithAudit,
   type TemplateKind,
 } from "@newsportal/control-plane";
+import { MCP_TEMPLATE_PAYLOAD_SCHEMAS, type JsonSchema } from "@newsportal/contracts";
 
 import {
   adminActionError,
   adminActionSuccess,
   prepareAdminAction,
 } from "../../../lib/server/admin-action";
+import {
+  assertAdminPayloadHasNoNestedEnvelope,
+  assertAdminPayloadMatchesSchema,
+  stripAdminMetaFields,
+} from "../../../lib/server/admin-payload-validation";
 import {
   resolveAdminAppPath,
   resolveAdminRedirectPath,
@@ -52,6 +58,36 @@ function resolveTemplateEditPath(
       ? `/templates/interests/${templateId}/edit`
       : `/templates/llm/${templateId}/edit`
   );
+}
+
+function normalizeTemplateValidationPayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const validationPayload = stripAdminMetaFields(payload, ["kind"]);
+  const isActive = validationPayload.isActive;
+  if (typeof isActive === "string") {
+    const normalized = isActive.trim().toLowerCase();
+    if (normalized === "true") {
+      validationPayload.isActive = true;
+    } else if (normalized === "false") {
+      validationPayload.isActive = false;
+    }
+  }
+  return validationPayload;
+}
+
+function resolveTemplateValidationSchema(
+  kind: TemplateKind,
+  payload: Record<string, unknown>
+): JsonSchema {
+  if (kind === "interest") {
+    return String(payload.interestTemplateId ?? "").trim()
+      ? MCP_TEMPLATE_PAYLOAD_SCHEMAS.systemInterestUpdate
+      : MCP_TEMPLATE_PAYLOAD_SCHEMAS.systemInterestCreate;
+  }
+  return String(payload.promptTemplateId ?? "").trim()
+    ? MCP_TEMPLATE_PAYLOAD_SCHEMAS.llmTemplateUpdate
+    : MCP_TEMPLATE_PAYLOAD_SCHEMAS.llmTemplateCreate;
 }
 
 export function formatTemplateBrowserErrorMessage(
@@ -99,8 +135,15 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const pool = getPool();
     const intent = resolveTemplateIntent(payload);
+    assertAdminPayloadHasNoNestedEnvelope(payload, "Template action");
 
     if (intent === "save") {
+      const validationPayload = normalizeTemplateValidationPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        validationPayload,
+        resolveTemplateValidationSchema(kind, validationPayload),
+        kind === "interest" ? "System interest payload" : "LLM template payload",
+      );
       const result = await saveTemplateFromPayload(pool, session.userId, payload);
       const entityPath = resolveTemplateEditPath(request, result.kind, result.entityId);
 
@@ -171,10 +214,14 @@ export const POST: APIRoute = async ({ request }) => {
       json: { ok: true },
     });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "";
+    const isValidationError =
+      errorMessage.includes("failed validation") ||
+      errorMessage.includes("Nested \"payload\" envelopes");
     return adminActionError(action.context, {
       section: "templates",
       message: formatTemplateBrowserErrorMessage(error, kind),
-      status: 500,
+      status: isValidationError ? 400 : 500,
       redirectTo,
       json: {
         error: error instanceof Error ? error.message : "Failed to save template.",

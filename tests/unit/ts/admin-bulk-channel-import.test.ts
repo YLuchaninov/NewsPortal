@@ -1,12 +1,48 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
-import { getBulkChannelImportViewModel } from "../../../apps/admin/src/components/BulkChannelImport.tsx";
+import {
+  buildBulkChannelImportPreflightHeaders,
+  getBulkChannelImportViewModel
+} from "../../../apps/admin/src/components/BulkChannelImport.tsx";
+import {
+  buildAdminActionToken,
+  prepareAdminAction,
+  type AdminActionSession
+} from "../../../apps/admin/src/lib/server/admin-action.ts";
 import {
   formatBulkImportSuccessMessage,
   parseBulkChannels,
-  planBulkImportWithPool
+  planBulkImportWithPool,
+  readBulkPayload
 } from "../../../apps/admin/src/pages/bff/admin/channels/bulk/shared.ts";
+
+const adminSession: AdminActionSession = {
+  userId: "admin-user-1",
+  roles: ["admin"],
+  identity: {
+    subject: "firebase-admin",
+    provider: "firebase_email_link",
+    email: "admin@example.test",
+    isAnonymous: false
+  }
+};
+
+async function withAppSecret<T>(secret: string, callback: () => Promise<T>): Promise<T> {
+  const previous = process.env.APP_SECRET;
+  process.env.APP_SECRET = secret;
+  try {
+    return await callback();
+  } finally {
+    if (previous == null) {
+      delete process.env.APP_SECRET;
+    } else {
+      process.env.APP_SECRET = previous;
+    }
+  }
+}
 
 test("getBulkChannelImportViewModel exposes mixed-import copy and required providerType", () => {
   const viewModel = getBulkChannelImportViewModel("mixed");
@@ -14,6 +50,72 @@ test("getBulkChannelImportViewModel exposes mixed-import copy and required provi
   assert.match(viewModel.helpText, /providerType/);
   assert.match(viewModel.exampleJson, /"providerType": "website"/);
   assert.equal(viewModel.fieldSchema.providerType?.type, '"rss" | "website" | "api" | "email_imap"');
+});
+
+test("bulk import island carries scoped admin action tokens explicitly", () => {
+  const headers = buildBulkChannelImportPreflightHeaders("preflight-token");
+
+  assert.deepEqual(headers, {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "x-admin-action-token": "preflight-token"
+  });
+
+  const componentSource = readFileSync(
+    join(process.cwd(), "apps/admin/src/components/BulkChannelImport.tsx"),
+    "utf8"
+  );
+  const importPageSource = readFileSync(
+    join(process.cwd(), "apps/admin/src/pages/channels/import.astro"),
+    "utf8"
+  );
+
+  assert.match(componentSource, /name="adminActionToken" value=\{adminActionToken\}/);
+  assert.match(importPageSource, /scope: "channels\.bulk"/);
+  assert.match(importPageSource, /scope: "channels\.bulk\.preflight"/);
+});
+
+test("bulk import form payload preserves admin action token for the shared guard", async () => {
+  await withAppSecret("bulk-import-test-secret", async () => {
+    const requestUrl = "http://127.0.0.1:4322/bff/admin/channels/bulk";
+    const token = buildAdminActionToken({
+      request: new Request(requestUrl),
+      session: adminSession,
+      targetPath: "/bff/admin/channels/bulk",
+      scope: "channels.bulk",
+      ttlMs: 60_000
+    });
+    const body = new URLSearchParams({
+      channelsJson: JSON.stringify([
+        {
+          providerType: "rss",
+          name: "Example feed",
+          fetchUrl: "https://example.com/feed.xml"
+        }
+      ]),
+      confirmOverwrite: "true",
+      adminActionToken: token
+    });
+    const result = await prepareAdminAction(
+      new Request(requestUrl, {
+        method: "POST",
+        body
+      }),
+      {
+        fallbackRedirectPath: "/channels/import",
+        actionToken: { scope: "channels.bulk" },
+        resolveSession: async () => adminSession,
+        payloadReader: readBulkPayload
+      }
+    );
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.context.payload.adminActionToken, undefined);
+      assert.equal(result.context.payload.confirmOverwrite, true);
+      assert.equal(Array.isArray(result.context.payload.channelsPayload), true);
+    }
+  });
 });
 
 test("parseBulkChannels requires row-level providerType for shared bulk imports", () => {
@@ -67,6 +169,11 @@ test("planBulkImportWithPool groups mixed provider rows and preserves original i
 
   const fakePool = {
     async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params, [["api"], ["https://example.com/api/items"]]);
+        return { rows: [] };
+      }
+
       if (sql.includes("provider_type = 'rss'")) {
         assert.deepEqual(params, [["rss-123"]]);
         return {

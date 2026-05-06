@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
@@ -30,6 +31,16 @@ from .worker_queues import (
     REINDEX_REQUESTED_EVENT,
 )
 
+REINDEX_RUNTIME_OPTION_KEYS = {
+    "backfill",
+    "contentAnalysis",
+    "progress",
+    "rebuild",
+    "result",
+    "selectionProfileSnapshot",
+}
+REINDEX_BATCH_ONLY_OPTION_KEYS = {"batchSize"}
+
 
 def _worker_main() -> Any:
     from . import main as worker_main
@@ -43,6 +54,43 @@ async def open_connection() -> Any:
 
 async def ensure_published_outbox_event(**kwargs: Any) -> None:
     await _worker_main().ensure_published_outbox_event(**kwargs)
+
+
+def _normalize_reindex_cancellation_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return sorted(
+            (_normalize_reindex_cancellation_value(item) for item in value),
+            key=lambda item: json.dumps(item, sort_keys=True, default=str),
+        )
+    if isinstance(value, dict):
+        return {
+            key: _normalize_reindex_cancellation_value(value[key])
+            for key in sorted(value)
+            if key not in REINDEX_RUNTIME_OPTION_KEYS
+            and key not in REINDEX_BATCH_ONLY_OPTION_KEYS
+        }
+    return value
+
+
+def build_reindex_cancellation_key(
+    *,
+    index_name: str,
+    job_kind: str,
+    options_json: dict[str, Any],
+) -> str:
+    return ":".join(
+        [
+            "reindex",
+            index_name,
+            job_kind,
+            json.dumps(
+                _normalize_reindex_cancellation_value(options_json),
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ),
+        ]
+    )
 
 
 async def find_prompt_template(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
@@ -92,10 +140,10 @@ async def insert_outbox_event(*args: Any, **kwargs: Any) -> None:
 async def read_reindex_job_context(
     cursor: psycopg.AsyncCursor[Any],
     reindex_job_id: str,
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[str, dict[str, Any], str]:
     await cursor.execute(
         """
-        select job_kind, options_json
+        select job_kind, options_json, status
         from reindex_jobs
         where reindex_job_id = %s
         for update
@@ -105,7 +153,26 @@ async def read_reindex_job_context(
     row = await cursor.fetchone()
     if row is None:
         raise ValueError(f"Reindex job {reindex_job_id} was not found.")
-    return (str(row.get("job_kind") or "rebuild"), coerce_json_object(row.get("options_json")))
+    return (
+        str(row.get("job_kind") or "rebuild"),
+        coerce_json_object(row.get("options_json")),
+        str(row.get("status") or "queued"),
+    )
+
+
+async def is_reindex_job_cancel_requested(reindex_job_id: str) -> bool:
+    async with await open_connection() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                select status
+                from reindex_jobs
+                where reindex_job_id = %s
+                """,
+                (reindex_job_id,),
+            )
+            row = await cursor.fetchone()
+    return bool(row and str(row.get("status") or "") in {"cancel_requested", "cancelled"})
 
 
 async def update_reindex_job_options(
@@ -399,6 +466,7 @@ async def replay_historical_articles(
             process_match_interests=process_match_interests,
             is_article_eligible_for_personalization=is_article_eligible_for_personalization,
             replay_gray_zone_reviews_for_doc=replay_gray_zone_reviews_for_doc,
+            is_cancel_requested=is_reindex_job_cancel_requested,
         ),
     )
 
@@ -862,6 +930,22 @@ async def replay_content_analysis(
     for subject_type in subject_types:
         last_subject_id: str | None = None
         while True:
+            if await is_reindex_job_cancel_requested(reindex_job_id):
+                return {
+                    "status": "cancelled",
+                    "mode": "content_analysis_backfill",
+                    "processedContentItems": processed_items,
+                    "totalContentItems": total_items,
+                    "failedContentItems": failed_items,
+                    "skippedContentItems": skipped_items,
+                    "subjectTypes": subject_types,
+                    "modules": sorted(modules),
+                    "missingOnly": missing_only,
+                    "policyKey": policy_key,
+                    "maxTextChars": max_text_chars,
+                    "retroNotifications": "skipped",
+                }
+
             batch_subject_ids = await list_content_analysis_backfill_targets(
                 subject_type=subject_type,
                 modules=modules,
@@ -1001,10 +1085,19 @@ async def queue_interest_auto_repair_job(
         interest_id=interest_id,
         source_version=source_version,
     )
+    cancellation_key = build_reindex_cancellation_key(
+        index_name=INTEREST_CENTROIDS_INDEX_NAME,
+        job_kind="repair",
+        options_json=options_json,
+    )
 
     async with await open_connection() as connection:
         async with connection.transaction():
             async with connection.cursor() as cursor:
+                await cursor.execute(
+                    "select pg_advisory_xact_lock(hashtext(%s))",
+                    (cancellation_key,),
+                )
                 await cursor.execute(
                     """
                     insert into reindex_jobs (
@@ -1013,16 +1106,47 @@ async def queue_interest_auto_repair_job(
                       job_kind,
                       options_json,
                       requested_by_user_id,
-                      status
+                      status,
+                      cancellation_key
                     )
-                    values (%s, %s, 'repair', %s::jsonb, %s, 'queued')
+                    values (%s, %s, 'repair', %s::jsonb, %s, 'queued', %s)
                     """,
                     (
                         reindex_job_id,
                         INTEREST_CENTROIDS_INDEX_NAME,
                         Json(make_json_safe(options_json)),
                         user_id,
+                        cancellation_key,
                     ),
+                )
+                await cursor.execute(
+                    """
+                    update reindex_jobs
+                    set
+                      status = 'cancelled',
+                      finished_at = coalesce(finished_at, now()),
+                      error_text = 'Cancelled because a newer same-lane reindex job was queued.',
+                      superseded_by_reindex_job_id = %s,
+                      updated_at = now()
+                    where cancellation_key = %s
+                      and reindex_job_id <> %s
+                      and status = 'queued'
+                    """,
+                    (reindex_job_id, cancellation_key, reindex_job_id),
+                )
+                await cursor.execute(
+                    """
+                    update reindex_jobs
+                    set
+                      status = 'cancel_requested',
+                      error_text = 'Cancellation requested because a newer same-lane reindex job was queued.',
+                      superseded_by_reindex_job_id = %s,
+                      updated_at = now()
+                    where cancellation_key = %s
+                      and reindex_job_id <> %s
+                      and status in ('running', 'cancel_requested')
+                    """,
+                    (reindex_job_id, cancellation_key, reindex_job_id),
                 )
                 await insert_outbox_event(
                     cursor,
@@ -1042,5 +1166,5 @@ async def queue_interest_auto_repair_job(
         "reindexJobId": str(reindex_job_id),
         "jobKind": "repair",
         "options": options_json,
+        "cancellationKey": cancellation_key,
     }
-

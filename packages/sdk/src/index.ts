@@ -114,6 +114,49 @@ function buildPath(path: string, query?: Record<string, QueryValue>): string {
   return serialized ? `${path}?${serialized}` : path;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function formatApiErrorDetail(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        const record = asRecord(entry);
+        if (!record) {
+          return String(entry);
+        }
+        const location = Array.isArray(record.loc) ? record.loc.join(".") : "";
+        const message = typeof record.msg === "string" ? record.msg : JSON.stringify(record);
+        return location ? `${location}: ${message}` : message;
+      })
+      .join("; ");
+  }
+  const record = asRecord(value);
+  return record ? JSON.stringify(record) : String(value ?? "");
+}
+
+async function buildRequestError(response: Response): Promise<Error> {
+  const bodyText = await response.text().catch(() => "");
+  let detail = "";
+  if (bodyText.trim()) {
+    try {
+      const payload = JSON.parse(bodyText) as unknown;
+      const record = asRecord(payload);
+      detail = formatApiErrorDetail(record?.detail ?? record?.error ?? payload);
+    } catch {
+      detail = bodyText.trim();
+    }
+  }
+  const suffix = detail ? ` ${detail}` : "";
+  return new Error(`Request failed with ${response.status} ${response.statusText}.${suffix}`);
+}
+
 export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
   const baseFetch = options.fetchImpl ?? fetch;
   const baseUrl = options.baseUrl.replace(/\/$/, "");
@@ -132,7 +175,7 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     });
     if (!response.ok) {
-      throw new Error(`Request failed with ${response.status} ${response.statusText}.`);
+      throw await buildRequestError(response);
     }
     return (await response.json()) as T;
   }

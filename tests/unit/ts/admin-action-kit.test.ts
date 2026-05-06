@@ -18,6 +18,7 @@ import {
   validateAdminActionCsrfMetadata,
   type AdminActionSession,
 } from "../../../apps/admin/src/lib/server/admin-action.ts";
+import { submitAdminForm } from "../../../apps/admin/src/components/admin-form-submit.ts";
 
 const adminSession: AdminActionSession = {
   userId: "admin-user-1",
@@ -450,6 +451,42 @@ test("admin action token sets expose scoped payload and header tokens", () => {
       tokens.channels,
     );
   });
+});
+
+test("submitAdminForm dispatches submit before native submit fallback", () => {
+  const calls: string[] = [];
+  const form = {
+    requestSubmit: undefined,
+    dispatchEvent(event: Event) {
+      calls.push(`${event.type}:${event.bubbles}:${event.cancelable}`);
+      return true;
+    },
+    submit() {
+      calls.push("native-submit");
+    },
+  };
+
+  submitAdminForm(form as unknown as HTMLFormElement);
+
+  assert.deepEqual(calls, ["submit:true:true", "native-submit"]);
+});
+
+test("submitAdminForm honors cancelled submit fallback", () => {
+  const calls: string[] = [];
+  const form = {
+    requestSubmit: undefined,
+    dispatchEvent(event: Event) {
+      calls.push(`${event.type}:${event.bubbles}:${event.cancelable}`);
+      return false;
+    },
+    submit() {
+      calls.push("native-submit");
+    },
+  };
+
+  submitAdminForm(form as unknown as HTMLFormElement);
+
+  assert.deepEqual(calls, ["submit:true:true"]);
 });
 
 function listFilesRecursive(dir: string): string[] {

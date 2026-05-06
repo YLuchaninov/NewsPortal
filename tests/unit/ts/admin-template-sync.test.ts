@@ -477,6 +477,45 @@ test("parseInterestTemplateInput accepts blank time_window_hours as any-time and
   assert.equal(parsed.selectionProfileLlmReviewMode, "always");
 });
 
+test("parseInterestTemplateInput accepts MCP string arrays and comma-separated token fields", () => {
+  const parsed = parseInterestTemplateInput({
+    name: "AI implementation failures",
+    positive_texts: [
+      "Failed AI pilot",
+      "LLM integration rollout blocked",
+    ],
+    negative_texts: ["Vendor blog", "Market report"],
+    must_not_have_terms: "vendor blog, market report\njob listing",
+    languages_allowed: ["en", "de"],
+    allowed_content_kinds: "editorial, listing, document",
+    short_tokens_required: ["AI", "LLM"],
+    candidate_positive_signals: "failure_signals: failed AI pilot, LLM rollout blocked",
+    candidate_negative_signals: ["noise: vendor blog, market report"],
+  });
+
+  assert.deepEqual(parsed.positiveTexts, [
+    "Failed AI pilot",
+    "LLM integration rollout blocked",
+  ]);
+  assert.deepEqual(parsed.negativeTexts, ["Vendor blog", "Market report"]);
+  assert.deepEqual(parsed.mustNotHaveTerms, ["vendor blog", "market report", "job listing"]);
+  assert.deepEqual(parsed.languagesAllowed, ["en", "de"]);
+  assert.deepEqual(parsed.allowedContentKinds, ["editorial", "listing", "document"]);
+  assert.deepEqual(parsed.shortTokensRequired, ["AI", "LLM"]);
+  assert.deepEqual(parsed.candidatePositiveSignals, [
+    {
+      name: "failure_signals",
+      cues: ["failed AI pilot", "LLM rollout blocked"],
+    },
+  ]);
+  assert.deepEqual(parsed.candidateNegativeSignals, [
+    {
+      name: "noise",
+      cues: ["vendor blog", "market report"],
+    },
+  ]);
+});
+
 test("parseInterestTemplateInput preserves fine-grained priority decimals and accepts comma decimals", () => {
   const dotParsed = parseInterestTemplateInput({
     name: "Outsourcing demand",

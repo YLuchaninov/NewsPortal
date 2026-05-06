@@ -103,6 +103,20 @@ class SequenceExecutor:
 
                 try:
                     result = await self._execute_task(task=task, context=task_context)
+                except asyncio.CancelledError:
+                    duration_ms = self._duration_ms_since(started_at)
+                    error_text = f"Task {task.key} was cancelled before completion."
+                    await self._repository.mark_task_run_failed(
+                        task_run_id,
+                        error_text=error_text,
+                        duration_ms=duration_ms,
+                    )
+                    await self._repository.mark_run_failed(
+                        run_id,
+                        context_json=context_manager.snapshot(),
+                        error_text=error_text,
+                    )
+                    raise
                 except Exception as error:
                     duration_ms = self._duration_ms_since(started_at)
                     await self._repository.mark_task_run_failed(

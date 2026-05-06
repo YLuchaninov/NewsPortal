@@ -1,4 +1,5 @@
 import { JsonRpcError, readOptionalString, readRequiredString } from "./protocol";
+import { buildPromptTitle } from "./context";
 
 export interface McpPromptDefinition {
   name: string;
@@ -21,6 +22,34 @@ export interface McpPromptDefinition {
 }
 
 export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
+  {
+    name: "diagnose.mcp_error",
+    description: "Diagnose an MCP client/tool error and choose the next safe read or schema correction.",
+    arguments: [
+      { name: "error", description: "The exact MCP or Streamable HTTP error text.", required: true },
+      { name: "objective", description: "What the operator was trying to accomplish." },
+    ],
+    render: (args) => {
+      const error = readRequiredString(args.error, "error");
+      const objective = readOptionalString(args.objective) ?? "complete the operator task safely";
+      return {
+        description: "MCP error diagnosis guide",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Diagnose this NewsPortal MCP error while trying to ${objective}: "${error}". ` +
+                `First classify whether it is transport, authentication/scope, input schema, backend validation, or business-state related. ` +
+                `Use MCP read tools before shell/raw SQL, inspect tool inputSchema/outputSchema, and propose the smallest safe correction. ` +
+                `For cleanup/token lifecycle issues, use admin.mcp_tokens.list/revoke/delete_revoked when the token has the needed scopes. Do not bypass MCP with direct admin REST calls and do not guess mcp_access_tokens columns.`,
+            },
+          },
+        ],
+      };
+    },
+  },
   {
     name: "operator.session.start",
     description: "Starter guidance for understanding and safely using the NewsPortal MCP server.",
@@ -201,6 +230,187 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
     },
   },
   {
+    name: "operations.daily_review",
+    description: "Run a daily read-only operational review of NewsPortal after setup.",
+    arguments: [
+      { name: "focus", description: "Optional focus such as channels, selection, discovery, or LLM budget." },
+    ],
+    render: (args) => {
+      const focus = readOptionalString(args.focus) ?? "all operating domains";
+      return {
+        description: "Daily operating review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review NewsPortal operational health for ${focus}. ` +
+                `Read newsportal://guide/operating-model, newsportal://ops/health, newsportal://ops/issues, and newsportal://ops/tuning-backlog. ` +
+                `Use operator.system.health for DB/API-backed counts. Report only verified state, separate normal low-yield states from failures, and recommend no mutations unless evidence points to a bounded tuning follow-up.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "operations.issue_triage",
+    description: "Triage a concrete production/operator symptom through read-only MCP diagnostics.",
+    arguments: [
+      { name: "symptom", description: "The concrete symptom or confusing report.", required: true },
+      { name: "domain", description: "Optional operating domain such as website_pipeline, selection, or discovery." },
+    ],
+    render: (args) => {
+      const symptom = readRequiredString(args.symptom, "symptom");
+      const domain = readOptionalString(args.domain) ?? "infer from the symptom";
+      return {
+        description: "Operational issue triage",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Triage NewsPortal symptom "${symptom}" with domain "${domain}". ` +
+                `Call operator.issue.explain with includeSamples=true, then inspect the listed source-of-truth rows using domain read/explain tools. ` +
+                `Classify whether this is normal policy behavior, stale async state, source acquisition failure, downstream selection/gating, budget pressure, or schema/client misuse. Do not mutate settings during triage.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "selection.tuning.plan",
+    description: "Plan a safe selection fine-tuning session from residual/article evidence.",
+    arguments: [
+      { name: "objective", description: "increase_recall or increase_precision.", required: true },
+      { name: "residualBucket", description: "Observed residual/downstream-loss bucket." },
+    ],
+    render: (args) => {
+      const objective = readRequiredString(args.objective, "objective");
+      const residualBucket = readOptionalString(args.residualBucket) ?? "dominant residual bucket";
+      return {
+        description: "Selection tuning plan",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Prepare a read-first selection tuning plan for objective "${objective}" and residual pattern "${residualBucket}". ` +
+                `Read newsportal://guide/tuning/selection, articles.residuals.summary, representative articles.explain rows, and operator.tuning.recommend. ` +
+                `Return suggested guarded MCP writes only as proposals, then require operator.effect.verify after any applied change.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "channel.health.review",
+    description: "Review channel fetch health and source onboarding state.",
+    arguments: [
+      { name: "channelId", description: "Optional channel id to focus on." },
+    ],
+    render: (args) => {
+      const channelId = readOptionalString(args.channelId) ?? "all relevant channels";
+      return {
+        description: "Channel health review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review NewsPortal channel health for ${channelId}. ` +
+                `Read newsportal://guide/diagnostics/channels, operator.system.health scoped to channels, channels.read/list, and fetch_runs.list. ` +
+                `Separate source fetch failures from downstream selection outcomes before recommending changes.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "website.pipeline.review",
+    description: "Explain website resources, projection, and downstream article selection outcomes.",
+    arguments: [
+      { name: "channelId", description: "Optional website channel id to focus on." },
+    ],
+    render: (args) => {
+      const channelId = readOptionalString(args.channelId) ?? "the website channel";
+      return {
+        description: "Website pipeline review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review website pipeline behavior for ${channelId}. ` +
+                `Read newsportal://guide/diagnostics/website_pipeline, web_resources.list with projection=all, fetch_runs.list, and operator.issue.explain if resources are projected but rejected. ` +
+                `Explain resource_only, projected_to_common_pipeline, and final_selection rejected as separate states.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "llm_budget.review",
+    description: "Review LLM budget pressure, review behavior, and gray-zone/hold outcomes.",
+    arguments: [
+      { name: "question", description: "Specific budget or review question." },
+    ],
+    render: (args) => {
+      const question = readOptionalString(args.question) ?? "current LLM budget and review pressure";
+      return {
+        description: "LLM budget review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review ${question}. ` +
+                `Read newsportal://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and article explains for representative gray-zone holds. ` +
+                `Recommend cost tuning only through operator.tuning.recommend; do not edit templates or interests from one example alone.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.yield.review",
+    description: "Review discovery mission/recall candidate yield and promotion readiness.",
+    arguments: [
+      { name: "missionId", description: "Optional graph mission id." },
+      { name: "recallMissionId", description: "Optional recall mission id." },
+    ],
+    render: (args) => {
+      const missionId = readOptionalString(args.missionId) ?? "any relevant graph mission";
+      const recallMissionId = readOptionalString(args.recallMissionId) ?? "any relevant recall mission";
+      return {
+        description: "Discovery yield review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review discovery yield for mission ${missionId} and recall mission ${recallMissionId}. ` +
+                `Read newsportal://guide/diagnostics/discovery, discovery.summary.get, mission/candidate lists, and operator.report.verify with reportKind=discovery_yield. ` +
+                `Explain rejected candidates by probe evidence and never force promotion without valid evidence or explicit overrideReason.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
     name: "system_interest.create",
     description: "Draft a bounded system-interest payload before calling MCP write tools.",
     arguments: [
@@ -366,7 +576,11 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             role: "user",
             content: {
               type: "text",
-              text: `Prepare a safe cleanup checklist for NewsPortal MCP work covering "${scope}". Separate reversible actions, destructive actions that require confirmation, and artifacts that should remain for audit or acceptance proof.`,
+              text:
+                `Prepare a safe cleanup checklist for NewsPortal MCP work covering "${scope}". ` +
+                `Separate reversible actions, destructive actions that require confirmation, and artifacts that should remain for audit or acceptance proof. ` +
+                `Use MCP read tools before shell or raw SQL. For MCP token lifecycle, use admin.mcp_tokens.list/revoke/delete_revoked if scopes allow it; otherwise report the missing scope and do not call admin REST directly. ` +
+                `Do not guess mcp_access_tokens columns such as id, name, is_active, or is_revoked because those are not schema columns. Leave migration-owned default/adaptive/system sequences unchanged.`,
             },
           },
         ],
@@ -378,6 +592,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
 export function listMcpPrompts() {
   return MCP_PROMPTS.map((prompt) => ({
     name: prompt.name,
+    title: buildPromptTitle(prompt.name),
     description: prompt.description,
     arguments: prompt.arguments,
   }));

@@ -115,10 +115,12 @@ const initialJobs = {
   hasNext: reindexJobs.hasNext,
   queuedCount: reindexJobs.items.filter((job) => String(job.status) === "queued").length,
   runningCount: reindexJobs.items.filter((job) => String(job.status) === "running").length,
+  cancellingCount: reindexJobs.items.filter((job) => String(job.status) === "cancel_requested").length,
   revision: JSON.stringify(
     reindexJobs.items.map((job) => [
       job.reindex_job_id,
       job.status,
+      ["queued", "running", "cancel_requested"].includes(String(job.status)),
       readProgressLabel(job),
       readSelectionProfileSnapshot(job),
       readSelectionProfileSummary(job),
@@ -141,6 +143,7 @@ const initialJobs = {
       indexName: String(job.index_name ?? "—"),
       jobKind: String(job.job_kind ?? "rebuild"),
       status: String(job.status ?? "pending"),
+      cancellable: ["queued", "running", "cancel_requested"].includes(String(job.status)),
       createdAt: job.created_at ? String(job.created_at) : null,
       createdAtLabel: job.created_at ? String(job.created_at) : null,
       processedArticles:
@@ -152,6 +155,7 @@ const initialJobs = {
       revision: JSON.stringify([
         job.reindex_job_id,
         job.status,
+        ["queued", "running", "cancel_requested"].includes(String(job.status)),
         readProgressLabel(job),
         readSelectionProfileSnapshot(job),
         readSelectionProfileSummary(job),
@@ -307,6 +311,8 @@ const initialJobs = {
       initialJobs={initialJobs}
       currentPage={page}
       currentPath={currentPath}
+      cancelAction={reindexBffPath}
+      adminActionToken={reindexActionToken}
       client:load
     />
   </div>

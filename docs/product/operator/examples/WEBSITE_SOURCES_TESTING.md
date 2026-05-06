@@ -376,12 +376,17 @@ Authorization header: <leave empty>
 
 - доминируют `document`, `listing`, `data_file`, иногда `entity`;
 - projected `editorial` rows могут отсутствовать совсем;
-- `resource-only` rows — это expected success path, а не partial failure.
+- `resource-only` rows — это expected success path, а не partial failure;
+- `listing`/`document`/`entity` rows могут также получить `projected_article_id`, если extractor смог сделать stable common-pipeline article representation.
 
 Ожидаемая картина:
 
+- `projection = all`
+  стартовая проверка, чтобы увидеть весь mix rows и не перепутать projection outcome с channel failure
 - `projection = resource_only`
-  это главный фильтр для этого кейса
+  часто самый полезный фильтр для pure resource truth, но не единственный валидный outcome
+- `projection = projected`
+  может быть пустым или показывать rows, которые дальше должны оцениваться через downstream article/selection diagnostics
 - `resourceKind = document`
   часто самый полезный фильтр
 - `resourceKind = listing`
@@ -395,17 +400,19 @@ Authorization header: <leave empty>
 2. `document` / `listing` rows видны в `/admin/resources`
 3. detail по resource открывается и показывает persisted metadata
 4. отсутствие article projection **не считается поломкой**
-5. resource-only lane остается наблюдаемой и фильтруемой
+5. наличие article projection с `final_decision=rejected` тоже не считается поломкой source onboarding: это уже downstream relevance/selection result
+6. resource-only lane остается наблюдаемой и фильтруемой
 
 ### Что не считать ошибкой
 
 Не ошибка, если:
 
 - `Projected = 0`
+- `Projected > 0`, но все downstream `final_selection_results` rejected
 - `projection = projected` пустой
 - `resourceKind = editorial` почти ничего не показывает
 
-Именно этот пример нужен, чтобы отучиться от ложного ожидания “каждый website source должен превратиться в Articles”.
+Именно этот пример нужен, чтобы отучиться от двух ложных ожиданий: “каждый website source должен превратиться в Articles” и “если procurement rows projected, они обязаны стать selected”.
 
 ### B.4. Как именно проверять
 
@@ -417,11 +424,14 @@ Authorization header: <leave empty>
    - есть `document` и/или `listing`
    - detail по resource открывается
 5. Пройдите фильтры:
+   - `projection=all`
    - `projection=resource_only`
+   - `projection=projected`
    - `resourceKind=document`
    - `resourceKind=listing`
    - `extractionState=failed`, если хотите отделить реальные extraction issues от нормальных resource-only rows
-6. Откройте несколько detail rows и убедитесь, что resource truth полезна даже без article projection.
+6. Если есть projected rows, откройте один projected article и проверьте downstream diagnostics / final decision.
+7. Откройте несколько detail rows и убедитесь, что resource truth полезна даже без article projection.
 
 ---
 

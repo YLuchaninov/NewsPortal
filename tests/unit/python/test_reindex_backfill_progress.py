@@ -252,6 +252,46 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["criteriaMatches"], 2)
         self.assertEqual(result["interestMatches"], 3)
 
+    async def test_replay_historical_articles_exits_when_cancel_requested_between_batches(self) -> None:
+        dependencies = reindex_backfill.HistoricalBackfillDependencies(
+            prepare_target_snapshot=AsyncMock(return_value=2),
+            list_target_batch=AsyncMock(
+                side_effect=[
+                    [{"target_position": 1, "doc_id": "doc-1"}],
+                    [{"target_position": 2, "doc_id": "doc-2"}],
+                ]
+            ),
+            update_job_options=AsyncMock(),
+            publish_outbox_event=AsyncMock(),
+            process_article_extract=AsyncMock(),
+            process_normalize=AsyncMock(),
+            process_dedup=AsyncMock(),
+            process_embed=AsyncMock(),
+            process_cluster=AsyncMock(return_value={"status": "clustered"}),
+            process_match_criteria=AsyncMock(return_value={"criteriaCount": 1}),
+            process_match_interests=AsyncMock(return_value={"interestCount": 1}),
+            is_article_eligible_for_personalization=AsyncMock(return_value=True),
+            replay_gray_zone_reviews_for_doc=AsyncMock(return_value=0),
+            is_cancel_requested=AsyncMock(side_effect=[False, True]),
+        )
+
+        result = await reindex_backfill.replay_historical_articles(
+            reindex_job_id="job-cancel",
+            batch_size=1,
+            doc_ids=None,
+            user_id=None,
+            interest_id=None,
+            system_feed_only=False,
+            include_enrichment=False,
+            force_enrichment=False,
+            dependencies=dependencies,
+        )
+
+        self.assertEqual(result["status"], "cancelled")
+        self.assertEqual(result["processedArticles"], 1)
+        self.assertEqual(result["totalArticles"], 2)
+        self.assertEqual(dependencies.list_target_batch.await_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

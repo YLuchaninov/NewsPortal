@@ -1,11 +1,106 @@
 import {
   createReadTool,
   detailSchema,
+  JsonRpcError,
   readOptionalString,
   readPageArgs,
   readRequiredString,
   type McpToolDefinition,
 } from "../shared";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PREFIX_RE = /^[0-9a-f-]{8,35}$/i;
+
+type QueryablePool = {
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+};
+
+async function resolveUuidFilter(
+  pool: QueryablePool,
+  value: unknown,
+  input: {
+    path: string;
+    tableName: string;
+    columnName: string;
+    label: string;
+  }
+): Promise<string | undefined> {
+  const normalized = readOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+  if (UUID_RE.test(normalized)) {
+    return normalized;
+  }
+  if (!UUID_PREFIX_RE.test(normalized)) {
+    throw new JsonRpcError(-32602, `${input.path} must be a full UUID or a unique UUID prefix.`, {
+      statusCode: 400,
+      data: {
+        path: input.path,
+        expectedShape: "UUID or unique UUID prefix of at least 8 hex characters",
+      },
+    });
+  }
+
+  const result = await pool.query(
+    `
+      select ${input.columnName}::text as id
+        from ${input.tableName}
+       where ${input.columnName}::text like $1
+       order by ${input.columnName}::text
+       limit 2
+    `,
+    [`${normalized}%`]
+  );
+  const rows = result.rows as Array<{ id: string }>;
+  if (rows.length === 1) {
+    return rows[0]?.id;
+  }
+  if (rows.length > 1) {
+    throw new JsonRpcError(-32602, `${input.path} prefix is ambiguous; pass the full UUID.`, {
+      statusCode: 400,
+      data: {
+        path: input.path,
+        value: normalized,
+        matches: rows.map((row) => row.id),
+      },
+    });
+  }
+  throw new JsonRpcError(-32602, `${input.label} ${normalized} was not found.`, {
+    statusCode: 400,
+    data: {
+      path: input.path,
+      value: normalized,
+    },
+  });
+}
+
+function resolveMissionIdFilter(
+  pool: QueryablePool,
+  value: unknown,
+  path = "missionId"
+): Promise<string | undefined> {
+  return resolveUuidFilter(pool, value, {
+    path,
+    tableName: "discovery_missions",
+    columnName: "mission_id",
+    label: "Discovery mission",
+  });
+}
+
+function resolveRecallMissionIdFilter(
+  pool: QueryablePool,
+  value: unknown,
+  path = "recallMissionId"
+): Promise<string | undefined> {
+  return resolveUuidFilter(pool, value, {
+    path,
+    tableName: "discovery_recall_missions",
+    columnName: "recall_mission_id",
+    label: "Discovery recall mission",
+  });
+}
 
 export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
@@ -145,10 +240,10 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       additionalProperties: false,
     },
-    async ({ sdk }, args) =>
+    async ({ sdk, pool }, args) =>
       sdk.listDiscoveryCandidates<Record<string, unknown>>({
         ...readPageArgs(args),
-        missionId: readOptionalString(args.missionId) ?? undefined,
+        missionId: await resolveMissionIdFilter(pool, args.missionId),
         status: readOptionalString(args.status) ?? undefined,
         providerType: readOptionalString(args.providerType) ?? undefined,
       })
@@ -177,10 +272,10 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       additionalProperties: false,
     },
-    async ({ sdk }, args) =>
+    async ({ sdk, pool }, args) =>
       sdk.listDiscoveryRecallCandidates<Record<string, unknown>>({
         ...readPageArgs(args),
-        recallMissionId: readOptionalString(args.recallMissionId) ?? undefined,
+        recallMissionId: await resolveRecallMissionIdFilter(pool, args.recallMissionId),
         status: readOptionalString(args.status) ?? undefined,
         providerType: readOptionalString(args.providerType) ?? undefined,
         canonicalDomain: readOptionalString(args.canonicalDomain) ?? undefined,
@@ -208,10 +303,10 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       additionalProperties: false,
     },
-    async ({ sdk }, args) =>
+    async ({ sdk, pool }, args) =>
       sdk.listDiscoveryHypotheses<Record<string, unknown>>({
         ...readPageArgs(args),
-        missionId: readOptionalString(args.missionId) ?? undefined,
+        missionId: await resolveMissionIdFilter(pool, args.missionId),
         status: readOptionalString(args.status) ?? undefined,
       })
   ),
@@ -259,10 +354,10 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       additionalProperties: false,
     },
-    async ({ sdk }, args) =>
+    async ({ sdk, pool }, args) =>
       sdk.listDiscoverySourceInterestScores<Record<string, unknown>>({
         ...readPageArgs(args),
-        missionId: readOptionalString(args.missionId) ?? undefined,
+        missionId: await resolveMissionIdFilter(pool, args.missionId),
         channelId: readOptionalString(args.channelId) ?? undefined,
         minScore: typeof args.minScore === "number" ? args.minScore : undefined,
       })
@@ -288,10 +383,10 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       additionalProperties: false,
     },
-    async ({ sdk }, args) =>
+    async ({ sdk, pool }, args) =>
       sdk.listDiscoveryFeedback<Record<string, unknown>>({
         ...readPageArgs(args),
-        missionId: readOptionalString(args.missionId) ?? undefined,
+        missionId: await resolveMissionIdFilter(pool, args.missionId),
       })
   ),
   createReadTool(

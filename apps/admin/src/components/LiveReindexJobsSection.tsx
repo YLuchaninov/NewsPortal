@@ -9,11 +9,14 @@ import {
   type AdminReindexJobSnapshot,
   type AdminReindexJobsSnapshot,
 } from "../lib/live-updates";
+import { AdminConfirmAction } from "./AdminConfirmAction";
 
 interface LiveReindexJobsSectionProps {
   initialJobs: AdminReindexJobsSnapshot;
   currentPage: number;
   currentPath: string;
+  cancelAction: string;
+  adminActionToken: string;
 }
 
 function resolvePageHref(currentPath: string, nextPage: number): string {
@@ -36,7 +39,14 @@ function statusClass(status: string): string {
   if (status === "running") {
     return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
   }
+  if (status === "cancel_requested") {
+    return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+  }
   return "bg-muted text-muted-foreground";
+}
+
+function statusLabel(status: string): string {
+  return status === "cancel_requested" ? "cancelling" : status;
 }
 
 function formatTimestamp(value: string | null): string | null {
@@ -90,6 +100,8 @@ export function LiveReindexJobsSection({
   initialJobs,
   currentPage,
   currentPath,
+  cancelAction,
+  adminActionToken,
 }: LiveReindexJobsSectionProps) {
   const [jobs, setJobs] = useState(initialJobs);
   const [needsRefreshNotice, setNeedsRefreshNotice] = useState(false);
@@ -162,6 +174,9 @@ export function LiveReindexJobsSection({
           <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
             {jobs.runningCount} running
           </span>
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {jobs.cancellingCount} cancelling
+          </span>
         </div>
         <p className="mt-0.5 text-[10px] text-muted-foreground">
           {jobs.total} job{jobs.total !== 1 ? "s" : ""} total
@@ -195,9 +210,9 @@ export function LiveReindexJobsSection({
           jobs.items.map((job) => (
             <div
               key={job.reindexJobId}
-              className="flex items-center justify-between px-4 py-3"
+              className="flex items-center justify-between gap-3 px-4 py-3"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">{job.indexName}</p>
                 <p className="text-[11px] text-muted-foreground">
                   {job.jobKind}
@@ -231,13 +246,31 @@ export function LiveReindexJobsSection({
                   </p>
                 )}
               </div>
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClass(
-                  job.status
-                )}`}
-              >
-                {job.status}
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                {job.cancellable && (
+                  <AdminConfirmAction
+                    action={cancelAction}
+                    title="Cancel reindex job"
+                    description="Queued jobs stop immediately. Running jobs stop after the current batch finishes."
+                    triggerLabel="Cancel"
+                    confirmLabel="Cancel job"
+                    fields={[
+                      { name: "adminActionToken", value: adminActionToken },
+                      { name: "intent", value: "cancel" },
+                      { name: "reindexJobId", value: job.reindexJobId },
+                    ]}
+                    triggerClassName="h-7 px-2 text-[11px]"
+                    confirmClassName="bg-amber-600 text-white hover:bg-amber-600/90"
+                  />
+                )}
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClass(
+                    job.status
+                  )}`}
+                >
+                  {statusLabel(job.status)}
+                </span>
+              </div>
             </div>
           ))
         )}

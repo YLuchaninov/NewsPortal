@@ -58,6 +58,7 @@ function createReindexSnapshot(): AdminReindexLiveSnapshot {
       hasNext: false,
       queuedCount: 1,
       runningCount: 1,
+      cancellingCount: 0,
       revision: "jobs-v1",
       items: [
         {
@@ -65,7 +66,9 @@ function createReindexSnapshot(): AdminReindexLiveSnapshot {
           indexName: "interest_centroids",
           jobKind: "backfill",
           status: "running",
+          cancellable: true,
           createdAt: "2026-03-27T11:59:00Z",
+          createdAtLabel: "2026-03-27T11:59:00Z",
           processedArticles: 10,
           totalArticles: 42,
           progressLabel: "10/42 articles",

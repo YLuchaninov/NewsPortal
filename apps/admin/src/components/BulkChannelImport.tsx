@@ -29,6 +29,8 @@ export type BulkChannelImportExampleMode =
 interface BulkChannelImportProps {
   action: string;
   preflightAction: string;
+  adminActionToken: string;
+  preflightAdminActionToken: string;
   redirectTo?: string;
   exampleMode?: BulkChannelImportExampleMode;
 }
@@ -545,6 +547,16 @@ export function getBulkChannelImportViewModel(
   return BULK_IMPORT_VIEW_MODELS[mode];
 }
 
+export function buildBulkChannelImportPreflightHeaders(
+  preflightAdminActionToken: string
+): Record<string, string> {
+  return {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "x-admin-action-token": preflightAdminActionToken
+  };
+}
+
 function formatProviderBreakdown(
   providerBreakdown: BulkImportProviderBreakdown[]
 ): string {
@@ -559,6 +571,8 @@ function formatProviderBreakdown(
 export function BulkChannelImport({
   action,
   preflightAction,
+  adminActionToken,
+  preflightAdminActionToken,
   redirectTo,
   exampleMode = "mixed"
 }: BulkChannelImportProps) {
@@ -611,10 +625,7 @@ export function BulkChannelImport({
     try {
       const response = await fetch(preflightAction, {
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
+        headers: buildBulkChannelImportPreflightHeaders(preflightAdminActionToken),
         body: JSON.stringify({
           channels: parsedPayload,
           redirectTo
@@ -695,6 +706,7 @@ export function BulkChannelImport({
         className="grid h-[calc(100%-2rem)] gap-2"
       >
         {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
+        <input type="hidden" name="adminActionToken" value={adminActionToken} />
         <input
           ref={confirmOverwriteRef}
           type="hidden"

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from decimal import Decimal
 from typing import Any
@@ -1278,6 +1279,50 @@ class DiscoveryOrchestratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             fresh_candidate["evaluation_json"]["browser_assisted_recommended"]
         )
+
+    async def test_execute_hypotheses_marks_current_hypothesis_failed_on_cancellation(self) -> None:
+        repository = _FakeDiscoveryRepository()
+        await repository.insert_hypotheses(
+            mission_id="mission-1",
+            hypotheses=[
+                {
+                    "class_key": "lexical",
+                    "tactic_key": "synonym",
+                    "search_query": "EU AI official bulletin",
+                    "target_provider_type": "rss",
+                    "generation_context": {"origin": "seed"},
+                    "expected_value": "Lexical / synonym",
+                }
+            ],
+        )
+        runtime = _FakeRuntime({})
+        sequence_repository = _FakeSequenceRepository()
+
+        async def fake_execute_run(self, run_id: str) -> dict[str, Any]:
+            del self, run_id
+            raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "services.workers.app.discovery_orchestrator.get_discovery_runtime",
+                return_value=runtime,
+            ),
+            patch(
+                "services.workers.app.discovery_orchestrator.SequenceExecutor.execute_run",
+                new=fake_execute_run,
+            ),
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await execute_hypotheses(
+                    mission_id="mission-1",
+                    settings=DiscoverySettings(max_hypotheses_per_run=5),
+                    repository=repository,
+                    sequence_repository=sequence_repository,  # type: ignore[arg-type]
+                )
+
+        self.assertEqual(repository.running_updates, [("hypothesis-1", "run-1")])
+        self.assertEqual(repository.failed_updates[0]["hypothesis_id"], "hypothesis-1")
+        self.assertIn("cancelled", repository.failed_updates[0]["error_text"])
 
     async def test_acquire_recall_missions_persists_neutral_candidates_without_source_registration(self) -> None:
         repository = _FakeDiscoveryRepository()

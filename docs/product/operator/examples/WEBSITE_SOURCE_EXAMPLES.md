@@ -379,20 +379,25 @@ Authorization header: <leave empty>
 Ожидаемая картина:
 
 - доминируют `document`, `listing`, иногда `entity`;
-- `projection=resource_only` должен быть самым полезным фильтром;
-- `projection=projected` может быть пустым и это **нормально**;
+- начинайте проверку с `projection=all`, потом сравнивайте `projection=resource_only` и `projection=projected`;
+- `projection=resource_only` часто полезен для чистой resource truth, но он не обязан быть единственным успешным outcome;
+- `projection=projected` может быть пустым, а может содержать `listing`/`document`/`entity` rows, спроецированные в common article pipeline;
 - главная ценность здесь не в `articles`, а в persisted resource truth.
 
 Что считать успехом:
 
-1. `resource-only` rows materialize-ятся;
-2. `/admin/resources` не скрывает non-editorial truth;
-3. resource detail usable даже без article projection.
+1. `web_resources` materialize-ятся;
+2. `document` / `listing` rows видны в `/admin/resources`;
+3. `/admin/resources` не скрывает non-editorial truth;
+4. если row projected, связанный article открывается и downstream selection diagnostics объясняют outcome;
+5. resource detail usable даже без article projection.
 
 Что не считать ошибкой:
 
 - `Projected = 0`;
+- `Projected > 0`, если projected rows дальше получили `final_decision=rejected`;
 - отсутствие `editorial` rows;
+- отсутствие selected articles, если downstream interests/filters не считают procurement rows релевантными;
 - пустой `/admin/articles` для этого target.
 
 ---

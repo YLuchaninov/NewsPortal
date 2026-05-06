@@ -11,6 +11,11 @@ import {
   prepareAdminAction,
   readRequiredAdminText,
 } from "../../../lib/server/admin-action";
+import {
+  assertAdminChannelPayloadMatchesSchema,
+  assertAdminPayloadHasNoNestedEnvelope,
+  stripAdminMetaFields,
+} from "../../../lib/server/admin-payload-validation";
 import { resolveAdminAppPath } from "../../../lib/server/browser-flow";
 import { getPool } from "../../../lib/server/db";
 
@@ -39,6 +44,7 @@ export const POST: APIRoute = async ({ request }) => {
     const { payload, session } = action.context;
     const pool = getPool();
     const intent = resolveChannelIntent(payload);
+    assertAdminPayloadHasNoNestedEnvelope(payload, "Channel action");
 
     if (intent === "delete") {
       const channelId = readRequiredAdminText(
@@ -68,6 +74,10 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
+    assertAdminChannelPayloadMatchesSchema(
+      stripAdminMetaFields(payload),
+      "Channel save payload",
+    );
     const result = await saveChannelFromPayload(pool, session.userId, payload);
     const entityPath = result.channelId
       ? resolveChannelEditPath(request, result.channelId)

@@ -58,10 +58,29 @@ export function readPageArgs(args: Record<string, unknown>) {
 export function readPayload(args: Record<string, unknown>): Record<string, unknown> {
   const payload = args.payload;
   if (payload != null && typeof payload === "object" && !Array.isArray(payload)) {
+    if (Object.prototype.hasOwnProperty.call(payload, "payload")) {
+      throw new JsonRpcError(
+        -32602,
+        "payload.payload is not allowed. Pass the backend payload directly as arguments.payload.",
+        {
+          statusCode: 400,
+          data: {
+            path: "payload.payload",
+            code: "nested_payload_not_allowed",
+            expectedShape: "arguments.payload must be the API payload object, not an envelope.",
+          },
+        }
+      );
+    }
     return { ...(payload as Record<string, unknown>) };
   }
   throw new JsonRpcError(-32602, "payload must be a JSON object.", {
     statusCode: 400,
+    data: {
+      path: "payload",
+      code: "invalid_type",
+      expectedShape: "JSON object",
+    },
   });
 }
 
@@ -74,6 +93,77 @@ export function withActorDefault(
     ...payload,
     [fieldName]: readOptionalString(payload[fieldName]) ?? actorUserId,
   };
+}
+
+export interface StringListFieldSpec {
+  splitCommas?: boolean;
+  allowedValues?: readonly string[];
+}
+
+export function normalizeStringListInput(
+  value: unknown,
+  path: string,
+  spec: StringListFieldSpec = {}
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const splitCommas = spec.splitCommas ?? true;
+  const values = Array.isArray(value) ? value : [value];
+  const items = values
+    .flatMap((entry) => String(entry ?? "").split(/\r?\n/u))
+    .flatMap((entry) => (splitCommas ? entry.split(",") : [entry]))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (spec.allowedValues) {
+    const invalid = items.find((entry) => !spec.allowedValues?.includes(entry));
+    if (invalid) {
+      throw new JsonRpcError(-32602, `${path} contains unsupported value "${invalid}".`, {
+        statusCode: 400,
+        data: {
+          path,
+          code: "invalid_enum",
+          allowedValues: [...spec.allowedValues],
+        },
+      });
+    }
+  }
+
+  return items;
+}
+
+export function normalizePayloadStringListFields(
+  payload: Record<string, unknown>,
+  specs: Record<string, StringListFieldSpec | undefined>,
+  pathPrefix = "payload"
+): Record<string, unknown> {
+  const normalized = { ...payload };
+  for (const [fieldName, spec] of Object.entries(specs)) {
+    if (!Object.prototype.hasOwnProperty.call(normalized, fieldName)) {
+      continue;
+    }
+    const list = normalizeStringListInput(
+      normalized[fieldName],
+      `${pathPrefix}.${fieldName}`,
+      spec
+    );
+    if (list !== undefined) {
+      normalized[fieldName] = list;
+    }
+  }
+  return normalized;
+}
+
+export function normalizeRecordStringListFields(
+  value: unknown,
+  specs: Record<string, StringListFieldSpec | undefined>,
+  pathPrefix: string
+): unknown {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  return normalizePayloadStringListFields(value as Record<string, unknown>, specs, pathPrefix);
 }
 
 function normalizeAuditEntityId(entityId: string | null | undefined): string | null {

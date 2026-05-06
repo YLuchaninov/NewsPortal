@@ -4,6 +4,7 @@ export * from "./content-analysis";
 export * from "./error-taxonomy";
 export * from "./auth";
 export * from "./health";
+export * from "./mcp-schemas";
 export * from "./pagination";
 export * from "./queue";
 export * from "./schema";

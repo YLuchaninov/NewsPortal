@@ -168,6 +168,13 @@ export function readBooleanFlag(value: unknown, fieldName: string): boolean {
 }
 
 export function buildToolResult(payload: unknown) {
+  const structuredContent =
+    payload != null && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : Array.isArray(payload)
+        ? { items: payload }
+        : { value: payload };
+
   return {
     content: [
       {
@@ -175,6 +182,6 @@ export function buildToolResult(payload: unknown) {
         text: JSON.stringify(payload, null, 2),
       },
     ],
-    structuredContent: payload,
+    structuredContent,
   };
 }

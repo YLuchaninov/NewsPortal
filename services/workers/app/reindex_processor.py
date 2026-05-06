@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -68,10 +69,31 @@ async def process_reindex_with_dependencies(
                 if await deps.is_event_processed(cursor, REINDEX_CONSUMER, event_id):
                     return {"status": "duplicate-event", "reindexJobId": reindex_job_id}
 
-                job_kind, job_options = await deps.read_reindex_job_context(
+                job_context = await deps.read_reindex_job_context(
                     cursor,
                     reindex_job_id,
                 )
+                if len(job_context) == 2:
+                    job_kind, job_options = job_context
+                    job_status = "queued"
+                else:
+                    job_kind, job_options, job_status = job_context
+
+                if job_status in {"cancel_requested", "cancelled"}:
+                    await cursor.execute(
+                        """
+                        update reindex_jobs
+                        set
+                          status = 'cancelled',
+                          finished_at = coalesce(finished_at, now()),
+                          error_text = coalesce(error_text, 'Cancelled before reindex started.'),
+                          updated_at = now()
+                        where reindex_job_id = %s
+                        """,
+                        (reindex_job_id,),
+                    )
+                    await deps.record_processed_event(cursor, REINDEX_CONSUMER, event_id)
+                    return {"status": "cancelled", "reindexJobId": reindex_job_id}
 
                 await cursor.execute(
                     """
@@ -163,6 +185,31 @@ async def process_reindex_with_dependencies(
                 max_text_chars=max_text_chars,
                 subject_ids=coerce_text_list(job_options.get("subjectIds")) or None,
             )
+    except asyncio.CancelledError:
+        async with await deps.open_connection() as connection:
+            async with connection.transaction():
+                async with connection.cursor() as cursor:
+                    await cursor.execute(
+                        """
+                        update reindex_jobs
+                        set
+                          status = case
+                            when status = 'cancel_requested' then 'cancelled'
+                            else 'failed'
+                          end,
+                          finished_at = now(),
+                          error_text = case
+                            when status = 'cancel_requested'
+                              then coalesce(error_text, 'Cancelled by operator.')
+                            else 'Task reindex was cancelled before completion.'
+                          end,
+                          updated_at = now()
+                        where reindex_job_id = %s
+                        """,
+                        (reindex_job_id,),
+                    )
+                    await deps.record_processed_event(cursor, REINDEX_CONSUMER, event_id)
+        raise
     except Exception as error:
         async with await deps.open_connection() as connection:
             async with connection.transaction():
@@ -186,6 +233,16 @@ async def process_reindex_with_dependencies(
             "error": str(error),
         }
 
+    terminal_status = "completed"
+    if (
+        isinstance(result.get("backfill"), dict)
+        and result["backfill"].get("status") == "cancelled"
+    ) or (
+        isinstance(result.get("contentAnalysis"), dict)
+        and result["contentAnalysis"].get("status") == "cancelled"
+    ):
+        terminal_status = "cancelled"
+
     async with await deps.open_connection() as connection:
         async with connection.transaction():
             async with connection.cursor() as cursor:
@@ -193,19 +250,27 @@ async def process_reindex_with_dependencies(
                     """
                     update reindex_jobs
                     set
-                      status = 'completed',
+                      status = %s,
                       finished_at = now(),
-                      error_text = null,
+                      error_text = case
+                        when %s = 'cancelled' then coalesce(error_text, 'Cancelled by operator.')
+                        else null
+                      end,
                       updated_at = now(),
                       options_json = options_json || %s::jsonb
                     where reindex_job_id = %s
                     """,
-                    (Json(make_json_safe(result)), reindex_job_id),
+                    (
+                        terminal_status,
+                        terminal_status,
+                        Json(make_json_safe(result)),
+                        reindex_job_id,
+                    ),
                 )
                 await deps.record_processed_event(cursor, REINDEX_CONSUMER, event_id)
 
     return {
-        "status": "completed",
+        "status": terminal_status,
         "reindexJobId": reindex_job_id,
         "result": result,
     }

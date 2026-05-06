@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 from typing import Any
 
@@ -131,6 +132,12 @@ async def execute_hypotheses(
 
         try:
             run_result = await executor.execute_run(run_id)
+        except asyncio.CancelledError as error:
+            await repository.mark_hypothesis_failed(
+                hypothesis_id=hypothesis_id_text,
+                error_text=str(error) or "Hypothesis execution was cancelled before completion.",
+            )
+            raise
         except Exception as error:
             await repository.mark_hypothesis_failed(
                 hypothesis_id=hypothesis_id_text,

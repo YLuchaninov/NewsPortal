@@ -90,23 +90,27 @@ function buildCollectionSignal(
 async function readPendingReindexCounts(): Promise<{
   queuedCount: number;
   runningCount: number;
+  cancellingCount: number;
 }> {
   const result = await getPool().query<{
     queued_count: number;
     running_count: number;
+    cancelling_count: number;
   }>(
     `
       select
         count(*) filter (where status = 'queued')::int as queued_count,
-        count(*) filter (where status = 'running')::int as running_count
+        count(*) filter (where status = 'running')::int as running_count,
+        count(*) filter (where status = 'cancel_requested')::int as cancelling_count
       from reindex_jobs
-      where status in ('queued', 'running')
+      where status in ('queued', 'running', 'cancel_requested')
     `
   );
 
   return {
     queuedCount: result.rows[0]?.queued_count ?? 0,
     runningCount: result.rows[0]?.running_count ?? 0,
+    cancellingCount: result.rows[0]?.cancelling_count ?? 0,
   };
 }
 
@@ -326,6 +330,7 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
     indexName: normalizeText(job.index_name) || "—",
     jobKind: normalizeText(job.job_kind) || "rebuild",
     status: normalizeText(job.status) || "pending",
+    cancellable: ["queued", "running"].includes(normalizeText(job.status)),
     createdAt,
     createdAtLabel: createdAt,
     processedArticles: progress.processedArticles,
@@ -336,6 +341,7 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
     revision: buildAdminLiveRevision([
       job.reindex_job_id,
       job.status,
+      ["queued", "running"].includes(normalizeText(job.status)),
       progress.processedArticles,
       progress.totalArticles,
       selectionProfileSnapshot,
@@ -369,12 +375,14 @@ async function loadReindexSnapshot(input: {
     hasNext: jobsPage.hasNext,
     queuedCount: pendingCounts.queuedCount,
     runningCount: pendingCounts.runningCount,
+    cancellingCount: pendingCounts.cancellingCount,
     revision: buildAdminLiveRevision([
       jobsPage.total,
       jobsPage.page,
       jobsPage.totalPages,
       pendingCounts.queuedCount,
       pendingCounts.runningCount,
+      pendingCounts.cancellingCount,
       items.map((item) => item.revision),
     ]),
     items,
@@ -384,7 +392,8 @@ async function loadReindexSnapshot(input: {
     surface: "reindex",
     fetchedAt: new Date().toISOString(),
     revision: jobs.revision,
-    hasPendingWork: jobs.queuedCount > 0 || jobs.runningCount > 0,
+    hasPendingWork:
+      jobs.queuedCount > 0 || jobs.runningCount > 0 || jobs.cancellingCount > 0,
     jobs,
   };
 }

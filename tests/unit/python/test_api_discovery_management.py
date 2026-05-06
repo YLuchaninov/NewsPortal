@@ -1075,15 +1075,25 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         ):
             result = api_main.request_content_analysis_backfill(payload)
 
-        job_sql, job_params = fake_connection.cursor_instance.executed[0]
-        event_sql, event_params = fake_connection.cursor_instance.executed[1]
+        advisory_sql, advisory_params = fake_connection.cursor_instance.executed[0]
+        job_sql, job_params = fake_connection.cursor_instance.executed[1]
+        cancel_queued_sql, cancel_queued_params = fake_connection.cursor_instance.executed[2]
+        cancel_running_sql, cancel_running_params = fake_connection.cursor_instance.executed[3]
+        event_sql, event_params = fake_connection.cursor_instance.executed[4]
         persisted_options = json.loads(job_params[1])
         persisted_event = json.loads(event_params[2])
 
+        self.assertIn("pg_advisory_xact_lock", advisory_sql)
+        self.assertTrue(advisory_params[0].startswith("reindex:content_analysis:content_analysis:"))
         self.assertIn("insert into reindex_jobs", job_sql.lower())
         self.assertIn("index_name", job_sql)
         self.assertEqual(job_params[0], "job-1")
         self.assertEqual(job_params[2], "11111111-1111-1111-1111-111111111111")
+        self.assertEqual(job_params[3], advisory_params[0])
+        self.assertIn("status = 'cancelled'", cancel_queued_sql)
+        self.assertEqual(cancel_queued_params, ("job-1", advisory_params[0], "job-1"))
+        self.assertIn("status = 'cancel_requested'", cancel_running_sql)
+        self.assertEqual(cancel_running_params, ("job-1", advisory_params[0], "job-1"))
         self.assertEqual(persisted_options["batchSize"], 25)
         self.assertEqual(persisted_options["subjectTypes"], ["article"])
         self.assertEqual(persisted_options["modules"], ["content_filter"])
@@ -1117,6 +1127,7 @@ class ApiDiscoveryManagementTests(unittest.TestCase):
         self.assertEqual(result["reindexJobId"], "job-1")
         self.assertEqual(result["jobKind"], "content_analysis")
         self.assertEqual(result["options"], persisted_options)
+        self.assertEqual(result["cancellationKey"], advisory_params[0])
 
     def test_update_discovery_recall_candidate_updates_review_fields_without_registration(self) -> None:
         payload = api_main.DiscoveryRecallCandidateUpdatePayload.model_validate(

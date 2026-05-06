@@ -54,6 +54,7 @@ export interface AdminReindexJobSnapshot {
   indexName: string;
   jobKind: string;
   status: string;
+  cancellable: boolean;
   createdAt: string | null;
   createdAtLabel: string | null;
   processedArticles: number | null;
@@ -78,6 +79,7 @@ export interface AdminReindexJobsSnapshot {
   hasNext: boolean;
   queuedCount: number;
   runningCount: number;
+  cancellingCount: number;
   revision: string;
   items: AdminReindexJobSnapshot[];
 }

@@ -218,10 +218,11 @@ function nullablePositiveIntegersEqual(left: unknown, right: unknown): boolean {
   return normalize(left) === normalize(right);
 }
 
-function readTextList(value: unknown): string[] {
-  const normalized = String(value ?? "");
-  return normalized
-    .split("\n")
+function readTextList(value: unknown, options: { splitCommas?: boolean } = {}): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((entry) => String(entry ?? "").split("\n"))
+    .flatMap((entry) => (options.splitCommas ? entry.split(",") : [entry]))
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
@@ -244,7 +245,7 @@ function parseCandidateSignalGroups(value: unknown): CandidateSignalGroup[] {
     const rawName = separatorIndex >= 0 ? line.slice(0, separatorIndex).trim() : "";
     const rawCueBlock = separatorIndex >= 0 ? line.slice(separatorIndex + 1) : line;
     const cues = rawCueBlock
-      .split("|")
+      .split(/[|,]/u)
       .map((entry) => entry.trim())
       .filter(Boolean);
     if (cues.length === 0) {
@@ -973,16 +974,16 @@ export function parseInterestTemplateInput(
     description: String(payload.description ?? "").trim(),
     positiveTexts,
     negativeTexts: readTextList(payload.negative_texts),
-    mustHaveTerms: readTextList(payload.must_have_terms),
-    mustNotHaveTerms: readTextList(payload.must_not_have_terms),
-    places: readTextList(payload.places),
-    languagesAllowed: readTextList(payload.languages_allowed),
+    mustHaveTerms: readTextList(payload.must_have_terms, { splitCommas: true }),
+    mustNotHaveTerms: readTextList(payload.must_not_have_terms, { splitCommas: true }),
+    places: readTextList(payload.places, { splitCommas: true }),
+    languagesAllowed: readTextList(payload.languages_allowed, { splitCommas: true }),
     timeWindowHours: readNullablePositiveInteger(payload.time_window_hours, "time_window_hours"),
-    allowedContentKinds: readTextList(payload.allowed_content_kinds).length
-      ? readTextList(payload.allowed_content_kinds)
+    allowedContentKinds: readTextList(payload.allowed_content_kinds, { splitCommas: true }).length
+      ? readTextList(payload.allowed_content_kinds, { splitCommas: true })
       : [...DEFAULT_ALLOWED_CONTENT_KINDS],
-    shortTokensRequired: readTextList(payload.short_tokens_required),
-    shortTokensForbidden: readTextList(payload.short_tokens_forbidden),
+    shortTokensRequired: readTextList(payload.short_tokens_required, { splitCommas: true }),
+    shortTokensForbidden: readTextList(payload.short_tokens_forbidden, { splitCommas: true }),
     candidatePositiveSignals: parseCandidateSignalGroups(payload.candidate_positive_signals),
     candidateNegativeSignals: parseCandidateSignalGroups(payload.candidate_negative_signals),
     selectionProfileStrictness: readStringEnum(

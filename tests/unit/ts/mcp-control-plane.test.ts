@@ -23,6 +23,60 @@ import { listMcpPrompts, resolveMcpPrompt } from "../../../services/mcp/src/prom
 import { listMcpResources, resolveMcpResource } from "../../../services/mcp/src/resources.ts";
 import { executeMcpTool, listMcpTools } from "../../../services/mcp/src/tools.ts";
 
+const WRITE_SEQUENCES_TOKEN = {
+  tokenId: "token-write-sequences",
+  label: "writer",
+  tokenPrefix: "npmcp_token-write-sequences",
+  scopes: ["read", "write.sequences"],
+  status: "active",
+  issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+  revokedByUserId: null,
+  revokedAt: null,
+  expiresAt: null,
+  lastUsedAt: null,
+  lastUsedIp: null,
+  lastUsedUserAgent: null,
+  createdAt: "2026-04-23T10:00:00.000Z",
+  updatedAt: "2026-04-23T10:00:00.000Z",
+  recentRequestCount: 0,
+} as const;
+
+const WRITE_DISCOVERY_TOKEN = {
+  tokenId: "token-write-discovery",
+  label: "discovery-writer",
+  tokenPrefix: "npmcp_token-write-discovery",
+  scopes: ["read", "write.discovery"],
+  status: "active",
+  issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+  revokedByUserId: null,
+  revokedAt: null,
+  expiresAt: null,
+  lastUsedAt: null,
+  lastUsedIp: null,
+  lastUsedUserAgent: null,
+  createdAt: "2026-04-23T10:00:00.000Z",
+  updatedAt: "2026-04-23T10:00:00.000Z",
+  recentRequestCount: 0,
+} as const;
+
+const WRITE_CHANNELS_TOKEN = {
+  tokenId: "token-write-channels",
+  label: "channel-writer",
+  tokenPrefix: "npmcp_token-write-channels",
+  scopes: ["read", "write.channels"],
+  status: "active",
+  issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+  revokedByUserId: null,
+  revokedAt: null,
+  expiresAt: null,
+  lastUsedAt: null,
+  lastUsedIp: null,
+  lastUsedUserAgent: null,
+  createdAt: "2026-04-23T10:00:00.000Z",
+  updatedAt: "2026-04-23T10:00:00.000Z",
+  recentRequestCount: 0,
+} as const;
+
 function createFakeMcpPool() {
   const state = {
     token: null,
@@ -150,6 +204,87 @@ function createFakeMcpPool() {
   };
 }
 
+function createFakeReindexPool() {
+  const state = {
+    clientQueries: [] as Array<{ sql: string; params: unknown[] }>,
+    poolQueries: [] as Array<{ sql: string; params: unknown[] }>,
+    released: false,
+  };
+  const client = {
+    async query(sql: string, params: unknown[] = []) {
+      state.clientQueries.push({ sql, params });
+      return { rows: [] };
+    },
+    release() {
+      state.released = true;
+    },
+  };
+  return {
+    state,
+    async connect() {
+      return client;
+    },
+    async query(sql: string, params: unknown[] = []) {
+      state.poolQueries.push({ sql, params });
+      if (/insert into audit_log/i.test(sql)) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in fake reindex pool: ${sql}`);
+    },
+  };
+}
+
+function createFakeChannelActivePool() {
+  const state = {
+    sourceChannelUpdates: [] as Array<{ sql: string; params: unknown[] }>,
+    auditRows: [] as unknown[][],
+  };
+  return {
+    state,
+    async query(sql: string, params: unknown[] = []) {
+      if (/update source_channels/i.test(sql)) {
+        state.sourceChannelUpdates.push({ sql, params });
+        return {
+          rows: [
+            {
+              channelId: String(params[0]),
+              name: "Failing website",
+              providerType: "website",
+              isActive: Boolean(params[1]),
+            },
+          ],
+        };
+      }
+      if (/insert into audit_log/i.test(sql)) {
+        state.auditRows.push(params);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in fake channel active pool: ${sql}`);
+    },
+  };
+}
+
+function createFakeDiscoveryPrefixPool() {
+  const state = {
+    queries: [] as Array<{ sql: string; params: unknown[] }>,
+  };
+  return {
+    state,
+    async query(sql: string, params: unknown[] = []) {
+      state.queries.push({ sql, params });
+      if (/from discovery_missions/i.test(sql)) {
+        return {
+          rows:
+            params[0] === "f3dbf7b8%"
+              ? [{ id: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }]
+              : [],
+        };
+      }
+      throw new Error(`Unexpected SQL in fake discovery prefix pool: ${sql}`);
+    },
+  };
+}
+
 test("MCP token helpers issue, resolve, list, touch, revoke, and log request metadata", async () => {
   const pool = createFakeMcpPool();
 
@@ -262,6 +397,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(toolNames.includes("articles.residuals.summary"));
   assert.ok(toolNames.includes("sequences.create"));
   assert.ok(toolNames.includes("discovery.recall_missions.pause"));
+  assert.ok(toolNames.includes("channels.set_active"));
 
   const resourceUris = listMcpResources().map((entry) => entry.uri);
   assert.ok(resourceUris.includes("newsportal://guide/server-overview"));
@@ -342,6 +478,124 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     structuredContent: { ok: true },
   });
   assert.equal(MCP_SCOPE_OPTIONS.includes("write.discovery"), true);
+});
+
+test("MCP read tools accept common report aliases for system interest read-back", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ interestTemplateId: "interest-1" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+
+  const result = await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_CHANNELS_TOKEN,
+    },
+    "system_interests.read",
+    {
+      entityId: "01f72c31-9c7f-4160-9ec1-b8c8130c3c10",
+    }
+  );
+
+  assert.deepEqual(result, { interestTemplateId: "interest-1" });
+  assert.match(requests[0] ?? "", /01f72c31-9c7f-4160-9ec1-b8c8130c3c10/);
+});
+
+test("MCP channel active-state tool avoids full provider payload guessing", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("fetch should not be called by channels.set_active");
+    }) as typeof fetch,
+  });
+  const pool = createFakeChannelActivePool();
+
+  const result = await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_CHANNELS_TOKEN,
+    },
+    "channels.set_active",
+    {
+      channelId: "abea2560-0000-4000-8000-000000000000",
+      isActive: false,
+      reason: "Cloudflare challenge",
+    }
+  );
+
+  assert.equal(pool.state.sourceChannelUpdates.length, 1);
+  assert.deepEqual(pool.state.sourceChannelUpdates[0]?.params, [
+    "abea2560-0000-4000-8000-000000000000",
+    false,
+  ]);
+  assert.equal(pool.state.auditRows.length, 1);
+  assert.equal((result as Record<string, unknown>).channelId, "abea2560-0000-4000-8000-000000000000");
+  assert.match(JSON.stringify(result), /channels\.read/);
+  assert.match(JSON.stringify(result), /operator\.report\.verify/);
+});
+
+test("MCP discovery candidate lists resolve unique mission UUID prefixes before API calls", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const pool = createFakeDiscoveryPrefixPool();
+
+  await executeMcpTool(
+    {
+      sdk,
+      pool,
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.candidates.list",
+    {
+      missionId: "f3dbf7b8",
+      status: "pending",
+      pageSize: 50,
+    }
+  );
+
+  assert.equal(pool.state.queries.length, 1);
+  assert.match(requests[0] ?? "", /missionId=f3dbf7b8-72ad-41e9-94d5-7d113b28ca13/);
+  assert.doesNotMatch(requests[0] ?? "", /missionId=f3dbf7b8&/);
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool,
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.candidates.list",
+        {
+          missionId: "not-a-uuid-prefix",
+          pageSize: 50,
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+  assert.equal(requests.length, 1, "invalid mission ids should fail before backend fetch");
 });
 
 test("MCP tool execution enforces scope and destructive confirmation before handler work", async () => {
@@ -476,6 +730,305 @@ test("MCP tool execution validates declared input schemas before handler work", 
       ),
     /channels\.list.*unexpected is not allowed/i
   );
+});
+
+test("MCP write tools normalize client-friendly list strings before backend calls", async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input, init) => {
+      requests.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify({ mission_id: "mission-1", status: "planned" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+
+  await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.missions.create",
+    {
+      payload: {
+        title: "String-list mission",
+        seedTopics: "AI rollout failures, LLM integration blockers",
+        seedLanguages: "en\nde",
+        seedRegions: ["us", "eu"],
+        targetProviderTypes: "rss, website",
+      },
+    }
+  );
+
+  assert.deepEqual(requests[0]?.body.seedTopics, [
+    "AI rollout failures",
+    "LLM integration blockers",
+  ]);
+  assert.deepEqual(requests[0]?.body.seedLanguages, ["en", "de"]);
+  assert.deepEqual(requests[0]?.body.seedRegions, ["us", "eu"]);
+  assert.deepEqual(requests[0]?.body.targetProviderTypes, ["rss", "website"]);
+  assert.equal(requests[0]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool: createFakeMcpPool(),
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.missions.create",
+        {
+          payload: {
+            title: "Too broad mission",
+            maxHypotheses: 15,
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      /confirmLargeRun/i.test(error.message)
+  );
+  assert.equal(requests.length, 1, "large unconfirmed MCP discovery runs should fail before backend fetch");
+
+  await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.missions.create",
+    {
+      payload: {
+        title: "Confirmed large mission",
+        maxHypotheses: 15,
+        confirmLargeRun: true,
+      },
+    }
+  );
+  assert.equal(requests[1]?.body.maxHypotheses, 15);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(requests[1]?.body ?? {}, "confirmLargeRun"),
+    false
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool: createFakeMcpPool(),
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.missions.create",
+        {
+          payload: {
+            title: "Invalid provider mission",
+            targetProviderTypes: "rss, spreadsheet",
+          },
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+  assert.equal(requests.length, 2, "invalid enum lists should fail before backend fetch");
+});
+
+test("MCP discovery run responses include async verification guidance", async () => {
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () =>
+      new Response(JSON.stringify({ runId: "run-1", status: "pending" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      })) as typeof fetch,
+  });
+
+  const result = await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.missions.run",
+    {
+      missionId: "mission-1",
+    }
+  );
+
+  assert.match(JSON.stringify(result), /operator\.report\.verify/i);
+  assert.match(JSON.stringify(result), /in progress, not completed|asynchronous/i);
+});
+
+test("MCP reindex request rejects unsupported indexName and jobKind at the boundary", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("fetch should not be called by maintenance.reindex.request");
+    }) as typeof fetch,
+  });
+  const pool = createFakeReindexPool();
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: dummySdk,
+          pool,
+          token: WRITE_SEQUENCES_TOKEN,
+        },
+        "maintenance.reindex.request",
+        {
+          payload: {
+            indexName: "articles",
+            jobKind: "backfill",
+          },
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: dummySdk,
+          pool,
+          token: WRITE_SEQUENCES_TOKEN,
+        },
+        "maintenance.reindex.request",
+        {
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "repair",
+          },
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+  assert.equal(pool.state.clientQueries.length, 0);
+});
+
+test("MCP reindex backfill stores selection replay defaults and read-back hints", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("fetch should not be called by maintenance.reindex.request");
+    }) as typeof fetch,
+  });
+  const pool = createFakeReindexPool();
+
+  const result = await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_SEQUENCES_TOKEN,
+    },
+    "maintenance.reindex.request",
+    {
+      payload: {
+        indexName: "interest_centroids",
+        jobKind: "backfill",
+      },
+    }
+  );
+  const reindexInsert = pool.state.clientQueries.find((entry) =>
+    /insert into public\.reindex_jobs/i.test(entry.sql)
+  );
+  assert.ok(reindexInsert, "reindex job insert should be recorded");
+  assert.equal(reindexInsert.params[1], "interest_centroids");
+  assert.equal(reindexInsert.params[2], "backfill");
+  assert.deepEqual(JSON.parse(String(reindexInsert.params[3])), {
+    batchSize: 100,
+    retroNotifications: "skip",
+    replayExistingArticles: true,
+    includeEnrichment: false,
+    forceEnrichment: false,
+  });
+  assert.equal(pool.state.released, true);
+  assert.equal(typeof (result as Record<string, unknown>).reindexJobId, "string");
+  assert.match(
+    JSON.stringify((result as Record<string, unknown>).nextReadBack),
+    /operator\.report\.verify/
+  );
+});
+
+test("MCP tool metadata disambiguates selection replay from content analysis backfill", () => {
+  const tools = new Map(listMcpTools().map((tool) => [tool.name, tool]));
+  const reindex = tools.get("maintenance.reindex.request");
+  const reindexJobs = tools.get("maintenance.reindex_jobs.list");
+  const contentBackfill = tools.get("content_analysis.backfill.request");
+
+  assert.ok(reindex);
+  assert.deepEqual(reindex.inputSchema.properties?.payload?.properties?.indexName?.enum, [
+    "interest_centroids",
+    "event_cluster_centroids",
+  ]);
+  assert.deepEqual(reindex.inputSchema.properties?.payload?.properties?.jobKind?.enum, [
+    "rebuild",
+    "backfill",
+  ]);
+  assert.match(reindex.description, /old articles|historical|existing/i);
+  assert.match(reindex.description, /current system interests|interest_filter_results/i);
+  assert.match(reindex.description, /final_selection_results|selected\/pass_through/i);
+  assert.match(reindex.description, /jobKind=backfill/i);
+
+  assert.ok(reindexJobs);
+  assert.match(reindexJobs.description, /status, job_kind/i);
+  assert.match(reindexJobs.description, /options_json/i);
+
+  assert.ok(contentBackfill);
+  assert.match(contentBackfill.description, /does not recompute article\.match_criteria/i);
+  assert.match(contentBackfill.description, /interest_filter_results/i);
+  assert.match(contentBackfill.description, /final_selection_results/i);
+});
+
+test("content analysis backfill response warns that final selection is not recomputed", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ reindexJobId: "job-content-analysis", status: "queued" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+
+  const result = await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_SEQUENCES_TOKEN,
+    },
+    "content_analysis.backfill.request",
+    {
+      payload: {
+        subjectTypes: "article, web_resource",
+        modules: "ner\ncontent_filter",
+        subjectIds: "doc-1, doc-2",
+      },
+    }
+  );
+
+  assert.deepEqual(requests[0]?.subjectTypes, ["article", "web_resource"]);
+  assert.deepEqual(requests[0]?.modules, ["ner", "content_filter"]);
+  assert.deepEqual(requests[0]?.subjectIds, ["doc-1", "doc-2"]);
+  assert.match(JSON.stringify(result), /does not recompute article\.match_criteria/i);
+  assert.match(JSON.stringify(result), /final_selection_results/i);
+  assert.match(JSON.stringify(result), /operator\.report\.verify/i);
 });
 
 test("SDK exposes discovery delete routes needed by MCP parity without forking a new client", async () => {

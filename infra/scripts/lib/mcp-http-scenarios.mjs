@@ -1,4 +1,5 @@
 import {
+  assertMcpSseHandshake,
   mcpBaseUrl,
   postJson,
   readIdentifier,
@@ -540,6 +541,10 @@ async function scenarioAuthAndTokenLifecycle(harness) {
     label: `config-${harness.runId}`,
     scopes: "read,write.templates,write.channels,write.destructive",
   });
+  const tokenAdmin = await harness.issueToken({
+    label: `token-admin-${harness.runId}`,
+    scopes: "read,admin.tokens,write.destructive",
+  });
   const expired = await harness.issueToken({
     label: `expired-${harness.runId}`,
     scopes: "read",
@@ -549,14 +554,20 @@ async function scenarioAuthAndTokenLifecycle(harness) {
     label: `revoke-${harness.runId}`,
     scopes: "read",
   });
+  const mcpLifecycleCheck = await harness.issueToken({
+    label: `mcp-lifecycle-${harness.runId}`,
+    scopes: "read",
+  });
 
   harness.tokens = {
     analyst,
     automation,
     discovery,
     config,
+    tokenAdmin,
     expired,
     revokeCheck,
+    mcpLifecycleCheck,
   };
 
   assert(html.includes(`analyst-${harness.runId}`) === false, "Pre-issue HTML should not already contain the new token labels.");
@@ -566,6 +577,7 @@ async function scenarioAuthAndTokenLifecycle(harness) {
     `automation-${harness.runId}`,
     `discovery-${harness.runId}`,
     `config-${harness.runId}`,
+    `token-admin-${harness.runId}`,
   ]);
   assert(
     refreshedHtml.includes("Copy this token now") === false,
@@ -613,15 +625,65 @@ async function scenarioAuthAndTokenLifecycle(harness) {
     "Revoked MCP token should fail with a revoke error."
   );
 
+  const mcpRevoked = await harness.mcpToolCall(tokenAdmin.token, "admin.mcp_tokens.revoke", {
+    tokenId: mcpLifecycleCheck.tokenRecord.tokenId,
+    reason: "deterministic MCP token lifecycle proof",
+    confirm: true,
+  });
+  assert(
+    mcpRevoked.tokenRecord?.status === "revoked",
+    "admin.mcp_tokens.revoke should return a revoked sanitized token record."
+  );
+  const mcpRevokedAttempt = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-mcp-revoked`,
+      method: "initialize",
+      params: {},
+    },
+    {
+      bearerToken: mcpLifecycleCheck.token,
+      expectStatus: 403,
+    }
+  );
+  assert(
+    readJsonRpcErrorMessage(mcpRevokedAttempt.json).toLowerCase().includes("revoked"),
+    "Token revoked through MCP should fail on the next request."
+  );
+
+  const mcpDeleted = await harness.mcpToolCall(
+    tokenAdmin.token,
+    "admin.mcp_tokens.delete_revoked",
+    {
+      tokenId: mcpLifecycleCheck.tokenRecord.tokenId,
+      confirm: true,
+    }
+  );
+  assert(
+    mcpDeleted.tokenRecord?.tokenId === mcpLifecycleCheck.tokenRecord.tokenId,
+    "admin.mcp_tokens.delete_revoked should return the deleted token record."
+  );
+  const tokenInventory = await harness.mcpToolCall(tokenAdmin.token, "admin.mcp_tokens.list", {});
+  assert(
+    !tokenInventory.items?.some(
+      (item) => item.tokenId === mcpLifecycleCheck.tokenRecord.tokenId
+    ),
+    "Deleted revoked token should not remain in admin.mcp_tokens.list."
+  );
+
   pushEvidence(evidence, "token-labels", {
     analyst: analyst.tokenRecord.label,
     automation: automation.tokenRecord.label,
     discovery: discovery.tokenRecord.label,
     config: config.tokenRecord.label,
+    tokenAdmin: tokenAdmin.tokenRecord.label,
   });
   pushEvidence(evidence, "token-statuses", {
     expiredStatus: expiredAttempt.status,
     revokedStatus: revokedAttempt.status,
+    mcpRevokedStatus: mcpRevokedAttempt.status,
+    mcpDeletedTokenId: mcpDeleted.tokenRecord?.tokenId,
   });
 
   return {
@@ -640,6 +702,23 @@ async function scenarioProtocolDiscovery(harness) {
     String(initialize?.result?.serverInfo?.name ?? "") === "newsportal-mcp",
     "MCP initialize should return the expected server name."
   );
+  const initializeInstructions = String(initialize?.result?.instructions ?? "");
+  assert(
+    initializeInstructions.includes("admin.mcp_tokens.list") &&
+      initializeInstructions.includes("read") &&
+      initializeInstructions.includes("confirm=true") &&
+      initializeInstructions.includes("operator.system.health"),
+    "MCP initialize should ship high-signal server instructions for read-first cleanup, destructive confirmation, and ongoing operations."
+  );
+  assert(
+    initialize?.result?.capabilities?.resources?.subscribe === true,
+    "MCP initialize should advertise resource subscription support for operational monitoring."
+  );
+  const sseInitialize = await assertMcpSseHandshake(token);
+  assert(
+    sseInitialize.serverName === "newsportal-mcp",
+    "MCP SSE initialize should return the expected server name."
+  );
 
   const toolsList = await harness.mcpRpc(token, "tools/list", {});
   const resourcesList = await harness.mcpRpc(token, "resources/list", {});
@@ -648,6 +727,75 @@ async function scenarioProtocolDiscovery(harness) {
   assert(Array.isArray(toolsList?.result?.tools), "tools/list must return an array.");
   assert(Array.isArray(resourcesList?.result?.resources), "resources/list must return an array.");
   assert(Array.isArray(promptsList?.result?.prompts), "prompts/list must return an array.");
+  const tokenInventoryTool = toolsList.result.tools.find(
+    (tool) => tool.name === "admin.mcp_tokens.list"
+  );
+  assert(
+    tokenInventoryTool?.annotations?.readOnlyHint === true &&
+      tokenInventoryTool?.outputSchema?.type === "object" &&
+      String(tokenInventoryTool?.description ?? "").includes("Read-only"),
+    "tools/list should expose read-only annotations, outputSchema, and usage guidance for token inventory."
+  );
+  const channelDeleteTool = toolsList.result.tools.find((tool) => tool.name === "channels.delete");
+  assert(
+    channelDeleteTool?.annotations?.destructiveHint === true &&
+      String(channelDeleteTool?.description ?? "").includes("confirm=true"),
+    "tools/list should expose destructive annotations and confirmation guidance for destructive tools."
+  );
+  const tokenRevokeTool = toolsList.result.tools.find(
+    (tool) => tool.name === "admin.mcp_tokens.revoke"
+  );
+  assert(
+    tokenRevokeTool?.annotations?.destructiveHint === true &&
+      String(tokenRevokeTool?.description ?? "").includes("direct admin REST"),
+    "tools/list should expose MCP-native token revoke and discourage direct admin REST bypass."
+  );
+  const systemHealthTool = toolsList.result.tools.find(
+    (tool) => tool.name === "operator.system.health"
+  );
+  const tuningRecommendTool = toolsList.result.tools.find(
+    (tool) => tool.name === "operator.tuning.recommend"
+  );
+  assert(
+    systemHealthTool?.annotations?.readOnlyHint === true &&
+      String(systemHealthTool?.description ?? "").includes("operational health") &&
+      tuningRecommendTool?.annotations?.readOnlyHint === true,
+    "tools/list should expose read-only operating intelligence tools for returning operators."
+  );
+  const clientContractResource = resourcesList.result.resources.find(
+    (resource) => resource.uri === "newsportal://guide/client-contract"
+  );
+  const operatingModelResource = resourcesList.result.resources.find(
+    (resource) => resource.uri === "newsportal://guide/operating-model"
+  );
+  const opsHealthResource = resourcesList.result.resources.find(
+    (resource) => resource.uri === "newsportal://ops/health"
+  );
+  assert(
+    clientContractResource?.annotations?.priority >= 0.9 &&
+      String(clientContractResource?.title ?? "").length > 0,
+    "resources/list should expose high-priority client-contract context metadata."
+  );
+  assert(
+    operatingModelResource?.annotations?.priority >= 0.8 &&
+      opsHealthResource?.annotations?.priority >= 0.6,
+    "resources/list should expose operating model and ops health resources for ongoing system work."
+  );
+  const diagnosePrompt = promptsList.result.prompts.find(
+    (prompt) => prompt.name === "diagnose.mcp_error"
+  );
+  const dailyReviewPrompt = promptsList.result.prompts.find(
+    (prompt) => prompt.name === "operations.daily_review"
+  );
+  const websitePipelinePrompt = promptsList.result.prompts.find(
+    (prompt) => prompt.name === "website.pipeline.review"
+  );
+  assert(
+    String(diagnosePrompt?.title ?? "").length > 0 &&
+      String(dailyReviewPrompt?.title ?? "").length > 0 &&
+      String(websitePipelinePrompt?.title ?? "").length > 0,
+    "prompts/list should expose titled MCP error and ongoing operations guidance."
+  );
 
   harness.shippedInventory.tools = toolsList.result.tools;
   harness.shippedInventory.resources = resourcesList.result.resources;
@@ -675,10 +823,22 @@ async function scenarioProtocolDiscovery(harness) {
     resources: resourcesList.result.resources.length,
     prompts: promptsList.result.prompts.length,
   });
+  pushEvidence(evidence, "context-metadata", {
+    initializeInstructions: initializeInstructions.split("\n").length,
+    tokenInventoryAnnotations: tokenInventoryTool.annotations,
+    tokenRevokeAnnotations: tokenRevokeTool.annotations,
+    channelDeleteAnnotations: channelDeleteTool.annotations,
+    clientContractPriority: clientContractResource.annotations.priority,
+    diagnosePromptTitle: diagnosePrompt.title,
+  });
+  pushEvidence(evidence, "sse-transport", {
+    endpoint: sseInitialize.endpoint,
+    protocolVersion: sseInitialize.protocolVersion,
+  });
 
   return {
     key: "protocol-discovery",
-    summary: "Enumerated the shipped MCP HTTP contract and read every shipped resource and prompt over JSON-RPC.",
+    summary: "Enumerated the shipped MCP HTTP contract, proved SSE compatibility, and read every shipped resource and prompt over JSON-RPC.",
     evidence,
   };
 }
@@ -691,18 +851,18 @@ async function scenarioTemplateInterestChannelFlows(harness) {
     payload: {
       name: `MCP Interest ${harness.runId}`,
       description: "Deterministic HTTP MCP system-interest scenario.",
-      positive_texts: "policy\nregulation",
-      negative_texts: "sports",
+      positive_texts: ["policy", "regulation"],
+      negative_texts: ["sports"],
       must_have_terms: "policy",
-      must_not_have_terms: "",
+      must_not_have_terms: "vendor blog, market report",
       places: "Europe",
-      languages_allowed: "en",
+      languages_allowed: ["en"],
       time_window_hours: "",
-      allowed_content_kinds: "editorial\ndocument",
-      short_tokens_required: "EU",
+      allowed_content_kinds: "editorial, document",
+      short_tokens_required: ["EU"],
       short_tokens_forbidden: "",
-      candidate_positive_signals: "",
-      candidate_negative_signals: "",
+      candidate_positive_signals: "policy: public policy, regulation change",
+      candidate_negative_signals: ["noise: sports commentary, market report"],
       selection_profile_strictness: "balanced",
       selection_profile_unresolved_decision: "hold",
       selection_profile_llm_review_mode: "always",
@@ -712,6 +872,11 @@ async function scenarioTemplateInterestChannelFlows(harness) {
   });
   const interestTemplateId = String(interest.entityId ?? interest.interestTemplateId ?? "");
   assert(interestTemplateId, "system_interests.create must return an interest template id.");
+  assert(
+    Array.isArray(interest.nextReadBack?.resources) &&
+      interest.nextReadBack.resources.includes("newsportal://ops/health"),
+    "Mutation responses should include nextReadBack ops resources for clients without resource subscriptions."
+  );
   harness.rememberEntity("interestTemplateId", interestTemplateId);
 
   await harness.mcpToolCall(token, "system_interests.update", {
@@ -719,18 +884,18 @@ async function scenarioTemplateInterestChannelFlows(harness) {
       interestTemplateId,
       name: `MCP Interest ${harness.runId} updated`,
       description: "Updated through deterministic HTTP MCP.",
-      positive_texts: "policy\nregulation",
-      negative_texts: "sports",
+      positive_texts: ["policy", "regulation"],
+      negative_texts: ["sports"],
       must_have_terms: "policy",
-      must_not_have_terms: "",
+      must_not_have_terms: "vendor blog, market report",
       places: "Europe",
-      languages_allowed: "en",
+      languages_allowed: ["en"],
       time_window_hours: "",
-      allowed_content_kinds: "editorial\ndocument",
-      short_tokens_required: "EU",
+      allowed_content_kinds: "editorial, document",
+      short_tokens_required: ["EU"],
       short_tokens_forbidden: "",
-      candidate_positive_signals: "",
-      candidate_negative_signals: "",
+      candidate_positive_signals: "policy: public policy, regulation change",
+      candidate_negative_signals: ["noise: sports commentary, market report"],
       selection_profile_strictness: "balanced",
       selection_profile_unresolved_decision: "hold",
       selection_profile_llm_review_mode: "always",
@@ -813,10 +978,151 @@ async function scenarioTemplateInterestChannelFlows(harness) {
     });
   });
 
+  const bulkSources = [
+    {
+      providerType: "rss",
+      name: `MCP Bulk RSS ${harness.runId}`,
+      fetchUrl: `https://example.com/${harness.runId}/bulk/feed.xml`,
+      language: "en",
+      isActive: true,
+    },
+    {
+      providerType: "website",
+      name: `MCP Bulk Website ${harness.runId}`,
+      fetchUrl: `https://example.com/${harness.runId}/bulk/`,
+      language: "en",
+      isActive: true,
+      feedDiscoveryEnabled: true,
+      sitemapDiscoveryEnabled: true,
+      maxResourcesPerPoll: 5,
+    },
+  ];
+  const bulkRiskPlan = await harness.mcpToolCall(token, "channels.bulk_onboard.plan", {
+    sources: [
+      ...bulkSources,
+      {
+        providerType: "rss",
+        name: `MCP Bulk Risky RSS ${harness.runId}`,
+        fetchUrl: `https://example.com/${harness.runId}/bulk/opportunity`,
+        language: "en",
+        isActive: true,
+      },
+      {
+        providerType: "website",
+        name: `MCP Bulk Duplicate Website ${harness.runId}`,
+        fetchUrl: `https://example.com/${harness.runId}/bulk/`,
+        language: "en",
+        isActive: true,
+      },
+    ],
+  });
+  const bulkRiskItems = Array.isArray(bulkRiskPlan.items) ? bulkRiskPlan.items : [];
+  assert(
+    bulkRiskItems.some((item) => item.status === "needs_override"),
+    "channels.bulk_onboard.plan should mark obvious website URLs submitted as RSS as needs_override."
+  );
+  assert(
+    bulkRiskItems.some((item) => item.status === "duplicate"),
+    "channels.bulk_onboard.plan should classify duplicate source rows before apply."
+  );
+
+  const bulkPlan = await harness.mcpToolCall(token, "channels.bulk_onboard.plan", {
+    sources: bulkSources,
+  });
+  assert(bulkPlan.planFingerprint, "channels.bulk_onboard.plan must return planFingerprint.");
+  assert(
+    Number(bulkPlan.summary?.readyCreate ?? 0) >= 2,
+    "channels.bulk_onboard.plan should classify new mixed RSS/website sources as ready_create."
+  );
+  const staleBulkApply = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-bulk-onboard-stale-fingerprint`,
+      method: "tools/call",
+      params: {
+        name: "channels.bulk_onboard.apply",
+        arguments: {
+          sources: bulkSources,
+          planFingerprint: "stale-fingerprint",
+        },
+      },
+    },
+    {
+      bearerToken: token,
+      expectStatus: 400,
+    }
+  );
+  assert(
+    readJsonRpcErrorMessage(staleBulkApply.json).toLowerCase().includes("stale"),
+    "channels.bulk_onboard.apply should reject stale planFingerprint before writes."
+  );
+
+  const bulkApply = await harness.mcpToolCall(token, "channels.bulk_onboard.apply", {
+    sources: bulkSources,
+    planFingerprint: bulkPlan.planFingerprint,
+  });
+  const bulkChannelIds = [
+    ...(bulkApply.createdChannelIds ?? []),
+    ...(bulkApply.updatedChannelIds ?? []),
+  ].map(String);
+  assert(bulkChannelIds.length >= 2, "channels.bulk_onboard.apply should create mixed-source channels.");
+  assert(
+    JSON.stringify(bulkApply.nextReadBack ?? {}).includes("operator.report.verify"),
+    "channels.bulk_onboard.apply mutation response should include nextReadBack for clients without notifications."
+  );
+  for (const bulkChannelId of bulkChannelIds) {
+    harness.addCleanup(`delete-bulk-channel-${bulkChannelId}`, async () => {
+      await harness.mcpToolCall(token, "channels.delete", {
+        channelId: bulkChannelId,
+        confirm: true,
+      });
+    });
+  }
+  const bulkVerify = await harness.mcpToolCall(token, "channels.bulk_onboard.verify", {
+    channelIds: bulkChannelIds,
+    includeSamples: true,
+  });
+  assert(
+    Number(bulkVerify.summary?.foundChannels ?? 0) >= 2,
+    "channels.bulk_onboard.verify should read back created channels from DB state."
+  );
+  const updatePlan = await harness.mcpToolCall(token, "channels.bulk_onboard.plan", {
+    sources: bulkSources,
+  });
+  assert(
+    Number(updatePlan.summary?.readyUpdate ?? 0) >= 2,
+    "channels.bulk_onboard.plan should detect existing bulk sources as ready_update."
+  );
+  const updateWithoutConfirm = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-bulk-onboard-update-without-confirm`,
+      method: "tools/call",
+      params: {
+        name: "channels.bulk_onboard.apply",
+        arguments: {
+          sources: bulkSources,
+          planFingerprint: updatePlan.planFingerprint,
+        },
+      },
+    },
+    {
+      bearerToken: token,
+      expectStatus: 400,
+    }
+  );
+  assert(
+    readJsonRpcErrorMessage(updateWithoutConfirm.json).includes("confirm=true"),
+    "channels.bulk_onboard.apply should require confirm=true when the plan updates existing channels."
+  );
+
   pushEvidence(evidence, "config-entities", {
     interestTemplateId,
     promptTemplateId,
     channelId,
+    bulkChannelIds,
   });
 
   return {
@@ -910,6 +1216,89 @@ async function scenarioSequenceOperatorFlows(harness) {
 
   await harness.startWorker();
 
+  const targetBackfillDocId = firstResultLine(
+    await harness.queryPostgres(`
+      select doc_id::text
+      from public.articles
+      order by created_at desc
+      limit 1;
+    `)
+  );
+  const reindexRequest = await harness.mcpToolCall(token, "maintenance.reindex.request", {
+    payload: {
+      indexName: "interest_centroids",
+      jobKind: "backfill",
+      ...(targetBackfillDocId
+        ? {
+            options: {
+              docIds: [targetBackfillDocId],
+            },
+          }
+        : {}),
+    },
+  });
+  const reindexJobId = String(reindexRequest.reindexJobId ?? reindexRequest.reindex_job_id ?? "");
+  assert(reindexJobId, "maintenance.reindex.request must return a reindex job id.");
+  assert(
+    JSON.stringify(reindexRequest.nextReadBack ?? {}).includes("operator.report.verify"),
+    "maintenance.reindex.request should return selection read-back guidance."
+  );
+  harness.rememberEntity("reindexJobId", reindexJobId);
+  const reindexJobStatus = await waitFor(
+    "MCP maintenance reindex job",
+    async () =>
+      firstResultLine(
+        await harness.queryPostgres(`
+          select status
+          from public.reindex_jobs
+          where reindex_job_id = ${sqlLiteral(reindexJobId)}::uuid;
+        `)
+      ),
+    (status) => ["completed", "failed"].includes(normalizeStatus(status)),
+    { timeoutMs: 90000, intervalMs: 2500 }
+  );
+  assert(
+    normalizeStatus(reindexJobStatus) === "completed",
+    `maintenance.reindex.request job should complete, got ${reindexJobStatus}`
+  );
+  const reindexJobEvidence = firstResultLine(
+    await harness.queryPostgres(`
+      select status || '|' || job_kind || '|' || index_name || '|' ||
+             coalesce(options_json->>'batchSize', '') || '|' ||
+             coalesce(options_json->>'retroNotifications', '') || '|' ||
+             coalesce(options_json->>'replayExistingArticles', '') || '|' ||
+             coalesce(options_json->>'includeEnrichment', '') || '|' ||
+             coalesce(options_json->>'forceEnrichment', '')
+      from public.reindex_jobs
+      where reindex_job_id = ${sqlLiteral(reindexJobId)}::uuid;
+    `)
+  );
+  const [
+    finalReindexStatus,
+    finalReindexJobKind,
+    finalReindexIndexName,
+    finalReindexBatchSize,
+    finalReindexRetroNotifications,
+    finalReindexReplayExistingArticles,
+    finalReindexIncludeEnrichment,
+    finalReindexForceEnrichment,
+  ] = reindexJobEvidence.split("|");
+  assert(normalizeStatus(finalReindexStatus) === "completed", "Backfill reindex job should be completed.");
+  assert(finalReindexJobKind === "backfill", "Backfill reindex job should store job_kind=backfill.");
+  assert(finalReindexIndexName === "interest_centroids", "Backfill reindex job should target interest_centroids.");
+  assert(finalReindexBatchSize === "100", "Backfill reindex job should store default batchSize=100.");
+  assert(
+    finalReindexRetroNotifications === "skip",
+    "Backfill reindex job should skip retro notifications by default."
+  );
+  assert(
+    finalReindexReplayExistingArticles === "true",
+    "Backfill reindex job should replay existing articles by default."
+  );
+  assert(finalReindexIncludeEnrichment === "false", "Backfill reindex job should not include enrichment by default.");
+  assert(finalReindexForceEnrichment === "false", "Backfill reindex job should not force enrichment by default.");
+  await harness.mcpToolCall(token, "maintenance.reindex_jobs.list", { page: 1, pageSize: 20 });
+
   const failingSequence = await harness.mcpToolCall(token, "sequences.create", {
     payload: {
       title: `MCP failing sequence ${harness.runId}`,
@@ -984,11 +1373,13 @@ async function scenarioSequenceOperatorFlows(harness) {
     failingSequenceId,
     failedRunId,
     retriedRunId,
+    reindexJobId,
+    reindexJobStatus,
   });
 
   return {
     key: "sequence-operator-flows",
-    summary: "Covered sequence create/update/run/cancel/retry/archive paths, including a genuine failed run and task-run evidence reads.",
+    summary: "Covered sequence create/update/run/cancel/retry/archive paths plus MCP-native reindex queue/read evidence.",
     evidence,
   };
 }
@@ -1007,11 +1398,11 @@ async function scenarioDiscoveryOperatorFlows(harness) {
       description: "Deterministic HTTP MCP profile.",
       status: "active",
       graphPolicyJson: {
-        providerTypes: ["rss", "website"],
-        supportedWebsiteKinds: [],
-        preferredDomains: [],
-        blockedDomains: [],
-        positiveKeywords: ["policy"],
+        providerTypes: "rss, website",
+        supportedWebsiteKinds: "editorial, listing",
+        preferredDomains: "example.com\nexample.org",
+        blockedDomains: "",
+        positiveKeywords: "policy, regulation",
         negativeKeywords: [],
         preferredTactics: [],
         expectedSourceShapes: [],
@@ -1021,11 +1412,11 @@ async function scenarioDiscoveryOperatorFlows(harness) {
         diversityCaps: {},
       },
       recallPolicyJson: {
-        providerTypes: ["rss", "website"],
-        supportedWebsiteKinds: [],
-        preferredDomains: [],
+        providerTypes: "rss, website",
+        supportedWebsiteKinds: "editorial\nlisting",
+        preferredDomains: "example.com",
         blockedDomains: [],
-        positiveKeywords: ["policy"],
+        positiveKeywords: "policy, regulation",
         negativeKeywords: [],
         preferredTactics: [],
         expectedSourceShapes: [],
@@ -1035,8 +1426,8 @@ async function scenarioDiscoveryOperatorFlows(harness) {
         diversityCaps: {},
       },
       yieldBenchmarkJson: {
-        domains: [],
-        titleKeywords: [],
+        domains: "example.com, example.org",
+        titleKeywords: "policy\nregulation",
         tacticKeywords: [],
       },
     },
@@ -1059,7 +1450,7 @@ async function scenarioDiscoveryOperatorFlows(harness) {
       displayName: `MCP Class ${harness.runId.slice(0, 8)}`,
       status: "active",
       generationBackend: "graph_seed_only",
-      defaultProviderTypes: ["website"],
+      defaultProviderTypes: "website",
       seedRulesJson: {
         keywords: ["policy"],
       },
@@ -1090,10 +1481,10 @@ async function scenarioDiscoveryOperatorFlows(harness) {
       title: `MCP Mission ${harness.runId}`,
       description: "Deterministic HTTP discovery mission.",
       sourceKind: "manual",
-      seedTopics: ["policy"],
-      seedLanguages: ["en"],
-      seedRegions: ["europe"],
-      targetProviderTypes: ["website"],
+      seedTopics: "policy, regulation",
+      seedLanguages: "en",
+      seedRegions: "europe",
+      targetProviderTypes: "website",
       interestGraph: {
         core_topic: "policy",
       },
@@ -1157,10 +1548,10 @@ async function scenarioDiscoveryOperatorFlows(harness) {
       title: `MCP Recall Mission ${harness.runId}`,
       description: "Deterministic HTTP recall mission.",
       missionKind: "manual",
-      seedDomains: ["example.com"],
-      seedUrls: ["https://example.com/source"],
-      seedQueries: ["policy news"],
-      targetProviderTypes: ["website"],
+      seedDomains: "example.com",
+      seedUrls: "https://example.com/source",
+      seedQueries: "policy news, regulation updates",
+      targetProviderTypes: "website",
       scopeJson: {},
       maxCandidates: 10,
       profileId,
@@ -1200,8 +1591,14 @@ async function scenarioDiscoveryOperatorFlows(harness) {
       status: "pending",
       qualitySignalSource: "manual",
       evaluationJson: {
+        classification: {
+          kind: "listing",
+        },
         policyReview: {
           stageLossBucket: "manual_only",
+          matchedSignals: {
+            websiteKindSupported: true,
+          },
         },
       },
     },
@@ -1228,7 +1625,7 @@ async function scenarioDiscoveryOperatorFlows(harness) {
   const promoted = await harness.mcpToolCall(token, "discovery.recall_candidates.promote", {
     recallCandidateId,
     payload: {
-      tags: ["mcp", "deterministic"],
+      tags: "mcp, deterministic",
     },
   });
   const promotedChannelId = String(promoted.registered_channel_id ?? promoted.registeredChannelId ?? "");
@@ -1343,9 +1740,18 @@ async function scenarioDiscoveryOperatorFlows(harness) {
 function buildReadToolCalls() {
   return [
     { name: "admin.summary.get", args: {} },
+    { name: "admin.mcp_tokens.list", args: {} },
     { name: "system_interests.list", args: { page: 1, pageSize: 20 } },
     { name: "llm_templates.list", args: { page: 1, pageSize: 20 } },
     { name: "channels.list", args: { page: 1, pageSize: 20 } },
+    { name: "channels.bulk_onboard.plan", args: { sources: [
+      {
+        providerType: "website",
+        name: "Read-only bulk plan canary",
+        fetchUrl: "https://example.com/mcp-read-bulk/",
+        isActive: true,
+      },
+    ] } },
     { name: "sequences.list", args: { page: 1, pageSize: 20 } },
     { name: "sequences.plugins.list", args: {} },
     { name: "discovery.summary.get", args: {} },
@@ -1366,6 +1772,13 @@ function buildReadToolCalls() {
     { name: "web_resources.list", args: { page: 1, pageSize: 20 } },
     { name: "fetch_runs.list", args: { page: 1, pageSize: 20 } },
     { name: "llm_budget.summary", args: {} },
+    { name: "operator.system.health", args: { domains: ["selection", "website_pipeline"], includeSamples: true } },
+    { name: "operator.issue.explain", args: { symptom: "website resources projected but rejected", domain: "website_pipeline", includeSamples: true } },
+    { name: "operator.tuning.recommend", args: { domain: "selection", objective: "increase_precision", residualBucket: "gray_zone_hold" } },
+    { name: "operator.effect.verify", args: { domain: "selection", changeRef: "deterministic-read-only-proof", baselineWindowHours: 24, comparisonWindowHours: 24 } },
+    { name: "operator.report.verify", args: { reportKind: "cleanup", entityIds: {}, includeSamples: true } },
+    { name: "operator.report.verify", args: { reportKind: "system_health", entityIds: {}, includeSamples: true } },
+    { name: "operator.report.verify", args: { reportKind: "website_pipeline", entityIds: {}, includeSamples: true } },
   ];
 }
 
@@ -1556,6 +1969,10 @@ async function scenarioContentAnalysisOperatorFlows(harness) {
   });
   const reindexJobId = readIdentifier(backfill, ["reindexJobId", "reindex_job_id"]);
   assert(reindexJobId, "content_analysis.backfill.request must return reindexJobId.");
+  assert(
+    JSON.stringify(backfill).includes("final_selection_results"),
+    "content_analysis.backfill.request should warn that final selection is not recomputed."
+  );
 
   pushEvidence(evidence, "content-analysis-canary", {
     subjectId: canary.subjectId,
@@ -1884,6 +2301,476 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
       expectStatus: 400,
     }
   );
+  const invalidChannelPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-channel-create-missing-fetch-url`,
+      method: "tools/call",
+      params: {
+        name: "channels.create",
+        arguments: {
+          payload: {
+            providerType: "website",
+            name: `Invalid website channel ${harness.runId}`,
+            websiteUrl: `https://example.com/${harness.runId}/`,
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.config.token,
+      expectStatus: 400,
+    }
+  );
+  const invalidBulkOnboardSource = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-bulk-onboard-extra-field-denied`,
+      method: "tools/call",
+      params: {
+        name: "channels.bulk_onboard.plan",
+        arguments: {
+          sources: [
+            {
+              providerType: "website",
+              name: `Invalid bulk website ${harness.runId}`,
+              fetchUrl: `https://example.com/${harness.runId}/bulk-invalid/`,
+              websiteUrl: `https://example.com/${harness.runId}/bulk-invalid/`,
+            },
+          ],
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.config.token,
+      expectStatus: 400,
+    }
+  );
+  const invalidDiscoveryMissionCreatePayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-discovery-mission-nested-payload-denied`,
+      method: "tools/call",
+      params: {
+        name: "discovery.missions.create",
+        arguments: {
+          payload: {
+            payload: {
+              title: `Nested payload mission ${harness.runId}`,
+            },
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+  const invalidRecallMissionCreatePayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-discovery-recall-mission-nested-payload-denied`,
+      method: "tools/call",
+      params: {
+        name: "discovery.recall_missions.create",
+        arguments: {
+          payload: {
+            payload: {
+              title: `Nested payload recall mission ${harness.runId}`,
+            },
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidDiscoveryReviewPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-invalid-discovery-review-payload`,
+      method: "tools/call",
+      params: {
+        name: "discovery.candidates.review",
+        arguments: {
+          candidateId: "00000000-0000-4000-8000-000000000000",
+          payload: {
+            decision: "rejected",
+            reason: "cleanup",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidRecallCandidatePayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-invalid-recall-candidate-payload`,
+      method: "tools/call",
+      params: {
+        name: "discovery.recall_candidates.update",
+        arguments: {
+          recallCandidateId: "00000000-0000-4000-8000-000000000000",
+          payload: {
+            status: "approved",
+            rejection_reason: "cleanup",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidDiscoveryProfileJsonString = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-discovery-profile-json-string-denied`,
+      method: "tools/call",
+      params: {
+        name: "discovery.profiles.create",
+        arguments: {
+          payload: JSON.stringify({
+            profileKey: `bad_${harness.runId}`,
+            displayName: "Bad profile",
+          }),
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidDiscoveryClassNestedPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-discovery-class-nested-payload-denied`,
+      method: "tools/call",
+      params: {
+        name: "discovery.classes.create",
+        arguments: {
+          payload: {
+            payload: {
+              classKey: `bad_${harness.runId.slice(0, 8)}`,
+              displayName: "Bad class",
+            },
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidSequenceCreateExtraPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-sequence-create-extra-field-denied`,
+      method: "tools/call",
+      params: {
+        name: "sequences.create",
+        arguments: {
+          payload: {
+            title: `Invalid sequence ${harness.runId}`,
+            taskGraph: [],
+            target: "interest_centroids",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidTemplateExtraPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-llm-template-extra-field-denied`,
+      method: "tools/call",
+      params: {
+        name: "llm_templates.create",
+        arguments: {
+          payload: {
+            name: `Invalid template ${harness.runId}`,
+            templateText: "Do not create.",
+            model: "guessed-field",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.config.token,
+      expectStatus: 400,
+    }
+  );
+
+  const invalidContentPolicyExtraPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-content-policy-extra-field-denied`,
+      method: "tools/call",
+      params: {
+        name: "content_analysis_policies.create",
+        arguments: {
+          payload: {
+            policyKey: `invalid_policy_${harness.runId.replace(/-/g, "_")}`,
+            title: "Invalid policy",
+            module: "ner",
+            payload: {
+              nested: true,
+            },
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
+
+  const recallMissionId = harness.getEntity("recallMissionId");
+  assert(recallMissionId, "Expected recallMissionId from discovery flow for RSS promotion guard proof.");
+  const invalidRssRecallCandidate = await harness.mcpToolCall(
+    harness.tokens.discovery.token,
+    "discovery.recall_candidates.create",
+    {
+      payload: {
+        recallMissionId,
+        url: `https://example.com/${harness.runId}/opportunity-html-page`,
+        finalUrl: `https://example.com/${harness.runId}/opportunity-html-page`,
+        title: `Invalid RSS candidate ${harness.runId}`,
+        providerType: "rss",
+        status: "pending",
+        qualitySignalSource: "manual",
+        evaluationJson: {
+          isValid: false,
+          classification: {
+            kind: "listing",
+          },
+        },
+      },
+    }
+  );
+  const invalidRssRecallCandidateId = readIdentifier(invalidRssRecallCandidate, [
+    "recall_candidate_id",
+    "recallCandidateId",
+  ]);
+  assert(invalidRssRecallCandidateId, "Invalid RSS recall candidate should be created for guard proof.");
+  const invalidRssPromotion = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-rss-html-promotion-denied`,
+      method: "tools/call",
+      params: {
+        name: "discovery.recall_candidates.promote",
+        arguments: {
+          recallCandidateId: invalidRssRecallCandidateId,
+          payload: {
+            tags: ["mcp", "invalid-rss"],
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.discovery.token,
+      expectStatus: 400,
+    }
+  );
+
+  const tokenRevokeWithoutAdminScope = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-token-revoke-missing-admin-scope`,
+      method: "tools/call",
+      params: {
+        name: "admin.mcp_tokens.revoke",
+        arguments: {
+          tokenId: harness.tokens.analyst.tokenRecord.tokenId,
+          reason: "should be denied by scope",
+          confirm: true,
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.config.token,
+      expectStatus: 403,
+    }
+  );
+
+  const tokenSelfRevoke = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-token-self-revoke`,
+      method: "tools/call",
+      params: {
+        name: "admin.mcp_tokens.revoke",
+        arguments: {
+          tokenId: harness.tokens.tokenAdmin.tokenRecord.tokenId,
+          reason: "self revoke should be denied",
+          confirm: true,
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.tokenAdmin.token,
+      expectStatus: 400,
+    }
+  );
+
+  const systemSequenceId = firstResultLine(
+    await harness.queryPostgres(`
+      select sequence_id::text
+      from public.sequences
+      where created_by like 'migration:%'
+        and status in ('active', 'draft')
+      order by title
+      limit 1;
+    `)
+  );
+  assert(systemSequenceId, "Expected at least one migration-owned system sequence for archive denial proof.");
+  const systemSequenceArchive = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-system-sequence-archive-denied`,
+      method: "tools/call",
+      params: {
+        name: "sequences.archive",
+        arguments: {
+          sequenceId: systemSequenceId,
+          confirm: true,
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
+
+  const defaultReindexSequenceId = firstResultLine(
+    await harness.queryPostgres(`
+      select sequence_id::text
+      from public.sequences
+      where title = 'Default Reindex'
+        and created_by like 'migration:%'
+      limit 1;
+    `)
+  );
+  assert(defaultReindexSequenceId, "Expected migration-owned Default Reindex sequence for manual-run denial proof.");
+  const defaultReindexManualRun = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-default-reindex-manual-run-denied`,
+      method: "tools/call",
+      params: {
+        name: "sequences.run",
+        arguments: {
+          sequenceId: defaultReindexSequenceId,
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
+  const invalidSequenceRunPayload = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-sequence-run-extra-target-denied`,
+      method: "tools/call",
+      params: {
+        name: "sequences.run",
+        arguments: {
+          sequenceId: defaultReindexSequenceId,
+          payload: {
+            target: "interest_centroids",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
+  const invalidReindexIndexName = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-reindex-invalid-index-denied`,
+      method: "tools/call",
+      params: {
+        name: "maintenance.reindex.request",
+        arguments: {
+          payload: {
+            indexName: "articles",
+            jobKind: "backfill",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
+  const invalidReindexJobKind = await postJson(
+    mcpBaseUrl,
+    {
+      jsonrpc: "2.0",
+      id: `${harness.runId}-reindex-invalid-kind-denied`,
+      method: "tools/call",
+      params: {
+        name: "maintenance.reindex.request",
+        arguments: {
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "repair",
+          },
+        },
+      },
+    },
+    {
+      bearerToken: harness.tokens.automation.token,
+      expectStatus: 400,
+    }
+  );
 
   const unknownMethod = await postJson(
     mcpBaseUrl,
@@ -1968,6 +2855,82 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     readJsonRpcErrorMessage(invalidPayload.json).toLowerCase().includes("payload"),
     "Invalid payload schema should be rejected."
   );
+  assert(
+    readJsonRpcErrorMessage(invalidChannelPayload.json).includes("payload.websiteUrl"),
+    "Invalid channel create payloads should be rejected by MCP schema before control-plane 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidBulkOnboardSource.json).includes("websiteUrl"),
+    "Invalid bulk onboarding source rows should be rejected by MCP schema before backend/control-plane writes."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidDiscoveryMissionCreatePayload.json).includes("payload.payload"),
+    "Nested discovery mission create payloads should be rejected by MCP schema before backend 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidRecallMissionCreatePayload.json).includes("payload.payload"),
+    "Nested recall mission create payloads should be rejected by MCP schema before backend 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidDiscoveryReviewPayload.json).includes("payload.status"),
+    "Invalid discovery review payload should be rejected by MCP schema before backend 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidRecallCandidatePayload.json).includes("payload.status"),
+    "Invalid recall candidate payload should be rejected by MCP schema before backend 422."
+  );
+  assert(
+    invalidDiscoveryProfileJsonString.json?.error?.data?.path === "payload",
+    "JSON-string write payloads should fail at the MCP payload boundary with data.path=payload."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidDiscoveryClassNestedPayload.json).includes("payload.payload"),
+    "Nested discovery class create payloads should be rejected by MCP schema before backend 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidSequenceCreateExtraPayload.json).includes("payload.target"),
+    "Sequence create should reject guessed extra payload fields before backend 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidTemplateExtraPayload.json).includes("payload.model"),
+    "LLM template create should reject guessed extra payload fields before control-plane mutation."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidContentPolicyExtraPayload.json).includes("payload.payload"),
+    "Content analysis policy create should reject nested payload envelopes before backend 422."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidRssPromotion.json).toLowerCase().includes("valid feed evidence"),
+    "Recall RSS promotion should reject HTML/opportunity pages without valid feed evidence."
+  );
+  assert(
+    readJsonRpcErrorMessage(tokenRevokeWithoutAdminScope.json).includes("admin.tokens"),
+    "MCP token revoke should require admin.tokens scope rather than encouraging direct REST bypass."
+  );
+  assert(
+    readJsonRpcErrorMessage(tokenSelfRevoke.json).toLowerCase().includes("current mcp token"),
+    "MCP token revoke should reject self-revoke through the active session."
+  );
+  assert(
+    readJsonRpcErrorMessage(systemSequenceArchive.json).toLowerCase().includes("system sequence"),
+    "MCP cleanup should reject archiving migration-owned system sequences."
+  );
+  assert(
+    readJsonRpcErrorMessage(defaultReindexManualRun.json).includes("maintenance.reindex"),
+    "MCP should reject manual Default Reindex runs without a valid reindex job/event context."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidSequenceRunPayload.json).includes("payload.target"),
+    "MCP should reject extra sequence run payload fields before backend 422 responses."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidReindexIndexName.json).includes("payload.indexName"),
+    "MCP should reject unsupported reindex indexName before creating a skipped job."
+  );
+  assert(
+    readJsonRpcErrorMessage(invalidReindexJobKind.json).includes("payload.jobKind"),
+    "MCP should reject unsupported reindex jobKind instead of coercing it to rebuild."
+  );
   assertClientError(unknownMethod, "Unknown JSON-RPC method");
   assertClientError(unknownTool, "Unknown MCP tool");
   assertClientError(unknownResource, "Unknown MCP resource");
@@ -1983,6 +2946,25 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     destructiveWithoutConfirm: destructiveWithoutConfirm.status,
     destructiveWithoutScope: destructiveWithoutScope.status,
     invalidPayload: invalidPayload.status,
+    invalidChannelPayload: invalidChannelPayload.status,
+    invalidBulkOnboardSource: invalidBulkOnboardSource.status,
+    invalidDiscoveryMissionCreatePayload: invalidDiscoveryMissionCreatePayload.status,
+    invalidRecallMissionCreatePayload: invalidRecallMissionCreatePayload.status,
+    invalidDiscoveryReviewPayload: invalidDiscoveryReviewPayload.status,
+    invalidRecallCandidatePayload: invalidRecallCandidatePayload.status,
+    invalidDiscoveryProfileJsonString: invalidDiscoveryProfileJsonString.status,
+    invalidDiscoveryClassNestedPayload: invalidDiscoveryClassNestedPayload.status,
+    invalidSequenceCreateExtraPayload: invalidSequenceCreateExtraPayload.status,
+    invalidTemplateExtraPayload: invalidTemplateExtraPayload.status,
+    invalidContentPolicyExtraPayload: invalidContentPolicyExtraPayload.status,
+    invalidRssPromotion: invalidRssPromotion.status,
+    tokenRevokeWithoutAdminScope: tokenRevokeWithoutAdminScope.status,
+    tokenSelfRevoke: tokenSelfRevoke.status,
+    systemSequenceArchive: systemSequenceArchive.status,
+    defaultReindexManualRun: defaultReindexManualRun.status,
+    invalidSequenceRunPayload: invalidSequenceRunPayload.status,
+    invalidReindexIndexName: invalidReindexIndexName.status,
+    invalidReindexJobKind: invalidReindexJobKind.status,
     unknownMethod: unknownMethod.status,
     unknownTool: unknownTool.status,
     unknownResource: unknownResource.status,
@@ -2000,6 +2982,8 @@ async function scenarioRequestLogAndAuditEvidence(harness) {
   const evidence = [];
   const analystTokenId = harness.tokens.analyst.tokenRecord.tokenId;
   const automationTokenId = harness.tokens.automation.tokenRecord.tokenId;
+  const configTokenId = harness.tokens.config.tokenRecord.tokenId;
+  const discoveryTokenId = harness.tokens.discovery.tokenRecord.tokenId;
 
   if (harness.getEntity("promptTemplateId") && !harness.getEntity("promptTemplateDeleted")) {
     await harness.mcpToolCall(harness.tokens.config.token, "llm_templates.delete", {
@@ -2014,11 +2998,27 @@ async function scenarioRequestLogAndAuditEvidence(harness) {
            coalesce(tool_name, resource_uri, prompt_name, '') as target,
            success::text
     from mcp_request_log
-    where token_id in ('${analystTokenId}', '${automationTokenId}')
+    where token_id in ('${analystTokenId}', '${automationTokenId}', '${configTokenId}', '${discoveryTokenId}')
     order by created_at desc
     limit 40
   `);
   assert(requestRows, "mcp_request_log should contain rows for authenticated MCP activity.");
+
+  const backend422Count = Number(
+    firstResultLine(
+      await harness.queryPostgres(`
+        select count(*)::int
+        from mcp_request_log
+        where token_id in ('${analystTokenId}', '${automationTokenId}', '${configTokenId}', '${discoveryTokenId}')
+          and success = false
+          and coalesce(error_text, '') like '%422%'
+      `)
+    ) ?? 0
+  );
+  assert(
+    backend422Count === 0,
+    `Covered invalid MCP write scenarios should fail at MCP -32602 boundary, not backend 422; got ${backend422Count}.`
+  );
 
   const auditRows = await harness.queryPostgres(`
     select action_type
@@ -2051,6 +3051,7 @@ async function scenarioRequestLogAndAuditEvidence(harness) {
 
   pushEvidence(evidence, "request-log-sample", requestRows.split(/\r?\n/).slice(0, 6));
   pushEvidence(evidence, "audit-log-sample", auditRows.split(/\r?\n/).slice(0, 6));
+  pushEvidence(evidence, "backend-422-errors", { coveredInvalidWriteScenarios: backend422Count });
 
   return {
     key: "request-log-and-audit-evidence",

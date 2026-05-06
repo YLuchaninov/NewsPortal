@@ -56,7 +56,8 @@ pnpm dev:mvp:internal:no-build
 2. Дождитесь poll.
 3. Откройте `Resources`.
 4. Проверьте найденные resources, provenance and projection state.
-5. Если сайт JS-heavy и static path не помогает, включайте browser fallback только явно.
+5. Для website source отделяйте acquisition/projection proof от downstream selection proof: `web_resources` могут остаться resource-only или спроецироваться в `articles`, а projected rows могут дальше получить `final_decision=rejected`.
+6. Если сайт JS-heavy и static path не помогает, включайте browser fallback только явно.
 
 Перед тем как считать lane рабочим proof, используйте:
 

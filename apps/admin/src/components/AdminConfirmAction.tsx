@@ -12,6 +12,7 @@ import {
   buttonVariants,
   cn,
 } from "@newsportal/ui";
+import { submitAdminForm } from "./admin-form-submit";
 
 interface HiddenField {
   name: string;
@@ -44,11 +45,7 @@ function submitHiddenForm(action: string, fields: HiddenField[]): void {
   }
 
   document.body.appendChild(form);
-  if (typeof form.requestSubmit === "function") {
-    form.requestSubmit();
-    return;
-  }
-  form.submit();
+  submitAdminForm(form);
 }
 
 export function AdminConfirmAction({

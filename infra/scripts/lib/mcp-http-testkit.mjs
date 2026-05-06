@@ -90,7 +90,12 @@ function detectBodyKind(contentType, text) {
 }
 
 function inferSourceHint(url, contentType, bodyPreview, status) {
-  const host = new URL(url).host.toLowerCase();
+  let host;
+  try {
+    host = new URL(url).host.toLowerCase();
+  } catch {
+    host = "";
+  }
   const localHost = host.startsWith("127.0.0.1") || host.startsWith("localhost");
   const normalizedPreview = String(bodyPreview ?? "").toLowerCase();
   const normalizedContentType = String(contentType ?? "").toLowerCase();
@@ -603,6 +608,163 @@ export async function getJson(url, { cookie, bearerToken, expectStatus, timeoutM
   };
 }
 
+function parseSseEvents(text) {
+  return String(text ?? "")
+    .split(/\n\n/u)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      let event = "message";
+      const data = [];
+      for (const line of chunk.split(/\r?\n/u)) {
+        if (line.startsWith("event:")) {
+          event = line.slice("event:".length).trim();
+        } else if (line.startsWith("data:")) {
+          data.push(line.slice("data:".length).trimStart());
+        }
+      }
+      return {
+        event,
+        data: data.join("\n"),
+      };
+    });
+}
+
+export async function assertMcpSseHandshake(token, { timeoutMs = 10000 } = {}) {
+  const target = new URL(mcpBaseUrl);
+  const client = target.protocol === "https:" ? https : http;
+  const requestId = randomUUID();
+
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let text = "";
+    let endpoint = "";
+
+    function fail(error) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      sseRequest.destroy();
+      reject(error);
+    }
+
+    function pass(value) {
+      if (settled) {
+        return;
+      }
+      clearTimeout(timer);
+      settled = true;
+      sseRequest.destroy();
+      resolve(value);
+    }
+
+    const timer = setTimeout(() => {
+      fail(new Error("Timed out waiting for MCP SSE handshake."));
+    }, timeoutMs);
+
+    const sseRequest = client.request(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || (target.protocol === "https:" ? 443 : 80),
+        path: `${target.pathname}${target.search}`,
+        method: "GET",
+        headers: {
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      (response) => {
+        const contentType = readHeader(response.headers, "content-type");
+        if (response.statusCode !== 200 || !contentType.includes("text/event-stream")) {
+          clearTimeout(timer);
+          fail(
+            new Error(
+              `Expected MCP SSE response with text/event-stream, got ${response.statusCode ?? 0} ${contentType || "missing-content-type"}.`
+            )
+          );
+          return;
+        }
+
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          text += chunk;
+          const endpointEvent = parseSseEvents(text).find((item) => item.event === "endpoint");
+          if (!endpointEvent || endpoint) {
+            return;
+          }
+          endpoint = endpointEvent.data;
+          const endpointUrl = new URL(endpoint, mcpBaseUrl).toString();
+          const body = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            method: "initialize",
+            params: {
+              protocolVersion: "2025-06-18",
+              capabilities: {},
+              clientInfo: {
+                name: "newsportal-mcp-sse-proof",
+                version: "1.0.0",
+              },
+            },
+          });
+          sendRequest(endpointUrl, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(body).toString(),
+            },
+            body,
+            timeoutMs,
+          })
+            .then((postResponse) => {
+              if (postResponse.status !== 202) {
+                fail(
+                  new Error(
+                    `Expected MCP SSE message endpoint to return 202, got ${postResponse.status}.`
+                  )
+                );
+              }
+            })
+            .catch(fail);
+        });
+
+        response.on("data", () => {
+          const messageEvent = parseSseEvents(text).find((item) => item.event === "message");
+          if (!messageEvent) {
+            return;
+          }
+          clearTimeout(timer);
+          const message = parseJsonPayload(messageEvent.data, {
+            status: 200,
+            statusText: "OK",
+            headers: response.headers,
+          });
+          if (message?.id !== requestId || message?.result?.serverInfo?.name !== "newsportal-mcp") {
+            fail(new Error("MCP SSE initialize returned an unexpected message payload."));
+            return;
+          }
+          pass({
+            endpoint,
+            protocolVersion: message.result.protocolVersion,
+            serverName: message.result.serverInfo.name,
+          });
+        });
+      }
+    );
+
+    sseRequest.on("error", (error) => {
+      clearTimeout(timer);
+      if (!settled) {
+        reject(error);
+      }
+    });
+    sseRequest.end();
+  });
+}
+
 export async function fetchJson(url, { cookie, timeoutMs = 10000 } = {}) {
   const response = await sendRequest(url, {
     headers: cookie ? { Cookie: cookie } : {},
@@ -1103,6 +1265,20 @@ export function createHarness({ logPrefix = "mcp-http-proof" } = {}) {
       if (!response?.result?.structuredContent) {
         throw buildMcpDiagnosticError(
           `MCP tool ${name} did not return structuredContent.`,
+          {
+            rpcMethod: "tools/call",
+            toolName: name,
+            requestArgs: args,
+            response,
+          }
+        );
+      }
+      if (
+        typeof response.result.structuredContent !== "object" ||
+        Array.isArray(response.result.structuredContent)
+      ) {
+        throw buildMcpDiagnosticError(
+          `MCP tool ${name} returned non-object structuredContent.`,
           {
             rpcMethod: "tools/call",
             toolName: name,

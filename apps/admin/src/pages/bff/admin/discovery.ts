@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { readRuntimeConfig } from "@newsportal/config";
+import { MCP_DISCOVERY_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
 
 import type { AdminActionContext } from "../../../lib/server/admin-action";
 import {
@@ -9,6 +10,10 @@ import {
   insertAdminAuditLog,
   prepareAdminAction,
 } from "../../../lib/server/admin-action";
+import {
+  assertAdminPayloadHasNoNestedEnvelope,
+  assertAdminPayloadMatchesSchema,
+} from "../../../lib/server/admin-payload-validation";
 import { resolveAdminAppPath } from "../../../lib/server/browser-flow";
 import { getPool } from "../../../lib/server/db";
 
@@ -49,6 +54,108 @@ export {
   buildDiscoveryAuditPayload,
 } from "../../../lib/server/discovery-payloads";
 export type { DiscoveryIntent } from "../../../lib/server/discovery-payloads";
+
+const SUPPORTED_WEBSITE_KINDS = new Set([
+  "editorial",
+  "procurement_portal",
+  "listing",
+  "document",
+  "resource",
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readPath(record: Record<string, unknown>, path: readonly string[]): unknown {
+  let current: unknown = record;
+  for (const key of path) {
+    const currentRecord = asRecord(current);
+    if (!currentRecord) {
+      return undefined;
+    }
+    current = currentRecord[key];
+  }
+  return current;
+}
+
+function readOptionalString(value: unknown): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized : null;
+}
+
+function hasStringArrayValue(value: unknown): boolean {
+  return Array.isArray(value) && value.some((entry) => readOptionalString(entry));
+}
+
+function hasValidFeedEvidence(evaluationJson: Record<string, unknown>): boolean {
+  return (
+    evaluationJson.isValid === true ||
+    evaluationJson.validFeed === true ||
+    readPath(evaluationJson, ["feed", "isValid"]) === true ||
+    readPath(evaluationJson, ["rss", "isValid"]) === true ||
+    hasStringArrayValue(evaluationJson.discoveredFeedUrls) ||
+    hasStringArrayValue(readPath(evaluationJson, ["probe", "discoveredFeedUrls"])) ||
+    hasStringArrayValue(readPath(evaluationJson, ["evaluation", "discoveredFeedUrls"]))
+  );
+}
+
+function hasSupportedWebsiteEvidence(evaluationJson: Record<string, unknown>): boolean {
+  if (readPath(evaluationJson, ["policyReview", "matchedSignals", "websiteKindSupported"]) === true) {
+    return true;
+  }
+  const kind =
+    readOptionalString(readPath(evaluationJson, ["classification", "kind"])) ??
+    readOptionalString(readPath(evaluationJson, ["probe", "classification", "kind"])) ??
+    readOptionalString(evaluationJson.websiteKind);
+  return Boolean(kind && SUPPORTED_WEBSITE_KINDS.has(kind));
+}
+
+async function assertRecallCandidateCanPromoteThroughAdmin(
+  recallCandidateId: string,
+  overrideReason: string | null,
+): Promise<void> {
+  const result = await getPool().query<{
+    status: string | null;
+    provider_type: string | null;
+    url: string | null;
+    final_url: string | null;
+    evaluation_json: Record<string, unknown> | null;
+  }>(
+    `
+      select status, provider_type, url, final_url, evaluation_json
+      from public.discovery_recall_candidates
+      where recall_candidate_id = $1
+      limit 1
+    `,
+    [recallCandidateId],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return;
+  }
+  const providerType = readOptionalString(row.provider_type) ?? "rss";
+  const status = readOptionalString(row.status) ?? "pending";
+  const evaluationJson = asRecord(row.evaluation_json) ?? {};
+  if (status === "rejected" && !overrideReason) {
+    throw new Error(
+      `Rejected recall candidate ${recallCandidateId} cannot be promoted without overrideReason.`,
+    );
+  }
+  if (providerType === "rss" && !hasValidFeedEvidence(evaluationJson)) {
+    throw new Error(
+      `Recall candidate ${recallCandidateId} is providerType=rss but has no valid feed evidence. Do not promote HTML/opportunity pages as RSS.`,
+    );
+  }
+  if (providerType === "website" && !hasSupportedWebsiteEvidence(evaluationJson) && !overrideReason) {
+    throw new Error(
+      `Website recall candidate ${recallCandidateId} requires supported website-kind evidence or overrideReason before promotion.`,
+    );
+  }
+}
+
 async function callDiscoveryApi<T>(path: string, init: RequestInit): Promise<T> {
   const runtimeConfig = readRuntimeConfig(process.env, {
     defaultAppBaseUrl: "http://127.0.0.1:4322/",
@@ -115,13 +222,20 @@ export const POST: APIRoute = async ({ request }) => {
   const { payload, session } = context;
 
   try {
+    assertAdminPayloadHasNoNestedEnvelope(payload, "Discovery action");
     const intent = resolveDiscoveryIntent(payload);
 
     if (intent === "create_profile") {
+      const requestPayload = buildDiscoveryProfileCreateApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.profileCreate,
+        "Discovery profile create payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>("/maintenance/discovery/profiles", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildDiscoveryProfileCreateApiPayload(payload, session.userId)),
+        body: JSON.stringify(requestPayload),
       });
       await writeAuditLog(
         session.userId,
@@ -144,12 +258,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!profileId) {
         throw new Error("Profile ID is required.");
       }
+      const requestPayload = buildDiscoveryProfileUpdateApiPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.profileUpdate,
+        "Discovery profile update payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>(
         `/maintenance/discovery/profiles/${profileId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildDiscoveryProfileUpdateApiPayload(payload)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -227,10 +347,16 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (intent === "create_mission") {
+      const requestPayload = buildDiscoveryMissionCreateApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.missionCreate,
+        "Discovery mission create payload",
+      );
       const result = await callDiscoveryApi<{ mission_id: string }>("/maintenance/discovery/missions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildDiscoveryMissionCreateApiPayload(payload, session.userId)),
+        body: JSON.stringify(requestPayload),
       });
       await writeAuditLog(
         session.userId,
@@ -253,12 +379,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!missionId) {
         throw new Error("Mission ID is required.");
       }
+      const requestPayload = buildDiscoveryMissionUpdateApiPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.missionUpdate,
+        "Discovery mission update payload",
+      );
       const result = await callDiscoveryApi<{ mission_id: string }>(
         `/maintenance/discovery/missions/${missionId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildDiscoveryMissionUpdateApiPayload(payload)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -342,12 +474,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!missionId) {
         throw new Error("Mission ID is required.");
       }
+      const requestPayload = { requestedBy: session.userId };
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.missionRun,
+        "Discovery mission run payload",
+      );
       const result = await callDiscoveryApi<{ run_id?: string }>(
         `/maintenance/discovery/missions/${missionId}/run`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ requestedBy: session.userId }),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -395,10 +533,16 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (intent === "create_class") {
+      const requestPayload = buildDiscoveryHypothesisClassCreateApiPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.classCreate,
+        "Discovery class create payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>("/maintenance/discovery/classes", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildDiscoveryHypothesisClassCreateApiPayload(payload)),
+        body: JSON.stringify(requestPayload),
       });
       await writeAuditLog(
         session.userId,
@@ -421,12 +565,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!classKey) {
         throw new Error("Class key is required.");
       }
+      const requestPayload = buildDiscoveryHypothesisClassUpdateApiPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.classUpdate,
+        "Discovery class update payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>(
         `/maintenance/discovery/classes/${classKey}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildDiscoveryHypothesisClassUpdateApiPayload(payload)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -502,12 +652,18 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (intent === "create_recall_mission") {
+      const requestPayload = buildDiscoveryRecallMissionCreateApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.recallMissionCreate,
+        "Discovery recall mission create payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>(
         "/maintenance/discovery/recall-missions",
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildDiscoveryRecallMissionCreateApiPayload(payload, session.userId)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -531,12 +687,18 @@ export const POST: APIRoute = async ({ request }) => {
       if (!recallMissionId) {
         throw new Error("Recall mission ID is required.");
       }
+      const requestPayload = buildDiscoveryRecallMissionUpdateApiPayload(payload);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.recallMissionUpdate,
+        "Discovery recall mission update payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>(
         `/maintenance/discovery/recall-missions/${recallMissionId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildDiscoveryRecallMissionUpdateApiPayload(payload)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -587,16 +749,24 @@ export const POST: APIRoute = async ({ request }) => {
       if (!recallCandidateId) {
         throw new Error("Recall candidate ID is required.");
       }
+      const overrideReason = readOptionalString(payload.overrideReason);
+      await assertRecallCandidateCanPromoteThroughAdmin(recallCandidateId, overrideReason);
+      const requestPayload = {
+        enabled: true,
+        reviewedBy: session.userId,
+        tags: parseTextList(payload.tags),
+      };
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.recallCandidatePromote,
+        "Discovery recall candidate promote payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>(
         `/maintenance/discovery/recall-candidates/${recallCandidateId}/promote`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            enabled: true,
-            reviewedBy: session.userId,
-            tags: parseTextList(payload.tags),
-          }),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -620,12 +790,18 @@ export const POST: APIRoute = async ({ request }) => {
         throw new Error("Candidate ID is required.");
       }
       const reviewStatus = String(payload.status ?? "").trim();
+      const requestPayload = buildDiscoveryCandidateReviewApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.candidateReview,
+        "Discovery candidate review payload",
+      );
       const result = await callDiscoveryApi<{ candidate_id: string }>(
         `/maintenance/discovery/candidates/${candidateId}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildDiscoveryCandidateReviewApiPayload(payload, session.userId)),
+          body: JSON.stringify(requestPayload),
         }
       );
       await writeAuditLog(
@@ -644,10 +820,16 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (intent === "submit_feedback") {
+      const requestPayload = buildDiscoveryFeedbackApiPayload(payload, session.userId);
+      assertAdminPayloadMatchesSchema(
+        requestPayload,
+        MCP_DISCOVERY_PAYLOAD_SCHEMAS.feedbackCreate,
+        "Discovery feedback payload",
+      );
       const result = await callDiscoveryApi<Record<string, unknown>>("/maintenance/discovery/feedback", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildDiscoveryFeedbackApiPayload(payload, session.userId)),
+        body: JSON.stringify(requestPayload),
       });
       await writeAuditLog(
         session.userId,
@@ -665,12 +847,18 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
+    const requestPayload = {
+      missionId: String(payload.missionId ?? "").trim() || null,
+    };
+    assertAdminPayloadMatchesSchema(
+      requestPayload,
+      MCP_DISCOVERY_PAYLOAD_SCHEMAS.reEvaluate,
+      "Discovery re-evaluate payload",
+    );
     const result = await callDiscoveryApi<Record<string, unknown>>("/maintenance/discovery/re-evaluate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        missionId: String(payload.missionId ?? "").trim() || null,
-      }),
+      body: JSON.stringify(requestPayload),
     });
     await writeAuditLog(
       session.userId,

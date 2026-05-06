@@ -153,6 +153,33 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(payload["backfill"]["selectionProfileSnapshot"]["maxVersion"], 7)
 
+    async def test_process_reindex_noops_cancel_requested_job_before_start(self) -> None:
+        job = SimpleNamespace(
+            data={
+                "eventId": "evt-reindex-cancel",
+                "reindexJobId": "job-cancel",
+                "indexName": worker_main.INTEREST_CENTROIDS_INDEX_NAME,
+            }
+        )
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(
+                worker_main,
+                "read_reindex_job_context",
+                AsyncMock(return_value=("backfill", {}, "cancel_requested")),
+            ),
+            patch.object(worker_main, "record_processed_event", AsyncMock()) as record_event,
+            patch.object(worker_main, "replay_historical_articles", AsyncMock()) as replay,
+        ):
+            result = await worker_main.process_reindex(job, "")
+
+        self.assertEqual(result["status"], "cancelled")
+        self.assertEqual(result["reindexJobId"], "job-cancel")
+        record_event.assert_awaited_once()
+        replay.assert_not_awaited()
+
     async def test_llm_review_monthly_quota_snapshot_uses_precise_budget_math(self) -> None:
         cursor = _RecordingCursor([{"month_to_date_cost_usd": "0.995"}])
         with patch.dict(

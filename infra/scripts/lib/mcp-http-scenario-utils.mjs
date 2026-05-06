@@ -29,6 +29,11 @@ export function hasContentArray(result) {
 
 export function buildPromptArguments(name, runId) {
   switch (name) {
+    case "diagnose.mcp_error":
+      return {
+        error: `Streamable HTTP 422 during cleanup ${runId}`,
+        objective: "clean MCP product-test artifacts",
+      };
     case "operator.session.start":
       return {
         objective: `review article residual diagnostics ${runId}`,
@@ -57,6 +62,37 @@ export function buildPromptArguments(name, runId) {
     case "observability.session.plan":
       return {
         question: `why did deterministic MCP coverage change for ${runId}`,
+      };
+    case "operations.daily_review":
+      return {
+        focus: `deterministic operations coverage ${runId}`,
+      };
+    case "operations.issue_triage":
+      return {
+        symptom: `website resources projected but rejected ${runId}`,
+        domain: "website_pipeline",
+      };
+    case "selection.tuning.plan":
+      return {
+        objective: "increase_precision",
+        residualBucket: "gray_zone_hold",
+      };
+    case "channel.health.review":
+      return {
+        channelId: "",
+      };
+    case "website.pipeline.review":
+      return {
+        channelId: "",
+      };
+    case "llm_budget.review":
+      return {
+        question: `gray-zone review cost ${runId}`,
+      };
+    case "discovery.yield.review":
+      return {
+        missionId: "",
+        recallMissionId: "",
       };
     case "system_interest.create":
       return {
