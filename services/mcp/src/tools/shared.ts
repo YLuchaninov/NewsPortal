@@ -253,6 +253,96 @@ export const contentDetailSchema = {
   additionalProperties: false,
 } satisfies JsonSchema;
 
+const UUID_PREFIX_RE = /^[0-9a-f-]{8,35}$/i;
+
+export type McpQueryablePool = {
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+};
+
+export function readAliasedRequiredString(
+  args: Record<string, unknown>,
+  canonicalField: string,
+  aliases: readonly string[]
+): string {
+  for (const fieldName of [canonicalField, ...aliases]) {
+    const value = readOptionalString(args[fieldName]);
+    if (value) {
+      return value;
+    }
+  }
+  throw new JsonRpcError(
+    -32602,
+    `${canonicalField} is required. Accepted aliases: ${aliases.join(", ")}.`,
+    {
+      statusCode: 400,
+      data: {
+        path: canonicalField,
+        acceptedAliases: [canonicalField, ...aliases],
+      },
+    }
+  );
+}
+
+export async function resolveUniqueUuidPrefix(
+  pool: McpQueryablePool,
+  value: unknown,
+  input: {
+    path: string;
+    tableName: string;
+    columnName: string;
+    label: string;
+  }
+): Promise<string | undefined> {
+  const normalized = readOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+  if (UUID_RE.test(normalized)) {
+    return normalized;
+  }
+  if (!UUID_PREFIX_RE.test(normalized)) {
+    throw new JsonRpcError(-32602, `${input.path} must be a full UUID or a unique UUID prefix.`, {
+      statusCode: 400,
+      data: {
+        path: input.path,
+        expectedShape: "UUID or unique UUID prefix of at least 8 hex characters",
+      },
+    });
+  }
+
+  const result = await pool.query(
+    `
+      select ${input.columnName}::text as id
+        from ${input.tableName}
+       where ${input.columnName}::text like $1
+       order by ${input.columnName}::text
+       limit 2
+    `,
+    [`${normalized}%`]
+  );
+  const rows = result.rows as Array<{ id: string }>;
+  if (rows.length === 1) {
+    return rows[0]?.id;
+  }
+  if (rows.length > 1) {
+    throw new JsonRpcError(-32602, `${input.path} prefix is ambiguous; pass the full UUID.`, {
+      statusCode: 400,
+      data: {
+        path: input.path,
+        value: normalized,
+        matches: rows.map((row) => row.id),
+      },
+    });
+  }
+  throw new JsonRpcError(-32602, `${input.label} ${normalized} was not found.`, {
+    statusCode: 400,
+    data: {
+      path: input.path,
+      value: normalized,
+    },
+  });
+}
+
 function isFlagEnabled(value: unknown): boolean {
   return value === true || String(value ?? "").trim().toLowerCase() === "true";
 }

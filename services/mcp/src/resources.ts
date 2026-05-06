@@ -379,10 +379,11 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       },
       sessionFlow: [
         "Read the current profile and mission state before creating new discovery work.",
-        "Create or update the profile/classifier policy first when it will shape multiple runs.",
+        "Default to guarded automation when the operator has not explicitly requested manual approval: create or update the profile/classifier policy first, then run profile-backed graph/recall missions so configured thresholds can make safe automatic decisions.",
+        "When auto-promotion or profile thresholds are expected, pass payload.profileId on discovery.missions.create and discovery.recall_missions.create; profile-less graph/recall missions are manual-review-only fallback and should be reported as less automated than the intended default.",
         "For interactive runs, keep maxHypotheses <= 5 unless the operator explicitly accepts a longer asynchronous run.",
         "Compile and request mission runs, then inspect sequence run/task state and candidates before reviewing or promoting anything.",
-        "Use feedback and re-evaluation when the initial candidate set is noisy instead of forcing promotion.",
+        "Use feedback and re-evaluation when the initial candidate set is noisy instead of forcing promotion; use manual review only for ambiguous candidates or when evidence/guardrails block automation.",
       ],
       destructiveCautions: [
         "Archive or pause missions only after preserving enough evidence to explain the operator decision.",

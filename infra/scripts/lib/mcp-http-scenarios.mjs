@@ -1590,17 +1590,6 @@ async function scenarioDiscoveryOperatorFlows(harness) {
       providerType: "website",
       status: "pending",
       qualitySignalSource: "manual",
-      evaluationJson: {
-        classification: {
-          kind: "listing",
-        },
-        policyReview: {
-          stageLossBucket: "manual_only",
-          matchedSignals: {
-            websiteKindSupported: true,
-          },
-        },
-      },
     },
   });
   const recallCandidateId = String(
@@ -1626,6 +1615,7 @@ async function scenarioDiscoveryOperatorFlows(harness) {
     recallCandidateId,
     payload: {
       tags: "mcp, deterministic",
+      overrideReason: "Deterministic MCP scenario promotes a manually created website candidate shell after explicit operator override.",
     },
   });
   const promotedChannelId = String(promoted.registered_channel_id ?? promoted.registeredChannelId ?? "");
@@ -2571,12 +2561,6 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
         providerType: "rss",
         status: "pending",
         qualitySignalSource: "manual",
-        evaluationJson: {
-          isValid: false,
-          classification: {
-            kind: "listing",
-          },
-        },
       },
     }
   );

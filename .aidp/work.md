@@ -15,21 +15,21 @@
 - Work route: bugfix
 - Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
 - Route phase: completed
-- Route-specific next step: hand off the MCP client-compatibility guard fixes to ongoing product testing.
-- Route-specific proof: completed DB/request-log reproduction, targeted MCP unit proof, MCP/control-plane typechecks, TS lint, runtime MCP rebuild, health checks, and targeted MCP compose proof.
+- Route-specific next step: hand off live MCP error audit and recall evidence update guard fix to ongoing product testing.
+- Route-specific proof: completed targeted MCP unit proof, contracts/MCP typecheck, TS lint, whitespace check, runtime MCP rebuild, and health proof.
 - Planning required by route: yes
 - Planning source: AIDP-native
 - Plan/spec status: accepted-for-this-item
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: user tested an MCP/OpenCode discovery-status prompt and saw client-retry errors from `discovery.candidates.list`, `channels.update`, and `system_interests.read`; MCP needs to fail earlier/more helpfully and offer safe narrow tools for common partial operator actions.
-- Active item id: NEWSPORTAL-MCP-CLIENT-COMPAT-ERROR-SWEEP-BUGFIX-1
+- Почему сейчас: live MCP request-log audit found a client bypassing RSS promotion evidence guard by writing `evaluationJson.validFeed=true` through `discovery.recall_candidates.update` after the first promotion denial.
+- Active item id: NEWSPORTAL-MCP-RECALL-EVIDENCE-UPDATE-GUARD-BUGFIX-1
 - Active item status: done
 - Item status: done
 - Risk: medium
 - Approval required: no
-- Approval reason: user is actively product-testing MCP and asked whether these client mistakes need fixing; planned work is local MCP/control-plane validation and read/write facade hardening with no schema migration, production deploy, real secrets, or destructive cleanup planned.
+- Approval reason: user is actively product-testing MCP and asked whether the discovery no-profile threshold behavior needs fixing; planned work is local MCP guidance/report hardening with no schema migration, production deploy, real secrets, or destructive cleanup planned.
 
 ## Проверки закрытия route
 
@@ -62,9 +62,9 @@
 
 ### Primary active item
 
-- ID: NEWSPORTAL-MCP-CLIENT-COMPAT-ERROR-SWEEP-BUGFIX-1
+- ID: NEWSPORTAL-MCP-RECALL-EVIDENCE-UPDATE-GUARD-BUGFIX-1
 - Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
-- Почему это primary active work: prevent common MCP client retries from producing backend 500/422-like noise or misleading partial-write attempts when the client uses truncated ids, partial channel update payloads, or alternative entity id names.
+- Почему это primary active work: ensure recall promotion semantic guards cannot be bypassed by MCP clients rewriting candidate evidence immediately before promotion.
 
 ### Secondary active item
 
@@ -78,6 +78,66 @@
 - Existing dirty worktree contains prior AIDP/admin/control-plane changes; do not revert unrelated changes.
 - Scope warning: do not run broad `git clean -fdX`; ignored `.env.*`, `.idea`, `node_modules`, `dist`, `.astro`, `data/models`, `data/snapshots` and other runtime/build artifacts may be locally useful and must only be removed by explicit targeted request.
 - No commit/stage/branch changes were requested or performed for the latest sweep/stages.
+
+### Active MCP recall evidence update guard bugfix
+
+- ID: NEWSPORTAL-MCP-RECALL-EVIDENCE-UPDATE-GUARD-BUGFIX-1
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `packages/contracts/src/mcp-schemas.ts`, `services/mcp/src/tools/discovery/write-tools.ts`, `tests/unit/ts/mcp-control-plane.test.ts`, and targeted proof.
+- Out of scope: backend/admin recall candidate edit semantics, live network feed probing, schema migrations, production deploy, or deleting the already-promoted product-test channel/candidate.
+- Accepted fix: remove `evaluationJson` from MCP recall candidate create/update payload shapes and tool guidance, so MCP clients cannot forge promotion evidence through either candidate creation or later review-state updates; keep review status/reason fields writable and keep promotion evidence checks on acquisition-owned stored candidate evidence.
+- Blueprint context checked: `.aidp/blueprint.md` Operator/admin control plane, Discovery acquisition, PostgreSQL source-of-truth; `.aidp/contracts/mcp-control-plane.md` recall promotion evidence guard.
+- Required proof: targeted MCP unit proof that `discovery.recall_candidates.create/update` with `evaluationJson` fails at MCP schema boundary before backend fetch; `pnpm --filter @newsportal/contracts typecheck`; `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `node --check infra/scripts/lib/mcp-http-scenarios.mjs`; `git diff --check --` touched paths; runtime MCP rebuild and health check.
+- Proof passed: yes; live `mcp_request_log` audit showed most errors were expected MCP guards, but found a real bypass where a client used `discovery.recall_candidates.update` to rewrite `evaluationJson.validFeed/discoveredFeedUrls` after an RSS promotion denial, then promoted successfully. Follow-up logic audit found the same trust edge on MCP candidate create, so `evaluationJson` is now removed from both MCP recall candidate create and update schemas. Updated tool guidance and MCP HTTP scenarios so acquisition/probe evidence cannot be forged through MCP candidate writes; explicit source rows should use channel/bulk onboarding and website candidate shell promotion needs `overrideReason`. `pnpm unit_tests:ts -- mcp-control-plane` passed 348/348; `pnpm --filter @newsportal/contracts typecheck`, `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, `node --check infra/scripts/lib/mcp-http-scenarios.mjs`, and `git diff --check -- .aidp/work.md packages/contracts/src/mcp-schemas.ts services/mcp/src/tools/discovery/write-tools.ts tests/unit/ts/mcp-control-plane.test.ts infra/scripts/lib/mcp-http-scenarios.mjs` passed; MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned ok and `docker-mcp-1` is healthy.
+- Cleanup status: compose stack remains running for product testing after the MCP rebuild; no destructive cleanup was run.
+
+### Active MCP automation-first guidance micro-patch
+
+- ID: NEWSPORTAL-MCP-AUTOMATION-FIRST-GUIDANCE-MICROPATCH-1
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `.aidp/contracts/mcp-control-plane.md`, `services/mcp/src/context.ts`, `services/mcp/src/resources.ts`, `services/mcp/src/prompts.ts`, `services/mcp/src/operating-intelligence.ts`, and targeted checks.
+- Out of scope: changing backend discovery auto-promotion semantics, bypassing recall promotion evidence guards, making destructive operations automatic, schema migrations, or production deploy.
+- Accepted approach: make server instructions, discovery resources, and relevant prompts say that NewsPortal is guarded-automation-first; MCP clients should plan automatic setup/run/verify/tuning when profiles/policies/evidence make it safe, and treat manual approval as explicit operator intent or fallback for missing policy/evidence, destructive actions, unsafe promotions, or unclear decisions.
+- Blueprint context checked: `.aidp/blueprint.md` Operator/admin control plane and discovery safe-by-default invariants; `.aidp/contracts/mcp-control-plane.md` tool/resource contract and report verification guidance.
+- Required proof: `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `git diff --check --` touched paths; runtime MCP rebuild and health check.
+- Proof passed: yes; MCP server instructions now state the default planning posture is guarded automation, not manual review. Discovery scenario resources and prompts now tell clients to use/create profiles and pass `profileId` for graph and recall missions when the operator did not request manual approval, with manual-review-only described as fallback for missing policy/evidence/ambiguity. The MCP control-plane contract records automation-first planning as part of initialize guidance. `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, and `git diff --check -- .aidp/work.md .aidp/contracts/mcp-control-plane.md services/mcp/src/context.ts services/mcp/src/resources.ts services/mcp/src/prompts.ts services/mcp/src/operating-intelligence.ts` passed; MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned ok and `docker-mcp-1` is healthy.
+- Cleanup status: compose stack remains running for product testing after the MCP rebuild; no destructive cleanup was run.
+
+### Active recall no-profile guidance bugfix
+
+- ID: NEWSPORTAL-MCP-RECALL-NO-PROFILE-GUIDANCE-BUGFIX-1
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `services/mcp/src/tools/discovery/write-tools.ts`, `services/mcp/src/tools.ts`, `services/mcp/src/context.ts`, `services/mcp/src/resources.ts`, `services/mcp/src/operating-intelligence.ts`, and targeted MCP control-plane tests.
+- Out of scope: forcing every recall mission to use a profile, changing backend recall scoring/promotion semantics, schema migrations, production deploy, deleting runtime candidates, or enabling unsafe auto-promotion by default.
+- Accepted plan: keep profile-less recall missions allowed, but make MCP mutation responses and `operator.report.verify discovery_run` explicitly warn that recall missions without `profileId`/applied policy are manual-review-only and should not be reported as recallPolicy/minPromotionScore configured; include recall candidate status counts so pending recall review is visible.
+- Blueprint context checked: `.aidp/blueprint.md` Operator/admin control plane, Discovery acquisition, PostgreSQL source-of-truth; `.aidp/contracts/mcp-control-plane.md` report verification and recall candidate promotion guards.
+- Required proof: targeted MCP unit proof for recall mission create/acquire guidance and discovery report warnings; `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `git diff --check --` touched paths; runtime MCP rebuild and health check.
+- Proof passed: yes; second-pass similarity audit found the recall lane had the same profile/policy ambiguity as graph missions. `discovery.recall_missions.create/update/acquire` now warn when no `profileId`/applied recall policy exists and point clients to read-back. `operator.report.verify reportKind=discovery_run` now includes recall mission policy flags, recall candidate status counts, pending recall warnings, and avoids pulling unrelated latest profiles/missions/recall missions when specific entity filters are supplied. Updated MCP instructions/resources/nextReadBack to cover graph and recall missions. `pnpm unit_tests:ts -- mcp-control-plane` passed 347/347; `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, and `git diff --check -- .aidp/work.md services/mcp/src/tools/discovery/write-tools.ts services/mcp/src/tools.ts services/mcp/src/context.ts services/mcp/src/resources.ts services/mcp/src/operating-intelligence.ts tests/unit/ts/mcp-control-plane.test.ts` passed; MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned ok and `docker-mcp-1` is healthy.
+- Cleanup status: compose stack remains running for product testing after the MCP rebuild; no destructive cleanup was run.
+
+### Active discovery no-profile guidance bugfix
+
+- ID: NEWSPORTAL-MCP-DISCOVERY-NO-PROFILE-GUIDANCE-BUGFIX-1
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `services/mcp/src/tools/discovery/write-tools.ts`, `services/mcp/src/tools.ts`, `services/mcp/src/context.ts`, `services/mcp/src/resources.ts`, `services/mcp/src/operating-intelligence.ts`, and targeted MCP control-plane tests.
+- Out of scope: forcing every discovery mission to use a profile, changing backend discovery ranking/promotion semantics, schema migrations, production deploy, reviewing/deleting current runtime candidates, or enabling unsafe auto-promotion by default.
+- Accepted plan: keep profile-less manual discovery allowed, but make MCP mutation responses and report verification explicitly warn that missions without `profileId`/applied policy are manual-review-only and should not be reported as threshold-configured/auto-promote capable; add pending-candidate warnings to `operator.report.verify discovery_run`.
+- Blueprint context checked: `.aidp/blueprint.md` Operator/admin control plane, Discovery acquisition, PostgreSQL source-of-truth; `.aidp/contracts/mcp-control-plane.md` report verification and read-after-write guidance.
+- Required proof: targeted MCP unit proof for no-profile discovery mission response and `operator.report.verify` warnings; `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `git diff --check --` touched paths; runtime MCP rebuild and health check.
+- Proof passed: yes; MCP now keeps profile-less manual discovery allowed but returns explicit `mcpWarnings`/read-back guidance for `discovery.missions.create/run` when no `profileId`/applied policy exists, and `operator.report.verify reportKind=discovery_run` warns when missions are manual-review-only or still have pending candidates. Updated discovery instructions/resources/read-back note to tell clients to pass `payload.profileId` when auto-promotion/profile thresholds are expected. `pnpm unit_tests:ts -- mcp-control-plane` passed 346/346; `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, and `git diff --check -- .aidp/work.md services/mcp/src/tools/discovery/write-tools.ts services/mcp/src/tools.ts services/mcp/src/context.ts services/mcp/src/resources.ts services/mcp/src/operating-intelligence.ts tests/unit/ts/mcp-control-plane.test.ts` passed; MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned ok and `docker-mcp-1` is healthy.
+- Cleanup status: compose stack remains running for product testing after the MCP rebuild; no destructive cleanup was run.
+
+### Active read-id alias/prefix sweep
+
+- ID: NEWSPORTAL-MCP-READ-ID-ALIAS-PREFIX-SWEEP-BUGFIX-2
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `services/mcp/src/tools/discovery/read-tools.ts`, `services/mcp/src/tools/sequences-tools.ts`, `services/mcp/src/tools/content-tools.ts`, and targeted MCP control-plane tests.
+- Out of scope: accepting missing IDs as guessed latest entities, broad write/destructive ID prefix handling, schema migrations, production deploy, deleting runtime rows, or changing backend/API persistence semantics.
+- Accepted plan: scan MCP read tools that still require one canonical id field; for read-only tools, accept common report aliases such as `id`/`entityId` and unique UUID prefixes where the source table is known; keep missing ID errors explicit and keep mutating/destructive tools strict except for already-intentional narrow helper tools.
+- Blueprint context checked: `.aidp/blueprint.md` PostgreSQL source-of-truth, Public API vs admin/operator API, Operator/admin control plane; `.aidp/contracts/mcp-control-plane.md` tool/resource contract and read-after-write/report verification guidance.
+- Required proof: targeted MCP unit proof for discovery/sequence/content read aliases and prefixes; `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `git diff --check --` touched paths; runtime MCP rebuild and health check.
+- Proof passed: yes; scan found read-only discovery profile/class/candidate/recall/source/score reads, sequence/sequence-run reads, article/content-item/web-resource reads with the same canonical-id-only risk. Added shared MCP alias + unique UUID-prefix resolver for read-back tools, kept missing-id errors explicit, and left mutating/destructive tools strict. `pnpm unit_tests:ts -- mcp-control-plane` passed 345/345; `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, and `git diff --check -- .aidp/work.md services/mcp/src/tools/shared.ts services/mcp/src/tools/discovery/read-tools.ts services/mcp/src/tools/sequences-tools.ts services/mcp/src/tools/content-tools.ts tests/unit/ts/mcp-control-plane.test.ts` passed; MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned ok and `docker-mcp-1` is healthy.
+- Cleanup status: compose stack remains running for product testing after the MCP rebuild; no destructive cleanup was run.
 
 ### Active stage scope
 

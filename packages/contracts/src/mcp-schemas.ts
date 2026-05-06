@@ -214,7 +214,6 @@ const discoveryRecallCandidateCreatePayloadSchema = {
     providerType: providerTypeSchema,
     status: { type: "string", enum: ["pending", "shortlisted", "rejected", "duplicate"] },
     qualitySignalSource: stringSchema,
-    evaluationJson: jsonObjectSchema,
     rejectionReason: nullableStringSchema,
     createdBy: stringSchema,
   },
@@ -228,7 +227,6 @@ const discoveryRecallCandidateUpdatePayloadSchema = {
     reviewedBy: stringSchema,
     rejectionReason: nullableStringSchema,
     qualitySignalSource: stringSchema,
-    evaluationJson: jsonObjectSchema,
   },
   additionalProperties: false,
 } satisfies JsonSchema;

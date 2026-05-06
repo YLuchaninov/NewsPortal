@@ -139,6 +139,7 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
     lifecycle: ["profile", "mission", "graph compile", "run/acquire", "candidate review", "promotion"],
     keyMetrics: ["active profiles/missions", "candidate statuses", "promotion readiness", "run status/cost"],
     normalStates: [
+      "Default operation is guarded automation: profile-backed missions can use configured thresholds, while manual review is fallback unless explicitly requested.",
       "Rejected recall candidates can be correct when probes show captcha/login/unsupported kind.",
       "Promotable candidates should still be verified before channel creation.",
     ],
@@ -1268,7 +1269,7 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
           },
         ],
         note:
-          "Discovery runs are asynchronous and may execute child search/probe sequences. Do not report completed discovery from the mutation response alone.",
+          "Discovery runs are asynchronous and may execute child search/probe sequences. Do not report completed discovery from the mutation response alone. NewsPortal is guarded-automation-first: if the operator did not ask for manual approval, prefer profile-backed graph/recall missions and configured thresholds. If the graph or recall mission has no profileId/applied policy, candidates are manual-review-only fallback and auto-promotion/recallPolicy thresholds should not be reported as configured.",
       },
     };
   }

@@ -199,6 +199,14 @@ function createFakeMcpPool() {
         return { rows: [] };
       }
 
+      if (/from public\.discovery_missions/i.test(sql)) {
+        return { rows: [{ profile_id: null, applied_policy_json: null }] };
+      }
+
+      if (/from public\.discovery_recall_missions/i.test(sql)) {
+        return { rows: [{ profile_id: null, applied_policy_json: null }] };
+      }
+
       throw new Error(`Unexpected SQL in fake MCP pool: ${sql}`);
     },
   };
@@ -268,19 +276,161 @@ function createFakeDiscoveryPrefixPool() {
   const state = {
     queries: [] as Array<{ sql: string; params: unknown[] }>,
   };
+  const mappings = [
+    {
+      pattern: /from discovery_missions/i,
+      prefix: "f3dbf7b8",
+      id: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13",
+    },
+    {
+      pattern: /from discovery_profiles/i,
+      prefix: "9b88d3e8",
+      id: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25",
+    },
+    {
+      pattern: /from discovery_candidates/i,
+      prefix: "d0e6f11f",
+      id: "d0e6f11f-1111-4111-8111-111111111111",
+    },
+    {
+      pattern: /from discovery_recall_missions/i,
+      prefix: "f0d8252c",
+      id: "f0d8252c-7813-4b36-8cd1-4c7243f9af96",
+    },
+    {
+      pattern: /from discovery_recall_candidates/i,
+      prefix: "fef0007b",
+      id: "fef0007b-1613-40d8-a04c-b7c5dc3ba583",
+    },
+    {
+      pattern: /from discovery_source_profiles/i,
+      prefix: "aaaaaaaa",
+      id: "aaaaaaaa-1111-4111-8111-111111111111",
+    },
+    {
+      pattern: /from discovery_source_interest_scores/i,
+      prefix: "bbbbbbbb",
+      id: "bbbbbbbb-1111-4111-8111-111111111111",
+    },
+    {
+      pattern: /from sequences/i,
+      prefix: "cccccccc",
+      id: "cccccccc-1111-4111-8111-111111111111",
+    },
+    {
+      pattern: /from sequence_runs/i,
+      prefix: "dddddddd",
+      id: "dddddddd-1111-4111-8111-111111111111",
+    },
+    {
+      pattern: /from articles/i,
+      prefix: "ea25c952",
+      id: "ea25c952-1111-4111-8111-111111111111",
+    },
+    {
+      pattern: /from web_resources/i,
+      prefix: "eeeeeeee",
+      id: "eeeeeeee-1111-4111-8111-111111111111",
+    },
+  ];
   return {
     state,
     async query(sql: string, params: unknown[] = []) {
       state.queries.push({ sql, params });
-      if (/from discovery_missions/i.test(sql)) {
+      const mapping = mappings.find((entry) => entry.pattern.test(sql));
+      if (mapping) {
         return {
           rows:
-            params[0] === "f3dbf7b8%"
-              ? [{ id: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }]
+            params[0] === `${mapping.prefix}%`
+              ? [{ id: mapping.id }]
               : [],
         };
       }
-      throw new Error(`Unexpected SQL in fake discovery prefix pool: ${sql}`);
+      throw new Error(`Unexpected SQL in fake read-id prefix pool: ${sql}`);
+    },
+  };
+}
+
+function createFakeDiscoveryReportPool() {
+  const state = {
+    sequenceRunQueryCount: 0,
+  };
+  return {
+    state,
+    async query(sql: string) {
+      if (/from discovery_policy_profiles/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/from discovery_missions dm/i.test(sql)) {
+        return {
+          rows: [
+            {
+              missionId: "mission-1",
+              title: "Manual discovery mission",
+              status: "active",
+              interestGraphStatus: "compiled",
+              runCount: 1,
+              lastRunAt: "2026-05-06T11:00:00.000Z",
+              profileId: null,
+              hasProfile: false,
+              hasAppliedPolicy: false,
+              candidateCount: 2,
+            },
+          ],
+        };
+      }
+      if (/from discovery_recall_missions drm/i.test(sql)) {
+        return {
+          rows: [
+            {
+              recallMissionId: "recall-1",
+              title: "Manual recall mission",
+              status: "active",
+              missionKind: "domain_seed",
+              maxCandidates: 10,
+              profileId: null,
+              hasProfile: false,
+              hasAppliedPolicy: false,
+              candidateCount: 3,
+            },
+          ],
+        };
+      }
+      if (/from sequence_runs/i.test(sql) && !/join sequence_runs/i.test(sql)) {
+        state.sequenceRunQueryCount += 1;
+        return { rows: [] };
+      }
+      if (/from sequence_task_runs tr/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/from discovery_hypotheses/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/from discovery_candidates/i.test(sql)) {
+        return {
+          rows: [
+            {
+              missionId: "mission-1",
+              status: "pending",
+              providerType: "rss",
+              count: 2,
+            },
+          ],
+        };
+      }
+      if (/from discovery_recall_candidates/i.test(sql)) {
+        return {
+          rows: [
+            {
+              recallMissionId: "recall-1",
+              status: "pending",
+              providerType: "website",
+              count: 3,
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected SQL in fake discovery report pool: ${sql}`);
     },
   };
 }
@@ -598,6 +748,164 @@ test("MCP discovery candidate lists resolve unique mission UUID prefixes before 
   assert.equal(requests.length, 1, "invalid mission ids should fail before backend fetch");
 });
 
+test("MCP discovery mission read accepts report aliases and UUID prefixes", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ missionId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const pool = createFakeDiscoveryPrefixPool();
+
+  await executeMcpTool(
+    {
+      sdk,
+      pool,
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.missions.read",
+    {
+      id: "f3dbf7b8",
+    }
+  );
+
+  assert.match(requests[0] ?? "", /f3dbf7b8-72ad-41e9-94d5-7d113b28ca13/);
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool,
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.missions.read",
+        {}
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      /Accepted aliases: id, entityId/i.test(error.message)
+  );
+});
+
+test("MCP discovery read tools accept common report aliases and UUID prefixes", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const pool = createFakeDiscoveryPrefixPool();
+
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
+    "discovery.profiles.read",
+    { entityId: "9b88d3e8" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
+    "discovery.classes.read",
+    { id: "lexical" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
+    "discovery.candidates.read",
+    { id: "d0e6f11f" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
+    "discovery.recall_candidates.read",
+    { candidateId: "fef0007b" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
+    "discovery.source_profiles.read",
+    { profileId: "aaaaaaaa" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
+    "discovery.source_interest_scores.read",
+    { entityId: "bbbbbbbb" }
+  );
+
+  assert.match(requests.join("\n"), /9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25/);
+  assert.match(requests.join("\n"), /lexical/);
+  assert.match(requests.join("\n"), /d0e6f11f-1111-4111-8111-111111111111/);
+  assert.match(requests.join("\n"), /fef0007b-1613-40d8-a04c-b7c5dc3ba583/);
+  assert.match(requests.join("\n"), /aaaaaaaa-1111-4111-8111-111111111111/);
+  assert.match(requests.join("\n"), /bbbbbbbb-1111-4111-8111-111111111111/);
+});
+
+test("MCP sequence and content read tools accept report aliases and UUID prefixes", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const pool = createFakeDiscoveryPrefixPool();
+
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_SEQUENCES_TOKEN },
+    "sequences.read",
+    { entityId: "cccccccc" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_SEQUENCES_TOKEN },
+    "sequences.runs.read",
+    { sequenceRunId: "dddddddd" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_SEQUENCES_TOKEN },
+    "sequences.run_task_runs.list",
+    { id: "dddddddd" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_CHANNELS_TOKEN },
+    "articles.explain",
+    { canonicalId: "ea25c952" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_CHANNELS_TOKEN },
+    "content_items.read",
+    { id: "ea25c952" }
+  );
+  await executeMcpTool(
+    { sdk, pool, token: WRITE_CHANNELS_TOKEN },
+    "web_resources.read",
+    { entityId: "eeeeeeee" }
+  );
+
+  const requestLog = requests.join("\n");
+  assert.match(requestLog, /cccccccc-1111-4111-8111-111111111111/);
+  assert.match(requestLog, /dddddddd-1111-4111-8111-111111111111/);
+  assert.match(requestLog, /ea25c952-1111-4111-8111-111111111111/);
+  assert.match(requestLog, /editorial%3Aea25c952-1111-4111-8111-111111111111/);
+  assert.match(requestLog, /eeeeeeee-1111-4111-8111-111111111111/);
+});
+
 test("MCP tool execution enforces scope and destructive confirmation before handler work", async () => {
   const dummySdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -750,7 +1058,7 @@ test("MCP write tools normalize client-friendly list strings before backend call
     }) as typeof fetch,
   });
 
-  await executeMcpTool(
+  const result = await executeMcpTool(
     {
       sdk,
       pool: createFakeMcpPool(),
@@ -768,6 +1076,8 @@ test("MCP write tools normalize client-friendly list strings before backend call
     }
   );
 
+  assert.match(JSON.stringify(result), /manual-review-only/i);
+  assert.match(JSON.stringify(result), /profileId/i);
   assert.deepEqual(requests[0]?.body.seedTopics, [
     "AI rollout failures",
     "LLM integration blockers",
@@ -868,6 +1178,164 @@ test("MCP discovery run responses include async verification guidance", async ()
 
   assert.match(JSON.stringify(result), /operator\.report\.verify/i);
   assert.match(JSON.stringify(result), /in progress, not completed|asynchronous/i);
+  assert.match(JSON.stringify(result), /manual-review-only/i);
+});
+
+test("MCP recall mission responses include profile guidance", async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input, init) => {
+      requests.push({
+        url: String(input),
+        body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {},
+      });
+      return new Response(
+        JSON.stringify({ recall_mission_id: "recall-1", status: "planned" }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  const createResult = await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.recall_missions.create",
+    {
+      payload: {
+        title: "Manual recall",
+        missionKind: "domain_seed",
+        seedDomains: "sam.gov\nted.europa.eu",
+      },
+    }
+  );
+
+  assert.match(JSON.stringify(createResult), /manual-review-only/i);
+  assert.match(JSON.stringify(createResult), /minPromotionScore/i);
+  assert.deepEqual(requests[0]?.body.seedDomains, ["sam.gov", "ted.europa.eu"]);
+
+  const acquireResult = await executeMcpTool(
+    {
+      sdk,
+      pool: createFakeMcpPool(),
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.recall_missions.acquire",
+    {
+      recallMissionId: "recall-1",
+    }
+  );
+
+  assert.match(JSON.stringify(acquireResult), /manual-review-only/i);
+  assert.match(JSON.stringify(acquireResult), /threshold-based promotion/i);
+});
+
+test("MCP recall candidate create/update rejects evidence writes before backend calls", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool: createFakeMcpPool(),
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.recall_candidates.create",
+        {
+          payload: {
+            recallMissionId: "bda9f68d-861c-4184-abc2-5864014babdd",
+            url: "https://example.com/feed.xml",
+            providerType: "rss",
+            evaluationJson: {
+              validFeed: true,
+              discoveredFeedUrls: ["https://example.com/feed.xml"],
+            },
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      /payload\.evaluationJson is not allowed/i.test(error.message)
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool: createFakeMcpPool(),
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.recall_candidates.update",
+        {
+          recallCandidateId: "9fb8c325-73cc-4d62-bfd1-d18301d4d6b3",
+          payload: {
+            reviewedBy: "operator",
+            evaluationJson: {
+              validFeed: true,
+              discoveredFeedUrls: ["https://example.com/feed.xml"],
+            },
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      /payload\.evaluationJson is not allowed/i.test(error.message)
+  );
+  assert.equal(requests.length, 0, "evidence rewrites must fail before backend fetch");
+});
+
+test("MCP discovery report verify warns for no-profile manual-review missions", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("operator.report.verify should use the DB-backed pool");
+    }) as typeof fetch,
+  });
+
+  const result = await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool: createFakeDiscoveryReportPool(),
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "operator.report.verify",
+    {
+      reportKind: "discovery_run",
+      entityIds: { missionIds: ["mission-1"], recallMissionIds: ["recall-1"] },
+      includeSamples: true,
+    }
+  );
+
+  const serialized = JSON.stringify(result);
+  assert.match(serialized, /manual-review-only/i);
+  assert.match(serialized, /auto-promotion thresholds/i);
+  assert.match(serialized, /recallPolicy\/minPromotionScore thresholds/i);
+  assert.match(serialized, /2 discovery candidates are still pending review/i);
+  assert.match(serialized, /3 recall candidates are still pending\/shortlisted/i);
 });
 
 test("MCP reindex request rejects unsupported indexName and jobKind at the boundary", async () => {

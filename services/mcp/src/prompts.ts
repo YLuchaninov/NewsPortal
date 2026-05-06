@@ -121,8 +121,9 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `Plan a NewsPortal MCP discovery session for objective "${objective}". ` +
                 `Read newsportal://guide/scenarios/discovery and newsportal://discovery/summary first, then inspect the relevant profiles, missions, recall missions, and recall candidates. ` +
+                `Unless the operator explicitly asks for manual approval, make the plan guarded-automation-first: use or create a profile, pass profileId into graph and recall missions, and rely on configured policy thresholds where evidence is sufficient. ` +
                 `Use discovery.mission.review before compile/run when mission boundaries or provider choices need tightening. ` +
-                `Promote only clearly aligned candidates and verify promoted channels after mutation.`,
+                `Promote only clearly aligned candidates with valid evidence or explicit overrideReason, and verify promoted channels after mutation. Manual review is a fallback for missing policy/evidence or ambiguity, not the default plan.`,
             },
           },
         ],
@@ -403,7 +404,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `Review discovery yield for mission ${missionId} and recall mission ${recallMissionId}. ` +
                 `Read newsportal://guide/diagnostics/discovery, discovery.summary.get, mission/candidate lists, and operator.report.verify with reportKind=discovery_yield. ` +
-                `Explain rejected candidates by probe evidence and never force promotion without valid evidence or explicit overrideReason.`,
+                `Explain rejected candidates by probe evidence and never force promotion without valid evidence or explicit overrideReason. If the operator expected automation but the mission has no profileId/applied policy, recommend profile-backed rerun/tuning instead of normalizing manual review as the desired state.`,
             },
           },
         ],
@@ -532,7 +533,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             role: "user",
             content: {
               type: "text",
-              text: `Review the discovery mission "${missionTitle}" for NewsPortal. Check whether the mission goal "${goal}" is bounded, whether provider types and budget feel proportional, and what should be adjusted before compile_graph or run.`,
+              text: `Review the discovery mission "${missionTitle}" for NewsPortal. Check whether the mission goal "${goal}" is bounded, whether provider types and budget feel proportional, whether profileId is present when automation/policy thresholds are expected, and what should be adjusted before compile_graph or run. If the operator did not ask for manual approval, prefer a guarded profile-backed plan over manual-review-only execution.`,
             },
           },
         ],

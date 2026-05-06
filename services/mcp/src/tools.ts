@@ -298,16 +298,18 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
         const missionIds = readStringArray(entityIds.missionIds);
         const recallMissionIds = readStringArray(entityIds.recallMissionIds);
         const runIds = readStringArray(entityIds.runIds);
+        const hasEntityFilters =
+          profileIds.length + missionIds.length + recallMissionIds.length + runIds.length > 0;
         const profiles = await pool.query(
           `
             select profile_id::text as "profileId", profile_key as "profileKey",
                    display_name as "displayName", status, version, updated_at as "updatedAt"
             from discovery_policy_profiles
-            where cardinality($1::text[]) = 0 or profile_id::text = any($1::text[])
+            where (cardinality($1::text[]) = 0 and $2 = false) or profile_id::text = any($1::text[])
             order by updated_at desc
             limit 25
           `,
-          [profileIds]
+          [profileIds, hasEntityFilters]
         );
         const missions = await pool.query(
           `
@@ -315,26 +317,30 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                    interest_graph_status as "interestGraphStatus",
                    run_count as "runCount", last_run_at as "lastRunAt",
                    profile_id::text as "profileId",
+                   (profile_id is not null) as "hasProfile",
+                   (applied_policy_json is not null) as "hasAppliedPolicy",
                    (select count(*)::int from discovery_candidates dc where dc.mission_id = dm.mission_id) as "candidateCount"
             from discovery_missions dm
-            where cardinality($1::text[]) = 0 or mission_id::text = any($1::text[])
+            where (cardinality($1::text[]) = 0 and $2 = false) or mission_id::text = any($1::text[])
             order by updated_at desc
             limit 25
           `,
-          [missionIds]
+          [missionIds, hasEntityFilters]
         );
         const recallMissions = await pool.query(
           `
             select recall_mission_id::text as "recallMissionId", title, status,
                    mission_kind as "missionKind", max_candidates as "maxCandidates",
                    profile_id::text as "profileId",
+                   (profile_id is not null) as "hasProfile",
+                   (applied_policy_json is not null) as "hasAppliedPolicy",
                    (select count(*)::int from discovery_recall_candidates rc where rc.recall_mission_id = drm.recall_mission_id) as "candidateCount"
             from discovery_recall_missions drm
-            where cardinality($1::text[]) = 0 or recall_mission_id::text = any($1::text[])
+            where (cardinality($1::text[]) = 0 and $2 = false) or recall_mission_id::text = any($1::text[])
             order by updated_at desc
             limit 25
           `,
-          [recallMissionIds]
+          [recallMissionIds, hasEntityFilters]
         );
         const sequenceRuns = await pool.query(
           `
@@ -347,16 +353,16 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                    coalesce(finished_at, started_at, created_at) as "updatedAt"
             from sequence_runs
             where
-              (cardinality($1::text[]) = 0 or run_id::text = any($1::text[]))
-              and (
-                cardinality($2::text[]) = 0
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or run_id::text = any($1::text[])
                 or context_json->>'mission_id' = any($2::text[])
                 or trigger_meta->>'missionId' = any($2::text[])
               )
             order by created_at desc
             limit 50
           `,
-          [runIds, missionIds]
+          [runIds, missionIds, hasEntityFilters]
         );
         const relatedSequenceRuns = await pool.query(
           `
@@ -370,7 +376,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
             from sequence_runs
             where
               (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0)
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
                 or context_json->>'mission_id' = any($1::text[])
                 or trigger_meta->>'missionId' = any($1::text[])
                 or run_id::text = any($2::text[])
@@ -378,7 +384,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
             order by created_at desc
             limit 75
           `,
-          [missionIds, runIds]
+          [missionIds, runIds, hasEntityFilters]
         );
         const taskRuns = await pool.query(
           `
@@ -396,7 +402,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
             join sequence_runs sr on sr.run_id = tr.run_id
             where
               (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0)
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
                 or tr.run_id::text = any($1::text[])
                 or sr.context_json->>'mission_id' = any($2::text[])
                 or sr.trigger_meta->>'missionId' = any($2::text[])
@@ -404,7 +410,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
             order by sr.created_at desc, tr.task_index asc
             limit 100
           `,
-          [runIds, missionIds]
+          [runIds, missionIds, hasEntityFilters]
         );
         const hypothesisStatusCounts = await pool.query(
           `
@@ -413,11 +419,11 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                    target_provider_type as "targetProviderType",
                    count(*)::int as count
             from discovery_hypotheses
-            where cardinality($1::text[]) = 0 or mission_id::text = any($1::text[])
+            where (cardinality($1::text[]) = 0 and $2 = false) or mission_id::text = any($1::text[])
             group by mission_id, status, target_provider_type
             order by mission_id, status, target_provider_type
           `,
-          [missionIds]
+          [missionIds, hasEntityFilters]
         );
         const candidateStatusCounts = await pool.query(
           `
@@ -426,11 +432,24 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                    provider_type as "providerType",
                    count(*)::int as count
             from discovery_candidates
-            where cardinality($1::text[]) = 0 or mission_id::text = any($1::text[])
+            where (cardinality($1::text[]) = 0 and $2 = false) or mission_id::text = any($1::text[])
             group by mission_id, status, provider_type
             order by mission_id, status, provider_type
           `,
-          [missionIds]
+          [missionIds, hasEntityFilters]
+        );
+        const recallCandidateStatusCounts = await pool.query(
+          `
+            select recall_mission_id::text as "recallMissionId",
+                   status,
+                   provider_type as "providerType",
+                   count(*)::int as count
+            from discovery_recall_candidates
+            where (cardinality($1::text[]) = 0 and $2 = false) or recall_mission_id::text = any($1::text[])
+            group by recall_mission_id, status, provider_type
+            order by recall_mission_id, status, provider_type
+          `,
+          [recallMissionIds, hasEntityFilters]
         );
         const runningRows = relatedSequenceRuns.rows.filter((row) =>
           ["pending", "running"].includes(String(row.status ?? ""))
@@ -462,6 +481,38 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
             "At least one discovery task failed; probe/search timeouts and no-result failures can mean low yield rather than successful source discovery."
           );
         }
+        const manualReviewOnlyMissions = missions.rows.filter(
+          (row) => row.hasProfile !== true || row.hasAppliedPolicy !== true
+        );
+        if (manualReviewOnlyMissions.length > 0) {
+          warnings.push(
+            "At least one discovery mission has no applied profile/policy snapshot. Treat its candidates as manual-review-only; do not describe auto-promotion thresholds as configured."
+          );
+        }
+        const manualReviewOnlyRecallMissions = recallMissions.rows.filter(
+          (row) => row.hasProfile !== true || row.hasAppliedPolicy !== true
+        );
+        if (manualReviewOnlyRecallMissions.length > 0) {
+          warnings.push(
+            "At least one recall mission has no applied profile/policy snapshot. Treat its candidates as manual-review-only; do not describe recallPolicy/minPromotionScore thresholds as configured."
+          );
+        }
+        const pendingCandidateCount = candidateStatusCounts.rows
+          .filter((row) => String(row.status ?? "") === "pending")
+          .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
+        if (pendingCandidateCount > 0) {
+          warnings.push(
+            `${pendingCandidateCount} discovery candidates are still pending review; do not report the mission review as complete.`
+          );
+        }
+        const pendingRecallCandidateCount = recallCandidateStatusCounts.rows
+          .filter((row) => ["pending", "shortlisted"].includes(String(row.status ?? "")))
+          .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
+        if (pendingRecallCandidateCount > 0) {
+          warnings.push(
+            `${pendingRecallCandidateCount} recall candidates are still pending/shortlisted; do not report recall review or promotion as complete.`
+          );
+        }
         return {
           reportKind,
           verifiedAt: new Date().toISOString(),
@@ -482,6 +533,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
           taskRuns: includeSamples ? taskRuns.rows.slice(0, 20) : [],
           hypothesisStatusCounts: hypothesisStatusCounts.rows,
           candidateStatusCounts: candidateStatusCounts.rows,
+          recallCandidateStatusCounts: recallCandidateStatusCounts.rows,
         };
       }
 

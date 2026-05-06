@@ -153,6 +153,156 @@ function prepareDiscoveryMissionPayload(payload: Record<string, unknown>): Recor
   return stripMcpOnlyDiscoveryMissionFields(normalized);
 }
 
+function hasDiscoveryMissionProfileReference(
+  payload: Record<string, unknown>,
+  result?: Record<string, unknown>
+): boolean {
+  return Boolean(
+    readOptionalString(payload.profileId) ??
+      readOptionalString(result?.profileId) ??
+      readOptionalString(result?.profile_id)
+  );
+}
+
+function withDiscoveryMissionProfileGuidance(
+  result: Record<string, unknown>,
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  if (hasDiscoveryMissionProfileReference(payload, result)) {
+    return result;
+  }
+  return {
+    ...result,
+    mcpWarnings: [
+      ...((Array.isArray(result.mcpWarnings) ? result.mcpWarnings : []) as unknown[]),
+      "This discovery mission has no profileId. It is manual-review-only: no applied discovery policy/threshold is available, so auto-promotion should not be expected.",
+    ],
+    nextReadBack: [
+      {
+        toolName: "operator.report.verify",
+        argumentsTemplate: {
+          reportKind: "discovery_run",
+          entityIds: {
+            missionIds: [String(result.mission_id ?? result.missionId ?? "<missionId>")],
+          },
+          includeSamples: true,
+        },
+      },
+      {
+        toolName: "discovery.profiles.list",
+        argumentsTemplate: { status: "active", pageSize: 20 },
+      },
+    ],
+  };
+}
+
+async function readDiscoveryMissionProfileGuidance(
+  pool: Parameters<McpToolDefinition["handler"]>[0]["pool"],
+  missionId: string
+): Promise<string[]> {
+  const result = await pool.query<{
+    profile_id: string | null;
+    applied_policy_json: Record<string, unknown> | null;
+  }>(
+    `
+      select profile_id, applied_policy_json
+      from public.discovery_missions
+      where mission_id = $1
+      limit 1
+    `,
+    [missionId]
+  );
+  const row = result.rows[0];
+  if (!row || (row.profile_id && row.applied_policy_json)) {
+    return [];
+  }
+  if (!row.profile_id) {
+    return [
+      "This discovery mission has no profileId. It is manual-review-only: no applied discovery policy/threshold is available, so auto-promotion should not be expected.",
+    ];
+  }
+  return [
+    "This discovery mission has a profileId but no applied policy snapshot yet. Compile/read back the mission before expecting policy thresholds or auto-promotion behavior.",
+  ];
+}
+
+function hasRecallMissionProfileReference(
+  payload: Record<string, unknown>,
+  result?: Record<string, unknown>
+): boolean {
+  return Boolean(
+    readOptionalString(payload.profileId) ??
+      readOptionalString(result?.profileId) ??
+      readOptionalString(result?.profile_id)
+  );
+}
+
+function recallMissionIdFromResult(result: Record<string, unknown>): string {
+  return String(result.recall_mission_id ?? result.recallMissionId ?? "<recallMissionId>");
+}
+
+function withRecallMissionProfileGuidance(
+  result: Record<string, unknown>,
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  if (hasRecallMissionProfileReference(payload, result)) {
+    return result;
+  }
+  return {
+    ...result,
+    mcpWarnings: [
+      ...((Array.isArray(result.mcpWarnings) ? result.mcpWarnings : []) as unknown[]),
+      "This recall mission has no profileId. It is manual-review-only: no applied recall policy/minPromotionScore is available, so threshold-based promotion should not be expected.",
+    ],
+    nextReadBack: [
+      {
+        toolName: "operator.report.verify",
+        argumentsTemplate: {
+          reportKind: "discovery_run",
+          entityIds: {
+            recallMissionIds: [recallMissionIdFromResult(result)],
+          },
+          includeSamples: true,
+        },
+      },
+      {
+        toolName: "discovery.profiles.list",
+        argumentsTemplate: { status: "active", pageSize: 20 },
+      },
+    ],
+  };
+}
+
+async function readRecallMissionProfileGuidance(
+  pool: Parameters<McpToolDefinition["handler"]>[0]["pool"],
+  recallMissionId: string
+): Promise<string[]> {
+  const result = await pool.query<{
+    profile_id: string | null;
+    applied_policy_json: Record<string, unknown> | null;
+  }>(
+    `
+      select profile_id, applied_policy_json
+      from public.discovery_recall_missions
+      where recall_mission_id = $1
+      limit 1
+    `,
+    [recallMissionId]
+  );
+  const row = result.rows[0];
+  if (!row || (row.profile_id && row.applied_policy_json)) {
+    return [];
+  }
+  if (!row.profile_id) {
+    return [
+      "This recall mission has no profileId. It is manual-review-only: no applied recall policy/minPromotionScore is available, so threshold-based promotion should not be expected.",
+    ];
+  }
+  return [
+    "This recall mission has a profileId but no applied policy snapshot yet. Acquire/read back the mission before expecting recallPolicy thresholds or threshold-based promotion behavior.",
+  ];
+}
+
 function normalizeRecallMissionPayload(payload: Record<string, unknown>): Record<string, unknown> {
   return normalizePayloadStringListFields(payload, {
     seedDomains: undefined,
@@ -334,7 +484,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "discovery.missions.create",
-    "Create a discovery mission. Pass a single object in arguments.payload; do not pass a JSON string and do not nest another payload field inside payload.",
+    "Create a discovery mission. Pass payload.profileId when profile thresholds/auto-promotion are expected; missions without profileId are manual-review-only. Pass a single object in arguments.payload; do not pass a JSON string and do not nest another payload field inside payload.",
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.missionCreate,
     async ({ sdk, pool, token }, args) => {
@@ -349,7 +499,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
         entityType: "discovery_mission",
         entityId: String(result.mission_id ?? ""),
       });
-      return result;
+      return withDiscoveryMissionProfileGuidance(result, payload);
     }
   ),
   createWriteTool(
@@ -368,7 +518,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
         entityType: "discovery_mission",
         entityId: missionId,
       });
-      return result;
+      return withDiscoveryMissionProfileGuidance(result, readPayload(args));
     }
   ),
   createWriteTool(
@@ -403,12 +553,13 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...payload,
         requestedBy: readOptionalString(payload.requestedBy) ?? token.issuedByUserId,
       });
+      const mcpWarnings = await readDiscoveryMissionProfileGuidance(pool, missionId);
       await writeMcpMutationAudit(pool, token, {
         actionType: "discovery_mission_run_requested",
         entityType: "discovery_mission",
         entityId: missionId,
       });
-      return result;
+      return mcpWarnings.length > 0 ? { ...result, mcpWarnings } : result;
     }
   ),
   createWriteTool(
@@ -505,7 +656,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "discovery.recall_missions.create",
-    "Create a recall mission. Pass a single object in arguments.payload; do not pass a JSON string and do not nest another payload field inside payload.",
+    "Create a recall mission. Pass payload.profileId when recallPolicy thresholds/minPromotionScore behavior is expected; missions without profileId are manual-review-only. Pass a single object in arguments.payload; do not pass a JSON string and do not nest another payload field inside payload.",
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallMissionCreate,
     async ({ sdk, pool, token }, args) => {
@@ -520,31 +671,32 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
         entityType: "discovery_recall_mission",
         entityId: String(result.recall_mission_id ?? ""),
       });
-      return result;
+      return withRecallMissionProfileGuidance(result, payload);
     }
   ),
   createWriteTool(
     "discovery.recall_missions.update",
-    "Update a recall mission.",
+    "Update a recall mission. Pass payload.profileId when recallPolicy thresholds/minPromotionScore behavior is expected; missions without profileId are manual-review-only.",
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallMissionUpdate,
     async ({ sdk, pool, token }, args) => {
       const recallMissionId = readRequiredString(args.recallMissionId, "recallMissionId");
+      const payload = normalizeRecallMissionPayload(readPayload(args));
       const result = await sdk.updateDiscoveryRecallMission<Record<string, unknown>>(
         recallMissionId,
-        normalizeRecallMissionPayload(readPayload(args))
+        payload
       );
       await writeMcpMutationAudit(pool, token, {
         actionType: "discovery_recall_mission_updated",
         entityType: "discovery_recall_mission",
         entityId: recallMissionId,
       });
-      return result;
+      return withRecallMissionProfileGuidance(result, payload);
     }
   ),
   createWriteTool(
     "discovery.recall_missions.acquire",
-    "Request acquisition for a recall mission.",
+    "Request acquisition for a recall mission. Verify read-back before reporting yield; profile-less recall missions are manual-review-only and have no configured recallPolicy/minPromotionScore threshold.",
     "write.discovery",
     {
       type: "object",
@@ -559,12 +711,13 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
       const result = await sdk.requestDiscoveryRecallMissionAcquire<Record<string, unknown>>(
         recallMissionId
       );
+      const mcpWarnings = await readRecallMissionProfileGuidance(pool, recallMissionId);
       await writeMcpMutationAudit(pool, token, {
         actionType: "discovery_recall_mission_acquired",
         entityType: "discovery_recall_mission",
         entityId: recallMissionId,
       });
-      return result;
+      return mcpWarnings.length > 0 ? { ...result, mcpWarnings } : result;
     }
   ),
   createWriteTool(
@@ -600,7 +753,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "discovery.recall_candidates.create",
-    "Create a recall candidate.",
+    "Create a recall candidate shell for review. Do not write evaluationJson through MCP create: probe/evaluation evidence is acquisition-owned and is used by promotion guards. For explicit operator-provided source rows, prefer channels.bulk_onboard.plan/apply/verify.",
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallCandidateCreate,
     async ({ sdk, pool, token }, args) => {
@@ -617,7 +770,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "discovery.recall_candidates.update",
-    "Update a recall candidate. Use payload.status one of pending, shortlisted, rejected, duplicate; use camelCase rejectionReason, not rejection_reason.",
+    "Update a recall candidate review state. Use payload.status one of pending, shortlisted, rejected, duplicate; use camelCase rejectionReason, not rejection_reason. Do not write evaluationJson through MCP update: probe/evaluation evidence is acquisition-owned and is used by promotion guards.",
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallCandidateUpdate,
     async ({ sdk, pool, token }, args) => {

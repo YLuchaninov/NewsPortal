@@ -1,20 +1,100 @@
 import {
   createReadTool,
-  detailSchema,
   JsonRpcError,
+  readAliasedRequiredString,
   readOptionalString,
   readPageArgs,
-  readRequiredString,
+  resolveUniqueUuidPrefix,
   type McpToolDefinition,
 } from "../shared";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const UUID_PREFIX_RE = /^[0-9a-f-]{8,35}$/i;
 
 type QueryablePool = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
 };
+
+const profileDetailSchema = {
+  type: "object",
+  properties: {
+    profileId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const classDetailSchema = {
+  type: "object",
+  properties: {
+    classKey: { type: "string" },
+    key: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const missionDetailSchema = {
+  type: "object",
+  properties: {
+    missionId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const candidateDetailSchema = {
+  type: "object",
+  properties: {
+    candidateId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const recallMissionDetailSchema = {
+  type: "object",
+  properties: {
+    recallMissionId: { type: "string" },
+    missionId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const recallCandidateDetailSchema = {
+  type: "object",
+  properties: {
+    recallCandidateId: { type: "string" },
+    candidateId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const sourceProfileDetailSchema = {
+  type: "object",
+  properties: {
+    sourceProfileId: { type: "string" },
+    profileId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const sourceInterestScoreDetailSchema = {
+  type: "object",
+  properties: {
+    scoreId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
 
 async function resolveUuidFilter(
   pool: QueryablePool,
@@ -26,54 +106,37 @@ async function resolveUuidFilter(
     label: string;
   }
 ): Promise<string | undefined> {
-  const normalized = readOptionalString(value);
-  if (!normalized) {
-    return undefined;
-  }
-  if (UUID_RE.test(normalized)) {
-    return normalized;
-  }
-  if (!UUID_PREFIX_RE.test(normalized)) {
-    throw new JsonRpcError(-32602, `${input.path} must be a full UUID or a unique UUID prefix.`, {
-      statusCode: 400,
-      data: {
-        path: input.path,
-        expectedShape: "UUID or unique UUID prefix of at least 8 hex characters",
-      },
-    });
-  }
+  return resolveUniqueUuidPrefix(pool, value, input);
+}
 
-  const result = await pool.query(
-    `
-      select ${input.columnName}::text as id
-        from ${input.tableName}
-       where ${input.columnName}::text like $1
-       order by ${input.columnName}::text
-       limit 2
-    `,
-    [`${normalized}%`]
-  );
-  const rows = result.rows as Array<{ id: string }>;
-  if (rows.length === 1) {
-    return rows[0]?.id;
+async function resolveUuidArgument(
+  pool: QueryablePool,
+  args: Record<string, unknown>,
+  input: {
+    canonicalField: string;
+    aliases: readonly string[];
+    tableName: string;
+    columnName: string;
+    label: string;
   }
-  if (rows.length > 1) {
-    throw new JsonRpcError(-32602, `${input.path} prefix is ambiguous; pass the full UUID.`, {
+): Promise<string> {
+  const resolved = await resolveUuidFilter(
+    pool,
+    readAliasedRequiredString(args, input.canonicalField, input.aliases),
+    {
+      path: input.canonicalField,
+      tableName: input.tableName,
+      columnName: input.columnName,
+      label: input.label,
+    }
+  );
+  if (!resolved) {
+    throw new JsonRpcError(-32602, `${input.canonicalField} is required.`, {
       statusCode: 400,
-      data: {
-        path: input.path,
-        value: normalized,
-        matches: rows.map((row) => row.id),
-      },
+      data: { path: input.canonicalField },
     });
   }
-  throw new JsonRpcError(-32602, `${input.label} ${normalized} was not found.`, {
-    statusCode: 400,
-    data: {
-      path: input.path,
-      value: normalized,
-    },
-  });
+  return resolved;
 }
 
 function resolveMissionIdFilter(
@@ -89,6 +152,23 @@ function resolveMissionIdFilter(
   });
 }
 
+async function resolveMissionIdArgument(
+  pool: QueryablePool,
+  args: Record<string, unknown>
+): Promise<string> {
+  const missionId = await resolveMissionIdFilter(
+    pool,
+    readAliasedRequiredString(args, "missionId", ["id", "entityId"])
+  );
+  if (!missionId) {
+    throw new JsonRpcError(-32602, "missionId is required.", {
+      statusCode: 400,
+      data: { path: "missionId" },
+    });
+  }
+  return missionId;
+}
+
 function resolveRecallMissionIdFilter(
   pool: QueryablePool,
   value: unknown,
@@ -100,6 +180,23 @@ function resolveRecallMissionIdFilter(
     columnName: "recall_mission_id",
     label: "Discovery recall mission",
   });
+}
+
+async function resolveRecallMissionIdArgument(
+  pool: QueryablePool,
+  args: Record<string, unknown>
+): Promise<string> {
+  const recallMissionId = await resolveRecallMissionIdFilter(
+    pool,
+    readAliasedRequiredString(args, "recallMissionId", ["missionId", "id", "entityId"])
+  );
+  if (!recallMissionId) {
+    throw new JsonRpcError(-32602, "recallMissionId is required.", {
+      statusCode: 400,
+      data: { path: "recallMissionId" },
+    });
+  }
+  return recallMissionId;
 }
 
 export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
@@ -129,11 +226,17 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.profiles.read",
-    "Read one discovery profile.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one discovery profile. Prefer profileId; id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    profileDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoveryProfile<Record<string, unknown>>(
-        readRequiredString(args.profileId, "profileId")
+        await resolveUuidArgument(pool, args, {
+          canonicalField: "profileId",
+          aliases: ["id", "entityId"],
+          tableName: "discovery_profiles",
+          columnName: "profile_id",
+          label: "Discovery profile",
+        })
       )
   ),
   createReadTool(
@@ -156,10 +259,12 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.classes.read",
-    "Read one discovery class.",
-    detailSchema,
+    "Read one discovery class. Prefer classKey; key/id/entityId are accepted for read-back.",
+    classDetailSchema,
     async ({ sdk }, args) =>
-      sdk.getDiscoveryClass<Record<string, unknown>>(readRequiredString(args.classKey, "classKey"))
+      sdk.getDiscoveryClass<Record<string, unknown>>(
+        readAliasedRequiredString(args, "classKey", ["key", "id", "entityId"])
+      )
   ),
   createReadTool(
     "discovery.missions.list",
@@ -181,20 +286,20 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.missions.read",
-    "Read one discovery mission.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one discovery mission. Prefer missionId; id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    missionDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoveryMission<Record<string, unknown>>(
-        readRequiredString(args.missionId, "missionId")
+        await resolveMissionIdArgument(pool, args)
       )
   ),
   createReadTool(
     "discovery.missions.portfolio.read",
-    "Read one discovery mission portfolio snapshot.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one discovery mission portfolio snapshot. Prefer missionId; id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    missionDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoveryMissionPortfolio<Record<string, unknown>>(
-        readRequiredString(args.missionId, "missionId")
+        await resolveMissionIdArgument(pool, args)
       )
   ),
   createReadTool(
@@ -219,11 +324,11 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.recall_missions.read",
-    "Read one recall mission.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one recall mission. Prefer recallMissionId; missionId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    recallMissionDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoveryRecallMission<Record<string, unknown>>(
-        readRequiredString(args.recallMissionId, "recallMissionId")
+        await resolveRecallMissionIdArgument(pool, args)
       )
   ),
   createReadTool(
@@ -250,11 +355,17 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.candidates.read",
-    "Read one discovery candidate.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one discovery candidate. Prefer candidateId; id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    candidateDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoveryCandidate<Record<string, unknown>>(
-        readRequiredString(args.candidateId, "candidateId")
+        await resolveUuidArgument(pool, args, {
+          canonicalField: "candidateId",
+          aliases: ["id", "entityId"],
+          tableName: "discovery_candidates",
+          columnName: "candidate_id",
+          label: "Discovery candidate",
+        })
       )
   ),
   createReadTool(
@@ -283,11 +394,17 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.recall_candidates.read",
-    "Read one recall candidate.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one recall candidate. Prefer recallCandidateId; candidateId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    recallCandidateDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoveryRecallCandidate<Record<string, unknown>>(
-        readRequiredString(args.recallCandidateId, "recallCandidateId")
+        await resolveUuidArgument(pool, args, {
+          canonicalField: "recallCandidateId",
+          aliases: ["candidateId", "id", "entityId"],
+          tableName: "discovery_recall_candidates",
+          columnName: "recall_candidate_id",
+          label: "Discovery recall candidate",
+        })
       )
   ),
   createReadTool(
@@ -333,11 +450,17 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.source_profiles.read",
-    "Read one source profile.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one discovery source profile. Prefer sourceProfileId; profileId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    sourceProfileDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoverySourceProfile<Record<string, unknown>>(
-        readRequiredString(args.sourceProfileId, "sourceProfileId")
+        await resolveUuidArgument(pool, args, {
+          canonicalField: "sourceProfileId",
+          aliases: ["profileId", "id", "entityId"],
+          tableName: "discovery_source_profiles",
+          columnName: "source_profile_id",
+          label: "Discovery source profile",
+        })
       )
   ),
   createReadTool(
@@ -364,11 +487,17 @@ export const DISCOVERY_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "discovery.source_interest_scores.read",
-    "Read one source-interest score row.",
-    detailSchema,
-    async ({ sdk }, args) =>
+    "Read one source-interest score row. Prefer scoreId; id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    sourceInterestScoreDetailSchema,
+    async ({ sdk, pool }, args) =>
       sdk.getDiscoverySourceInterestScore<Record<string, unknown>>(
-        readRequiredString(args.scoreId, "scoreId")
+        await resolveUuidArgument(pool, args, {
+          canonicalField: "scoreId",
+          aliases: ["id", "entityId"],
+          tableName: "discovery_source_interest_scores",
+          columnName: "score_id",
+          label: "Discovery source-interest score",
+        })
       )
   ),
   createReadTool(

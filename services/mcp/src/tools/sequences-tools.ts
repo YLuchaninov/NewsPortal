@@ -7,7 +7,6 @@ import {
   createReadTool,
   createWriteTool,
   pagingSchema,
-  detailSchema,
   readPageArgs,
   readPayload,
   normalizePayloadStringListFields,
@@ -15,8 +14,10 @@ import {
   JsonRpcError,
   writeMcpMutationAudit,
   requireDestructiveConfirmation,
+  readAliasedRequiredString,
   readOptionalString,
   readRequiredString,
+  resolveUniqueUuidPrefix,
   type McpToolDefinition
 } from "./shared";
 
@@ -48,6 +49,75 @@ const REINDEX_BACKFILL_DEFAULT_OPTIONS = {
 
 type ReindexIndexName = (typeof REINDEX_INDEX_NAMES)[number];
 type ReindexJobKind = (typeof REINDEX_JOB_KINDS)[number];
+
+const sequenceDetailSchema = {
+  type: "object",
+  properties: {
+    sequenceId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const sequenceRunDetailSchema = {
+  type: "object",
+  properties: {
+    runId: { type: "string" },
+    sequenceRunId: { type: "string" },
+    id: { type: "string" },
+    entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+type QueryablePool = Parameters<McpToolDefinition["handler"]>[0]["pool"];
+
+async function resolveSequenceIdArgument(
+  pool: QueryablePool,
+  args: Record<string, unknown>
+): Promise<string> {
+  const sequenceId = await resolveUniqueUuidPrefix(
+    pool,
+    readAliasedRequiredString(args, "sequenceId", ["id", "entityId"]),
+    {
+      path: "sequenceId",
+      tableName: "sequences",
+      columnName: "sequence_id",
+      label: "Sequence",
+    }
+  );
+  if (!sequenceId) {
+    throw new JsonRpcError(-32602, "sequenceId is required.", {
+      statusCode: 400,
+      data: { path: "sequenceId" },
+    });
+  }
+  return sequenceId;
+}
+
+async function resolveSequenceRunIdArgument(
+  pool: QueryablePool,
+  args: Record<string, unknown>
+): Promise<string> {
+  const runId = await resolveUniqueUuidPrefix(
+    pool,
+    readAliasedRequiredString(args, "runId", ["sequenceRunId", "id", "entityId"]),
+    {
+      path: "runId",
+      tableName: "sequence_runs",
+      columnName: "run_id",
+      label: "Sequence run",
+    }
+  );
+  if (!runId) {
+    throw new JsonRpcError(-32602, "runId is required.", {
+      statusCode: 400,
+      data: { path: "runId" },
+    });
+  }
+  return runId;
+}
 
 function readReindexIndexName(value: unknown): ReindexIndexName {
   const normalized = readOptionalString(value) ?? "interest_centroids";
@@ -202,10 +272,10 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "sequences.read",
-    "Read one sequence.",
-    detailSchema,
-    async ({ sdk }, args) =>
-      sdk.getSequence<Record<string, unknown>>(readRequiredString(args.sequenceId, "sequenceId"))
+    "Read one sequence. Prefer sequenceId; id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    sequenceDetailSchema,
+    async ({ sdk, pool }, args) =>
+      sdk.getSequence<Record<string, unknown>>(await resolveSequenceIdArgument(pool, args))
   ),
   createReadTool(
     "sequences.plugins.list",
@@ -215,17 +285,21 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "sequences.runs.read",
-    "Read one sequence run.",
-    detailSchema,
-    async ({ sdk }, args) =>
-      sdk.getSequenceRun<Record<string, unknown>>(readRequiredString(args.runId, "runId"))
+    "Read one sequence run. Prefer runId; sequenceRunId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    sequenceRunDetailSchema,
+    async ({ sdk, pool }, args) =>
+      sdk.getSequenceRun<Record<string, unknown>>(
+        await resolveSequenceRunIdArgument(pool, args)
+      )
   ),
   createReadTool(
     "sequences.run_task_runs.list",
-    "List task runs for a sequence run.",
-    detailSchema,
-    async ({ sdk }, args) =>
-      sdk.getSequenceRunTaskRuns<Record<string, unknown>>(readRequiredString(args.runId, "runId"))
+    "List task runs for a sequence run. Prefer runId; sequenceRunId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    sequenceRunDetailSchema,
+    async ({ sdk, pool }, args) =>
+      sdk.getSequenceRunTaskRuns<Record<string, unknown>>(
+        await resolveSequenceRunIdArgument(pool, args)
+      )
   ),
   createReadTool(
     "maintenance.reindex_jobs.list",

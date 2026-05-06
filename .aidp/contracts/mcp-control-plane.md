@@ -44,7 +44,7 @@ MCP control plane adds a remote HTTP operator surface for AI clients and automat
 - `GET /mcp` with `Accept: text/event-stream` opens an authenticated SSE session for clients that require legacy EventSource transport, emits an `endpoint` event for `/mcp/messages?sessionId=...`, and sends JSON-RPC responses back as `event: message` SSE frames.
 - `/mcp/messages` is a session message endpoint owned by the MCP service and routed through nginx for SSE clients; it must not become a separate unauthenticated API surface.
 - Initialize negotiates supported protocol versions and currently supports `2025-06-18`, `2025-03-26`, and `2024-11-05`.
-- Initialize returns concise server `instructions` with critical read-before-write, ongoing-operations, cleanup, destructive-confirmation, schema, token-inventory, and external-content trust guidance. These instructions are the compatibility baseline for clients that do not surface resources/prompts.
+- Initialize returns concise server `instructions` with critical read-before-write, ongoing-operations, cleanup, destructive-confirmation, schema, token-inventory, automation-first planning, and external-content trust guidance. These instructions are the compatibility baseline for clients that do not surface resources/prompts. Planning posture is guarded automation by default: unless the operator explicitly requests manual approval, clients should prefer profile/policy-backed setup, run, verify, and tuning flows that let safe decisions proceed automatically; manual review is fallback for missing policy/evidence, destructive actions, unsafe promotions, or genuinely ambiguous decisions.
 
 ## Tool/resource contract
 
