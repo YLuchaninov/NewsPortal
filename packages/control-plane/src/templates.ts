@@ -18,11 +18,194 @@ import { insertOutboxEvent } from "../../../apps/admin/src/lib/server/outbox";
 import { writeAuditLog } from "./audit";
 
 export type TemplateKind = "interest" | "llm";
+type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
 
 interface SavedTemplateResult {
   kind: TemplateKind;
   entityId: string;
   created: boolean;
+}
+
+function hasOwn(record: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function copyMissing(
+  payload: Record<string, unknown>,
+  key: string,
+  value: unknown
+): void {
+  if (!hasOwn(payload, key)) {
+    payload[key] = value;
+  }
+}
+
+function readPolicyRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function readCandidateSignalLines(
+  definitionJson: unknown,
+  key: "positiveGroups" | "negativeGroups"
+): string[] {
+  const definition = readPolicyRecord(definitionJson);
+  const candidateSignals = readPolicyRecord(definition.candidateSignals);
+  const groups = Array.isArray(candidateSignals[key]) ? candidateSignals[key] : [];
+  return groups
+    .map((group) => {
+      const record = readPolicyRecord(group);
+      const cues = Array.isArray(record.cues)
+        ? record.cues.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+        : [];
+      if (cues.length === 0) {
+        return "";
+      }
+      const name = String(record.name ?? "").trim();
+      return name ? `${name}: ${cues.join(", ")}` : cues.join(", ");
+    })
+    .filter(Boolean);
+}
+
+async function hydrateInterestTemplateUpdatePayload(
+  queryable: Queryable,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const interestTemplateId = String(payload.interestTemplateId ?? "").trim();
+  if (!interestTemplateId) {
+    return payload;
+  }
+
+  const result = await queryable.query<{
+    name: string;
+    description: string;
+    positive_texts: unknown;
+    negative_texts: unknown;
+    must_have_terms: unknown;
+    must_not_have_terms: unknown;
+    places: unknown;
+    languages_allowed: unknown;
+    time_window_hours: number | null;
+    allowed_content_kinds: unknown;
+    short_tokens_required: unknown;
+    short_tokens_forbidden: unknown;
+    priority: number;
+    is_active: boolean;
+    definition_json: unknown;
+    policy_json: unknown;
+  }>(
+    `
+      select
+        it.name,
+        it.description,
+        it.positive_texts,
+        it.negative_texts,
+        it.must_have_terms,
+        it.must_not_have_terms,
+        it.places,
+        it.languages_allowed,
+        it.time_window_hours,
+        it.allowed_content_kinds,
+        it.short_tokens_required,
+        it.short_tokens_forbidden,
+        it.priority,
+        it.is_active,
+        sp.definition_json,
+        sp.policy_json
+      from interest_templates it
+      left join selection_profiles sp
+        on sp.source_interest_template_id = it.interest_template_id
+      where it.interest_template_id = $1
+      limit 1
+    `,
+    [interestTemplateId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return payload;
+  }
+
+  const hydrated = { ...payload };
+  copyMissing(hydrated, "name", row.name);
+  copyMissing(hydrated, "description", row.description);
+  copyMissing(hydrated, "positive_texts", row.positive_texts);
+  copyMissing(hydrated, "negative_texts", row.negative_texts);
+  copyMissing(hydrated, "must_have_terms", row.must_have_terms);
+  copyMissing(hydrated, "must_not_have_terms", row.must_not_have_terms);
+  copyMissing(hydrated, "places", row.places);
+  copyMissing(hydrated, "languages_allowed", row.languages_allowed);
+  copyMissing(hydrated, "time_window_hours", row.time_window_hours);
+  copyMissing(hydrated, "allowed_content_kinds", row.allowed_content_kinds);
+  copyMissing(hydrated, "short_tokens_required", row.short_tokens_required);
+  copyMissing(hydrated, "short_tokens_forbidden", row.short_tokens_forbidden);
+  copyMissing(hydrated, "priority", row.priority);
+  copyMissing(hydrated, "isActive", row.is_active);
+
+  const policy = readPolicyRecord(row.policy_json);
+  copyMissing(hydrated, "selection_profile_strictness", policy.strictness);
+  copyMissing(hydrated, "selection_profile_unresolved_decision", policy.unresolvedDecision);
+  copyMissing(hydrated, "selection_profile_llm_review_mode", policy.llmReviewMode);
+  copyMissing(
+    hydrated,
+    "candidate_positive_signals",
+    readCandidateSignalLines(row.definition_json, "positiveGroups")
+  );
+  copyMissing(
+    hydrated,
+    "candidate_negative_signals",
+    readCandidateSignalLines(row.definition_json, "negativeGroups")
+  );
+  return hydrated;
+}
+
+async function hydrateLlmTemplateUpdatePayload(
+  queryable: Queryable,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const promptTemplateId = String(payload.promptTemplateId ?? "").trim();
+  if (!promptTemplateId) {
+    return payload;
+  }
+
+  const result = await queryable.query<{
+    name: string;
+    scope: string;
+    language: string | null;
+    template_text: string;
+    is_active: boolean;
+  }>(
+    `
+      select name, scope, language, template_text, is_active
+      from llm_prompt_templates
+      where prompt_template_id = $1
+      limit 1
+    `,
+    [promptTemplateId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return payload;
+  }
+
+  const hydrated = { ...payload };
+  copyMissing(hydrated, "name", row.name);
+  copyMissing(hydrated, "scope", row.scope);
+  copyMissing(hydrated, "language", row.language);
+  copyMissing(hydrated, "templateText", row.template_text);
+  copyMissing(hydrated, "isActive", row.is_active);
+  return hydrated;
+}
+
+export async function hydrateTemplateUpdatePayloadForSave(
+  queryable: Queryable,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const kind = String(payload.kind ?? "llm").trim() === "interest" ? "interest" : "llm";
+  if (kind === "interest") {
+    return hydrateInterestTemplateUpdatePayload(queryable, payload);
+  }
+  return hydrateLlmTemplateUpdatePayload(queryable, payload);
 }
 
 export async function saveTemplateFromPayload(
@@ -36,7 +219,8 @@ export async function saveTemplateFromPayload(
     await client.query("begin");
 
     if (kind === "interest") {
-      const template = parseInterestTemplateInput(payload);
+      const hydratedPayload = await hydrateTemplateUpdatePayloadForSave(client, payload);
+      const template = parseInterestTemplateInput(hydratedPayload);
       const result = await saveInterestTemplate(client, template);
       const syncResult = await syncInterestTemplateCriterion(client, result.interestTemplateId);
       const profileSyncResult = await syncInterestTemplateSelectionProfile(
@@ -89,7 +273,8 @@ export async function saveTemplateFromPayload(
       };
     }
 
-    const template = parseLlmTemplateInput(payload);
+    const hydratedPayload = await hydrateTemplateUpdatePayloadForSave(client, payload);
+    const template = parseLlmTemplateInput(hydratedPayload);
     const result = await saveLlmTemplate(client, template);
     await writeAuditLog(client, {
       actorUserId,

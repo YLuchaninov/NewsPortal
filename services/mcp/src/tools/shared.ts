@@ -283,6 +283,37 @@ export function readAliasedRequiredString(
   );
 }
 
+export function readRequiredUuidString(value: unknown, path: string): string {
+  const normalized = readOptionalString(value);
+  if (normalized && UUID_RE.test(normalized)) {
+    return normalized;
+  }
+  throw new JsonRpcError(-32602, `${path} must be a full UUID.`, {
+    statusCode: 400,
+    data: {
+      path,
+      expectedShape: "full UUID",
+    },
+  });
+}
+
+export function readOptionalUuidString(value: unknown, path: string): string | undefined {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  const normalized = readOptionalString(value);
+  if (normalized && UUID_RE.test(normalized)) {
+    return normalized;
+  }
+  throw new JsonRpcError(-32602, `${path} must be a full UUID.`, {
+    statusCode: 400,
+    data: {
+      path,
+      expectedShape: "full UUID",
+    },
+  });
+}
+
 export async function resolveUniqueUuidPrefix(
   pool: McpQueryablePool,
   value: unknown,

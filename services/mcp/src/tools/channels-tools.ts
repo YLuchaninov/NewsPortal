@@ -405,7 +405,7 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
       return deleteChannelWithAudit(
         pool,
         token.issuedByUserId,
-        readRequiredString(args.channelId, "channelId")
+        await resolveChannelId(pool, args.channelId)
       );
     },
     true

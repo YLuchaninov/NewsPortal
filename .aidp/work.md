@@ -14,17 +14,17 @@
 - Разрешенные workflow modes: setup | normal | repair
 - Work route: bugfix
 - Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
-- Route phase: completed
-- Route-specific next step: hand off live MCP error audit and recall evidence update guard fix to ongoing product testing.
-- Route-specific proof: completed targeted MCP unit proof, contracts/MCP typecheck, TS lint, whitespace check, runtime MCP rebuild, and health proof.
+- Route phase: done
+- Route-specific next step: report completed template/token hygiene bugfix and continue product-test follow-ups from the next user request.
+- Route-specific proof: targeted unit proof, control-plane/MCP typecheck, TS lint, whitespace check, runtime MCP rebuild, health proof, request-log check, and DB cleanup verification passed.
 - Planning required by route: yes
 - Planning source: AIDP-native
 - Plan/spec status: accepted-for-this-item
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
 - Фокус аудита: n/a
-- Почему сейчас: live MCP request-log audit found a client bypassing RSS promotion evidence guard by writing `evaluationJson.validFeed=true` through `discovery.recall_candidates.update` after the first promotion denial.
-- Active item id: NEWSPORTAL-MCP-RECALL-EVIDENCE-UPDATE-GUARD-BUGFIX-1
+- Почему сейчас: product-test observations found system interest updates can reset omitted `languages_allowed`, MCP token inventory counts expired active rows as active, and local test DB contains expired active MCP test tokens.
+- Active item id: NEWSPORTAL-MCP-TEMPLATE-TOKEN-HYGIENE-BUGFIX-1
 - Active item status: done
 - Item status: done
 - Risk: medium
@@ -62,9 +62,9 @@
 
 ### Primary active item
 
-- ID: NEWSPORTAL-MCP-RECALL-EVIDENCE-UPDATE-GUARD-BUGFIX-1
+- ID: NEWSPORTAL-MCP-TEMPLATE-TOKEN-HYGIENE-BUGFIX-1
 - Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
-- Почему это primary active work: ensure recall promotion semantic guards cannot be bypassed by MCP clients rewriting candidate evidence immediately before promotion.
+- Почему это primary active work: make MCP/admin template updates preserve omitted fields and make token inventory distinguish usable active tokens from expired active rows.
 
 ### Secondary active item
 
@@ -72,6 +72,30 @@
 - Почему существует: n/a
 - Разрешенные overlap paths: n/a
 - Условие выхода к одному primary item: n/a
+
+### Active MCP template/token hygiene bugfix
+
+- ID: NEWSPORTAL-MCP-TEMPLATE-TOKEN-HYGIENE-BUGFIX-1
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `packages/control-plane/src/templates.ts`, `packages/control-plane/src/mcp-tokens.ts`, `services/mcp/src/tools/admin-tools.ts`, `services/mcp/src/resources.ts`, `tests/unit/ts/mcp-control-plane.test.ts`, targeted proof, and local DB expired test-token cleanup.
+- Out of scope: adding per-interest `promptTemplateId` linkage, schema migrations, production deploy, changing MCP token auth expiry semantics, deleting non-expired tokens, or changing read-only id prefix behavior.
+- Accepted fix: hydrate existing interest/LLM template rows before update so omitted optional fields preserve current DB values; expose token `effectiveStatus`, `activeUsable`, and `expiredActive` in MCP token inventory/summary surfaces; delete local expired test tokens after verification.
+- Blueprint context checked: `.aidp/blueprint.md` PostgreSQL source-of-truth, Operator/admin control plane, Public API vs admin/operator API; `.aidp/contracts/mcp-control-plane.md` token inventory and strict typed facade.
+- Required proof: targeted TS unit proof for template update preservation and token effective counts; `pnpm --filter @newsportal/control-plane typecheck`; `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `git diff --check --` touched paths; runtime MCP rebuild and health check; DB before/after cleanup count.
+- Proof passed: yes; `pnpm unit_tests:ts -- mcp-control-plane` passed 352/352; `pnpm --filter @newsportal/control-plane typecheck`, `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, and `git diff --check -- .aidp/work.md packages/control-plane/src/templates.ts packages/control-plane/src/mcp-tokens.ts services/mcp/src/tools/admin-tools.ts services/mcp/src/resources.ts services/mcp/src/tools/shared.ts services/mcp/src/tools/sequences-tools.ts services/mcp/src/tools/discovery/write-tools.ts services/mcp/src/tools/channels-tools.ts services/mcp/src/tools/templates-tools.ts tests/unit/ts/mcp-control-plane.test.ts` passed. DB cleanup verification shows no remaining expired active MCP tokens (`active=56`, `revoked=11`, `expired_count=0`); deletion query removed 0 additional rows because the expired local test rows were already gone. MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned `{"service":"mcp","status":"ok"}`, `docker-mcp-1` is healthy, and recent `mcp_request_log` check showed 0 errors in the last 5 minutes.
+- Cleanup status: expired active local MCP test-token cleanup verified complete; no non-expired tokens were deleted.
+
+### Active MCP sequence id guard bugfix
+
+- ID: NEWSPORTAL-MCP-SEQUENCE-ID-GUARD-BUGFIX-1
+- Parent capability: MCP strict typed control-plane facade and ongoing operating intelligence.
+- Scope: `.aidp/work.md`, `services/mcp/src/tools/shared.ts`, `services/mcp/src/tools/sequences-tools.ts`, `tests/unit/ts/mcp-control-plane.test.ts`, and targeted proof.
+- Out of scope: changing sequence backend semantics, accepting ID prefixes for mutating tools, schema migrations, production deploy, or deleting runtime sequence rows/runs.
+- Accepted fix: add a shared full-UUID reader for mutating MCP id arguments and use it for sequence update/run/retry/cancel/archive paths; read-only sequence tools keep existing alias/prefix behavior.
+- Blueprint context checked: `.aidp/blueprint.md` Operator/admin control plane, PostgreSQL source-of-truth, API/control-plane boundaries; `.aidp/contracts/mcp-control-plane.md` strict typed facade and sequence cleanup/reindex guidance.
+- Required proof: targeted MCP unit proof that invalid sequence write ids fail with MCP `-32602` before backend fetch; `pnpm --filter @newsportal/mcp typecheck`; `pnpm lint:ts`; `git diff --check --` touched paths; runtime MCP rebuild and health check.
+- Proof passed: yes; follow-up similarity sweep found adjacent malformed-UUID risk in discovery write ids, discovery id-bearing payloads, template update/destructive ids, MCP token lifecycle ids, and channel delete. Added shared optional/required UUID readers and applied full-UUID MCP boundary validation while preserving read-only alias/prefix behavior and string-key `discovery.classes.*` handling. `pnpm unit_tests:ts -- mcp-control-plane` passed 350/350 including sequence and adjacent malformed-id regression coverage; `pnpm --filter @newsportal/mcp typecheck`, `pnpm lint:ts`, and `git diff --check -- .aidp/work.md services/mcp/src/tools/shared.ts services/mcp/src/tools/sequences-tools.ts services/mcp/src/tools/discovery/write-tools.ts services/mcp/src/tools/admin-tools.ts services/mcp/src/tools/channels-tools.ts services/mcp/src/tools/templates-tools.ts tests/unit/ts/mcp-control-plane.test.ts` passed. Final `rg` found no remaining `readRequiredString(...Id)` in MCP tools except the private `resolveChannelId` helper, which immediately validates full UUID/unique prefix. MCP container was rebuilt with `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up --build -d mcp`; `/health` returned ok, `docker-mcp-1` is healthy, and a fresh 5-minute `mcp_request_log` check showed 0 new errors.
+- Cleanup status: compose stack remains running for product testing; no destructive cleanup planned.
 
 ### Согласованность worktree
 

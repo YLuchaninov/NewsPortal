@@ -18,6 +18,7 @@ export const MCP_SCOPE_OPTIONS = [
 
 export type McpScope = (typeof MCP_SCOPE_OPTIONS)[number];
 export type McpAccessTokenStatus = "active" | "revoked";
+export type McpAccessTokenEffectiveStatus = "active" | "expired" | "revoked";
 
 export interface McpAccessTokenRecord {
   tokenId: string;
@@ -35,6 +36,14 @@ export interface McpAccessTokenRecord {
   createdAt: string;
   updatedAt: string;
   recentRequestCount: number;
+}
+
+export interface McpAccessTokenSummary {
+  total: number;
+  active: number;
+  activeUsable: number;
+  expiredActive: number;
+  revoked: number;
 }
 
 interface McpAccessTokenRow {
@@ -129,6 +138,32 @@ export function hasMcpScope(
   requiredScope: McpScope | "read"
 ): boolean {
   return grantedScopes.includes(requiredScope);
+}
+
+export function getMcpAccessTokenEffectiveStatus(
+  token: Pick<McpAccessTokenRecord, "status" | "expiresAt">
+): McpAccessTokenEffectiveStatus {
+  if (token.status === "revoked") {
+    return "revoked";
+  }
+  if (token.expiresAt && Date.parse(token.expiresAt) <= Date.now()) {
+    return "expired";
+  }
+  return "active";
+}
+
+export function summarizeMcpAccessTokens(
+  tokens: readonly McpAccessTokenRecord[]
+): McpAccessTokenSummary {
+  return {
+    total: tokens.length,
+    active: tokens.filter((token) => token.status === "active").length,
+    activeUsable: tokens.filter((token) => getMcpAccessTokenEffectiveStatus(token) === "active")
+      .length,
+    expiredActive: tokens.filter((token) => getMcpAccessTokenEffectiveStatus(token) === "expired")
+      .length,
+    revoked: tokens.filter((token) => token.status === "revoked").length,
+  };
 }
 
 export async function issueMcpAccessToken(

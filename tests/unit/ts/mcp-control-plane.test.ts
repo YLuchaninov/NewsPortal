@@ -9,9 +9,11 @@ import {
   recordMcpRequestLog,
   revokeMcpAccessToken,
   resolveMcpAccessTokenBySecret,
+  summarizeMcpAccessTokens,
   touchMcpAccessTokenUsage,
   MCP_SCOPE_OPTIONS,
 } from "../../../packages/control-plane/src/mcp-tokens.ts";
+import { hydrateTemplateUpdatePayloadForSave } from "../../../packages/control-plane/src/templates.ts";
 import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
 import {
   buildToolResult,
@@ -64,6 +66,48 @@ const WRITE_CHANNELS_TOKEN = {
   label: "channel-writer",
   tokenPrefix: "npmcp_token-write-channels",
   scopes: ["read", "write.channels"],
+  status: "active",
+  issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+  revokedByUserId: null,
+  revokedAt: null,
+  expiresAt: null,
+  lastUsedAt: null,
+  lastUsedIp: null,
+  lastUsedUserAgent: null,
+  createdAt: "2026-04-23T10:00:00.000Z",
+  updatedAt: "2026-04-23T10:00:00.000Z",
+  recentRequestCount: 0,
+} as const;
+
+const WRITE_TEMPLATES_TOKEN = {
+  tokenId: "token-write-templates",
+  label: "template-writer",
+  tokenPrefix: "npmcp_token-write-templates",
+  scopes: ["read", "write.templates"],
+  status: "active",
+  issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
+  revokedByUserId: null,
+  revokedAt: null,
+  expiresAt: null,
+  lastUsedAt: null,
+  lastUsedIp: null,
+  lastUsedUserAgent: null,
+  createdAt: "2026-04-23T10:00:00.000Z",
+  updatedAt: "2026-04-23T10:00:00.000Z",
+  recentRequestCount: 0,
+} as const;
+
+const DESTRUCTIVE_CHANNELS_TOKEN = {
+  ...WRITE_CHANNELS_TOKEN,
+  tokenId: "token-destructive-channels",
+  scopes: ["read", "write.channels", "write.destructive"],
+} as const;
+
+const DESTRUCTIVE_ADMIN_TOKEN = {
+  tokenId: "550e8400-e29b-41d4-a716-446655440010",
+  label: "admin-token-writer",
+  tokenPrefix: "npmcp_token-admin-token-writer",
+  scopes: ["read", "admin.tokens", "write.destructive"],
   status: "active",
   issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
   revokedByUserId: null,
@@ -514,6 +558,122 @@ test("MCP token delete is limited to already revoked records", async () => {
   assert.equal(pool.state.token?.status, "active");
 });
 
+test("MCP token summaries distinguish usable active tokens from expired active rows", () => {
+  const tokens = [
+    {
+      ...WRITE_SEQUENCES_TOKEN,
+      expiresAt: null,
+    },
+    {
+      ...WRITE_DISCOVERY_TOKEN,
+      tokenId: "token-expired-active",
+      expiresAt: "2020-01-01T00:00:00.000Z",
+    },
+    {
+      ...WRITE_CHANNELS_TOKEN,
+      tokenId: "token-revoked",
+      status: "revoked",
+      revokedAt: "2026-05-06T12:00:00.000Z",
+      expiresAt: null,
+    },
+  ];
+
+  assert.deepEqual(summarizeMcpAccessTokens(tokens), {
+    total: 3,
+    active: 2,
+    activeUsable: 1,
+    expiredActive: 1,
+    revoked: 1,
+  });
+});
+
+test("MCP template update hydration preserves omitted optional fields", async () => {
+  const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const queryable = {
+    async query(sql: string, params?: unknown[]) {
+      calls.push({ sql, params });
+      if (/from interest_templates it/i.test(sql)) {
+        return {
+          rows: [
+            {
+              name: "Existing interest",
+              description: "Existing description",
+              positive_texts: ["old signal"],
+              negative_texts: ["old noise"],
+              must_have_terms: ["RFP"],
+              must_not_have_terms: ["vendor blog"],
+              places: ["EU"],
+              languages_allowed: ["en", "de"],
+              time_window_hours: 2160,
+              allowed_content_kinds: ["editorial", "document"],
+              short_tokens_required: ["AI"],
+              short_tokens_forbidden: ["NBA"],
+              priority: 0.8,
+              is_active: true,
+              definition_json: {
+                candidateSignals: {
+                  positiveGroups: [{ name: "buyer_need", cues: ["RFP", "vendor search"] }],
+                  negativeGroups: [{ name: "vendor_marketing", cues: ["case study"] }],
+                },
+              },
+              policy_json: {
+                strictness: "broad",
+                unresolvedDecision: "reject",
+                llmReviewMode: "optional_high_value_only",
+              },
+            },
+          ],
+        };
+      }
+      if (/from llm_prompt_templates/i.test(sql)) {
+        return {
+          rows: [
+            {
+              name: "Existing LLM template",
+              scope: "criteria",
+              language: "en",
+              template_text: "Review {title}",
+              is_active: false,
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+
+  const interestPayload = await hydrateTemplateUpdatePayloadForSave(queryable as any, {
+    kind: "interest",
+    interestTemplateId: "11111111-1111-4111-8111-111111111111",
+    name: "Updated interest",
+    positive_texts: "new signal",
+  });
+
+  assert.equal(interestPayload.name, "Updated interest");
+  assert.equal(interestPayload.positive_texts, "new signal");
+  assert.deepEqual(interestPayload.languages_allowed, ["en", "de"]);
+  assert.deepEqual(interestPayload.allowed_content_kinds, ["editorial", "document"]);
+  assert.equal(interestPayload.selection_profile_strictness, "broad");
+  assert.equal(interestPayload.selection_profile_unresolved_decision, "reject");
+  assert.equal(interestPayload.selection_profile_llm_review_mode, "optional_high_value_only");
+  assert.deepEqual(interestPayload.candidate_positive_signals, [
+    "buyer_need: RFP, vendor search",
+  ]);
+
+  const llmPayload = await hydrateTemplateUpdatePayloadForSave(queryable as any, {
+    kind: "llm",
+    promptTemplateId: "22222222-2222-4222-8222-222222222222",
+    templateText: "Updated {title}",
+  });
+
+  assert.equal(llmPayload.templateText, "Updated {title}");
+  assert.equal(llmPayload.name, "Existing LLM template");
+  assert.equal(llmPayload.scope, "criteria");
+  assert.equal(llmPayload.language, "en");
+  assert.equal(llmPayload.isActive, false);
+  assert.equal(calls.length, 2);
+});
+
 test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP foundation metadata", () => {
   const parsed = parseJsonRpcRequest({
     jsonrpc: "2.0",
@@ -906,6 +1066,213 @@ test("MCP sequence and content read tools accept report aliases and UUID prefixe
   assert.match(requestLog, /eeeeeeee-1111-4111-8111-111111111111/);
 });
 
+test("MCP sequence write tools reject malformed UUID ids before backend fetch", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const pool = createFakeMcpPool();
+  const malformedId = "00000000-0000-0000-0000-nonexistentid";
+
+  const invalidCalls: Array<{
+    toolName: string;
+    args: Record<string, unknown>;
+    expectedPath: string;
+  }> = [
+    {
+      toolName: "sequences.update",
+      args: {
+        sequenceId: malformedId,
+        payload: { title: "Should not reach backend" },
+      },
+      expectedPath: "sequenceId",
+    },
+    {
+      toolName: "sequences.run",
+      args: {
+        sequenceId: malformedId,
+      },
+      expectedPath: "sequenceId",
+    },
+    {
+      toolName: "sequences.retry_run",
+      args: {
+        runId: malformedId,
+      },
+      expectedPath: "runId",
+    },
+    {
+      toolName: "sequences.cancel_run",
+      args: {
+        runId: malformedId,
+      },
+      expectedPath: "runId",
+    },
+  ];
+
+  for (const invalidCall of invalidCalls) {
+    await assert.rejects(
+      () =>
+        executeMcpTool(
+          { sdk, pool, token: WRITE_SEQUENCES_TOKEN },
+          invalidCall.toolName,
+          invalidCall.args
+        ),
+      (error) =>
+        error instanceof JsonRpcError &&
+        error.code === -32602 &&
+        error.message === `${invalidCall.expectedPath} must be a full UUID.`
+    );
+  }
+  assert.equal(requests.length, 0, "invalid sequence write ids should fail before backend fetch");
+});
+
+test("MCP adjacent write tools reject malformed UUID ids before backend or DB work", async () => {
+  const requests: string[] = [];
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const pool = createFakeMcpPool();
+  const malformedId = "00000000-0000-0000-0000-nonexistentid";
+
+  const invalidCalls: Array<{
+    toolName: string;
+    token: typeof WRITE_DISCOVERY_TOKEN | typeof WRITE_TEMPLATES_TOKEN | typeof DESTRUCTIVE_CHANNELS_TOKEN | typeof DESTRUCTIVE_ADMIN_TOKEN;
+    args: Record<string, unknown>;
+    expectedPath: string;
+    expectedMessage?: string;
+  }> = [
+    {
+      toolName: "discovery.profiles.update",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { profileId: malformedId, payload: { displayName: "Nope" } },
+      expectedPath: "profileId",
+    },
+    {
+      toolName: "discovery.missions.update",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { missionId: malformedId, payload: { title: "Nope" } },
+      expectedPath: "missionId",
+    },
+    {
+      toolName: "discovery.missions.create",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { payload: { title: "Nope", profileId: malformedId } },
+      expectedPath: "payload.profileId",
+    },
+    {
+      toolName: "discovery.recall_missions.update",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { recallMissionId: malformedId, payload: { title: "Nope" } },
+      expectedPath: "recallMissionId",
+    },
+    {
+      toolName: "discovery.recall_candidates.create",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { payload: { recallMissionId: malformedId, url: "https://example.test/feed.xml" } },
+      expectedPath: "payload.recallMissionId",
+    },
+    {
+      toolName: "discovery.candidates.review",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { candidateId: malformedId, payload: { status: "rejected" } },
+      expectedPath: "candidateId",
+    },
+    {
+      toolName: "discovery.feedback.create",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { payload: { feedbackType: "reject", missionId: malformedId } },
+      expectedPath: "payload.missionId",
+    },
+    {
+      toolName: "discovery.re_evaluate",
+      token: WRITE_DISCOVERY_TOKEN,
+      args: { payload: { missionId: malformedId } },
+      expectedPath: "payload.missionId",
+    },
+    {
+      toolName: "system_interests.update",
+      token: WRITE_TEMPLATES_TOKEN,
+      args: {
+        payload: {
+          interestTemplateId: malformedId,
+          name: "Nope",
+          positive_texts: "signals",
+        },
+      },
+      expectedPath: "payload.interestTemplateId",
+    },
+    {
+      toolName: "llm_templates.update",
+      token: WRITE_TEMPLATES_TOKEN,
+      args: {
+        payload: {
+          promptTemplateId: malformedId,
+          name: "Nope",
+          templateText: "Review {title}",
+        },
+      },
+      expectedPath: "payload.promptTemplateId",
+    },
+    {
+      toolName: "channels.delete",
+      token: DESTRUCTIVE_CHANNELS_TOKEN,
+      args: { channelId: malformedId, confirm: true },
+      expectedPath: "channelId",
+      expectedMessage: "channelId must be a full UUID or a unique UUID prefix.",
+    },
+    {
+      toolName: "admin.mcp_tokens.revoke",
+      token: DESTRUCTIVE_ADMIN_TOKEN,
+      args: { tokenId: malformedId, confirm: true },
+      expectedPath: "tokenId",
+    },
+    {
+      toolName: "admin.mcp_tokens.delete_revoked",
+      token: DESTRUCTIVE_ADMIN_TOKEN,
+      args: { tokenId: malformedId, confirm: true },
+      expectedPath: "tokenId",
+    },
+  ];
+
+  for (const invalidCall of invalidCalls) {
+    await assert.rejects(
+      () =>
+        executeMcpTool(
+          { sdk, pool, token: invalidCall.token },
+          invalidCall.toolName,
+          invalidCall.args
+        ),
+      (error) =>
+        error instanceof JsonRpcError &&
+        error.code === -32602 &&
+        error.message ===
+          (invalidCall.expectedMessage ?? `${invalidCall.expectedPath} must be a full UUID.`)
+    );
+  }
+
+  assert.equal(requests.length, 0, "invalid adjacent write ids should fail before backend fetch");
+  assert.equal(pool.calls.length, 0, "invalid adjacent write ids should fail before DB work");
+});
+
 test("MCP tool execution enforces scope and destructive confirmation before handler work", async () => {
   const dummySdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1172,7 +1539,7 @@ test("MCP discovery run responses include async verification guidance", async ()
     },
     "discovery.missions.run",
     {
-      missionId: "mission-1",
+      missionId: "11111111-1111-4111-8111-111111111111",
     }
   );
 
@@ -1191,7 +1558,10 @@ test("MCP recall mission responses include profile guidance", async () => {
         body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {},
       });
       return new Response(
-        JSON.stringify({ recall_mission_id: "recall-1", status: "planned" }),
+        JSON.stringify({
+          recall_mission_id: "22222222-2222-4222-8222-222222222222",
+          status: "planned",
+        }),
         {
           status: 200,
           headers: {
@@ -1230,7 +1600,7 @@ test("MCP recall mission responses include profile guidance", async () => {
     },
     "discovery.recall_missions.acquire",
     {
-      recallMissionId: "recall-1",
+      recallMissionId: "22222222-2222-4222-8222-222222222222",
     }
   );
 

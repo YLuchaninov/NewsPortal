@@ -12,6 +12,7 @@ import {
   pagingSchema,
   readPageArgs,
   readPayload,
+  readRequiredUuidString,
   requireDestructiveConfirmation,
   type McpToolDefinition
 } from "./shared";
@@ -74,6 +75,36 @@ function readLlmTemplateId(args: Record<string, unknown>): string {
   return readAliasedId(args, "promptTemplateId", ["llmTemplateId", "templateId", "entityId"]);
 }
 
+function readSystemInterestUuidId(args: Record<string, unknown>): string {
+  return readRequiredUuidString(readSystemInterestId(args), "interestTemplateId");
+}
+
+function readLlmTemplateUuidId(args: Record<string, unknown>): string {
+  return readRequiredUuidString(readLlmTemplateId(args), "promptTemplateId");
+}
+
+function readSystemInterestPayload(args: Record<string, unknown>): Record<string, unknown> {
+  const payload = readPayload(args);
+  if (Object.prototype.hasOwnProperty.call(payload, "interestTemplateId")) {
+    payload.interestTemplateId = readRequiredUuidString(
+      payload.interestTemplateId,
+      "payload.interestTemplateId"
+    );
+  }
+  return payload;
+}
+
+function readLlmTemplatePayload(args: Record<string, unknown>): Record<string, unknown> {
+  const payload = readPayload(args);
+  if (Object.prototype.hasOwnProperty.call(payload, "promptTemplateId")) {
+    payload.promptTemplateId = readRequiredUuidString(
+      payload.promptTemplateId,
+      "payload.promptTemplateId"
+    );
+  }
+  return payload;
+}
+
 export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
     "system_interests.list",
@@ -106,7 +137,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.systemInterestCreate,
     async ({ pool, token }, args) => {
       const payload = {
-        ...readPayload(args),
+        ...readSystemInterestPayload(args),
         kind: "interest",
       };
       return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
@@ -119,7 +150,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.systemInterestUpdate,
     async ({ pool, token }, args) => {
       const payload = {
-        ...readPayload(args),
+        ...readSystemInterestPayload(args),
         kind: "interest",
       };
       return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
@@ -140,7 +171,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const interestTemplateId = readSystemInterestId(args);
+      const interestTemplateId = readSystemInterestUuidId(args);
       await setTemplateActiveStateWithAudit(
         pool,
         token.issuedByUserId,
@@ -171,7 +202,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const interestTemplateId = readSystemInterestId(args);
+      const interestTemplateId = readSystemInterestUuidId(args);
       await deleteTemplateWithAudit(pool, token.issuedByUserId, "interest", interestTemplateId);
       return {
         ok: true,
@@ -187,7 +218,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.llmTemplateCreate,
     async ({ pool, token }, args) => {
       const payload = {
-        ...readPayload(args),
+        ...readLlmTemplatePayload(args),
         kind: "llm",
       };
       return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
@@ -200,7 +231,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.llmTemplateUpdate,
     async ({ pool, token }, args) => {
       const payload = {
-        ...readPayload(args),
+        ...readLlmTemplatePayload(args),
         kind: "llm",
       };
       return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
@@ -221,7 +252,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const promptTemplateId = readLlmTemplateId(args);
+      const promptTemplateId = readLlmTemplateUuidId(args);
       await setTemplateActiveStateWithAudit(
         pool,
         token.issuedByUserId,
@@ -252,7 +283,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const promptTemplateId = readLlmTemplateId(args);
+      const promptTemplateId = readLlmTemplateUuidId(args);
       await deleteTemplateWithAudit(pool, token.issuedByUserId, "llm", promptTemplateId);
       return {
         ok: true,

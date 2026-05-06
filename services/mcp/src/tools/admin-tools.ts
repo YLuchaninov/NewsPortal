@@ -1,7 +1,9 @@
 import {
   deleteRevokedMcpAccessToken,
+  getMcpAccessTokenEffectiveStatus,
   listMcpAccessTokens,
   revokeMcpAccessToken,
+  summarizeMcpAccessTokens,
   type McpAccessTokenRecord,
 } from "@newsportal/control-plane";
 
@@ -10,7 +12,7 @@ import {
   createWriteTool,
   JsonRpcError,
   readOptionalString,
-  readRequiredString,
+  readRequiredUuidString,
   type McpToolDefinition
 } from "./shared";
 
@@ -21,6 +23,7 @@ function serializeToken(token: McpAccessTokenRecord) {
     tokenPrefix: token.tokenPrefix,
     scopes: token.scopes,
     status: token.status,
+    effectiveStatus: getMcpAccessTokenEffectiveStatus(token),
     expiresAt: token.expiresAt,
     lastUsedAt: token.lastUsedAt,
     createdAt: token.createdAt,
@@ -41,11 +44,7 @@ export const ADMIN_MCP_TOOLS: readonly McpToolDefinition[] = [
       ]);
       return {
         dashboardSummary,
-        mcpTokens: {
-          total: tokens.length,
-          active: tokens.filter((token) => token.status === "active").length,
-          revoked: tokens.filter((token) => token.status === "revoked").length,
-        },
+        mcpTokens: summarizeMcpAccessTokens(tokens),
       };
     }
   ),
@@ -56,9 +55,7 @@ export const ADMIN_MCP_TOOLS: readonly McpToolDefinition[] = [
     async ({ pool }) => {
       const tokens = await listMcpAccessTokens(pool);
       return {
-        total: tokens.length,
-        active: tokens.filter((token) => token.status === "active").length,
-        revoked: tokens.filter((token) => token.status === "revoked").length,
+        ...summarizeMcpAccessTokens(tokens),
         items: tokens.map(serializeToken),
         databaseColumns: [
           "token_id",
@@ -94,7 +91,7 @@ export const ADMIN_MCP_TOOLS: readonly McpToolDefinition[] = [
       additionalProperties: false,
     },
     async ({ pool, token }, args) => {
-      const tokenId = readRequiredString(args.tokenId, "tokenId");
+      const tokenId = readRequiredUuidString(args.tokenId, "tokenId");
       if (tokenId === token.tokenId) {
         throw new JsonRpcError(
           -32602,
@@ -130,7 +127,7 @@ export const ADMIN_MCP_TOOLS: readonly McpToolDefinition[] = [
       additionalProperties: false,
     },
     async ({ pool, token }, args) => {
-      const tokenId = readRequiredString(args.tokenId, "tokenId");
+      const tokenId = readRequiredUuidString(args.tokenId, "tokenId");
       if (tokenId === token.tokenId) {
         throw new JsonRpcError(
           -32602,

@@ -7,8 +7,10 @@ import {
   normalizeRecordStringListFields,
   readBooleanFlag,
   readOptionalString,
+  readOptionalUuidString,
   readPayload,
   readRequiredString,
+  readRequiredUuidString,
   requireDestructiveConfirmation,
   withActorDefault,
   writeMcpMutationAudit,
@@ -93,12 +95,16 @@ function hasSupportedWebsiteEvidence(evaluationJson: Record<string, unknown>): b
 }
 
 function normalizeDiscoveryMissionPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  return normalizePayloadStringListFields(payload, {
+  const normalized = normalizePayloadStringListFields(payload, {
     seedTopics: undefined,
     seedLanguages: undefined,
     seedRegions: undefined,
     targetProviderTypes: { allowedValues: PROVIDER_TYPES },
   });
+  if (Object.prototype.hasOwnProperty.call(normalized, "profileId")) {
+    normalized.profileId = readOptionalUuidString(normalized.profileId, "payload.profileId") ?? null;
+  }
+  return normalized;
 }
 
 function stripMcpOnlyDiscoveryMissionFields(
@@ -304,12 +310,66 @@ async function readRecallMissionProfileGuidance(
 }
 
 function normalizeRecallMissionPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  return normalizePayloadStringListFields(payload, {
+  const normalized = normalizePayloadStringListFields(payload, {
     seedDomains: undefined,
     seedUrls: undefined,
     seedQueries: undefined,
     targetProviderTypes: { allowedValues: PROVIDER_TYPES },
   });
+  if (Object.prototype.hasOwnProperty.call(normalized, "profileId")) {
+    normalized.profileId = readOptionalUuidString(normalized.profileId, "payload.profileId") ?? null;
+  }
+  return normalized;
+}
+
+function normalizeRecallCandidateCreatePayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const normalized = { ...payload };
+  normalized.recallMissionId = readRequiredUuidString(
+    normalized.recallMissionId,
+    "payload.recallMissionId"
+  );
+  if (Object.prototype.hasOwnProperty.call(normalized, "sourceProfileId")) {
+    const sourceProfileId = readOptionalUuidString(
+      normalized.sourceProfileId,
+      "payload.sourceProfileId"
+    );
+    if (sourceProfileId) {
+      normalized.sourceProfileId = sourceProfileId;
+    } else {
+      delete normalized.sourceProfileId;
+    }
+  }
+  return normalized;
+}
+
+function normalizeDiscoveryFeedbackPayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const normalized = { ...payload };
+  if (Object.prototype.hasOwnProperty.call(normalized, "missionId")) {
+    normalized.missionId = readOptionalUuidString(normalized.missionId, "payload.missionId") ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "candidateId")) {
+    normalized.candidateId =
+      readOptionalUuidString(normalized.candidateId, "payload.candidateId") ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "sourceProfileId")) {
+    normalized.sourceProfileId =
+      readOptionalUuidString(normalized.sourceProfileId, "payload.sourceProfileId") ?? null;
+  }
+  return normalized;
+}
+
+function normalizeDiscoveryReEvaluatePayload(
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const normalized = { ...payload };
+  if (Object.prototype.hasOwnProperty.call(normalized, "missionId")) {
+    normalized.missionId = readOptionalUuidString(normalized.missionId, "payload.missionId") ?? null;
+  }
+  return normalized;
 }
 
 function normalizeDiscoveryClassPayload(payload: Record<string, unknown>): Record<string, unknown> {
@@ -441,7 +501,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.profileUpdate,
     async ({ sdk, pool, token }, args) => {
-      const profileId = readRequiredString(args.profileId, "profileId");
+      const profileId = readRequiredUuidString(args.profileId, "profileId");
       const result = await sdk.updateDiscoveryProfile<Record<string, unknown>>(
         profileId,
         normalizeDiscoveryProfilePayload(readPayload(args))
@@ -469,7 +529,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ sdk, pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const profileId = readRequiredString(args.profileId, "profileId");
+      const profileId = readRequiredUuidString(args.profileId, "profileId");
       const result = await sdk.updateDiscoveryProfile<Record<string, unknown>>(profileId, {
         status: "archived",
       });
@@ -508,7 +568,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.missionUpdate,
     async ({ sdk, pool, token }, args) => {
-      const missionId = readRequiredString(args.missionId, "missionId");
+      const missionId = readRequiredUuidString(args.missionId, "missionId");
       const result = await sdk.updateDiscoveryMission<Record<string, unknown>>(
         missionId,
         prepareDiscoveryMissionPayload(readPayload(args))
@@ -527,7 +587,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.missionRun,
     async ({ sdk, pool, token }, args) => {
-      const missionId = readRequiredString(args.missionId, "missionId");
+      const missionId = readRequiredUuidString(args.missionId, "missionId");
       const payload = args.payload == null ? {} : readPayload(args);
       const result = await sdk.compileDiscoveryMissionGraph<Record<string, unknown>>(
         missionId,
@@ -547,7 +607,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.missionRun,
     async ({ sdk, pool, token }, args) => {
-      const missionId = readRequiredString(args.missionId, "missionId");
+      const missionId = readRequiredUuidString(args.missionId, "missionId");
       const payload = args.payload == null ? {} : readPayload(args);
       const result = await sdk.runDiscoveryMission<Record<string, unknown>>(missionId, {
         ...payload,
@@ -577,7 +637,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ sdk, pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const missionId = readRequiredString(args.missionId, "missionId");
+      const missionId = readRequiredUuidString(args.missionId, "missionId");
       const result = await sdk.updateDiscoveryMission<Record<string, unknown>>(missionId, {
         status: "archived",
       });
@@ -680,7 +740,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallMissionUpdate,
     async ({ sdk, pool, token }, args) => {
-      const recallMissionId = readRequiredString(args.recallMissionId, "recallMissionId");
+      const recallMissionId = readRequiredUuidString(args.recallMissionId, "recallMissionId");
       const payload = normalizeRecallMissionPayload(readPayload(args));
       const result = await sdk.updateDiscoveryRecallMission<Record<string, unknown>>(
         recallMissionId,
@@ -707,7 +767,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
       additionalProperties: false,
     },
     async ({ sdk, pool, token }, args) => {
-      const recallMissionId = readRequiredString(args.recallMissionId, "recallMissionId");
+      const recallMissionId = readRequiredUuidString(args.recallMissionId, "recallMissionId");
       const result = await sdk.requestDiscoveryRecallMissionAcquire<Record<string, unknown>>(
         recallMissionId
       );
@@ -735,7 +795,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ sdk, pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const recallMissionId = readRequiredString(args.recallMissionId, "recallMissionId");
+      const recallMissionId = readRequiredUuidString(args.recallMissionId, "recallMissionId");
       const result = await sdk.updateDiscoveryRecallMission<Record<string, unknown>>(
         recallMissionId,
         {
@@ -758,7 +818,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallCandidateCreate,
     async ({ sdk, pool, token }, args) => {
       const result = await sdk.createDiscoveryRecallCandidate<Record<string, unknown>>(
-        readPayload(args)
+        normalizeRecallCandidateCreatePayload(readPayload(args))
       );
       await writeMcpMutationAudit(pool, token, {
         actionType: "discovery_recall_candidate_created",
@@ -774,7 +834,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallCandidateUpdate,
     async ({ sdk, pool, token }, args) => {
-      const recallCandidateId = readRequiredString(
+      const recallCandidateId = readRequiredUuidString(
         args.recallCandidateId,
         "recallCandidateId"
       );
@@ -796,7 +856,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.recallCandidatePromote,
     async ({ sdk, pool, token }, args) => {
-      const recallCandidateId = readRequiredString(
+      const recallCandidateId = readRequiredUuidString(
         args.recallCandidateId,
         "recallCandidateId"
       );
@@ -839,7 +899,7 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.candidateReview,
     async ({ sdk, pool, token }, args) => {
-      const candidateId = readRequiredString(args.candidateId, "candidateId");
+      const candidateId = readRequiredUuidString(args.candidateId, "candidateId");
       const payload = withActorDefault(readPayload(args), "reviewedBy", token.issuedByUserId);
       const result = await sdk.updateDiscoveryCandidate<Record<string, unknown>>(candidateId, payload);
       await writeMcpMutationAudit(pool, token, {
@@ -856,7 +916,11 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.feedbackCreate,
     async ({ sdk, pool, token }, args) => {
-      const payload = withActorDefault(readPayload(args), "createdBy", token.issuedByUserId);
+      const payload = withActorDefault(
+        normalizeDiscoveryFeedbackPayload(readPayload(args)),
+        "createdBy",
+        token.issuedByUserId
+      );
       const result = await sdk.createDiscoveryFeedback<Record<string, unknown>>(payload);
       await writeMcpMutationAudit(pool, token, {
         actionType: "discovery_feedback_submitted",
@@ -872,7 +936,8 @@ export const DISCOVERY_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.discovery",
     MCP_DISCOVERY_ARGUMENT_SCHEMAS.reEvaluate,
     async ({ sdk, pool, token }, args) => {
-      const payload = args.payload == null ? {} : readPayload(args);
+      const payload =
+        args.payload == null ? {} : normalizeDiscoveryReEvaluatePayload(readPayload(args));
       const result = await sdk.reEvaluateDiscoverySources<Record<string, unknown>>(payload);
       await writeMcpMutationAudit(pool, token, {
         actionType: "discovery_re_evaluation_requested",

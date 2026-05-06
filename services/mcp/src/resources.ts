@@ -1,4 +1,4 @@
-import { listMcpAccessTokens } from "@newsportal/control-plane";
+import { listMcpAccessTokens, summarizeMcpAccessTokens } from "@newsportal/control-plane";
 
 import {
   MCP_SERVER_INSTRUCTIONS,
@@ -680,11 +680,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       ]);
       return {
         dashboardSummary,
-        mcpTokens: {
-          total: tokens.length,
-          active: tokens.filter((token) => token.status === "active").length,
-          revoked: tokens.filter((token) => token.status === "revoked").length,
-        },
+        mcpTokens: summarizeMcpAccessTokens(tokens),
       };
     },
   },

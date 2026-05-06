@@ -16,7 +16,7 @@ import {
   requireDestructiveConfirmation,
   readAliasedRequiredString,
   readOptionalString,
-  readRequiredString,
+  readRequiredUuidString,
   resolveUniqueUuidPrefix,
   type McpToolDefinition
 } from "./shared";
@@ -421,7 +421,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.sequences",
     MCP_SEQUENCE_ARGUMENT_SCHEMAS.update,
     async ({ sdk, pool, token }, args) => {
-      const sequenceId = readRequiredString(args.sequenceId, "sequenceId");
+      const sequenceId = readRequiredUuidString(args.sequenceId, "sequenceId");
       const result = await sdk.updateSequence<Record<string, unknown>>(
         sequenceId,
         normalizeSequencePayload(readPayload(args))
@@ -440,7 +440,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.sequences",
     MCP_SEQUENCE_ARGUMENT_SCHEMAS.run,
     async ({ sdk, pool, token }, args) => {
-      const sequenceId = readRequiredString(args.sequenceId, "sequenceId");
+      const sequenceId = readRequiredUuidString(args.sequenceId, "sequenceId");
       const payload =
         args.payload == null
           ? {}
@@ -478,7 +478,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.sequences",
     MCP_SEQUENCE_ARGUMENT_SCHEMAS.retryRun,
     async ({ sdk, pool, token }, args) => {
-      const runId = readRequiredString(args.runId, "runId");
+      const runId = readRequiredUuidString(args.runId, "runId");
       const payload =
         args.payload == null
           ? {}
@@ -512,7 +512,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.sequences",
     MCP_SEQUENCE_ARGUMENT_SCHEMAS.cancelRun,
     async ({ sdk, pool, token }, args) => {
-      const runId = readRequiredString(args.runId, "runId");
+      const runId = readRequiredUuidString(args.runId, "runId");
       const payload = args.payload == null ? {} : readPayload(args);
       const result = await sdk.cancelSequenceRun<Record<string, unknown>>(runId, payload);
       await writeMcpMutationAudit(pool, token, {
@@ -538,7 +538,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ sdk, pool, token }, args) => {
       requireDestructiveConfirmation(token, args);
-      const sequenceId = readRequiredString(args.sequenceId, "sequenceId");
+      const sequenceId = readRequiredUuidString(args.sequenceId, "sequenceId");
       await assertSequenceCanBeArchivedThroughMcp(pool, sequenceId);
       const result = await sdk.archiveSequence<Record<string, unknown>>(sequenceId);
       await writeMcpMutationAudit(pool, token, {
