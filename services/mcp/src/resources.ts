@@ -208,9 +208,9 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
           guideResource: "newsportal://guide/scenarios/discovery",
           steps: [
             "Read newsportal://discovery/summary and relevant discovery lists first.",
-            "Create or update a profile before missions when reusable policy is needed.",
-            "Run graph or recall workflows, then read back candidates before review or promotion.",
-            "Promote only candidates that are clearly aligned and leave residual evidence when yield is weak.",
+            "Create or update a target, refresh coverage, and inspect gaps before starting runs.",
+            "Run bounded v3 discovery workflows, then read back endpoints, contracts, claims, negative evidence, and provider health before review or promotion.",
+            "Promote only endpoints with valid evidence contracts; keep new sources in probation until contract health proves stable yield.",
           ],
         },
         {
@@ -220,7 +220,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
             "Read newsportal://articles/residuals-summary first to find the dominant downstream-loss buckets.",
             "Inspect one blocker bucket at a time with articles.residuals.list, articles.read, and articles.explain.",
             "Compare the editorial observation with content_items.read/content_items.explain when selected/public truth matters.",
-            "Tune one interest, template, or discovery profile at a time and read the changed entity back after any mutation.",
+            "Tune one interest, template, or discovery target/coverage policy at a time and read the changed entity back after any mutation.",
           ],
         },
         {
@@ -346,53 +346,55 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
   {
     uri: "newsportal://guide/scenarios/discovery",
     name: "guide.scenarios.discovery",
-    description: "Concrete MCP playbook for discovery profiles, missions, recall, promotion, and feedback loops.",
+    description: "Concrete MCP playbook for resilient discovery targets, coverage, endpoints, contracts, claims, provider health, and eval replay.",
     mimeType: "application/json",
     read: async () => ({
       objective:
-        "Use this scenario for source onboarding, discovery mission tuning, recall acquisition, candidate promotion, and post-run review.",
+        "Use this scenario for source discovery, coverage-gap expansion, endpoint review, probation contracts, hidden-signal claims, and post-run review.",
       startWith: [
-        "Read newsportal://discovery/summary first, then inspect the relevant discovery lists and mission/profile state.",
-        "When a reusable sourcing policy is needed, establish or update the profile before starting missions.",
-        "Use prompt discovery.mission.review before compile/run when mission scope, budget, or provider mix is unclear.",
+        "Read newsportal://discovery/summary first, then inspect targets, coverage, endpoints, contracts, claims and provider health.",
+        "Create or update a discovery target before starting runs; coverage gaps should drive hypothesis generation.",
+        "Use prompts discovery.constructive_skeptic.review and discovery.verification_skeptic.review when hypothesis scope, provider mix, or hidden-signal noise is unclear.",
       ],
       recommendedTools: {
         read: [
           "discovery.summary.get",
-          "discovery.profiles.list",
-          "discovery.missions.list",
-          "discovery.recall_missions.list",
-          "discovery.recall_candidates.list",
+          "discovery.targets.list",
+          "discovery.coverage.read",
+          "discovery.runs.list",
+          "discovery.endpoints.list",
+          "discovery.contracts.list",
+          "discovery.claims.list",
+          "discovery.negative_evidence.list",
+          "discovery.provider_health.list",
+          "discovery.eval_runs.list",
         ],
         write: [
-          "discovery.profiles.create",
-          "discovery.profiles.update",
-          "discovery.missions.create",
-          "discovery.missions.compile_graph",
-          "discovery.missions.run",
-          "discovery.recall_missions.create",
-          "discovery.recall_missions.acquire",
-          "discovery.recall_candidates.promote",
-          "discovery.feedback.create",
-          "discovery.recall_candidates.reevaluate",
+          "discovery.targets.create_manual",
+          "discovery.targets.update",
+          "discovery.coverage.refresh",
+          "discovery.runs.start",
+          "discovery.runs.cancel",
+          "discovery.endpoints.promote",
+          "discovery.endpoints.reject",
         ],
       },
       sessionFlow: [
-        "Read the current profile and mission state before creating new discovery work.",
-        "Default to guarded automation when the operator has not explicitly requested manual approval: create or update the profile/classifier policy first, then run profile-backed graph/recall missions so configured thresholds can make safe automatic decisions.",
-        "When auto-promotion or profile thresholds are expected, pass payload.profileId on discovery.missions.create and discovery.recall_missions.create; profile-less graph/recall missions are manual-review-only fallback and should be reported as less automated than the intended default.",
-        "For interactive runs, keep maxHypotheses <= 5 unless the operator explicitly accepts a longer asynchronous run.",
-        "Compile and request mission runs, then inspect sequence run/task state and candidates before reviewing or promoting anything.",
-        "Use feedback and re-evaluation when the initial candidate set is noisy instead of forcing promotion; use manual review only for ambiguous candidates or when evidence/guardrails block automation.",
+        "Read target coverage before creating new discovery work; missing roles and weak sources determine the run kind.",
+        "Run bounded discovery with provider capabilities, negative-evidence cooldowns, diversity budgets, and provider-health circuit breakers.",
+        "Review endpoints through evidence, why-found, why-not-promoted, missing evidence, duplicate identity and provider compliance, not score alone.",
+        "Promoted direct sources enter Source Evidence Contract probation and contribute partial coverage until contract evaluation passes.",
+        "Hidden/social evidence must become claim-backed and control-compared before it can generate strong direct-source follow-up hypotheses.",
+        "Threshold, prompt, or policy changes require replay eval proof before reporting them as improvements.",
       ],
       destructiveCautions: [
-        "Archive or pause missions only after preserving enough evidence to explain the operator decision.",
-        "Promote only candidates that are clearly aligned with the bounded source goal; weak yield should be recorded honestly.",
+        "Do not apply the destructive discovery rebuild migration or remove old runtime modules without explicit operator approval and migration smoke/read-back proof.",
+        "Do not auto-promote social, API, email or website sources unless provider policy and operator config explicitly allow it.",
       ],
       verifyAfterWrite: [
-        "Read back the updated mission/profile state after every mutation.",
-        "After discovery.missions.run, treat the result as queued/running until operator.report.verify shows the sequence run completed or failed.",
-        "After promotion, confirm the resulting channel through channels.read or newsportal://channels.",
+        "Read back the updated target, run, endpoint, contract or claim after every mutation.",
+        "After discovery.runs.start, treat the result as queued/running until operator.report.verify or run read-back shows completion/failure.",
+        "After promotion, confirm the resulting source_channel, probation contract and partial coverage contribution.",
         "Before the final discovery report, call operator.report.verify with reportKind=discovery_run.",
       ],
     }),
@@ -478,10 +480,10 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     mimeType: "application/json",
     read: async () => ({
       objective:
-        "Use this scenario for source-channel onboarding and maintenance, including recall promotion follow-up, metadata correction, and bounded cleanup.",
+        "Use this scenario for source-channel onboarding and maintenance, including discovery v3 endpoint promotion follow-up, metadata correction, and bounded cleanup.",
       startWith: [
         "Read newsportal://channels first to check whether the source already exists or overlaps with an existing channel.",
-        "When a channel comes from discovery promotion, preserve the candidate evidence before making manual edits.",
+        "When a channel comes from discovery promotion, preserve endpoint evidence and the source evidence contract before making manual edits.",
       ],
       recommendedTools: {
         read: [
@@ -545,13 +547,14 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         writeFollowThrough: [
           "system_interests.update",
           "llm_templates.update",
-          "discovery.profiles.update",
+          "discovery.targets.update",
+          "discovery.coverage.refresh",
         ],
       },
       sessionFlow: [
         "Diagnose residual buckets before drilling into single examples.",
         "Separate technical filtering, semantic rejection, gray-zone hold, and review-pending cases before proposing config changes.",
-        "Tune one interest, template, or discovery profile at a time and keep recommendations bounded to repeated evidence patterns.",
+        "Tune one interest, template, or discovery target policy at a time and keep recommendations bounded to repeated evidence patterns.",
         "After any mutation outside this read-first flow, re-read the affected entity through MCP before making the next recommendation.",
       ],
       invariants: [
@@ -621,7 +624,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
           "channels.read",
           "system_interests.read",
           "llm_templates.read",
-          "discovery.missions.read",
+          "discovery.targets.read",
         ],
         write: [
           "sequences.archive",
@@ -697,6 +700,54 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     description: "Current discovery summary payload.",
     mimeType: "application/json",
     read: async ({ sdk }) => sdk.getDiscoverySummary<Record<string, unknown>>(),
+  },
+  {
+    uri: "newsportal://discovery/targets",
+    name: "discovery.targets",
+    description: "First page of resilient discovery targets.",
+    mimeType: "application/json",
+    read: async ({ sdk }) =>
+      sdk.listDiscoveryTargets<Record<string, unknown>>({ page: 1, pageSize: 20 }),
+  },
+  {
+    uri: "newsportal://discovery/source-evidence-contracts",
+    name: "discovery.source_evidence_contracts",
+    description: "First page of Source Evidence Contracts and probation health.",
+    mimeType: "application/json",
+    read: async ({ sdk }) =>
+      sdk.listDiscoveryContracts<Record<string, unknown>>({ page: 1, pageSize: 20 }),
+  },
+  {
+    uri: "newsportal://discovery/negative-evidence",
+    name: "discovery.negative_evidence",
+    description: "First page of negative evidence cooldowns.",
+    mimeType: "application/json",
+    read: async ({ sdk }) =>
+      sdk.listDiscoveryNegativeEvidence<Record<string, unknown>>({ page: 1, pageSize: 20 }),
+  },
+  {
+    uri: "newsportal://discovery/claims",
+    name: "discovery.claims",
+    description: "First page of hidden-signal claims and control-comparison state.",
+    mimeType: "application/json",
+    read: async ({ sdk }) =>
+      sdk.listDiscoveryClaims<Record<string, unknown>>({ page: 1, pageSize: 20 }),
+  },
+  {
+    uri: "newsportal://discovery/provider-health",
+    name: "discovery.provider_health",
+    description: "Provider circuit-breaker and cooldown state.",
+    mimeType: "application/json",
+    read: async ({ sdk }) =>
+      sdk.listDiscoveryProviderHealth<Record<string, unknown>>({ page: 1, pageSize: 50 }),
+  },
+  {
+    uri: "newsportal://discovery/eval-suites",
+    name: "discovery.eval_suites",
+    description: "Replay eval suite inventory for discovery threshold/prompt/policy calibration.",
+    mimeType: "application/json",
+    read: async ({ sdk }) =>
+      sdk.listDiscoveryEvalSuites<Record<string, unknown>>({ page: 1, pageSize: 20 }),
   },
   {
     uri: "newsportal://system-interests",

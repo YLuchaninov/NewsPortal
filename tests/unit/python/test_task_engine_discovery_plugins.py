@@ -744,46 +744,25 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
 
         modules = {item["module"] for item in registry.list_all()}
 
-        self.assertIn("discovery.plan_hypotheses", modules)
-        self.assertIn("discovery.execute_hypotheses", modules)
-        self.assertIn("discovery.evaluate_results", modules)
-        self.assertIn("discovery.re_evaluate_sources", modules)
+        self.assertIn("discovery.v3.bootstrap_targets", modules)
+        self.assertIn("discovery.v3.refresh_coverage", modules)
+        self.assertIn("discovery.v3.run", modules)
+        self.assertIn("discovery.v3.expand_existing_source", modules)
 
-    async def test_executor_short_circuits_orchestrator_sequence_when_discovery_runtime_disabled(self) -> None:
+    async def test_executor_fails_v3_run_without_run_id(self) -> None:
         executor, repository = self._build_executor(
             task_graph=[
                 {
-                    "key": "plan",
-                    "module": "discovery.plan_hypotheses",
-                    "options": {},
-                },
-                {
-                    "key": "execute",
-                    "module": "discovery.execute_hypotheses",
+                    "key": "run",
+                    "module": "discovery.v3.run",
                     "options": {},
                 },
             ],
-            initial_context={"mission_id": "mission-1"},
+            initial_context={},
         )
 
-        with patch(
-            "services.workers.app.task_engine.orchestrator_plugins.discovery_enabled",
-            return_value=False,
-        ):
-            result = await executor.execute_run("run-1")
-
-        self.assertEqual(result["status"], "completed")
-        self.assertTrue(result["stoppedEarly"])
-        self.assertEqual(repository.runs["run-1"].status, "completed")
-        self.assertFalse(repository.runs["run-1"].context_json["discovery_runtime_enabled"])
-        self.assertTrue(repository.runs["run-1"].context_json["discovery_runtime_skipped"])
-        self.assertEqual(
-            repository.runs["run-1"].context_json["discovery_runtime_phase"],
-            "plan_hypotheses",
-        )
-        self.assertEqual(repository.task_runs[0]["status"], "completed")
-        self.assertEqual(repository.task_runs[1]["status"], "skipped")
-        self.assertEqual(repository.task_runs[1]["output_json"]["reason"], "sequence_stopped")
+        with self.assertRaisesRegex(ValueError, "run_id is required"):
+            await executor.execute_run("run-1")
 
     async def test_executor_runs_source_discovery_sequence_end_to_end(self) -> None:
         executor, repository = self._build_executor(

@@ -136,17 +136,17 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
   discovery: {
     domain: "discovery",
     title: "Discovery",
-    lifecycle: ["profile", "mission", "graph compile", "run/acquire", "candidate review", "promotion"],
-    keyMetrics: ["active profiles/missions", "candidate statuses", "promotion readiness", "run status/cost"],
+    lifecycle: ["target", "coverage", "hypotheses", "evidence", "endpoint/claim review", "contract probation", "coverage refresh"],
+    keyMetrics: ["active targets/runs", "coverage gaps", "endpoint actions", "contract health", "claim confidence", "provider health"],
     normalStates: [
-      "Default operation is guarded automation: profile-backed missions can use configured thresholds, while manual review is fallback unless explicitly requested.",
-      "Rejected recall candidates can be correct when probes show captcha/login/unsupported kind.",
-      "Promotable candidates should still be verified before channel creation.",
+      "Newly promoted direct sources count only as probation coverage until the Source Evidence Contract passes.",
+      "Hidden/social signals remain claims or monitor-only evidence until independent support and control comparison justify direct-source follow-up.",
+      "Provider errors should update provider health/circuit breakers rather than being interpreted as bad hypotheses.",
     ],
-    commonSymptoms: ["low yield", "unsupported website kind", "candidate promotion blocked"],
-    commonCauses: ["profile too narrow", "site requires browser/login", "seed domains are marketplaces/blogs", "budget too low"],
-    tuningLevers: ["preferred domains", "positive/negative keywords", "supported website kinds", "recall thresholds"],
-    readBackChecks: ["discovery.summary.get", "discovery.recall_candidates.list", "operator.report.verify"],
+    commonSymptoms: ["coverage stuck", "too many rejected endpoints", "contract probation failures", "hidden signal noise", "provider degraded"],
+    commonCauses: ["query diversity collapsed", "negative evidence cooldown ignored", "source identity duplicates", "provider auth/rate limits", "missing control comparison"],
+    tuningLevers: ["coverage policy", "diversity budget", "provider capability card", "Source Evidence Contract", "replay eval thresholds"],
+    readBackChecks: ["discovery.summary.get", "discovery.targets.list", "discovery.endpoints.list", "discovery.contracts.list", "operator.report.verify"],
   },
   sequences: {
     domain: "sequences",
@@ -434,15 +434,17 @@ export async function buildSystemHealth(
     countQuery(
       pool,
       `
-        select kind, status, count(*)::int as count
+          select kind, status, count(*)::int as count
         from (
-          select 'profile' as kind, status from discovery_policy_profiles
+          select 'target' as kind, status from discovery_targets
           union all
-          select 'mission' as kind, status from discovery_missions
+          select 'run' as kind, status from discovery_runs
           union all
-          select 'recall_mission' as kind, status from discovery_recall_missions
+          select 'endpoint' as kind, status from discovery_source_endpoints
           union all
-          select 'recall_candidate' as kind, status from discovery_recall_candidates
+          select 'contract' as kind, status from discovery_source_contracts
+          union all
+          select 'claim' as kind, status from discovery_claims
         ) state
         group by kind, status
         order by kind, status
@@ -643,13 +645,13 @@ function buildIssuesFromHealth(input: Record<string, unknown>) {
   }
 
   const weakDiscovery = discoveryRows
-    .filter((row) => row.kind === "recall_candidate" && ["rejected", "duplicate"].includes(String(row.status)))
+    .filter((row) => row.kind === "endpoint" && ["rejected", "duplicate"].includes(String(row.status)))
     .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
   if (weakDiscovery > 0) {
     issues.push(
-      issue("info", "discovery", "Discovery has rejected or duplicate recall candidates.", { weakDiscovery }, [
-        "Review rejected reasons before changing profile thresholds.",
-        "Rejected candidates may be correct for captcha/login/unsupported kind cases.",
+      issue("info", "discovery", "Discovery has rejected or duplicate endpoints.", { weakDiscovery }, [
+        "Review rejected reasons before changing target coverage policy or thresholds.",
+        "Rejected endpoints may be correct for captcha/login/unsupported kind, duplicate identity, or missing-contract cases.",
       ])
     );
   }
@@ -977,15 +979,16 @@ function buildTuningRecommendations(
   }
   if (domain === "discovery" || objective === "stabilize_discovery") {
     base.riskLevel = "medium";
-    base.expectedEffect = "Improve candidate yield without forcing weak or unsupported promotions.";
+    base.expectedEffect = "Improve coverage and endpoint quality without forcing weak promotions or noisy hidden signals.";
     base.recommendedChanges.push({
-      target: "discovery profile/recall policy",
-      action: "Adjust preferred domains, positive/negative keywords, or supported website kinds from rejected-candidate evidence.",
+      target: "discovery coverage/provider/contract policy",
+      action: "Inspect gaps, endpoints, contracts, negative evidence and provider health before changing thresholds; prove threshold changes through replay eval.",
       reason: residualBucket ?? "discovery yield needs tuning",
     });
     base.suggestedToolCalls.push(
-      { toolName: "discovery.recall_candidates.list", argumentsTemplate: { status: "rejected" } },
-      { toolName: "discovery.profiles.update", argumentsTemplate: { profileId: "<profileId>", payload: {} } }
+      { toolName: "discovery.endpoints.list", argumentsTemplate: { status: "rejected" } },
+      { toolName: "discovery.negative_evidence.list", argumentsTemplate: {} },
+      { toolName: "discovery.eval_runs.list", argumentsTemplate: {} }
     );
     return base;
   }
@@ -1105,14 +1108,14 @@ function effectQueryForDomain(domain: OperatingDomain) {
   }
   if (domain === "discovery") {
     return {
-      metric: "recall candidate statuses",
+      metric: "discovery endpoint statuses",
       sql: `
-        select provider_type as "providerType", status, count(*)::int as count
-        from discovery_recall_candidates
+        select provider_type as "providerType", status, recommended_action as "recommendedAction", count(*)::int as count
+        from discovery_source_endpoints
         where created_at >= now() - ($1::int * interval '1 hour')
           and created_at < now() - ($2::int * interval '1 hour')
-        group by provider_type, status
-        order by provider_type, status
+        group by provider_type, status, recommended_action
+        order by provider_type, status, recommended_action
       `,
     };
   }
@@ -1246,7 +1249,7 @@ export function affectedOperationalResourcesForTool(toolName: string): string[] 
 }
 
 export function nextReadBackForTool(toolName: string): Record<string, unknown> {
-  if (toolName === "discovery.missions.run") {
+  if (toolName === "discovery.runs.start") {
     return {
       nextReadBack: {
         resources: [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"],
@@ -1255,21 +1258,21 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
             name: "operator.report.verify",
             arguments: {
               reportKind: "discovery_run",
-              entityIds: { missionIds: ["<missionId>"], runIds: ["<runId-from-response>"] },
+              entityIds: { targetIds: ["<targetId>"], runIds: ["<runId-from-response>"] },
               includeSamples: true,
             },
             verify:
-              "Treat discovery.missions.run as a run request. Poll until the sequence run is completed or failed; inspect task runs, hypothesis status counts, and candidate status counts before reporting outcomes.",
+              "Treat discovery.runs.start as asynchronous discovery. Poll until the run is completed or failed; inspect coverage, hypotheses, endpoints, contracts, claims, negative evidence and provider health before reporting outcomes.",
           },
           {
-            name: "discovery.candidates.list",
+            name: "discovery.endpoints.list",
             arguments: { page: 1, pageSize: 20 },
             verify:
-              "Use candidates as noisy evidence for review/promotion; rejected or low-score candidates are not a successful source discovery outcome.",
+              "Use endpoints plus why-found/why-not-promoted/missing-evidence fields as review evidence; rejected or low-score endpoints are not a successful source discovery outcome.",
           },
         ],
         note:
-          "Discovery runs are asynchronous and may execute child search/probe sequences. Do not report completed discovery from the mutation response alone. NewsPortal is guarded-automation-first: if the operator did not ask for manual approval, prefer profile-backed graph/recall missions and configured thresholds. If the graph or recall mission has no profileId/applied policy, candidates are manual-review-only fallback and auto-promotion/recallPolicy thresholds should not be reported as configured.",
+          "Discovery runs are asynchronous and may execute child search/probe/provider work. Do not report completed discovery from the mutation response alone. New sources remain probation until contract evaluation proves stable yield.",
       },
     };
   }

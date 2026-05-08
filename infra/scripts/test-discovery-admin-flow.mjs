@@ -15,7 +15,6 @@ import {
   selectAdminEmail,
   sendRequest,
   sqlLiteral,
-  waitFor,
   waitForHttpHealth,
 } from "./lib/compose-proof-testkit.mjs";
 
@@ -47,6 +46,268 @@ async function ensureComposeStack() {
   ]);
 }
 
+function expectId(value, label) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    throw new Error(`${label} did not return an id.`);
+  }
+  return normalized;
+}
+
+async function assertStatus(url, expected, { cookie } = {}) {
+  const response = await sendRequest(url, {
+    headers: {
+      Accept: "text/html",
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+  });
+  if (response.status !== expected) {
+    throw new Error(`Expected ${url} to return ${expected}, got ${response.status}.`);
+  }
+}
+
+function seedV3GuardRows(env, { runId, targetId }) {
+  const endpointUrl = `https://v3-${runId}.example.test/feed.xml`;
+  const targetTitle = `V3 acceptance target ${runId}`;
+  const claimTitle = `Operators need resilient discovery ${runId}`;
+  const evalSuiteName = `Discovery replay suite ${runId}`;
+  const queryText = `"resilient discovery" ${runId}`;
+
+  const endpointId = queryPostgres(
+    env,
+    `
+    insert into discovery_source_endpoints (
+      target_id,
+      provider_id,
+      provider_type,
+      canonical_domain,
+      homepage_url,
+      endpoint_url,
+      normalized_endpoint_url,
+      endpoint_kind,
+      source_role,
+      signal_mode,
+      title,
+      description,
+      evidence_json,
+      samples_json,
+      extraction_config_json,
+      why_found_json,
+      why_not_promoted_json,
+      missing_evidence_json,
+      next_best_action,
+      interest_fit_score,
+      evidence_score,
+      quality_score,
+      yield_score,
+      freshness_score,
+      novelty_score,
+      extraction_ready_score,
+      coverage_gap_score,
+      compliance_score,
+      adversarial_confidence_score,
+      total_score,
+      status,
+      recommended_action
+    )
+    values (
+      ${sqlLiteral(targetId)}::uuid,
+      'rss',
+      'rss',
+      ${sqlLiteral(`v3-${runId}.example.test`)},
+      ${sqlLiteral(`https://v3-${runId}.example.test`)},
+      ${sqlLiteral(endpointUrl)},
+      ${sqlLiteral(endpointUrl)},
+      'rss_feed',
+      'technical_change',
+      'direct',
+      ${sqlLiteral(`V3 RSS endpoint ${runId}`)},
+      'Admin acceptance endpoint',
+      '{"rss":{"isValid":true,"sampleEntryCount":4,"recentEntryCount":3,"hasDates":true}}'::jsonb,
+      '[{"title":"Resilient discovery release note"}]'::jsonb,
+      '{"expectedDataShape":"technical_update"}'::jsonb,
+      '["matches missing technical_change role","valid RSS probe evidence"]'::jsonb,
+      '["manual review required before operator promotion"]'::jsonb,
+      '["probation contract must pass before strong coverage"]'::jsonb,
+      'promote_endpoint',
+      0.82,
+      0.84,
+      0.76,
+      0.70,
+      0.74,
+      1.00,
+      0.92,
+      0.86,
+      0.98,
+      0.75,
+      0.84,
+      'manual_review',
+      'manual_promote'
+    )
+    returning endpoint_id::text
+    `
+  );
+
+  const negativeEvidenceId = queryPostgres(
+    env,
+    `
+    insert into discovery_negative_evidence (
+      target_id,
+      evidence_kind,
+      provider_id,
+      query_text,
+      source_role,
+      signal_mode,
+      failure_mode,
+      severity,
+      details_json,
+      cooldown_until
+    )
+    values (
+      ${sqlLiteral(targetId)}::uuid,
+      'search_result',
+      'web_search',
+      ${sqlLiteral(queryText)},
+      'industry_niche',
+      'direct',
+      'seo_noise',
+      0.70,
+      '{"why":"acceptance cooldown proof"}'::jsonb,
+      now() + interval '1 hour'
+    )
+    returning negative_evidence_id::text
+    `
+  );
+
+  queryPostgres(
+    env,
+    `
+    insert into discovery_claims (
+      target_id,
+      claim_type,
+      signal_mode,
+      title,
+      normalized_claim,
+      summary,
+      support_evidence_count,
+      independent_source_count,
+      unique_author_count,
+      control_query_text,
+      control_signal_rate,
+      target_signal_rate,
+      specificity_score,
+      confidence_score,
+      risk_score,
+      novelty_score,
+      status
+    )
+    values (
+      ${sqlLiteral(targetId)}::uuid,
+      'need',
+      'hidden',
+      ${sqlLiteral(claimTitle)},
+      ${sqlLiteral(`operators need resilient discovery ${runId}`)},
+      'Claim-backed hidden-signal acceptance row with control comparison.',
+      12,
+      4,
+      8,
+      '"generic discovery need"',
+      0.20,
+      0.58,
+      2.90,
+      0.78,
+      0.18,
+      0.66,
+      'confirmed'
+    )
+    `
+  );
+
+  queryPostgres(
+    env,
+    `
+    insert into discovery_provider_health (
+      provider_id,
+      status,
+      success_rate,
+      error_rate,
+      rate_limit_score,
+      auth_health_score,
+      latency_score,
+      last_error_at,
+      last_error_kind,
+      cooldown_until,
+      metrics_json
+    )
+    values (
+      'web_search',
+      'auth_failed',
+      0.30,
+      0.70,
+      1.00,
+      0.00,
+      0.75,
+      now(),
+      'auth_failed',
+      now() + interval '1 hour',
+      '{"acceptance":true}'::jsonb
+    )
+    on conflict (provider_id) do update set
+      status = excluded.status,
+      success_rate = excluded.success_rate,
+      error_rate = excluded.error_rate,
+      auth_health_score = excluded.auth_health_score,
+      last_error_at = excluded.last_error_at,
+      last_error_kind = excluded.last_error_kind,
+      cooldown_until = excluded.cooldown_until,
+      metrics_json = excluded.metrics_json,
+      updated_at = now()
+    `
+  );
+
+  const evalSuiteId = queryPostgres(
+    env,
+    `
+    with suite as (
+      insert into discovery_eval_suites (name, description, status)
+      values (
+        ${sqlLiteral(evalSuiteName)},
+        'Admin acceptance replay suite',
+        'active'
+      )
+      returning eval_suite_id
+    ),
+    case_row as (
+      insert into discovery_eval_cases (
+        eval_suite_id,
+        target_json,
+        provider_fixtures_json,
+        expected_sources_json,
+        expected_rejects_json,
+        expected_hidden_claims_json
+      )
+      select
+        eval_suite_id,
+        ${sqlLiteral(JSON.stringify({ title: targetTitle }))}::jsonb,
+        ${sqlLiteral(JSON.stringify({
+          sources: [{ normalized_endpoint_url: endpointUrl }],
+          rejects: [{ normalized_endpoint_url: `https://junk-${runId}.example.test` }],
+          hiddenClaims: [{ normalized_claim: `operators need resilient discovery ${runId}` }],
+          cost: 0.04,
+        }))}::jsonb,
+        ${sqlLiteral(JSON.stringify([{ normalized_endpoint_url: endpointUrl }]))}::jsonb,
+        ${sqlLiteral(JSON.stringify([{ normalized_endpoint_url: `https://junk-${runId}.example.test` }]))}::jsonb,
+        ${sqlLiteral(JSON.stringify([{ normalized_claim: `operators need resilient discovery ${runId}` }]))}::jsonb
+      from suite
+      returning eval_suite_id
+    )
+    select eval_suite_id::text from case_row
+    `
+  );
+
+  return { endpointId, evalSuiteId, negativeEvidenceId };
+}
+
 async function main() {
   const env = await readEnvFile(".env.dev");
   const firebaseApiKey = requireConfigured(env, "FIREBASE_WEB_API_KEY", {
@@ -60,16 +321,7 @@ async function main() {
   const adminPassword = `NewsPortal!${runId}`;
   const adminBaseUrl = "http://127.0.0.1:4322";
   const apiBaseUrl = "http://127.0.0.1:8000";
-  const discoveryPath = "/discovery";
 
-  let candidateId = "";
-  let sourceProfileId;
-  let recallCandidateId;
-  let recallMissionId;
-  let profileId;
-  let deletableProfileId = "";
-  let deletableMissionId = "";
-  let deletableClassKey = "";
   let adminCreated = false;
 
   try {
@@ -81,7 +333,7 @@ async function main() {
     const signIn = await postForm(`${adminBaseUrl}/bff/auth/sign-in`, {
       email: adminEmail,
       password: adminPassword,
-      next: discoveryPath,
+      next: "/discovery",
     });
     const adminCookie = signIn.cookie;
     if (!adminCookie) {
@@ -92,906 +344,179 @@ async function main() {
       throw new Error("Discovery admin sign-in did not create an admin session.");
     }
 
-    log("Preflighting the discovery surface.");
+    log("Creating a v3 discovery target through the API surface.");
+    const target = await postJson(`${apiBaseUrl}/maintenance/discovery/targets`, {
+      originKind: "manual_prompt",
+      title: `V3 acceptance target ${runId}`,
+      description: "Admin acceptance target for resilient discovery cutover.",
+      seedTopics: ["resilient discovery", "source contracts"],
+      seedEntities: ["NewsPortal"],
+      seedGeos: ["EU"],
+      seedLanguages: ["en"],
+      graphJson: {
+        coreTopic: "resilient discovery",
+        sourceRoleTargets: {
+          technical_change: { min: 1, target: 2 },
+          social_pain_signal: { min: 1, target: 2 },
+        },
+      },
+      createdBy: "discovery-admin-compose",
+    });
+    const targetId = expectId(target.json?.target_id, "Discovery target creation");
+
+    const createdRun = await postJson(`${apiBaseUrl}/maintenance/discovery/runs`, {
+      targetId,
+      runKind: "manual",
+      triggerKind: "api",
+      maxDepth: 1,
+      maxHypotheses: 4,
+      maxSearchResults: 4,
+      maxDomains: 4,
+      maxEndpoints: 4,
+      createdBy: "discovery-admin-compose",
+    });
+    expectId(createdRun.json?.run_id, "Discovery run creation");
+
+    await postJson(`${apiBaseUrl}/maintenance/discovery/targets/${targetId}/refresh-coverage`, {});
+
+    log("Seeding v3 endpoint, claim, negative evidence, provider health and eval rows.");
+    const { endpointId, evalSuiteId, negativeEvidenceId } = seedV3GuardRows(env, {
+      runId,
+      targetId,
+    });
+
+    log("Exercising v3 guard actions.");
+    await postJson(
+      `${apiBaseUrl}/maintenance/discovery/endpoints/${encodeURIComponent(endpointId)}/promote`,
+      {
+        reviewedBy: "discovery-admin-compose",
+        reason: "acceptance promotion proof",
+        tags: ["acceptance", "discovery-v3"],
+      }
+    );
+    const contractId = expectId(
+      queryPostgres(
+        env,
+        `
+        select contract_id::text
+        from discovery_source_contracts
+        where endpoint_id = ${sqlLiteral(endpointId)}::uuid
+        order by created_at desc
+        limit 1
+        `
+      ),
+      "Endpoint promotion contract lookup"
+    );
+
+    const evaluated = await postJson(
+      `${apiBaseUrl}/maintenance/discovery/contracts/${encodeURIComponent(contractId)}/evaluate`,
+      {
+        evaluatedBy: "discovery-admin-compose",
+        metrics: {
+          successful_fetch_count: 3,
+          useful_item_count: 4,
+          duplicate_rate: 0.10,
+          topic_fit_score: 0.78,
+          extraction_success_rate: 0.92,
+          recent_item_count: 3,
+          last_success_age_days: 1,
+        },
+      }
+    );
+    if (String(evaluated.json?.status ?? "") !== "active") {
+      throw new Error("Contract evaluation did not promote the source contract to active.");
+    }
+
+    await postJson(
+      `${apiBaseUrl}/maintenance/discovery/negative-evidence/${encodeURIComponent(negativeEvidenceId)}/clear-cooldown`,
+      {}
+    );
+
+    await postJson(`${apiBaseUrl}/maintenance/discovery/providers/web_search/repair`, {
+      repairKind: "repair_provider_auth",
+      requestedBy: "discovery-admin-compose",
+      reason: "acceptance circuit-breaker repair proof",
+    });
+
+    const evalRun = await postJson(
+      `${apiBaseUrl}/maintenance/discovery/eval-suites/${encodeURIComponent(evalSuiteId)}/run`,
+      {
+        requestedBy: "discovery-admin-compose",
+        configJson: { acceptance: true },
+      }
+    );
+    expectId(evalRun.json?.eval_run_id, "Eval suite run");
+
+    log("Verifying v3 API read surfaces.");
+    for (const path of [
+      "/maintenance/discovery/targets",
+      "/maintenance/discovery/runs",
+      "/maintenance/discovery/endpoints",
+      "/maintenance/discovery/contracts",
+      "/maintenance/discovery/claims",
+      "/maintenance/discovery/negative-evidence",
+      "/maintenance/discovery/provider-health",
+      "/maintenance/discovery/eval-suites",
+      "/maintenance/discovery/eval-runs",
+    ]) {
+      await fetchJson(`${apiBaseUrl}${path}`);
+    }
+
+    for (const legacyPath of [
+      "/maintenance/discovery/missions",
+      "/maintenance/discovery/candidates",
+      "/maintenance/discovery/recall-candidates",
+      "/maintenance/discovery/source-profiles",
+    ]) {
+      const response = await sendRequest(`${apiBaseUrl}${legacyPath}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (response.status !== 404 && response.status !== 405) {
+        throw new Error(`Legacy discovery API path ${legacyPath} is still reachable (${response.status}).`);
+      }
+    }
+
+    log("Verifying the v3 admin workspace.");
     await assertHtmlContains(
       `${adminBaseUrl}/discovery`,
       [
-        "Adaptive Discovery Agent",
-        "Dual-path discovery control plane",
-        "Dashboard",
-        "Profiles",
-        "Missions",
-        "Recall",
+        "Resilient Discovery",
+        "Coverage-driven source acquisition",
+        `V3 acceptance target ${runId}`,
+        `https://v3-${runId}.example.test/feed.xml`,
+        "Why found",
+        "Why not promoted",
+        "Missing evidence",
+        "Source Evidence Contracts",
+        "technical_change",
+        "Hidden Claims",
+        `Operators need resilient discovery ${runId}`,
+        "Negative Evidence",
+        `resilient discovery&quot; ${runId}`,
+        "Provider Health",
+        "web_search",
+        "Replay Eval Suites",
+        `Discovery replay suite ${runId}`,
       ],
       { cookie: adminCookie }
     );
 
-    const createProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_profile",
-      redirectTo: `${discoveryPath}?tab=profiles`,
-      profileKey: `acceptance_profile_${runId}`,
-      displayName: `Acceptance profile ${runId}`,
-      description: "Admin acceptance profile",
-      status: "active",
-      graphProviderTypes: "rss,website",
-      graphSupportedWebsiteKinds: "editorial\nlisting",
-      graphPreferredDomains: `discovery-${runId}.example.test`,
-      graphPositiveKeywords: "discovery\ncandidate",
-      graphPreferredTactics: "acceptance_review",
-      graphMinRssReviewScore: "0.70",
-      graphMinWebsiteReviewScore: "0.80",
-      recallProviderTypes: "rss,website",
-      recallSupportedWebsiteKinds: "editorial\nprocurement_portal",
-      recallPreferredDomains: `recall-${runId}.example.test`,
-      recallPositiveKeywords: "recall\ncandidate",
-      recallPreferredTactics: "acceptance_manual",
-      recallMinPromotionScore: "0.60",
-      benchmarkDomains: `discovery-${runId}.example.test\nrecall-${runId}.example.test`,
-      benchmarkTitleKeywords: "acceptance",
-      benchmarkTacticKeywords: "acceptance_review",
-    }, { cookie: adminCookie });
-    profileId = String(createProfile.json?.profile_id ?? "");
-    if (!profileId) {
-      throw new Error("Discovery profile creation did not return a profile_id.");
-    }
-    const deleteProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_profile",
-      redirectTo: `${discoveryPath}?tab=profiles`,
-      profileKey: `delete_profile_${runId}`,
-      displayName: `Disposable profile ${runId}`,
-      description: "Delete-path profile",
-      status: "draft",
-      graphProviderTypes: "rss,website",
-      graphSupportedWebsiteKinds: "editorial",
-      recallProviderTypes: "rss,website",
-      recallSupportedWebsiteKinds: "editorial",
-    }, { cookie: adminCookie });
-    deletableProfileId = String(deleteProfile.json?.profile_id ?? "");
-    if (!deletableProfileId) {
-      throw new Error("Disposable discovery profile creation did not return a profile_id.");
+    for (const oldPath of [
+      "/discovery/missions",
+      "/discovery/candidates",
+      "/discovery/recall",
+      "/discovery/profiles",
+      "/discovery/sources",
+    ]) {
+      await assertStatus(`${adminBaseUrl}${oldPath}`, 404, { cookie: adminCookie });
     }
 
-    const missionTitle = `Discovery mission ${runId}`;
-    const createMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      title: missionTitle,
-      description: "Admin acceptance mission",
-      seedTopics: "EU AI oversight\nBrussels",
-      seedLanguages: "en",
-      seedRegions: "EU",
-      targetProviderTypes: "rss,website",
-      maxHypotheses: "4",
-      maxSources: "6",
-      budgetCents: "400",
-      priority: "2",
-      profileId,
-      interestGraph: '{"core_topic":"EU AI oversight","subtopics":["policy","regulation"]}',
-    }, { cookie: adminCookie });
-    const missionId = String(createMission.json?.mission_id ?? "");
-    if (!missionId) {
-      throw new Error("Discovery mission creation did not return a mission_id.");
-    }
-
-    const deleteMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      title: `Disposable mission ${runId}`,
-      description: "Delete-path mission",
-      seedTopics: "Disposable mission",
-      seedLanguages: "en",
-      seedRegions: "EU",
-      targetProviderTypes: "rss",
-      maxHypotheses: "2",
-      maxSources: "2",
-      budgetCents: "0",
-      priority: "0",
-    }, { cookie: adminCookie });
-    deletableMissionId = String(deleteMission.json?.mission_id ?? "");
-    if (!deletableMissionId) {
-      throw new Error("Deletable discovery mission creation did not return a mission_id.");
-    }
-
-    const classKey = `acceptance_${runId}`;
-    const createClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_class",
-      redirectTo: `${discoveryPath}?tab=classes`,
-      classKey,
-      displayName: `Acceptance class ${runId}`,
-      description: "Admin acceptance class",
-      status: "draft",
-      generationBackend: "graph_seed_only",
-      defaultProviderTypes: "rss,website",
-      maxPerMission: "2",
-      sortOrder: "7",
-      seedRulesJson: '{"tactics":["acceptance_seed"]}',
-      configJson: '{"notes":"acceptance"}',
-    }, { cookie: adminCookie });
-    if (String(createClass.json?.class_key ?? "") !== classKey) {
-      throw new Error("Discovery class creation did not return the expected class_key.");
-    }
-
-    deletableClassKey = `delete_${runId}`;
-    const deleteClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_class",
-      redirectTo: `${discoveryPath}?tab=classes`,
-      classKey: deletableClassKey,
-      displayName: `Disposable class ${runId}`,
-      description: "Delete-path class",
-      status: "draft",
-      generationBackend: "graph_seed_only",
-      defaultProviderTypes: "rss",
-      maxPerMission: "1",
-      sortOrder: "99",
-      seedRulesJson: '{"tactics":["delete_path"]}',
-      configJson: '{"notes":"delete path"}',
-    }, { cookie: adminCookie });
-    if (String(deleteClass.json?.class_key ?? "") !== deletableClassKey) {
-      throw new Error("Deletable discovery class creation did not return the expected class_key.");
-    }
-
-    log("Updating the discovery class through the admin surface.");
-    const updateClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "update_class",
-      redirectTo: `${discoveryPath}?tab=classes`,
-      classKey,
-      status: "active",
-      sortOrder: "9",
-      maxPerMission: "3",
-    }, { cookie: adminCookie });
-    if (String(updateClass.json?.status ?? "") !== "active") {
-      throw new Error("Discovery class update did not persist the active status.");
-    }
-
-    log("Compiling the mission graph through the admin surface.");
-    const compiledMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "compile_graph",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      missionId,
-    }, { cookie: adminCookie });
-    if (String(compiledMission.json?.interest_graph_status ?? "") !== "compiled") {
-      throw new Error("Discovery graph compile did not return a compiled mission.");
-    }
-
-    log("Updating the mission through the admin surface.");
-    const updatedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "update_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      missionId,
-      status: "paused",
-      priority: "5",
-      budgetCents: "500",
-    }, { cookie: adminCookie });
-    if (String(updatedMission.json?.status ?? "") !== "paused") {
-      throw new Error("Discovery mission update did not persist the paused status.");
-    }
-
-    log("Requesting a mission run through the admin surface.");
-    const runMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "run_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      missionId,
-    }, { cookie: adminCookie });
-    const runIdFromApi = String(runMission.json?.run_id ?? "");
-    if (!runIdFromApi) {
-      throw new Error("Discovery mission run did not return a run_id.");
-    }
-    await waitFor(
-      "mission active after run request",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`),
-      (payload) => String(payload?.status ?? "") === "active"
-    );
-
-    log("Seeding a pending discovery candidate and source profile for admin review.");
-    const hypothesisId = queryPostgres(
-      env,
-      `
-        insert into discovery_hypotheses (
-          mission_id,
-          class_key,
-          tactic_key,
-          search_query,
-          target_urls,
-          target_provider_type,
-          generation_context,
-          expected_value,
-          status
-        )
-        values (
-          ${sqlLiteral(missionId)},
-          ${sqlLiteral(classKey)},
-          ${sqlLiteral("acceptance_review")},
-          ${sqlLiteral(`site:${runId} discovery candidate`)},
-          array[${sqlLiteral(`https://discovery-${runId}.example.test/feed.xml`)}]::text[],
-          'rss',
-          '{}'::jsonb,
-          ${sqlLiteral("acceptance candidate")},
-          'pending'
-        )
-        returning hypothesis_id::text;
-      `
-    );
-    if (!hypothesisId) {
-      throw new Error("Failed to seed a discovery hypothesis for admin review.");
-    }
-
-      candidateId = queryPostgres(
-      env,
-      `
-        insert into discovery_candidates (
-          hypothesis_id,
-          mission_id,
-          url,
-          final_url,
-          title,
-          description,
-          provider_type,
-          is_valid,
-          relevance_score,
-          evaluation_json,
-          llm_assessment,
-          sample_data,
-          status,
-          rejection_reason
-        )
-        values (
-          ${sqlLiteral(hypothesisId)},
-          ${sqlLiteral(missionId)},
-          ${sqlLiteral(`https://discovery-${runId}.example.test/feed.xml`)},
-          ${sqlLiteral(`https://discovery-${runId}.example.test/feed.xml`)},
-          ${sqlLiteral(`Discovery candidate ${runId}`)},
-          ${sqlLiteral("Synthetic candidate for admin acceptance review.")},
-          'rss',
-          true,
-          0.91,
-          '{"quality_signal_source":"acceptance","normalizedReasonBucket":"below_auto_approval_threshold","reviewScore":0.91}'::jsonb,
-          '{}'::jsonb,
-          '[]'::jsonb,
-          'pending',
-          null
-        )
-        returning candidate_id::text;
-      `
-    );
-    if (!candidateId) {
-      throw new Error("Failed to seed a pending discovery candidate.");
-    }
-
-    sourceProfileId = queryPostgres(
-      env,
-      `
-        insert into discovery_source_profiles (
-          candidate_id,
-          canonical_domain,
-          source_type,
-          org_name,
-          country,
-          languages,
-          ownership_transparency,
-          author_accountability,
-          source_linking_quality,
-          historical_stability,
-          technical_quality,
-          spam_signals,
-          trust_score,
-          extraction_data
-        )
-        values (
-          ${sqlLiteral(candidateId)},
-          ${sqlLiteral(`discovery-${runId}.example.test`)},
-          'news_site',
-          ${sqlLiteral(`Discovery Org ${runId}`)},
-          'PL',
-          array['en']::text[],
-          0.72,
-          0.68,
-          0.64,
-          0.7,
-          0.76,
-          0.08,
-          0.74,
-          '{"acceptance":true}'::jsonb
-        )
-        returning source_profile_id::text;
-      `
-    );
-    if (!sourceProfileId) {
-      throw new Error("Failed to seed a discovery source profile.");
-    }
-    queryPostgres(
-      env,
-      `
-        update discovery_candidates
-        set source_profile_id = ${sqlLiteral(sourceProfileId)}
-        where candidate_id = ${sqlLiteral(candidateId)};
-      `
-    );
-    queryPostgres(
-      env,
-      `
-        insert into discovery_source_quality_snapshots (
-          source_profile_id,
-          channel_id,
-          snapshot_reason,
-          trust_score,
-          extraction_quality_score,
-          stability_score,
-          independence_score,
-          freshness_score,
-          lead_time_score,
-          yield_score,
-          duplication_score,
-          recall_score,
-          scoring_breakdown
-        )
-        values (
-          ${sqlLiteral(sourceProfileId)},
-          null,
-          'acceptance_seed',
-          0.74,
-          0.76,
-          0.7,
-          0.69,
-          0.66,
-          0.62,
-          0.71,
-          0.12,
-          0.73,
-          '{"metricSource":"acceptance_seed"}'::jsonb
-        )
-        on conflict (source_profile_id)
-        do update
-        set
-          snapshot_reason = excluded.snapshot_reason,
-          trust_score = excluded.trust_score,
-          extraction_quality_score = excluded.extraction_quality_score,
-          stability_score = excluded.stability_score,
-          independence_score = excluded.independence_score,
-          freshness_score = excluded.freshness_score,
-          lead_time_score = excluded.lead_time_score,
-          yield_score = excluded.yield_score,
-          duplication_score = excluded.duplication_score,
-          recall_score = excluded.recall_score,
-          scoring_breakdown = excluded.scoring_breakdown,
-          scored_at = now(),
-          updated_at = now();
-      `
-    );
-    queryPostgres(
-      env,
-      `
-        insert into discovery_source_interest_scores (
-          source_profile_id,
-          channel_id,
-          mission_id,
-          topic_coverage,
-          specificity,
-          audience_fit,
-          evidence_depth,
-          signal_to_noise,
-          fit_score,
-          novelty_score,
-          lead_time_score,
-          yield_score,
-          duplication_score,
-          contextual_score,
-          role_labels,
-          scoring_breakdown
-        )
-        values (
-          ${sqlLiteral(sourceProfileId)},
-          null,
-          ${sqlLiteral(missionId)},
-          0.74,
-          0.68,
-          0.7,
-          0.66,
-          0.64,
-          0.75,
-          0.55,
-          0.62,
-          0.71,
-          0.12,
-          0.77,
-          array['regional_watch']::text[],
-          '{"metricSource":"acceptance_seed"}'::jsonb
-        )
-        on conflict (mission_id, source_profile_id)
-        do update
-        set
-          contextual_score = excluded.contextual_score,
-          topic_coverage = excluded.topic_coverage,
-          fit_score = excluded.fit_score,
-          yield_score = excluded.yield_score,
-          lead_time_score = excluded.lead_time_score,
-          duplication_score = excluded.duplication_score,
-          role_labels = excluded.role_labels,
-          scoring_breakdown = excluded.scoring_breakdown,
-          scored_at = now(),
-          updated_at = now();
-      `
-    );
-
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=profiles`,
-      [`Acceptance profile ${runId}`, "Save profile", "Graph website kinds", "Recall website kinds", "Diagnostics"],
-      { cookie: adminCookie }
-    );
-    const profilePayload = await fetchJson(
-      `${apiBaseUrl}/maintenance/discovery/profiles/${encodeURIComponent(profileId)}`,
-      { cookie: adminCookie }
-    );
-    if (String(profilePayload?.graph_policy_json?.supportedWebsiteKinds?.[0] ?? "") !== "editorial") {
-      throw new Error("Discovery profile did not preserve graph supportedWebsiteKinds.");
-    }
-    if (
-      String(profilePayload?.recall_policy_json?.supportedWebsiteKinds?.[1] ?? "") !==
-      "procurement_portal"
-    ) {
-      throw new Error("Discovery profile did not preserve recall supportedWebsiteKinds.");
-    }
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=missions`,
-      [missionTitle, "Run mission", "Compile graph", `Acceptance profile ${runId}`],
-      { cookie: adminCookie }
-    );
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=classes`,
-      ["Save class", "Delete"],
-      { cookie: adminCookie }
-    );
-    await waitFor(
-      "discovery class through maintenance API",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`),
-      (payload) => String(payload?.display_name ?? "") === `Acceptance class ${runId}`
-    );
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=candidates`,
-      [`Discovery candidate ${runId}`, "Approve", "Reason bucket"],
-      { cookie: adminCookie }
-    );
-
-    log("Approving the seeded discovery candidate through the admin surface.");
-    const reviewedCandidate = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "review_candidate",
-      redirectTo: `${discoveryPath}?tab=candidates`,
-      candidateId,
-      status: "approved",
-    }, { cookie: adminCookie });
-    const reviewedCandidateId = String(reviewedCandidate.json?.candidate_id ?? "");
-    if (reviewedCandidateId !== candidateId) {
-      throw new Error("Discovery candidate review did not return the expected candidate_id.");
-    }
-    const approvedCandidate = await waitFor(
-      "approved discovery candidate",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/candidates/${encodeURIComponent(candidateId)}`),
-      (payload) =>
-        String(payload?.status ?? "") === "approved" ||
-        String(payload?.status ?? "") === "duplicate"
-    );
-    const registeredChannelId = String(approvedCandidate?.registered_channel_id ?? "");
-    if (!registeredChannelId) {
-      throw new Error("Discovery candidate approval did not register or link a source channel.");
-    }
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=candidates`,
-      [`Discovery candidate ${runId}`, "Reviewed"],
-      { cookie: adminCookie }
-    );
-
-    log("Submitting discovery feedback and re-evaluating the mission.");
-    const feedbackNotes = `Discovery admin acceptance feedback ${runId}`;
-    const feedbackResult = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "submit_feedback",
-      redirectTo: `${discoveryPath}?tab=feedback`,
-      missionId,
-      candidateId,
-      sourceProfileId,
-      feedbackType: "valuable_source",
-      feedbackValue: "keep",
-      notes: feedbackNotes,
-    }, { cookie: adminCookie });
-    if (!String(feedbackResult.json?.feedback_event_id ?? "")) {
-      throw new Error("Discovery feedback submission did not return a feedback_event_id.");
-    }
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=feedback`,
-      [feedbackNotes, "valuable_source", "keep"],
-      { cookie: adminCookie }
-    );
-
-    const reEvaluateResult = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "re_evaluate",
-      redirectTo: `${discoveryPath}?tab=portfolio&portfolioMissionId=${encodeURIComponent(missionId)}`,
-      missionId,
-    }, { cookie: adminCookie });
-    if (typeof reEvaluateResult.json?.discovery_re_evaluated_count !== "number") {
-      throw new Error("Discovery re-evaluation did not return a discovery_re_evaluated_count.");
-    }
-    await waitFor(
-      "mission portfolio snapshot",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`),
-      (payload) => String(payload?.latest_portfolio_snapshot_id ?? "").trim().length > 0
-    );
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=portfolio&portfolioMissionId=${encodeURIComponent(missionId)}`,
-      [missionTitle, "Re-evaluate mission", "Ranked sources", `discovery-${runId}.example.test`],
-      { cookie: adminCookie }
-    );
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=sources&portfolioMissionId=${encodeURIComponent(missionId)}`,
-      ["Generic source quality", "Mission fit"],
-      { cookie: adminCookie }
-    );
-    const sourceProfilePayload = await fetchJson(
-      `${apiBaseUrl}/maintenance/discovery/source-profiles/${encodeURIComponent(sourceProfileId)}`,
-      { cookie: adminCookie }
-    );
-    if (String(sourceProfilePayload?.canonical_domain ?? "") !== `discovery-${runId}.example.test`) {
-      throw new Error("Source profile detail did not preserve the seeded discovery canonical_domain.");
-    }
-    if (String(sourceProfilePayload?.latest_source_quality_snapshot_id ?? "").trim().length === 0) {
-      throw new Error("Source profile detail did not expose the latest source-quality snapshot.");
-    }
-
-    log("Creating a recall mission through the admin surface.");
-    const recallMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "create_recall_mission",
-      redirectTo: `${discoveryPath}?tab=recall`,
-      title: `Recall mission ${runId}`,
-      description: "Admin acceptance recall mission",
-      missionKind: "domain_seed",
-      seedDomains: `recall-${runId}.example.test`,
-      seedQueries: `recall ${runId}`,
-      targetProviderTypes: "rss",
-      scopeJson: '{"acceptance":true}',
-      maxCandidates: "4",
-      profileId,
-    }, { cookie: adminCookie });
-    recallMissionId = String(recallMission.json?.recall_mission_id ?? "");
-    if (!recallMissionId) {
-      throw new Error("Recall mission creation did not return a recall_mission_id.");
-    }
-    const updatedRecallMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "update_recall_mission",
-      redirectTo: `${discoveryPath}?tab=recall`,
-      recallMissionId,
-      status: "active",
-      maxCandidates: "5",
-      profileId,
-    }, { cookie: adminCookie, timeoutMs: 60000 });
-    if (String(updatedRecallMission.json?.status ?? "") !== "active") {
-      throw new Error("Recall mission update did not persist the active status.");
-    }
-    const acquiredRecallMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "acquire_recall_mission",
-      redirectTo: `${discoveryPath}?tab=recall`,
-      recallMissionId,
-    }, { cookie: adminCookie, timeoutMs: 60000 });
-    if (typeof acquiredRecallMission.json?.discovery_recall_executed_count !== "number") {
-      throw new Error("Recall mission acquire did not return discovery_recall_executed_count.");
-    }
-    const recallSourceProfileId = queryPostgres(
-      env,
-      `
-        insert into discovery_source_profiles (
-          candidate_id,
-          canonical_domain,
-          source_type,
-          org_name,
-          country,
-          languages,
-          ownership_transparency,
-          author_accountability,
-          source_linking_quality,
-          historical_stability,
-          technical_quality,
-          spam_signals,
-          trust_score,
-          extraction_data
-        )
-        values (
-          null,
-          ${sqlLiteral(`recall-${runId}.example.test`)},
-          'procurement_portal',
-          ${sqlLiteral(`Recall Org ${runId}`)},
-          'PL',
-          array['en']::text[],
-          0.78,
-          0.74,
-          0.72,
-          0.8,
-          0.81,
-          0.05,
-          0.82,
-          '{"acceptance":true,"lane":"recall"}'::jsonb
-        )
-        returning source_profile_id::text;
-      `
-    );
-    if (!recallSourceProfileId) {
-      throw new Error("Failed to seed a discovery source profile for recall acceptance.");
-    }
-    queryPostgres(
-      env,
-      `
-        insert into discovery_source_quality_snapshots (
-          source_profile_id,
-          channel_id,
-          snapshot_reason,
-          trust_score,
-          extraction_quality_score,
-          stability_score,
-          independence_score,
-          freshness_score,
-          lead_time_score,
-          yield_score,
-          duplication_score,
-          recall_score,
-          scoring_breakdown
-        )
-        values (
-          ${sqlLiteral(recallSourceProfileId)},
-          null,
-          'acceptance_recall_seed',
-          0.82,
-          0.81,
-          0.8,
-          0.78,
-          0.76,
-          0.73,
-          0.71,
-          0.08,
-          0.93,
-          '{"metricSource":"acceptance_recall_seed"}'::jsonb
-        )
-        on conflict (source_profile_id)
-        do update
-        set
-          snapshot_reason = excluded.snapshot_reason,
-          trust_score = excluded.trust_score,
-          extraction_quality_score = excluded.extraction_quality_score,
-          stability_score = excluded.stability_score,
-          independence_score = excluded.independence_score,
-          freshness_score = excluded.freshness_score,
-          lead_time_score = excluded.lead_time_score,
-          yield_score = excluded.yield_score,
-          duplication_score = excluded.duplication_score,
-          recall_score = excluded.recall_score,
-          scoring_breakdown = excluded.scoring_breakdown,
-          scored_at = now(),
-          updated_at = now();
-      `
-    );
-    const blockedRecallCandidate = (
-      await postJson(`${apiBaseUrl}/maintenance/discovery/recall-candidates`, {
-        recallMissionId,
-        sourceProfileId: recallSourceProfileId,
-        url: `https://recall-${runId}.example.test/opportunity`,
-        finalUrl: `https://recall-${runId}.example.test/opportunity`,
-        title: `Blocked recall candidate ${runId}`,
-        description: "HTML opportunity page intentionally mislabeled as RSS",
-        providerType: "rss",
-        status: "pending",
-        qualitySignalSource: "acceptance_manual",
-        evaluationJson: {
-          classification: "html",
-          normalizedReasonBucket: "manual_regression_guard",
-          recallScore: 0.91,
-        },
-        createdBy: adminEmail,
-      }, { expectStatus: 201 })
-    ).json;
-    const blockedRecallCandidateId = String(blockedRecallCandidate?.recall_candidate_id ?? "");
-    try {
-      await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-        intent: "promote_recall_candidate",
-        redirectTo: `${discoveryPath}?tab=recall`,
-        recallCandidateId: blockedRecallCandidateId,
-      }, { cookie: adminCookie, timeoutMs: 60000 });
-      throw new Error("Admin recall candidate promotion accepted an RSS candidate without valid feed evidence.");
-    } catch (error) {
-      if (!String(error?.message ?? "").includes("no valid feed evidence")) {
-        throw error;
-      }
-    }
-    const recallCandidate = (
-      await postJson(`${apiBaseUrl}/maintenance/discovery/recall-candidates`, {
-        recallMissionId,
-        sourceProfileId: recallSourceProfileId,
-        url: `https://recall-${runId}.example.test/feed.xml`,
-        finalUrl: `https://recall-${runId}.example.test/feed.xml`,
-        title: `Recall candidate ${runId}`,
-        description: "Admin acceptance recall candidate",
-        providerType: "rss",
-        status: "pending",
-        qualitySignalSource: "acceptance_manual",
-        evaluationJson: {
-          classification: "rss",
-          validFeed: true,
-          discoveredFeedUrls: [`https://recall-${runId}.example.test/feed.xml`],
-          normalizedReasonBucket: "below_auto_promotion_threshold",
-          recallScore: 0.73,
-        },
-        createdBy: adminEmail,
-      }, { expectStatus: 201 })
-    ).json;
-    recallCandidateId = String(recallCandidate?.recall_candidate_id ?? "");
-    if (!recallCandidateId) {
-      throw new Error("Recall candidate creation did not return a recall_candidate_id.");
-    }
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=recall`,
-      ["Acquire now", "Promote"],
-      { cookie: adminCookie }
-    );
-    const promotedRecallCandidate = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "promote_recall_candidate",
-      redirectTo: `${discoveryPath}?tab=recall`,
-      recallCandidateId,
-      tags: "acceptance",
-    }, { cookie: adminCookie, timeoutMs: 60000 });
-    const recallPromotionState =
-      String(promotedRecallCandidate.json?.status ?? "") === "duplicate"
-        ? "linked_duplicate"
-        : "promoted";
-    await assertHtmlContains(
-      `${adminBaseUrl}/discovery?tab=recall`,
-      [`Recall mission ${runId}`, `Recall candidate ${runId}`, recallPromotionState, `Acceptance profile ${runId}`],
-      { cookie: adminCookie }
-    );
-
-    log("Archiving and reactivating discovery mission, class, and profile through the admin surface.");
-    const archivedProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "archive_profile",
-      redirectTo: `${discoveryPath}?tab=profiles`,
-      profileId,
-    }, { cookie: adminCookie });
-    if (String(archivedProfile.json?.status ?? "") !== "archived") {
-      throw new Error("Discovery profile archive did not persist the archived status.");
-    }
-    const activatedProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "activate_profile",
-      redirectTo: `${discoveryPath}?tab=profiles`,
-      profileId,
-    }, { cookie: adminCookie });
-    if (String(activatedProfile.json?.status ?? "") !== "active") {
-      throw new Error("Discovery profile activation did not persist the active status.");
-    }
-    const archivedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "archive_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      missionId,
-    }, { cookie: adminCookie });
-    if (String(archivedMission.json?.mission_id ?? "") !== missionId) {
-      throw new Error("Discovery mission archive did not return the expected mission_id.");
-    }
-    await waitFor(
-      "archived discovery mission",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`),
-      (payload) => String(payload?.status ?? "") === "archived"
-    );
-    const activatedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "activate_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      missionId,
-    }, { cookie: adminCookie });
-    if (String(activatedMission.json?.mission_id ?? "") !== missionId) {
-      throw new Error("Discovery mission reactivation did not return the expected mission_id.");
-    }
-    await waitFor(
-      "reactivated discovery mission",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(missionId)}`),
-      (payload) => String(payload?.status ?? "") === "planned"
-    );
-
-    const archivedClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "archive_class",
-      redirectTo: `${discoveryPath}?tab=classes`,
-      classKey,
-    }, { cookie: adminCookie });
-    if (String(archivedClass.json?.class_key ?? "") !== classKey) {
-      throw new Error("Discovery class archive did not return the expected class_key.");
-    }
-    await waitFor(
-      "archived discovery class",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`),
-      (payload) => String(payload?.status ?? "") === "archived"
-    );
-    const activatedClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "activate_class",
-      redirectTo: `${discoveryPath}?tab=classes`,
-      classKey,
-    }, { cookie: adminCookie });
-    if (String(activatedClass.json?.class_key ?? "") !== classKey) {
-      throw new Error("Discovery class reactivation did not return the expected class_key.");
-    }
-    await waitFor(
-      "reactivated discovery class",
-      async () => fetchJson(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(classKey)}`),
-      (payload) => String(payload?.status ?? "") === "active"
-    );
-
-    log("Deleting disposable discovery mission, class, and profile through the admin surface.");
-    const deletedMission = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "delete_mission",
-      redirectTo: `${discoveryPath}?tab=missions`,
-      missionId: deletableMissionId,
-    }, { cookie: adminCookie });
-    if (deletedMission.json?.deleted !== true) {
-      throw new Error("Discovery mission delete did not report deleted=true.");
-    }
-    await waitFor(
-      "deleted discovery mission",
-      async () =>
-        sendRequest(`${apiBaseUrl}/maintenance/discovery/missions/${encodeURIComponent(deletableMissionId)}`),
-      (response) => response.status === 404
-    );
-
-    const deletedClass = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "delete_class",
-      redirectTo: `${discoveryPath}?tab=classes`,
-      classKey: deletableClassKey,
-    }, { cookie: adminCookie });
-    if (deletedClass.json?.deleted !== true) {
-      throw new Error("Discovery class delete did not report deleted=true.");
-    }
-    await waitFor(
-      "deleted discovery class",
-      async () =>
-        sendRequest(`${apiBaseUrl}/maintenance/discovery/classes/${encodeURIComponent(deletableClassKey)}`),
-      (response) => response.status === 404
-    );
-
-    const deletedProfile = await postForm(`${adminBaseUrl}/bff/admin/discovery`, {
-      intent: "delete_profile",
-      redirectTo: `${discoveryPath}?tab=profiles`,
-      profileId: deletableProfileId,
-    }, { cookie: adminCookie });
-    if (deletedProfile.json?.deleted !== true) {
-      throw new Error("Discovery profile delete did not report deleted=true.");
-    }
-    await waitFor(
-      "deleted discovery profile",
-      async () =>
-        sendRequest(`${apiBaseUrl}/maintenance/discovery/profiles/${encodeURIComponent(deletableProfileId)}`),
-      (response) => response.status === 404
-    );
-
-    console.log(
-      JSON.stringify(
-        {
-          status: "discovery-admin-ok",
-          missionId,
-          classKey,
-          deletableMissionId,
-          deletableClassKey,
-          discoveryRunId: runIdFromApi,
-          candidateId,
-          sourceProfileId,
-          registeredChannelId,
-          recallMissionId,
-          recallCandidateId,
-          recallPromotionState,
-          profileId,
-          deletableProfileId,
-        },
-        null,
-        2
-      )
-    );
+    log("Discovery admin v3 acceptance passed.");
   } finally {
     if (adminCreated) {
-      try {
-        await deleteFirebasePasswordUser(firebaseApiKey, adminEmail, adminPassword);
-      } catch (error) {
-        log(`Firebase cleanup warning: ${error instanceof Error ? error.message : String(error)}`);
-      }
+      await deleteFirebasePasswordUser(firebaseApiKey, adminEmail).catch(() => undefined);
     }
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack : error);
-  process.exitCode = 1;
-});
+await main();

@@ -54,80 +54,7 @@ async function main(): Promise<void> {
               'extracted_source_name'
             ))
             or
-            (table_name = 'discovery_policy_profiles' and column_name in (
-              'profile_key',
-              'status',
-              'graph_policy_json',
-              'recall_policy_json',
-              'yield_benchmark_json',
-              'version'
-            ))
-            or
-            (table_name = 'discovery_missions' and column_name in (
-              'seed_topics',
-              'interest_graph',
-              'latest_portfolio_snapshot_id',
-              'profile_id',
-              'applied_profile_version',
-              'applied_policy_json'
-            ))
-            or
-            (table_name = 'discovery_hypothesis_classes' and column_name in (
-              'generation_backend',
-              'default_provider_types',
-              'max_per_mission'
-            ))
-            or
-            (table_name = 'discovery_hypotheses' and column_name in (
-              'class_key',
-              'target_provider_type',
-              'execution_cost_usd'
-            ))
-            or
-            (table_name = 'discovery_source_profiles' and column_name in (
-              'candidate_id',
-              'channel_id',
-              'canonical_domain',
-              'trust_score'
-            ))
-            or
-            (table_name = 'discovery_candidates' and column_name in (
-              'source_profile_id',
-              'evaluation_json',
-              'registered_channel_id',
-              'updated_at'
-            ))
-            or
-            (table_name = 'discovery_source_interest_scores' and column_name in (
-              'source_profile_id',
-              'mission_id',
-              'yield_score',
-              'duplication_score',
-              'contextual_score'
-            ))
-            or
-            (table_name = 'discovery_portfolio_snapshots' and column_name in (
-              'ranked_sources',
-              'gaps_json',
-              'summary_json'
-            ))
-            or
-            (table_name = 'discovery_feedback_events' and column_name in (
-              'source_profile_id',
-              'feedback_type'
-            ))
-            or
-            (table_name = 'discovery_strategy_stats' and column_name in (
-              'class_key',
-              'trials',
-              'last_effectiveness'
-            ))
-            or
-            (table_name = 'discovery_cost_log' and column_name in (
-              'cost_usd',
-              'cost_cents',
-              'request_count'
-            ))
+            table_name like 'discovery_%'
             or
             (table_name = 'canonical_documents' and column_name in (
               'canonical_domain',
@@ -177,31 +104,6 @@ async function main(): Promise<void> {
               'compat_system_feed_decision'
             ))
             or
-            (table_name = 'discovery_recall_missions' and column_name in (
-              'mission_kind',
-              'seed_domains',
-              'seed_queries',
-              'scope_json',
-              'profile_id',
-              'applied_profile_version',
-              'applied_policy_json'
-            ))
-            or
-            (table_name = 'discovery_recall_candidates' and column_name in (
-              'source_profile_id',
-              'canonical_domain',
-              'quality_signal_source',
-              'evaluation_json',
-              'registered_channel_id'
-            ))
-            or
-            (table_name = 'discovery_source_quality_snapshots' and column_name in (
-              'source_profile_id',
-              'channel_id',
-              'snapshot_reason',
-              'recall_score'
-            ))
-            or
             (table_name = 'source_channels' and column_name in (
               'auth_config_json',
               'enrichment_enabled',
@@ -246,16 +148,16 @@ async function main(): Promise<void> {
         where n.nspname = $1
           and c.conname in (
             'fetch_cursors_cursor_type_check',
-            'discovery_hypotheses_class_key_fkey',
-            'discovery_missions_profile_id_fkey',
-            'discovery_candidates_source_profile_id_fkey',
-            'discovery_source_profiles_candidate_fk',
-            'discovery_missions_latest_portfolio_snapshot_fk',
-            'discovery_source_interest_scores_source_profile_id_fkey',
-            'discovery_source_interest_scores_mission_id_fkey',
-            'discovery_feedback_events_source_profile_id_fkey',
-            'discovery_strategy_stats_class_key_fkey',
-            'discovery_recall_missions_profile_id_fkey'
+            'discovery_targets_status_check',
+            'discovery_runs_kind_check',
+            'discovery_provider_health_status_check',
+            'discovery_hypotheses_signal_mode_check',
+            'discovery_hypotheses_debate_state_check',
+            'discovery_negative_evidence_failure_mode_check',
+            'discovery_claims_status_check',
+            'discovery_source_endpoints_action_check',
+            'discovery_source_contracts_status_check',
+            'discovery_actions_type_check'
           )
       `,
       [schemaName]
@@ -296,17 +198,30 @@ async function main(): Promise<void> {
       "fetch_cursors",
       "crawl_policy_cache",
       "articles",
-      "discovery_policy_profiles",
-      "discovery_missions",
-      "discovery_hypothesis_classes",
+      "discovery_legacy_archive_batches",
+      "discovery_targets",
+      "discovery_runs",
+      "discovery_provider_capabilities",
+      "discovery_provider_health",
+      "discovery_coverage_snapshots",
       "discovery_hypotheses",
-      "discovery_source_profiles",
-      "discovery_candidates",
-      "discovery_source_interest_scores",
-      "discovery_portfolio_snapshots",
-      "discovery_feedback_events",
-      "discovery_strategy_stats",
-      "discovery_cost_log",
+      "discovery_debates",
+      "discovery_provider_queries",
+      "discovery_evidence_items",
+      "discovery_negative_evidence",
+      "discovery_signal_clusters",
+      "discovery_claims",
+      "discovery_claim_evidence",
+      "discovery_domain_inventory",
+      "discovery_source_identities",
+      "discovery_source_endpoints",
+      "discovery_source_contracts",
+      "discovery_source_edges",
+      "discovery_actions",
+      "discovery_repairs",
+      "discovery_eval_suites",
+      "discovery_eval_cases",
+      "discovery_eval_runs",
       "canonical_documents",
       "document_observations",
       "story_clusters",
@@ -314,9 +229,6 @@ async function main(): Promise<void> {
       "verification_results",
       "interest_filter_results",
       "final_selection_results",
-      "discovery_recall_missions",
-      "discovery_recall_candidates",
-      "discovery_source_quality_snapshots",
       "web_resources",
       "article_external_refs",
       "outbox_events",
@@ -328,30 +240,36 @@ async function main(): Promise<void> {
       "crawl_policy_cache_expires_idx",
       "articles_channel_source_article_id_unique",
       "articles_processing_state_idx",
-      "discovery_policy_profiles_status_idx",
-      "discovery_missions_status_idx",
-      "discovery_missions_source_ref_idx",
-      "discovery_missions_interest_graph_status_idx",
-      "discovery_missions_profile_id_idx",
-      "discovery_hypothesis_classes_status_idx",
-      "discovery_hypotheses_mission_idx",
+      "discovery_legacy_archive_batches_table_idx",
+      "discovery_targets_origin_idx",
+      "discovery_targets_origin_unique",
+      "discovery_targets_status_idx",
+      "discovery_runs_target_idx",
+      "discovery_runs_status_idx",
+      "discovery_provider_health_status_idx",
+      "discovery_coverage_target_idx",
+      "discovery_hypotheses_run_idx",
+      "discovery_hypotheses_target_idx",
       "discovery_hypotheses_status_idx",
-      "discovery_hypotheses_class_idx",
-      "discovery_hypotheses_mission_intent_unique",
-      "discovery_source_profiles_domain_unique",
-      "discovery_source_profiles_channel_idx",
-      "discovery_candidates_hypothesis_idx",
-      "discovery_candidates_mission_idx",
-      "discovery_candidates_status_idx",
-      "discovery_candidates_url_mission_unique",
-      "discovery_source_interest_scores_current_unique",
-      "discovery_source_interest_scores_contextual_idx",
-      "discovery_portfolio_snapshots_mission_idx",
-      "discovery_feedback_events_mission_idx",
-      "discovery_strategy_stats_unique",
-      "discovery_cost_log_mission_idx",
-      "discovery_cost_log_hypothesis_idx",
-      "discovery_cost_log_created_idx",
+      "discovery_hypotheses_dedupe_idx",
+      "discovery_debates_hypothesis_idx",
+      "discovery_provider_queries_hypothesis_idx",
+      "discovery_evidence_target_idx",
+      "discovery_evidence_domain_idx",
+      "discovery_negative_evidence_target_idx",
+      "discovery_negative_evidence_cooldown_idx",
+      "discovery_signal_clusters_target_idx",
+      "discovery_claims_target_idx",
+      "discovery_domain_inventory_kind_idx",
+      "discovery_source_identities_domain_unique",
+      "discovery_source_identities_known_domains_idx",
+      "discovery_source_endpoints_target_url_unique",
+      "discovery_source_endpoints_target_score_idx",
+      "discovery_source_endpoints_status_idx",
+      "discovery_source_contracts_target_idx",
+      "discovery_source_contracts_channel_idx",
+      "discovery_actions_status_idx",
+      "discovery_eval_runs_suite_idx",
       "canonical_documents_canonical_domain_idx",
       "canonical_documents_published_at_idx",
       "canonical_documents_last_observed_at_idx",
@@ -370,17 +288,6 @@ async function main(): Promise<void> {
       "final_selection_results_final_decision_idx",
       "final_selection_results_canonical_document_id_idx",
       "final_selection_results_story_cluster_id_idx",
-      "discovery_recall_missions_status_idx",
-      "discovery_recall_missions_kind_idx",
-      "discovery_recall_missions_profile_id_idx",
-      "discovery_recall_candidates_url_mission_unique",
-      "discovery_recall_candidates_mission_status_idx",
-      "discovery_recall_candidates_canonical_domain_idx",
-      "discovery_recall_candidates_source_profile_idx",
-      "discovery_recall_candidates_registered_channel_idx",
-      "discovery_source_quality_snapshots_source_profile_unique",
-      "discovery_source_quality_snapshots_recall_idx",
-      "discovery_source_quality_snapshots_channel_idx",
       "web_resources_channel_external_resource_id_unique",
       "web_resources_channel_normalized_url_unique",
       "web_resources_channel_id_idx",
@@ -400,47 +307,24 @@ async function main(): Promise<void> {
       "articles.extracted_favicon_url",
       "articles.extracted_published_at",
       "articles.extracted_source_name",
-      "discovery_policy_profiles.profile_key",
-      "discovery_policy_profiles.status",
-      "discovery_policy_profiles.graph_policy_json",
-      "discovery_policy_profiles.recall_policy_json",
-      "discovery_policy_profiles.yield_benchmark_json",
-      "discovery_policy_profiles.version",
-      "discovery_missions.seed_topics",
-      "discovery_missions.interest_graph",
-      "discovery_missions.latest_portfolio_snapshot_id",
-      "discovery_missions.profile_id",
-      "discovery_missions.applied_profile_version",
-      "discovery_missions.applied_policy_json",
-      "discovery_hypothesis_classes.generation_backend",
-      "discovery_hypothesis_classes.default_provider_types",
-      "discovery_hypothesis_classes.max_per_mission",
-      "discovery_hypotheses.class_key",
-      "discovery_hypotheses.target_provider_type",
-      "discovery_hypotheses.execution_cost_usd",
-      "discovery_source_profiles.candidate_id",
-      "discovery_source_profiles.channel_id",
-      "discovery_source_profiles.canonical_domain",
-      "discovery_source_profiles.trust_score",
-      "discovery_candidates.source_profile_id",
-      "discovery_candidates.evaluation_json",
-      "discovery_candidates.registered_channel_id",
-      "discovery_source_interest_scores.source_profile_id",
-      "discovery_source_interest_scores.mission_id",
-      "discovery_source_interest_scores.yield_score",
-      "discovery_source_interest_scores.duplication_score",
-      "discovery_source_interest_scores.contextual_score",
-      "discovery_portfolio_snapshots.ranked_sources",
-      "discovery_portfolio_snapshots.gaps_json",
-      "discovery_portfolio_snapshots.summary_json",
-      "discovery_feedback_events.source_profile_id",
-      "discovery_feedback_events.feedback_type",
-      "discovery_strategy_stats.class_key",
-      "discovery_strategy_stats.trials",
-      "discovery_strategy_stats.last_effectiveness",
-      "discovery_cost_log.cost_usd",
-      "discovery_cost_log.cost_cents",
-      "discovery_cost_log.request_count",
+      "discovery_targets.target_id",
+      "discovery_targets.graph_json",
+      "discovery_targets.policy_json",
+      "discovery_targets.autopilot_json",
+      "discovery_runs.run_kind",
+      "discovery_runs.max_social_items",
+      "discovery_provider_capabilities.provider_card_json",
+      "discovery_provider_health.cooldown_until",
+      "discovery_coverage_snapshots.coverage_json",
+      "discovery_hypotheses.signal_mode",
+      "discovery_hypotheses.control_query_text",
+      "discovery_hypotheses.debate_state",
+      "discovery_evidence_items.evidence_kind",
+      "discovery_negative_evidence.failure_mode",
+      "discovery_claims.control_signal_rate",
+      "discovery_source_endpoints.why_not_promoted_json",
+      "discovery_source_contracts.coverage_contribution",
+      "discovery_eval_runs.metrics_json",
       "canonical_documents.canonical_domain",
       "canonical_documents.canonical_url",
       "canonical_documents.observation_count",
@@ -468,21 +352,6 @@ async function main(): Promise<void> {
       "final_selection_results.final_decision",
       "final_selection_results.is_selected",
       "final_selection_results.compat_system_feed_decision",
-      "discovery_recall_missions.mission_kind",
-      "discovery_recall_missions.seed_domains",
-      "discovery_recall_missions.seed_queries",
-      "discovery_recall_missions.scope_json",
-      "discovery_recall_missions.profile_id",
-      "discovery_recall_missions.applied_profile_version",
-      "discovery_recall_missions.applied_policy_json",
-      "discovery_recall_candidates.source_profile_id",
-      "discovery_recall_candidates.canonical_domain",
-      "discovery_recall_candidates.quality_signal_source",
-      "discovery_recall_candidates.evaluation_json",
-      "discovery_source_quality_snapshots.source_profile_id",
-      "discovery_source_quality_snapshots.channel_id",
-      "discovery_source_quality_snapshots.snapshot_reason",
-      "discovery_source_quality_snapshots.recall_score",
       "source_channels.auth_config_json",
       "source_channels.enrichment_enabled",
       "source_channels.enrichment_min_body_length",
@@ -534,16 +403,16 @@ async function main(): Promise<void> {
     }
 
     const requiredDiscoveryConstraints = [
-      "discovery_hypotheses_class_key_fkey",
-      "discovery_missions_profile_id_fkey",
-      "discovery_candidates_source_profile_id_fkey",
-      "discovery_source_profiles_candidate_fk",
-      "discovery_missions_latest_portfolio_snapshot_fk",
-      "discovery_source_interest_scores_source_profile_id_fkey",
-      "discovery_source_interest_scores_mission_id_fkey",
-      "discovery_feedback_events_source_profile_id_fkey",
-      "discovery_strategy_stats_class_key_fkey",
-      "discovery_recall_missions_profile_id_fkey"
+      "discovery_targets_status_check",
+      "discovery_runs_kind_check",
+      "discovery_provider_health_status_check",
+      "discovery_hypotheses_signal_mode_check",
+      "discovery_hypotheses_debate_state_check",
+      "discovery_negative_evidence_failure_mode_check",
+      "discovery_claims_status_check",
+      "discovery_source_endpoints_action_check",
+      "discovery_source_contracts_status_check",
+      "discovery_actions_type_check"
     ];
     for (const constraintName of requiredDiscoveryConstraints) {
       if (!constraintByName.has(constraintName)) {

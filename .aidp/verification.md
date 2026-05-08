@@ -66,6 +66,7 @@
 - Discovery admin flow: `pnpm test:discovery:admin:compose`
 - Discovery example proof: `pnpm test:discovery:examples:compose`
 - Discovery mega comprehensive matrix proof: `pnpm test:discovery:mega:compose` (`pnpm test:discovery:domains:compose` is a compatibility alias)
+- Discovery live calibration proof: `pnpm test:discovery:live-calibration:compose`; strict MVP gate: `pnpm test:discovery:live-acceptance:compose`; manual/overnight soak: `pnpm test:discovery:live-soak:compose`
 - Discovery nonregression proof: `pnpm test:discovery:nonregression:compose`
 - Discovery yield proof: `pnpm test:discovery:yield:compose`
 - MCP compose proof: `pnpm test:mcp:compose`
@@ -199,7 +200,7 @@ External spec/tool plan acceptance is scoped to the active item. It must be chec
 - Relay/queue changes: relay tests plus phase routing and worker/sequence smoke when routing semantics change.
 - Worker/selection changes: Python unit proof plus relevant worker smoke/compose proof such as normalize/dedup, embed, interest/criterion compile, cluster-match-notify or reindex-backfill.
 - Migration/schema changes: `pnpm test:migrations:smoke` plus affected API/worker/fetcher proof.
-- Discovery changes: bounded discovery smoke/compose proof; admin, nonregression, examples or yield gates are selected by touched surface. Live external search/LLM gaps must be explicit.
+- Discovery changes: bounded discovery smoke/compose proof; admin, nonregression, examples, yield, live calibration or live acceptance gates are selected by touched surface. Live external search/LLM gaps must be explicit.
 - MCP/control-plane changes: `pnpm test:mcp:compose` or targeted MCP HTTP group proof.
 - Automation/control-plane changes: `pnpm test:automation:admin:compose` plus targeted unit/control-plane proof.
 - Delivery/compose changes: compose startup/health proof or an explicit blocked proof gap; scaffold changes should run `pnpm check:scaffold`.

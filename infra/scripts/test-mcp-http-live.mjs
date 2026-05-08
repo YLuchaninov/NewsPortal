@@ -6,16 +6,8 @@ import {
   createHarness,
   extractHttpDiagnostics,
   extractMcpDiagnostics,
-  readIdentifier,
   waitFor,
 } from "./lib/mcp-http-testkit.mjs";
-import {
-  buildDiscoveryProfilePayload,
-  buildProfileBackedGraphMissionPayload,
-  buildProfileBackedRecallMissionPayload,
-} from "./lib/discovery-live-proof-profiles.mjs";
-import { DISCOVERY_LIVE_DEFAULTS } from "./lib/discovery-live-example-cases.mjs";
-import { classifyRecallCandidate } from "./lib/discovery-live-yield-policy.mjs";
 
 export const LIVE_CASE = {
   key: "mcp_http_live",
@@ -185,17 +177,6 @@ export const LIVE_CASE = {
   },
 };
 
-function buildLiveProfilePayload(runId) {
-  const base = buildDiscoveryProfilePayload(LIVE_CASE);
-  const suffix = runId.replace(/-/g, "_");
-  return {
-    ...base,
-    profileKey: `${base.profileKey}_${suffix}`,
-    displayName: `${base.displayName} ${runId.slice(0, 8)}`,
-    description: `${base.description} Live run ${runId}.`,
-  };
-}
-
 function normalizeStatus(value) {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -229,12 +210,12 @@ function classifyStepError(error) {
   const httpDiagnostics = extractHttpDiagnostics(error);
   const mcpDiagnostics = extractMcpDiagnostics(error);
   if (
-    mcpDiagnostics?.toolName === "discovery.recall_candidates.promote"
+    mcpDiagnostics?.toolName === "discovery.endpoints.promote"
     && Number(mcpDiagnostics?.errorData?.statusCode ?? 0) === 422
   ) {
     return {
       verdict: "yield-usefulness-weak-but-runtime-healthy",
-      reason: "live recall candidate promotion failed validation for the attempted candidate, which is a yield weakness unless every candidate should have been promotable",
+      reason: "live endpoint promotion failed validation for the attempted endpoint, which is a yield weakness unless every endpoint should have been promotable",
     };
   }
   if (httpDiagnostics?.bodyKind === "html") {
@@ -273,13 +254,12 @@ function classifyStepError(error) {
     };
   }
   if (
-    normalized.includes("no recall candidates")
-    || normalized.includes("no promotable recall candidates")
-    || normalized.includes("no discovery candidates")
+    normalized.includes("no discovery endpoints")
+    || normalized.includes("no promotable discovery endpoints")
   ) {
     return {
       verdict: "yield-usefulness-weak-but-runtime-healthy",
-      reason: "runtime stayed healthy but the live acquisition window did not produce useful candidates",
+      reason: "runtime stayed healthy but the live acquisition window did not produce useful endpoints",
     };
   }
   return {
@@ -476,177 +456,91 @@ async function main() {
       };
     });
 
-    await runStep(report, "profile-backed-live-discovery", async () => {
+    await runStep(report, "v3-live-discovery-target-run", async () => {
       const token = harness.liveToken.token;
-      const profile = await harness.mcpToolCall(token, "discovery.profiles.create", {
-        payload: buildLiveProfilePayload(harness.runId),
+      const target = await harness.mcpToolCall(token, "discovery.targets.create_manual", {
+        payload: {
+          originKind: "manual_prompt",
+          title: `MCP HTTP live v3 discovery ${harness.runId}`,
+          description:
+            "Bounded v3 target for developer tools, open-source releases, and cloud infrastructure source discovery.",
+          seedTopics: LIVE_CASE.graphMission.seedTopics,
+          seedEntities: ["Cloudflare", "JetBrains", "GitHub", "Kubernetes"],
+          seedGeos: ["global"],
+          seedLanguages: ["en"],
+          graphJson: {
+            coreTopic: "developer tools and cloud infrastructure releases",
+            sourceRoleTargets: {
+              authoritative_anchor: { min: 1, target: 2 },
+              technical_change: { min: 1, target: 2 },
+              report_research: { min: 1, target: 1 },
+            },
+          },
+          policyJson: {
+            hypothesisBudget: {
+              total: 24,
+              bySignalMode: { direct: 18, hidden: 6 },
+              maxPerProvider: { web_search: 18, reddit: 3, youtube: 3 },
+            },
+            targetSafety: {
+              maxNewSourcesPerRun: 2,
+              maxAutoPromotionsPerRun: 1,
+            },
+          },
+        },
       });
-      const profileId = String(profile.profile_id ?? profile.profileId ?? "");
-      const graphMission = await harness.mcpToolCall(token, "discovery.missions.create", {
-        payload: buildProfileBackedGraphMissionPayload(
-          LIVE_CASE,
-          harness.runId,
-          profileId
-        ),
+      const targetId = String(target.target_id ?? target.targetId ?? "");
+      await harness.mcpToolCall(token, "discovery.coverage.refresh", { targetId });
+      const run = await harness.mcpToolCall(token, "discovery.runs.start", {
+        payload: {
+          targetId,
+          runKind: "manual",
+          triggerKind: "mcp",
+          maxDepth: 1,
+          maxHypotheses: 24,
+          maxDomains: 40,
+          maxEndpoints: 60,
+        },
       });
-      const missionId = String(graphMission.mission_id ?? graphMission.missionId ?? "");
-      await harness.mcpToolCall(token, "discovery.missions.compile_graph", { missionId });
-      await harness.mcpToolCall(token, "discovery.missions.run", { missionId });
-      const candidates = await waitFor(
-        "live discovery candidates",
-        () => harness.mcpToolCall(token, "discovery.candidates.list", { missionId, page: 1, pageSize: 20 }),
-        (payload) => readRows(payload).length > 0,
-        { timeoutMs: 90000, intervalMs: 3000 }
-      ).catch(() => null);
-      await harness.mcpToolCall(token, "discovery.missions.archive", {
-        missionId,
-        confirm: true,
-      });
-      await harness.mcpToolCall(token, "discovery.profiles.archive", {
-        profileId,
-        confirm: true,
+      const runId = String(run.run_id ?? run.runId ?? "");
+      await harness.mcpToolCall(token, "discovery.runs.read", { runId });
+      await harness.mcpToolCall(token, "discovery.coverage.read", { targetId });
+      const endpoints = await harness.mcpToolCall(token, "discovery.endpoints.list", {
+        targetId,
+        page: 1,
+        pageSize: 20,
       });
       return {
-        profileId,
-        missionId,
-        candidateCount: candidates ? readRows(candidates).length : 0,
+        targetId,
+        runId,
+        endpointCount: readRows(endpoints).length,
       };
     });
 
-    await runStep(report, "live-recall-acquisition", async () => {
+    await runStep(report, "v3-live-guards-readback", async () => {
       const token = harness.liveToken.token;
-      const profile = await harness.mcpToolCall(token, "discovery.profiles.create", {
-        payload: buildLiveProfilePayload(`${harness.runId}-recall`),
-      });
-      const profileId = String(profile.profile_id ?? profile.profileId ?? "");
-      const recallMission = await harness.mcpToolCall(token, "discovery.recall_missions.create", {
-        payload: buildProfileBackedRecallMissionPayload(
-          LIVE_CASE,
-          harness.runId,
-          profileId
-        ),
-      });
-      const recallMissionId = String(
-        recallMission.recall_mission_id ?? recallMission.recallMissionId ?? ""
-      );
-      await harness.mcpToolCall(token, "discovery.recall_missions.acquire", {
-        recallMissionId,
-      }, { timeoutMs: 90000 });
-
-      const recallCandidates = await waitFor(
-        "live recall candidates",
-        () =>
-          harness.mcpToolCall(token, "discovery.recall_candidates.list", {
-            recallMissionId,
-            page: 1,
-            pageSize: 20,
-          }),
-        (payload) => readRows(payload).length > 0,
-        { timeoutMs: 90000, intervalMs: 3000 }
-      ).catch(() => null);
-      const firstCandidate = readRows(recallCandidates ?? {})[0] ?? null;
-      const candidatePlans = readRows(recallCandidates ?? {})
-        .map((candidate) => ({
-          candidate,
-          plan: classifyRecallCandidate(candidate, LIVE_CASE, DISCOVERY_LIVE_DEFAULTS),
-        }))
-        .sort((left, right) => right.plan.reviewScore - left.plan.reviewScore);
-
-      let promotionEvidence = null;
-      const promotionAttempts = [];
-      for (const item of candidatePlans) {
-        const recallCandidateId = readIdentifier(item.candidate, [
-          "recall_candidate_id",
-          "recallCandidateId",
-        ]);
-        if (!recallCandidateId) {
-          continue;
-        }
-        const registeredChannelId = String(
-          item.candidate.registered_channel_id ?? item.candidate.registeredChannelId ?? ""
-        ).trim();
-        const currentStatus = normalizeStatus(item.candidate.status);
-        if (registeredChannelId) {
-          promotionAttempts.push({
-            recallCandidateId,
-            decision: "already_registered",
-            status: currentStatus,
-            registeredChannelId,
-          });
-          continue;
-        }
-        if (item.plan.decision !== "promotable") {
-          promotionAttempts.push({
-            recallCandidateId,
-            decision: item.plan.decision,
-            rejectionReason: item.plan.rejectionReason ?? null,
-            reviewScore: item.plan.reviewScore ?? null,
-          });
-          continue;
-        }
-        try {
-          const promoted = await harness.mcpToolCall(token, "discovery.recall_candidates.promote", {
-            recallCandidateId,
-            payload: {
-              tags: ["mcp", "live-proof"],
-            },
-          });
-          const promotedChannelId = String(
-            promoted.registered_channel_id ?? promoted.registeredChannelId ?? ""
-          );
-          if (promotedChannelId) {
-            await harness.mcpToolCall(token, "channels.delete", {
-              channelId: promotedChannelId,
-              confirm: true,
-            });
-          }
-          promotionEvidence = {
-            recallCandidateId,
-            promotedChannelId,
-            reviewScore: item.plan.reviewScore ?? null,
-          };
-          promotionAttempts.push({
-            recallCandidateId,
-            decision: "promoted",
-            promotedChannelId: promotedChannelId || null,
-            reviewScore: item.plan.reviewScore ?? null,
-          });
-          break;
-        } catch (error) {
-          promotionAttempts.push({
-            recallCandidateId,
-            decision: "promotion_failed",
-            reviewScore: item.plan.reviewScore ?? null,
-            error: error instanceof Error ? error.message : String(error),
-            mcpDiagnostics: extractMcpDiagnostics(error),
-            httpDiagnostics: extractHttpDiagnostics(error),
-          });
-        }
-      }
-
-      await harness.mcpToolCall(token, "discovery.recall_missions.pause", {
-        recallMissionId,
-        confirm: true,
-      });
-      await harness.mcpToolCall(token, "discovery.profiles.archive", {
-        profileId,
-        confirm: true,
-      });
-
-      if (!firstCandidate) {
-        throw new Error("No recall candidates were produced during the live acquisition window.");
-      }
-
-      if (!promotionEvidence) {
-        throw new Error("No promotable recall candidates were produced during the live acquisition window.");
-      }
-
+      const [
+        contracts,
+        claims,
+        negativeEvidence,
+        providerHealth,
+        evalSuites,
+        evalRuns,
+      ] = await Promise.all([
+        harness.mcpToolCall(token, "discovery.contracts.list", { page: 1, pageSize: 10 }),
+        harness.mcpToolCall(token, "discovery.claims.list", { page: 1, pageSize: 10 }),
+        harness.mcpToolCall(token, "discovery.negative_evidence.list", { page: 1, pageSize: 10 }),
+        harness.mcpToolCall(token, "discovery.provider_health.list", { page: 1, pageSize: 10 }),
+        harness.mcpToolCall(token, "discovery.eval_suites.list", { page: 1, pageSize: 10 }),
+        harness.mcpToolCall(token, "discovery.eval_runs.list", { page: 1, pageSize: 10 }),
+      ]);
       return {
-        profileId,
-        recallMissionId,
-        recallCandidateCount: readRows(recallCandidates ?? {}).length,
-        promotionEvidence,
-        promotionAttempts,
+        contractRows: readRows(contracts).length,
+        claimRows: readRows(claims).length,
+        negativeEvidenceRows: readRows(negativeEvidence).length,
+        providerHealthRows: readRows(providerHealth).length,
+        evalSuiteRows: readRows(evalSuites).length,
+        evalRunRows: readRows(evalRuns).length,
       };
     });
 

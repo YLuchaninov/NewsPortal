@@ -2611,6 +2611,8 @@ Discovery в NewsPortal не заменяет готовые bundles из это
 
 Этот файл оставляет только high-level tie-in между example bundles и discovery, чтобы не дублировать длинные profile settings в двух местах.
 
+> **Resilient discovery v3 cutover note.** Подразделы ниже описывают историческую Example A/B/C привязку к legacy mission/recall discovery и сохранены как архив знаний. Для новой работы используйте [`docs/product/operator/discovery/resilient-discovery.md`](../discovery/resilient-discovery.md): discovery теперь v3-only, без `/admin/discovery/missions`, `/admin/discovery/recall`, `/admin/discovery/candidates` и старых `/maintenance/discovery/mission|recall|candidate` routes.
+
 ### 7.1. Что discovery добавляет, а что не заменяет
 
 Discovery добавляет:

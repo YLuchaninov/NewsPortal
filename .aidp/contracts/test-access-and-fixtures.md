@@ -61,6 +61,10 @@ Reusable deterministic procedures:
 - `infra/scripts/test-live-website-matrix.mjs`
 - `infra/scripts/test-live-discovery-examples.mjs`
 - `infra/scripts/test-live-discovery-domain-matrix.mjs`
+- `infra/scripts/test-live-discovery-calibration.mjs`
+  - `pnpm test:discovery:live-calibration:compose` is diagnostic and fails only for runtime/precondition failures; quality weakness is reported as tuning evidence.
+  - `pnpm test:discovery:live-acceptance:compose` is the strict MVP web/RSS/Atom discovery gate with repeated-flow acceptance.
+  - `pnpm test:discovery:live-soak:compose` is a manual/nightly polishing contour with more repetitions.
 - `infra/scripts/test-product-mega-flow.mjs`
   - `pnpm test:product:mega-flow:compose` is strict for live-selected article proof: each Example A/B/C must have at least one live-discovery article/news row selected in `final_selection_results`. Deterministic fixtures may prove provider/filter/sequence/Web/Admin/MCP buckets, but cannot substitute for live-selected-article acceptance.
   - `pnpm test:product:total-live:compose` is the broadest local/live audit layer above product mega-flow. API and Email IMAP external-live provider checks are `not_applicable_with_reason` until real external test targets exist; deterministic provider fixture evidence remains required and must not be described as fake external live proof.
@@ -125,7 +129,9 @@ If cleanup cannot be completed:
 ## Discovery proof notes
 
 - Discovery proof is DDGS-first by default; Brave/Serper-backed discovery is not part of the default local proof contour.
+- Discovery live calibration covers web search, RSS/Atom and website probes only; social, API and email ingress are excluded from this contour.
 - `pnpm test:discovery:examples:compose` is the canonical profile-backed examples entrypoint.
+- `pnpm test:discovery:live-calibration:compose` records run-scoped targets/runs, replay eval fixtures and tuning recommendations without automatically mutating prompts, thresholds or policies.
 - `pnpm test:discovery:mega:compose` is the bounded A/B/C mega comprehensive matrix proof layered on the profile-backed examples harness; `pnpm test:discovery:domains:compose` remains a compatibility alias.
 - `pnpm test:discovery-enabled:compose` proves bounded enabled runtime.
 - Live external provider proof is allowed only as bounded evidence and may leave explicit nondeterministic proof gaps.

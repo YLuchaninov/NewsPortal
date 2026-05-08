@@ -22,5 +22,5 @@ export const DETERMINISTIC_SCENARIO_GROUPS = {
     "negative-scope-and-destructive-policy",
     "request-log-and-audit-evidence",
   ],
-  discovery: ["discovery-operator-flows", "read-only-operator-needs", "doc-parity-matrix"],
+  discovery: ["discovery-operator-flows", "read-only-operator-needs"],
 };

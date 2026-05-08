@@ -1,4 +1,6 @@
-# DISCOVERY_MODE_TESTING.md — Готовые discovery-mode сценарии и operator-facing handbook для dual-path discovery
+# DISCOVERY_MODE_TESTING.md — Архивные discovery-mode сценарии для legacy dual-path discovery
+
+> **Archived after resilient discovery v3 cutover.** Этот документ сохранён как исторический operator knowledge для старой `mission/recall/candidate` модели. Актуальная production/operator инструкция теперь живёт в [`docs/product/operator/discovery/resilient-discovery.md`](../discovery/resilient-discovery.md): v3 использует `targets -> coverage -> hypotheses -> evidence -> endpoints/signals -> actions -> source_channels -> coverage`, Source Evidence Contracts, probation, claims, negative evidence, provider health and replay eval. Старые `/admin/discovery/missions`, `/admin/discovery/recall`, `/admin/discovery/candidates`, `/maintenance/discovery/missions`, `/maintenance/discovery/recall-*` routes retired and should not be used for new work.
 
 > **Для кого этот документ:** для администратора, который уже поднял NewsPortal и хочет тестировать discovery mode как отдельную подсистему, а не как набор разрозненных env-переменных и API ручек.
 >

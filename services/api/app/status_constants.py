@@ -1,23 +1,10 @@
 from __future__ import annotations
 
 from services.api.app import content_query as _content_query
-from services.api.app import discovery_payloads as _discovery_payloads
 from services.api.app import web_resource_read_model as _web_resource_read_model
 
 SEQUENCE_DEFINITION_STATUSES = {"draft", "active", "archived"}
 SEQUENCE_RUN_CANCELLABLE_STATUSES = {"pending"}
-
-DISCOVERY_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed", "archived"}
-DISCOVERY_RECALL_MISSION_STATUSES = {"planned", "active", "completed", "paused", "failed"}
-DISCOVERY_RECALL_MISSION_KINDS = {"manual", "domain_seed", "query_seed"}
-DISCOVERY_CLASS_STATUSES = {"draft", "active", "archived"}
-DISCOVERY_PROFILE_STATUSES = {"draft", "active", "archived"}
-DISCOVERY_GRAPH_STATUSES = {"pending", "compiled", "failed"}
-DISCOVERY_CANDIDATE_STATUSES = {"pending", "approved", "rejected", "auto_approved", "duplicate"}
-DISCOVERY_RECALL_CANDIDATE_STATUSES = {"pending", "shortlisted", "rejected", "duplicate"}
-DISCOVERY_HYPOTHESIS_STATUSES = {"pending", "running", "completed", "failed", "skipped"}
-DISCOVERY_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
-DISCOVERY_PROFILE_PROVIDER_TYPES = _discovery_payloads.DISCOVERY_PROFILE_PROVIDER_TYPES
 
 CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
 WEB_RESOURCE_EXTRACTION_STATES = _web_resource_read_model.WEB_RESOURCE_EXTRACTION_STATES

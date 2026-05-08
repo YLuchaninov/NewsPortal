@@ -119,11 +119,133 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP discovery session for objective "${objective}". ` +
-                `Read newsportal://guide/scenarios/discovery and newsportal://discovery/summary first, then inspect the relevant profiles, missions, recall missions, and recall candidates. ` +
-                `Unless the operator explicitly asks for manual approval, make the plan guarded-automation-first: use or create a profile, pass profileId into graph and recall missions, and rely on configured policy thresholds where evidence is sufficient. ` +
-                `Use discovery.mission.review before compile/run when mission boundaries or provider choices need tightening. ` +
-                `Promote only clearly aligned candidates with valid evidence or explicit overrideReason, and verify promoted channels after mutation. Manual review is a fallback for missing policy/evidence or ambiguity, not the default plan.`,
+                `Plan a NewsPortal MCP discovery v3 session for objective "${objective}". ` +
+                `Read newsportal://guide/scenarios/discovery and newsportal://discovery/summary first, then inspect the relevant targets, coverage, runs, endpoints, contracts, claims, provider health, negative evidence, and eval runs. ` +
+                `Unless the operator explicitly asks for manual approval, make the plan guarded-automation-first: create or update a target, refresh coverage, start a bounded run, and rely on evidence contracts, provider capability policy, and replay-evaluated thresholds where evidence is sufficient. ` +
+                `Use discovery.constructive_skeptic.review, discovery.verification_skeptic.review, discovery.contract.review, or discovery.claim.review when hypothesis boundaries, hidden-signal claims, provider choices, or probation evidence need tightening. ` +
+                `Promote only endpoints with valid evidence and source contracts, keep new sources in probation until the contract passes, and verify promoted channels after mutation. Manual review is a fallback for missing policy/evidence or ambiguity, not the default plan.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.constructive_skeptic.review",
+    description: "Review Explorer hypotheses with bounded constructive skepticism.",
+    arguments: [
+      { name: "target", description: "Target or hypothesis pack under review.", required: true },
+    ],
+    render: (args) => {
+      const target = readRequiredString(args.target, "target");
+      return {
+        description: "Constructive Skeptic review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review this discovery hypothesis pack as Constructive Skeptic: ${target}. ` +
+                `Return concrete critiques, repair patches, bounded missing-angle ideas, negative controls, provider warnings, and direct-vs-hidden corrections. ` +
+                `Do not create an unlimited alternate plan. Hidden signals require claims and control comparison; provider failures are provider-health events, not hypothesis failures.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.verification_skeptic.review",
+    description: "Perform the short post-repair Verification Skeptic pass.",
+    arguments: [
+      { name: "target", description: "Repaired hypothesis pack under verification.", required: true },
+    ],
+    render: (args) => {
+      const target = readRequiredString(args.target, "target");
+      return {
+        description: "Verification Skeptic review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Verify this repaired discovery hypothesis pack: ${target}. ` +
+                `Confirm whether major risks were fixed, list only blocking residual issues, add at most three critical ideas, and route persistent disagreement to manual_review.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.contract.review",
+    description: "Review a Source Evidence Contract or probation source.",
+    arguments: [
+      { name: "contract", description: "Contract/probation evidence to review.", required: true },
+    ],
+    render: (args) => {
+      const contract = readRequiredString(args.contract, "contract");
+      return {
+        description: "Source Evidence Contract review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review this Source Evidence Contract and probation evidence: ${contract}. ` +
+                `Identify expected yield, noise, duplicate, freshness and extraction gaps; recommend active, degraded, replacement_needed or manual review.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.claim.review",
+    description: "Review a hidden-signal claim and control comparison.",
+    arguments: [
+      { name: "claim", description: "Claim/evidence/control-comparison payload.", required: true },
+    ],
+    render: (args) => {
+      const claim = readRequiredString(args.claim, "claim");
+      return {
+        description: "Hidden claim review",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Review this hidden-signal claim: ${claim}. ` +
+                `Check support, contradiction, independent sources, unique authors, spam/campaign risk and control specificity. ` +
+                `Do not allow strong follow-up if claim/control support is insufficient.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "discovery.failure.repair",
+    description: "Diagnose weak discovery runs and propose allowed repair recipes.",
+    arguments: [
+      { name: "run", description: "Run metrics/failure evidence to diagnose.", required: true },
+    ],
+    render: (args) => {
+      const run = readRequiredString(args.run, "run");
+      return {
+        description: "Discovery failure repair",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Diagnose this resilient discovery run: ${run}. ` +
+                `Use observed metrics only. Separate provider health failures from hypothesis failures. Recommend repair recipes such as broaden_queries, reduce_noise, switch_provider, expand_source_directory or replace_weak_source.`,
             },
           },
         ],
@@ -386,14 +508,14 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "discovery.yield.review",
-    description: "Review discovery mission/recall candidate yield and promotion readiness.",
+    description: "Review discovery v3 target/run yield and endpoint promotion readiness.",
     arguments: [
-      { name: "missionId", description: "Optional graph mission id." },
-      { name: "recallMissionId", description: "Optional recall mission id." },
+      { name: "targetId", description: "Optional discovery target id." },
+      { name: "runId", description: "Optional discovery run id." },
     ],
     render: (args) => {
-      const missionId = readOptionalString(args.missionId) ?? "any relevant graph mission";
-      const recallMissionId = readOptionalString(args.recallMissionId) ?? "any relevant recall mission";
+      const targetId = readOptionalString(args.targetId) ?? "any relevant discovery target";
+      const runId = readOptionalString(args.runId) ?? "any relevant discovery run";
       return {
         description: "Discovery yield review",
         messages: [
@@ -402,9 +524,9 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Review discovery yield for mission ${missionId} and recall mission ${recallMissionId}. ` +
-                `Read newsportal://guide/diagnostics/discovery, discovery.summary.get, mission/candidate lists, and operator.report.verify with reportKind=discovery_yield. ` +
-                `Explain rejected candidates by probe evidence and never force promotion without valid evidence or explicit overrideReason. If the operator expected automation but the mission has no profileId/applied policy, recommend profile-backed rerun/tuning instead of normalizing manual review as the desired state.`,
+                `Review discovery yield for target ${targetId} and run ${runId}. ` +
+                `Read newsportal://guide/diagnostics/discovery, discovery.summary.get, coverage, hypotheses, endpoints, contracts, claims, negative evidence, provider health, and operator.report.verify with reportKind=discovery_run or discovery_yield. ` +
+                `Explain rejected endpoints by probe evidence, source contracts, provider health, negative evidence, and missing evidence. Never force promotion without valid evidence; if a source is promoted, it starts in probation and does not count as strong coverage until the contract passes.`,
             },
           },
         ],
@@ -490,26 +612,26 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
     },
   },
   {
-    name: "discovery.profile.tune",
-    description: "Turn article residual evidence into a bounded discovery-profile tuning recommendation.",
+    name: "discovery.coverage.tune",
+    description: "Turn article residual evidence into a bounded discovery target/coverage tuning recommendation.",
     arguments: [
-      { name: "profileName", description: "Discovery profile being tuned.", required: true },
+      { name: "targetTitle", description: "Discovery target being tuned.", required: true },
       { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
     ],
     render: (args) => {
-      const profileName = readRequiredString(args.profileName, "profileName");
+      const targetTitle = readRequiredString(args.targetTitle, "targetTitle");
       const residualPattern = readRequiredString(args.residualPattern, "residualPattern");
       return {
-        description: "Discovery profile tuning guide",
+        description: "Discovery coverage tuning guide",
         messages: [
           {
             role: "user",
             content: {
               type: "text",
               text:
-                `Use newsportal://guide/scenarios/article-diagnostics and the relevant discovery/profile reads to tune discovery profile "${profileName}" from downstream evidence. ` +
+                `Use newsportal://guide/scenarios/article-diagnostics and the relevant discovery target, coverage, contract, claim, endpoint, and negative-evidence reads to tune discovery target "${targetTitle}" from downstream evidence. ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
-                `Return a bounded recommendation covering profile scope, provider/source constraints, escalation policy, and what follow-up checks should confirm the change, while preserving the invariant that downstream diagnostics inform operators but do not become direct auto-approval inputs. Do not auto-write changes.`,
+                `Return a bounded recommendation covering target graph scope, source-role targets, provider/source constraints, hidden-signal claim requirements, contract thresholds, and what replay eval or follow-up checks should confirm the change. Preserve the invariant that downstream diagnostics inform operators but do not become direct auto-approval inputs. Do not auto-write changes.`,
             },
           },
         ],
@@ -517,23 +639,23 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
     },
   },
   {
-    name: "discovery.mission.review",
-    description: "Review a discovery mission before compile/run.",
+    name: "discovery.target.review",
+    description: "Review a discovery v3 target before refresh/run/expand.",
     arguments: [
-      { name: "missionTitle", description: "Mission title.", required: true },
-      { name: "goal", description: "Why the mission exists." },
+      { name: "targetTitle", description: "Discovery target title.", required: true },
+      { name: "goal", description: "Why the target exists." },
     ],
     render: (args) => {
-      const missionTitle = readRequiredString(args.missionTitle, "missionTitle");
+      const targetTitle = readRequiredString(args.targetTitle, "targetTitle");
       const goal = readOptionalString(args.goal) ?? "find net-new high-signal sources";
       return {
-        description: "Discovery mission review guide",
+        description: "Discovery target review guide",
         messages: [
           {
             role: "user",
             content: {
               type: "text",
-              text: `Review the discovery mission "${missionTitle}" for NewsPortal. Check whether the mission goal "${goal}" is bounded, whether provider types and budget feel proportional, whether profileId is present when automation/policy thresholds are expected, and what should be adjusted before compile_graph or run. If the operator did not ask for manual approval, prefer a guarded profile-backed plan over manual-review-only execution.`,
+              text: `Review discovery target "${targetTitle}" for NewsPortal. Check whether the target goal "${goal}" is bounded, whether source-role coverage policy, direct/hidden signal split, provider capabilities, diversity budget, kill switches and contract/probation thresholds are proportional, and what should be adjusted before refresh-coverage, expand-gap or run. If hidden signals are involved, require claims plus control comparison before strong follow-up.`,
             },
           },
         ],

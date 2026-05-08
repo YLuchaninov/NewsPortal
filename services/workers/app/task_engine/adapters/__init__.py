@@ -7,6 +7,7 @@ from .content_sampler import FetchersContentSamplerAdapter
 from .db_store import PostgresDbStoreAdapter
 from .fetchers_rss_probe import FetchersRssProbeAdapter
 from .llm_analyzer import GeminiLlmAnalyzerAdapter
+from .search_fanout import SearchFanoutAdapter
 from .source_registrar import PostgresSourceRegistrarAdapter
 from .url_validator import FetchersUrlValidatorAdapter
 from .web_search import (
@@ -31,7 +32,22 @@ def resolve_discovery_search_provider() -> str:
 
 
 def build_discovery_web_search_adapter() -> object:
+    import os
+
+    providers_value = os.getenv("DISCOVERY_SEARCH_PROVIDERS", "").strip().lower()
+    if providers_value:
+        adapters: dict[str, object] = {}
+        for provider_name in [item.strip() for item in providers_value.split(",") if item.strip()]:
+            adapters[provider_name] = _build_single_search_adapter(provider_name)
+        if len(adapters) > 1:
+            return SearchFanoutAdapter(adapters)
+        if len(adapters) == 1:
+            return next(iter(adapters.values()))
     provider = resolve_discovery_search_provider()
+    return _build_single_search_adapter(provider)
+
+
+def _build_single_search_adapter(provider: str) -> object:
     if provider == "stub":
         return StubWebSearchAdapter()
     if provider == "ddgs":

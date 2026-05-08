@@ -242,7 +242,7 @@ pnpm test:product:local:core
   - `DISCOVERY_BRAVE_API_KEY`
   - `DISCOVERY_SERPER_API_KEY`
 - Supported discovery search adapters are `stub`, `ddgs`, `brave`, and `serper`; the default stays `ddgs`, but runtime/provider semantics no longer assume DDGS outside the selected adapter.
-- Admin discovery surfaces live under `/admin/discovery` behind the existing allowlisted admin/session boundary and keep same-origin BFF writes with audit logging. The overview remains at `/admin/discovery`, while focused entry routes now include `/admin/discovery/profiles`, `/admin/discovery/missions`, `/admin/discovery/recall`, `/admin/discovery/candidates`, and `/admin/discovery/sources`.
+- Admin discovery surfaces live under `/admin/discovery` behind the existing allowlisted admin/session boundary and keep same-origin BFF writes with audit logging. The cutover workspace is v3-only: targets, coverage, runs, endpoints, source contracts, hidden claims, negative evidence, provider health and replay eval are shown in the single resilient discovery operator workspace. Legacy mission/recall/candidate/profile/source subroutes are retired after the resilient discovery rebuild.
 
 ### Discovery live enable runbook
 

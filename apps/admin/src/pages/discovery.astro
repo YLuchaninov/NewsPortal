@@ -1,16 +1,6 @@
 ---
 import { readRuntimeConfig } from "@newsportal/config";
-import DiscoveryCandidatesTab from "../components/discovery/DiscoveryCandidatesTab.astro";
-import DiscoveryClassesTab from "../components/discovery/DiscoveryClassesTab.astro";
-import DiscoveryControlPlaneHero from "../components/discovery/DiscoveryControlPlaneHero.astro";
-import DiscoveryDashboardTab from "../components/discovery/DiscoveryDashboardTab.astro";
-import DiscoveryFeedbackTab from "../components/discovery/DiscoveryFeedbackTab.astro";
-import DiscoveryHypothesesTab from "../components/discovery/DiscoveryHypothesesTab.astro";
-import DiscoveryMissionsTab from "../components/discovery/DiscoveryMissionsTab.astro";
-import DiscoveryProfilesTab from "../components/discovery/DiscoveryProfilesTab.astro";
-import DiscoveryPortfolioTab from "../components/discovery/DiscoveryPortfolioTab.astro";
-import DiscoveryRecallTab from "../components/discovery/DiscoveryRecallTab.astro";
-import DiscoverySourcesTab from "../components/discovery/DiscoverySourcesTab.astro";
+import { createNewsPortalSdk } from "@newsportal/sdk";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -18,14 +8,22 @@ import {
   readFlash,
   resolveAdminCurrentPath,
 } from "../lib/server/browser-flow";
-import {
-  buildDiscoveryPageLinks,
-  buildDiscoveryPageViewModel,
-} from "../lib/server/discovery-page-view-model";
 
 export const prerender = false;
 
-const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
+type Page = {
+  items?: Array<Record<string, unknown>>;
+};
+
+type Column = {
+  key: string;
+  label: string;
+  wide?: boolean;
+};
+
+const runtimeConfig = readRuntimeConfig(process.env, {
+  defaultAppBaseUrl: "http://127.0.0.1:4322/",
+});
 const session = await resolveAdminSession(Astro.request);
 if (!session) {
   return Astro.redirect(
@@ -33,333 +31,382 @@ if (!session) {
   );
 }
 
+const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const flash = readFlash(Astro.url);
-const tab = Astro.url.searchParams.get("tab") ?? "dashboard";
-const {
-  appPath,
-  bffPath,
-  currentPath,
-  pagePaths,
-  resolveMissionScopedHref,
-  resolvePageHref,
-  resolveSelectionHref,
-  tabs,
-} = buildDiscoveryPageLinks({
-  request: Astro.request,
-  url: Astro.url,
-  tab,
-});
-const {
-  activeLlmModel,
-  activeSearchProvider,
-  attachableProfiles,
-  candidateItems,
-  candidates,
-  classItems,
-  classes,
-  costItems,
-  costs,
-  feedback,
-  feedbackItems,
-  hypothesisItems,
-  hypotheses,
-  missionItems,
-  missions,
-  monthToDateCostUsd,
-  monthlyBudgetCents,
-  monthlyQuotaReached,
-  operatorSummary,
-  portfolioGaps,
-  portfolioSnapshot,
-  portfolioSummary,
-  profileItems,
-  profiles,
-  rankedSources,
-  recallCandidateItems,
-  recallCandidates,
-  recallMissionItems,
-  recallMissions,
-  remainingMonthlyBudgetCents,
-  selectedCandidate,
-  selectedCandidateId,
-  selectedMissionId,
-  selectedMissionWorkspace,
-  selectedMissionWorkspaceId,
-  selectedSourceProfile,
-  selectedSourceProfileId,
-  sourceProfileItems,
-  sourceProfiles,
-  sourceScoreByProfileId,
-  summary,
-  totalCostUsd,
-} = await buildDiscoveryPageViewModel({
-  runtimeConfig,
-  url: Astro.url,
-  fetchImpl: fetch,
-});
 
-const candidateSelectionHrefById = Object.fromEntries(
-  candidateItems
-    .map((candidate) => String(candidate.candidate_id ?? ""))
-    .filter(Boolean)
-    .map((candidateId) => [
-      candidateId,
-      resolveSelectionHref("candidates", { selectedCandidateId: candidateId }),
-    ])
-);
-const sourceSelectionHrefById = Object.fromEntries(
-  sourceProfileItems
-    .map((profile) => String(profile.source_profile_id ?? ""))
-    .filter(Boolean)
-    .map((profileId) => [
-      profileId,
-      resolveSelectionHref("sources", { selectedSourceProfileId: profileId }),
-    ])
-);
-const missionHrefById = Object.fromEntries(
-  missionItems
-    .map((mission) => String(mission.mission_id ?? ""))
-    .filter(Boolean)
-    .map((missionId) => [missionId, resolveMissionScopedHref(missionId)])
-);
-const missionSelectionHrefById = Object.fromEntries(
-  missionItems
-    .map((mission) => String(mission.mission_id ?? ""))
-    .filter(Boolean)
-    .map((missionId) => [
-      missionId,
-      resolveSelectionHref("missions", { selectedMissionId: missionId }),
-    ])
-);
-const selectedMissionHref = selectedMissionId
-  ? resolveMissionScopedHref(selectedMissionId)
-  : "";
+async function safe<T>(loader: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await loader();
+  } catch {
+    return fallback;
+  }
+}
+
+const [
+  summary,
+  targets,
+  runs,
+  endpoints,
+  contracts,
+  claims,
+  negativeEvidence,
+  providerHealth,
+  evalSuites,
+  llmDecisions,
+  autopilotProfiles,
+] = await Promise.all([
+  safe(() => sdk.getDiscoverySummary<Record<string, unknown>>(), {}),
+  safe(() => sdk.listDiscoveryTargets<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryRuns<Record<string, unknown>>({ page: 1, pageSize: 12 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryEndpoints<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryContracts<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryClaims<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryNegativeEvidence<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryProviderHealth<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryEvalSuites<Record<string, unknown>>({ page: 1, pageSize: 10 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryLlmDecisions<Record<string, unknown>>({ page: 1, pageSize: 12 }), { items: [] } as Page),
+  safe(() => sdk.listDiscoveryAutopilotProfiles<Record<string, unknown>>(), { items: [] }),
+]);
+
+const targetItems = targets.items ?? [];
+const runItems = runs.items ?? [];
+const endpointItems = endpoints.items ?? [];
+const contractItems = contracts.items ?? [];
+const claimItems = claims.items ?? [];
+const negativeItems = negativeEvidence.items ?? [];
+const providerItems = providerHealth.items ?? [];
+const evalItems = evalSuites.items ?? [];
+const llmDecisionItems = llmDecisions.items ?? [];
+const autopilotItems = Array.isArray(autopilotProfiles.items) ? autopilotProfiles.items : [];
+
+const targetColumns: Column[] = [
+  { key: "title", label: "Target", wide: true },
+  { key: "origin_kind", label: "Origin" },
+  { key: "status", label: "Status" },
+  { key: "priority", label: "Priority" },
+  { key: "updated_at", label: "Updated" },
+];
+
+const runColumns: Column[] = [
+  { key: "run_kind", label: "Kind" },
+  { key: "trigger_kind", label: "Trigger" },
+  { key: "status", label: "Status" },
+  { key: "created_at", label: "Created" },
+];
+
+const contractColumns: Column[] = [
+  { key: "source_role", label: "Role" },
+  { key: "status", label: "Status" },
+  { key: "coverage_contribution", label: "Coverage" },
+  { key: "health_score", label: "Health" },
+  { key: "failure_reason", label: "Failure", wide: true },
+];
+
+const claimColumns: Column[] = [
+  { key: "title", label: "Claim", wide: true },
+  { key: "status", label: "Status" },
+  { key: "confidence_score", label: "Confidence" },
+  { key: "specificity_score", label: "Specificity" },
+  { key: "independent_source_count", label: "Sources" },
+];
+
+const negativeColumns: Column[] = [
+  { key: "failure_mode", label: "Failure" },
+  { key: "provider_id", label: "Provider" },
+  { key: "query_text", label: "Query", wide: true },
+  { key: "cooldown_until", label: "Cooldown" },
+];
+
+const providerColumns: Column[] = [
+  { key: "provider_id", label: "Provider" },
+  { key: "status", label: "Status" },
+  { key: "error_rate", label: "Error rate" },
+  { key: "cooldown_until", label: "Cooldown" },
+  { key: "last_error_kind", label: "Last error" },
+];
+
+const evalColumns: Column[] = [
+  { key: "name", label: "Suite", wide: true },
+  { key: "status", label: "Status" },
+  { key: "created_at", label: "Created" },
+];
+
+const llmDecisionColumns: Column[] = [
+  { key: "task_name", label: "Task", wide: true },
+  { key: "status", label: "Status" },
+  { key: "fallback_used", label: "Fallback" },
+  { key: "schema_name", label: "Schema" },
+  { key: "created_at", label: "Created" },
+];
+
+function text(value: unknown, fallback = "n/a"): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.map((entry) => text(entry, "")).filter(Boolean).join(", ") : fallback;
+  }
+  if (value != null && typeof value === "object") {
+    const serialized = JSON.stringify(value);
+    return serialized === "{}" || serialized === "[]" ? fallback : serialized;
+  }
+  const normalized = String(value ?? "").trim();
+  return normalized || fallback;
+}
+
+function score(value: unknown): string {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+}
+
+function metricValue(...keys: string[]): string {
+  for (const key of keys) {
+    const value = summary[key];
+    if (value != null) {
+      return text(value, "0");
+    }
+  }
+  return "0";
+}
+
+function cellValue(row: Record<string, unknown>, key: string): string {
+  if (key.endsWith("_score") || key === "priority" || key === "coverage_contribution" || key === "health_score" || key === "error_rate") {
+    return score(row[key]);
+  }
+  return text(row[key]);
+}
 ---
 
 <AdminShell title="Discovery — Admin" session={session} flash={flash} activeNav="discovery">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
-      <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
+      <a href="/" class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <span class="text-foreground font-medium">Discovery</span>
+      <span class="font-medium text-foreground">Resilient Discovery</span>
     </nav>
   </Fragment>
 
   <Fragment slot="header-actions">
-    <a href={appPath("/channels")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
-      View channels
+    <a href="/channels" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent">
+      Source channels
     </a>
   </Fragment>
 
-  <div class="space-y-6">
-    <DiscoveryControlPlaneHero
-      activeLlmModel={activeLlmModel}
-      activeSearchProvider={activeSearchProvider}
-      defaultCron={runtimeConfig.discoveryCron}
-      monthToDateCostUsd={monthToDateCostUsd}
-      monthlyBudgetCents={monthlyBudgetCents}
-      monthlyQuotaReached={monthlyQuotaReached}
-      operatorSummary={operatorSummary}
-      remainingMonthlyBudgetCents={remainingMonthlyBudgetCents}
-      summary={summary}
-      tab={tab}
-      tabs={tabs}
-    />
+  <div class="space-y-8">
+    <section class="space-y-4">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-normal">Resilient Discovery</h1>
+        <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
+          Coverage-driven source acquisition with endpoint evidence, probation contracts, hidden-signal claims, negative evidence and provider circuit breakers.
+        </p>
+      </div>
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+        <form method="post" action="/api/admin/discovery/targets/create-simple" class="rounded-md border bg-card p-4">
+          <h2 class="text-base font-semibold tracking-normal">Create simple target</h2>
+          <div class="mt-3 grid gap-3 md:grid-cols-[1fr_180px_auto]">
+            <input name="prompt" required class="h-9 rounded-md border bg-background px-3 text-sm" placeholder="Topic, entities, geos and signals to discover" />
+            <select name="autopilotProfile" class="h-9 rounded-md border bg-background px-3 text-sm">
+              {autopilotItems.map((profile) => <option value={text(profile.profileId)}>{text(profile.profileId)}</option>)}
+              {autopilotItems.length === 0 && <option value="balanced">balanced</option>}
+            </select>
+            <button class="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Create</button>
+          </div>
+        </form>
+        <div class="rounded-md border bg-card p-4">
+          <h2 class="text-base font-semibold tracking-normal">Operator guardrails</h2>
+          <div class="mt-2 text-sm text-muted-foreground">
+            LLM decisions are proposal-only, website auto-promotion is disabled, social providers stay monitor-only or needs-config, and probation sources count as partial coverage until contracts pass.
+          </div>
+        </div>
+      </div>
+      <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div class="rounded-md border bg-card p-3">
+          <div class="text-xs font-medium uppercase text-muted-foreground">Active targets</div>
+          <div class="mt-2 text-2xl font-semibold">{metricValue("active_targets", "activeTargets")}</div>
+        </div>
+        <div class="rounded-md border bg-card p-3">
+          <div class="text-xs font-medium uppercase text-muted-foreground">Active runs</div>
+          <div class="mt-2 text-2xl font-semibold">{metricValue("active_runs", "activeRuns")}</div>
+        </div>
+        <div class="rounded-md border bg-card p-3">
+          <div class="text-xs font-medium uppercase text-muted-foreground">Review endpoints</div>
+          <div class="mt-2 text-2xl font-semibold">{metricValue("review_endpoints", "reviewEndpoints")}</div>
+        </div>
+        <div class="rounded-md border bg-card p-3">
+          <div class="text-xs font-medium uppercase text-muted-foreground">Probation</div>
+          <div class="mt-2 text-2xl font-semibold">{metricValue("probation_sources", "probationSources")}</div>
+        </div>
+        <div class="rounded-md border bg-card p-3">
+          <div class="text-xs font-medium uppercase text-muted-foreground">Open claims</div>
+          <div class="mt-2 text-2xl font-semibold">{metricValue("open_claims", "openClaims")}</div>
+        </div>
+        <div class="rounded-md border bg-card p-3">
+          <div class="text-xs font-medium uppercase text-muted-foreground">Provider alerts</div>
+          <div class="mt-2 text-2xl font-semibold">{metricValue("unhealthy_providers", "unhealthyProviders")}</div>
+        </div>
+      </div>
+    </section>
 
-    {(tab === "dashboard" || !tab) && (
-      <DiscoveryDashboardTab
-        costItems={costItems}
-        costs={costs}
-        operatorSummary={operatorSummary}
-        totalCostUsd={totalCostUsd}
-      />
-    )}
+    <section class="grid gap-6 xl:grid-cols-2">
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3">
+          <h2 class="text-base font-semibold tracking-normal">Targets</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+              <tr>{targetColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr>
+            </thead>
+            <tbody>
+              {targetItems.length === 0 && <tr><td colspan={targetColumns.length} class="px-3 py-4 text-muted-foreground">No discovery targets.</td></tr>}
+              {targetItems.map((row) => (
+                <tr class="border-t align-top">
+                  {targetColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-    {tab === "profiles" && (
-      <DiscoveryProfilesTab
-        bffPath={bffPath}
-        candidateItems={candidateItems}
-        currentPath={currentPath}
-        missionItems={missionItems}
-        nextHref={resolvePageHref("profilePage", profiles.page + 1)}
-        operatorSummary={operatorSummary}
-        prevHref={resolvePageHref("profilePage", profiles.page - 1)}
-        profileItems={profileItems}
-        profiles={profiles}
-        recallMissionItems={recallMissionItems}
-      />
-    )}
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3">
+          <h2 class="text-base font-semibold tracking-normal">Runs</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+              <tr>{runColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr>
+            </thead>
+            <tbody>
+              {runItems.length === 0 && <tr><td colspan={runColumns.length} class="px-3 py-4 text-muted-foreground">No discovery runs.</td></tr>}
+              {runItems.map((row) => (
+                <tr class="border-t align-top">
+                  {runColumns.map((column) => <td class="whitespace-nowrap px-3 py-2">{cellValue(row, column.key)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    {tab === "missions" && (
-      <DiscoveryMissionsTab
-        attachableProfiles={attachableProfiles}
-        bffPath={bffPath}
-        currentPath={currentPath}
-        missionItems={missionItems}
-        missionPortfolioHrefById={missionHrefById}
-        missionSelectionHrefById={missionSelectionHrefById}
-        missions={missions}
-        monthlyQuotaReached={monthlyQuotaReached}
-        nextHref={resolvePageHref("missionPage", missions.page + 1)}
-        prevHref={resolvePageHref("missionPage", missions.page - 1)}
-        selectedMissionWorkspace={selectedMissionWorkspace}
-        selectedMissionWorkspaceId={selectedMissionWorkspaceId}
-        summary={summary}
-      />
-    )}
+    <section class="space-y-4">
+      <h2 class="text-lg font-semibold tracking-normal">Endpoint Review</h2>
+      <div class="overflow-x-auto rounded-md border bg-card">
+        <table class="min-w-full text-sm">
+          <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+            <tr>
+              <th class="px-3 py-2">Endpoint</th>
+              <th class="px-3 py-2">Provider</th>
+              <th class="px-3 py-2">Role</th>
+              <th class="px-3 py-2">Score</th>
+              <th class="px-3 py-2">Action</th>
+              <th class="px-3 py-2">Why found</th>
+              <th class="px-3 py-2">Why not promoted</th>
+              <th class="px-3 py-2">Missing evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {endpointItems.length === 0 && (
+              <tr><td colspan="8" class="px-3 py-4 text-muted-foreground">No endpoint candidates.</td></tr>
+            )}
+            {endpointItems.map((item) => (
+              <tr class="border-t align-top">
+                <td class="max-w-md break-all px-3 py-2">{text(item.endpoint_url)}</td>
+                <td class="whitespace-nowrap px-3 py-2">{text(item.provider_type)}</td>
+                <td class="whitespace-nowrap px-3 py-2">{text(item.source_role)}</td>
+                <td class="whitespace-nowrap px-3 py-2">{score(item.total_score)}</td>
+                <td class="whitespace-nowrap px-3 py-2">{text(item.recommended_action)}</td>
+                <td class="max-w-sm break-words px-3 py-2 text-muted-foreground">{text(item.why_found_json, "No explanation yet")}</td>
+                <td class="max-w-sm break-words px-3 py-2 text-muted-foreground">{text(item.why_not_promoted_json, "No blocker recorded")}</td>
+                <td class="max-w-sm break-words px-3 py-2 text-muted-foreground">{text(item.missing_evidence_json, "No missing evidence recorded")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-    {tab === "recall" && (
-      <DiscoveryRecallTab
-        attachableProfiles={attachableProfiles}
-        bffPath={bffPath}
-        currentPath={currentPath}
-        operatorSummary={operatorSummary}
-        recallCandidateItems={recallCandidateItems}
-        recallCandidateNextHref={resolvePageHref("recallCandidatePage", recallCandidates.page + 1)}
-        recallCandidatePrevHref={resolvePageHref("recallCandidatePage", recallCandidates.page - 1)}
-        recallCandidates={recallCandidates}
-        recallMissionItems={recallMissionItems}
-        recallMissionNextHref={resolvePageHref("recallMissionPage", recallMissions.page + 1)}
-        recallMissionPrevHref={resolvePageHref("recallMissionPage", recallMissions.page - 1)}
-        recallMissions={recallMissions}
-      />
-    )}
+    <section class="grid gap-6 xl:grid-cols-2">
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Source Evidence Contracts</h2></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{contractColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
+            <tbody>
+              {contractItems.length === 0 && <tr><td colspan={contractColumns.length} class="px-3 py-4 text-muted-foreground">No source evidence contracts.</td></tr>}
+              {contractItems.map((row) => <tr class="border-t align-top">{contractColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-    {tab === "classes" && (
-      <DiscoveryClassesTab
-        bffPath={bffPath}
-        classItems={classItems}
-        classes={classes}
-        currentPath={currentPath}
-        nextHref={resolvePageHref("classPage", classes.page + 1)}
-        prevHref={resolvePageHref("classPage", classes.page - 1)}
-      />
-    )}
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Hidden Claims</h2></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{claimColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
+            <tbody>
+              {claimItems.length === 0 && <tr><td colspan={claimColumns.length} class="px-3 py-4 text-muted-foreground">No hidden-signal claims.</td></tr>}
+              {claimItems.map((row) => <tr class="border-t align-top">{claimColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-    {tab === "candidates" && (
-      <DiscoveryCandidatesTab
-        bffPath={bffPath}
-        candidateItems={candidateItems}
-        candidates={candidates}
-        currentPath={currentPath}
-        nextHref={resolvePageHref("candidatePage", candidates.page + 1)}
-        prevHref={resolvePageHref("candidatePage", candidates.page - 1)}
-        selectedCandidate={selectedCandidate}
-        selectedCandidateId={selectedCandidateId}
-        selectionHrefByCandidateId={candidateSelectionHrefById}
-      />
-    )}
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Negative Evidence</h2></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{negativeColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
+            <tbody>
+              {negativeItems.length === 0 && <tr><td colspan={negativeColumns.length} class="px-3 py-4 text-muted-foreground">No negative evidence cooldowns.</td></tr>}
+              {negativeItems.map((row) => <tr class="border-t align-top">{negativeColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-    {tab === "hypotheses" && (
-      <DiscoveryHypothesesTab
-        hypotheses={hypotheses}
-        hypothesisItems={hypothesisItems}
-        nextHref={resolvePageHref("hypothesisPage", hypotheses.page + 1)}
-        prevHref={resolvePageHref("hypothesisPage", hypotheses.page - 1)}
-      />
-    )}
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Provider Health</h2></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{providerColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
+            <tbody>
+              {providerItems.length === 0 && <tr><td colspan={providerColumns.length} class="px-3 py-4 text-muted-foreground">No provider health alerts.</td></tr>}
+              {providerItems.map((row) => <tr class="border-t align-top">{providerColumns.map((column) => <td class="whitespace-nowrap px-3 py-2">{cellValue(row, column.key)}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    {tab === "sources" && (
-      <DiscoverySourcesTab
-        currentMissionHref={selectedMissionHref}
-        nextHref={resolvePageHref("sourcePage", sourceProfiles.page + 1)}
-        prevHref={resolvePageHref("sourcePage", sourceProfiles.page - 1)}
-        selectedMissionId={selectedMissionId}
-        selectedSourceProfile={selectedSourceProfile}
-        selectedSourceProfileId={selectedSourceProfileId}
-        sourceProfileItems={sourceProfileItems}
-        sourceProfiles={sourceProfiles}
-        sourceScoreByProfileId={sourceScoreByProfileId}
-        sourceSelectionHrefById={sourceSelectionHrefById}
-      />
-    )}
+    <section>
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Replay Eval Suites</h2></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{evalColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
+            <tbody>
+              {evalItems.length === 0 && <tr><td colspan={evalColumns.length} class="px-3 py-4 text-muted-foreground">No replay eval suites.</td></tr>}
+              {evalItems.map((row) => <tr class="border-t align-top">{evalColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    {tab === "portfolio" && (
-      <DiscoveryPortfolioTab
-        bffPath={bffPath}
-        currentPath={currentPath}
-        missionHrefById={missionHrefById}
-        missionItems={missionItems}
-        portfolioGaps={portfolioGaps}
-        portfolioSnapshot={portfolioSnapshot}
-        portfolioSummary={portfolioSummary}
-        rankedSources={rankedSources}
-        selectedMissionId={selectedMissionId}
-      />
-    )}
-
-    {tab === "feedback" && (
-      <DiscoveryFeedbackTab
-        bffPath={bffPath}
-        currentPath={currentPath}
-        feedback={feedback}
-        feedbackItems={feedbackItems}
-        nextHref={resolvePageHref("feedbackPage", feedback.page + 1)}
-        prevHref={resolvePageHref("feedbackPage", feedback.page - 1)}
-        selectedMissionId={selectedMissionId}
-      />
-    )}
+    <section>
+      <div class="rounded-md border bg-card">
+        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">LLM Decisions</h2></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{llmDecisionColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
+            <tbody>
+              {llmDecisionItems.length === 0 && <tr><td colspan={llmDecisionColumns.length} class="px-3 py-4 text-muted-foreground">No discovery LLM decisions recorded.</td></tr>}
+              {llmDecisionItems.map((row) => <tr class="border-t align-top">{llmDecisionColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
-
-  <script is:inline>
-    (() => {
-      const interactiveSelector = [
-        "a",
-        "button",
-        "input",
-        "select",
-        "textarea",
-        "label",
-        "[role='button']",
-        "[role='link']",
-        "[data-admin-pane-open-link]",
-      ].join(",");
-
-      const openPaneState = (paneId) => {
-        try {
-          window.localStorage.setItem(`newsportal-admin-pane:${paneId}:state`, "open");
-        } catch {
-          return;
-        }
-      };
-
-      const rows = document.querySelectorAll("[data-discovery-row-href][data-discovery-row-pane]");
-      rows.forEach((row) => {
-        const href = row.getAttribute("data-discovery-row-href");
-        const paneId = row.getAttribute("data-discovery-row-pane");
-        if (!href || !paneId) {
-          return;
-        }
-
-        const navigate = () => {
-          openPaneState(paneId);
-          window.location.href = href;
-        };
-
-        row.addEventListener("click", (event) => {
-          const target = event.target;
-          if (!(target instanceof Element)) {
-            navigate();
-            return;
-          }
-          if (target.closest(interactiveSelector)) {
-            return;
-          }
-          navigate();
-        });
-
-        row.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") {
-            return;
-          }
-          const target = event.target;
-          if (target instanceof Element && target.closest(interactiveSelector) !== row && target !== row) {
-            return;
-          }
-          event.preventDefault();
-          navigate();
-        });
-      });
-    })();
-  </script>
 </AdminShell>

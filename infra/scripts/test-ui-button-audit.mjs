@@ -704,223 +704,121 @@ async function seedAdminFixtures(env, adminCookie, runId) {
   const editableChannelId = String(editableChannel.json?.channelId ?? "");
   assert.ok(editableChannelId);
 
-  const mission = await postForm(
-    "http://127.0.0.1:4322/bff/admin/discovery",
-    {
-      intent: "create_mission",
-      redirectTo: "/discovery?tab=missions",
-      title: `UI audit mission ${runId}`,
-      description: "Browser click audit mission",
-      seedTopics: "browser audit mission",
-      seedLanguages: "en",
-      seedRegions: "EU",
-      targetProviderTypes: "rss",
-      maxHypotheses: "2",
-      maxSources: "2",
-      budgetCents: "0",
-      priority: "0",
-    },
-    { cookie: adminCookie }
-  );
-  const missionId = String(mission.json?.mission_id ?? "");
-  assert.ok(missionId);
-
-  const deletableMission = await postForm(
-    "http://127.0.0.1:4322/bff/admin/discovery",
-    {
-      intent: "create_mission",
-      redirectTo: "/discovery?tab=missions",
-      title: `UI audit delete mission ${runId}`,
-      description: "Browser click audit delete mission",
-      seedTopics: "browser delete mission",
-      seedLanguages: "en",
-      seedRegions: "EU",
-      targetProviderTypes: "rss",
-      maxHypotheses: "1",
-      maxSources: "1",
-      budgetCents: "0",
-      priority: "0",
-    },
-    { cookie: adminCookie }
-  );
-  const deletableMissionId = String(deletableMission.json?.mission_id ?? "");
-  assert.ok(deletableMissionId);
-
-  const classKey = `ui_audit_${runId}`;
-  await postForm(
-    "http://127.0.0.1:4322/bff/admin/discovery",
-    {
-      intent: "create_class",
-      redirectTo: "/discovery?tab=classes",
-      classKey,
-      displayName: `UI audit class ${runId}`,
-      description: "Browser click audit class",
-      status: "active",
-      generationBackend: "graph_seed_only",
-      defaultProviderTypes: "rss",
-      maxPerMission: "1",
-      sortOrder: "-990",
-      seedRulesJson: '{"tactics":["browser"]}',
-      configJson: '{"notes":"browser"}',
-    },
-    { cookie: adminCookie }
-  );
-
-  const deleteClassKey = `ui_audit_delete_${runId}`;
-  await postForm(
-    "http://127.0.0.1:4322/bff/admin/discovery",
-    {
-      intent: "create_class",
-      redirectTo: "/discovery?tab=classes",
-      classKey: deleteClassKey,
-      displayName: `UI audit delete class ${runId}`,
-      description: "Browser click audit delete class",
-      status: "draft",
-      generationBackend: "graph_seed_only",
-      defaultProviderTypes: "rss",
-      maxPerMission: "1",
-      sortOrder: "-989",
-      seedRulesJson: '{"tactics":["browser_delete"]}',
-      configJson: '{"notes":"browser delete"}',
-    },
-    { cookie: adminCookie }
-  );
-
-  const hypothesisId = firstResultLine(queryPostgres(
+  const discoveryTargetId = firstResultLine(queryPostgres(
     env,
     `
-        insert into discovery_hypotheses (
-          mission_id,
-          class_key,
-          tactic_key,
-          search_query,
-          target_urls,
-          target_provider_type,
-          generation_context,
-          expected_value,
-          status
-        )
-        values (
-          ${sqlLiteral(missionId)},
-          ${sqlLiteral(classKey)},
-          ${sqlLiteral("audit_review")},
-          ${sqlLiteral(`site:${runId} discovery candidate`)},
-          array[${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)}]::text[],
-          'rss',
-          '{}'::jsonb,
-          ${sqlLiteral("audit hypothesis")},
-          'pending'
-        )
-        returning hypothesis_id::text;
-    `
-  ));
-  assert.ok(hypothesisId);
-
-  const candidateId = firstResultLine(queryPostgres(
-    env,
-    `
-      insert into discovery_candidates (
-        hypothesis_id,
-        mission_id,
-        url,
-        final_url,
+      insert into discovery_targets (
+        origin_kind,
         title,
         description,
-        provider_type,
-        is_valid,
-        relevance_score,
-        evaluation_json,
-        llm_assessment,
-        sample_data,
-        status
+        seed_topics,
+        seed_languages,
+        graph_json,
+        policy_json,
+        created_by
       )
       values (
-        ${sqlLiteral(hypothesisId)},
-        ${sqlLiteral(missionId)},
-        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
-        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
-        ${sqlLiteral(`UI audit candidate ${runId}`)},
-        ${sqlLiteral("Synthetic candidate for browser review.")},
-        'rss',
-        true,
-        0.91,
-        '{"quality_signal_source":"audit"}'::jsonb,
-        '{}'::jsonb,
-        '[]'::jsonb,
-        'pending'
+        'manual_prompt',
+        ${sqlLiteral(`UI audit discovery target ${runId}`)},
+        'Browser click audit resilient discovery target',
+        array['browser audit discovery']::text[],
+        array['en']::text[],
+        '{"sourceRoleTargets":{"technical_change":{"min":1,"target":1}}}'::jsonb,
+        '{"targetSafety":{"manualReviewRequired":true}}'::jsonb,
+        'ui-button-audit'
       )
-      returning candidate_id::text;
+      returning target_id::text;
     `
   ));
-  assert.ok(candidateId);
+  assert.ok(discoveryTargetId);
 
-  const rejectHypothesisId = firstResultLine(queryPostgres(
+  const discoveryRunId = firstResultLine(queryPostgres(
     env,
     `
-        insert into discovery_hypotheses (
-          mission_id,
-          class_key,
-          tactic_key,
-          search_query,
-          target_urls,
-          target_provider_type,
-          generation_context,
-          expected_value,
-          status
-        )
-        values (
-          ${sqlLiteral(missionId)},
-          ${sqlLiteral(classKey)},
-          ${sqlLiteral("audit_reject")},
-          ${sqlLiteral(`site:${runId} discovery reject candidate`)},
-          array[${sqlLiteral(`https://audit-reject-${runId}.example.test/feed.xml`)}]::text[],
-          'rss',
-          '{}'::jsonb,
-          ${sqlLiteral("audit reject hypothesis")},
-          'pending'
-        )
-        returning hypothesis_id::text;
+      insert into discovery_runs (
+        target_id,
+        run_kind,
+        trigger_kind,
+        status,
+        summary_json,
+        created_by
+      )
+      values (
+        ${sqlLiteral(discoveryTargetId)},
+        'manual',
+        'manual',
+        'completed',
+        '{"uiAudit":true}'::jsonb,
+        'ui-button-audit'
+      )
+      returning run_id::text;
     `
   ));
-  assert.ok(rejectHypothesisId);
+  assert.ok(discoveryRunId);
 
-  const rejectCandidateId = firstResultLine(queryPostgres(
+  const discoveryEndpointId = firstResultLine(queryPostgres(
     env,
     `
-      insert into discovery_candidates (
-        hypothesis_id,
-        mission_id,
-        url,
-        final_url,
+      insert into discovery_source_endpoints (
+        target_id,
+        run_id,
+        provider_id,
+        provider_type,
+        canonical_domain,
+        homepage_url,
+        endpoint_url,
+        normalized_endpoint_url,
+        endpoint_kind,
+        source_role,
+        signal_mode,
         title,
-        description,
-        provider_type,
-        is_valid,
-        relevance_score,
-        evaluation_json,
-        llm_assessment,
-        sample_data,
-        status
+        evidence_json,
+        interest_fit_score,
+        evidence_score,
+        quality_score,
+        yield_score,
+        freshness_score,
+        novelty_score,
+        extraction_ready_score,
+        coverage_gap_score,
+        compliance_score,
+        adversarial_confidence_score,
+        total_score,
+        status,
+        recommended_action
       )
       values (
-        ${sqlLiteral(rejectHypothesisId)},
-        ${sqlLiteral(missionId)},
-        ${sqlLiteral(`https://audit-reject-${runId}.example.test/feed.xml`)},
-        ${sqlLiteral(`https://audit-reject-${runId}.example.test/feed.xml`)},
-        ${sqlLiteral(`UI audit reject candidate ${runId}`)},
-        ${sqlLiteral("Synthetic candidate for browser rejection.")},
+        ${sqlLiteral(discoveryTargetId)},
+        ${sqlLiteral(discoveryRunId)},
         'rss',
-        true,
-        0.53,
-        '{"quality_signal_source":"audit"}'::jsonb,
-        '{}'::jsonb,
-        '[]'::jsonb,
-        'pending'
+        'rss',
+        ${sqlLiteral(`audit-${runId}.example.test`)},
+        ${sqlLiteral(`https://audit-${runId}.example.test`)},
+        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
+        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
+        'rss_feed',
+        'technical_change',
+        'direct',
+        ${sqlLiteral(`UI audit endpoint ${runId}`)},
+        '{"whyFound":["UI audit v3 endpoint"],"whyNotPromoted":["manual audit only"]}'::jsonb,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        1.0,
+        0.9,
+        1.0,
+        1.0,
+        0.8,
+        0.84,
+        'manual_review',
+        'manual_promote'
       )
-      returning candidate_id::text;
+      returning endpoint_id::text;
     `
   ));
-  assert.ok(rejectCandidateId);
+  assert.ok(discoveryEndpointId);
 
   const articleDocId = firstResultLine(queryPostgres(
     env,
@@ -957,12 +855,9 @@ async function seedAdminFixtures(env, adminCookie, runId) {
     systemInterestId,
     editableChannelId,
     deletableChannelId,
-    missionId,
-    deletableMissionId,
-    classKey,
-    deleteClassKey,
-    candidateId,
-    rejectCandidateId,
+    discoveryTargetId,
+    discoveryRunId,
+    discoveryEndpointId,
     articleDocId,
     resourceId,
   };

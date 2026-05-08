@@ -2,20 +2,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import discovery_runtime as _discovery_runtime
 from .discovery_enrichment_plugins import ArticleEnricherPlugin, ArticleLoaderPlugin
 from .discovery_llm_plugins import LlmAnalyzerPlugin
 from .discovery_probe_plugins import RssProbePlugin, UrlValidatorPlugin, WebsiteProbePlugin
 from .discovery_registration_plugins import SourceRegistrarPlugin
+from .discovery_storage_plugins import DbStorePlugin
 from .discovery_sampling_plugins import ContentSamplerPlugin
 from .discovery_scoring_plugins import RelevanceScorerPlugin
 from .discovery_search_plugins import WebSearchPlugin
-from .discovery_storage_plugins import DbStorePlugin
+from .discovery_v3_cluster_plugins import DiscoveryV3UrlClusterPlugin
+from .discovery_v3_endpoint_sweep_plugins import DiscoveryV3EndpointSweepPlugin
+from .discovery_v3_scoring_plugins import DiscoveryV3ActionDeciderPlugin, DiscoveryV3EndpointScorerPlugin
+from .discovery_v3_source_directory_plugins import DiscoveryV3SourceDirectoryExtractorPlugin
 from .plugins import TASK_REGISTRY, TaskPluginRegistry
+from .discovery_runtime import get_discovery_runtime as _get_discovery_runtime
 
 
 def get_discovery_runtime() -> Any:
-    return _discovery_runtime.get_discovery_runtime()
+    return _get_discovery_runtime()
 
 
 DISCOVERY_PLUGIN_CLASSES = (
@@ -27,6 +31,11 @@ DISCOVERY_PLUGIN_CLASSES = (
     RelevanceScorerPlugin,
     LlmAnalyzerPlugin,
     SourceRegistrarPlugin,
+    DiscoveryV3UrlClusterPlugin,
+    DiscoveryV3SourceDirectoryExtractorPlugin,
+    DiscoveryV3EndpointSweepPlugin,
+    DiscoveryV3EndpointScorerPlugin,
+    DiscoveryV3ActionDeciderPlugin,
 )
 
 UTILITY_PLUGIN_CLASSES = (DbStorePlugin,)

@@ -18,6 +18,7 @@
 - [Website Source Examples](./operator/examples/WEBSITE_SOURCE_EXAMPLES.md) — проверенные live website-source примеры с ожидаемыми `web_resources`.
 - [Website Source Testing](./operator/examples/WEBSITE_SOURCES_TESTING.md) — operator checklist для website lane и `Resources`.
 - [Discovery Mode Testing](./operator/examples/DISCOVERY_MODE_TESTING.md) — проверенные discovery сценарии и replay settings.
+- [Resilient Discovery Operator Guide](./operator/discovery/resilient-discovery.md) — новая evidence-bounded discovery модель: targets, coverage, provider cards, direct/hidden signals, endpoint actions.
 - [MCP Operator Docs](./operator/mcp/README.md) — вход в MCP-документы.
 - [MCP Client Setup](./operator/mcp/client-setups.md), [HTTP Smoke](./operator/mcp/http-smoke.md), [MCP Testing](./operator/mcp/testing.md) — проверенные MCP setup/smoke/proof инструкции.
 - [Firebase Setup](./operator/setup/firebase_setup.md) — настройка Firebase для локального admin/web входа.

@@ -243,14 +243,6 @@ function createFakeMcpPool() {
         return { rows: [] };
       }
 
-      if (/from public\.discovery_missions/i.test(sql)) {
-        return { rows: [{ profile_id: null, applied_policy_json: null }] };
-      }
-
-      if (/from public\.discovery_recall_missions/i.test(sql)) {
-        return { rows: [{ profile_id: null, applied_policy_json: null }] };
-      }
-
       throw new Error(`Unexpected SQL in fake MCP pool: ${sql}`);
     },
   };
@@ -322,41 +314,6 @@ function createFakeDiscoveryPrefixPool() {
   };
   const mappings = [
     {
-      pattern: /from discovery_missions/i,
-      prefix: "f3dbf7b8",
-      id: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13",
-    },
-    {
-      pattern: /from discovery_profiles/i,
-      prefix: "9b88d3e8",
-      id: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25",
-    },
-    {
-      pattern: /from discovery_candidates/i,
-      prefix: "d0e6f11f",
-      id: "d0e6f11f-1111-4111-8111-111111111111",
-    },
-    {
-      pattern: /from discovery_recall_missions/i,
-      prefix: "f0d8252c",
-      id: "f0d8252c-7813-4b36-8cd1-4c7243f9af96",
-    },
-    {
-      pattern: /from discovery_recall_candidates/i,
-      prefix: "fef0007b",
-      id: "fef0007b-1613-40d8-a04c-b7c5dc3ba583",
-    },
-    {
-      pattern: /from discovery_source_profiles/i,
-      prefix: "aaaaaaaa",
-      id: "aaaaaaaa-1111-4111-8111-111111111111",
-    },
-    {
-      pattern: /from discovery_source_interest_scores/i,
-      prefix: "bbbbbbbb",
-      id: "bbbbbbbb-1111-4111-8111-111111111111",
-    },
-    {
       pattern: /from sequences/i,
       prefix: "cccccccc",
       id: "cccccccc-1111-4111-8111-111111111111",
@@ -396,83 +353,80 @@ function createFakeDiscoveryPrefixPool() {
 }
 
 function createFakeDiscoveryReportPool() {
-  const state = {
-    sequenceRunQueryCount: 0,
-  };
+  const state = {};
   return {
     state,
     async query(sql: string) {
-      if (/from discovery_policy_profiles/i.test(sql)) {
-        return { rows: [] };
-      }
-      if (/from discovery_missions dm/i.test(sql)) {
+      if (/from discovery_targets/i.test(sql)) {
         return {
           rows: [
             {
-              missionId: "mission-1",
-              title: "Manual discovery mission",
+              targetId: "target-1",
+              title: "Manual resilient target",
               status: "active",
-              interestGraphStatus: "compiled",
-              runCount: 1,
-              lastRunAt: "2026-05-06T11:00:00.000Z",
-              profileId: null,
-              hasProfile: false,
-              hasAppliedPolicy: false,
-              candidateCount: 2,
+              originKind: "manual_prompt",
+              priority: 1,
+              lastRunId: "run-1",
+              lastCoverageSnapshotId: "coverage-1",
+              updatedAt: "2026-05-06T11:00:00.000Z",
             },
           ],
         };
       }
-      if (/from discovery_recall_missions drm/i.test(sql)) {
+      if (/from discovery_runs/i.test(sql)) {
         return {
           rows: [
             {
-              recallMissionId: "recall-1",
-              title: "Manual recall mission",
-              status: "active",
-              missionKind: "domain_seed",
-              maxCandidates: 10,
-              profileId: null,
-              hasProfile: false,
-              hasAppliedPolicy: false,
-              candidateCount: 3,
+              runId: "run-1",
+              targetId: "target-1",
+              runKind: "manual",
+              triggerKind: "mcp",
+              status: "running",
+              createdAt: "2026-05-06T11:05:00.000Z",
             },
           ],
         };
       }
-      if (/from sequence_runs/i.test(sql) && !/join sequence_runs/i.test(sql)) {
-        state.sequenceRunQueryCount += 1;
-        return { rows: [] };
-      }
-      if (/from sequence_task_runs tr/i.test(sql)) {
-        return { rows: [] };
+      if (/from discovery_coverage_snapshots/i.test(sql)) {
+        return {
+          rows: [
+            {
+              coverageSnapshotId: "coverage-1",
+              targetId: "target-1",
+              coverageScore: 0.42,
+              sourceCount: 3,
+              strongSourceCount: 1,
+              missingRoleCount: 4,
+              createdAt: "2026-05-06T11:08:00.000Z",
+            },
+          ],
+        };
       }
       if (/from discovery_hypotheses/i.test(sql)) {
-        return { rows: [] };
+        return { rows: [{ status: "queued", count: 4 }] };
       }
-      if (/from discovery_candidates/i.test(sql)) {
+      if (/from discovery_source_endpoints/i.test(sql)) {
         return {
           rows: [
             {
-              missionId: "mission-1",
-              status: "pending",
+              status: "manual_review",
               providerType: "rss",
               count: 2,
             },
           ],
         };
       }
-      if (/from discovery_recall_candidates/i.test(sql)) {
-        return {
-          rows: [
-            {
-              recallMissionId: "recall-1",
-              status: "pending",
-              providerType: "website",
-              count: 3,
-            },
-          ],
-        };
+      if (/from discovery_source_contracts/i.test(sql)) {
+        return { rows: [{ status: "probation", count: 1 }] };
+      }
+      if (/from discovery_claims/i.test(sql)) {
+        return { rows: [{ status: "candidate", count: 1 }] };
+      }
+      if (/from discovery_negative_evidence/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/from discovery_provider_health/i.test(sql)) {
+        return { rows: [] };
       }
       throw new Error(`Unexpected SQL in fake discovery report pool: ${sql}`);
     },
@@ -706,7 +660,8 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(toolNames.includes("articles.residuals.list"));
   assert.ok(toolNames.includes("articles.residuals.summary"));
   assert.ok(toolNames.includes("sequences.create"));
-  assert.ok(toolNames.includes("discovery.recall_missions.pause"));
+  assert.ok(toolNames.includes("discovery.provider_health.list"));
+  assert.ok(toolNames.includes("discovery.endpoints.promote"));
   assert.ok(toolNames.includes("channels.set_active"));
 
   const resourceUris = listMcpResources().map((entry) => entry.uri);
@@ -739,7 +694,9 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(promptNames.includes("observability.session.plan"));
   assert.ok(promptNames.includes("system_interest.polish"));
   assert.ok(promptNames.includes("llm_template.tune"));
-  assert.ok(promptNames.includes("discovery.profile.tune"));
+  assert.ok(promptNames.includes("discovery.coverage.tune"));
+  assert.ok(promptNames.includes("discovery.target.review"));
+  assert.ok(promptNames.includes("discovery.contract.review"));
   const prompt = resolveMcpPrompt("sequence.draft");
   assert.equal(prompt.name, "sequence.draft");
   const orientationPrompt = resolveMcpPrompt("operator.session.start");
@@ -753,7 +710,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   );
   const discoverySessionPrompt = resolveMcpPrompt("discovery.session.plan");
   const discoverySessionRendered = discoverySessionPrompt.render({
-    objective: "promote a high-signal recall candidate",
+    objective: "promote a high-signal discovery endpoint",
   });
   assert.match(
     discoverySessionRendered.messages[0]?.content.text ?? "",
@@ -855,7 +812,7 @@ test("MCP channel active-state tool avoids full provider payload guessing", asyn
   assert.match(JSON.stringify(result), /operator\.report\.verify/);
 });
 
-test("MCP discovery candidate lists resolve unique mission UUID prefixes before API calls", async () => {
+test("MCP discovery endpoint lists use v3 filters before API calls", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -869,52 +826,52 @@ test("MCP discovery candidate lists resolve unique mission UUID prefixes before 
       });
     }) as typeof fetch,
   });
-  const pool = createFakeDiscoveryPrefixPool();
 
   await executeMcpTool(
     {
       sdk,
-      pool,
+      pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.candidates.list",
+    "discovery.endpoints.list",
     {
-      missionId: "f3dbf7b8",
-      status: "pending",
+      targetId: "target-1",
+      status: "manual_review",
       pageSize: 50,
     }
   );
 
-  assert.equal(pool.state.queries.length, 1);
-  assert.match(requests[0] ?? "", /missionId=f3dbf7b8-72ad-41e9-94d5-7d113b28ca13/);
-  assert.doesNotMatch(requests[0] ?? "", /missionId=f3dbf7b8&/);
+  assert.match(
+    requests[0] ?? "",
+    /\/maintenance\/discovery\/endpoints\?status=manual_review&targetId=target-1&pageSize=50/
+  );
 
   await assert.rejects(
     () =>
       executeMcpTool(
         {
           sdk,
-          pool,
+          pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.candidates.list",
+        "discovery.endpoints.list",
         {
-          missionId: "not-a-uuid-prefix",
+          unexpected: true,
           pageSize: 50,
         }
       ),
     (error) => error instanceof JsonRpcError && error.code === -32602
   );
-  assert.equal(requests.length, 1, "invalid mission ids should fail before backend fetch");
+  assert.equal(requests.length, 1, "invalid v3 list args should fail before backend fetch");
 });
 
-test("MCP discovery mission read accepts report aliases and UUID prefixes", async () => {
+test("MCP discovery target read accepts full v3 target ids", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
-      return new Response(JSON.stringify({ missionId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }), {
+      return new Response(JSON.stringify({ targetId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }), {
         status: 200,
         headers: {
           "content-type": "application/json",
@@ -922,17 +879,16 @@ test("MCP discovery mission read accepts report aliases and UUID prefixes", asyn
       });
     }) as typeof fetch,
   });
-  const pool = createFakeDiscoveryPrefixPool();
 
   await executeMcpTool(
     {
       sdk,
-      pool,
+      pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.missions.read",
+    "discovery.targets.read",
     {
-      id: "f3dbf7b8",
+      targetId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13",
     }
   );
 
@@ -943,20 +899,19 @@ test("MCP discovery mission read accepts report aliases and UUID prefixes", asyn
       executeMcpTool(
         {
           sdk,
-          pool,
+          pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.missions.read",
+        "discovery.targets.read",
         {}
       ),
     (error) =>
       error instanceof JsonRpcError &&
-      error.code === -32602 &&
-      /Accepted aliases: id, entityId/i.test(error.message)
+      error.code === -32602
   );
 });
 
-test("MCP discovery read tools accept common report aliases and UUID prefixes", async () => {
+test("MCP discovery read tools expose v3 target, coverage and run surfaces", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -970,45 +925,26 @@ test("MCP discovery read tools accept common report aliases and UUID prefixes", 
       });
     }) as typeof fetch,
   });
-  const pool = createFakeDiscoveryPrefixPool();
+  const pool = createFakeMcpPool();
 
   await executeMcpTool(
     { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.profiles.read",
-    { entityId: "9b88d3e8" }
+    "discovery.targets.read",
+    { targetId: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25" }
   );
   await executeMcpTool(
     { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.classes.read",
-    { id: "lexical" }
+    "discovery.coverage.read",
+    { targetId: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25" }
   );
   await executeMcpTool(
     { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.candidates.read",
-    { id: "d0e6f11f" }
-  );
-  await executeMcpTool(
-    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.recall_candidates.read",
-    { candidateId: "fef0007b" }
-  );
-  await executeMcpTool(
-    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.source_profiles.read",
-    { profileId: "aaaaaaaa" }
-  );
-  await executeMcpTool(
-    { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.source_interest_scores.read",
-    { entityId: "bbbbbbbb" }
+    "discovery.runs.read",
+    { runId: "d0e6f11f-1111-4111-8111-111111111111" }
   );
 
   assert.match(requests.join("\n"), /9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25/);
-  assert.match(requests.join("\n"), /lexical/);
   assert.match(requests.join("\n"), /d0e6f11f-1111-4111-8111-111111111111/);
-  assert.match(requests.join("\n"), /fef0007b-1613-40d8-a04c-b7c5dc3ba583/);
-  assert.match(requests.join("\n"), /aaaaaaaa-1111-4111-8111-111111111111/);
-  assert.match(requests.join("\n"), /bbbbbbbb-1111-4111-8111-111111111111/);
 });
 
 test("MCP sequence and content read tools accept report aliases and UUID prefixes", async () => {
@@ -1161,52 +1097,34 @@ test("MCP adjacent write tools reject malformed UUID ids before backend or DB wo
     expectedMessage?: string;
   }> = [
     {
-      toolName: "discovery.profiles.update",
+      toolName: "discovery.targets.update",
       token: WRITE_DISCOVERY_TOKEN,
-      args: { profileId: malformedId, payload: { displayName: "Nope" } },
-      expectedPath: "profileId",
+      args: { targetId: malformedId, payload: { title: "Nope" } },
+      expectedPath: "targetId",
     },
     {
-      toolName: "discovery.missions.update",
+      toolName: "discovery.coverage.refresh",
       token: WRITE_DISCOVERY_TOKEN,
-      args: { missionId: malformedId, payload: { title: "Nope" } },
-      expectedPath: "missionId",
+      args: { targetId: malformedId },
+      expectedPath: "targetId",
     },
     {
-      toolName: "discovery.missions.create",
+      toolName: "discovery.runs.cancel",
       token: WRITE_DISCOVERY_TOKEN,
-      args: { payload: { title: "Nope", profileId: malformedId } },
-      expectedPath: "payload.profileId",
+      args: { runId: malformedId },
+      expectedPath: "runId",
     },
     {
-      toolName: "discovery.recall_missions.update",
+      toolName: "discovery.endpoints.promote",
       token: WRITE_DISCOVERY_TOKEN,
-      args: { recallMissionId: malformedId, payload: { title: "Nope" } },
-      expectedPath: "recallMissionId",
+      args: { endpointId: malformedId, payload: { enabled: true } },
+      expectedPath: "endpointId",
     },
     {
-      toolName: "discovery.recall_candidates.create",
+      toolName: "discovery.endpoints.reject",
       token: WRITE_DISCOVERY_TOKEN,
-      args: { payload: { recallMissionId: malformedId, url: "https://example.test/feed.xml" } },
-      expectedPath: "payload.recallMissionId",
-    },
-    {
-      toolName: "discovery.candidates.review",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { candidateId: malformedId, payload: { status: "rejected" } },
-      expectedPath: "candidateId",
-    },
-    {
-      toolName: "discovery.feedback.create",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { payload: { feedbackType: "reject", missionId: malformedId } },
-      expectedPath: "payload.missionId",
-    },
-    {
-      toolName: "discovery.re_evaluate",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { payload: { missionId: malformedId } },
-      expectedPath: "payload.missionId",
+      args: { endpointId: malformedId, payload: { reason: "Nope" } },
+      expectedPath: "endpointId",
     },
     {
       toolName: "system_interests.update",
@@ -1407,7 +1325,7 @@ test("MCP tool execution validates declared input schemas before handler work", 
   );
 });
 
-test("MCP write tools normalize client-friendly list strings before backend calls", async () => {
+test("MCP discovery target create applies actor defaults and v3 payload passthrough", async () => {
   const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1416,7 +1334,7 @@ test("MCP write tools normalize client-friendly list strings before backend call
         url: String(input),
         body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
       });
-      return new Response(JSON.stringify({ mission_id: "mission-1", status: "planned" }), {
+      return new Response(JSON.stringify({ targetId: "target-1", status: "active" }), {
         status: 200,
         headers: {
           "content-type": "application/json",
@@ -1431,27 +1349,25 @@ test("MCP write tools normalize client-friendly list strings before backend call
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.missions.create",
+    "discovery.targets.create_manual",
     {
       payload: {
-        title: "String-list mission",
-        seedTopics: "AI rollout failures, LLM integration blockers",
-        seedLanguages: "en\nde",
-        seedRegions: ["us", "eu"],
-        targetProviderTypes: "rss, website",
+        originKind: "manual_prompt",
+        title: "Manual resilient target",
+        seedTopics: ["AI rollout failures", "LLM integration blockers"],
+        seedLanguages: ["en", "de"],
+        seedGeos: ["us", "eu"],
       },
     }
   );
 
-  assert.match(JSON.stringify(result), /manual-review-only/i);
-  assert.match(JSON.stringify(result), /profileId/i);
+  assert.equal((result as Record<string, unknown>).targetId, "target-1");
   assert.deepEqual(requests[0]?.body.seedTopics, [
     "AI rollout failures",
     "LLM integration blockers",
   ]);
   assert.deepEqual(requests[0]?.body.seedLanguages, ["en", "de"]);
-  assert.deepEqual(requests[0]?.body.seedRegions, ["us", "eu"]);
-  assert.deepEqual(requests[0]?.body.targetProviderTypes, ["rss", "website"]);
+  assert.deepEqual(requests[0]?.body.seedGeos, ["us", "eu"]);
   assert.equal(requests[0]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
 
   await assert.rejects(
@@ -1462,73 +1378,33 @@ test("MCP write tools normalize client-friendly list strings before backend call
           pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.missions.create",
+        "discovery.targets.create_manual",
         {
-          payload: {
-            title: "Too broad mission",
-            maxHypotheses: 15,
-          },
-        }
-      ),
-    (error) =>
-      error instanceof JsonRpcError &&
-      error.code === -32602 &&
-      /confirmLargeRun/i.test(error.message)
-  );
-  assert.equal(requests.length, 1, "large unconfirmed MCP discovery runs should fail before backend fetch");
-
-  await executeMcpTool(
-    {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.missions.create",
-    {
-      payload: {
-        title: "Confirmed large mission",
-        maxHypotheses: 15,
-        confirmLargeRun: true,
-      },
-    }
-  );
-  assert.equal(requests[1]?.body.maxHypotheses, 15);
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(requests[1]?.body ?? {}, "confirmLargeRun"),
-    false
-  );
-
-  await assert.rejects(
-    () =>
-      executeMcpTool(
-        {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.missions.create",
-        {
-          payload: {
-            title: "Invalid provider mission",
-            targetProviderTypes: "rss, spreadsheet",
-          },
+          payload: "invalid",
         }
       ),
     (error) => error instanceof JsonRpcError && error.code === -32602
   );
-  assert.equal(requests.length, 2, "invalid enum lists should fail before backend fetch");
+  assert.equal(requests.length, 1, "invalid v3 target payloads should fail before backend fetch");
 });
 
-test("MCP discovery run responses include async verification guidance", async () => {
+test("MCP discovery run start calls v3 run endpoint", async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
-    fetchImpl: (async () =>
+    fetchImpl: (async (input, init) => {
+      requests.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+      });
+      return (
       new Response(JSON.stringify({ runId: "run-1", status: "pending" }), {
         status: 200,
         headers: {
           "content-type": "application/json",
         },
-      })) as typeof fetch,
+      }))
+    }) as typeof fetch,
   });
 
   const result = await executeMcpTool(
@@ -1537,18 +1413,22 @@ test("MCP discovery run responses include async verification guidance", async ()
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.missions.run",
+    "discovery.runs.start",
     {
-      missionId: "11111111-1111-4111-8111-111111111111",
+      payload: {
+        targetId: "11111111-1111-4111-8111-111111111111",
+        runKind: "manual",
+        triggerKind: "mcp",
+      },
     }
   );
 
-  assert.match(JSON.stringify(result), /operator\.report\.verify/i);
-  assert.match(JSON.stringify(result), /in progress, not completed|asynchronous/i);
-  assert.match(JSON.stringify(result), /manual-review-only/i);
+  assert.equal((result as Record<string, unknown>).runId, "run-1");
+  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/runs$/);
+  assert.equal(requests[0]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
 });
 
-test("MCP recall mission responses include profile guidance", async () => {
+test("MCP endpoint promotion sends probation-review payload through v3", async () => {
   const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1559,8 +1439,9 @@ test("MCP recall mission responses include profile guidance", async () => {
       });
       return new Response(
         JSON.stringify({
-          recall_mission_id: "22222222-2222-4222-8222-222222222222",
-          status: "planned",
+          endpointId: "22222222-2222-4222-8222-222222222222",
+          status: "registered",
+          trustStage: "probation",
         }),
         {
           status: 200,
@@ -1578,37 +1459,41 @@ test("MCP recall mission responses include profile guidance", async () => {
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.recall_missions.create",
+    "discovery.endpoints.promote",
     {
+      endpointId: "22222222-2222-4222-8222-222222222222",
       payload: {
-        title: "Manual recall",
-        missionKind: "domain_seed",
-        seedDomains: "sam.gov\nted.europa.eu",
+        enabled: true,
+        tags: ["discovery", "technical_change"],
       },
     }
   );
 
-  assert.match(JSON.stringify(createResult), /manual-review-only/i);
-  assert.match(JSON.stringify(createResult), /minPromotionScore/i);
-  assert.deepEqual(requests[0]?.body.seedDomains, ["sam.gov", "ted.europa.eu"]);
+  assert.match(JSON.stringify(createResult), /probation/i);
+  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/endpoints\/22222222-2222-4222-8222-222222222222\/promote$/);
+  assert.deepEqual(requests[0]?.body.tags, ["discovery", "technical_change"]);
+  assert.equal(requests[0]?.body.reviewedBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
 
-  const acquireResult = await executeMcpTool(
+  const rejectResult = await executeMcpTool(
     {
       sdk,
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.recall_missions.acquire",
+    "discovery.endpoints.reject",
     {
-      recallMissionId: "22222222-2222-4222-8222-222222222222",
+      endpointId: "22222222-2222-4222-8222-222222222222",
+      payload: {
+        reason: "insufficient evidence",
+      },
     }
   );
 
-  assert.match(JSON.stringify(acquireResult), /manual-review-only/i);
-  assert.match(JSON.stringify(acquireResult), /threshold-based promotion/i);
+  assert.match(JSON.stringify(rejectResult), /registered|probation/i);
+  assert.match(requests[1]?.url ?? "", /\/maintenance\/discovery\/endpoints\/22222222-2222-4222-8222-222222222222\/reject$/);
 });
 
-test("MCP recall candidate create/update rejects evidence writes before backend calls", async () => {
+test("MCP endpoint promote/reject reject malformed ids before backend calls", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1631,23 +1516,16 @@ test("MCP recall candidate create/update rejects evidence writes before backend 
           pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.recall_candidates.create",
+        "discovery.endpoints.promote",
         {
-          payload: {
-            recallMissionId: "bda9f68d-861c-4184-abc2-5864014babdd",
-            url: "https://example.com/feed.xml",
-            providerType: "rss",
-            evaluationJson: {
-              validFeed: true,
-              discoveredFeedUrls: ["https://example.com/feed.xml"],
-            },
-          },
+          endpointId: "not-a-uuid",
+          payload: { enabled: true },
         }
       ),
     (error) =>
       error instanceof JsonRpcError &&
       error.code === -32602 &&
-      /payload\.evaluationJson is not allowed/i.test(error.message)
+      /endpointId must be a full UUID/i.test(error.message)
   );
 
   await assert.rejects(
@@ -1658,27 +1536,21 @@ test("MCP recall candidate create/update rejects evidence writes before backend 
           pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.recall_candidates.update",
+        "discovery.endpoints.reject",
         {
-          recallCandidateId: "9fb8c325-73cc-4d62-bfd1-d18301d4d6b3",
-          payload: {
-            reviewedBy: "operator",
-            evaluationJson: {
-              validFeed: true,
-              discoveredFeedUrls: ["https://example.com/feed.xml"],
-            },
-          },
+          endpointId: "not-a-uuid",
+          payload: { reason: "bad evidence" },
         }
       ),
     (error) =>
       error instanceof JsonRpcError &&
       error.code === -32602 &&
-      /payload\.evaluationJson is not allowed/i.test(error.message)
+      /endpointId must be a full UUID/i.test(error.message)
   );
-  assert.equal(requests.length, 0, "evidence rewrites must fail before backend fetch");
+  assert.equal(requests.length, 0, "malformed endpoint ids must fail before backend fetch");
 });
 
-test("MCP discovery report verify warns for no-profile manual-review missions", async () => {
+test("MCP discovery report verify warns for v3 in-progress runs and probation contracts", async () => {
   const dummySdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
@@ -1695,17 +1567,16 @@ test("MCP discovery report verify warns for no-profile manual-review missions", 
     "operator.report.verify",
     {
       reportKind: "discovery_run",
-      entityIds: { missionIds: ["mission-1"], recallMissionIds: ["recall-1"] },
+      entityIds: { targetIds: ["target-1"], runIds: ["run-1"] },
       includeSamples: true,
     }
   );
 
   const serialized = JSON.stringify(result);
-  assert.match(serialized, /manual-review-only/i);
-  assert.match(serialized, /auto-promotion thresholds/i);
-  assert.match(serialized, /recallPolicy\/minPromotionScore thresholds/i);
-  assert.match(serialized, /2 discovery candidates are still pending review/i);
-  assert.match(serialized, /3 recall candidates are still pending\/shortlisted/i);
+  assert.match(serialized, /queued\/running|in progress/i);
+  assert.match(serialized, /2 discovery endpoints still require evidence review/i);
+  assert.match(serialized, /1 promoted sources are still in contract probation/i);
+  assert.match(serialized, /coverageScore/i);
 });
 
 test("MCP reindex request rejects unsupported indexName and jobKind at the boundary", async () => {
@@ -1869,7 +1740,7 @@ test("content analysis backfill response warns that final selection is not recom
   assert.match(JSON.stringify(result), /operator\.report\.verify/i);
 });
 
-test("SDK exposes discovery delete routes needed by MCP parity without forking a new client", async () => {
+test("SDK exposes resilient discovery mutation routes needed by MCP parity", async () => {
   const requests = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1887,17 +1758,28 @@ test("SDK exposes discovery delete routes needed by MCP parity without forking a
     }) as typeof fetch,
   });
 
-  await sdk.deleteDiscoveryClass<Record<string, unknown>>("class-1");
-  await sdk.deleteDiscoveryMission<Record<string, unknown>>("mission-1");
+  await sdk.cancelDiscoveryRun<Record<string, unknown>>("11111111-1111-4111-8111-111111111111");
+  await sdk.promoteDiscoveryEndpoint<Record<string, unknown>>(
+    "22222222-2222-4222-8222-222222222222",
+    { enabled: true }
+  );
+  await sdk.rejectDiscoveryEndpoint<Record<string, unknown>>(
+    "33333333-3333-4333-8333-333333333333",
+    { reason: "low evidence" }
+  );
 
   assert.deepEqual(requests, [
     {
-      url: "http://api.example.test/maintenance/discovery/classes/class-1",
-      method: "DELETE",
+      url: "http://api.example.test/maintenance/discovery/runs/11111111-1111-4111-8111-111111111111/cancel",
+      method: "POST",
     },
     {
-      url: "http://api.example.test/maintenance/discovery/missions/mission-1",
-      method: "DELETE",
+      url: "http://api.example.test/maintenance/discovery/endpoints/22222222-2222-4222-8222-222222222222/promote",
+      method: "POST",
+    },
+    {
+      url: "http://api.example.test/maintenance/discovery/endpoints/33333333-3333-4333-8333-333333333333/reject",
+      method: "POST",
     },
   ]);
 });

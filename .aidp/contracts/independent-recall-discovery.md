@@ -1,46 +1,25 @@
 # Контракт independent recall discovery
 
-Этот contract обязателен, когда работа трогает generic source quality, neutral recall missions/candidates, recall acquisition or recall-candidate promotion.
+Этот contract сохранен как supersession note для старой dual-path discovery модели.
 
-## Назначение
+## Status
 
-Independent recall adds upstream interest-independent acquisition so discovery is not solely owned by `interest_graph`. It keeps zero-shot filtering downstream and separates generic source quality from mission-fit scoring.
+Superseded by `.aidp/contracts/discovery-agent.md`.
 
-## Current shipped truth
+Independent recall used to add neutral acquisition beside graph-first missions through `discovery_recall_missions` and `discovery_recall_candidates`. The resilient discovery rebuild folds surviving recall ideas into the new target/coverage/evidence model:
 
-- Graph-first discovery remains valid compatibility truth.
-- `discovery_source_quality_snapshots` persists generic source-quality snapshots.
-- `discovery_recall_missions` and `discovery_recall_candidates` persist neutral recall backlog.
-- Recall acquisition for `rss` and `website` can search/probe and persist recall candidates without `interest_graph`.
-- Recall-candidate promotion uses `POST /maintenance/discovery/recall-candidates/{recall_candidate_id}/promote`, reuses source registrar, persists `registered_channel_id` and emits normal onboarding/outbox truth.
+- neutral wide acquisition becomes provider-card-gated hypotheses;
+- generic source quality becomes domain inventory, endpoint quality and source health;
+- recall candidates become `discovery_source_endpoints` or `discovery_signal_clusters`;
+- recall promotion becomes endpoint promotion through the same `source_channels` registrar/outbox discipline.
 
-## Target flow
+## Durable carried-forward rules
 
-`neutral recall acquisition -> generic source quality evaluation -> bounded promotion into source_channels -> existing ingest/canonical/filter/select pipeline`
-
-## Compatibility rules
-
-- `discovery_missions`, `discovery_hypotheses`, `discovery_candidates`, `discovery_source_interest_scores`, and portfolio snapshots remain graph-first truth until explicitly demoted.
-- `discovery_source_profiles` is shared anchor for graph and recall.
-- Generic source quality must not silently replace mission-fit scores in UI/API wording.
 - Source-channel onboarding must keep PostgreSQL + outbox discipline.
+- Generic quality and target fit remain separate scores.
+- Interest-independent acquisition must not bypass downstream source/content safety gates.
+- Wide recall is useful, but noisy candidates require evidence, scoring and operator-visible status.
 
-## Failure modes
+## Update trigger
 
-- Generic source quality mixed back into mission-fit scores.
-- Recall storage becoming primary truth before admin/API surfaces distinguish it.
-- Claiming interest-independent discovery while all acquisition still requires `interest_graph`.
-- Reopening downstream zero-shot filtering by accident.
-- Hiding unrelated schema drift inside recall work.
-
-## Proof expectations
-
-- Quality foundation: migrations, unit/typecheck, targeted scoring/persistence proof.
-- Recall mission/candidate layer: API proof for maintenance surfaces and source-profile linking.
-- Acquisition loops: targeted worker/API proof plus unit/typecheck.
-- Promotion cutover: migration proof, API/worker proof for source-channel onboarding and outbox discipline.
-- Observability cleanup: targeted TS/Python proof for admin/read-model wording.
-
-## Update triggers
-
-Update when recall tables, source quality semantics, recall acquisition providers, promotion boundaries, or graph-vs-recall compatibility rules change.
+Delete this file only when old recall code, old recall docs and old recall tests have been fully removed and `.aidp/history.md` records the completed cutover.

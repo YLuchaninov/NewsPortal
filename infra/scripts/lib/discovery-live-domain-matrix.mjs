@@ -196,8 +196,14 @@ function resolveDomainRootCause(summary) {
 
 export function summarizeDomainCaseRun(caseRun, target) {
   const domain = normalizeDomain(target.domain ?? target);
-  const graphCandidates = asArray(caseRun?.graphLane?.candidates);
-  const recallCandidates = asArray(caseRun?.recallLane?.candidates);
+  const graphCandidates = [
+    ...asArray(caseRun?.graphLane?.endpoints),
+    ...asArray(caseRun?.graphLane?.candidates),
+  ];
+  const recallCandidates = [
+    ...asArray(caseRun?.recallLane?.endpoints),
+    ...asArray(caseRun?.recallLane?.candidates),
+  ];
   const allCandidates = [...graphCandidates, ...recallCandidates];
   const targetCandidates = allCandidates.filter((candidate) => matchesDomain(candidate.domain || candidate.url, domain));
   const targetPositiveCandidates = targetCandidates.filter(candidateIsPositiveDecision);

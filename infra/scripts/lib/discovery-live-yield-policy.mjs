@@ -656,8 +656,14 @@ function buildProductivityBuckets(downstreamEvidence) {
 }
 
 export function buildCaseYieldSummary(caseDefinition, caseRun, defaults) {
-  const graphCandidates = asArray(caseRun.graphLane?.candidates);
-  const recallCandidates = asArray(caseRun.recallLane?.candidates);
+  const graphCandidates = [
+    ...asArray(caseRun.graphLane?.endpoints),
+    ...asArray(caseRun.graphLane?.candidates),
+  ];
+  const recallCandidates = [
+    ...asArray(caseRun.recallLane?.endpoints),
+    ...asArray(caseRun.recallLane?.candidates),
+  ];
   const allCandidates = [...graphCandidates, ...recallCandidates];
   const onboardedChannelIds = [
     ...new Set(

@@ -209,6 +209,12 @@ commands:
   discovery_domains_compose: pnpm test:discovery:domains:compose
   discovery_mega_compose: pnpm test:discovery:mega:compose
   discovery_examples_compose: pnpm test:discovery:examples:compose
+  discovery_live_calibration_compose: pnpm test:discovery:live-calibration:compose
+  discovery_live_acceptance_compose: pnpm test:discovery:live-acceptance:compose
+  discovery_live_soak_compose: pnpm test:discovery:live-soak:compose
+  discovery_live_polish_compose: pnpm test:discovery:live-polish:compose
+  discovery_live_polish_acceptance_compose: pnpm test:discovery:live-polish-acceptance:compose
+  discovery_live_polish_soak_compose: pnpm test:discovery:live-polish-soak:compose
   discovery_nonregression_compose: pnpm test:discovery:nonregression:compose
   discovery_yield_compose: pnpm test:discovery:yield:compose
   mcp_compose: pnpm test:mcp:compose

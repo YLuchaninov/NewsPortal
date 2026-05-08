@@ -1,128 +1,148 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Body, FastAPI, Query
+
+from services.api.app import discovery_v3_api as v3
 
 
-def register_discovery_routes(app: FastAPI, deps: dict[str, Any]) -> None:
+def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
+    del deps
     router = APIRouter()
-    router.get("/maintenance/discovery/summary")(deps["get_discovery_summary_route"])
-    router.get("/maintenance/discovery/classes")(deps["list_discovery_classes"])
-    router.post("/maintenance/discovery/classes", status_code=201)(
-        deps["create_discovery_class_route"]
+
+    router.get("/maintenance/discovery/summary")(v3.get_summary)
+    router.get("/maintenance/discovery/autopilot-profiles")(v3.get_autopilot_profiles)
+    router.post("/maintenance/discovery/config/simplify")(v3.simplify_config)
+
+    router.get("/maintenance/discovery/targets")(_list_targets)
+    router.post("/maintenance/discovery/targets", status_code=201)(v3.create_target)
+    router.post("/maintenance/discovery/targets/create-simple", status_code=201)(v3.create_simple_target)
+    router.get("/maintenance/discovery/targets/{target_id}")(_get_target)
+    router.patch("/maintenance/discovery/targets/{target_id}")(v3.update_target)
+    router.get("/maintenance/discovery/targets/{target_id}/coverage")(v3.latest_coverage)
+    router.get("/maintenance/discovery/targets/{target_id}/coverage/explain")(v3.explain_coverage)
+    router.post("/maintenance/discovery/targets/{target_id}/refresh-coverage")(v3.refresh_coverage)
+    router.post("/maintenance/discovery/targets/{target_id}/expand-gap")(_expand_gap)
+
+    router.get("/maintenance/discovery/runs")(_list_runs)
+    router.post("/maintenance/discovery/runs", status_code=201)(v3.create_run)
+    router.get("/maintenance/discovery/runs/{run_id}")(_get_run)
+    router.post("/maintenance/discovery/runs/{run_id}/diagnose")(v3.diagnose_run)
+    router.post("/maintenance/discovery/runs/{run_id}/cancel")(v3.cancel_run)
+
+    for public_name, kind in (
+        ("hypotheses", "hypotheses"),
+        ("domains", "domains"),
+        ("endpoints", "endpoints"),
+        ("actions", "actions"),
+        ("contracts", "contracts"),
+        ("claims", "claims"),
+        ("negative-evidence", "negative-evidence"),
+        ("provider-health", "provider-health"),
+        ("identities", "identities"),
+        ("eval-suites", "eval-suites"),
+        ("eval-runs", "eval-runs"),
+        ("llm-decisions", "llm-decisions"),
+    ):
+        router.get(f"/maintenance/discovery/{public_name}")(
+            _build_list_handler(kind)
+        )
+        router.get(f"/maintenance/discovery/{public_name}/{{record_id}}")(
+            _build_get_handler(kind)
+        )
+
+    router.post("/maintenance/discovery/endpoints/{endpoint_id}/promote")(v3.promote_endpoint)
+    router.get("/maintenance/discovery/endpoints/{endpoint_id}/explain")(v3.explain_endpoint)
+    router.post("/maintenance/discovery/endpoints/{endpoint_id}/reject")(v3.reject_endpoint)
+    router.post("/maintenance/discovery/endpoints/{endpoint_id}/expand")(v3.expand_endpoint)
+    router.post("/maintenance/discovery/endpoints/{endpoint_id}/mark-duplicate")(
+        v3.mark_endpoint_duplicate
     )
-    router.get("/maintenance/discovery/classes/{class_key}")(
-        deps["get_discovery_class_route"]
+    router.post("/maintenance/discovery/contracts/{contract_id}/evaluate")(v3.evaluate_contract)
+    router.post("/maintenance/discovery/providers/{provider_id}/repair")(v3.repair_provider)
+    router.post("/maintenance/discovery/negative-evidence/{negative_evidence_id}/clear-cooldown")(
+        v3.clear_negative_evidence_cooldown
     )
-    router.patch("/maintenance/discovery/classes/{class_key}")(
-        deps["update_discovery_class_route"]
-    )
-    router.delete("/maintenance/discovery/classes/{class_key}")(
-        deps["delete_discovery_class_route"]
-    )
-    router.get("/maintenance/discovery/missions")(deps["list_discovery_missions"])
-    router.post("/maintenance/discovery/missions", status_code=201)(
-        deps["create_discovery_mission_route"]
-    )
-    router.get("/maintenance/discovery/missions/{mission_id}")(
-        deps["get_discovery_mission_route"]
-    )
-    router.patch("/maintenance/discovery/missions/{mission_id}")(
-        deps["update_discovery_mission_route"]
-    )
-    router.delete("/maintenance/discovery/missions/{mission_id}")(
-        deps["delete_discovery_mission_route"]
-    )
-    router.post("/maintenance/discovery/missions/{mission_id}/compile-graph")(
-        deps["compile_discovery_mission_graph_route"]
-    )
-    router.post("/maintenance/discovery/missions/{mission_id}/run", status_code=202)(
-        deps["request_discovery_mission_run_route"]
-    )
-    router.get("/maintenance/discovery/missions/{mission_id}/portfolio")(
-        deps["get_discovery_portfolio_snapshot_route"]
-    )
-    router.get("/maintenance/discovery/profiles")(deps["list_discovery_policy_profiles"])
-    router.post("/maintenance/discovery/profiles", status_code=201)(
-        deps["create_discovery_policy_profile_route"]
-    )
-    router.get("/maintenance/discovery/profiles/{profile_id}")(
-        deps["get_discovery_policy_profile_route"]
-    )
-    router.patch("/maintenance/discovery/profiles/{profile_id}")(
-        deps["update_discovery_policy_profile_route"]
-    )
-    router.delete("/maintenance/discovery/profiles/{profile_id}")(
-        deps["delete_discovery_policy_profile_route"]
-    )
-    router.get("/maintenance/discovery/recall-missions")(
-        deps["list_discovery_recall_missions"]
-    )
-    router.post("/maintenance/discovery/recall-missions", status_code=201)(
-        deps["create_discovery_recall_mission_route"]
-    )
-    router.get("/maintenance/discovery/recall-missions/{recall_mission_id}")(
-        deps["get_discovery_recall_mission_route"]
-    )
-    router.patch("/maintenance/discovery/recall-missions/{recall_mission_id}")(
-        deps["update_discovery_recall_mission_route"]
-    )
-    router.post("/maintenance/discovery/recall-missions/{recall_mission_id}/acquire")(
-        deps["request_discovery_recall_mission_acquisition_route"]
-    )
-    router.get("/maintenance/discovery/candidates")(deps["list_discovery_candidates"])
-    router.get("/maintenance/discovery/candidates/{candidate_id}")(
-        deps["get_discovery_candidate_route"]
-    )
-    router.patch("/maintenance/discovery/candidates/{candidate_id}")(
-        deps["update_discovery_candidate_route"]
-    )
-    router.get("/maintenance/discovery/recall-candidates")(
-        deps["list_discovery_recall_candidates"]
-    )
-    router.post("/maintenance/discovery/recall-candidates", status_code=201)(
-        deps["create_discovery_recall_candidate_route"]
-    )
-    router.get("/maintenance/discovery/recall-candidates/{recall_candidate_id}")(
-        deps["get_discovery_recall_candidate_route"]
-    )
-    router.post("/maintenance/discovery/recall-candidates/{recall_candidate_id}/promote")(
-        deps["promote_discovery_recall_candidate_route"]
-    )
-    router.patch("/maintenance/discovery/recall-candidates/{recall_candidate_id}")(
-        deps["update_discovery_recall_candidate_route"]
-    )
-    router.get("/maintenance/discovery/hypotheses")(deps["list_discovery_hypotheses"])
-    router.get("/maintenance/discovery/hypotheses/{hypothesis_id}")(
-        deps["get_discovery_hypothesis_route"]
-    )
-    router.get("/maintenance/discovery/source-profiles")(
-        deps["list_discovery_source_profiles"]
-    )
-    router.get("/maintenance/discovery/source-profiles/{source_profile_id}")(
-        deps["get_discovery_source_profile_route"]
-    )
-    router.get("/maintenance/discovery/source-quality-snapshots")(
-        deps["list_discovery_source_quality_snapshots"]
-    )
-    router.get("/maintenance/discovery/source-quality-snapshots/{snapshot_id}")(
-        deps["get_discovery_source_quality_snapshot_route"]
-    )
-    router.get("/maintenance/discovery/source-interest-scores")(
-        deps["list_discovery_source_interest_scores"]
-    )
-    router.get("/maintenance/discovery/source-interest-scores/{score_id}")(
-        deps["get_discovery_source_interest_score_route"]
-    )
-    router.get("/maintenance/discovery/feedback")(deps["list_discovery_feedback"])
-    router.post("/maintenance/discovery/feedback", status_code=201)(
-        deps["create_discovery_feedback_route"]
-    )
-    router.post("/maintenance/discovery/re-evaluate")(
-        deps["re_evaluate_discovery_sources_route"]
-    )
-    router.get("/maintenance/discovery/costs/summary")(
-        deps["get_discovery_cost_summary_route"]
-    )
+    router.post("/maintenance/discovery/eval-suites/{eval_suite_id}/run")(v3.run_eval_suite)
+    router.post("/maintenance/discovery/sources/{channel_id}/expand")(v3.expand_source)
+    router.post("/maintenance/discovery/sources/{channel_id}/replace-candidates")(v3.replace_source_candidates)
+
     app.include_router(router)
+
+
+def _list_targets(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(50, ge=1, le=200),
+    status: str | None = None,
+) -> dict[str, Any]:
+    return v3.list_v3_records(
+        "targets",
+        page=page,
+        page_size=pageSize,
+        status=status,
+    )
+
+
+def _get_target(target_id: str) -> dict[str, Any]:
+    return v3.get_v3_record("targets", target_id)
+
+
+def _expand_gap(
+    target_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+) -> dict[str, Any]:
+    payload = {key: value for key, value in payload.items() if key not in {"targetId", "target_id"}}
+    return v3.create_run(
+        v3.DiscoveryV3RunCreatePayload(
+            targetId=target_id,
+            runKind="gap_fill",
+            triggerKind="coverage_gap",
+            **payload,
+        )
+    )
+
+
+def _list_runs(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(50, ge=1, le=200),
+    status: str | None = None,
+    targetId: str | None = None,
+) -> dict[str, Any]:
+    return v3.list_v3_records(
+        "runs",
+        page=page,
+        page_size=pageSize,
+        status=status,
+        target_id=targetId,
+    )
+
+
+def _get_run(run_id: str) -> dict[str, Any]:
+    return v3.get_v3_record("runs", run_id)
+
+
+def _build_list_handler(kind: str):
+    def handler(
+        page: int = Query(1, ge=1),
+        pageSize: int = Query(50, ge=1, le=200),
+        status: str | None = None,
+        targetId: str | None = None,
+    ) -> dict[str, Any]:
+        return v3.list_v3_records(
+            kind,
+            page=page,
+            page_size=pageSize,
+            status=status,
+            target_id=targetId,
+        )
+
+    return handler
+
+
+def _build_get_handler(kind: str):
+    def handler(record_id: str) -> dict[str, Any]:
+        return v3.get_v3_record(kind, record_id)
+
+    return handler

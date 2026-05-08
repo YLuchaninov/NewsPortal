@@ -107,9 +107,7 @@ const operatorReportVerifySchema = {
       type: "object",
       properties: {
         channelIds: { type: "array", items: { type: "string" } },
-        profileIds: { type: "array", items: { type: "string" } },
-        missionIds: { type: "array", items: { type: "string" } },
-        recallMissionIds: { type: "array", items: { type: "string" } },
+        targetIds: { type: "array", items: { type: "string" } },
         runIds: { type: "array", items: { type: "string" } },
         docIds: { type: "array", items: { type: "string" } },
       },
@@ -294,223 +292,194 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
       }
 
       if (reportKind === "discovery_run") {
-        const profileIds = readStringArray(entityIds.profileIds);
-        const missionIds = readStringArray(entityIds.missionIds);
-        const recallMissionIds = readStringArray(entityIds.recallMissionIds);
+        const targetIds = readStringArray(entityIds.targetIds);
         const runIds = readStringArray(entityIds.runIds);
-        const hasEntityFilters =
-          profileIds.length + missionIds.length + recallMissionIds.length + runIds.length > 0;
-        const profiles = await pool.query(
+        const hasEntityFilters = targetIds.length + runIds.length > 0;
+        const targets = await pool.query(
           `
-            select profile_id::text as "profileId", profile_key as "profileKey",
-                   display_name as "displayName", status, version, updated_at as "updatedAt"
-            from discovery_policy_profiles
-            where (cardinality($1::text[]) = 0 and $2 = false) or profile_id::text = any($1::text[])
-            order by updated_at desc
+            select target_id::text as "targetId", title, origin_kind as "originKind",
+                   status, priority, last_run_id::text as "lastRunId",
+                   last_coverage_snapshot_id::text as "lastCoverageSnapshotId",
+                   updated_at as "updatedAt"
+            from discovery_targets
+            where (cardinality($1::text[]) = 0 and $2 = false) or target_id::text = any($1::text[])
+            order by updated_at desc, priority desc
             limit 25
           `,
-          [profileIds, hasEntityFilters]
+          [targetIds, hasEntityFilters]
         );
-        const missions = await pool.query(
+        const runs = await pool.query(
           `
-            select mission_id::text as "missionId", title, status,
-                   interest_graph_status as "interestGraphStatus",
-                   run_count as "runCount", last_run_at as "lastRunAt",
-                   profile_id::text as "profileId",
-                   (profile_id is not null) as "hasProfile",
-                   (applied_policy_json is not null) as "hasAppliedPolicy",
-                   (select count(*)::int from discovery_candidates dc where dc.mission_id = dm.mission_id) as "candidateCount"
-            from discovery_missions dm
-            where (cardinality($1::text[]) = 0 and $2 = false) or mission_id::text = any($1::text[])
-            order by updated_at desc
-            limit 25
-          `,
-          [missionIds, hasEntityFilters]
-        );
-        const recallMissions = await pool.query(
-          `
-            select recall_mission_id::text as "recallMissionId", title, status,
-                   mission_kind as "missionKind", max_candidates as "maxCandidates",
-                   profile_id::text as "profileId",
-                   (profile_id is not null) as "hasProfile",
-                   (applied_policy_json is not null) as "hasAppliedPolicy",
-                   (select count(*)::int from discovery_recall_candidates rc where rc.recall_mission_id = drm.recall_mission_id) as "candidateCount"
-            from discovery_recall_missions drm
-            where (cardinality($1::text[]) = 0 and $2 = false) or recall_mission_id::text = any($1::text[])
-            order by updated_at desc
-            limit 25
-          `,
-          [recallMissionIds, hasEntityFilters]
-        );
-        const sequenceRuns = await pool.query(
-          `
-            select run_id::text as "runId", sequence_id::text as "sequenceId",
-                   status, trigger_type as "triggerType",
-                   context_json->>'mission_id' as "missionId",
-                   trigger_meta->>'hypothesisId' as "hypothesisId",
-                   started_at as "startedAt", finished_at as "finishedAt",
-                   error_text as "errorText", created_at as "createdAt",
-                   coalesce(finished_at, started_at, created_at) as "updatedAt"
-            from sequence_runs
+            select run_id::text as "runId", target_id::text as "targetId",
+                   run_kind as "runKind", trigger_kind as "triggerKind",
+                   status, started_at as "startedAt", finished_at as "finishedAt",
+                   error_text as "errorText", created_at as "createdAt"
+            from discovery_runs
             where
               (
                 (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or run_id::text = any($1::text[])
-                or context_json->>'mission_id' = any($2::text[])
-                or trigger_meta->>'missionId' = any($2::text[])
-              )
-            order by created_at desc
-            limit 50
-          `,
-          [runIds, missionIds, hasEntityFilters]
-        );
-        const relatedSequenceRuns = await pool.query(
-          `
-            select run_id::text as "runId", sequence_id::text as "sequenceId",
-                   status, trigger_type as "triggerType",
-                   context_json->>'mission_id' as "missionId",
-                   trigger_meta->>'hypothesisId' as "hypothesisId",
-                   started_at as "startedAt", finished_at as "finishedAt",
-                   error_text as "errorText", created_at as "createdAt",
-                   coalesce(finished_at, started_at, created_at) as "updatedAt"
-            from sequence_runs
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or context_json->>'mission_id' = any($1::text[])
-                or trigger_meta->>'missionId' = any($1::text[])
+                or target_id::text = any($1::text[])
                 or run_id::text = any($2::text[])
               )
             order by created_at desc
-            limit 75
+            limit 25
           `,
-          [missionIds, runIds, hasEntityFilters]
+          [targetIds, runIds, hasEntityFilters]
         );
-        const taskRuns = await pool.query(
+        const coverage = await pool.query(
           `
-            select tr.run_id::text as "runId",
-                   sr.trigger_type as "triggerType",
-                   sr.context_json->>'mission_id' as "missionId",
-                   tr.task_index as "taskIndex",
-                   tr.task_key as "taskKey",
-                   tr.module,
-                   tr.status,
-                   tr.started_at as "startedAt",
-                   tr.finished_at as "finishedAt",
-                   tr.error_text as "errorText"
-            from sequence_task_runs tr
-            join sequence_runs sr on sr.run_id = tr.run_id
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or tr.run_id::text = any($1::text[])
-                or sr.context_json->>'mission_id' = any($2::text[])
-                or sr.trigger_meta->>'missionId' = any($2::text[])
-              )
-            order by sr.created_at desc, tr.task_index asc
-            limit 100
+            select distinct on (target_id)
+                   target_id::text as "targetId",
+                   coverage_score as "coverageScore",
+                   source_count as "sourceCount",
+                   strong_source_count as "strongSourceCount",
+                   missing_role_count as "missingRoleCount",
+                   summary_json as "summaryJson",
+                   created_at as "createdAt"
+            from discovery_coverage_snapshots
+            where (cardinality($1::text[]) = 0 and $2 = false) or target_id::text = any($1::text[])
+            order by target_id, created_at desc
+            limit 25
           `,
-          [runIds, missionIds, hasEntityFilters]
+          [targetIds, hasEntityFilters]
         );
         const hypothesisStatusCounts = await pool.query(
           `
-            select mission_id::text as "missionId",
+            select target_id::text as "targetId",
+                   run_id::text as "runId",
                    status,
-                   target_provider_type as "targetProviderType",
+                   source_role as "sourceRole",
+                   signal_mode as "signalMode",
                    count(*)::int as count
             from discovery_hypotheses
-            where (cardinality($1::text[]) = 0 and $2 = false) or mission_id::text = any($1::text[])
-            group by mission_id, status, target_provider_type
-            order by mission_id, status, target_provider_type
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or target_id::text = any($1::text[])
+                or run_id::text = any($2::text[])
+              )
+            group by target_id, run_id, status, source_role, signal_mode
+            order by target_id, run_id, status, source_role, signal_mode
           `,
-          [missionIds, hasEntityFilters]
+          [targetIds, runIds, hasEntityFilters]
         );
-        const candidateStatusCounts = await pool.query(
+        const endpointStatusCounts = await pool.query(
           `
-            select mission_id::text as "missionId",
+            select target_id::text as "targetId",
                    status,
+                   recommended_action as "recommendedAction",
                    provider_type as "providerType",
                    count(*)::int as count
-            from discovery_candidates
-            where (cardinality($1::text[]) = 0 and $2 = false) or mission_id::text = any($1::text[])
-            group by mission_id, status, provider_type
-            order by mission_id, status, provider_type
+            from discovery_source_endpoints
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or target_id::text = any($1::text[])
+                or run_id::text = any($2::text[])
+              )
+            group by target_id, status, recommended_action, provider_type
+            order by target_id, status, recommended_action, provider_type
           `,
-          [missionIds, hasEntityFilters]
+          [targetIds, runIds, hasEntityFilters]
         );
-        const recallCandidateStatusCounts = await pool.query(
+        const contractStatusCounts = await pool.query(
           `
-            select recall_mission_id::text as "recallMissionId",
+            select target_id::text as "targetId",
                    status,
-                   provider_type as "providerType",
+                   source_role as "sourceRole",
                    count(*)::int as count
-            from discovery_recall_candidates
-            where (cardinality($1::text[]) = 0 and $2 = false) or recall_mission_id::text = any($1::text[])
-            group by recall_mission_id, status, provider_type
-            order by recall_mission_id, status, provider_type
+            from discovery_source_contracts
+            where (cardinality($1::text[]) = 0 and $2 = false) or target_id::text = any($1::text[])
+            group by target_id, status, source_role
+            order by target_id, status, source_role
           `,
-          [recallMissionIds, hasEntityFilters]
+          [targetIds, hasEntityFilters]
         );
-        const runningRows = relatedSequenceRuns.rows.filter((row) =>
-          ["pending", "running"].includes(String(row.status ?? ""))
+        const claimStatusCounts = await pool.query(
+          `
+            select target_id::text as "targetId",
+                   status,
+                   signal_type as "signalType",
+                   count(*)::int as count
+            from discovery_claims
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or target_id::text = any($1::text[])
+                or run_id::text = any($2::text[])
+              )
+            group by target_id, status, signal_type
+            order by target_id, status, signal_type
+          `,
+          [targetIds, runIds, hasEntityFilters]
         );
-        if (runIds.length > 0 && sequenceRuns.rows.length !== runIds.length) {
-          warnings.push("Some requested discovery sequence runIds were not found.");
+        const negativeEvidence = await pool.query(
+          `
+            select negative_evidence_id::text as "negativeEvidenceId",
+                   target_id::text as "targetId",
+                   provider_id as "providerId",
+                   failure_mode as "failureMode",
+                   severity,
+                   cooldown_until as "cooldownUntil",
+                   created_at as "createdAt"
+            from discovery_negative_evidence
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or target_id::text = any($1::text[])
+                or run_id::text = any($2::text[])
+              )
+            order by created_at desc
+            limit 25
+          `,
+          [targetIds, runIds, hasEntityFilters]
+        );
+        const providerHealth = await pool.query(
+          `
+            select provider_id as "providerId", status, error_rate as "errorRate",
+                   last_error_kind as "lastErrorKind", cooldown_until as "cooldownUntil"
+            from discovery_provider_health
+            where status <> 'healthy'
+            order by updated_at desc
+            limit 25
+          `,
+        );
+        const runningRows = runs.rows.filter((row) =>
+          ["queued", "running"].includes(String(row.status ?? ""))
+        );
+        if (runIds.length > 0 && runs.rows.length !== runIds.length) {
+          warnings.push("Some requested discovery runIds were not found.");
         }
-        if (missionIds.length > 0 && missions.rows.length !== missionIds.length) {
-          warnings.push("Some requested discovery missionIds were not found.");
+        if (targetIds.length > 0 && targets.rows.length !== targetIds.length) {
+          warnings.push("Some requested discovery targetIds were not found.");
         }
         if (runningRows.length > 0) {
           warnings.push(
-            "Some discovery sequence runs are still pending/running; report the discovery as in progress, not completed."
+            "Some discovery runs are still queued/running; report the discovery as in progress, not completed."
           );
         }
-        const failedRows = relatedSequenceRuns.rows.filter(
+        const failedRows = runs.rows.filter(
           (row) => String(row.status ?? "") === "failed"
         );
         if (failedRows.length > 0) {
           warnings.push(
-            "Some discovery child/parent sequence runs failed; inspect taskRuns.errorText before claiming yield."
+            "Some discovery runs failed; inspect run error_text, negative evidence and provider health before claiming yield."
           );
         }
-        const failedTaskRows = taskRuns.rows.filter(
-          (row) => String(row.status ?? "") === "failed"
-        );
-        if (failedTaskRows.length > 0) {
-          warnings.push(
-            "At least one discovery task failed; probe/search timeouts and no-result failures can mean low yield rather than successful source discovery."
-          );
-        }
-        const manualReviewOnlyMissions = missions.rows.filter(
-          (row) => row.hasProfile !== true || row.hasAppliedPolicy !== true
-        );
-        if (manualReviewOnlyMissions.length > 0) {
-          warnings.push(
-            "At least one discovery mission has no applied profile/policy snapshot. Treat its candidates as manual-review-only; do not describe auto-promotion thresholds as configured."
-          );
-        }
-        const manualReviewOnlyRecallMissions = recallMissions.rows.filter(
-          (row) => row.hasProfile !== true || row.hasAppliedPolicy !== true
-        );
-        if (manualReviewOnlyRecallMissions.length > 0) {
-          warnings.push(
-            "At least one recall mission has no applied profile/policy snapshot. Treat its candidates as manual-review-only; do not describe recallPolicy/minPromotionScore thresholds as configured."
-          );
-        }
-        const pendingCandidateCount = candidateStatusCounts.rows
-          .filter((row) => String(row.status ?? "") === "pending")
+        const pendingEndpointCount = endpointStatusCounts.rows
+          .filter((row) => ["candidate", "promotable", "manual_review"].includes(String(row.status ?? "")))
           .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
-        if (pendingCandidateCount > 0) {
+        if (pendingEndpointCount > 0) {
           warnings.push(
-            `${pendingCandidateCount} discovery candidates are still pending review; do not report the mission review as complete.`
+            `${pendingEndpointCount} discovery endpoints still require evidence review; do not report source onboarding as complete.`
           );
         }
-        const pendingRecallCandidateCount = recallCandidateStatusCounts.rows
-          .filter((row) => ["pending", "shortlisted"].includes(String(row.status ?? "")))
+        const probationContractCount = contractStatusCounts.rows
+          .filter((row) => String(row.status ?? "") === "probation")
           .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
-        if (pendingRecallCandidateCount > 0) {
+        if (probationContractCount > 0) {
           warnings.push(
-            `${pendingRecallCandidateCount} recall candidates are still pending/shortlisted; do not report recall review or promotion as complete.`
+            `${probationContractCount} promoted sources are still in contract probation and do not count as strong coverage.`
           );
         }
         return {
@@ -518,22 +487,21 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
           verifiedAt: new Date().toISOString(),
           staleReportNotes: warnings,
           counts: {
-            profiles: profiles.rows.length,
-            missions: missions.rows.length,
-            recallMissions: recallMissions.rows.length,
-            sequenceRuns: sequenceRuns.rows.length,
-            relatedSequenceRuns: relatedSequenceRuns.rows.length,
-            taskRuns: taskRuns.rows.length,
+            targets: targets.rows.length,
+            runs: runs.rows.length,
+            coverageSnapshots: coverage.rows.length,
+            negativeEvidence: negativeEvidence.rows.length,
+            providerAlerts: providerHealth.rows.length,
           },
-          profiles: profiles.rows,
-          missions: missions.rows,
-          recallMissions: recallMissions.rows,
-          sequenceRuns: sequenceRuns.rows,
-          relatedSequenceRuns: relatedSequenceRuns.rows,
-          taskRuns: includeSamples ? taskRuns.rows.slice(0, 20) : [],
+          targets: targets.rows,
+          runs: runs.rows,
+          coverage: coverage.rows,
           hypothesisStatusCounts: hypothesisStatusCounts.rows,
-          candidateStatusCounts: candidateStatusCounts.rows,
-          recallCandidateStatusCounts: recallCandidateStatusCounts.rows,
+          endpointStatusCounts: endpointStatusCounts.rows,
+          contractStatusCounts: contractStatusCounts.rows,
+          claimStatusCounts: claimStatusCounts.rows,
+          negativeEvidence: includeSamples ? negativeEvidence.rows : [],
+          providerHealth: providerHealth.rows,
         };
       }
 
@@ -544,9 +512,9 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
               (select count(*)::int from source_channels where is_active = true) as "activeChannels",
               (select count(*)::int from interest_templates where is_active = true) as "activeSystemInterests",
               (select count(*)::int from llm_prompt_templates where is_active = true) as "activeLlmTemplates",
-              (select count(*)::int from discovery_missions where status in ('planned', 'active')) as "activeDiscoveryMissions",
-              (select count(*)::int from discovery_recall_missions where status in ('planned', 'active')) as "activeRecallMissions",
-              (select count(*)::int from discovery_hypothesis_classes where status = 'active') as "activeDiscoveryClasses",
+              (select count(*)::int from discovery_targets where status = 'active') as "activeDiscoveryTargets",
+              (select count(*)::int from discovery_runs where status in ('queued', 'running')) as "activeDiscoveryRuns",
+              (select count(*)::int from discovery_source_contracts where status = 'probation') as "probationDiscoveryContracts",
               (select count(*)::int from sequences where status in ('draft', 'active')) as "activeSequences",
               (select count(*)::int from mcp_access_tokens where status = 'active' and (expires_at is null or expires_at > now())) as "activeMcpTokens"
           `
@@ -557,10 +525,6 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                 select 'sequence' as kind, sequence_id::text as id, title as name, created_by as "createdBy"
                 from sequences
                 where created_by like 'migration:%'
-                union all
-                select 'discovery_class' as kind, class_key as id, display_name as name, 'system' as "createdBy"
-                from discovery_hypothesis_classes
-                where class_key in ('lexical', 'facet', 'actor', 'source_type', 'evidence_chain', 'contrarian')
                 order by kind, name
                 limit 50
               `

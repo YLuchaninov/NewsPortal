@@ -16,8 +16,8 @@ function formatInterestTable(rows) {
 
 export function formatDiscoveryCaseMarkdown(caseRun) {
   const approvedOrPromoted = [
-    ...caseRun.graphLane.candidates.filter((item) => item.decision === "approved"),
-    ...caseRun.recallLane.candidates.filter(
+    ...asArray(caseRun.graphLane?.endpoints).filter((item) => item.decision === "approved"),
+    ...asArray(caseRun.recallLane?.endpoints).filter(
       (item) => item.decision === "promoted" || item.decision === "duplicate"
     ),
   ];
@@ -42,7 +42,7 @@ export function formatDiscoveryCaseMarkdown(caseRun) {
     ``,
     `Manual replay profile: \`${caseRun.manualReplaySettings?.profile?.profileKey || "n/a"}\` · ${caseRun.manualReplaySettings?.profile?.displayName || "n/a"} · applied graph v${caseRun.manualReplaySettings?.graphMission?.appliedProfileVersion ?? "—"} · applied recall v${caseRun.manualReplaySettings?.recallMission?.appliedProfileVersion ?? "—"}`,
     ``,
-    `Approved/promoted channels: ${approvedOrPromoted.length}`,
+    `Approved/promoted endpoints: ${approvedOrPromoted.length}`,
     `Yield summary: reviewed=${caseRun.yieldSummary.candidatesReviewed}, benchmark_like=${caseRun.yieldSummary.benchmarkLikeCandidatesFound}, approved_or_promoted=${caseRun.yieldSummary.candidatesApprovedOrPromoted}, onboarded=${caseRun.yieldSummary.channelsOnboarded}, downstream=${caseRun.yieldSummary.channelsWithDownstreamEvidence}, covered_interests=${caseRun.yieldSummary.interestsCoveredDownstream}`,
     `Evidence funnel: fetch_runs=${caseRun.yieldSummary.channelsWithFetchRuns}, articles=${caseRun.yieldSummary.channelsWithArticles}, interest_filters=${caseRun.yieldSummary.channelsWithInterestFilterResults}, final_selection=${caseRun.yieldSummary.channelsWithFinalSelectionResults}`,
     `Baseline evidence: successful_fetches=${caseRun.yieldSummary.baselineSuccessfulFetches ?? 0}, required=${caseRun.yieldSummary.minimumBaselineSuccessfulFetches ?? 0}`,

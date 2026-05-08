@@ -128,13 +128,15 @@ function countDownstreamRows(caseRun) {
   }).length;
 }
 
-function countPositiveDiscoveryCandidates(caseRun) {
-  const allCandidates = [
+function countPositiveDiscoveryEndpoints(caseRun) {
+  const allEndpoints = [
+    ...asArray(caseRun?.graphLane?.endpoints),
+    ...asArray(caseRun?.recallLane?.endpoints),
     ...asArray(caseRun?.graphLane?.candidates),
     ...asArray(caseRun?.recallLane?.candidates),
   ];
-  return allCandidates.filter((candidate) => {
-    const decision = normalizeText(candidate?.decision).toLowerCase();
+  return allEndpoints.filter((endpoint) => {
+    const decision = normalizeText(endpoint?.decision ?? endpoint?.recommendedAction).toLowerCase();
     return decision === "approved" || decision === "promoted" || decision === "duplicate";
   }).length;
 }
@@ -152,8 +154,8 @@ function classifyMissingLiveSelection(caseRun, liveDiscovery) {
   if (liveDiscovery.interestFilterRows <= 0) {
     return "no_interest_filter_rows_for_live_articles";
   }
-  if (liveDiscovery.positiveDiscoveryCandidates <= 0) {
-    return "no_positive_live_discovery_candidate";
+  if (liveDiscovery.positiveDiscoveryEndpoints <= 0) {
+    return "no_positive_live_discovery_endpoint";
   }
 
   const fetchOnlyRows = sumEvidenceRows(caseRun).filter((row) => {
@@ -219,8 +221,8 @@ export function summarizeFilterBucketEvidence(input) {
     duplicateCanonicalFamily: {
       passed:
         commandPassed(commandResults, "providers-compose")
-        || countPositiveDiscoveryCandidates(caseRun) > 0,
-      source: "provider-preflight-or-live-discovery-duplicate-candidates",
+        || countPositiveDiscoveryEndpoints(caseRun) > 0,
+      source: "provider-preflight-or-live-discovery-duplicate-endpoints",
     },
   };
 }
@@ -348,7 +350,7 @@ export function buildProductMegaFlowScenarioSummary(input) {
     replaySelectedFinalRows: replaySelectedRows,
     downstreamEvidenceRows: countDownstreamRows(caseRun),
     interestFilterRows: countInterestFilterRows(caseRun),
-    positiveDiscoveryCandidates: countPositiveDiscoveryCandidates(caseRun),
+    positiveDiscoveryEndpoints: countPositiveDiscoveryEndpoints(caseRun),
     rootCauseClassification: caseRun?.rootCauseClassification ?? null,
   };
   const liveSelectedArticleEvidence = {
@@ -376,7 +378,7 @@ export function buildProductMegaFlowScenarioSummary(input) {
   const liveDiscoveryAccepted =
     liveDiscovery.finalVerdict === "pass"
     && liveDiscovery.downstreamEvidenceRows > 0
-    && liveDiscovery.positiveDiscoveryCandidates > 0
+    && liveDiscovery.positiveDiscoveryEndpoints > 0
     && liveSelectedArticleEvidence.passed;
   const passed =
     adminManagedTruth.passed

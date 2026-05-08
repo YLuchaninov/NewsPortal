@@ -34,35 +34,17 @@ from services.workers.app.main import (
     process_interest_compile,
     process_reindex,
 )
-from services.workers.app.discovery_orchestrator import (
-    DiscoveryCoordinatorRepository,
-    compile_interest_graph_for_mission,
-    evaluate_hypotheses,
-    execute_hypotheses,
-    load_discovery_settings,
-    plan_hypotheses,
-    re_evaluate_sources,
-)
+from services.workers.app.discovery_orchestrator import load_discovery_settings
 from services.workers.app.task_engine import (
     configure_discovery_runtime,
     get_discovery_runtime,
     reset_discovery_runtime,
 )
 from services.workers.app.task_engine.adapters import build_live_discovery_runtime, discovery_enabled
-from services.workers.app.task_engine.discovery_runtime import DiscoveryRuntime
 from services.workers.app.task_engine.discovery_plugins import LlmAnalyzerPlugin, WebSearchPlugin
-from services.workers.app.task_engine.repository import PostgresSequenceRepository
 from infra.scripts.workers.smoke_adaptive_discovery import (
-    AdaptiveDiscoverySmokeFixture,
-    _AdaptiveSmokeContentSamplerAdapter,
-    _AdaptiveSmokeUrlValidatorAdapter,
-    _AdaptiveSmokeWebSearchAdapter,
-    _AdaptiveSmokeWebsiteProbeAdapter,
-    cleanup_adaptive_discovery_smoke_fixture,
-    create_adaptive_discovery_smoke_fixture,
     fake_ddgs_client,
     fake_gemini_server,
-    insert_adaptive_discovery_smoke_feedback,
     stable_uuid,
     temporary_environment,
 )
@@ -3159,7 +3141,7 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                 "content": {
                     "parts": [
                         {
-                            "text": '[{"source_url":"https://news.example.com/eu-ai","verdict":"approve","relevance":0.93,"reasoning":"synthetic discovery smoke"}]'
+                            "text": '[{"source_url":"https://news.example.com/eu-ai","verdict":"review","relevance":0.93,"reasoning":"synthetic resilient discovery smoke"}]'
                         }
                     ]
                 }
@@ -3179,7 +3161,6 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
     discovered_output_cost = os.getenv("DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD") or os.getenv(
         "LLM_OUTPUT_COST_PER_MILLION_USD"
     ) or "0.40"
-    adaptive_fixture: AdaptiveDiscoverySmokeFixture | None = None
 
     with fake_gemini_server(fake_payload) as (base_url, request_paths):
         with fake_ddgs_client() as ddgs_calls:
@@ -3210,9 +3191,11 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                         raise RuntimeError("Discovery enabled smoke failed: live DDGS adapter was not configured.")
                     if runtime.llm_analyzer.__class__.__name__ != "GeminiLlmAnalyzerAdapter":
                         raise RuntimeError("Discovery enabled smoke failed: live Gemini analyzer was not configured.")
-                    if settings.search_provider != "ddgs":
+                    search_provider = settings.search_providers[0] if settings.search_providers else ""
+                    monthly_budget_cents = int(os.getenv("DISCOVERY_MONTHLY_BUDGET_CENTS") or "0")
+                    if search_provider != "ddgs":
                         raise RuntimeError("Discovery enabled smoke failed: discovery settings did not resolve DDGS.")
-                    if settings.monthly_budget_cents != 500:
+                    if monthly_budget_cents != 500:
                         raise RuntimeError("Discovery enabled smoke failed: monthly quota did not resolve to $5.00.")
 
                     search_result = await WebSearchPlugin().execute(
@@ -3251,267 +3234,21 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                     if len(request_paths) != 1:
                         raise RuntimeError("Discovery enabled smoke failed: fake discovery Gemini endpoint was not called once.")
 
-                    adaptive_fixture = await create_adaptive_discovery_smoke_fixture()
-                    adaptive_summary: dict[str, Any] = {}
-                    try:
-                        with temporary_environment(
-                            {
-                                "DISCOVERY_GEMINI_API_KEY": "",
-                                "GEMINI_API_KEY": "",
-                                "DISCOVERY_AUTO_APPROVE_THRESHOLD": "0",
-                            }
-                        ):
-                            configure_discovery_runtime(
-                                DiscoveryRuntime(
-                                    web_search=_AdaptiveSmokeWebSearchAdapter(
-                                        website_url=adaptive_fixture.website_url
-                                    ),
-                                    url_validator=_AdaptiveSmokeUrlValidatorAdapter(),
-                                    rss_probe=runtime.rss_probe,
-                                    content_sampler=_AdaptiveSmokeContentSamplerAdapter(),
-                                    llm_analyzer=runtime.llm_analyzer,
-                                    source_registrar=runtime.source_registrar,
-                                    db_store=runtime.db_store,
-                                    article_loader=runtime.article_loader,
-                                    article_enricher=runtime.article_enricher,
-                                    website_probe=_AdaptiveSmokeWebsiteProbeAdapter(
-                                        website_url=adaptive_fixture.website_url,
-                                        feed_url=adaptive_fixture.feed_url,
-                                    ),
-                                )
-                            )
-                            adaptive_settings = load_discovery_settings()
-                            repository = DiscoveryCoordinatorRepository()
-                            sequence_repository = PostgresSequenceRepository()
-                            mission = await repository.get_mission(adaptive_fixture.mission_id)
-                            if mission is None:
-                                raise RuntimeError(
-                                    "Discovery enabled smoke failed: adaptive mission fixture was not created."
-                                )
-
-                            compiled_graph = await compile_interest_graph_for_mission(
-                                mission=mission,
-                                repository=repository,
-                            )
-                            if str(compiled_graph.get("core_topic") or "") != "EU AI oversight":
-                                raise RuntimeError(
-                                    "Discovery enabled smoke failed: graph compilation did not preserve the mission core topic."
-                                )
-
-                            planned = await plan_hypotheses(
-                                mission_id=adaptive_fixture.mission_id,
-                                settings=adaptive_settings,
-                                repository=repository,
-                                class_keys=[adaptive_fixture.class_key],
-                            )
-                            if planned["discovery_planned_count"] != 1:
-                                raise RuntimeError(
-                                    "Discovery enabled smoke failed: adaptive planning did not emit exactly one bounded hypothesis."
-                                )
-
-                            executed = await execute_hypotheses(
-                                mission_id=adaptive_fixture.mission_id,
-                                settings=adaptive_settings,
-                                repository=repository,
-                                sequence_repository=sequence_repository,
-                            )
-                            if executed["discovery_executed_count"] != 1:
-                                raise RuntimeError(
-                                    "Discovery enabled smoke failed: adaptive execution did not run the planned hypothesis."
-                                )
-                            evaluated = await evaluate_hypotheses(
-                                hypothesis_ids=executed["discovery_executed_hypothesis_ids"],
-                                repository=repository,
-                            )
-
-                            async with await open_connection() as connection:
-                                async with connection.cursor() as cursor:
-                                    await cursor.execute(
-                                        """
-                                        select
-                                          h.hypothesis_id::text as hypothesis_id,
-                                          h.class_key,
-                                          c.candidate_id::text as candidate_id,
-                                          c.status as candidate_status,
-                                          c.registered_channel_id::text as registered_channel_id,
-                                          c.source_profile_id::text as source_profile_id,
-                                          sis.score_id::text as score_id,
-                                          dps.snapshot_id::text as snapshot_id,
-                                          dss.trials,
-                                          dss.successes,
-                                          sc.fetch_url,
-                                          sc.config_json,
-                                          oe.event_type
-                                        from discovery_hypotheses h
-                                        left join discovery_candidates c on c.hypothesis_id = h.hypothesis_id
-                                        left join discovery_source_interest_scores sis
-                                          on sis.mission_id = h.mission_id
-                                         and sis.source_profile_id = c.source_profile_id
-                                        left join discovery_strategy_stats dss
-                                          on dss.mission_id = h.mission_id
-                                         and dss.class_key = h.class_key
-                                         and dss.tactic_key = h.tactic_key
-                                        left join discovery_portfolio_snapshots dps
-                                          on dps.snapshot_id = (
-                                            select latest_portfolio_snapshot_id
-                                            from discovery_missions
-                                            where mission_id = h.mission_id
-                                          )
-                                        left join source_channels sc on sc.channel_id = c.registered_channel_id
-                                        left join outbox_events oe
-                                          on oe.aggregate_type = 'source_channel'
-                                         and oe.aggregate_id = c.registered_channel_id
-                                        where h.mission_id = %s
-                                        order by c.created_at desc nulls last
-                                        limit 1
-                                        """,
-                                        (adaptive_fixture.mission_id,),
-                                    )
-                                    state_row = await cursor.fetchone()
-                                    if state_row is None:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: adaptive walkthrough produced no persisted discovery rows."
-                                        )
-                                    if str(state_row.get("class_key") or "") != adaptive_fixture.class_key:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: custom registry class did not own the emitted hypothesis."
-                                        )
-                                    candidate_id = str(state_row.get("candidate_id") or "")
-                                    source_profile_id = str(state_row.get("source_profile_id") or "")
-                                    registered_channel_id = str(state_row.get("registered_channel_id") or "")
-                                    first_snapshot_id = str(state_row.get("snapshot_id") or "")
-                                    if not candidate_id or not source_profile_id:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: candidate/profile persistence was incomplete."
-                                        )
-                                    if not state_row.get("score_id"):
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: source interest score was not persisted."
-                                        )
-                                    if not first_snapshot_id:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: execution portfolio snapshot was not persisted."
-                                        )
-                                    if int(state_row.get("trials") or 0) < 1 or int(state_row.get("successes") or 0) < 1:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: strategy stats were not updated after evaluation."
-                                        )
-                                    if str(state_row.get("candidate_status") or "") not in {"approved", "auto_approved"}:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: candidate did not reach an approved registration state."
-                                        )
-                                    if not registered_channel_id:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: approved source was not registered as a source channel."
-                                        )
-                                    if str(state_row.get("fetch_url") or "") != adaptive_fixture.website_url:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: registered website channel did not preserve the adaptive website URL."
-                                        )
-                                    if str(state_row.get("event_type") or "") != "source.channel.sync.requested":
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: source registration did not publish the outbox sync event."
-                                        )
-                                    config_json = state_row.get("config_json") or {}
-                                    discovery_hints = (
-                                        config_json.get("discoveryHints", {})
-                                        if isinstance(config_json, dict)
-                                        else {}
-                                    )
-                                    discovered_feed_urls = (
-                                        discovery_hints.get("discoveredFeedUrls", [])
-                                        if isinstance(discovery_hints, dict)
-                                        else []
-                                    )
-                                    if not isinstance(config_json, dict):
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: registered source channel config_json did not stay structured."
-                                        )
-                                    if bool(
-                                        state_row.get("browser_assisted_recommended")
-                                        if isinstance(state_row, dict)
-                                        else False
-                                    ) and not bool(config_json.get("browserFallbackEnabled")):
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: browser-assisted website recommendation did not materialize into the registered source channel config."
-                                        )
-                                    if adaptive_fixture.feed_url not in discovered_feed_urls:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: hidden feed hints were not preserved on the registered website channel."
-                                        )
-
-                            await insert_adaptive_discovery_smoke_feedback(
-                                mission_id=adaptive_fixture.mission_id,
-                                candidate_id=candidate_id,
-                                source_profile_id=source_profile_id,
-                            )
-                            re_evaluated = await re_evaluate_sources(
-                                mission_id=adaptive_fixture.mission_id,
-                                repository=repository,
-                            )
-                            if re_evaluated["discovery_portfolio_snapshot_count"] != 1:
-                                raise RuntimeError(
-                                    "Discovery enabled smoke failed: re-evaluation did not persist a fresh portfolio snapshot."
-                                )
-                            if re_evaluated["discovery_feedback_row_count"] != 1:
-                                raise RuntimeError(
-                                    "Discovery enabled smoke failed: feedback row was not visible during re-evaluation."
-                                )
-
-                            async with await open_connection() as connection:
-                                async with connection.cursor() as cursor:
-                                    await cursor.execute(
-                                        """
-                                        select latest_portfolio_snapshot_id::text as latest_portfolio_snapshot_id
-                                        from discovery_missions
-                                        where mission_id = %s
-                                        """,
-                                        (adaptive_fixture.mission_id,),
-                                    )
-                                    mission_row = await cursor.fetchone()
-                                    latest_snapshot_id = (
-                                        str(mission_row.get("latest_portfolio_snapshot_id") or "")
-                                        if mission_row is not None
-                                        else ""
-                                    )
-                                    if not latest_snapshot_id or latest_snapshot_id == first_snapshot_id:
-                                        raise RuntimeError(
-                                            "Discovery enabled smoke failed: re-evaluation did not advance the portfolio snapshot pointer."
-                                        )
-
-                            adaptive_summary = {
-                                "missionId": adaptive_fixture.mission_id,
-                                "customClassKey": adaptive_fixture.class_key,
-                                "plannedCount": planned["discovery_planned_count"],
-                                "executedCount": executed["discovery_executed_count"],
-                                "evaluatedCount": evaluated["discovery_evaluated_count"],
-                                "candidateId": candidate_id,
-                                "sourceProfileId": source_profile_id,
-                                "registeredChannelId": registered_channel_id,
-                                "firstSnapshotId": first_snapshot_id,
-                                "latestSnapshotId": latest_snapshot_id,
-                                "reEvaluatedCount": re_evaluated["discovery_re_evaluated_count"],
-                            }
-                    finally:
-                        if adaptive_fixture is not None:
-                            await cleanup_adaptive_discovery_smoke_fixture(adaptive_fixture)
-
                     return {
                         "status": "discovery-enabled-ok",
                         "enabled": True,
-                        "searchProvider": settings.search_provider,
-                        "llmModel": settings.llm_model,
-                        "monthlyBudgetCents": settings.monthly_budget_cents,
+                        "resilientDiscoveryV3": True,
+                        "searchProvider": search_provider,
+                        "llmModel": discovered_model,
+                        "monthlyBudgetCents": monthly_budget_cents,
                         "searchMeta": search_result["search_meta"],
                         "llmMeta": llm_meta,
                         "ddgsCall": ddgs_calls[0],
                         "providerPath": request_paths[0],
                         "configuredBaseUrl": discovered_base_url,
-                        "adaptiveWalkthrough": adaptive_summary,
                     }
                 finally:
                     reset_discovery_runtime()
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="NewsPortal worker smoke commands")

@@ -24,7 +24,7 @@ test("MCP doc-parity matrix separates shipped coverage from deferred planning-do
     (entry) => entry.name === "system_interest.polish"
   );
   const deferredResource = matrix.legacy.resources.find(
-    (entry) => entry.uri === "newsportal://discovery/profiles"
+    (entry) => entry.uri === "newsportal://discovery/source-evidence-contracts"
   );
   const nonHttpExample = matrix.legacy.examples.find(
     (entry) => entry.name === "stdio-first local MCP workflow"
