@@ -1,6 +1,8 @@
 import unittest
 
 from services.workers.app.discovery_v3_autopilot import build_simple_target_payload, list_autopilot_profiles
+from services.workers.app.discovery_v3_graph import build_target_from_system_interest, compile_interest_graph
+from services.workers.app.discovery_v3_hypotheses import build_initial_frontier
 from services.workers.app.discovery_v3_llm_gateway import DiscoveryV3LlmGateway
 from services.workers.app.discovery_v3_llm_schemas import ConfigSimplificationOutput
 from services.workers.app.discovery_v3_orchestrator import _accepted_hypotheses_from_pack
@@ -90,6 +92,38 @@ class DiscoveryV3IntelligenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["origin_kind"], "manual_prompt")
         self.assertEqual(payload["autopilot_json"]["websiteAutoPromote"], False)
 
+    def test_system_interest_candidate_signals_flow_into_hidden_frontier(self):
+        target = build_target_from_system_interest(
+            {
+                "interest_template_id": "interest-1",
+                "name": "Workflow partner demand",
+                "description": "Find hidden workflow implementation asks.",
+                "positive_texts": ["workflow portal integration"],
+                "selection_profile_definition_json": {
+                    "candidateSignals": {
+                        "positiveGroups": [{"name": "buyer", "cues": ["seeking", "budget"]}],
+                        "negativeGroups": [{"name": "training", "cues": ["tutorial"]}],
+                    },
+                    "hiddenClaimExtraction": {
+                        "thresholds": {"minPositiveGroups": 1, "minPositiveHits": 1, "maxNegativeGroups": 0}
+                    },
+                },
+            }
+        )
+        target["target_id"] = "target-hidden"
+        graph = compile_interest_graph(target)
+        frontier = build_initial_frontier(
+            target=target,
+            graph=graph,
+            coverage={"gaps_json": [{"sourceRole": "social_pain_signal", "gapScore": 0.9}]},
+            run={"run_id": "run-hidden", "run_kind": "hidden_signal_scan"},
+        )
+        hidden = next(row for row in frontier if row["signal_mode"] == "hidden")
+
+        self.assertEqual(hidden["hiddenClaimExtraction"]["positiveGroups"][0]["name"], "buyer")
+        self.assertEqual(hidden["hiddenClaimExtraction"]["negativeGroups"][0]["name"], "training")
+        self.assertEqual(hidden["hiddenClaimExtraction"]["thresholds"]["minPositiveGroups"], 1)
+
     def test_source_expansion_builds_sibling_and_replacement_hypotheses(self):
         target = {"target_id": "target-1", "title": "VMware migration"}
         graph = {"coreTopic": "VMware migration"}
@@ -113,6 +147,31 @@ class DiscoveryV3IntelligenceTests(unittest.IsolatedAsyncioTestCase):
         hypotheses = build_existing_source_hypotheses(target=target, graph=graph, run=run, source_inventory=inventory)
         self.assertIn("sibling_endpoint", {row["hypothesis_type"] for row in hypotheses})
         self.assertIn("replacement_source", {row["hypothesis_type"] for row in hypotheses})
+
+    def test_source_expansion_consumes_feed_probe_evidence_without_domain_rules(self):
+        target = {"target_id": "target-1", "title": "Operational workflow signals"}
+        graph = {"coreTopic": "Operational workflow signals"}
+        run = {"run_id": "run-1"}
+        inventory = [
+            {
+                "channel_id": "website-with-feed",
+                "fetch_url": "https://example.com/news",
+                "source_role": "industry_niche",
+                "is_active": True,
+                "config_json": {
+                    "discovery": {"trustStage": "probation", "coverageContribution": 0.5},
+                    "discoveryHints": {"discoveredFeedUrls": ["https://example.com/feed.xml"]},
+                },
+            }
+        ]
+
+        hypotheses = build_existing_source_hypotheses(target=target, graph=graph, run=run, source_inventory=inventory)
+        feed_hypotheses = [row for row in hypotheses if row["hypothesis_type"] == "discovered_feed_candidate"]
+
+        self.assertEqual(len(feed_hypotheses), 1)
+        self.assertEqual(feed_hypotheses[0]["seed_url"], "https://example.com/feed.xml")
+        self.assertEqual(feed_hypotheses[0]["expected_provider_types"], ["rss"])
+        self.assertEqual(feed_hypotheses[0]["acquisition_tactic"], "feed_probe_autodiscovery")
 
     def test_referee_pack_rows_are_normalized_before_insert(self):
         rows = _accepted_hypotheses_from_pack(

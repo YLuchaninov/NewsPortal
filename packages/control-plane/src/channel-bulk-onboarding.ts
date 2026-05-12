@@ -121,7 +121,33 @@ export type BulkOnboardingItemStatus =
   | "invalid_schema"
   | "provider_mismatch_risk"
   | "needs_override"
+  | "api_mapping_required"
+  | "adapter_required"
   | "unsupported";
+
+export type ChannelProviderShapeClassification =
+  | "feed_like"
+  | "semantic_query_feed"
+  | "website_page"
+  | "api_like"
+  | "email_imap"
+  | "unknown";
+
+export interface ChannelProviderShapeAlternative {
+  providerType: AdminChannelProviderType | "adapter_required";
+  fetchUrl: string | null;
+  reason: string;
+  requiresMapping?: boolean;
+  requiresAdapter?: boolean;
+}
+
+export interface ChannelProviderShapeValidation {
+  classification: ChannelProviderShapeClassification;
+  blocker: string | null;
+  recommendedProviderType: AdminChannelProviderType | "adapter_required" | null;
+  recommendedAlternatives: ChannelProviderShapeAlternative[];
+  feedProbeEvidence?: Record<string, unknown> | null;
+}
 
 export interface BulkOnboardingPlanOptions {
   mode?: BulkOnboardingMode;
@@ -148,6 +174,7 @@ export interface BulkOnboardingPlanItem {
   warnings: string[];
   errors: string[];
   requiresOverride: boolean;
+  validation?: ChannelProviderShapeValidation;
 }
 
 export interface BulkOnboardingSummary {
@@ -158,6 +185,8 @@ export interface BulkOnboardingSummary {
   invalidSchema: number;
   providerMismatchRisk: number;
   needsOverride: number;
+  apiMappingRequired: number;
+  adapterRequired: number;
   unsupported: number;
   blocked: number;
   wouldCreate: number;
@@ -216,6 +245,7 @@ export interface BulkOnboardingVerifyResult {
     note: string;
     countsByDecision: Array<Record<string, unknown>>;
   };
+  providerShapeRisks: Array<Record<string, unknown>>;
   samples?: {
     fetchRuns: Array<Record<string, unknown>>;
     webResources: Array<Record<string, unknown>>;
@@ -636,16 +666,146 @@ function normalizeUrlKey(value: unknown): string {
   }
 }
 
+const SOURCE_IDENTITY_NON_SEMANTIC_QUERY_PARAMS = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "fbclid",
+  "gclid",
+  "dclid",
+  "mc_cid",
+  "mc_eid",
+  "ref",
+  "source",
+  "count",
+  "limit",
+  "page",
+  "per_page"
+]);
+
+function isSemanticQueryFeedUrl(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  const pathname = url.pathname.replace(/\/+$/, "").toLowerCase() || "/";
+  const hasMeaningfulQuery = Array.from(url.searchParams.keys()).some((key) => {
+    const normalized = key.trim().toLowerCase();
+    return (
+      normalized &&
+      !normalized.startsWith("utm_") &&
+      !SOURCE_IDENTITY_NON_SEMANTIC_QUERY_PARAMS.has(normalized)
+    );
+  });
+  if (!hasMeaningfulQuery) {
+    return false;
+  }
+  return (
+    hostname.includes("rss") ||
+    hostname.includes("feeds") ||
+    /(^|\/)(feed|feeds|rss|atom|search\.rss)(\/|\.|$)/i.test(pathname) ||
+    /\.(rss|atom|xml)$/i.test(pathname) ||
+    hostname.includes("feedburner")
+  );
+}
+
+function normalizeSourceIdentityUrlKey(
+  value: unknown,
+  options: { preserveSemanticQuery?: boolean } = {}
+): string {
+  const raw = normalizeString(value);
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const url = new URL(raw);
+    const preserveSearchParams = options.preserveSemanticQuery === true || isSemanticQueryFeedUrl(url);
+    const semanticSearchEntries = preserveSearchParams
+      ? Array.from(url.searchParams.entries())
+          .map(([key, entryValue]) => [key.trim().toLowerCase(), entryValue.trim()] as const)
+          .filter(
+            ([key, entryValue]) =>
+              key &&
+              entryValue &&
+              !key.startsWith("utm_") &&
+              !SOURCE_IDENTITY_NON_SEMANTIC_QUERY_PARAMS.has(key)
+          )
+          .sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+            const keyComparison = leftKey.localeCompare(rightKey);
+            return keyComparison === 0 ? leftValue.localeCompare(rightValue) : keyComparison;
+          })
+      : [];
+
+    url.hash = "";
+    url.search = "";
+    url.hostname = url.hostname.toLowerCase();
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+
+    if (semanticSearchEntries.length > 0) {
+      const semanticSearch = new URLSearchParams();
+      semanticSearchEntries.forEach(([key, entryValue]) => semanticSearch.append(key, entryValue));
+      url.search = semanticSearch.toString();
+    }
+
+    return url.toString();
+  } catch {
+    return raw.toLowerCase().replace(/\/+$/, "");
+  }
+}
+
 function isFeedLikeUrl(value: unknown): boolean {
+  const raw = normalizeString(value);
+  if (!raw) {
+    return false;
+  }
+  try {
+    const url = new URL(raw);
+    if (isSemanticQueryFeedUrl(url) || url.hostname.toLowerCase().includes("rss")) {
+      return true;
+    }
+  } catch {
+    // Fall through to normalized path-based checks.
+  }
   const normalized = normalizeUrlKey(value);
   if (!normalized) {
     return false;
+  }
+  try {
+    const url = new URL(normalized);
+    if (isSemanticQueryFeedUrl(url)) {
+      return true;
+    }
+  } catch {
+    // Fall through to path-based checks.
   }
   return (
     /(^|\/)(feed|feeds|rss|atom)(\/|\.|$)/i.test(normalized) ||
     /\.(rss|atom|xml)$/i.test(normalized) ||
     normalized.includes("feedburner")
   );
+}
+
+function isApiLikeUrl(value: unknown): boolean {
+  const normalized = normalizeUrlKey(value);
+  if (!normalized) {
+    return false;
+  }
+  try {
+    const url = new URL(normalized);
+    const path = url.pathname.toLowerCase();
+    if (isSemanticQueryFeedUrl(url) || isFeedLikeUrl(url.toString())) {
+      return false;
+    }
+    return (
+      /(^|\/)(api|graphql|openapi|swagger)(\/|\.|$)/i.test(path) ||
+      /\.(json|ndjson)$/i.test(path) ||
+      (url.searchParams.has("format") &&
+        String(url.searchParams.get("format")).toLowerCase() === "json")
+    );
+  } catch {
+    return /(^|\/)(api|graphql|openapi|swagger)(\/|\.|$)/i.test(normalized) ||
+      /\.(json|ndjson)$/i.test(normalized);
+  }
 }
 
 function isWebsiteOnlyUrl(value: unknown): boolean {
@@ -662,6 +822,138 @@ function isWebsiteOnlyUrl(value: unknown): boolean {
   }
 }
 
+function readFeedProbeEvidence(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const evidence = payload.feedProbeEvidence ?? payload.feed_probe_evidence;
+  if (evidence != null && typeof evidence === "object" && !Array.isArray(evidence)) {
+    return evidence as Record<string, unknown>;
+  }
+  const validation = payload.validation;
+  if (validation != null && typeof validation === "object" && !Array.isArray(validation)) {
+    const nested = (validation as Record<string, unknown>).feedProbeEvidence;
+    if (nested != null && typeof nested === "object" && !Array.isArray(nested)) {
+      return nested as Record<string, unknown>;
+    }
+  }
+  return null;
+}
+
+function hasValidFeedProbeEvidence(
+  payload: Record<string, unknown>,
+  fetchUrl: string | null
+): boolean {
+  const evidence = readFeedProbeEvidence(payload);
+  if (!evidence) {
+    return false;
+  }
+  const valid = evidence.isValidRss ?? evidence.is_valid_rss;
+  if (valid !== true) {
+    return false;
+  }
+  const evidenceUrl = normalizeUrlKey(
+    evidence.feedUrl ?? evidence.feed_url ?? evidence.finalUrl ?? evidence.final_url
+  );
+  const normalizedFetchUrl = normalizeUrlKey(fetchUrl);
+  return !evidenceUrl || !normalizedFetchUrl || evidenceUrl === normalizedFetchUrl;
+}
+
+function readSourceCandidateStatus(payload: Record<string, unknown>): string | null {
+  const status = normalizeString(
+    payload.sourceCandidateStatus ?? payload.candidateStatus ?? payload.alternativeStatus
+  );
+  return status || null;
+}
+
+export function classifyChannelProviderShape(
+  providerType: AdminChannelProviderType | string | null,
+  fetchUrl: string | null
+): ChannelProviderShapeClassification {
+  if (providerType === "email_imap") {
+    return "email_imap";
+  }
+  if (!normalizeString(fetchUrl)) {
+    return "unknown";
+  }
+  try {
+    const url = new URL(String(fetchUrl));
+    if (isSemanticQueryFeedUrl(url)) {
+      return "semantic_query_feed";
+    }
+  } catch {
+    // Fall through to other checks.
+  }
+  if (isFeedLikeUrl(fetchUrl)) {
+    return "feed_like";
+  }
+  if (isApiLikeUrl(fetchUrl)) {
+    return "api_like";
+  }
+  if (isWebsiteOnlyUrl(fetchUrl)) {
+    return "website_page";
+  }
+  return "unknown";
+}
+
+export function buildProviderShapeValidation(
+  providerType: AdminChannelProviderType | string | null,
+  fetchUrl: string | null,
+  payload: Record<string, unknown> = {}
+): ChannelProviderShapeValidation {
+  const classification = classifyChannelProviderShape(providerType, fetchUrl);
+  const feedProbeEvidence = readFeedProbeEvidence(payload);
+  const alternatives: ChannelProviderShapeAlternative[] = [];
+  let blocker: string | null = null;
+  let recommendedProviderType: AdminChannelProviderType | "adapter_required" | null;
+
+  if (classification === "api_like" && providerType !== "api") {
+    blocker = "api_mapping_required";
+    recommendedProviderType = "api";
+    alternatives.push({
+      providerType: "api",
+      fetchUrl,
+      reason: "URL shape looks like a structured API endpoint; configure API field mappings instead of onboarding it as RSS/website.",
+      requiresMapping: true
+    });
+  } else if (providerType === "rss" && classification === "website_page") {
+    if (hasValidFeedProbeEvidence(payload, fetchUrl)) {
+      recommendedProviderType = "rss";
+    } else {
+      blocker = "rss_requires_feed_evidence";
+      recommendedProviderType = "website";
+      alternatives.push({
+        providerType: "website",
+        fetchUrl,
+        reason: "URL looks like a website page/root. Use website ingestion or run channel alternatives to discover a real feed URL."
+      });
+      alternatives.push({
+        providerType: "rss",
+        fetchUrl: null,
+        reason: "Run feed autodiscovery; only onboard RSS when fetchers feed-probe validates a discovered RSS/Atom/JSON Feed."
+      });
+    }
+  } else if (providerType === "website" && ["feed_like", "semantic_query_feed"].includes(classification)) {
+    recommendedProviderType = "rss";
+    alternatives.push({
+      providerType: "rss",
+      fetchUrl,
+      reason: "URL looks feed-like; RSS is usually the safer provider when the feed probe validates it."
+    });
+  } else if (providerType === "api" && classification !== "api_like") {
+    recommendedProviderType = "api";
+  } else {
+    recommendedProviderType = isAdminChannelProviderType(String(providerType ?? ""))
+      ? (providerType as AdminChannelProviderType)
+      : null;
+  }
+
+  return {
+    classification,
+    blocker,
+    recommendedProviderType,
+    recommendedAlternatives: alternatives,
+    ...(feedProbeEvidence ? { feedProbeEvidence } : {})
+  };
+}
+
 function rowDedupeKey(
   providerType: AdminChannelProviderType,
   payload: Record<string, unknown>
@@ -674,7 +966,9 @@ function rowDedupeKey(
       normalizeString(payload.mailbox).toLowerCase() || "inbox"
     ].join(":");
   }
-  return `${providerType}:${normalizeUrlKey(payload.fetchUrl)}`;
+  return `${providerType}:${normalizeSourceIdentityUrlKey(payload.fetchUrl, {
+    preserveSemanticQuery: providerType === "api",
+  })}`;
 }
 
 function parseBulkOnboardingRow(
@@ -696,7 +990,13 @@ function parseBulkOnboardingRow(
         existingFetchUrl: null,
         warnings: [],
         errors: ["Source row must be an object."],
-        requiresOverride: false
+        requiresOverride: false,
+        validation: {
+          classification: "unknown",
+          blocker: "invalid_schema",
+          recommendedProviderType: null,
+          recommendedAlternatives: []
+        }
       }
     };
   }
@@ -722,7 +1022,13 @@ function parseBulkOnboardingRow(
         existingFetchUrl: null,
         warnings: [],
         errors: [error instanceof Error ? error.message : "Unsupported providerType."],
-        requiresOverride: false
+        requiresOverride: false,
+        validation: {
+          classification: "unknown",
+          blocker: "unsupported_provider",
+          recommendedProviderType: null,
+          recommendedAlternatives: []
+        }
       }
     };
   }
@@ -751,7 +1057,12 @@ function parseBulkOnboardingRow(
         existingFetchUrl: null,
         warnings: [],
         errors: [error instanceof Error ? error.message : "Invalid source row."],
-        requiresOverride: false
+        requiresOverride: false,
+        validation: buildProviderShapeValidation(
+          providerType,
+          normalizeString(payload.fetchUrl) || null,
+          payload
+        )
       }
     };
   }
@@ -806,6 +1117,8 @@ function buildPlanSummary(
       item.status === "duplicate" ||
       item.status === "invalid_schema" ||
       item.status === "unsupported" ||
+      item.status === "api_mapping_required" ||
+      item.status === "adapter_required" ||
       item.status === "needs_override"
   ).length;
 
@@ -817,6 +1130,8 @@ function buildPlanSummary(
     invalidSchema: count("invalid_schema"),
     providerMismatchRisk: count("provider_mismatch_risk"),
     needsOverride: count("needs_override"),
+    apiMappingRequired: count("api_mapping_required"),
+    adapterRequired: count("adapter_required"),
     unsupported: count("unsupported"),
     blocked,
     wouldCreate: importPlan.wouldCreate,
@@ -871,7 +1186,12 @@ export async function planChannelBulkOnboardingWithPool(
         existingFetchUrl: null,
         warnings: [`Duplicate of source row ${firstIndex}; only the first matching source is actionable.`],
         errors: [],
-        requiresOverride: false
+        requiresOverride: false,
+        validation: buildProviderShapeValidation(
+          parsed.parsed.providerType,
+          normalizeString(payload.fetchUrl) || null,
+          payload
+        )
       });
       return;
     }
@@ -914,7 +1234,11 @@ export async function planChannelBulkOnboardingWithPool(
         existingFetchUrl: null,
         warnings: [],
         errors: ["Provider preflight did not return a plan item for this source."],
-        requiresOverride: false
+        requiresOverride: false,
+        validation: buildProviderShapeValidation(
+          parsed.providerType,
+          "fetchUrl" in parsed.channel ? parsed.channel.fetchUrl : null
+        )
       });
       continue;
     }
@@ -923,14 +1247,43 @@ export async function planChannelBulkOnboardingWithPool(
     let status: BulkOnboardingItemStatus =
       planned.action === "update" ? "ready_update" : "ready_create";
     let requiresOverride = false;
+    const rawPayload =
+      sources[parsed.index] != null &&
+      typeof sources[parsed.index] === "object" &&
+      !Array.isArray(sources[parsed.index])
+        ? (sources[parsed.index] as Record<string, unknown>)
+        : {};
+    const validation = buildProviderShapeValidation(
+      parsed.providerType,
+      planned.fetchUrl,
+      rawPayload
+    );
+    const sourceCandidateStatus = readSourceCandidateStatus(rawPayload);
 
-    if (parsed.providerType === "rss" && isWebsiteOnlyUrl(planned.fetchUrl)) {
+    if (
+      parsed.providerType === "rss" &&
+      sourceCandidateStatus === "needs_probe" &&
+      !hasValidFeedProbeEvidence(rawPayload, planned.fetchUrl)
+    ) {
+      status = "unsupported";
+      warnings.push(
+        "RSS alternative candidate is still marked needs_probe. Run feed autodiscovery/probe and include valid feedProbeEvidence before onboarding."
+      );
+    } else if (validation.blocker === "api_mapping_required") {
+      status = "api_mapping_required";
+      warnings.push(
+        "Source URL looks API-like. Configure an API channel with item/field mappings instead of importing it as RSS or website."
+      );
+    } else if (validation.blocker === "rss_requires_feed_evidence") {
       status = "needs_override";
       requiresOverride = true;
       warnings.push(
         "RSS source looks like a website page/root URL. Use providerType=website unless you have external feed-validation evidence."
       );
-    } else if (parsed.providerType === "website" && isFeedLikeUrl(planned.fetchUrl)) {
+    } else if (
+      parsed.providerType === "website" &&
+      ["feed_like", "semantic_query_feed"].includes(validation.classification)
+    ) {
       status = "provider_mismatch_risk";
       warnings.push(
         "Website source URL looks feed-like. This is allowed, but RSS may be the better provider if the URL is a valid feed."
@@ -954,7 +1307,8 @@ export async function planChannelBulkOnboardingWithPool(
       existingFetchUrl: planned.existingFetchUrl,
       warnings,
       errors: [],
-      requiresOverride
+      requiresOverride,
+      validation
     });
   }
 
@@ -974,12 +1328,15 @@ export async function planChannelBulkOnboardingWithPool(
       matchType: item.matchType,
       channelId: item.channelId,
       existingFetchUrl: item.existingFetchUrl,
-      fetchUrl: item.fetchUrl
+      fetchUrl: item.fetchUrl,
+      validation: item.validation
     })),
     summary: {
       readyCreate: summary.readyCreate,
       readyUpdate: summary.readyUpdate,
       needsOverride: summary.needsOverride,
+      apiMappingRequired: summary.apiMappingRequired,
+      adapterRequired: summary.adapterRequired,
       duplicate: summary.duplicate,
       invalidSchema: summary.invalidSchema,
       unsupported: summary.unsupported,
@@ -999,6 +1356,8 @@ export async function planChannelBulkOnboardingWithPool(
         item.status === "duplicate" ||
         item.status === "invalid_schema" ||
         item.status === "unsupported" ||
+        item.status === "api_mapping_required" ||
+        item.status === "adapter_required" ||
         item.status === "needs_override"
     ),
     nextReadBack: nextBulkReadBack()
@@ -1007,12 +1366,13 @@ export async function planChannelBulkOnboardingWithPool(
 
 function isActionableBulkStatus(
   status: BulkOnboardingItemStatus,
+  mode: BulkOnboardingMode,
   overrideReason: string | null
 ): boolean {
   if (status === "ready_create" || status === "ready_update" || status === "provider_mismatch_risk") {
     return true;
   }
-  return status === "needs_override" && Boolean(overrideReason);
+  return status === "needs_override" && mode === "allow_overrides" && Boolean(overrideReason);
 }
 
 async function writeBulkAuditLogs(
@@ -1058,23 +1418,38 @@ export async function applyChannelBulkOnboardingWithPool(
       "Bulk onboarding plan is stale. Re-run channels.bulk_onboard.plan and apply the new planFingerprint."
     );
   }
-  if (plan.summary.readyUpdate > 0 && options.confirm !== true) {
+  const actionableItems = plan.items.filter((item) =>
+    isActionableBulkStatus(item.status, plan.mode, overrideReason)
+  );
+  if (plan.summary.needsOverride > 0 && plan.mode !== "allow_overrides") {
+    throw new Error("mode=allow_overrides is required for sources with status=needs_override.");
+  }
+  if (plan.summary.needsOverride > 0 && options.confirm !== true) {
+    throw new Error("confirm=true is required for sources with status=needs_override.");
+  }
+  if (actionableItems.some((item) => item.action === "update") && options.confirm !== true) {
     throw new Error("confirm=true is required when the bulk onboarding plan updates existing channels.");
   }
   if (plan.summary.needsOverride > 0 && !overrideReason) {
     throw new Error("overrideReason is required for sources with status=needs_override.");
   }
 
-  const actionableIndexes = new Set(
-    plan.items
-      .filter((item) => isActionableBulkStatus(item.status, overrideReason))
-      .map((item) => item.index)
-  );
+  const actionableIndexes = new Set(actionableItems.map((item) => item.index));
+  const planItemByIndex = new Map(plan.items.map((item) => [item.index, item]));
   const parsedRows = (sources as unknown[]).flatMap((row, index) => {
     if (!actionableIndexes.has(index)) {
       return [];
     }
-    const parsed = parseBulkOnboardingRow(row, index);
+    const planItem = planItemByIndex.get(index);
+    const rowWithMatchedChannel =
+      row != null &&
+      typeof row === "object" &&
+      !Array.isArray(row) &&
+      planItem?.action === "update" &&
+      planItem.channelId
+        ? { ...(row as Record<string, unknown>), channelId: planItem.channelId }
+        : row;
+    const parsed = parseBulkOnboardingRow(rowWithMatchedChannel, index);
     return parsed.parsed ? [parsed.parsed] : [];
   });
   const result =
@@ -1284,6 +1659,23 @@ export async function verifyChannelBulkOnboardingWithPool(
       "Some website resources projected into articles and were rejected downstream by final_selection_results; that is selection/content policy behavior, not channel onboarding failure."
     );
   }
+  const providerShapeRisks = channelResult.rows
+    .map((row) => ({
+      channelId: row.channelId,
+      name: row.name,
+      providerType: row.providerType,
+      fetchUrl: row.fetchUrl,
+      validation: buildProviderShapeValidation(
+        String(row.providerType ?? ""),
+        String(row.fetchUrl ?? "")
+      ),
+    }))
+    .filter((row) => row.validation.blocker);
+  if (providerShapeRisks.length > 0) {
+    warnings.push(
+      `${providerShapeRisks.length} channel${providerShapeRisks.length === 1 ? "" : "s"} have provider-shape blockers; run channels.alternatives.plan before judging source quality.`
+    );
+  }
 
   return {
     reportKind: "channel_onboarding",
@@ -1302,6 +1694,7 @@ export async function verifyChannelBulkOnboardingWithPool(
         "Website onboarding is verified in stages: channel row, fetch/acquisition, web_resources, projection, then downstream final selection. resource_only/projected/projected-but-rejected are distinct states.",
       countsByDecision: decisionCounts.rows
     },
+    providerShapeRisks,
     ...(samples ? { samples } : {}),
     warnings,
     nextReadBack: nextBulkReadBack(requestedIds)

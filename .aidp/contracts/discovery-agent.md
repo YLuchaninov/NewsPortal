@@ -28,13 +28,15 @@ coverage -> adversarial hypotheses -> evidence -> endpoints/signals -> actions -
 - No probe evidence means no promotion.
 - Hidden/social signals never auto-promote `source_channels`; they create signal clusters, monitor-only watches, request-config actions or follow-up direct-source hypotheses.
 - A newly promoted direct source starts in `probation`; it contributes `0.25` coverage and downstream weight `0.3` until its Source Evidence Contract passes.
+- Rare-signal source priors are not promotion proof. A `rare_signal_source_prior` only proves that a source/channel/endpoint is worth longer observation when semantic/source-role/trust/fetch-health evidence is strong enough for a rare hidden-signal domain. Prior-only monitor/probation evidence is stored in `discovery_source_contracts.contract_json.rareSignalPrior` and/or `source_channels.config_json.discovery.rareSignalPrior`, keeps `coverageContribution=0.0` and `downstreamWeight=0.0`, and must not make any article web-selected.
 - Provider failure is provider health evidence, not hypothesis failure. Auth/rate-limit/API degradation must update provider health/circuit-breaker state and avoid poisoning negative hypothesis history.
 - Threshold, prompt or policy changes require replay evaluation before being described as quality improvements.
 
 ## Core entities
 
 - `discovery_targets`: normalized interest/search task with seed fields, `graph_json`, `policy_json`, `autopilot_json`, current run/coverage pointers.
-- `discovery_runs`: bounded execution attempt with run kind, trigger kind, budgets, status, summaries and diagnosis.
+- `discovery_runs`: bounded execution attempt with run kind, trigger kind, budgets, status, summaries and diagnosis. Per-run live provider execution must be an explicit bounded operator approval such as `providerExecutionEnabled`; it must not be inferred globally from a domain, target title, or source prior.
+- API/MCP run creation surfaces that claim to start discovery (`/maintenance/discovery/runs`, `targets/{id}/expand-gap`, and source expand/replace routes) must also dispatch a Sequence Runner job for `discovery.v3.run` through `q.sequence`, or return an explicit dispatch failure. A bare `discovery_runs` row in `queued` is durable state, not executable work by itself. Retained queued rows from older paths must be re-dispatched through the bounded maintenance surface instead of being deleted or silently ignored. If target-level hypothesis dedupe collides with an older queued/failed hypothesis, a later approved run may reuse that unexecuted hypothesis for execution; it must not delete, clone, or treat the old row as cleanup.
 - `discovery_provider_capabilities`: provider cards, query primitives, object types, auth, rate limits, compliance, signal modes and promotion mode.
 - `discovery_provider_health`: provider circuit-breaker state, auth/rate-limit/error/latency health and cooldown.
 - `discovery_llm_task_templates`: versioned discovery prompt/task templates for graph compile, strategy, Explorer/Skeptic, endpoint review, hidden signal mining, diagnosis and config simplification.
@@ -163,6 +165,7 @@ Promotion does not mean a source is proven. Every promoted endpoint must create 
 - allowed repair actions.
 
 `source_channels.config_json.discovery` must include `trustStage`, `coverageContribution`, `downstreamWeight` and `evidenceContract`.
+`source_channels.config_json.discovery.rareSignalPrior` may additionally record a rare-signal observation prior. This field is an exploration/monitoring hint only; coverage and downstream selection must continue to use Source Evidence Contract state and real article/claim evidence.
 
 Defaults:
 
@@ -170,6 +173,7 @@ Defaults:
 new direct source -> trustStage=probation, coverageContribution=0.25, downstreamWeight=0.3
 contract passed -> trustStage=active, coverageContribution=1.0, downstreamWeight=1.0
 contract failed/degraded -> trustStage=degraded, coverageContribution=0.0, downstreamWeight=0.0
+rare-signal prior only -> trustStage unchanged, coverageContribution=0.0, downstreamWeight=0.0
 ```
 
 Coverage must count source identities and contract state, not raw endpoint count.

@@ -154,6 +154,53 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(len(Handler.request_paths), 1)
         self.assertIn("/models/gemini-2.0-flash:generateContent", Handler.request_paths[0])
 
+    def test_review_with_gemini_accepts_provider_json_array_response(self) -> None:
+        class Handler(_FakeGeminiHandler):
+            pass
+
+        Handler.response_payload = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": '[{"decision":"reject","score":"0.2","reason":"array shape"}]'
+                            }
+                        ]
+                    }
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 10,
+                "candidatesTokenCount": 5,
+                "totalTokenCount": 15,
+            },
+        }
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with patch.dict(
+                "os.environ",
+                {
+                    "GEMINI_API_KEY": "local-proof-key",
+                    "GEMINI_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+                },
+                clear=False,
+            ):
+                result = review_with_gemini("review this article")
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
+
+        self.assertEqual(result.decision, "reject")
+        self.assertEqual(result.score, 0.2)
+        self.assertEqual(
+            result.response_json["parsed"]["_providerShapeWarning"],
+            "review_json_array_first_object_used",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

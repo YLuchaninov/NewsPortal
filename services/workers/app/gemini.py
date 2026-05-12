@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -76,7 +77,7 @@ def _read_text_part(payload: dict[str, Any]) -> str:
     return ""
 
 
-def _parse_json_fragment(value: str) -> dict[str, Any] | None:
+def _parse_json_fragment(value: str) -> Any | None:
     candidate = value.strip()
     if not candidate:
         return None
@@ -93,6 +94,24 @@ def _parse_json_fragment(value: str) -> dict[str, Any] | None:
         except json.JSONDecodeError:
             return None
     return None
+
+
+def _coerce_review_json(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, Mapping):
+                return {
+                    **dict(item),
+                    "_providerShapeWarning": "review_json_array_first_object_used",
+                    "_providerArrayLength": len(value),
+                }
+        return {
+            "_providerShapeWarning": "review_json_array_without_object",
+            "_providerArrayLength": len(value),
+        }
+    return {}
 
 
 def _normalize_decision(value: Any) -> str:
@@ -254,7 +273,7 @@ def review_with_gemini(
         )
 
     text_part = _read_text_part(payload)
-    parsed = _parse_json_fragment(text_part) or {}
+    parsed = _coerce_review_json(_parse_json_fragment(text_part))
     prompt_tokens, completion_tokens, total_tokens, usage_metadata = _read_usage_metadata(payload)
     price_card, price_card_metadata = _resolve_price_card(model)
     cost_estimate_usd = _estimate_cost_usd(

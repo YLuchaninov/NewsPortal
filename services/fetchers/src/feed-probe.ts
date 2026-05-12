@@ -72,6 +72,7 @@ function resultErrorFields(errorCode: string, errorText: string): Pick<FeedProbe
 
 function discoverFeedUrlsFromHtml(html: string, baseUrl: string): string[] {
   const urls: string[] = [];
+  let htmlBaseUrl = baseUrl;
   const document = parseDocument(html);
   const visit = (node: unknown): void => {
     if (!node || typeof node !== "object") {
@@ -82,7 +83,15 @@ function discoverFeedUrlsFromHtml(html: string, baseUrl: string): string[] {
       attribs?: Record<string, string>;
       children?: unknown[];
     };
-    if (String(record.name ?? "").toLowerCase() === "link") {
+    const nodeName = String(record.name ?? "").toLowerCase();
+    if (nodeName === "base") {
+      const href = String(record.attribs?.href ?? "").trim();
+      const resolved = href ? normalizeProbeUrl(href, baseUrl) : { url: null };
+      if (resolved.url) {
+        htmlBaseUrl = resolved.url;
+      }
+    }
+    if (nodeName === "link") {
       const attribs = record.attribs ?? {};
       const relTokens = new Set(String(attribs.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean));
       const typeValue = String(attribs.type ?? "").toLowerCase();
@@ -92,7 +101,7 @@ function discoverFeedUrlsFromHtml(html: string, baseUrl: string): string[] {
         relTokens.has("alternate") &&
         FEED_CONTENT_TYPE_HINTS.some((hint) => typeValue.includes(hint))
       ) {
-        const resolved = normalizeProbeUrl(href, baseUrl);
+        const resolved = normalizeProbeUrl(href, htmlBaseUrl);
         if (resolved.url && !urls.includes(resolved.url)) {
           urls.push(resolved.url);
         }
@@ -104,6 +113,29 @@ function discoverFeedUrlsFromHtml(html: string, baseUrl: string): string[] {
   };
   for (const child of document.children) {
     visit(child);
+  }
+  return urls;
+}
+
+function discoverFeedUrlsFromLinkHeader(value: string | null, baseUrl: string): string[] {
+  if (!value) {
+    return [];
+  }
+  const urls: string[] = [];
+  const matches = value.matchAll(/<([^>]+)>\s*;\s*([^,]+)/g);
+  for (const match of matches) {
+    const rawUrl = String(match[1] ?? "").trim();
+    const params = String(match[2] ?? "").toLowerCase();
+    if (!/\brel\s*=\s*"?[^"]*\balternate\b/.test(params)) {
+      continue;
+    }
+    if (!FEED_CONTENT_TYPE_HINTS.some((hint) => params.includes(hint))) {
+      continue;
+    }
+    const resolved = normalizeProbeUrl(rawUrl, baseUrl);
+    if (resolved.url && !urls.includes(resolved.url)) {
+      urls.push(resolved.url);
+    }
   }
   return urls;
 }
@@ -120,6 +152,7 @@ function sampleEntries(parsed: ReturnType<typeof parseFeed>, sampleCount: number
 async function fetchText(url: string, input: Pick<FeedProbeInput, "userAgent" | "timeoutMs">): Promise<{
   finalUrl: string;
   contentType: string | null;
+  linkHeader: string | null;
   text: string;
 }> {
   const guardedInitialUrl = await validateAcquisitionUrl(url, { resolveDns: true });
@@ -161,6 +194,7 @@ async function fetchText(url: string, input: Pick<FeedProbeInput, "userAgent" | 
   return {
     finalUrl: guardedFinalUrl.url,
     contentType: response.headers.get("content-type"),
+    linkHeader: response.headers.get("link"),
     text: new TextDecoder().decode(bytes),
   };
 }
@@ -236,7 +270,12 @@ export async function probeFeedsForDiscovery(input: FeedProbeInput): Promise<{ p
         });
         continue;
       } catch {
-        const discovered = discoverFeedUrlsFromHtml(response.text, response.finalUrl);
+        const discovered = Array.from(
+          new Set([
+            ...discoverFeedUrlsFromLinkHeader(response.linkHeader, response.finalUrl),
+            ...discoverFeedUrlsFromHtml(response.text, response.finalUrl),
+          ]),
+        );
         let accepted: FeedProbeResult | null = null;
         for (const feedUrl of discovered) {
           try {

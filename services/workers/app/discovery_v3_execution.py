@@ -7,6 +7,7 @@ from urllib import robotparser
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from .discovery_v3_claims import build_claim_from_cluster, score_hidden_claim
 from .discovery_v3_negative_evidence import build_negative_evidence
 from .discovery_v3_provider_health import evaluate_provider_health
 from .task_engine.discovery_v3_cluster_plugins import cluster_discovery_results
@@ -65,6 +66,7 @@ async def execute_hypothesis_batch_live(
     all_edges: list[dict[str, Any]] = []
     all_followups: list[dict[str, Any]] = []
     all_endpoints: list[dict[str, Any]] = []
+    all_hidden_claims: list[dict[str, Any]] = []
     negative_evidence: list[dict[str, Any]] = []
     provider_health: list[dict[str, Any]] = []
 
@@ -156,6 +158,22 @@ async def execute_hypothesis_batch_live(
         clustered = cluster_discovery_results(normalized_results)
         all_search_results.extend(clustered["results"])
         all_domains.extend(clustered["domains"])
+        if str(hypothesis.get("signal_mode") or hypothesis.get("signalMode") or "") == "hidden":
+            control_results = await _run_control_search(
+                active_runtime=active_runtime,
+                hypothesis=hypothesis,
+                count=max(1, max_results_per_hypothesis),
+                effective_now=effective_now,
+                provider_queries=all_provider_queries,
+                provider_health=provider_health,
+            )
+            claim = _hidden_claim_from_results(
+                hypothesis=hypothesis,
+                target_results=clustered["results"],
+                control_results=control_results,
+            )
+            if claim is not None:
+                all_hidden_claims.append(claim)
 
         directory_domains: list[str] = []
         directory_pages_fetched = 0
@@ -215,10 +233,12 @@ async def execute_hypothesis_batch_live(
     endpoints = _dedupe_endpoints(probed_endpoints)
     domains = _dedupe_by(all_domains, "canonical_domain")[:max_domains]
     search_results = _dedupe_by(all_search_results, "canonical_url")
+    hidden_claims = _dedupe_claims(all_hidden_claims)
     return {
         "providerQueries": all_provider_queries,
         "searchResults": search_results,
         "evidenceItems": _evidence_items_from_search_results(search_results),
+        "hiddenClaims": hidden_claims,
         "domains": domains,
         "edges": all_edges,
         "followUpHypotheses": _dedupe_followups(all_followups),
@@ -233,6 +253,8 @@ async def execute_hypothesis_batch_live(
             "manualReviewCount": sum(1 for endpoint in endpoints if endpoint.get("status") == "manual_review"),
             "negativeEvidenceCount": len(negative_evidence),
             "providerHealthEventCount": len(_dedupe_provider_health(provider_health)),
+            "hiddenClaimCount": len(hidden_claims),
+            "confirmedHiddenClaimCount": sum(1 for claim in hidden_claims if claim.get("status") == "confirmed_signal"),
         },
     }
 
@@ -500,6 +522,421 @@ def _website_probe_evidence(row: dict[str, Any]) -> dict[str, Any]:
         "quality_score": 0.65 if http_valid and not browser_challenge else 0.25,
         "rejection_reason": "browser_challenge" if browser_challenge else None,
     }
+
+
+async def _run_control_search(
+    *,
+    active_runtime: Any,
+    hypothesis: dict[str, Any],
+    count: int,
+    effective_now: datetime,
+    provider_queries: list[dict[str, Any]],
+    provider_health: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    control_query = str(hypothesis.get("control_query_text") or hypothesis.get("controlQueryText") or "").strip()
+    if not control_query:
+        return []
+    try:
+        raw_output = await _resolve_runtime_call(
+            active_runtime.web_search.search(
+                query=control_query,
+                count=count,
+                result_type="web",
+                time_range=None,
+            )
+        )
+        results, meta = unwrap_web_search_output(raw_output)
+    except Exception as error:  # pragma: no cover - covered through fake runtimes in tests
+        provider_health.append(_provider_health_from_exception(provider_id="web_search", error=error, now=effective_now))
+        return []
+
+    provider_queries.append(
+        {
+            "run_id": hypothesis.get("run_id") or hypothesis.get("runId"),
+            "target_id": hypothesis.get("target_id") or hypothesis.get("targetId"),
+            "hypothesis_id": hypothesis.get("hypothesis_id") or hypothesis.get("hypothesisId"),
+            "provider_id": "web_search",
+            "query_text": control_query,
+            "result_type": "web",
+            "time_range": None,
+            "provider_meta_json": {**meta, "control": True},
+            "cost_json": {
+                "costUsd": meta.get("cost_usd", 0),
+                "costCents": meta.get("cost_cents", 0),
+                "requestCount": meta.get("request_count", 1 if results else 0),
+            },
+        }
+    )
+    return _search_results_with_provider_votes(results, provider="web_search")
+
+
+def _hidden_claim_from_results(
+    *,
+    hypothesis: dict[str, Any],
+    target_results: list[dict[str, Any]],
+    control_results: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    entities = _hypothesis_entities(hypothesis)
+    context_terms = _hidden_context_terms(hypothesis)
+    extraction_config = _hidden_claim_extraction_config(hypothesis)
+    matching = [
+        row
+        for row in target_results
+        if _hidden_result_score(
+            row,
+            context_terms=context_terms,
+            require_context=True,
+            extraction_config=extraction_config,
+        )
+        > 0
+    ]
+    if len(matching) < 2:
+        return None
+
+    control_matching = [
+        row
+        for row in control_results
+        if _hidden_result_score(row, extraction_config=extraction_config) > 0
+    ]
+    target_total = max(1, len(target_results))
+    control_total = max(1, len(control_results))
+    target_rate = len(matching) / target_total
+    control_rate = len(control_matching) / control_total if control_results else None
+    domains = {
+        str(row.get("canonical_domain") or canonical_domain_from_result(row))
+        for row in matching
+        if str(row.get("canonical_domain") or canonical_domain_from_result(row)).strip()
+    }
+    signal_type = _hidden_signal_type(matching)
+    title = _claim_title(signal_type, hypothesis)
+    cluster = {
+        "signal_type": signal_type,
+        "title": title,
+        "summary": _claim_summary(signal_type, matching),
+        "normalized_claim": title,
+        "related_entities": entities,
+        "related_geos": [],
+        "related_languages": [],
+        "evidence_count": len(matching),
+        "independent_source_count": len(domains),
+        "unique_author_count": len({str(row.get("url") or row.get("canonical_url")) for row in matching}),
+        "need_score": min(1.0, 0.45 + 0.08 * len(matching)),
+        "burst_score": 0.6 if len(matching) >= 5 else 0.35,
+        "novelty_score": 0.65,
+        "risk_score": 0.25 if len(domains) >= 2 else 0.45,
+        "target_signal_rate": target_rate,
+        "control_signal_rate": control_rate,
+    }
+    claim = build_claim_from_cluster(cluster)
+    scored = score_hidden_claim(claim)
+    return {
+        **claim,
+        "target_id": hypothesis.get("target_id") or hypothesis.get("targetId"),
+        "run_id": hypothesis.get("run_id") or hypothesis.get("runId"),
+        "control_query_text": hypothesis.get("control_query_text") or hypothesis.get("controlQueryText"),
+        "specificity_score": scored["specificityScore"],
+        "confidence_score": scored["confidenceScore"],
+        "status": scored["status"] if scored["hasControlComparison"] else "needs_control",
+        "support_evidence_urls": [
+            str(row.get("canonical_url") or row.get("url") or "").strip()
+            for row in matching
+            if str(row.get("canonical_url") or row.get("url") or "").strip()
+        ],
+        "summary": (
+            f"{claim.get('summary') or ''} "
+            f"Evidence={len(matching)}/{target_total}; control={len(control_matching)}/{control_total if control_results else 0}."
+        ).strip(),
+    }
+
+
+def _hidden_result_score(
+    row: dict[str, Any],
+    *,
+    entities: list[str] | None = None,
+    context_terms: list[str] | None = None,
+    require_context: bool = False,
+    extraction_config: dict[str, Any] | None = None,
+) -> float:
+    text = " ".join(str(row.get(key) or "") for key in ("title", "snippet", "description", "url")).lower()
+    required_terms = [term.lower() for term in (context_terms or entities or []) if term]
+    if require_context and required_terms and not any(term in text for term in required_terms):
+        return 0.0
+    config = _normalize_hidden_claim_extraction_config(extraction_config)
+    positive_hits = _hidden_group_hits(text, config["positiveGroups"])
+    negative_hits = _hidden_group_hits(text, config["negativeGroups"])
+    positive_group_count = len(positive_hits)
+    positive_hit_count = sum(len(values) for values in positive_hits.values())
+    negative_group_count = len(negative_hits)
+    negative_hit_count = sum(len(values) for values in negative_hits.values())
+    thresholds = config["thresholds"]
+    if positive_group_count < thresholds["minPositiveGroups"]:
+        return 0.0
+    if positive_hit_count < thresholds["minPositiveHits"]:
+        return 0.0
+    if negative_group_count > thresholds["maxNegativeGroups"]:
+        return 0.0
+    return float(positive_group_count + positive_hit_count - negative_group_count - negative_hit_count)
+
+
+def _hidden_signal_type(rows: list[dict[str, Any]]) -> str:
+    text = " ".join(
+        " ".join(str(row.get(key) or "") for key in ("title", "snippet", "description", "url")).lower()
+        for row in rows
+    )
+    if any(token in text for token in ("failed", "failure", "delayed", "stalled", "replacement", "moving away", "alternative")):
+        return "vendor_replacement_or_project_rescue"
+    if any(token in text for token in ("hiring", "contractor", "capacity", "shortage")):
+        return "delivery_capacity_pressure"
+    if any(token in text for token in ("compliance", "deadline", "nis2", "dora", "security")):
+        return "compliance_or_security_urgency"
+    return "implementation_pain"
+
+
+def _claim_title(signal_type: str, hypothesis: dict[str, Any]) -> str:
+    topic = str(
+        hypothesis.get("query_text")
+        or hypothesis.get("queryText")
+        or hypothesis.get("seed_entity")
+        or hypothesis.get("seedEntity")
+        or "hidden demand"
+    ).strip()
+    return f"{signal_type}: {topic}"[:240]
+
+
+def _claim_summary(signal_type: str, rows: list[dict[str, Any]]) -> str:
+    examples = "; ".join(str(row.get("title") or row.get("url") or "").strip() for row in rows[:3] if row)
+    return f"Open-web evidence cluster for {signal_type}. Sample evidence: {examples}"[:1000]
+
+
+_DEFAULT_HIDDEN_POSITIVE_GROUPS: list[dict[str, Any]] = [
+    {
+        "name": "project_need",
+        "cues": [
+            "need help",
+            "looking for",
+            "seeking",
+            "request for",
+            "proposal",
+            "quote",
+            "vendor",
+        ],
+    },
+    {
+        "name": "implementation_change",
+        "cues": [
+            "implementation",
+            "integration",
+            "migration",
+            "replacement",
+            "upgrade",
+            "replatform",
+            "custom",
+        ],
+    },
+    {
+        "name": "urgency_or_capacity",
+        "cues": [
+            "urgent",
+            "deadline",
+            "delayed",
+            "stalled",
+            "capacity",
+            "shortage",
+            "temporary",
+            "contractor",
+        ],
+    },
+    {
+        "name": "project_rescue",
+        "cues": [
+            "failed",
+            "failure",
+            "problem",
+            "workaround",
+            "moving away",
+            "alternative",
+            "take over",
+        ],
+    },
+]
+
+_DEFAULT_HIDDEN_NEGATIVE_GROUPS: list[dict[str, Any]] = [
+    {
+        "name": "generic_content",
+        "cues": ["tutorial", "guide", "webinar", "training", "course", "best practices"],
+    },
+    {
+        "name": "vendor_marketing",
+        "cues": ["sponsored", "press release", "award winning", "our platform", "book a demo"],
+    },
+    {
+        "name": "jobs_only",
+        "cues": ["salary", "full-time", "job opening", "career", "apply now"],
+    },
+]
+
+_DEFAULT_HIDDEN_THRESHOLDS = {
+    "minPositiveGroups": 1,
+    "minPositiveHits": 1,
+    "maxNegativeGroups": 0,
+}
+
+
+def _coerce_group_config(value: Any, fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return fallback
+    groups: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or f"group_{index + 1}").strip()
+        raw_cues = item.get("cues")
+        if not isinstance(raw_cues, list):
+            raw_cues = item.get("terms")
+        cues = [str(entry).strip().lower() for entry in raw_cues or [] if str(entry).strip()]
+        if name and cues:
+            groups.append({"name": name, "cues": cues})
+    return groups or fallback
+
+
+def _coerce_threshold(value: Any, fallback: int, *, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = fallback
+    return max(minimum, min(maximum, parsed))
+
+
+def _normalize_hidden_claim_extraction_config(config: dict[str, Any] | None) -> dict[str, Any]:
+    raw = config if isinstance(config, dict) else {}
+    raw_thresholds = raw.get("thresholds") if isinstance(raw.get("thresholds"), dict) else {}
+    return {
+        "positiveGroups": _coerce_group_config(
+            raw.get("positiveGroups"),
+            _DEFAULT_HIDDEN_POSITIVE_GROUPS,
+        ),
+        "negativeGroups": _coerce_group_config(
+            raw.get("negativeGroups"),
+            _DEFAULT_HIDDEN_NEGATIVE_GROUPS,
+        ),
+        "thresholds": {
+            "minPositiveGroups": _coerce_threshold(
+                raw_thresholds.get("minPositiveGroups"),
+                _DEFAULT_HIDDEN_THRESHOLDS["minPositiveGroups"],
+                minimum=1,
+                maximum=10,
+            ),
+            "minPositiveHits": _coerce_threshold(
+                raw_thresholds.get("minPositiveHits"),
+                _DEFAULT_HIDDEN_THRESHOLDS["minPositiveHits"],
+                minimum=1,
+                maximum=30,
+            ),
+            "maxNegativeGroups": _coerce_threshold(
+                raw_thresholds.get("maxNegativeGroups"),
+                _DEFAULT_HIDDEN_THRESHOLDS["maxNegativeGroups"],
+                minimum=0,
+                maximum=10,
+            ),
+        },
+    }
+
+
+def _hidden_claim_extraction_config(hypothesis: dict[str, Any]) -> dict[str, Any]:
+    for key in ("hiddenClaimExtraction", "hidden_claim_extraction"):
+        value = hypothesis.get(key)
+        if isinstance(value, dict):
+            return value
+    for container_key in ("explorer_json", "explorerJson", "graph_json", "graphJson", "policy_json", "policyJson"):
+        container = hypothesis.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        value = container.get("hiddenClaimExtraction") or container.get("hidden_claim_extraction")
+        if isinstance(value, dict):
+            return value
+        candidate_signals = container.get("candidateSignals") or container.get("candidate_signals")
+        if isinstance(candidate_signals, dict):
+            return {
+                "positiveGroups": candidate_signals.get("positiveGroups") or [],
+                "negativeGroups": candidate_signals.get("negativeGroups") or [],
+            }
+    return {}
+
+
+def _hidden_group_hits(text: str, groups: list[dict[str, Any]]) -> dict[str, list[str]]:
+    hits: dict[str, list[str]] = {}
+    for group in groups:
+        name = str(group.get("name") or "").strip()
+        cues = group.get("cues") if isinstance(group.get("cues"), list) else []
+        matched = [str(cue).lower() for cue in cues if str(cue).lower() in text]
+        if name and matched:
+            hits[name] = matched
+    return hits
+
+
+def _hypothesis_entities(hypothesis: dict[str, Any]) -> list[str]:
+    entities: list[str] = []
+    for key in ("seed_entity", "seedEntity"):
+        value = str(hypothesis.get(key) or "").strip()
+        if value:
+            entities.append(value)
+    return list(dict.fromkeys(entities))
+
+
+def _hidden_context_terms(hypothesis: dict[str, Any]) -> list[str]:
+    entities = _hypothesis_entities(hypothesis)
+    if entities:
+        return entities
+    query = str(hypothesis.get("query_text") or hypothesis.get("queryText") or "").lower()
+    stop_terms = {
+        "and",
+        "or",
+        "the",
+        "after",
+        "too",
+        "expensive",
+        "cost",
+        "price",
+        "problem",
+        "failed",
+        "failure",
+        "alternative",
+        "moving",
+        "away",
+        "replacement",
+        "migration",
+    }
+    terms: list[str] = []
+    current = ""
+    for character in query:
+        if character.isalnum():
+            current += character
+            continue
+        if len(current) >= 3 and current not in stop_terms:
+            terms.append(current)
+        current = ""
+    if len(current) >= 3 and current not in stop_terms:
+        terms.append(current)
+    return list(dict.fromkeys(terms))[:6]
+
+
+def _dedupe_claims(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = str(row.get("normalized_claim") or row.get("title") or "").lower()
+        if not key:
+            continue
+        existing = deduped.get(key)
+        if existing is None or float(row.get("confidence_score") or 0) > float(existing.get("confidence_score") or 0):
+            deduped[key] = row
+    return list(deduped.values())
+
+
+def canonical_domain_from_result(row: dict[str, Any]) -> str:
+    try:
+        return urlparse(str(row.get("canonical_url") or row.get("url") or "")).netloc.lower()
+    except Exception:
+        return ""
 
 
 def _deep_merge_endpoint_evidence(endpoint: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:

@@ -4,8 +4,7 @@ import { buildAdminSignInPath } from "../../../../../lib/server/browser-flow";
 import { buildExpiredAdminSessionCookie } from "../../../../../lib/server/auth";
 import { prepareAdminAction } from "../../../../../lib/server/admin-action";
 import {
-  parseBulkChannels,
-  planBulkImport,
+  planBulkOnboarding,
   readBulkPayload,
 } from "./shared";
 
@@ -28,17 +27,19 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const bulkPayload = action.context.payload;
-    const channels = parseBulkChannels(bulkPayload.channelsPayload);
-    const importPlan = await planBulkImport(channels);
+    const importPlan = await planBulkOnboarding(bulkPayload.channelsPayload);
 
     return Response.json({
       ok: true,
-      wouldCreate: importPlan.wouldCreate,
-      wouldUpdate: importPlan.wouldUpdate,
-      matchedByChannelId: importPlan.matchedByChannelId,
-      matchedByFetchUrl: importPlan.matchedByFetchUrl,
+      wouldCreate: importPlan.summary.wouldCreate,
+      wouldUpdate: importPlan.summary.wouldUpdate,
+      matchedByChannelId: importPlan.summary.matchedByChannelId,
+      matchedByFetchUrl: importPlan.summary.matchedByFetchUrl,
       items: importPlan.items,
-      providerBreakdown: importPlan.providerBreakdown,
+      providerBreakdown: importPlan.summary.providerBreakdown,
+      blocked: importPlan.blocked,
+      warnings: importPlan.warnings,
+      planFingerprint: importPlan.planFingerprint,
     });
   } catch (error) {
     return Response.json(

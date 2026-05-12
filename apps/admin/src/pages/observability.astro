@@ -1,6 +1,7 @@
 ---
 import { DEFAULT_PAGE } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
+import { summarizeChannelBottlenecksWithPool } from "@newsportal/control-plane";
 import { createNewsPortalSdk } from "@newsportal/sdk";
 import { PaginationNav } from "@newsportal/ui";
 import { AdminLiveCollectionNotice } from "../components/AdminLiveCollectionNotice";
@@ -22,6 +23,7 @@ import {
   resolvePageHref,
 } from "../lib/view-helpers";
 import { ADMIN_HERO_CARD_CLASS } from "../lib/admin-ui-classes";
+import { getPool } from "../lib/server/db";
 
 export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
@@ -44,11 +46,12 @@ type R = Record<string, unknown>;
 
 const fetchPage = parsePositivePage(Astro.url, "fetchPage", DEFAULT_PAGE);
 const reviewPage = parsePositivePage(Astro.url, "reviewPage", DEFAULT_PAGE);
-const [fetchRuns, llmReviews, llmUsageSummary, llmBudgetSummary] = await Promise.all([
+const [fetchRuns, llmReviews, llmUsageSummary, llmBudgetSummary, sourceBottleneckSummary] = await Promise.all([
   sdk.listFetchRunsPage<R>({ page: fetchPage, pageSize: FETCH_RUNS_PAGE_SIZE }),
   sdk.listLlmReviewsPage<R>({ page: reviewPage, pageSize: LLM_REVIEWS_PAGE_SIZE }),
   sdk.getLlmUsageSummary<R>(),
   sdk.getLlmBudgetSummary<R>(),
+  summarizeChannelBottlenecksWithPool(getPool()),
 ]);
 
 function asInt(v: unknown, fallback = 0): number {
@@ -236,6 +239,40 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
         initialBudget={initialBudget}
         client:load
       />
+    )}
+
+    {currentView === "fetch" && (
+    <section class="grid gap-3 md:grid-cols-4">
+      <div class="rounded-lg border border-border bg-card p-3">
+        <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Sources</p>
+        <p class="mt-1 text-2xl font-semibold">{sourceBottleneckSummary.totalChannels}</p>
+        <p class="mt-1 text-xs text-muted-foreground">{sourceBottleneckSummary.activeChannels} active</p>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Technical bottlenecks</p>
+        <p class="mt-1 text-2xl font-semibold">{sourceBottleneckSummary.technicalBottlenecks}</p>
+        <p class="mt-1 text-xs text-muted-foreground">Repair lanes, not selection failures</p>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Working noisy</p>
+        <p class="mt-1 text-2xl font-semibold">{sourceBottleneckSummary.workingNoisy}</p>
+        <p class="mt-1 text-xs text-muted-foreground">Fetch works; downstream filters reject</p>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3">
+        <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Top repair lane</p>
+        <p class="mt-1 text-lg font-semibold">{sourceBottleneckSummary.byRepairLane[0]?.repairLane ?? "none"}</p>
+        <p class="mt-1 text-xs text-muted-foreground">{sourceBottleneckSummary.byRepairLane[0]?.count ?? 0} sources</p>
+      </div>
+      <div class="rounded-lg border border-border bg-card p-3 md:col-span-4">
+        <div class="flex flex-wrap gap-2">
+          {sourceBottleneckSummary.byFailureBucket.slice(0, 8).map((bucket) => (
+            <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+              {bucket.failureBucket}: <span class="ml-1 font-medium text-foreground">{bucket.count}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
     )}
 
     {currentView === "fetch" && (

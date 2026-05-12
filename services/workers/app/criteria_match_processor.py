@@ -40,6 +40,7 @@ class CriteriaMatchProcessorDependencies:
     coerce_selection_profile_runtime: Callable[..., Any]
     build_selection_profile_runtime_explain: Callable[..., dict[str, Any]]
     selection_profile_allows_llm_review: Callable[[Any], bool]
+    resolve_strict_candidate_signal_guard: Callable[..., dict[str, Any] | None]
     resolve_criterion_gray_zone_runtime_resolution: Callable[..., dict[str, Any] | None]
     build_llm_budget_gate_explain: Callable[..., dict[str, Any]]
     resolve_profile_gray_zone_decision: Callable[[Any], str]
@@ -80,6 +81,7 @@ def build_criteria_match_processor_dependencies() -> CriteriaMatchProcessorDepen
         coerce_selection_profile_runtime=legacy_main.coerce_selection_profile_runtime,
         build_selection_profile_runtime_explain=legacy_main.build_selection_profile_runtime_explain,
         selection_profile_allows_llm_review=legacy_main.selection_profile_allows_llm_review,
+        resolve_strict_candidate_signal_guard=legacy_main.resolve_strict_candidate_signal_guard,
         resolve_criterion_gray_zone_runtime_resolution=legacy_main.resolve_criterion_gray_zone_runtime_resolution,
         build_llm_budget_gate_explain=legacy_main.build_llm_budget_gate_explain,
         resolve_profile_gray_zone_decision=legacy_main.resolve_profile_gray_zone_decision,
@@ -249,6 +251,14 @@ async def process_match_criteria_with_dependencies(
                     llm_review_allowed = deps.selection_profile_allows_llm_review(
                         selection_profile_runtime
                     )
+                    if decision == "relevant":
+                        strict_candidate_signal_guard = deps.resolve_strict_candidate_signal_guard(
+                            selection_profile_runtime,
+                            candidate_signal_explain,
+                        )
+                        if strict_candidate_signal_guard is not None:
+                            decision = str(strict_candidate_signal_guard["finalDecision"])
+                            explain_json["strictCandidateSignalGuard"] = strict_candidate_signal_guard
                     candidate_recovery_protected = bool(
                         candidate_signal_explain
                         and candidate_signal_explain.get("upliftedToGrayZone")
@@ -376,6 +386,17 @@ async def process_match_criteria_with_dependencies(
                             doc_id=article["doc_id"],
                             criterion_id=criterion["criterion_id"],
                             canonical_document_id=filter_context["canonicalDocumentId"],
+                            prompt_template_id=(
+                                str(prompt_template.get("prompt_template_id") or "").strip()
+                                if prompt_template is not None
+                                else None
+                            ),
+                            prompt_version=(
+                                int(prompt_template.get("version"))
+                                if prompt_template is not None
+                                and prompt_template.get("version") is not None
+                                else None
+                            ),
                         )
                         if reused_review is not None:
                             await deps.persist_criterion_review_resolution(

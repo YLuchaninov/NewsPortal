@@ -1,4 +1,40 @@
 export type SourceProviderType = "rss" | "website" | "api" | "email_imap" | "youtube";
+export const API_ADAPTER_KEYS = [
+  "hn_algolia_search",
+  "github_issues_search",
+  "stack_exchange_search",
+  "ddgs_search",
+  "searxng_search",
+  "brave_search",
+  "tavily_search",
+  "exa_search",
+  "serpapi_google_news_research",
+  "discourse_search",
+  "greenhouse_job_board",
+  "lever_postings",
+  "ashby_job_postings",
+  "remotive_jobs",
+  "remoteok_jobs",
+  "weworkremotely_rss",
+  "peopleperhour_public_projects_research",
+  "freelancer_public_projects_research",
+  "guru_public_projects_research",
+  "malt_public_projects_research",
+  "contra_public_search_research",
+  "upwork_public_signal_research",
+  "linkedin_public_signal_research"
+] as const;
+export const API_ADAPTER_RESEARCH_MODES = ["production", "research_only"] as const;
+export const API_ADAPTER_ACCESS_KINDS = [
+  "official_free",
+  "official_free_key",
+  "official_paid",
+  "github_unofficial_public",
+  "github_unofficial_restricted",
+  "closed_access",
+  "unsupported"
+] as const;
+export const API_ADAPTER_TOS_RISKS = ["low", "medium", "high", "unknown"] as const;
 export const FEED_INGRESS_ADAPTER_STRATEGIES = [
   "generic",
   "reddit_search_rss",
@@ -39,6 +75,11 @@ export const CHANNEL_SCHEDULE_PRESETS = {
   daily: 86400,
   three_day: 259200
 } as const;
+
+export type ApiAdapterKey = (typeof API_ADAPTER_KEYS)[number];
+export type ApiAdapterResearchMode = (typeof API_ADAPTER_RESEARCH_MODES)[number];
+export type ApiAdapterAccessKind = (typeof API_ADAPTER_ACCESS_KINDS)[number];
+export type ApiAdapterTosRisk = (typeof API_ADAPTER_TOS_RISKS)[number];
 
 export interface SourceChannelRuntimeState {
   adaptiveEnabled: boolean;
@@ -206,6 +247,30 @@ export interface ApiChannelConfig {
   publishedAtField: string;
   externalIdField: string;
   languageField: string;
+  adapter: {
+    adapterKey: ApiAdapterKey | null;
+    researchMode: ApiAdapterResearchMode;
+    accessKind: ApiAdapterAccessKind | null;
+    sourceRole: string | null;
+    contentKind: ResourceKind | string | null;
+    query: string | null;
+    platform: string | null;
+    searchQuery: {
+      query: string | null;
+      platform: string | null;
+      siteFilter: string | null;
+      locale: string | null;
+      timeRange: string | null;
+      maxResults: number;
+      searchProvider: string | null;
+      directCoverage: boolean;
+    };
+    organization: string | null;
+    tags: string[];
+    githubEvidence: unknown[];
+    tosRisk: ApiAdapterTosRisk;
+    requiresProductionReplacement: boolean;
+  };
 }
 
 export interface EmailImapChannelConfig {
@@ -296,7 +361,31 @@ const DEFAULT_API_CHANNEL_CONFIG: ApiChannelConfig = {
   urlField: "url",
   publishedAtField: "publishedAt",
   externalIdField: "id",
-  languageField: "language"
+  languageField: "language",
+  adapter: {
+    adapterKey: null,
+    researchMode: "production",
+    accessKind: null,
+    sourceRole: null,
+    contentKind: null,
+    query: null,
+    platform: null,
+    searchQuery: {
+      query: null,
+      platform: null,
+      siteFilter: null,
+      locale: null,
+      timeRange: null,
+      maxResults: 20,
+      searchProvider: null,
+      directCoverage: false
+    },
+    organization: null,
+    tags: [],
+    githubEvidence: [],
+    tosRisk: "unknown",
+    requiresProductionReplacement: false
+  }
 };
 
 const DEFAULT_EMAIL_IMAP_CHANNEL_CONFIG: EmailImapChannelConfig = {
@@ -507,6 +596,147 @@ function readApiPaginationMode(value: unknown): ApiChannelConfig["pagination"]["
     return normalized;
   }
   throw new Error('Source channel config field "pagination.mode" must be none, next_url, or page.');
+}
+
+function readApiAdapterEnum<T extends readonly string[]>(
+  value: unknown,
+  allowedValues: T,
+  fallback: T[number] | null,
+  fieldName: string
+): T[number] | null {
+  if (value == null) {
+    return fallback;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`Source channel config field "${fieldName}" must be a string.`);
+  }
+  const normalized = value.trim();
+  if (!normalized) {
+    return fallback;
+  }
+  if ((allowedValues as readonly string[]).includes(normalized)) {
+    return normalized as T[number];
+  }
+  throw new Error(
+    `Source channel config field "${fieldName}" must be one of ${allowedValues.join(", ")}.`
+  );
+}
+
+function readApiAdapterConfig(config: Record<string, unknown>): ApiChannelConfig["adapter"] {
+  const nested = config.api != null ? asRecord(config.api) : {};
+  const adapterSource =
+    nested.adapterKey != null || nested.adapter != null
+      ? nested
+      : config.adapter != null
+        ? asRecord(config.adapter)
+        : config;
+  const searchQuerySource =
+    adapterSource.searchQuery != null
+      ? asRecord(adapterSource.searchQuery)
+      : nested.searchQuery != null
+        ? asRecord(nested.searchQuery)
+        : {};
+  const adapterKey = readApiAdapterEnum(
+    adapterSource.adapterKey,
+    API_ADAPTER_KEYS,
+    DEFAULT_API_CHANNEL_CONFIG.adapter.adapterKey,
+    "adapterKey"
+  ) as ApiAdapterKey | null;
+  const researchMode = readApiAdapterEnum(
+    adapterSource.researchMode,
+    API_ADAPTER_RESEARCH_MODES,
+    adapterKey && String(adapterKey).endsWith("_research") ? "research_only" : DEFAULT_API_CHANNEL_CONFIG.adapter.researchMode,
+    "researchMode"
+  ) as ApiAdapterResearchMode;
+  const accessKind = readApiAdapterEnum(
+    adapterSource.accessKind,
+    API_ADAPTER_ACCESS_KINDS,
+    DEFAULT_API_CHANNEL_CONFIG.adapter.accessKind,
+    "accessKind"
+  ) as ApiAdapterAccessKind | null;
+  const tosRisk = readApiAdapterEnum(
+    adapterSource.tosRisk,
+    API_ADAPTER_TOS_RISKS,
+    researchMode === "research_only" ? "high" : DEFAULT_API_CHANNEL_CONFIG.adapter.tosRisk,
+    "tosRisk"
+  ) as ApiAdapterTosRisk;
+
+  return {
+    adapterKey,
+    researchMode,
+    accessKind,
+    sourceRole: readOptionalString(
+      adapterSource.sourceRole,
+      DEFAULT_API_CHANNEL_CONFIG.adapter.sourceRole,
+      "sourceRole"
+    ),
+    contentKind: readOptionalString(
+      adapterSource.contentKind,
+      DEFAULT_API_CHANNEL_CONFIG.adapter.contentKind,
+      "contentKind"
+    ),
+    query: readOptionalString(adapterSource.query, DEFAULT_API_CHANNEL_CONFIG.adapter.query, "query"),
+    platform: readOptionalString(
+      adapterSource.platform,
+      DEFAULT_API_CHANNEL_CONFIG.adapter.platform,
+      "platform"
+    ),
+    searchQuery: {
+      query:
+        readOptionalString(searchQuerySource.query, null, "searchQuery.query") ??
+        readOptionalString(adapterSource.query, DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.query, "query"),
+      platform:
+        readOptionalString(searchQuerySource.platform, null, "searchQuery.platform") ??
+        readOptionalString(adapterSource.platform, DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.platform, "platform"),
+      siteFilter: readOptionalString(
+        searchQuerySource.siteFilter,
+        DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.siteFilter,
+        "searchQuery.siteFilter"
+      ),
+      locale: readOptionalString(
+        searchQuerySource.locale,
+        DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.locale,
+        "searchQuery.locale"
+      ),
+      timeRange: readOptionalString(
+        searchQuerySource.timeRange,
+        DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.timeRange,
+        "searchQuery.timeRange"
+      ),
+      maxResults: readPositiveInteger(
+        searchQuerySource.maxResults,
+        DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.maxResults,
+        "searchQuery.maxResults"
+      ),
+      searchProvider: readOptionalString(
+        searchQuerySource.searchProvider,
+        DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.searchProvider,
+        "searchQuery.searchProvider"
+      ),
+      directCoverage: readBoolean(
+        searchQuerySource.directCoverage,
+        DEFAULT_API_CHANNEL_CONFIG.adapter.searchQuery.directCoverage,
+        "searchQuery.directCoverage"
+      )
+    },
+    organization: readOptionalString(
+      adapterSource.organization,
+      DEFAULT_API_CHANNEL_CONFIG.adapter.organization,
+      "organization"
+    ),
+    tags: readStringList(adapterSource.tags, DEFAULT_API_CHANNEL_CONFIG.adapter.tags, "tags"),
+    githubEvidence: Array.isArray(adapterSource.githubEvidence)
+      ? adapterSource.githubEvidence.map((item, index) =>
+          assertJsonCompatible(item, `githubEvidence[${index}]`)
+        )
+      : [...DEFAULT_API_CHANNEL_CONFIG.adapter.githubEvidence],
+    tosRisk,
+    requiresProductionReplacement: readBoolean(
+      adapterSource.requiresProductionReplacement,
+      researchMode === "research_only",
+      "requiresProductionReplacement"
+    )
+  };
 }
 
 const API_REQUEST_HEADER_BLOCKLIST = new Set([
@@ -1011,7 +1241,8 @@ export function parseApiChannelConfig(config: unknown): ApiChannelConfig {
       candidate.languageField,
       DEFAULT_API_CHANNEL_CONFIG.languageField,
       "languageField"
-    )
+    ),
+    adapter: readApiAdapterConfig(candidate)
   };
 }
 

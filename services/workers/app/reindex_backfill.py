@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from time import monotonic
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable
+
+HISTORICAL_BACKFILL_PROGRESS_DOC_INTERVAL = 5
+HISTORICAL_BACKFILL_PROGRESS_SECONDS = 30.0
 
 
 async def _never_cancel_requested(_reindex_job_id: str) -> bool:
@@ -24,7 +29,7 @@ class HistoricalBackfillDependencies:
     process_match_criteria: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_match_interests: Callable[[Any, str], Awaitable[dict[str, Any]]]
     is_article_eligible_for_personalization: Callable[..., Awaitable[bool]]
-    replay_gray_zone_reviews_for_doc: Callable[..., Awaitable[int]]
+    replay_gray_zone_reviews_for_doc: Callable[..., Awaitable[int | dict[str, Any]]]
     is_cancel_requested: Callable[[str], Awaitable[bool]] = _never_cancel_requested
 
 
@@ -32,13 +37,46 @@ def build_historical_backfill_progress_patch(
     *,
     processed_articles: int,
     total_articles: int,
+    phase: str = "historical_backfill",
+    current_doc_id: str | None = None,
+    criterion_llm_reviews: int = 0,
+    interest_llm_reviews: int = 0,
+    llm_review_failures: int = 0,
+    started_at_monotonic: float | None = None,
 ) -> dict[str, Any]:
+    now_iso = datetime.now(UTC).isoformat()
+    elapsed_seconds = (
+        max(monotonic() - started_at_monotonic, 0.0)
+        if started_at_monotonic is not None
+        else 0.0
+    )
     return {
         "progress": {
+            "phase": phase,
+            "currentDocId": current_doc_id,
             "processedArticles": processed_articles,
             "totalArticles": total_articles,
+            "criterionLlmReviews": criterion_llm_reviews,
+            "interestLlmReviews": interest_llm_reviews,
+            "llmReviewFailures": llm_review_failures,
+            "lastProgressAt": now_iso,
+            "lastHeartbeatAt": now_iso,
+            "elapsedSeconds": round(elapsed_seconds, 3),
         }
     }
+
+
+def _coerce_replay_review_result(value: int | dict[str, Any]) -> dict[str, int]:
+    if isinstance(value, dict):
+        completed = int(value.get("completed") or value.get("count") or 0)
+        failed = int(value.get("failed") or 0)
+        timed_out = int(value.get("timedOut") or value.get("timeoutFailures") or 0)
+        return {
+            "completed": max(completed, 0),
+            "failed": max(failed, 0),
+            "timedOut": max(timed_out, 0),
+        }
+    return {"completed": max(int(value or 0), 0), "failed": 0, "timedOut": 0}
 
 
 async def replay_historical_articles(
@@ -69,15 +107,41 @@ async def replay_historical_articles(
     interest_matches = 0
     criterion_llm_reviews = 0
     interest_llm_reviews = 0
+    llm_review_failures = 0
+    llm_review_timeouts = 0
     last_position = 0
+    started_at_monotonic = monotonic()
+    last_progress_monotonic = 0.0
+    last_progress_processed = 0
 
-    await dependencies.update_job_options(
-        reindex_job_id,
-        build_historical_backfill_progress_patch(
-            processed_articles=processed_articles,
-            total_articles=total_articles,
-        ),
-    )
+    async def write_progress(*, phase: str, current_doc_id: str | None = None) -> None:
+        nonlocal last_progress_monotonic, last_progress_processed
+        await dependencies.update_job_options(
+            reindex_job_id,
+            build_historical_backfill_progress_patch(
+                processed_articles=processed_articles,
+                total_articles=total_articles,
+                phase=phase,
+                current_doc_id=current_doc_id,
+                criterion_llm_reviews=criterion_llm_reviews,
+                interest_llm_reviews=interest_llm_reviews,
+                llm_review_failures=llm_review_failures,
+                started_at_monotonic=started_at_monotonic,
+            ),
+        )
+        last_progress_monotonic = monotonic()
+        last_progress_processed = processed_articles
+
+    async def maybe_write_progress(*, phase: str, current_doc_id: str | None = None) -> None:
+        processed_delta = processed_articles - last_progress_processed
+        elapsed_since_progress = monotonic() - last_progress_monotonic
+        if (
+            processed_delta >= HISTORICAL_BACKFILL_PROGRESS_DOC_INTERVAL
+            or elapsed_since_progress >= HISTORICAL_BACKFILL_PROGRESS_SECONDS
+        ):
+            await write_progress(phase=phase, current_doc_id=current_doc_id)
+
+    await write_progress(phase="snapshot_ready")
 
     while True:
         if await dependencies.is_cancel_requested(reindex_job_id):
@@ -100,6 +164,7 @@ async def replay_historical_articles(
 
         for target in batch_targets:
             doc_id = str(target["doc_id"])
+            await maybe_write_progress(phase="processing_document", current_doc_id=doc_id)
             if include_enrichment:
                 enrichment_event_id = str(uuid.uuid4())
                 enrichment_processed += 1
@@ -229,10 +294,15 @@ async def replay_historical_articles(
                 "",
             )
             criteria_matches += int(criteria_result.get("criteriaCount") or 0)
-            criterion_llm_reviews += await dependencies.replay_gray_zone_reviews_for_doc(
-                doc_id=doc_id,
-                scope="criterion",
+            criterion_review_result = _coerce_replay_review_result(
+                await dependencies.replay_gray_zone_reviews_for_doc(
+                    doc_id=doc_id,
+                    scope="criterion",
+                )
             )
+            criterion_llm_reviews += criterion_review_result["completed"]
+            llm_review_failures += criterion_review_result["failed"]
+            llm_review_timeouts += criterion_review_result["timedOut"]
             if await dependencies.is_article_eligible_for_personalization(doc_id=doc_id):
                 cluster_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
@@ -288,15 +358,12 @@ async def replay_historical_articles(
                 )
                 interest_matches += int(interest_result.get("interestCount") or 0)
             processed_articles += 1
+            await maybe_write_progress(phase="processed_document", current_doc_id=doc_id)
 
         last_position = int(batch_targets[-1]["target_position"])
-        await dependencies.update_job_options(
-            reindex_job_id,
-            build_historical_backfill_progress_patch(
-                processed_articles=processed_articles,
-                total_articles=total_articles,
-            ),
-        )
+        await write_progress(phase="batch_completed")
+
+    await write_progress(phase="completed")
 
     return {
         "mode": "historical_backfill",
@@ -312,6 +379,8 @@ async def replay_historical_articles(
         "interestMatches": interest_matches,
         "criterionLlmReviews": criterion_llm_reviews,
         "interestLlmReviews": interest_llm_reviews,
+        "llmReviewFailures": llm_review_failures,
+        "llmReviewTimeouts": llm_review_timeouts,
         "retroNotifications": "skipped",
         "batchSize": batch_size,
     }

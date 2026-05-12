@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Literal
 
 from fastapi import HTTPException
@@ -8,6 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.api.app.database import build_database_url, query_all, query_count, query_one
 from services.api.app.pagination import build_paginated_response
+from services.api.app.sequence_worker_boundary import (
+    SequenceQueueDispatchError,
+    dispatch_sequence_run_job,
+)
 from services.workers.app.discovery_v3_coverage import compute_coverage
 from services.workers.app.discovery_v3_eval import run_fixture_replay_eval
 from services.workers.app.discovery_v3_graph import compile_interest_graph
@@ -19,6 +24,21 @@ from services.workers.app.discovery_v3_autopilot import (
 )
 from services.workers.app.discovery_v3_llm_tasks import explain_endpoint_deterministically
 from services.workers.app.task_engine.adapters.source_registrar import PostgresSourceRegistrarAdapter
+
+
+DISCOVERY_V3_RUNNER_SEQUENCE_TITLE = "Default Discovery V3 Runner"
+DISCOVERY_V3_RUNNER_SEQUENCE_CREATED_BY = "system:discovery_v3_api"
+DISCOVERY_V3_RUNNER_SEQUENCE_TAGS = ["default", "discovery", "v3", "runner"]
+DISCOVERY_V3_RUNNER_TASK_GRAPH = [
+    {
+        "key": "discovery_v3_run",
+        "module": "discovery.v3.run",
+        "enabled": True,
+        "options": {},
+        "retry": {"attempts": 1, "delay_ms": 1000},
+        "timeout_ms": 420000,
+    }
+]
 
 
 class DiscoveryV3TargetCreatePayload(BaseModel):
@@ -91,7 +111,19 @@ class DiscoveryV3RunCreatePayload(BaseModel):
     max_domains: int = Field(default=400, ge=0, alias="maxDomains")
     max_endpoints: int = Field(default=700, ge=0, alias="maxEndpoints")
     max_social_items: int = Field(default=1000, ge=0, alias="maxSocialItems")
+    provider_execution_enabled: bool = Field(default=False, alias="providerExecutionEnabled")
     created_by: str | None = Field(default=None, alias="createdBy")
+
+
+class DiscoveryV3DispatchQueuedRunsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    target_id: str | None = Field(default=None, alias="targetId")
+    run_ids: list[str] = Field(default_factory=list, alias="runIds")
+    limit: int = Field(default=25, ge=1, le=50)
+    include_already_dispatched: bool = Field(default=False, alias="includeAlreadyDispatched")
+    requested_by: str | None = Field(default=None, alias="requestedBy")
+    reason: str | None = None
 
 
 class DiscoveryV3EndpointDecisionPayload(BaseModel):
@@ -152,6 +184,7 @@ class DiscoveryV3SourceActionPayload(BaseModel):
     max_domains: int = Field(default=80, ge=0, alias="maxDomains")
     max_endpoints: int = Field(default=120, ge=0, alias="maxEndpoints")
     max_social_items: int = Field(default=0, ge=0, alias="maxSocialItems")
+    provider_execution_enabled: bool = Field(default=False, alias="providerExecutionEnabled")
     requested_by: str | None = Field(default=None, alias="requestedBy")
 
 
@@ -302,6 +335,183 @@ def get_autopilot_profiles() -> dict[str, Any]:
     return {"items": list_autopilot_profiles()}
 
 
+def _ensure_discovery_v3_runner_sequence() -> str:
+    row = query_one(
+        """
+        select sequence_id::text as sequence_id
+        from sequences
+        where title = %s
+          and created_by = %s
+          and status <> 'archived'
+        order by updated_at desc, created_at desc
+        limit 1
+        """,
+        (
+            DISCOVERY_V3_RUNNER_SEQUENCE_TITLE,
+            DISCOVERY_V3_RUNNER_SEQUENCE_CREATED_BY,
+        ),
+    )
+    if row is not None:
+        return str(row["sequence_id"])
+
+    row = query_one(
+        """
+        insert into sequences (
+          title, description, task_graph, status, trigger_event, cron,
+          max_runs, tags, created_by
+        )
+        values (%s, %s, %s::jsonb, 'active', null, null, null, %s::text[], %s)
+        returning sequence_id::text as sequence_id
+        """,
+        (
+            DISCOVERY_V3_RUNNER_SEQUENCE_TITLE,
+            "Default Sequence Runner entrypoint for Discovery V3 runs created through API/MCP.",
+            Json(DISCOVERY_V3_RUNNER_TASK_GRAPH),
+            DISCOVERY_V3_RUNNER_SEQUENCE_TAGS,
+            DISCOVERY_V3_RUNNER_SEQUENCE_CREATED_BY,
+        ),
+    )
+    if row is None:
+        raise HTTPException(status_code=500, detail="Discovery runner sequence was not created.")
+    return str(row["sequence_id"])
+
+
+def _mark_sequence_dispatch_failed(
+    *,
+    sequence_run_id: str,
+    discovery_run_id: str,
+    sequence_id: str,
+    error_text: str,
+) -> None:
+    query_one(
+        """
+        update sequence_runs
+        set status = 'failed', finished_at = now(), error_text = %s
+        where run_id = %s
+        returning run_id
+        """,
+        (error_text, sequence_run_id),
+    )
+    query_one(
+        """
+        update discovery_runs
+        set summary_json = summary_json || %s::jsonb
+        where run_id = %s
+        returning run_id
+        """,
+        (
+            Json(
+                {
+                    "sequenceDispatch": {
+                        "sequenceId": sequence_id,
+                        "sequenceRunId": sequence_run_id,
+                        "dispatchStatus": "failed",
+                        "error": error_text,
+                    }
+                }
+            ),
+            discovery_run_id,
+        ),
+    )
+
+
+def _attach_sequence_dispatch(
+    run: dict[str, Any],
+    *,
+    dispatch_source: str = "discovery_v3_api",
+    requested_by: str | None = None,
+) -> dict[str, Any]:
+    run_id = str(run["run_id"])
+    target_id = str(run["target_id"])
+    sequence_id = _ensure_discovery_v3_runner_sequence()
+    sequence_run_id = str(uuid.uuid4())
+    trigger_meta = {
+        "source": dispatch_source,
+        "discoveryRunId": run_id,
+        "targetId": target_id,
+        "runKind": run.get("run_kind"),
+        "triggerKind": run.get("trigger_kind"),
+    }
+    if requested_by or run.get("created_by"):
+        trigger_meta["requestedBy"] = requested_by or run["created_by"]
+
+    query_one(
+        """
+        insert into sequence_runs (
+          run_id, sequence_id, retry_of_run_id, status, context_json,
+          trigger_type, trigger_meta
+        )
+        values (%s, %s, null, 'pending', %s::jsonb, 'api', %s::jsonb)
+        returning run_id
+        """,
+        (
+            sequence_run_id,
+            sequence_id,
+            Json(
+                {
+                    "run_id": run_id,
+                    "runId": run_id,
+                    "target_id": target_id,
+                    "targetId": target_id,
+                }
+            ),
+            Json(trigger_meta),
+        ),
+    )
+
+    try:
+        dispatch_sequence_run_job(sequence_run_id, sequence_id)
+    except SequenceQueueDispatchError as error:
+        error_text = str(error) or "Failed to enqueue discovery run sequence."
+        _mark_sequence_dispatch_failed(
+            sequence_run_id=sequence_run_id,
+            discovery_run_id=run_id,
+            sequence_id=sequence_id,
+            error_text=error_text,
+        )
+        raise HTTPException(status_code=503, detail=error_text) from error
+    except Exception as error:  # pragma: no cover - runtime dependent
+        error_text = str(error) or "Failed to enqueue discovery run sequence."
+        _mark_sequence_dispatch_failed(
+            sequence_run_id=sequence_run_id,
+            discovery_run_id=run_id,
+            sequence_id=sequence_id,
+            error_text=error_text,
+        )
+        raise HTTPException(status_code=503, detail=error_text) from error
+
+    dispatch_metadata = {
+        "sequenceId": sequence_id,
+        "sequenceRunId": sequence_run_id,
+        "dispatchStatus": "enqueued",
+    }
+    updated = query_one(
+        """
+        update discovery_runs
+        set summary_json = summary_json || %s::jsonb
+        where run_id = %s
+        returning *
+        """,
+        (Json({"sequenceDispatch": dispatch_metadata}), run_id),
+    )
+    return {
+        **(updated or run),
+        "sequenceDispatch": dispatch_metadata,
+    }
+
+
+def _operator_run_summary(
+    *,
+    provider_execution_enabled: bool,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    summary = dict(extra or {})
+    if provider_execution_enabled:
+        summary["providerExecutionEnabled"] = True
+        summary["providerExecutionScope"] = "bounded_operator_approved"
+    return summary
+
+
 def simplify_config(payload: DiscoveryV3SimpleTargetPayload) -> dict[str, Any]:
     return simplify_config_deterministically(payload.model_dump(by_alias=True))
 
@@ -338,9 +548,10 @@ def create_run(payload: DiscoveryV3RunCreatePayload) -> dict[str, Any]:
         """
         insert into discovery_runs (
           target_id, run_kind, trigger_kind, max_depth, max_hypotheses,
-          max_search_results, max_domains, max_endpoints, max_social_items, created_by
+          max_search_results, max_domains, max_endpoints, max_social_items,
+          summary_json, created_by
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
         returning *
         """,
         (
@@ -353,10 +564,80 @@ def create_run(payload: DiscoveryV3RunCreatePayload) -> dict[str, Any]:
             payload.max_domains,
             payload.max_endpoints,
             payload.max_social_items,
+            Json(_operator_run_summary(provider_execution_enabled=payload.provider_execution_enabled)),
             payload.created_by,
         ),
     )
-    return _row_or_404(row, "Discovery run")
+    return _attach_sequence_dispatch(_row_or_404(row, "Discovery run"))
+
+
+def dispatch_queued_runs(payload: DiscoveryV3DispatchQueuedRunsPayload) -> dict[str, Any]:
+    clauses = ["status = 'queued'", "started_at is null"]
+    params: list[Any] = []
+    if payload.target_id:
+        clauses.append("target_id = %s")
+        params.append(payload.target_id)
+    if payload.run_ids:
+        clauses.append("run_id = any(%s::uuid[])")
+        params.append(payload.run_ids)
+    if not payload.include_already_dispatched:
+        clauses.append("not (summary_json ? 'sequenceDispatch')")
+    where_sql = " and ".join(clauses)
+    rows = query_all(
+        f"""
+        select *
+        from discovery_runs
+        where {where_sql}
+        order by created_at asc
+        limit %s
+        """,
+        (*params, payload.limit),
+    )
+    dispatched: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for row in rows:
+        run_id = str(row["run_id"])
+        try:
+            updated = _attach_sequence_dispatch(
+                row,
+                dispatch_source="discovery_v3_queue_repair",
+                requested_by=payload.requested_by,
+            )
+        except HTTPException as error:
+            failures.append(
+                {
+                    "runId": run_id,
+                    "statusCode": error.status_code,
+                    "error": str(error.detail),
+                }
+            )
+            break
+        except Exception as error:  # pragma: no cover - defensive runtime guard
+            failures.append({"runId": run_id, "error": str(error)})
+            break
+        dispatched.append(
+            {
+                "runId": run_id,
+                "targetId": str(row["target_id"]),
+                "runKind": row.get("run_kind"),
+                "sequenceDispatch": updated.get("sequenceDispatch"),
+            }
+        )
+    return {
+        "requested": {
+            "targetId": payload.target_id,
+            "runIds": payload.run_ids,
+            "limit": payload.limit,
+            "includeAlreadyDispatched": payload.include_already_dispatched,
+            "requestedBy": payload.requested_by,
+            "reason": payload.reason,
+        },
+        "matched": len(rows),
+        "dispatchedCount": len(dispatched),
+        "failureCount": len(failures),
+        "dispatched": dispatched,
+        "failures": failures,
+    }
 
 
 def cancel_run(run_id: str) -> dict[str, Any]:
@@ -719,11 +1000,16 @@ def expand_source(channel_id: str, payload: DiscoveryV3SourceActionPayload) -> d
             payload.max_domains,
             payload.max_endpoints,
             payload.max_social_items,
-            Json({"sourceChannelId": channel_id}),
+            Json(
+                _operator_run_summary(
+                    provider_execution_enabled=payload.provider_execution_enabled,
+                    extra={"sourceChannelId": channel_id},
+                )
+            ),
             payload.requested_by,
         ),
     )
-    return _row_or_404(row, "Discovery run")
+    return _attach_sequence_dispatch(_row_or_404(row, "Discovery run"))
 
 
 def replace_source_candidates(channel_id: str, payload: DiscoveryV3SourceActionPayload) -> dict[str, Any]:
@@ -745,11 +1031,16 @@ def replace_source_candidates(channel_id: str, payload: DiscoveryV3SourceActionP
             payload.max_domains,
             payload.max_endpoints,
             payload.max_social_items,
-            Json({"sourceChannelId": channel_id}),
+            Json(
+                _operator_run_summary(
+                    provider_execution_enabled=payload.provider_execution_enabled,
+                    extra={"sourceChannelId": channel_id},
+                )
+            ),
             payload.requested_by,
         ),
     )
-    return _row_or_404(row, "Discovery run")
+    return _attach_sequence_dispatch(_row_or_404(row, "Discovery run"))
 
 
 def get_summary() -> dict[str, Any]:

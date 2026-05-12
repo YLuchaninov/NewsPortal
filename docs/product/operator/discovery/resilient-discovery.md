@@ -46,6 +46,34 @@ Hidden signals are useful for finding what to search next. They are not enough t
 
 Hidden signals must become claim-backed before strong follow-up discovery. A hidden signal without claim support and control comparison cannot exceed confidence `0.70`. A confirmed hidden claim needs independent evidence and specificity above background noise.
 
+## Reference Bundle Calibration
+
+If a manual/example bundle previously worked better than the current discovery flow, use it as calibration evidence before broadening discovery again. Do not treat the file as runtime truth and do not move its domain vocabulary into code.
+
+Extract these reusable parts:
+
+- source roles and provider shapes that actually fed useful content;
+- signal families, not just keywords;
+- positive prototypes and near-miss negative prototypes;
+- candidate uplift positive and negative cue groups;
+- allowed content kinds and strictness/review policy;
+- LLM review guardrails for wrappers, portal shells, directories, seller pages, hiring noise and other near-miss content;
+- provider classes that require adapters or mapping instead of fake RSS/website rows.
+
+Then compare the reference against MCP read-back:
+
+```text
+system_interests + llm_templates + channels.bottlenecks + articles.residuals + content_items + discovery targets
+```
+
+The product pattern is:
+
+```text
+calibrated intent -> broad working source pool -> strict independent filtering -> selected public content
+```
+
+For rare-signal domains, low yield alone is not a source failure. A noisy but technically working source can stay monitored or in contract/probation; transport failures, provider-shape mismatches and adapter-required sources should go through bottleneck read models, alternatives, adapter planning or polite-polling repair.
+
 ## Provider Cards
 
 Every provider needs a capability card before discovery can use it. A provider card says:

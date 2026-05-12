@@ -19,6 +19,7 @@ import type {
   SourceChannelRow
 } from "./fetcher-persistence";
 import { validateAcquisitionUrl } from "./probe-url-guard";
+import { fetchApiAdapterItems } from "./api-adapter-registry";
 
 interface ApiChannelPollerDependencies {
   config: FetchersConfig;
@@ -38,6 +39,13 @@ const API_PAGE_CURSOR_TYPE = "api_page_token";
 
 interface ApiPageFetchResult {
   payload: unknown;
+  status: number;
+  finalUrl: string;
+  retryAfterSeconds: number | null;
+}
+
+interface ApiTextFetchResult {
+  text: string;
   status: number;
   finalUrl: string;
   retryAfterSeconds: number | null;
@@ -177,6 +185,100 @@ async function fetchApiPage(input: {
   };
 }
 
+async function fetchApiText(input: {
+  channel: SourceChannelRow;
+  url: string;
+  apiConfig: ReturnType<typeof parseApiChannelConfig>;
+  authConfigJson: unknown;
+  defaultUserAgent: string;
+}): Promise<ApiTextFetchResult> {
+  const guardedUrl = await validateAcquisitionUrl(input.url, { resolveDns: true });
+  if (!guardedUrl.url) {
+    const message = `API adapter channel ${input.channel.channelId} fetchUrl is not allowed: ${guardedUrl.error}`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: null,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+
+  const headers = new Headers({
+    "user-agent": input.apiConfig.userAgent || input.defaultUserAgent,
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+  });
+  for (const [name, value] of Object.entries(input.apiConfig.requestHeaders)) {
+    headers.set(name, value);
+  }
+  const authorizationHeader = resolveSourceChannelAuthorizationHeader(
+    guardedUrl.url,
+    guardedUrl.url,
+    input.authConfigJson
+  );
+  if (authorizationHeader) {
+    headers.set("authorization", authorizationHeader);
+  }
+
+  const response = await fetch(guardedUrl.url, {
+    method: "GET",
+    headers,
+    signal: AbortSignal.timeout(input.apiConfig.requestTimeoutMs)
+  });
+  const guardedFinalUrl = await validateAcquisitionUrl(response.url || guardedUrl.url);
+  if (!guardedFinalUrl.url) {
+    const message = `API adapter channel ${input.channel.channelId} final URL is not allowed: ${guardedFinalUrl.error}`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: response.status,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+  if (!response.ok) {
+    const message = `API adapter fetch failed for ${input.channel.channelId}: ${response.status} ${response.statusText}`;
+    throw new ChannelFetchError(message, {
+      outcome: classifyHttpFailure(response.status),
+      httpStatus: response.status,
+      retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after")),
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+
+  const responseBytes = await response.arrayBuffer();
+  if (responseBytes.byteLength > MAX_API_RESPONSE_BODY_BYTES) {
+    const message = `API adapter fetch failed for ${input.channel.channelId}: response body is too large.`;
+    throw new ChannelFetchError(message, {
+      outcome: "hard_failure",
+      httpStatus: response.status,
+      retryAfterSeconds: null,
+      fetchedItemCount: 0,
+      newArticleCount: 0,
+      duplicateSuppressedCount: 0,
+      cursorChanged: false,
+      errorMessage: message
+    });
+  }
+
+  return {
+    text: new TextDecoder().decode(responseBytes),
+    status: response.status,
+    finalUrl: guardedFinalUrl.url,
+    retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after"))
+  };
+}
+
 export async function pollApiProviderChannel(
   channel: SourceChannelRow,
   startedAt: string,
@@ -198,6 +300,88 @@ export async function pollApiProviderChannel(
   const apiConfig = parseApiChannelConfig(channel.configJson);
   const cursors = await dependencies.loadCursorMap(channel.channelId);
   const fetchedAt = new Date().toISOString();
+  if (apiConfig.adapter.adapterKey) {
+    let lastStatus: number | null = null;
+    let lastRetryAfterSeconds: number | null = null;
+    const adapterItems = await fetchApiAdapterItems(apiConfig.adapter.adapterKey, {
+      channel,
+      apiConfig,
+      fetchedAt,
+      fetchJson: async (url?: string) => {
+        const page = await fetchApiPage({
+          channel,
+          url: url ?? channel.fetchUrl ?? "",
+          apiConfig,
+          authConfigJson: channel.authConfigJson,
+          defaultUserAgent: dependencies.config.defaultUserAgent
+        });
+        lastStatus = page.status;
+        lastRetryAfterSeconds = page.retryAfterSeconds;
+        return page.payload;
+      },
+      fetchText: async (url?: string) => {
+        const page = await fetchApiText({
+          channel,
+          url: url ?? channel.fetchUrl ?? "",
+          apiConfig,
+          authConfigJson: channel.authConfigJson,
+          defaultUserAgent: dependencies.config.defaultUserAgent
+        });
+        lastStatus = page.status;
+        lastRetryAfterSeconds = page.retryAfterSeconds;
+        return { text: page.text, finalUrl: page.finalUrl, status: page.status };
+      }
+    });
+    const inputs: PersistArticleInput[] = adapterItems.slice(0, apiConfig.maxItemsPerPoll).map((item) => ({
+      channel,
+      externalArticleId: item.externalArticleId,
+      url: normalizeExternalUrl(item.url),
+      publishedAt: item.publishedAt,
+      title: item.title,
+      lead: item.lead,
+      body: item.body,
+      lang: item.lang ?? channel.language ?? null,
+      confidence: channel.language || item.lang ? 0.8 : 0.5,
+      rawPayload: {
+        ...item.rawPayload,
+        fetchedAt
+      }
+    }));
+    const latestPublishedAt = inputs.reduce<string | null>((latest, item) => {
+      return latest && latest > item.publishedAt ? latest : item.publishedAt;
+    }, null);
+    const { ingestedCount, duplicateCount } = await dependencies.persistInputsWithPreflight(
+      channel.channelId,
+      inputs
+    );
+
+    await dependencies.markChannelSuccess(channel, {
+      startedAt,
+      finishedAt: fetchedAt,
+      outcome: ingestedCount > 0 ? "new_content" : "no_change",
+      httpStatus: lastStatus,
+      retryAfterSeconds: lastRetryAfterSeconds,
+      fetchedItemCount: inputs.length,
+      newArticleCount: ingestedCount,
+      duplicateSuppressedCount: duplicateCount,
+      cursorChanged: latestPublishedAt !== (cursors.timestamp?.cursorValue ?? null),
+      errorMessage: null,
+      cursorUpdates: [
+        {
+          cursorType: "timestamp",
+          cursorValue: latestPublishedAt ?? fetchedAt,
+          cursorJson: {
+            provider: "api",
+            fetcher: "api_adapter",
+            adapterKey: apiConfig.adapter.adapterKey,
+            researchMode: apiConfig.adapter.researchMode
+          }
+        }
+      ]
+    });
+    return;
+  }
+
   const inputs: PersistArticleInput[] = [];
   const fetchedItems: unknown[] = [];
   let latestPublishedAt: string | null = null;

@@ -69,8 +69,12 @@ REGULATORY_POLICY_SOURCE_QUERIES = [
 ]
 
 HIDDEN_SIGNAL_QUERIES = [
-    '"{topic}" problem',
-    '"{topic}" too expensive',
-    '"{entity}" alternative',
+    '{topic} implementation problem',
+    '{topic} vendor replacement',
+    '{topic} migration alternative',
+    '{topic} implementation partner',
+    '"{entity}" migration problem',
+    '"{entity}" alternative migration',
+    '"{entity}" "too expensive" migration',
     '"moving away from {entity}"',
 ]

@@ -196,6 +196,7 @@ from .selection_profiles import (
     build_selection_profile_runtime_explain,
     coerce_selection_profile_runtime,
     resolve_profile_gray_zone_decision,
+    resolve_strict_candidate_signal_guard,
     selection_profile_allows_llm_review,
 )
 from .story_clusters import sync_story_cluster_and_verification
@@ -391,6 +392,7 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
             coerce_selection_profile_runtime=coerce_selection_profile_runtime,
             build_selection_profile_runtime_explain=build_selection_profile_runtime_explain,
             selection_profile_allows_llm_review=selection_profile_allows_llm_review,
+            resolve_strict_candidate_signal_guard=resolve_strict_candidate_signal_guard,
             resolve_criterion_gray_zone_runtime_resolution=resolve_criterion_gray_zone_runtime_resolution,
             build_llm_budget_gate_explain=build_llm_budget_gate_explain,
             resolve_profile_gray_zone_decision=resolve_profile_gray_zone_decision,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
@@ -30,6 +32,9 @@ from .worker_queues import (
     LLM_REVIEW_REQUESTED_EVENT,
     REINDEX_REQUESTED_EVENT,
 )
+
+LOGGER = logging.getLogger(__name__)
+HISTORICAL_REPLAY_LLM_REVIEW_TIMEOUT_SECONDS = 45
 
 REINDEX_RUNTIME_OPTION_KEYS = {
     "backfill",
@@ -78,17 +83,20 @@ def build_reindex_cancellation_key(
     job_kind: str,
     options_json: dict[str, Any],
 ) -> str:
+    normalized_options = json.dumps(
+        _normalize_reindex_cancellation_value(options_json),
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(normalized_options.encode("utf-8")).hexdigest()
     return ":".join(
         [
             "reindex",
             index_name,
             job_kind,
-            json.dumps(
-                _normalize_reindex_cancellation_value(options_json),
-                sort_keys=True,
-                separators=(",", ":"),
-                default=str,
-            ),
+            "sha256",
+            digest,
         ]
     )
 
@@ -392,13 +400,15 @@ async def replay_gray_zone_reviews_for_doc(
     *,
     doc_id: str,
     scope: str,
-) -> int:
+) -> dict[str, int]:
     prompt_template_id = await find_current_prompt_template_id(scope)
     if prompt_template_id is None:
-        return 0
+        return {"completed": 0, "failed": 0, "timedOut": 0}
 
     target_ids = await list_gray_zone_target_ids(doc_id=doc_id, scope=scope)
     replay_count = 0
+    failed_count = 0
+    timeout_count = 0
     for target_id in target_ids:
         review_event_id = str(uuid.uuid4())
         await ensure_published_outbox_event(
@@ -415,21 +425,45 @@ async def replay_gray_zone_reviews_for_doc(
                 "version": 1,
             },
         )
-        await process_llm_review(
-            SimpleNamespace(
-                data={
-                    "eventId": review_event_id,
-                    "docId": doc_id,
-                    "scope": scope,
-                    "targetId": target_id,
-                    "promptTemplateId": prompt_template_id,
-                    "historicalBackfill": True,
-                }
-            ),
-            "",
+        review_job = SimpleNamespace(
+            data={
+                "eventId": review_event_id,
+                "docId": doc_id,
+                "scope": scope,
+                "targetId": target_id,
+                "promptTemplateId": prompt_template_id,
+                "historicalBackfill": True,
+            }
         )
-        replay_count += 1
-    return replay_count
+        try:
+            await asyncio.wait_for(
+                process_llm_review(review_job, ""),
+                timeout=HISTORICAL_REPLAY_LLM_REVIEW_TIMEOUT_SECONDS,
+            )
+            replay_count += 1
+        except asyncio.TimeoutError:
+            timeout_count += 1
+            failed_count += 1
+            LOGGER.warning(
+                "Historical replay LLM review timed out.",
+                extra={
+                    "doc_id": doc_id,
+                    "scope": scope,
+                    "target_id": target_id,
+                    "timeout_seconds": HISTORICAL_REPLAY_LLM_REVIEW_TIMEOUT_SECONDS,
+                },
+            )
+        except Exception:
+            failed_count += 1
+            LOGGER.exception(
+                "Historical replay LLM review failed softly.",
+                extra={
+                    "doc_id": doc_id,
+                    "scope": scope,
+                    "target_id": target_id,
+                },
+            )
+    return {"completed": replay_count, "failed": failed_count, "timedOut": timeout_count}
 
 
 async def replay_historical_articles(

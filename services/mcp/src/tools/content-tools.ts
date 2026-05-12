@@ -12,6 +12,11 @@ import {
   resolveUniqueUuidPrefix,
   type McpToolDefinition
 } from "./shared";
+import {
+  buildArticleHoldQualitySummary,
+  explainArticleHoldQuality,
+  listArticleHoldQuality,
+} from "../operating-intelligence";
 
 type QueryablePool = Parameters<McpToolDefinition["handler"]>[0]["pool"];
 
@@ -55,6 +60,30 @@ const webResourceDetailSchema = {
     resourceId: { type: "string" },
     id: { type: "string" },
     entityId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const articleHoldsListSchema = {
+  type: "object",
+  properties: {
+    page: { type: "number" },
+    pageSize: { type: "number" },
+    candidateSignalTier: { type: "string" },
+    downstreamLossBucket: { type: "string" },
+    verificationState: { type: "string" },
+    docIds: { type: "array", items: { type: "string" } },
+    q: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const articleHoldExplainSchema = {
+  type: "object",
+  required: ["docId"],
+  properties: {
+    docId: { type: "string" },
+    id: { type: "string" },
   },
   additionalProperties: false,
 } as const;
@@ -297,6 +326,24 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
         duplicateKind: readOptionalString(args.duplicateKind) ?? undefined,
         q: readOptionalString(args.q) ?? undefined,
       })
+  ),
+  createReadTool(
+    "articles.holds.summary",
+    "Read DB-backed hold-quality counts split by candidate-signal tier, downstream bucket, verification state, and LLM-review pressure.",
+    articleHoldsListSchema,
+    async (context, args) => buildArticleHoldQualitySummary(context, args)
+  ),
+  createReadTool(
+    "articles.holds.list",
+    "List held article candidates with candidate-signal tier/evidence so replay chunks can target buyer_intent/project_intent instead of context-only noise.",
+    articleHoldsListSchema,
+    async (context, args) => listArticleHoldQuality(context, args)
+  ),
+  createReadTool(
+    "articles.holds.explain",
+    "Explain one held article candidate using final_selection_results and interest_filter_results candidateSignals evidence.",
+    articleHoldExplainSchema,
+    async (context, args) => explainArticleHoldQuality(context, args)
   ),
   createReadTool(
     "web_resources.list",

@@ -419,6 +419,48 @@ def _normalize_hypothesis_for_insert(row: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _claim_evidence_links(
+    *,
+    claim_rows: list[dict[str, Any]],
+    inserted_claims: list[dict[str, Any]],
+    inserted_evidence_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    evidence_by_url: dict[str, str] = {}
+    for item in inserted_evidence_items:
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        if not evidence_id:
+            continue
+        for key in ("canonical_url", "url"):
+            value = str(item.get(key) or "").strip()
+            if value:
+                evidence_by_url[value] = evidence_id
+
+    claims_by_key = {
+        str(row.get("normalized_claim") or row.get("title") or "").strip(): str(row.get("claim_id") or "").strip()
+        for row in inserted_claims
+        if str(row.get("claim_id") or "").strip()
+    }
+    links: list[dict[str, Any]] = []
+    for claim in claim_rows:
+        claim_key = str(claim.get("normalized_claim") or claim.get("title") or "").strip()
+        claim_id = claims_by_key.get(claim_key)
+        if not claim_id:
+            continue
+        for url in claim.get("support_evidence_urls") or []:
+            evidence_id = evidence_by_url.get(str(url).strip())
+            if not evidence_id:
+                continue
+            links.append(
+                {
+                    "claim_id": claim_id,
+                    "evidence_id": evidence_id,
+                    "relation": "supports",
+                    "strength": 0.8,
+                }
+            )
+    return links
+
+
 async def _persist_debate(
     *,
     repository: DiscoveryV3Repository,
@@ -479,8 +521,28 @@ async def _persist_execution_result(
         for row in execution_result.get("evidenceItems", [])
         if isinstance(row, dict)
     ]
+    inserted_evidence_items = []
     if evidence_items:
-        await repository.insert_evidence_items(evidence_items)
+        inserted_evidence_items = await repository.insert_evidence_items(evidence_items)
+
+    hidden_claim_rows = [
+        {
+            **row,
+            "target_id": row.get("target_id") or target_id,
+            "run_id": row.get("run_id") or run_id,
+        }
+        for row in execution_result.get("hiddenClaims", [])
+        if isinstance(row, dict)
+    ]
+    if hidden_claim_rows:
+        inserted_claims = await repository.insert_claims(hidden_claim_rows)
+        claim_evidence_links = _claim_evidence_links(
+            claim_rows=hidden_claim_rows,
+            inserted_claims=inserted_claims,
+            inserted_evidence_items=inserted_evidence_items,
+        )
+        if claim_evidence_links:
+            await repository.insert_claim_evidence_links(claim_evidence_links)
 
     domain_rows = [
         {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from typing import Any, Callable
 
 RUNTIME_OPTION_KEYS = {
@@ -35,13 +36,20 @@ def build_reindex_cancellation_key(
     job_kind: str,
     options_json: dict[str, Any],
 ) -> str:
-    normalized_options = _normalize_for_cancellation(options_json)
+    normalized_options = json.dumps(
+        _normalize_for_cancellation(options_json),
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(normalized_options.encode("utf-8")).hexdigest()
     return ":".join(
         [
             "reindex",
             index_name,
             job_kind,
-            json.dumps(normalized_options, sort_keys=True, separators=(",", ":"), default=str),
+            "sha256",
+            digest,
         ]
     )
 

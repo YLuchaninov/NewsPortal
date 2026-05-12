@@ -21,6 +21,39 @@ def _legacy_worker_main() -> Any:
     return legacy_main
 
 
+def _collect_article_shape_veto_reasons(article: Mapping[str, Any]) -> set[str]:
+    title = str(article.get("title") or "").strip().lower()
+    url = str(article.get("url") or article.get("source_url") or "").strip().lower()
+    reasons: set[str] = set()
+
+    if "github.com/" in url and (
+        "/pull/" in url
+        or "/commit/" in url
+        or title.startswith(("feat:", "fix:", "chore:", "refactor:", "docs:", "test:"))
+    ):
+        reasons.add("repo_internal_change_noise")
+
+    if any(host in url for host in ("linkedin.com/posts/", "linkedin.com/feed/update/")):
+        reasons.add("professional_network_post_noise")
+
+    if any(host in url for host in ("remotive.com/remote-jobs/", "remoteok.com/remote-jobs/")):
+        reasons.add("jobs_only_post_noise")
+
+    if title.startswith(("top ", "best ", "top 7 ", "top 10 ", "the best ")) or any(
+        fragment in title
+        for fragment in (
+            " top ",
+            " best ",
+            " we've tested",
+            "developers (202",
+            "software we've tested",
+        )
+    ):
+        reasons.add("directory_listicle_noise")
+
+    return reasons
+
+
 async def upsert_system_feed_result(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: str | uuid.UUID,
@@ -141,6 +174,8 @@ async def find_reusable_criterion_llm_review(
     doc_id: str | uuid.UUID,
     criterion_id: str | uuid.UUID,
     canonical_document_id: str | uuid.UUID | None,
+    prompt_template_id: str | uuid.UUID | None = None,
+    prompt_version: int | None = None,
 ) -> dict[str, Any] | None:
     canonical_uuid = None
     if str(canonical_document_id or "").strip():
@@ -150,6 +185,12 @@ async def find_reusable_criterion_llm_review(
             canonical_uuid = None
     doc_uuid = uuid.UUID(str(doc_id))
     criterion_uuid = uuid.UUID(str(criterion_id))
+    prompt_template_uuid = None
+    if str(prompt_template_id or "").strip():
+        try:
+            prompt_template_uuid = uuid.UUID(str(prompt_template_id))
+        except (TypeError, ValueError):
+            prompt_template_uuid = None
     await cursor.execute(
         """
         select
@@ -165,6 +206,8 @@ async def find_reusable_criterion_llm_review(
         join articles reviewed_article on reviewed_article.doc_id = lrl.doc_id
         where lrl.scope = 'criterion'
           and lrl.target_id = %s
+          and (%s::uuid is null or lrl.prompt_template_id = %s::uuid)
+          and (%s::integer is null or lrl.prompt_version = %s::integer)
           and (
             (%s::uuid is not null and reviewed_article.canonical_doc_id = %s::uuid)
             or (%s::uuid is null and lrl.doc_id = %s)
@@ -174,6 +217,10 @@ async def find_reusable_criterion_llm_review(
         """,
         (
             criterion_uuid,
+            prompt_template_uuid,
+            prompt_template_uuid,
+            int(prompt_version) if prompt_version is not None else None,
+            int(prompt_version) if prompt_version is not None else None,
             canonical_uuid,
             canonical_uuid,
             canonical_uuid,
@@ -414,10 +461,37 @@ async def upsert_final_selection_result(
             where coalesce((explain_json -> 'candidateSignals' ->> 'upliftedToGrayZone')::boolean, false)
           )::int as candidate_signal_uplift_count,
           count(*) filter (
+            where coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
+          )::int as candidate_signal_eligible_count,
+          count(*) filter (
+            where semantic_decision = 'match'
+              and coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
+              and coalesce(explain_json -> 'candidateSignals' ->> 'candidateSignalTier', '') in ('buyer_intent', 'project_intent')
+              and coalesce((explain_json -> 'candidateSignals' ->> 'positiveSignalCount')::int, 0) >= 3
+              and coalesce((explain_json -> 'candidateSignals' ->> 'positiveSignalHitCount')::int, 0) >= 4
+              and coalesce((explain_json -> 'candidateSignals' ->> 'noiseSignalCount')::int, 0) = 0
+              and jsonb_array_length(coalesce(explain_json -> 'filterReasons', '[]'::jsonb)) = 0
+          )::int as candidate_signal_strong_match_count,
+          count(*) filter (
+            where coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
+              and coalesce(explain_json -> 'candidateSignals' ->> 'candidateSignalTier', '') = 'context'
+          )::int as candidate_signal_context_count,
+          count(*) filter (
+            where coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
+              and coalesce(explain_json -> 'candidateSignals' ->> 'candidateSignalTier', '') = 'buyer_intent'
+          )::int as candidate_signal_buyer_intent_count,
+          count(*) filter (
+            where coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
+              and coalesce(explain_json -> 'candidateSignals' ->> 'candidateSignalTier', '') = 'project_intent'
+          )::int as candidate_signal_project_intent_count,
+          count(*) filter (
             where coalesce(explain_json -> 'llmReview' ->> 'source', '') = 'reused_canonical_llm_review'
           )::int as canonical_review_reused_count,
           count(*) filter (where technical_filter_state = 'filtered_out')::int as technical_filtered_out_count
         from interest_filter_results
+        join criteria c
+          on c.criterion_id = interest_filter_results.criterion_id
+          and c.enabled = true
         where doc_id = %s
           and filter_scope = 'system_criterion'
         """,
@@ -428,6 +502,9 @@ async def upsert_final_selection_result(
         """
         select explain_json -> 'filterReasons' as filter_reasons
         from interest_filter_results
+        join criteria c
+          on c.criterion_id = interest_filter_results.criterion_id
+          and c.enabled = true
         where doc_id = %s
           and filter_scope = 'system_criterion'
         """,
@@ -444,6 +521,25 @@ async def upsert_final_selection_result(
             if not reason:
                 continue
             filter_reason_counts[reason] = filter_reason_counts.get(reason, 0) + 1
+    for reason in _collect_article_shape_veto_reasons(article):
+        filter_reason_counts[reason] = max(
+            filter_reason_counts.get(reason, 0),
+            int(counts.get("total_filter_count") or 0),
+        )
+    candidate_signal_tier_counts = {
+        "context": int(counts.get("candidate_signal_context_count") or 0),
+        "buyer_intent": int(counts.get("candidate_signal_buyer_intent_count") or 0),
+        "project_intent": int(counts.get("candidate_signal_project_intent_count") or 0),
+    }
+    candidate_signal_tier = None
+    positive_candidate_tiers = {
+        key: value for key, value in candidate_signal_tier_counts.items() if value > 0
+    }
+    if positive_candidate_tiers:
+        candidate_signal_tier = max(
+            positive_candidate_tiers.items(),
+            key=lambda item: (item[1], {"context": 1, "buyer_intent": 2, "project_intent": 3}[item[0]]),
+        )[0]
     duplicate_article_count = 1
     if selection_context.get("canonicalDocumentId") is not None:
         await cursor.execute(
@@ -473,12 +569,28 @@ async def upsert_final_selection_result(
         candidate_signal_uplift_count=int(
             counts.get("candidate_signal_uplift_count") or 0
         ),
+        candidate_signal_eligible_count=int(
+            counts.get("candidate_signal_eligible_count") or 0
+        ),
+        candidate_signal_strong_match_count=int(
+            counts.get("candidate_signal_strong_match_count") or 0
+        ),
+        candidate_signal_tier=candidate_signal_tier,
+        candidate_signal_tier_counts=candidate_signal_tier_counts,
         filter_reason_counts=filter_reason_counts,
     )
     explain_json = coerce_json_object(summary.get("explain_json"))
     explain_json["candidateSignalUpliftCount"] = int(
         counts.get("candidate_signal_uplift_count") or 0
     )
+    explain_json["candidateSignalEligibleCount"] = int(
+        counts.get("candidate_signal_eligible_count") or 0
+    )
+    explain_json["candidateSignalStrongMatchCount"] = int(
+        counts.get("candidate_signal_strong_match_count") or 0
+    )
+    explain_json["candidateSignalTier"] = candidate_signal_tier
+    explain_json["candidateSignalTierCounts"] = candidate_signal_tier_counts
     explain_json["canonicalReviewReused"] = bool(
         counts.get("canonical_review_reused_count") or 0
     )
@@ -592,6 +704,12 @@ async def upsert_final_selection_result(
         "holdFilterCount": int(counts.get("hold_filter_count") or 0),
         "candidateSignalUpliftCount": int(
             counts.get("candidate_signal_uplift_count") or 0
+        ),
+        "candidateSignalEligibleCount": int(
+            counts.get("candidate_signal_eligible_count") or 0
+        ),
+        "candidateSignalStrongMatchCount": int(
+            counts.get("candidate_signal_strong_match_count") or 0
         ),
         "canonicalReviewReused": bool(counts.get("canonical_review_reused_count") or 0),
         "canonicalReviewReusedCount": int(

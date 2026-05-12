@@ -5,7 +5,9 @@ from typing import Any
 
 from fastapi import APIRouter, Body, FastAPI, Query
 
+from services.api.app import discovery_source_priors_api as source_priors
 from services.api.app import discovery_v3_api as v3
+from services.workers.app.task_engine.adapters.web_search import DdgsWebSearchAdapter
 
 
 def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
@@ -28,9 +30,15 @@ def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
 
     router.get("/maintenance/discovery/runs")(_list_runs)
     router.post("/maintenance/discovery/runs", status_code=201)(v3.create_run)
+    router.post("/maintenance/discovery/runs/dispatch-queued")(v3.dispatch_queued_runs)
     router.get("/maintenance/discovery/runs/{run_id}")(_get_run)
     router.post("/maintenance/discovery/runs/{run_id}/diagnose")(v3.diagnose_run)
     router.post("/maintenance/discovery/runs/{run_id}/cancel")(v3.cancel_run)
+
+    router.get("/maintenance/discovery/source-priors")(_list_source_priors)
+    router.post("/maintenance/discovery/source-priors/evaluate")(source_priors.evaluate_source_prior)
+    router.post("/maintenance/discovery/source-priors/apply")(source_priors.apply_source_prior)
+    router.get("/maintenance/discovery/search/ddgs")(_ddgs_search)
 
     for public_name, kind in (
         ("hypotheses", "hypotheses"),
@@ -70,6 +78,21 @@ def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     router.post("/maintenance/discovery/sources/{channel_id}/replace-candidates")(v3.replace_source_candidates)
 
     app.include_router(router)
+
+
+def _ddgs_search(
+    q: str = Query(..., min_length=1, max_length=500),
+    count: int = Query(10, ge=1, le=20),
+    resultType: str = Query("text", pattern="^(text|news)$"),
+    timeRange: str | None = Query(default=None, pattern="^(day|week|month|year)$"),
+) -> dict[str, Any]:
+    adapter = DdgsWebSearchAdapter()
+    return adapter.search(
+        query=q,
+        count=count,
+        result_type=resultType,
+        time_range=timeRange,
+    )
 
 
 def _list_targets(
@@ -121,6 +144,24 @@ def _list_runs(
 
 def _get_run(run_id: str) -> dict[str, Any]:
     return v3.get_v3_record("runs", run_id)
+
+
+def _list_source_priors(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(50, ge=1, le=200),
+    targetId: str | None = None,
+    channelId: str | None = None,
+    endpointId: str | None = None,
+    contractId: str | None = None,
+) -> dict[str, Any]:
+    return source_priors.list_source_priors(
+        page=page,
+        page_size=pageSize,
+        target_id=targetId,
+        channel_id=channelId,
+        endpoint_id=endpointId,
+        contract_id=contractId,
+    )
 
 
 def _build_list_handler(kind: str):

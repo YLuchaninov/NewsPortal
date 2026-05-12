@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import traceback
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -211,6 +212,9 @@ async def process_reindex_with_dependencies(
                     await deps.record_processed_event(cursor, REINDEX_CONSUMER, event_id)
         raise
     except Exception as error:
+        error_text = "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
         async with await deps.open_connection() as connection:
             async with connection.transaction():
                 async with connection.cursor() as cursor:
@@ -224,7 +228,7 @@ async def process_reindex_with_dependencies(
                           updated_at = now()
                         where reindex_job_id = %s
                         """,
-                        (str(error), reindex_job_id),
+                        (error_text, reindex_job_id),
                     )
                     await deps.record_processed_event(cursor, REINDEX_CONSUMER, event_id)
         return {

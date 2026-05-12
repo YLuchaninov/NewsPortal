@@ -2,6 +2,7 @@ import {
   executeBulkImportWithPool,
   formatBulkImportSuccessMessage,
   parseBulkChannels,
+  planChannelBulkOnboardingWithPool,
   planBulkImportWithPool,
   type BulkImportChannel,
   type BulkImportExecutionBreakdown,
@@ -132,6 +133,10 @@ export async function planBulkImport(
   channels: ParsedBulkImportChannel[]
 ): Promise<BulkImportPlan> {
   return planBulkImportWithPool(getPool(), channels);
+}
+
+export async function planBulkOnboarding(channelsPayload: unknown) {
+  return planChannelBulkOnboardingWithPool(getPool(), channelsPayload);
 }
 
 export async function executeBulkImport(

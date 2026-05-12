@@ -25,39 +25,63 @@ interface HnChannelRow {
   runtimeMaxPollIntervalSeconds: number | null;
 }
 
+interface GoogleRssChannelRow {
+  channelId: string;
+  pollIntervalSeconds: number;
+  adaptiveEnabled: boolean | null;
+  runtimeMaxPollIntervalSeconds: number | null;
+}
+
 function hasFlag(flag: string): boolean {
   return process.argv.slice(2).includes(flag);
 }
 
-async function quarantineGoogleRssChannels(client: PoolClient): Promise<number> {
-  const updated = await client.query<{ channel_id: string }>(
+async function deprioritizeGoogleRssChannels(client: PoolClient): Promise<number> {
+  const rows = await client.query<GoogleRssChannelRow>(
     `
-      update source_channels
-      set
-        is_active = false,
-        updated_at = now()
-      where provider_type = 'rss'
-        and is_active = true
-        and split_part(split_part(fetch_url, '://', 2), '/', 1) = 'news.google.com'
-      returning channel_id::text
+      select
+        sc.channel_id::text as "channelId",
+        sc.poll_interval_seconds as "pollIntervalSeconds",
+        runtime.adaptive_enabled as "adaptiveEnabled",
+        runtime.max_poll_interval_seconds as "runtimeMaxPollIntervalSeconds"
+      from source_channels sc
+      left join source_channel_runtime_state runtime on runtime.channel_id = sc.channel_id
+      where sc.provider_type = 'rss'
+        and sc.is_active = true
+        and split_part(split_part(sc.fetch_url, '://', 2), '/', 1) = 'news.google.com'
     `
   );
 
-  if ((updated.rowCount ?? 0) > 0) {
+  let updatedCount = 0;
+  for (const row of rows.rows) {
+    const nextPollIntervalSeconds = Math.max(row.pollIntervalSeconds, 86400);
+    if (nextPollIntervalSeconds === row.pollIntervalSeconds) {
+      continue;
+    }
     await client.query(
       `
-        update source_channel_runtime_state
+        update source_channels
         set
-          next_due_at = null,
-          adaptive_reason = 'article_yield_google_quarantine',
+          poll_interval_seconds = $2,
           updated_at = now()
-        where channel_id = any($1::uuid[])
+        where channel_id = $1
       `,
-      [updated.rows.map((row) => row.channel_id)]
+      [row.channelId, nextPollIntervalSeconds]
     );
+    await updateRuntimeSchedule(client, {
+      channelId: row.channelId,
+      adaptiveEnabled: row.adaptiveEnabled ?? true,
+      pollIntervalSeconds: nextPollIntervalSeconds,
+      maxPollIntervalSeconds: normalizeMaxPollIntervalSeconds(
+        nextPollIntervalSeconds,
+        row.runtimeMaxPollIntervalSeconds
+      ),
+      reason: "article_yield_google_deprioritized"
+    });
+    updatedCount += 1;
   }
 
-  return updated.rowCount ?? 0;
+  return updatedCount;
 }
 
 async function updateRuntimeSchedule(
@@ -204,7 +228,7 @@ async function tuneHnChannels(client: PoolClient): Promise<{
 }
 
 async function applyRemediation(client: PoolClient): Promise<Record<string, unknown>> {
-  const googleChannelsQuarantined = await quarantineGoogleRssChannels(client);
+  const googleChannelsDeprioritized = await deprioritizeGoogleRssChannels(client);
   const hnTuning = await tuneHnChannels(client);
 
   return {
@@ -212,7 +236,7 @@ async function applyRemediation(client: PoolClient): Promise<Record<string, unkn
       mode: "skipped",
       reason: "runtime_truth_lives_in_admin"
     },
-    googleChannelsQuarantined,
+    googleChannelsDeprioritized,
     hnTuning
   };
 }

@@ -37,14 +37,17 @@ interface BulkChannelImportProps {
 
 interface BulkImportPreflightItem {
   index: number;
-  providerType: AdminChannelProviderType;
-  name: string;
-  fetchUrl: string;
-  action: "create" | "update";
-  matchType: "create" | "channelId" | "fetchUrl";
+  providerType: AdminChannelProviderType | string | null;
+  name: string | null;
+  fetchUrl: string | null;
+  status?: string;
+  action: "create" | "update" | "skip" | null;
+  matchType: "create" | "channelId" | "fetchUrl" | "duplicate" | null;
   channelId: string | null;
   existingName: string | null;
   existingFetchUrl: string | null;
+  warnings?: string[];
+  errors?: string[];
 }
 
 interface BulkImportProviderBreakdown {
@@ -62,6 +65,9 @@ interface BulkImportPreflightResult {
   matchedByFetchUrl: number;
   items: BulkImportPreflightItem[];
   providerBreakdown: BulkImportProviderBreakdown[];
+  blocked?: BulkImportPreflightItem[];
+  warnings?: string[];
+  planFingerprint?: string;
 }
 
 interface BulkImportViewModel {
@@ -568,6 +574,15 @@ function formatProviderBreakdown(
     .join(", ");
 }
 
+function formatProviderLabel(providerType: AdminChannelProviderType | string | null): string {
+  return providerType === "rss" ||
+    providerType === "website" ||
+    providerType === "api" ||
+    providerType === "email_imap"
+    ? formatAdminChannelProviderLabel(providerType)
+    : String(providerType ?? "unknown");
+}
+
 export function BulkChannelImport({
   action,
   preflightAction,
@@ -587,6 +602,7 @@ export function BulkChannelImport({
   const viewModel = getBulkChannelImportViewModel(exampleMode);
   const updateItems =
     preflightResult?.items.filter((item) => item.action === "update") ?? [];
+  const blockedItems = preflightResult?.blocked ?? [];
 
   function resetOverwriteConfirmation() {
     if (confirmOverwriteRef.current) {
@@ -670,6 +686,9 @@ export function BulkChannelImport({
     if (!result) {
       return;
     }
+    if ((result.blocked?.length ?? 0) > 0) {
+      return;
+    }
 
     if (result.wouldUpdate > 0) {
       setConfirmOpen(true);
@@ -734,11 +753,23 @@ export function BulkChannelImport({
           />
         </FormField>
         {preflightResult && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-              Preflight ready
+          <div className={`rounded-md border p-2.5 ${
+            blockedItems.length > 0
+              ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20"
+              : "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/40 dark:bg-emerald-950/20"
+          }`}>
+            <p className={`text-xs font-medium ${
+              blockedItems.length > 0
+                ? "text-amber-700 dark:text-amber-300"
+                : "text-emerald-700 dark:text-emerald-300"
+            }`}>
+              {blockedItems.length > 0 ? "Preflight blocked" : "Preflight ready"}
             </p>
-            <p className="mt-1 text-[11px] text-emerald-700/90 dark:text-emerald-300/90">
+            <p className={`mt-1 text-[11px] ${
+              blockedItems.length > 0
+                ? "text-amber-700/90 dark:text-amber-300/90"
+                : "text-emerald-700/90 dark:text-emerald-300/90"
+            }`}>
               {preflightResult.wouldCreate} create
               {preflightResult.wouldCreate === 1 ? "" : "s"} and{" "}
               {preflightResult.wouldUpdate} update
@@ -753,6 +784,17 @@ export function BulkChannelImport({
                 <> {preflightResult.matchedByFetchUrl} matched by fetch URL.</>
               )}
             </p>
+            {blockedItems.length > 0 && (
+              <ul className="mt-2 space-y-1 text-[11px] text-amber-700/90 dark:text-amber-300/90">
+                {blockedItems.slice(0, 5).map((item) => (
+                  <li key={`${item.index}-${item.providerType}-${item.fetchUrl}`}>
+                    Row {item.index + 1}: status={item.status ?? "blocked"}
+                    {item.warnings?.[0] ? `, ${item.warnings[0]}` : ""}
+                    {item.errors?.[0] ? `, ${item.errors[0]}` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {validationErrors.length > 0 && (
@@ -807,7 +849,7 @@ export function BulkChannelImport({
           <ul className="mt-2 space-y-1 text-[11px] text-amber-700/90 dark:text-amber-300/90">
             {updateItems.slice(0, 5).map((item) => (
               <li key={`${item.index}-${item.providerType}-${item.fetchUrl}`}>
-                Row {item.index + 1}: {formatAdminChannelProviderLabel(item.providerType)}{" "}
+                Row {item.index + 1}: {formatProviderLabel(item.providerType)}{" "}
                 {item.name} via{" "}
                 {item.matchType === "fetchUrl" ? "fetchUrl match" : "channelId"} to{" "}
                 <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">

@@ -19,7 +19,20 @@ class DiscoveryV3Repository:
         return psycopg.connect(self._database_url, row_factory=dict_row)
 
     async def list_active_system_interests(self) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(self._query_all, "select * from interest_templates where is_active = true", ())
+        return await asyncio.to_thread(
+            self._query_all,
+            """
+            select it.*,
+                   sp.definition_json as selection_profile_definition_json,
+                   sp.policy_json as selection_profile_policy_json
+            from interest_templates it
+            left join selection_profiles sp
+              on sp.source_interest_template_id = it.interest_template_id
+             and sp.profile_family = 'compatibility_interest_template'
+            where it.is_active = true
+            """,
+            (),
+        )
 
     async def list_active_user_interests(self) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._query_all, "select * from user_interests where is_active = true", ())
@@ -208,6 +221,12 @@ class DiscoveryV3Repository:
 
     async def insert_evidence_items(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._insert_many_json_rows, "discovery_evidence_items", rows)
+
+    async def insert_claims(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._insert_many_json_rows, "discovery_claims", rows)
+
+    async def insert_claim_evidence_links(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._insert_many_json_rows, "discovery_claim_evidence", rows)
 
     async def upsert_domain_inventory(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._insert_many_json_rows, "discovery_domain_inventory", rows)
@@ -492,9 +511,46 @@ class DiscoveryV3Repository:
                     float(hypothesis.get("confidence_score", 0.5)),
                 ),
             )
+            if row is None:
+                row = self._find_reusable_hypothesis_for_execution(hypothesis)
             if row:
+                if hypothesis.get("run_id"):
+                    row = {**row, "run_id": hypothesis["run_id"]}
                 rows.append(row)
         return rows
+
+    def _find_reusable_hypothesis_for_execution(self, hypothesis: dict[str, Any]) -> dict[str, Any] | None:
+        """Find an existing unexecuted dedupe match for a later approved run."""
+
+        return self._query_one(
+            """
+            select *
+            from discovery_hypotheses
+            where target_id = %s
+              and hypothesis_type = %s
+              and signal_mode = %s
+              and source_role = %s
+              and coalesce(provider_id, '') = coalesce(%s, '')
+              and coalesce(query_text, '') = coalesce(%s, '')
+              and coalesce(seed_url, '') = coalesce(%s, '')
+              and coalesce(seed_domain, '') = coalesce(%s, '')
+              and coalesce(seed_entity, '') = coalesce(%s, '')
+              and status in ('queued', 'failed')
+            order by created_at asc
+            limit 1
+            """,
+            (
+                hypothesis.get("target_id"),
+                hypothesis.get("hypothesis_type"),
+                hypothesis.get("signal_mode", "direct"),
+                hypothesis.get("source_role"),
+                hypothesis.get("provider_id"),
+                hypothesis.get("query_text"),
+                hypothesis.get("seed_url"),
+                hypothesis.get("seed_domain"),
+                hypothesis.get("seed_entity"),
+            ),
+        )
 
     def _insert_json_row(self, table: str, payload: dict[str, Any], id_column: str) -> dict[str, Any]:
         rows = self._insert_many_json_rows(table, [payload])

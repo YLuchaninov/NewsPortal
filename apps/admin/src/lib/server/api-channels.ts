@@ -53,6 +53,7 @@ export interface NormalizedApiAdminChannelInput {
   publishedAtField: string;
   externalIdField: string;
   languageField: string;
+  adapter: ApiChannelConfig["adapter"];
   enrichmentEnabled: boolean;
   enrichmentMinBodyLength: number;
   authorizationHeaderUpdate: AuthorizationHeaderUpdate;
@@ -119,6 +120,20 @@ function normalizeApiConfig(payload: Record<string, unknown>): ApiChannelConfig 
       payload.languageField ?? DEFAULT_API_CONFIG.languageField,
       "languageField"
     ),
+    adapterKey: payload.adapterKey,
+    researchMode: payload.researchMode,
+    accessKind: payload.accessKind,
+    sourceRole: payload.sourceRole,
+    contentKind: payload.contentKind,
+    query: payload.query,
+    platform: payload.platform,
+    searchQuery: payload.searchQuery,
+    organization: payload.organization,
+    tags: payload.tags,
+    githubEvidence: payload.githubEvidence,
+    tosRisk: payload.tosRisk,
+    requiresProductionReplacement: payload.requiresProductionReplacement,
+    adapter: payload.adapter,
   });
 }
 
@@ -164,6 +179,7 @@ export function parseApiAdminChannelInput(payload: Record<string, unknown>): Nor
     publishedAtField: config.publishedAtField,
     externalIdField: config.externalIdField,
     languageField: config.languageField,
+    adapter: config.adapter,
     enrichmentEnabled: readBoolean(payload.enrichmentEnabled, true, "enrichmentEnabled"),
     enrichmentMinBodyLength: readPositiveInteger(
       payload.enrichmentMinBodyLength,
@@ -323,6 +339,7 @@ export async function upsertApiChannels(
         publishedAtField: channel.publishedAtField,
         externalIdField: channel.externalIdField,
         languageField: channel.languageField,
+        adapter: channel.adapter,
       });
 
       if (channel.channelId) {

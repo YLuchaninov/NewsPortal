@@ -9,6 +9,7 @@ import {
   executeBulkImport,
   formatBulkImportSuccessMessage,
   parseBulkChannels,
+  planBulkOnboarding,
   planBulkImport,
   readBulkPayload
 } from "./bulk/shared";
@@ -27,6 +28,15 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const bulkPayload = action.context.payload;
+    const onboardingPlan = await planBulkOnboarding(bulkPayload.channelsPayload);
+    if (onboardingPlan.blocked.length > 0) {
+      throw new Error(
+        `Bulk import has ${onboardingPlan.blocked.length} blocked source${onboardingPlan.blocked.length === 1 ? "" : "s"}: ${onboardingPlan.blocked
+          .slice(0, 3)
+          .map((item) => `row ${item.index + 1} status=${item.status}`)
+          .join(", ")}. Run validation and use channel alternatives or a supported provider shape before importing.`
+      );
+    }
     const channels = parseBulkChannels(bulkPayload.channelsPayload);
     const importPlan = await planBulkImport(channels);
     const overwriteCount = importPlan.wouldUpdate;

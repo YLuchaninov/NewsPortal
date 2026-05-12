@@ -63,6 +63,30 @@ test("parseApiAdminChannelInput normalizes API admin payload fields", () => {
     publishedAtField: "published_at",
     externalIdField: "external_id",
     languageField: "lang",
+    adapter: {
+      adapterKey: null,
+      researchMode: "production",
+      accessKind: null,
+      sourceRole: null,
+      contentKind: null,
+      query: null,
+      platform: null,
+      organization: null,
+      searchQuery: {
+        query: null,
+        platform: null,
+        siteFilter: null,
+        locale: null,
+        timeRange: null,
+        maxResults: 20,
+        searchProvider: null,
+        directCoverage: false,
+      },
+      tags: [],
+      githubEvidence: [],
+      tosRisk: "unknown",
+      requiresProductionReplacement: false,
+    },
     enrichmentEnabled: false,
     enrichmentMinBodyLength: 750,
     authorizationHeaderUpdate: {
@@ -70,6 +94,30 @@ test("parseApiAdminChannelInput normalizes API admin payload fields", () => {
       authorizationHeader: null,
     },
   });
+});
+
+test("parseApiAdminChannelInput preserves adapter metadata for MCP onboarding", () => {
+  const channel = parseApiAdminChannelInput({
+    providerType: "api",
+    name: "HN contractor search",
+    fetchUrl: "https://hn.algolia.com/api/v1/search_by_date?query=looking%20for%20contractor",
+    adapterKey: "hn_algolia_search",
+    researchMode: "production",
+    accessKind: "official_free",
+    sourceRole: "community_search",
+    contentKind: "discussion",
+    query: "looking for contractor",
+    platform: "Hacker News Algolia",
+    tags: ["contractor", "agency"],
+    tosRisk: "low",
+    requiresProductionReplacement: false,
+  });
+
+  assert.equal(channel.adapter.adapterKey, "hn_algolia_search");
+  assert.equal(channel.adapter.sourceRole, "community_search");
+  assert.equal(channel.adapter.query, "looking for contractor");
+  assert.deepEqual(channel.adapter.tags, ["contractor", "agency"]);
+  assert.equal(channel.adapter.requiresProductionReplacement, false);
 });
 
 test("parseApiAdminChannelInput supports replace, preserve, and clear authorization header semantics", () => {

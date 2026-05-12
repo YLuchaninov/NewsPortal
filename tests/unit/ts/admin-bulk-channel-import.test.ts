@@ -18,6 +18,11 @@ import {
   planBulkImportWithPool,
   readBulkPayload
 } from "../../../apps/admin/src/pages/bff/admin/channels/bulk/shared.ts";
+import {
+  applyChannelBulkOnboardingWithPool,
+  planChannelBulkOnboardingWithPool
+} from "../../../packages/control-plane/src/channel-bulk-onboarding.ts";
+import { planChannelAlternativesWithPool } from "../../../packages/control-plane/src/channel-alternatives.ts";
 
 const adminSession: AdminActionSession = {
   userId: "admin-user-1",
@@ -259,6 +264,398 @@ test("planBulkImportWithPool groups mixed provider rows and preserves original i
   assert.equal(
     (plan.channels[0]?.channel as { channelId?: string }).channelId,
     "website-123"
+  );
+});
+
+test("channel bulk onboarding treats query-backed RSS feeds as distinct sources", async () => {
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params?.[0], ["rss"]);
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+
+  const plan = await planChannelBulkOnboardingWithPool(
+    fakePool as never,
+    [
+      {
+        providerType: "rss",
+        name: "HN Ask Shopify contractor search",
+        fetchUrl: "https://hnrss.org/ask?q=shopify+contractor&count=20"
+      },
+      {
+        providerType: "rss",
+        name: "HN Ask CRM migration partner search",
+        fetchUrl: "https://hnrss.org/ask?q=crm+migration+partner&count=20"
+      },
+      {
+        providerType: "rss",
+        name: "HN Ask Shopify contractor search duplicate window",
+        fetchUrl: "https://hnrss.org/ask?q=shopify+contractor&count=50&utm_source=test"
+      },
+      {
+        providerType: "rss",
+        name: "Google News SMB CRM vendor search",
+        fetchUrl:
+          "https://news.google.com/rss/search?q=%22small+business%22+CRM+vendor+partner&hl=en-US&gl=US&ceid=US:en"
+      },
+      {
+        providerType: "rss",
+        name: "Google News SMB ERP vendor search",
+        fetchUrl:
+          "https://news.google.com/rss/search?q=%22small+business%22+ERP+vendor+partner&hl=en-US&gl=US&ceid=US:en"
+      }
+    ],
+    { mode: "allow_overrides" }
+  );
+
+  assert.equal(plan.summary.duplicate, 1);
+  assert.equal(plan.items[0]?.status, "ready_create");
+  assert.equal(plan.items[1]?.status, "ready_create");
+  assert.equal(plan.items[2]?.status, "duplicate");
+  assert.equal(plan.items[3]?.status, "ready_create");
+  assert.equal(plan.items[4]?.status, "ready_create");
+});
+
+test("channel bulk onboarding treats query-backed API adapter channels as distinct sources", async () => {
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params?.[0], ["api"]);
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+
+  const plan = await planChannelBulkOnboardingWithPool(
+    fakePool as never,
+    [
+      {
+        providerType: "api",
+        name: "HN contractor search",
+        fetchUrl: "https://hn.algolia.com/api/v1/search_by_date?query=contractor",
+        adapterKey: "hn_algolia_search",
+      },
+      {
+        providerType: "api",
+        name: "HN MVP search",
+        fetchUrl: "https://hn.algolia.com/api/v1/search_by_date?query=mvp",
+        adapterKey: "hn_algolia_search",
+      },
+      {
+        providerType: "api",
+        name: "HN contractor search duplicate window",
+        fetchUrl: "https://hn.algolia.com/api/v1/search_by_date?query=contractor&utm_source=test",
+        adapterKey: "hn_algolia_search",
+      }
+    ],
+    { mode: "allow_overrides" }
+  );
+
+  assert.equal(plan.summary.duplicate, 1);
+  assert.equal(plan.items[0]?.status, "ready_create");
+  assert.equal(plan.items[1]?.status, "ready_create");
+  assert.equal(plan.items[2]?.status, "duplicate");
+});
+
+
+test("channel bulk onboarding blocks webpage URLs masquerading as RSS", async () => {
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params, [["rss"], ["https://example.com/products/widget"]]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+  const sources = [
+    {
+      providerType: "rss",
+      name: "Product page",
+      fetchUrl: "https://example.com/products/widget"
+    }
+  ];
+
+  const plan = await planChannelBulkOnboardingWithPool(fakePool as never, sources, {
+    mode: "allow_overrides"
+  });
+
+  assert.equal(plan.items[0]?.status, "needs_override");
+  assert.equal(plan.blocked.length, 1);
+  assert.equal(plan.items[0]?.validation?.classification, "website_page");
+  assert.equal(plan.items[0]?.validation?.blocker, "rss_requires_feed_evidence");
+  assert.equal(plan.items[0]?.validation?.recommendedProviderType, "website");
+
+  await assert.rejects(
+    () =>
+      applyChannelBulkOnboardingWithPool(fakePool as never, "admin-user-1", sources, {
+        planFingerprint: plan.planFingerprint,
+        mode: "allow_overrides",
+        confirm: true
+      }),
+    /overrideReason/
+  );
+});
+
+test("channel bulk onboarding accepts non-feed-shaped RSS URL only with valid feed probe evidence", async () => {
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params, [["rss"], ["https://example.com/news"]]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+
+  const plan = await planChannelBulkOnboardingWithPool(
+    fakePool as never,
+    [
+      {
+        providerType: "rss",
+        name: "Validated feed at non-feed URL",
+        fetchUrl: "https://example.com/news",
+        feedProbeEvidence: {
+          url: "https://example.com/news",
+          final_url: "https://example.com/news",
+          is_valid_rss: true
+        }
+      }
+    ]
+  );
+
+  assert.equal(plan.items[0]?.status, "ready_create");
+  assert.equal(plan.items[0]?.validation?.classification, "website_page");
+  assert.equal(plan.items[0]?.validation?.blocker, null);
+});
+
+test("channel bulk onboarding marks API-like URLs as mapping-required", async () => {
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params, [["rss"], ["https://example.com/api/items.json"]]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+
+  const plan = await planChannelBulkOnboardingWithPool(fakePool as never, [
+    {
+      providerType: "rss",
+      name: "JSON API as RSS",
+      fetchUrl: "https://example.com/api/items.json"
+    }
+  ]);
+
+  assert.equal(plan.items[0]?.status, "api_mapping_required");
+  assert.equal(plan.items[0]?.validation?.classification, "api_like");
+  assert.equal(plan.items[0]?.validation?.recommendedProviderType, "api");
+});
+
+test("channel bulk onboarding blocks needs-probe alternatives until feed evidence exists", async () => {
+  const fakePool = {
+    async query(sql: string) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        return { rows: [] };
+      }
+      if (sql.includes("provider_type = 'rss'")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+
+  const blockedPlan = await planChannelBulkOnboardingWithPool(fakePool as never, [
+    {
+      providerType: "rss",
+      name: "Unprobed alternative",
+      fetchUrl: "https://example.com/feed.xml",
+      sourceCandidateStatus: "needs_probe"
+    }
+  ]);
+
+  assert.equal(blockedPlan.items[0]?.status, "unsupported");
+  assert.match(blockedPlan.items[0]?.warnings.join("\n") ?? "", /needs_probe/);
+
+  const acceptedPlan = await planChannelBulkOnboardingWithPool(fakePool as never, [
+    {
+      providerType: "rss",
+      name: "Validated alternative",
+      fetchUrl: "https://example.com/feed.xml",
+      sourceCandidateStatus: "needs_probe",
+      feedProbeEvidence: {
+        is_valid_rss: true,
+        feed_url: "https://example.com/feed.xml"
+      }
+    }
+  ]);
+
+  assert.equal(acceptedPlan.items[0]?.status, "ready_create");
+});
+
+test("channel alternatives plan returns feed-probe candidates without creating channels", async () => {
+  const fakePool = {
+    async query(sql: string) {
+      throw new Error(`Unexpected pool query for URL-only alternatives: ${sql}`);
+    }
+  };
+  const fetchCalls: string[] = [];
+
+  const plan = await planChannelAlternativesWithPool(fakePool as never, {
+    urls: ["https://example.com/news"],
+    includeFeedProbe: true,
+    maxCandidates: 10,
+    fetchImpl: (async (input) => {
+      fetchCalls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          probed_feeds: [
+            {
+              url: "https://example.com/news",
+              feed_url: "https://example.com/feed.xml",
+              final_url: "https://example.com/feed.xml",
+              is_valid_rss: true,
+              sample_entries: [{ title: "Recent item" }]
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }) as typeof fetch
+  });
+
+  const feedCandidate = plan.candidates.find((candidate) => candidate.strategy === "feed_probe");
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(feedCandidate?.providerType, "rss");
+  assert.equal(feedCandidate?.fetchUrl, "https://example.com/feed.xml");
+  assert.equal(feedCandidate?.status, "candidate");
+  assert.equal(feedCandidate?.validation.classification, "feed_like");
+  assert.ok(plan.candidates.every((candidate) => candidate.sourceChannelId === null));
+});
+
+test("channel bulk onboarding applies fetchUrl matches as updates after override", async () => {
+  const existingChannelId = "rss-existing-1";
+  const fetchUrl = "https://hnrss.org/ask?q=looking+for+developer&count=100&link=comments";
+  const clientQueries: Array<{ sql: string; params?: unknown[] }> = [];
+  const fakeClient = {
+    async query(sql: string, params?: unknown[]) {
+      clientQueries.push({ sql, params });
+      if (sql === "begin" || sql === "commit" || sql === "rollback") {
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes("select auth_config_json")) {
+        assert.equal(params?.[0], existingChannelId);
+        return { rows: [{ auth_config_json: null }], rowCount: 1 };
+      }
+      if (sql.includes("update source_channels")) {
+        assert.equal(params?.[0], existingChannelId);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("insert into source_channel_runtime_state")) {
+        assert.equal(params?.[0], existingChannelId);
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected client query: ${sql}`);
+    },
+    release() {}
+  };
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("provider_type = any($1::text[])")) {
+        assert.deepEqual(params, [["rss"], [fetchUrl]]);
+        return {
+          rows: [
+            {
+              channel_id: existingChannelId,
+              provider_type: "rss",
+              fetch_url: fetchUrl
+            }
+          ]
+        };
+      }
+      if (sql.includes("provider_type = 'rss'") && sql.includes("channel_id::text = any")) {
+        assert.deepEqual(params, [[existingChannelId]]);
+        return {
+          rows: [
+            {
+              channel_id: existingChannelId,
+              name: "Existing HNRSS",
+              fetch_url: fetchUrl
+            }
+          ]
+        };
+      }
+      if (sql.includes("from source_providers")) {
+        return { rows: [{ provider_id: "rss-provider-1" }] };
+      }
+      if (sql.includes("insert into audit_log")) {
+        assert.equal(params?.[1], "channel_updated");
+        assert.equal(params?.[3], existingChannelId);
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    async connect() {
+      return fakeClient;
+    }
+  };
+  const sources = [
+    {
+      providerType: "rss",
+      name: "HN looking for developer",
+      fetchUrl,
+      language: "en",
+      isActive: true
+    }
+  ];
+
+  const plan = await planChannelBulkOnboardingWithPool(fakePool as never, sources, {
+    mode: "allow_overrides"
+  });
+  assert.equal(plan.summary.matchedByFetchUrl, 1);
+  assert.equal(plan.items[0]?.action, "update");
+  assert.equal(plan.items[0]?.status, "ready_update");
+
+  await assert.rejects(
+    () =>
+      applyChannelBulkOnboardingWithPool(fakePool as never, "admin-user-1", sources, {
+        mode: "allow_overrides",
+        planFingerprint: plan.planFingerprint
+      }),
+    /confirm=true/
+  );
+
+  const result = await applyChannelBulkOnboardingWithPool(
+    fakePool as never,
+    "admin-user-1",
+    sources,
+    {
+      mode: "allow_overrides",
+      planFingerprint: plan.planFingerprint,
+      confirm: true
+    }
+  );
+
+  assert.deepEqual(result.createdChannelIds, []);
+  assert.deepEqual(result.updatedChannelIds, [existingChannelId]);
+  assert.equal(result.summary.createdCount, 0);
+  assert.equal(result.summary.updatedCount, 1);
+  assert.equal(result.items[0]?.status, "updated");
+  assert.equal(result.items[0]?.channelId, existingChannelId);
+  assert.equal(
+    clientQueries.some((entry) => entry.sql.includes("insert into source_channels")),
+    false
   );
 });
 

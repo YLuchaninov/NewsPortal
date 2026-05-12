@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 
 from services.api.app import discovery_v3_api
+from services.api.app import discovery_source_priors_api
 from services.api.app.routes.discovery_routes import register_discovery_routes
 from services.workers.app.discovery_v3_coverage import compute_coverage
 from services.workers.app.discovery_v3_graph import compile_interest_graph
@@ -28,7 +29,11 @@ class DiscoveryV3CutoverTests(unittest.TestCase):
 
         self.assertIn("/maintenance/discovery/targets", paths)
         self.assertIn("/maintenance/discovery/runs", paths)
+        self.assertIn("/maintenance/discovery/runs/dispatch-queued", paths)
         self.assertIn("/maintenance/discovery/endpoints/{endpoint_id}/promote", paths)
+        self.assertIn("/maintenance/discovery/source-priors", paths)
+        self.assertIn("/maintenance/discovery/source-priors/evaluate", paths)
+        self.assertIn("/maintenance/discovery/source-priors/apply", paths)
         self.assertIn("/maintenance/discovery/contracts/{contract_id}/evaluate", paths)
         self.assertIn("/maintenance/discovery/negative-evidence/{negative_evidence_id}/clear-cooldown", paths)
         self.assertIn("/maintenance/discovery/eval-suites/{eval_suite_id}/run", paths)
@@ -38,6 +43,37 @@ class DiscoveryV3CutoverTests(unittest.TestCase):
         self.assertNotIn("/maintenance/discovery/candidates", paths)
         self.assertNotIn("/maintenance/discovery/recall-candidates", paths)
         self.assertNotIn("/maintenance/discovery/classes", paths)
+
+    def test_source_prior_list_reads_channel_and_contract_json_without_mutation(self) -> None:
+        seen: dict[str, object] = {}
+
+        def fake_query_count(sql, params):  # type: ignore[no-untyped-def]
+            seen["count_sql"] = sql
+            seen["count_params"] = params
+            return 0
+
+        def fake_query_all(sql, params):  # type: ignore[no-untyped-def]
+            seen["list_sql"] = sql
+            seen["list_params"] = params
+            return []
+
+        with (
+            patch.object(discovery_source_priors_api, "query_count", side_effect=fake_query_count),
+            patch.object(discovery_source_priors_api, "query_all", side_effect=fake_query_all),
+        ):
+            result = discovery_source_priors_api.list_source_priors(
+                target_id="target-1",
+                channel_id="channel-1",
+                page=1,
+                page_size=20,
+            )
+
+        self.assertEqual(result["items"], [])
+        self.assertIn("rareSignalPrior", str(seen["count_sql"]))
+        self.assertIn('"targetId" = %s', str(seen["count_sql"]))
+        self.assertIn('"channelId" = %s', str(seen["count_sql"]))
+        self.assertEqual(seen["count_params"], ("target-1", "channel-1"))
+        self.assertEqual(seen["list_params"], ("target-1", "channel-1", 20, 0))
 
     def test_domain_list_filters_by_first_seen_target(self) -> None:
         seen: dict[str, object] = {}
@@ -68,6 +104,188 @@ class DiscoveryV3CutoverTests(unittest.TestCase):
         self.assertNotIn(" where target_id = %s", str(seen["count_sql"]))
         self.assertEqual(seen["count_params"], ("target-1",))
         self.assertEqual(seen["list_params"], ("target-1", 20, 0))
+
+    def test_create_run_enqueues_default_sequence_runner(self) -> None:
+        seen: dict[str, object] = {}
+
+        def fake_query_one(sql, params):  # type: ignore[no-untyped-def]
+            normalized = " ".join(str(sql).split()).lower()
+            if normalized.startswith("insert into discovery_runs"):
+                seen["discovery_insert_params"] = params
+                return {
+                    "run_id": "run-1",
+                    "target_id": "target-1",
+                    "run_kind": "gap_fill",
+                    "trigger_kind": "mcp",
+                    "summary_json": {},
+                    "created_by": "operator-1",
+                }
+            if "from sequences" in normalized:
+                return None
+            if normalized.startswith("insert into sequences"):
+                seen["sequence_insert_params"] = params
+                return {"sequence_id": "sequence-discovery-v3"}
+            if normalized.startswith("insert into sequence_runs"):
+                seen["sequence_run_insert_params"] = params
+                return {"run_id": "sequence-run-1"}
+            if normalized.startswith("update discovery_runs"):
+                seen["discovery_update_params"] = params
+                return {
+                    "run_id": "run-1",
+                    "target_id": "target-1",
+                    "run_kind": "gap_fill",
+                    "trigger_kind": "mcp",
+                    "summary_json": _unwrap_json_param(params[0]),
+                    "created_by": "operator-1",
+                }
+            raise AssertionError(f"Unexpected SQL: {sql}")
+
+        payload = discovery_v3_api.DiscoveryV3RunCreatePayload(
+            targetId="target-1",
+            runKind="gap_fill",
+            triggerKind="mcp",
+            createdBy="operator-1",
+        )
+
+        with (
+            patch.object(discovery_v3_api, "query_one", side_effect=fake_query_one),
+            patch.object(discovery_v3_api.uuid, "uuid4", return_value="sequence-run-1"),
+            patch.object(discovery_v3_api, "dispatch_sequence_run_job") as dispatch,
+        ):
+            result = discovery_v3_api.create_run(payload)
+
+        dispatch.assert_called_once_with("sequence-run-1", "sequence-discovery-v3")
+        self.assertEqual(result["sequenceDispatch"]["sequenceId"], "sequence-discovery-v3")
+        self.assertEqual(result["sequenceDispatch"]["sequenceRunId"], "sequence-run-1")
+        self.assertEqual(result["sequenceDispatch"]["dispatchStatus"], "enqueued")
+        sequence_task_graph = _unwrap_json_param(seen["sequence_insert_params"][2])
+        self.assertEqual(sequence_task_graph[0]["module"], "discovery.v3.run")
+        self.assertEqual(
+            _unwrap_json_param(seen["sequence_run_insert_params"][2])["run_id"],
+            "run-1",
+        )
+        self.assertEqual(
+            _unwrap_json_param(seen["sequence_run_insert_params"][3])["requestedBy"],
+            "operator-1",
+        )
+
+    def test_create_run_can_store_bounded_provider_execution_approval(self) -> None:
+        seen: dict[str, object] = {}
+
+        def fake_query_one(sql, params):  # type: ignore[no-untyped-def]
+            normalized = " ".join(str(sql).split()).lower()
+            if normalized.startswith("insert into discovery_runs"):
+                seen["run_summary"] = _unwrap_json_param(params[9])
+                return {
+                    "run_id": "run-live-1",
+                    "target_id": "target-1",
+                    "run_kind": "hidden_signal_scan",
+                    "trigger_kind": "mcp",
+                    "summary_json": _unwrap_json_param(params[9]),
+                    "created_by": "operator-1",
+                }
+            if "from sequences" in normalized:
+                return {"sequence_id": "sequence-discovery-v3"}
+            if normalized.startswith("insert into sequence_runs"):
+                return {"run_id": "sequence-run-live-1"}
+            if normalized.startswith("update discovery_runs"):
+                return {
+                    "run_id": "run-live-1",
+                    "target_id": "target-1",
+                    "run_kind": "hidden_signal_scan",
+                    "trigger_kind": "mcp",
+                    "summary_json": _unwrap_json_param(params[0]),
+                    "created_by": "operator-1",
+                }
+            raise AssertionError(f"Unexpected SQL: {sql}")
+
+        payload = discovery_v3_api.DiscoveryV3RunCreatePayload(
+            targetId="target-1",
+            runKind="hidden_signal_scan",
+            triggerKind="mcp",
+            providerExecutionEnabled=True,
+            createdBy="operator-1",
+        )
+
+        with (
+            patch.object(discovery_v3_api, "query_one", side_effect=fake_query_one),
+            patch.object(discovery_v3_api.uuid, "uuid4", return_value="sequence-run-live-1"),
+            patch.object(discovery_v3_api, "dispatch_sequence_run_job"),
+        ):
+            discovery_v3_api.create_run(payload)
+
+        self.assertEqual(
+            seen["run_summary"],
+            {
+                "providerExecutionEnabled": True,
+                "providerExecutionScope": "bounded_operator_approved",
+            },
+        )
+
+    def test_dispatch_queued_runs_enqueues_existing_rows_without_cleanup(self) -> None:
+        seen: dict[str, object] = {}
+
+        def fake_query_all(sql, params):  # type: ignore[no-untyped-def]
+            normalized = " ".join(str(sql).split()).lower()
+            self.assertIn("from discovery_runs", normalized)
+            self.assertIn("status = 'queued'", normalized)
+            self.assertIn("not (summary_json ? 'sequencedispatch')", normalized)
+            seen["queued_select_params"] = params
+            return [
+                {
+                    "run_id": "run-queued-1",
+                    "target_id": "target-1",
+                    "run_kind": "source_expand",
+                    "trigger_kind": "api",
+                    "summary_json": {},
+                    "created_by": "old-operator",
+                }
+            ]
+
+        def fake_query_one(sql, params):  # type: ignore[no-untyped-def]
+            normalized = " ".join(str(sql).split()).lower()
+            if "from sequences" in normalized:
+                return {"sequence_id": "sequence-discovery-v3"}
+            if normalized.startswith("insert into sequence_runs"):
+                seen["sequence_run_insert_params"] = params
+                return {"run_id": "sequence-run-queued-1"}
+            if normalized.startswith("update discovery_runs"):
+                seen["discovery_update_params"] = params
+                return {
+                    "run_id": "run-queued-1",
+                    "target_id": "target-1",
+                    "run_kind": "source_expand",
+                    "trigger_kind": "api",
+                    "summary_json": _unwrap_json_param(params[0]),
+                    "created_by": "old-operator",
+                }
+            raise AssertionError(f"Unexpected SQL: {sql}")
+
+        payload = discovery_v3_api.DiscoveryV3DispatchQueuedRunsPayload(
+            targetId="target-1",
+            limit=10,
+            requestedBy="operator-1",
+            reason="repair retained queued rows",
+        )
+
+        with (
+            patch.object(discovery_v3_api, "query_all", side_effect=fake_query_all),
+            patch.object(discovery_v3_api, "query_one", side_effect=fake_query_one),
+            patch.object(discovery_v3_api.uuid, "uuid4", return_value="sequence-run-queued-1"),
+            patch.object(discovery_v3_api, "dispatch_sequence_run_job") as dispatch,
+        ):
+            result = discovery_v3_api.dispatch_queued_runs(payload)
+
+        dispatch.assert_called_once_with("sequence-run-queued-1", "sequence-discovery-v3")
+        self.assertEqual(result["matched"], 1)
+        self.assertEqual(result["dispatchedCount"], 1)
+        self.assertEqual(result["failureCount"], 0)
+        self.assertEqual(seen["queued_select_params"], ("target-1", 10))
+        context_json = _unwrap_json_param(seen["sequence_run_insert_params"][2])
+        trigger_meta = _unwrap_json_param(seen["sequence_run_insert_params"][3])
+        self.assertEqual(context_json["run_id"], "run-queued-1")
+        self.assertEqual(trigger_meta["source"], "discovery_v3_queue_repair")
+        self.assertEqual(trigger_meta["requestedBy"], "operator-1")
 
     def test_coverage_counts_probation_as_partial_not_strong(self) -> None:
         graph = {

@@ -1,4 +1,13 @@
 import type { Pool } from "pg";
+import {
+  buildCoverageFirstAutoplan,
+  buildCoverageFirstIterationRecommendation,
+  getSourceFamilyCoverageWithPool,
+  getSourceRoleCoverageWithPool,
+  listAdapterResearchWithPool,
+  listChannelBottlenecksWithPool,
+  summarizeChannelBottlenecksWithPool,
+} from "@newsportal/control-plane";
 
 import { readOptionalInteger, readOptionalString } from "./protocol";
 import type { McpToolContext } from "./tools/shared";
@@ -19,6 +28,15 @@ export type OperatingDomain = (typeof OPERATING_DOMAIN_VALUES)[number];
 export const OPERATING_REPORT_KINDS = [
   "system_health",
   "channel_health",
+  "source_bottleneck",
+  "funnel_calibration",
+  "selection_precision",
+  "selection_hold_quality",
+  "source_role_coverage",
+  "source_family_balance",
+  "adapter_research",
+  "indirect_search_execution",
+  "marketplace_extraction_quality",
   "website_pipeline",
   "selection_tuning",
   "content_analysis",
@@ -189,6 +207,1251 @@ function readStringArray(value: unknown): string[] {
   return value
     .map((entry) => readOptionalString(entry))
     .filter((entry): entry is string => Boolean(entry));
+}
+
+function normalizeText(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function compactStringList(value: unknown): string[] {
+  return readStringArray(value).map((entry) => entry.trim()).filter(Boolean);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function readPageWindow(args: Record<string, unknown>, defaultPageSize = 25) {
+  const page = Math.max(readOptionalInteger(args.page) ?? 1, 1);
+  const pageSize = Math.min(
+    Math.max(readOptionalInteger(args.pageSize) ?? defaultPageSize, 1),
+    100
+  );
+  return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
+function holdQualityWhere(args: Record<string, unknown>) {
+  const clauses = [
+    `
+      fsr.final_decision = 'gray_zone'
+      and (
+        coalesce(fsr.explain_json ->> 'selectionReason', '') in (
+          'candidate_signal_hold',
+          'semantic_hold',
+          'candidate_signal_gray_zone'
+        )
+        or coalesce(fsr.explain_json ->> 'downstreamLossBucket', '') in (
+          'gray_zone_hold',
+          'context_candidate_not_selected',
+          'buyer_intent_hold',
+          'project_intent_hold',
+          'llm_review_pending'
+        )
+      )
+    `,
+  ];
+  const params: unknown[] = [];
+  const candidateSignalTier = readOptionalString(args.candidateSignalTier);
+  const verificationState = readOptionalString(args.verificationState);
+  const downstreamLossBucket = readOptionalString(args.downstreamLossBucket);
+  const q = readOptionalString(args.q);
+  const docIds = readStringArray(args.docIds);
+  if (candidateSignalTier) {
+    params.push(candidateSignalTier);
+    clauses.push(
+      `coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', 'unknown') = $${params.length}`
+    );
+  }
+  if (verificationState) {
+    params.push(verificationState);
+    clauses.push(`coalesce(fsr.verification_state, '') = $${params.length}`);
+  }
+  if (downstreamLossBucket) {
+    params.push(downstreamLossBucket);
+    clauses.push(`coalesce(fsr.explain_json ->> 'downstreamLossBucket', '') = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    clauses.push(`(a.title ilike $${params.length} or coalesce(a.url, '') ilike $${params.length})`);
+  }
+  if (docIds.length > 0) {
+    params.push(docIds);
+    clauses.push(`fsr.doc_id::text = any($${params.length}::text[])`);
+  }
+  return { whereSql: clauses.map((clause) => `(${clause})`).join(" and "), params };
+}
+
+function holdQualitySelectSql() {
+  return `
+    select
+      fsr.doc_id::text as "docId",
+      a.title,
+      a.url,
+      a.published_at as "publishedAt",
+      a.channel_id::text as "channelId",
+      sc.name as "channelName",
+      sc.provider_type as "providerType",
+      fsr.final_decision as "finalDecision",
+      fsr.is_selected as "isSelected",
+      fsr.verification_state as "verificationState",
+      coalesce(fsr.explain_json ->> 'selectionReason', '') as "selectionReason",
+      coalesce(fsr.explain_json ->> 'downstreamLossBucket', '') as "downstreamLossBucket",
+      coalesce(fsr.explain_json ->> 'selectionBlockerReason', '') as "selectionBlockerReason",
+      coalesce(fsr.explain_json ->> 'holdReason', '') as "holdReason",
+      coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', 'unknown') as "candidateSignalTier",
+      coalesce((fsr.explain_json ->> 'candidateSignalUpliftCount')::int, 0) as "candidateSignalUpliftCount",
+      coalesce((fsr.explain_json #>> '{semanticSignalSummary,llmReviewPending}')::int, 0) as "llmReviewPendingCount",
+      coalesce((fsr.explain_json #>> '{semanticSignalSummary,hold}')::int, 0) as "holdCount",
+      fsr.explain_json as "finalSelectionExplain",
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'criterionId', ifr.criterion_id::text,
+            'semanticDecision', ifr.semantic_decision,
+            'candidateSignals', ifr.explain_json -> 'candidateSignals',
+            'llmReviewAllowed', coalesce((ifr.explain_json -> 'selectionProfile' ->> 'llmReviewAllowed')::boolean, false),
+            'runtimeReviewState', ifr.explain_json -> 'runtimeReviewState',
+            'filterReasons', ifr.explain_json -> 'filterReasons'
+          )
+          order by ifr.created_at desc
+        )
+        from interest_filter_results ifr
+        where ifr.doc_id = fsr.doc_id
+          and ifr.filter_scope = 'system_criterion'
+          and (
+            ifr.semantic_decision = 'gray_zone'
+            or ifr.explain_json ? 'candidateSignals'
+          )
+      ) as "holdEvidence"
+    from final_selection_results fsr
+    join articles a on a.doc_id = fsr.doc_id
+    left join source_channels sc on sc.channel_id = a.channel_id
+  `;
+}
+
+export async function buildArticleHoldQualitySummary(
+  { pool }: McpToolContext,
+  args: Record<string, unknown>
+) {
+  const { whereSql, params } = holdQualityWhere(args);
+  const [total, byTier, byBucket, byVerification, pendingLlm] = await Promise.all([
+    countQuery(
+      pool,
+      `
+        select count(*)::int as count
+        from final_selection_results fsr
+        join articles a on a.doc_id = fsr.doc_id
+        where ${whereSql}
+      `,
+      params
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', 'unknown') as tier,
+          count(*)::int as count
+        from final_selection_results fsr
+        join articles a on a.doc_id = fsr.doc_id
+        where ${whereSql}
+        group by tier
+        order by count desc, tier asc
+      `,
+      params
+    ),
+    countQuery(
+      pool,
+      `
+        select coalesce(fsr.explain_json ->> 'downstreamLossBucket', 'unknown') as bucket,
+               count(*)::int as count
+        from final_selection_results fsr
+        join articles a on a.doc_id = fsr.doc_id
+        where ${whereSql}
+        group by bucket
+        order by count desc, bucket asc
+      `,
+      params
+    ),
+    countQuery(
+      pool,
+      `
+        select coalesce(fsr.verification_state, 'unknown') as "verificationState",
+               count(*)::int as count
+        from final_selection_results fsr
+        join articles a on a.doc_id = fsr.doc_id
+        where ${whereSql}
+        group by fsr.verification_state
+        order by count desc, "verificationState" asc
+      `,
+      params
+    ),
+    countQuery(
+      pool,
+      `
+        select count(*)::int as count
+        from final_selection_results fsr
+        join articles a on a.doc_id = fsr.doc_id
+        where ${whereSql}
+          and coalesce((fsr.explain_json #>> '{semanticSignalSummary,llmReviewPending}')::int, 0) > 0
+      `,
+      params
+    ),
+  ]);
+  return {
+    generatedAt: new Date().toISOString(),
+    totalHolds: Number(total[0]?.count ?? 0),
+    byCandidateSignalTier: byTier,
+    byDownstreamLossBucket: byBucket,
+    byVerificationState: byVerification,
+    llmReviewPending: Number(pendingLlm[0]?.count ?? 0),
+    interpretation: [
+      "context candidates are diagnostics and should not be treated as selected evidence",
+      "buyer_intent/project_intent holds are the preferred bounded replay pool",
+      "source health and source priors are intentionally absent from selection eligibility",
+    ],
+  };
+}
+
+export async function listArticleHoldQuality(
+  { pool }: McpToolContext,
+  args: Record<string, unknown>
+) {
+  const { whereSql, params } = holdQualityWhere(args);
+  const { page, pageSize, offset } = readPageWindow(args, 25);
+  const items = await countQuery(
+    pool,
+    `
+      ${holdQualitySelectSql()}
+      where ${whereSql}
+      order by
+        case coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', 'unknown')
+          when 'project_intent' then 1
+          when 'buyer_intent' then 2
+          when 'context' then 3
+          else 4
+        end,
+        fsr.updated_at desc
+      limit $${params.length + 1}
+      offset $${params.length + 2}
+    `,
+    [...params, pageSize, offset]
+  );
+  const total = await countQuery(
+    pool,
+    `
+      select count(*)::int as count
+      from final_selection_results fsr
+      join articles a on a.doc_id = fsr.doc_id
+      where ${whereSql}
+    `,
+    params
+  );
+  return {
+    page,
+    pageSize,
+    total: Number(total[0]?.count ?? 0),
+    items,
+  };
+}
+
+export async function explainArticleHoldQuality(
+  { pool }: McpToolContext,
+  args: Record<string, unknown>
+) {
+  const docId = readOptionalString(args.docId) ?? readOptionalString(args.id);
+  if (!docId) {
+    throw new Error("docId is required.");
+  }
+  const result = await countQuery(
+    pool,
+    `
+      ${holdQualitySelectSql()}
+      where fsr.doc_id::text = $1
+      limit 1
+    `,
+    [docId]
+  );
+  const row = result[0] ?? null;
+  return {
+    generatedAt: new Date().toISOString(),
+    docId,
+    hold: row,
+    explanation: row
+      ? [
+          "whyNotSelected is derived from final_selection_results.explain_json and interest_filter_results candidateSignals",
+          "candidateSignalTier=context is diagnostic only; prefer buyer_intent/project_intent for bounded replay",
+        ]
+      : ["No hold-quality row found for this docId."],
+  };
+}
+
+const PROJECT_INTENT_MARKERS = [
+  "request for proposal",
+  "request for quote",
+  "rfp",
+  "rfq",
+  "tender",
+  "bid",
+  "procurement",
+  "proposal",
+  "quote",
+  "looking for",
+  "need help",
+  "seeking",
+  "wanted",
+  "vendor selection",
+  "implementation partner",
+  "migration partner",
+];
+
+const DELIVERY_OBJECT_MARKERS = [
+  "implementation",
+  "migration",
+  "integration",
+  "replacement",
+  "custom app",
+  "portal",
+  "platform",
+  "software",
+  "website",
+  "crm",
+  "erp",
+  "api",
+  "automation",
+  "dashboard",
+  "developer",
+  "contractor",
+];
+
+const COMMITMENT_MARKERS = [
+  "budget",
+  "fixed price",
+  "deadline",
+  "due date",
+  "submission",
+  "contact",
+  "contract",
+  "award",
+  "posted",
+  "open for proposals",
+  "proposals",
+  "bids",
+  "scope",
+];
+
+const SELECTION_NOISE_MARKERS = [
+  "how to ",
+  "guide to ",
+  "what is ",
+  "why ",
+  "top ",
+  "best ",
+  "directory",
+  "profile",
+  "case study",
+  "award winner",
+  "thought leadership",
+  "guest post",
+  "browse jobs",
+  "search results",
+  "tag/",
+  "filters=tag",
+];
+
+function rowText(row: Record<string, unknown>): string {
+  return normalizeText(
+    [
+      row.title,
+      row.lead,
+      row.url,
+    ].join(" ")
+  );
+}
+
+function selectionEvidenceGroups(row: Record<string, unknown>) {
+  const text = rowText(row);
+  const projectMarkers = PROJECT_INTENT_MARKERS.filter((marker) => text.includes(marker));
+  const deliveryMarkers = DELIVERY_OBJECT_MARKERS.filter((marker) => text.includes(marker));
+  const commitmentMarkers = COMMITMENT_MARKERS.filter((marker) => text.includes(marker));
+  const noiseMarkers = SELECTION_NOISE_MARKERS.filter((marker) => text.includes(marker));
+  const filterReasonCounts = isRecord(row.finalSelectionExplain)
+    && isRecord(row.finalSelectionExplain.semanticSignalSummary)
+    && isRecord(row.finalSelectionExplain.semanticSignalSummary.filterReasonCounts)
+    ? row.finalSelectionExplain.semanticSignalSummary.filterReasonCounts
+    : {};
+  const filterReasons = Object.keys(filterReasonCounts).filter((key) => Number(filterReasonCounts[key]) > 0);
+  const selectionReason = String(row.selectionReason ?? "");
+  const totalFilterCount = Number(row.totalFilterCount ?? 0);
+  const matchedFilterCount = Number(row.matchedFilterCount ?? 0);
+  const candidateSignalTier = String(row.candidateSignalTier ?? "");
+  const professionalNetworkNoise =
+    /linkedin\.[^/\s]+\/(pulse|in|jobs)\b/u.test(text)
+    || (/linkedin\.[^/\s]+\/posts\b/u.test(text) && /\b(job|hiring|salary|apply now)\b/u.test(text));
+  const hasProjectIntent = projectMarkers.length > 0;
+  const hasDeliveryObject = deliveryMarkers.length > 0;
+  const hasCommitment = commitmentMarkers.length > 0;
+  const hasItemLevelEvidence = hasProjectIntent && hasDeliveryObject;
+  const stalePassThrough =
+    selectionReason === "pass_through" || (totalFilterCount === 0 && matchedFilterCount === 0);
+  const documentShapeVeto = filterReasons.some((reason) =>
+    [
+      "directory_listicle_noise",
+      "jobs_only_post_noise",
+      "professional_network_post_noise",
+      "repo_internal_change_noise",
+      "wrapper_directory_noise",
+    ].includes(reason)
+  );
+  const wrapperNoise =
+    documentShapeVeto
+    || professionalNetworkNoise
+    || (noiseMarkers.length > 0 && !hasItemLevelEvidence);
+  return {
+    projectMarkers,
+    deliveryMarkers,
+    commitmentMarkers,
+    noiseMarkers,
+    filterReasons,
+    professionalNetworkNoise,
+    stalePassThrough,
+    wrapperNoise,
+    candidateSignalTier,
+    hasItemLevelEvidence,
+    hasStrongEvidence: hasItemLevelEvidence && hasCommitment,
+  };
+}
+
+function classifySelectionPrecisionRow(row: Record<string, unknown>) {
+  const groups = selectionEvidenceGroups(row);
+  const whySelected = String(row.selectionReason ?? "unknown");
+  if (groups.stalePassThrough || groups.wrapperNoise) {
+    return {
+      outcome: "noise",
+      whySelected,
+      vetoMissed: groups.stalePassThrough ? "stale_pass_through" : "negative_veto_missed",
+      evidence: groups,
+    };
+  }
+  if (groups.hasStrongEvidence) {
+    return {
+      outcome: "strong_project_signal",
+      whySelected,
+      vetoMissed: null,
+      evidence: groups,
+    };
+  }
+  if (groups.hasItemLevelEvidence) {
+    return {
+      outcome: "probable_signal",
+      whySelected,
+      vetoMissed: null,
+      evidence: groups,
+    };
+  }
+  return {
+    outcome: "context_only",
+    whySelected,
+    vetoMissed: "selected_without_item_level_buyer_project_evidence",
+    evidence: groups,
+  };
+}
+
+function selectionPrecisionSelectSql() {
+  return `
+    select
+      fsr.doc_id::text as "docId",
+      a.title,
+      a.lead,
+      a.url,
+      a.published_at as "publishedAt",
+      a.channel_id::text as "channelId",
+      sc.name as "channelName",
+      sc.provider_type as "providerType",
+      fsr.final_decision as "finalDecision",
+      fsr.is_selected as "isSelected",
+      fsr.verification_state as "verificationState",
+      fsr.total_filter_count as "totalFilterCount",
+      fsr.matched_filter_count as "matchedFilterCount",
+      fsr.no_match_filter_count as "noMatchFilterCount",
+      fsr.gray_zone_filter_count as "grayZoneFilterCount",
+      fsr.technical_filtered_out_count as "technicalFilteredOutCount",
+      coalesce(fsr.explain_json ->> 'selectionReason', '') as "selectionReason",
+      coalesce(fsr.explain_json ->> 'downstreamLossBucket', '') as "downstreamLossBucket",
+      coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', '') as "candidateSignalTier",
+      fsr.explain_json as "finalSelectionExplain",
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'criterionId', ifr.criterion_id::text,
+            'semanticDecision', ifr.semantic_decision,
+            'technicalFilterState', ifr.technical_filter_state,
+            'filterReasons', ifr.explain_json -> 'filterReasons',
+            'candidateSignals', ifr.explain_json -> 'candidateSignals',
+            'runtimeReviewState', ifr.explain_json -> 'runtimeReviewState',
+            'score', ifr.semantic_score
+          )
+          order by ifr.created_at desc
+        )
+        from interest_filter_results ifr
+        where ifr.doc_id = fsr.doc_id
+          and ifr.filter_scope = 'system_criterion'
+      ) as "selectionEvidence"
+    from final_selection_results fsr
+    join articles a on a.doc_id = fsr.doc_id
+    left join source_channels sc on sc.channel_id = a.channel_id
+  `;
+}
+
+export async function buildSelectionPrecisionAudit(
+  { pool }: McpToolContext,
+  args: Record<string, unknown> = {}
+) {
+  const docIds = readStringArray(args.docIds);
+  const pageSize = Math.min(Math.max(readOptionalInteger(args.pageSize) ?? 100, 1), 200);
+  const includeSamples = args.includeSamples !== false;
+  const params: unknown[] = [];
+  const clauses = ["fsr.is_selected = true", "fsr.final_decision = 'selected'"];
+  if (docIds.length > 0) {
+    params.push(docIds);
+    clauses.push(`fsr.doc_id::text = any($${params.length}::text[])`);
+  }
+  const rows = await countQuery(
+    pool,
+    `
+      ${selectionPrecisionSelectSql()}
+      where ${clauses.join(" and ")}
+      order by fsr.updated_at desc
+      limit $${params.length + 1}
+    `,
+    [...params, pageSize]
+  );
+  const classified = rows.map((row) => ({
+    ...row,
+    precision: classifySelectionPrecisionRow(row),
+  }));
+  const buckets = classified.reduce<Record<string, number>>((acc, row) => {
+    const outcome = String((row.precision as Record<string, unknown>).outcome ?? "unknown");
+    acc[outcome] = (acc[outcome] ?? 0) + 1;
+    return acc;
+  }, {});
+  const highQualityCount =
+    (buckets.strong_project_signal ?? 0) + (buckets.probable_signal ?? 0);
+  const weakSelectedCount = (buckets.context_only ?? 0) + (buckets.noise ?? 0);
+  const staleRows = await countQuery(
+    pool,
+    `
+      select
+        count(*) filter (
+          where fsr.total_filter_count = 0
+            and (
+              fsr.is_selected = true
+              or fsr.final_decision = 'selected'
+              or fsr.compat_system_feed_decision = 'pass_through'
+            )
+            and not exists (
+              select 1
+              from interest_filter_results ifr
+              where ifr.doc_id = fsr.doc_id
+                and ifr.filter_scope = 'system_criterion'
+            )
+        )::int as "stalePassThroughCount",
+        count(*) filter (
+          where not exists (
+            select 1
+            from interest_filter_results ifr
+            where ifr.doc_id = fsr.doc_id
+              and ifr.filter_scope = 'system_criterion'
+          )
+        )::int as "missingInterestFilterResults"
+      from final_selection_results fsr
+    `
+  );
+  const weakSamples = classified
+    .filter((row) => ["context_only", "noise"].includes(String((row.precision as Record<string, unknown>).outcome)))
+    .slice(0, 20);
+  return {
+    generatedAt: new Date().toISOString(),
+    readOnly: true,
+    inspectedSelectedCount: rows.length,
+    highQualityCount,
+    weakSelectedCount,
+    buckets: {
+      strong_project_signal: buckets.strong_project_signal ?? 0,
+      probable_signal: buckets.probable_signal ?? 0,
+      context_only: buckets.context_only ?? 0,
+      noise: buckets.noise ?? 0,
+    },
+    staleSelection: staleRows[0] ?? {},
+    interpretation: [
+      "selected is the only web truth; this audit does not create a second public/private selected split",
+      "context_only/noise selected rows are precision defects to fix through system interests, LLM templates, candidate-signal groups, and bounded replay",
+      "source role, source health, source prior, adapter risk, and search provider metadata are intentionally absent from selection eligibility",
+    ],
+    samples: includeSamples
+      ? {
+          weakSelected: weakSamples,
+          highQuality: classified
+            .filter((row) => ["strong_project_signal", "probable_signal"].includes(String((row.precision as Record<string, unknown>).outcome)))
+            .slice(0, 20),
+        }
+      : {},
+    recommendedMcpActions: [
+      {
+        tool: "operator.tuning.recommend",
+        reason: "Choose increase_precision when context_only/noise selected rows repeat.",
+        arguments: { domain: "selection", objective: "increase_precision", includeSamples: true },
+      },
+      {
+        tool: "system_interests.update",
+        reason:
+          "Tune active interests/templates so negative/veto cues beat broad semantic similarity and context-only cues stay diagnostic.",
+      },
+      {
+        tool: "maintenance.reindex.request",
+        reason: "Replay weak selected docIds in bounded chunks after MCP/admin config changes.",
+        arguments: {
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "backfill",
+            options: {
+              docIds: weakSamples.map((row) => row.docId),
+              includeEnrichment: false,
+              forceEnrichment: false,
+              reason: "selection-precision-cleanup",
+            },
+          },
+        },
+      },
+    ],
+    nextReadBack: [
+      "operator.report.verify reportKind=selection",
+      "articles.holds.summary",
+      "articles.residuals.summary",
+      "maintenance.reindex_jobs.list",
+      "content_items.list",
+    ],
+  };
+}
+
+function hasAnyText(text: string, needles: readonly string[]): boolean {
+  const normalized = normalizeText(text);
+  return needles.some((needle) => normalized.includes(normalizeText(needle)));
+}
+
+function buildReferenceFunnelSpec(args: Record<string, unknown>) {
+  const objective = readOptionalString(args.objective) ?? "calibrated rare-signal funnel";
+  const referenceEvidenceKind = readOptionalString(args.referenceEvidenceKind) ?? "reference_text";
+  const referenceBundleKey = normalizeText(args.referenceBundleKey);
+  const referenceText = [
+    readOptionalString(args.referenceText) ?? "",
+    referenceBundleKey,
+  ].join(" ");
+  const reference = normalizeText(referenceText);
+  const rareSignal = hasAnyText(reference, [
+    "rare",
+    "hidden",
+    "crumb",
+    "low-yield",
+    "buyer-side",
+    "procurement",
+    "marketplace project",
+  ]);
+  const contentKinds = uniqueStrings([
+    "editorial",
+    "listing",
+    ...(hasAnyText(reference, ["procurement", "tender", "contract notice", "document"]) ? ["document"] : []),
+    ...(hasAnyText(reference, ["api_payload", "api-like", "api payload"]) ? ["api_payload"] : []),
+    ...(hasAnyText(reference, ["data_file", "dataset", "csv"]) ? ["data_file"] : []),
+  ]);
+  const guardrails = [
+    {
+      key: "direct_request_over_wrapper",
+      requiredWhenReferenceMentions: ["marketplace", "wrapper", "project card"],
+      phraseHints: ["wrapper", "marketplace", "direct buyer", "primary signal"],
+    },
+    {
+      key: "seller_authored_rejection",
+      requiredWhenReferenceMentions: ["seller", "agency", "vendor landing", "profile"],
+      phraseHints: ["seller", "self-promotion", "agency page", "profile"],
+    },
+    {
+      key: "formal_notice_without_exact_keyword",
+      requiredWhenReferenceMentions: ["tender", "procurement", "contract notice"],
+      phraseHints: ["formal", "tender", "contract notice", "procurement", "exact words"],
+    },
+    {
+      key: "bland_title_body_evidence",
+      requiredWhenReferenceMentions: ["bland", "competition", "contract notice"],
+      phraseHints: ["bland", "title", "body", "procurement details"],
+    },
+  ].filter((guardrail) =>
+    guardrail.requiredWhenReferenceMentions.some((hint) => reference.includes(normalizeText(hint)))
+  );
+  return {
+    objective,
+    referenceEvidenceKind,
+    referenceBundleKey: readOptionalString(args.referenceBundleKey) ?? null,
+    actorModel: rareSignal
+      ? "Treat the reference as evidence for a rare-signal funnel: broad acquisition, strict independent content selection, and explicit near-miss rejection."
+      : "Treat the reference as calibration evidence for a source-to-selection funnel.",
+    hardGatePolicy: {
+      mustHaveTermsBaseline: "empty_unless_marker_is_mandatory",
+      timeWindowBaseline: "empty_or_null_for_initial_recall",
+      broadHardGatesAreRisky: true,
+    },
+    allowedContentKinds: contentKinds,
+    signalFamilies: [
+      "direct buyer ask or project request",
+      "formal procurement, tender, RFP/RFQ, award, or implementation notice",
+      "delivery pressure with concrete implementation, migration, integration, or takeover object",
+      "context signal that creates a follow-up hypothesis but is not enough for final selection alone",
+    ],
+    nearMissNegativeFamilies: [
+      "seller-authored marketing, profile, ranking, case study, or award",
+      "portal shell, navigation, index, category, or search page without a concrete item",
+      "internal hiring or recruiter content",
+      "generic topic commentary without an active sourcing event",
+    ],
+    sourceRoleMatrix: [
+      "direct-intent source",
+      "context source",
+      "community or hidden-signal source",
+      "directory or replacement source",
+      "adapter-required source",
+    ],
+    promptGuardrails: guardrails,
+    adapterPolicy:
+      "API-like, ATS, marketplace, repository, or authenticated sources require adapter/mapping status and must not be disguised as RSS/website.",
+    proofGates: [
+      "operator.funnel.audit before writes",
+      "system_interests.read and llm_templates.read after config changes",
+      "maintenance.reindex.request bounded docIds chunks for existing content",
+      "operator.report.verify reportKind=funnel_calibration and reportKind=selection after replay",
+      "content_items.list for web-visible selected content",
+    ],
+  };
+}
+
+function classifyInterestFamily(row: Record<string, unknown>): string {
+  const text = normalizeText(`${row.name ?? ""} ${row.description ?? ""}`);
+  if (/procurement|rfp|rfq|tender|contract|award|bid/u.test(text)) return "procurement";
+  if (/fund|startup|scaleup|series|seed/u.test(text)) return "funding";
+  if (/hiring|capacity|staff|contractor|freelance/u.test(text)) return "capacity";
+  if (/migration|integration|implementation|replacement|takeover|legacy/u.test(text)) {
+    return "implementation";
+  }
+  if (/security|compliance|audit|deadline|cve|eol/u.test(text)) return "compliance";
+  if (/smb|sme|small business|mid.market|local|chamber|association/u.test(text)) return "smb";
+  return "other";
+}
+
+function summarizeDrift(
+  spec: ReturnType<typeof buildReferenceFunnelSpec>,
+  live: {
+    interests: Record<string, unknown>[];
+    llmTemplates: Record<string, unknown>[];
+    discoveryRows: Record<string, unknown>[];
+    adapterRows: Record<string, unknown>[];
+  }
+) {
+  const hardGateDrift = live.interests
+    .filter((row) => {
+      const mustHave = compactStringList(row.mustHaveTerms);
+      const shortRequired = compactStringList(row.shortTokensRequired);
+      const timeWindow = row.timeWindowHours;
+      return mustHave.length > 0 || shortRequired.length > 0 || timeWindow != null;
+    })
+    .map((row) => ({
+      interestTemplateId: row.interestTemplateId,
+      name: row.name,
+      mustHaveTerms: compactStringList(row.mustHaveTerms),
+      shortTokensRequired: compactStringList(row.shortTokensRequired),
+      timeWindowHours: row.timeWindowHours,
+      risk: "Rare-signal recall-first baselines should avoid broad hard gates until replay proves they are safe.",
+    }));
+
+  const expectedKinds = spec.allowedContentKinds;
+  const contentKindDrift = live.interests
+    .filter((row) => {
+      const actual = compactStringList(row.allowedContentKinds);
+      return expectedKinds.length > 0 && !expectedKinds.every((kind) => actual.includes(kind));
+    })
+    .map((row) => ({
+      interestTemplateId: row.interestTemplateId,
+      name: row.name,
+      allowedContentKinds: compactStringList(row.allowedContentKinds),
+      missingContentKinds: expectedKinds.filter(
+        (kind) => !compactStringList(row.allowedContentKinds).includes(kind)
+      ),
+    }));
+
+  const promptGuardrailDrift = spec.promptGuardrails
+    .map((guardrail) => {
+      const missingTemplates = live.llmTemplates
+        .filter((row) => row.isActive !== false)
+        .filter((row) => !hasAnyText(String(row.templateText ?? ""), guardrail.phraseHints))
+        .map((row) => ({
+          promptTemplateId: row.promptTemplateId,
+          name: row.name,
+          scope: row.scope,
+        }));
+      return {
+        guardrail: guardrail.key,
+        phraseHints: guardrail.phraseHints,
+        missingTemplateCount: missingTemplates.length,
+        missingTemplates,
+      };
+    })
+    .filter((row) => row.missingTemplateCount > 0);
+
+  const familyGroups = new Map<string, Record<string, unknown>[]>();
+  for (const row of live.interests) {
+    const family = classifyInterestFamily(row);
+    familyGroups.set(family, [...(familyGroups.get(family) ?? []), row]);
+  }
+  const duplicateInterestRisk = [...familyGroups.entries()]
+    .filter(([, rows]) => rows.length > 3)
+    .map(([family, rows]) => ({
+      family,
+      activeCount: rows.length,
+      samples: rows.slice(0, 8).map((row) => ({ interestTemplateId: row.interestTemplateId, name: row.name })),
+      risk: "Many active interests in one signal family can split evidence and make calibration harder; consolidate only after retained-test evidence is no longer needed.",
+    }));
+
+  const sourceRoleGap = live.discoveryRows.filter((row) => Number(row.missingRoleCount ?? 0) > 0);
+  const adapterRequiredGap = live.adapterRows;
+
+  return {
+    hardGateDrift,
+    contentKindDrift,
+    promptGuardrailDrift,
+    duplicateInterestRisk,
+    sourceRoleGap,
+    adapterRequiredGap,
+  };
+}
+
+function buildFunnelRecommendedActions(
+  drift: ReturnType<typeof summarizeDrift>,
+  domainPrefix: string | null
+) {
+  const actions: Array<Record<string, unknown>> = [];
+  if (drift.hardGateDrift.length > 0 || drift.contentKindDrift.length > 0) {
+    actions.push({
+      tool: "system_interests.update",
+      reason:
+        "Align active calibrated interests with the portable rare-signal funnel policy: broad acquisition, minimal hard gates, explicit negative cues, and enough content kinds for formal evidence.",
+      scope: domainPrefix ? { domainPrefix } : "review affected interests from operator.funnel.audit findings",
+      payloadGuidance: {
+        must_have_terms: [],
+        time_window_hours: null,
+        allowed_content_kinds: "preserve current valid kinds and add missing evidence kinds only where the signal family needs them",
+      },
+    });
+  }
+  if (drift.promptGuardrailDrift.length > 0) {
+    actions.push({
+      tool: "llm_templates.update",
+      reason:
+        "Add missing LLM guardrails from the portable reference spec without changing source-prior or source-health selection independence.",
+      payloadGuidance: {
+        guardrails:
+          "direct request beats wrapper noise; seller-authored pages reject; formal notices can be valid without exact keywords; bland titles can pass when body has concrete evidence",
+      },
+    });
+  }
+  if (drift.adapterRequiredGap.length > 0) {
+    actions.push({
+      tool: "channels.alternatives.plan",
+      reason:
+        "Adapter-required/API-like candidates should be repaired or mapped through alternatives/adapters, not forced into RSS/website onboarding.",
+    });
+  }
+  actions.push(
+    {
+      tool: "articles.residuals.list",
+      reason: "Choose bounded gray/hold docId chunks only after calibration drift is understood.",
+      arguments: { selectionMode: "hold", pageSize: 100 },
+    },
+    {
+      tool: "maintenance.reindex.request",
+      reason:
+        "After MCP/admin config changes, replay existing content in bounded docId chunks and verify every chunk.",
+      arguments: {
+        payload: {
+          indexName: "interest_centroids",
+          jobKind: "backfill",
+          options: {
+            docIds: ["<bounded-doc-id-list>"],
+            batchSize: 100,
+            includeEnrichment: false,
+            forceEnrichment: false,
+            reason: "funnel-calibration-bounded-replay",
+          },
+        },
+      },
+    },
+    {
+      tool: "operator.report.verify",
+      arguments: { reportKind: "funnel_calibration", entityIds: {}, includeSamples: true },
+      reason: "Verify DB-backed calibration state after each bounded change.",
+    }
+  );
+  return actions;
+}
+
+async function readFunnelLiveState(
+  pool: Pool,
+  options: { domainPrefix: string | null; includeDiscovery: boolean; includeSamples: boolean }
+) {
+  const domainLike = options.domainPrefix ? `%${options.domainPrefix}%` : null;
+  const interestResult = await pool.query<Record<string, unknown>>(
+    `
+      select
+        it.interest_template_id::text as "interestTemplateId",
+        it.name,
+        it.description,
+        it.must_have_terms as "mustHaveTerms",
+        it.must_not_have_terms as "mustNotHaveTerms",
+        it.short_tokens_required as "shortTokensRequired",
+        it.allowed_content_kinds as "allowedContentKinds",
+        it.time_window_hours as "timeWindowHours",
+        it.places,
+        it.languages_allowed as "languagesAllowed",
+        sp.definition_json as "definitionJson",
+        sp.policy_json as "policyJson",
+        it.is_active as "isActive",
+        it.updated_at as "updatedAt"
+      from interest_templates it
+      left join selection_profiles sp on sp.source_interest_template_id = it.interest_template_id
+      where it.is_active = true
+        and ($1::text is null or it.name ilike $1::text or it.description ilike $1::text)
+      order by it.updated_at desc, it.name asc
+      limit 250
+    `,
+    [domainLike]
+  );
+  const llmResult = await pool.query<Record<string, unknown>>(
+    `
+      select
+        prompt_template_id::text as "promptTemplateId",
+        name,
+        scope,
+        language,
+        template_text as "templateText",
+        is_active as "isActive",
+        updated_at as "updatedAt"
+      from llm_prompt_templates
+      where is_active = true
+        and ($1::text is null or name ilike $1::text or template_text ilike $1::text)
+      order by updated_at desc, scope asc, name asc
+      limit 100
+    `,
+    [domainLike]
+  );
+  const compileRows = await pool.query<Record<string, unknown>>(
+    `
+      select
+        count(*)::int as "activeInterests",
+        count(c.criterion_id)::int as "activeInterestsWithCriterion",
+        count(*) filter (
+          where c.enabled = true
+            and c.compiled = true
+            and c.compile_status = 'compiled'
+            and cc.compile_status = 'compiled'
+        )::int as "compiledActiveCriteria",
+        count(*) filter (
+          where sp.status = 'active'
+        )::int as "activeSelectionProfiles"
+      from interest_templates it
+      left join criteria c on c.source_interest_template_id = it.interest_template_id
+      left join criteria_compiled cc on cc.criterion_id = c.criterion_id
+      left join selection_profiles sp on sp.source_interest_template_id = it.interest_template_id
+      where it.is_active = true
+        and ($1::text is null or it.name ilike $1::text or it.description ilike $1::text)
+    `,
+    [domainLike]
+  );
+  const selectionRows = await pool.query<Record<string, unknown>>(
+    `
+      select final_decision as "finalDecision", count(*)::int as count
+      from final_selection_results
+      group by final_decision
+      order by final_decision
+    `
+  );
+  const webVisibleRows = await pool.query<Record<string, unknown>>(
+    `
+      select
+        count(*) filter (where eligible_for_feed = true)::int as "webVisibleEligible",
+        count(*) filter (where decision = 'eligible')::int as "eligibleRows",
+        count(*) filter (where decision = 'pending_llm')::int as "pendingLlmRows",
+        count(*)::int as "systemFeedRows"
+      from system_feed_results
+    `
+  );
+  const staleRows = await pool.query<Record<string, unknown>>(
+    `
+      select
+        count(*) filter (
+          where fsr.total_filter_count = 0
+            and (
+              fsr.is_selected = true
+              or fsr.final_decision = 'selected'
+              or fsr.compat_system_feed_decision = 'pass_through'
+            )
+            and not exists (
+              select 1
+              from interest_filter_results ifr
+              where ifr.doc_id = fsr.doc_id
+                and ifr.filter_scope = 'system_criterion'
+            )
+        )::int as "stalePassThroughCount",
+        count(*) filter (
+          where not exists (
+            select 1
+            from interest_filter_results ifr
+            where ifr.doc_id = fsr.doc_id
+              and ifr.filter_scope = 'system_criterion'
+          )
+        )::int as "missingInterestFilterResults"
+      from final_selection_results fsr
+    `
+  );
+  const residualRows = await pool.query<Record<string, unknown>>(
+    `
+      select
+        verification_state as "verificationState",
+        final_decision as "finalDecision",
+        count(*)::int as count
+      from final_selection_results
+      group by verification_state, final_decision
+      order by final_decision, verification_state
+    `
+  );
+  const discoveryRows = options.includeDiscovery
+    ? await pool.query<Record<string, unknown>>(
+        `
+          select
+            target_id::text as "targetId",
+            source_count as "sourceCount",
+            strong_source_count as "strongSourceCount",
+            missing_role_count as "missingRoleCount",
+            coverage_score as "coverageScore",
+            created_at as "createdAt"
+          from discovery_coverage_snapshots
+          order by created_at desc
+          limit 25
+        `
+      )
+    : { rows: [] };
+  const adapterRows = options.includeDiscovery
+    ? await pool.query<Record<string, unknown>>(
+        `
+          select
+            provider_type as "providerType",
+            endpoint_kind as "endpointKind",
+            recommended_action as "recommendedAction",
+            status,
+            count(*)::int as count
+          from discovery_source_endpoints
+          where recommended_action in ('needs_config', 'monitor_only')
+             or provider_type not in ('rss', 'website', 'api', 'email_imap')
+          group by provider_type, endpoint_kind, recommended_action, status
+          order by provider_type, endpoint_kind, recommended_action, status
+          limit 50
+        `
+      )
+    : { rows: [] };
+
+  return {
+    domainPrefix: options.domainPrefix,
+    interests: interestResult.rows,
+    llmTemplates: llmResult.rows,
+    compileStatus: compileRows.rows[0] ?? {},
+    selectionCounts: selectionRows.rows,
+    webVisibility: webVisibleRows.rows[0] ?? {},
+    staleSelection: staleRows.rows[0] ?? {},
+    residualCounts: residualRows.rows,
+    discoveryRows: discoveryRows.rows,
+    adapterRows: adapterRows.rows,
+    samples: options.includeSamples
+      ? {
+          interests: interestResult.rows.slice(0, 12).map((row) => ({
+            interestTemplateId: row.interestTemplateId,
+            name: row.name,
+            mustHaveTerms: row.mustHaveTerms,
+            timeWindowHours: row.timeWindowHours,
+            allowedContentKinds: row.allowedContentKinds,
+          })),
+          llmTemplates: llmResult.rows.slice(0, 8).map((row) => ({
+            promptTemplateId: row.promptTemplateId,
+            name: row.name,
+            scope: row.scope,
+          })),
+        }
+      : {},
+  };
+}
+
+export async function buildFunnelAudit(
+  context: McpToolContext,
+  args: Record<string, unknown>
+) {
+  const objective = readOptionalString(args.objective) ?? "funnel calibration";
+  const domainPrefix = readOptionalString(args.domainPrefix) ?? null;
+  const includeDiscovery = args.includeDiscovery !== false;
+  const includeSamples = args.includeSamples === true;
+  const portableFunnelSpec = buildReferenceFunnelSpec({ ...args, objective });
+  const live = await readFunnelLiveState(context.pool, {
+    domainPrefix,
+    includeDiscovery,
+    includeSamples,
+  });
+  const drift = summarizeDrift(portableFunnelSpec, {
+    interests: live.interests,
+    llmTemplates: live.llmTemplates,
+    discoveryRows: live.discoveryRows,
+    adapterRows: live.adapterRows,
+  });
+  const findings = [
+    {
+      findingType: "hardGateDrift",
+      severity: drift.hardGateDrift.length > 0 ? "warning" : "info",
+      count: drift.hardGateDrift.length,
+      evidence: includeSamples ? drift.hardGateDrift.slice(0, 20) : drift.hardGateDrift.slice(0, 5),
+      interpretation:
+        "Rare-signal funnels usually lose recall when broad must-have terms, short-token requirements, or time windows are used as early hard gates.",
+    },
+    {
+      findingType: "contentKindDrift",
+      severity: drift.contentKindDrift.length > 0 ? "warning" : "info",
+      count: drift.contentKindDrift.length,
+      evidence: includeSamples ? drift.contentKindDrift.slice(0, 20) : drift.contentKindDrift.slice(0, 5),
+      interpretation:
+        "Formal evidence may arrive as listings, documents, data files, or API payloads; content-kind gaps can hide acquisition success before selection.",
+    },
+    {
+      findingType: "promptGuardrailDrift",
+      severity: drift.promptGuardrailDrift.length > 0 ? "warning" : "info",
+      count: drift.promptGuardrailDrift.length,
+      evidence: drift.promptGuardrailDrift,
+      interpretation:
+        "LLM review should reject wrapper/seller/navigation noise while preserving direct buyer requests and concrete formal notices.",
+    },
+    {
+      findingType: "duplicateInterestRisk",
+      severity: drift.duplicateInterestRisk.length > 0 ? "info" : "info",
+      count: drift.duplicateInterestRisk.length,
+      evidence: drift.duplicateInterestRisk,
+      interpretation:
+        "Duplicate signal-family interests may be intentional retained-test evidence, but calibration should know when evidence is split across many active copies.",
+    },
+    {
+      findingType: "sourceRoleGap",
+      severity: drift.sourceRoleGap.length > 0 ? "warning" : "info",
+      count: drift.sourceRoleGap.length,
+      evidence: includeSamples ? drift.sourceRoleGap.slice(0, 10) : [],
+      interpretation:
+        "Discovery coverage gaps should be handled by source expansion/repair, not by loosening final content selection.",
+    },
+    {
+      findingType: "adapterRequiredGap",
+      severity: drift.adapterRequiredGap.length > 0 ? "warning" : "info",
+      count: drift.adapterRequiredGap.length,
+      evidence: drift.adapterRequiredGap,
+      interpretation:
+        "API-like or adapter-required candidates need adapters/mapping or alternatives; they should not be forced into fake RSS/website rows.",
+    },
+  ];
+  return {
+    generatedAt: new Date().toISOString(),
+    objective,
+    readOnly: true,
+    mutationPolicy:
+      "This audit never writes configuration, starts discovery, onboards channels, or queues replay. Apply recommendations only through explicit MCP/admin writes.",
+    portableFunnelSpec,
+    liveStateSummary: {
+      domainPrefix,
+      interests: live.interests.length,
+      llmTemplates: live.llmTemplates.length,
+      compileStatus: live.compileStatus,
+      selectionCounts: live.selectionCounts,
+      webVisibility: live.webVisibility,
+      staleSelection: live.staleSelection,
+      residualCounts: live.residualCounts,
+      discoveryCoverageRows: live.discoveryRows.length,
+      adapterRequiredRows: live.adapterRows.length,
+      samples: live.samples,
+    },
+    findings,
+    drift,
+    recommendedMcpActions: buildFunnelRecommendedActions(drift, domainPrefix),
+    riskNotes: [
+      "Reference evidence is calibration input, not canonical runtime truth.",
+      "Domain vocabulary must remain in MCP/admin configuration and tests, not hardcoded selection/discovery runtime logic.",
+      "Source health and source priors remain independent from article selection, ranking, escalation, web visibility, and counts.",
+      "If async workers are running, repeat report verification after bounded replay or fetch cycles complete.",
+    ],
+    nextReadBack: [
+      "operator.report.verify reportKind=funnel_calibration",
+      "system_interests.compile_status.list",
+      "templates.duplicates.audit",
+      "articles.residuals.summary",
+      "content_items.list",
+    ],
+  };
+}
+
+export async function buildFunnelAutoplan(context: McpToolContext, args: Record<string, unknown>) {
+  const includeExamples = args.includeSamples === true;
+  const coverage = await getSourceFamilyCoverageWithPool(context.pool, { includeExamples });
+  return {
+    generatedAt: new Date().toISOString(),
+    readOnly: true,
+    mutationPolicy:
+      "This plan does not mutate sources, discovery targets, templates, interests, replay jobs, or channel activation state. Apply bounded follow-through through explicit MCP tools only.",
+    ...buildCoverageFirstAutoplan({
+      objective: readOptionalString(args.objective) ?? undefined,
+      maxNewChannels: readOptionalInteger(args.maxNewChannels) ?? undefined,
+      coverage,
+    }),
+    currentSourceFamilyCoverage: coverage,
+    recommendedMcpActions: [
+      { tool: "discovery.source_families.coverage", arguments: { includeExamples } },
+      { tool: "operator.report.verify", arguments: { reportKind: "source_family_balance", entityIds: {}, includeSamples: includeExamples } },
+      { tool: "discovery.source_roles.plan", arguments: { objective: readOptionalString(args.objective) ?? "coverage-first rare-signal funnel", rareSignal: true } },
+      { tool: "operator.selection.precision_audit", arguments: { includeSamples: includeExamples } },
+    ],
+    nextReadBack: [
+      "discovery.source_families.coverage",
+      "operator.report.verify reportKind=source_family_balance",
+      "operator.funnel.iteration.recommend",
+      "operator.report.verify reportKind=selection",
+    ],
+  };
+}
+
+export async function buildFunnelIterationRecommendation(
+  context: McpToolContext,
+  args: Record<string, unknown>
+) {
+  const includeExamples = args.includeSamples === true;
+  const coverage = await getSourceFamilyCoverageWithPool(context.pool, { includeExamples });
+  return {
+    generatedAt: new Date().toISOString(),
+    readOnly: true,
+    mutationPolicy:
+      "Recommendations never disable working noisy/low-yield semantic sources. Use explicit operator action and reason for any deactivation.",
+    ...buildCoverageFirstIterationRecommendation({
+      objective: readOptionalString(args.objective) ?? undefined,
+      coverage,
+    }),
+    currentSourceFamilyCoverage: coverage,
+  };
 }
 
 function readDomains(value: unknown): OperatingDomain[] {
@@ -1006,6 +2269,63 @@ function buildTuningRecommendations(
     );
     return base;
   }
+  if (domain === "selection" && objective === "increase_recall" && residualBucket === "gray_zone_hold") {
+    base.riskLevel = "medium";
+    base.expectedEffect =
+      "Re-evaluate held candidate-signal items in bounded chunks without loosening source health or web visibility rules.";
+    base.recommendedChanges.push({
+      target: "selection replay and candidate-signal hold policy",
+      action:
+        "Read hold-quality tiers, choose only buyer_intent/project_intent docId chunks of 25, queue maintenance.reindex.request jobKind=backfill with payload.options.docIds, then verify selection/hold-quality/report/effect before tuning interests.",
+      reason:
+        "gray_zone_hold can be caused by candidate-signal recovery plus strict hold policy; prove replay effects before changing criteria.",
+    });
+    base.suggestedToolCalls.push(
+      { toolName: "articles.holds.summary", argumentsTemplate: {} },
+      {
+        toolName: "articles.holds.list",
+        argumentsTemplate: { candidateSignalTier: "project_intent", pageSize: 25 },
+      },
+      { toolName: "articles.residuals.summary", argumentsTemplate: { downstreamLossBucket: "gray_zone_hold" } },
+      {
+        toolName: "articles.residuals.list",
+        argumentsTemplate: { selectionMode: "hold", downstreamLossBucket: "project_intent_hold", pageSize: 25 },
+      },
+      {
+        toolName: "maintenance.reindex.request",
+        argumentsTemplate: {
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "backfill",
+            options: {
+              docIds: ["<bounded-doc-id-list>"],
+              batchSize: 25,
+              includeEnrichment: false,
+              forceEnrichment: false,
+              reason: "selection-gray-zone-hold-bounded-replay",
+              parentReindexJobId: "<failed-or-parent-reindex-job-id>",
+            },
+          },
+        },
+      },
+      { toolName: "maintenance.reindex_jobs.list", argumentsTemplate: { pageSize: 10 } },
+      { toolName: "operator.report.verify", argumentsTemplate: { reportKind: "selection", entityIds: {} } },
+      {
+        toolName: "operator.report.verify",
+        argumentsTemplate: { reportKind: "selection_hold_quality", entityIds: {}, includeSamples: true },
+      },
+      {
+        toolName: "operator.effect.verify",
+        argumentsTemplate: {
+          domain: "selection",
+          changeRef: "selection-gray-zone-hold-bounded-replay",
+          baselineWindowHours: 24,
+          comparisonWindowHours: 6,
+        },
+      }
+    );
+    return base;
+  }
   if (objective === "increase_recall") {
     base.expectedEffect = "Let more borderline items reach review/selection while monitoring false positives.";
     base.recommendedChanges.push({
@@ -1154,14 +2474,511 @@ export async function buildOperationalReportVerification(
   const domainByKind: Record<string, OperatingDomain> = {
     system_health: "selection",
     channel_health: "channels",
+    source_bottleneck: "channels",
+    source_role_coverage: "discovery",
+    source_family_balance: "discovery",
+    adapter_research: "discovery",
+    indirect_search_execution: "discovery",
+    marketplace_extraction_quality: "discovery",
+    funnel_calibration: "selection",
+    selection_precision: "selection",
     website_pipeline: "website_pipeline",
     selection_tuning: "selection",
+    selection_hold_quality: "selection",
     content_analysis: "content_analysis",
     llm_budget: "llm_budget",
     sequence_run: "sequences",
     discovery_yield: "discovery",
   };
   const domain = domainByKind[reportKind] ?? "selection";
+  if (reportKind === "funnel_calibration") {
+    const domainPrefix = readOptionalString(entityIds.domainPrefix) ?? null;
+    const audit = await buildFunnelAudit(context, {
+      objective: "funnel calibration report verification",
+      referenceEvidenceKind: "portable_funnel_guidance",
+      referenceText:
+        "rare-signal funnel with buyer-side asks, formal procurement notices, wrapper-noise guardrails, empty must_have_terms baseline, null time window baseline, allowed content kinds including editorial listing document data_file api_payload, and adapter-required source policy",
+      domainPrefix,
+      includeDiscovery: true,
+      includeSamples,
+    });
+    const liveStateSummary = audit.liveStateSummary as Record<string, unknown>;
+    const drift = audit.drift as Record<string, unknown>;
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        interests: liveStateSummary.interests,
+        llmTemplates: liveStateSummary.llmTemplates,
+        compileStatus: liveStateSummary.compileStatus,
+        selectionCounts: liveStateSummary.selectionCounts,
+        webVisibility: liveStateSummary.webVisibility,
+        staleSelection: liveStateSummary.staleSelection,
+        hardGateDrift: Array.isArray(drift.hardGateDrift) ? drift.hardGateDrift.length : 0,
+        contentKindDrift: Array.isArray(drift.contentKindDrift)
+          ? drift.contentKindDrift.length
+          : 0,
+        promptGuardrailDrift: Array.isArray(drift.promptGuardrailDrift)
+          ? drift.promptGuardrailDrift.length
+          : 0,
+        duplicateInterestRisk: Array.isArray(drift.duplicateInterestRisk)
+          ? drift.duplicateInterestRisk.length
+          : 0,
+        sourceRoleGap: Array.isArray(drift.sourceRoleGap) ? drift.sourceRoleGap.length : 0,
+        adapterRequiredGap: Array.isArray(drift.adapterRequiredGap)
+          ? drift.adapterRequiredGap.length
+          : 0,
+      },
+      findings: audit.findings,
+      warnings: (audit.findings as Array<Record<string, unknown>>).filter(
+        (finding) => finding.severity === "warning"
+      ),
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Reference bundles are calibration evidence, not runtime truth.",
+        "Use MCP/admin config writes plus bounded maintenance.reindex.request chunks for any follow-through.",
+      ],
+      nextReadBack: [
+        "operator.funnel.audit",
+        "operator.report.verify reportKind=selection",
+        "maintenance.reindex_jobs.list",
+        "content_items.list",
+      ],
+    };
+  }
+  if (reportKind === "selection" || reportKind === "selection_precision") {
+    const docIds = readStringArray(entityIds.docIds);
+    const audit = await buildSelectionPrecisionAudit(context, {
+      docIds,
+      pageSize: includeSamples ? 100 : 50,
+      includeSamples,
+    });
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        inspectedSelectedCount: audit.inspectedSelectedCount,
+        highQualityCount: audit.highQualityCount,
+        weakSelectedCount: audit.weakSelectedCount,
+        buckets: audit.buckets,
+        staleSelection: audit.staleSelection,
+      },
+      samples: includeSamples ? audit.samples : {},
+      warnings: [
+        ...(audit.weakSelectedCount > 0
+          ? [
+              issue(
+                "warning",
+                "selection",
+                "Selected rows include context-only or noise candidates.",
+                {
+                  weakSelectedCount: audit.weakSelectedCount,
+                  buckets: audit.buckets,
+                },
+                [
+                  "Fix selected precision through MCP/admin system interests, LLM templates, candidateSignals and bounded replay.",
+                  "Do not add a separate public selected gate; selected itself must become web-safe.",
+                ],
+              ),
+            ]
+          : []),
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "selected remains the only web truth; this report does not create internal/public selected divergence.",
+        "Source health, source role, source prior, adapter risk, and search provider metadata are acquisition diagnostics only.",
+      ],
+      nextReadBack: audit.nextReadBack,
+    };
+  }
+  if (reportKind === "source_bottleneck") {
+    const channelIds = readStringArray(entityIds.channelIds);
+    const summary = await summarizeChannelBottlenecksWithPool(context.pool, { channelIds });
+    const list = await listChannelBottlenecksWithPool(context.pool, {
+      channelIds,
+      pageSize: includeSamples ? 25 : 5,
+    });
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: summary,
+      samples: includeSamples ? list.items : [],
+      warnings: [
+        ...(summary.technicalBottlenecks > 0
+          ? [
+              issue(
+                "warning",
+                "channels",
+                "Source bottlenecks include technical repair lanes.",
+                {
+                  technicalBottlenecks: summary.technicalBottlenecks,
+                  byFailureBucket: summary.byFailureBucket,
+                  byRepairLane: summary.byRepairLane,
+                },
+                [
+                  "Use channels.bottlenecks.list/explain before changing discovery or selection filters.",
+                  "Low yield alone is not a fetch failure; repair transport/provider-shape bottlenecks separately.",
+                ],
+              ),
+            ]
+          : []),
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Source health does not select, rank, escalate, or publish content by itself.",
+        "Repeat after async fetchers/discovery jobs finish if the report covers in-flight work.",
+      ],
+      nextReadBack: [
+        "channels.bottlenecks.summary",
+        "channels.bottlenecks.list",
+        "channels.bottlenecks.explain",
+        "channels.alternatives.plan",
+      ],
+    };
+  }
+  if (reportKind === "selection_hold_quality") {
+    const docIds = readStringArray(entityIds.docIds);
+    const args = docIds.length > 0 ? { docIds, pageSize: includeSamples ? 25 : 5 } : {};
+    const summary = await buildArticleHoldQualitySummary(context, args);
+    const list = await listArticleHoldQuality(context, {
+      ...args,
+      pageSize: includeSamples ? 25 : 5,
+    });
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: summary,
+      samples: includeSamples ? list.items : [],
+      warnings: [
+        ...(summary.totalHolds > 0
+          ? [
+              issue(
+                "warning",
+                "selection",
+                "Selection holds remain and should be split by candidate-signal tier before replay.",
+                {
+                  byCandidateSignalTier: summary.byCandidateSignalTier,
+                  byDownstreamLossBucket: summary.byDownstreamLossBucket,
+                },
+                [
+                  "Replay project_intent/buyer_intent holds first in chunks of 25.",
+                  "Treat context-only holds as diagnostics, not useful selected evidence.",
+                ],
+              ),
+            ]
+          : []),
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Source priors/source health are intentionally not selection evidence.",
+        "Use maintenance.reindex.request only with bounded docIds after inspecting hold quality.",
+      ],
+      nextReadBack: [
+        "articles.holds.summary",
+        "articles.holds.list",
+        "articles.holds.explain",
+        "maintenance.reindex_jobs.list",
+        "operator.effect.verify",
+      ],
+    };
+  }
+  if (reportKind === "source_role_coverage") {
+    const coverage = await getSourceRoleCoverageWithPool(context.pool, { includeExamples: includeSamples });
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        missingRoles: coverage.missingRoles,
+        risks: coverage.risks,
+        roles: coverage.roles.map((row) => ({
+          sourceRole: row.sourceRole,
+          channels: row.channels,
+          activeChannels: row.activeChannels,
+          adapterChannels: row.adapterChannels,
+          researchOnlyChannels: row.researchOnlyChannels,
+          candidateEndpoints: row.candidateEndpoints,
+          detectOnlyEndpoints: row.detectOnlyEndpoints,
+          adapterRequiredEndpoints: row.adapterRequiredEndpoints,
+          accessRequiredEndpoints: row.accessRequiredEndpoints,
+        })),
+      },
+      samples: includeSamples ? coverage.roles.flatMap((row) => row.examples) : [],
+      warnings: [
+        ...(coverage.missingRoles.length > 0
+          ? [
+              issue(
+                "warning",
+                "discovery",
+                "Thematic source-role coverage has missing roles.",
+                { missingRoles: coverage.missingRoles, risks: coverage.risks },
+                [
+                  "Use discovery.source_roles.plan/coverage before adding more RSS channels.",
+                  "Use discovery.adapter_research.plan/start for missing API/marketplace/community roles.",
+                ],
+              ),
+            ]
+          : []),
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Source role coverage is acquisition diagnostics only and cannot select, rank, escalate, or publish content.",
+      ],
+      nextReadBack: [
+        "discovery.source_roles.coverage",
+        "discovery.adapter_research.plan",
+        "operator.report.verify reportKind=adapter_research",
+      ],
+    };
+  }
+  if (reportKind === "source_family_balance") {
+    const coverage = await getSourceFamilyCoverageWithPool(context.pool, { includeExamples: includeSamples });
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        missingFamilies: coverage.missingFamilies,
+        lifecycleCounts: coverage.lifecycleCounts,
+        retainedWorkingNoisyChannels: coverage.retainedWorkingNoisyChannels,
+        retainedWorkingLowYieldChannels: coverage.retainedWorkingLowYieldChannels,
+        negativeControlUsefulChannels: coverage.negativeControlUsefulChannels,
+        technicalRepairChannels: coverage.technicalRepairChannels,
+        operatorDisabledChannels: coverage.operatorDisabledChannels,
+        risks: coverage.risks,
+        families: coverage.families.map((row) => ({
+          sourceFamily: row.sourceFamily,
+          channels: row.channels,
+          activeChannels: row.activeChannels,
+          workingChannels: row.workingChannels,
+          workingNoisySemanticMatch: row.workingNoisySemanticMatch,
+          workingLowYield: row.workingLowYield,
+          negativeControlUseful: row.negativeControlUseful,
+          technicalBottlenecks: row.technicalBottlenecks,
+          adapterRequired: row.adapterRequired,
+          accessRequired: row.accessRequired,
+          selectedRows: row.selectedRows,
+          grayRows: row.grayRows,
+          rejectedRows: row.rejectedRows,
+        })),
+      },
+      samples: includeSamples ? coverage.families.flatMap((row) => row.examples) : [],
+      warnings: [
+        ...(coverage.missingFamilies.length > 0
+          ? [
+              issue(
+                "warning",
+                "discovery",
+                "Coverage-first source-family balance has missing families.",
+                { missingFamilies: coverage.missingFamilies, risks: coverage.risks },
+                [
+                  "Use operator.funnel.autoplan before adding broad channels.",
+                  "Use bounded source-family additions instead of optimizing only for current yield.",
+                ],
+              ),
+            ]
+          : []),
+        ...(coverage.technicalRepairChannels > 0
+          ? [
+              issue(
+                "warning",
+                "channels",
+                "Some source-family inventory belongs in technical repair/access lanes.",
+                { technicalRepairChannels: coverage.technicalRepairChannels },
+                ["Repair transport/provider-shape/access blockers without disabling working noisy semantic sources."],
+              ),
+            ]
+          : []),
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Working noisy, low-yield, and negative-control useful channels are retained acquisition inventory unless an operator explicitly disables them.",
+        "Source family, lifecycle label, source health, source prior, and adapter risk cannot select, rank, escalate, or publish content.",
+      ],
+      autoDisablePolicy: coverage.autoDisablePolicy,
+      recommendations: coverage.recommendations,
+      nextReadBack: coverage.nextReadBack,
+    };
+  }
+  if (reportKind === "adapter_research") {
+    const research = await listAdapterResearchWithPool(context.pool, {
+      pageSize: includeSamples ? 50 : 10,
+    });
+    const accessCounts = research.items.reduce<Record<string, number>>((acc, item) => {
+      const accessKind = String(
+        ((item.adapterResearch as Record<string, unknown> | null)?.accessKind ?? "unknown")
+      );
+      acc[accessKind] = (acc[accessKind] ?? 0) + 1;
+      return acc;
+    }, {});
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        total: research.total,
+        accessCounts,
+        pageSize: research.pageSize,
+      },
+      samples: includeSamples ? research.items : [],
+      warnings: [
+        ...((accessCounts.closed_access ?? 0) > 0 || (accessCounts.github_unofficial_restricted ?? 0) > 0
+          ? [
+              issue(
+                "warning",
+                "discovery",
+                "Adapter research includes access-restricted source roles.",
+                { accessCounts },
+                [
+                  "Use indirect aggregator targets or explicit operator-approved access for restricted platforms.",
+                  "Do not disguise API/social/ATS/project-marketplace sources as RSS or website rows.",
+                ],
+              ),
+            ]
+          : []),
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Adapter research rows do not create channels or selected content until separately onboarded/fetched/filtered.",
+      ],
+      nextReadBack: [
+        "discovery.adapter_research.list",
+        "discovery.source_roles.coverage",
+        "channels.bulk_onboard.plan",
+      ],
+    };
+  }
+  if (reportKind === "indirect_search_execution") {
+    const endpointCounts = await context.pool.query(`
+      select
+        count(*) filter (where source_role = 'indirect_aggregator')::int as indirect_endpoints,
+        count(*) filter (where source_role = 'indirect_aggregator' and (status = 'detect_only' or signal_mode = 'hidden'))::int as detect_only_endpoints
+      from discovery_source_endpoints
+    `);
+    const channelCounts = await context.pool.query(`
+      select
+        coalesce(config_json #>> '{api,adapterKey}', config_json #>> '{adapter,adapterKey}', config_json #>> '{adapterKey}') as adapter_key,
+        coalesce(config_json #>> '{api,sourceRole}', config_json #>> '{adapter,sourceRole}', config_json #>> '{sourceRole}') as source_role,
+        count(*)::int as channels,
+        count(*) filter (where is_active)::int as active_channels
+      from source_channels
+      where coalesce(config_json #>> '{api,adapterKey}', config_json #>> '{adapter,adapterKey}', config_json #>> '{adapterKey}')
+        in ('ddgs_search', 'searxng_search', 'brave_search', 'tavily_search', 'exa_search', 'serpapi_google_news_research')
+      group by 1, 2
+      order by channels desc
+    `);
+    const articleCounts = await context.pool.query(`
+      select
+        coalesce(a.raw_payload_json ->> 'adapterKey', 'unknown') as adapter_key,
+        count(*)::int as articles,
+        count(*) filter (where fsr.final_decision = 'selected')::int as selected,
+        count(*) filter (where fsr.final_decision = 'gray_zone')::int as held,
+        count(*) filter (where fsr.final_decision = 'rejected')::int as rejected
+      from articles a
+      left join final_selection_results fsr on fsr.doc_id = a.doc_id
+      where a.raw_payload_json ->> 'adapterKey'
+        in ('ddgs_search', 'searxng_search', 'brave_search', 'tavily_search', 'exa_search', 'serpapi_google_news_research')
+      group by 1
+      order by articles desc
+    `);
+    const detectOnlyEndpoints = Number(endpointCounts.rows[0]?.detect_only_endpoints ?? 0);
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        indirectEndpoints: Number(endpointCounts.rows[0]?.indirect_endpoints ?? 0),
+        detectOnlyEndpoints,
+        channels: channelCounts.rows,
+        articles: articleCounts.rows,
+      },
+      warnings: [
+        ...(detectOnlyEndpoints > 0 && channelCounts.rows.length === 0
+          ? [
+              issue(
+                "warning",
+                "discovery",
+                "Indirect aggregator evidence exists but no executable search channels are active.",
+                { detectOnlyEndpoints },
+                ["Use discovery.indirect_targets.channels.plan, then channels.bulk_onboard.plan/apply/verify."]
+              ),
+            ]
+          : []),
+      ],
+      nextReadBack: [
+        "discovery.indirect_targets.channels.plan",
+        "channels.bulk_onboard.plan",
+        "fetch_runs.list",
+        "articles.residuals.summary",
+        "articles.holds.summary",
+      ],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Indirect search execution is acquisition-only and cannot influence selection by provider metadata.",
+      ],
+    };
+  }
+  if (reportKind === "marketplace_extraction_quality") {
+    const quality = await context.pool.query(`
+      select
+        coalesce(a.raw_payload_json ->> 'adapterKey', 'unknown') as adapter_key,
+        count(*)::int as articles,
+        count(*) filter (where (a.raw_payload_json ->> 'extractionKind') = 'project_detail')::int as project_detail_articles,
+        count(*) filter (where nullif(a.raw_payload_json ->> 'projectDetailConfidence', '')::float >= 0.55)::int as confident_project_details,
+        count(*) filter (where (a.raw_payload_json ->> 'detailFetchAttempted')::boolean is true)::int as detail_fetch_attempted,
+        count(*) filter (where fsr.final_decision = 'selected')::int as selected,
+        count(*) filter (where fsr.final_decision = 'gray_zone')::int as held,
+        count(*) filter (where fsr.final_decision = 'rejected')::int as rejected
+      from articles a
+      left join final_selection_results fsr on fsr.doc_id = a.doc_id
+      where a.raw_payload_json ->> 'adapterKey'
+        in ('peopleperhour_public_projects_research', 'freelancer_public_projects_research', 'guru_public_projects_research', 'malt_public_projects_research', 'contra_public_search_research', 'upwork_public_signal_research', 'linkedin_public_signal_research', 'discourse_search')
+      group by 1
+      order by articles desc
+    `);
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        byAdapter: quality.rows,
+      },
+      warnings: [
+        ...(quality.rows.some(
+          (row: Record<string, unknown>) =>
+            Number(row.articles ?? 0) > 0 && Number(row.project_detail_articles ?? 0) === 0
+        )
+          ? [
+              issue(
+                "warning",
+                "discovery",
+                "Marketplace/forum acquisition produced items but no project-detail evidence.",
+                { byAdapter: quality.rows },
+                ["Inspect adapter HTML extraction and reject category/navigation wrappers before tuning selection."]
+              ),
+            ]
+          : []),
+      ],
+      nextReadBack: ["articles.residuals.list", "articles.holds.list", "channels.bottlenecks.list"],
+      staleReportNotes: [
+        "This verification is read-only and DB-backed.",
+        "Project-detail confidence is extraction evidence only and cannot select content by itself.",
+      ],
+    };
+  }
   const health = await buildSystemHealth(context, {
     domains: reportKind === "system_health" ? OPERATING_DOMAIN_VALUES : [domain],
     includeSamples,

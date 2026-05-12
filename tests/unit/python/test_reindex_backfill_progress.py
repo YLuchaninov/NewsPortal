@@ -1,7 +1,7 @@
 import unittest
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock, call, patch
 
-from services.workers.app import reindex_backfill
+from services.workers.app import reindex_backfill, reindex_backfill_runtime
 
 
 class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
@@ -56,14 +56,14 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
                 call(reindex_job_id="job-1", batch_size=1, after_position=2),
             ],
         )
+        progress_calls = [entry.args[1]["progress"] for entry in update_job_options.await_args_list]
         self.assertEqual(
-            update_job_options.await_args_list,
-            [
-                call("job-1", {"progress": {"processedArticles": 0, "totalArticles": 2}}),
-                call("job-1", {"progress": {"processedArticles": 1, "totalArticles": 2}}),
-                call("job-1", {"progress": {"processedArticles": 2, "totalArticles": 2}}),
-            ],
+            [(entry["processedArticles"], entry["totalArticles"]) for entry in progress_calls],
+            [(0, 2), (1, 2), (2, 2), (2, 2)],
         )
+        self.assertEqual(progress_calls[-1]["phase"], "completed")
+        self.assertEqual(progress_calls[-1]["criterionLlmReviews"], 1)
+        self.assertIn("lastHeartbeatAt", progress_calls[-1])
         self.assertEqual(result["processedArticles"], 2)
         self.assertEqual(result["totalArticles"], 2)
         self.assertEqual(result["criteriaMatches"], 2)
@@ -124,10 +124,12 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             batch_size=50,
             after_position=0,
         )
-        update_job_options.assert_awaited_once_with(
-            "job-empty",
-            {"progress": {"processedArticles": 0, "totalArticles": 0}},
+        progress_calls = [entry.args[1]["progress"] for entry in update_job_options.await_args_list]
+        self.assertEqual(
+            [(entry["processedArticles"], entry["totalArticles"]) for entry in progress_calls],
+            [(0, 0), (0, 0)],
         )
+        self.assertEqual(progress_calls[-1]["phase"], "completed")
         process_article_extract.assert_not_awaited()
         process_normalize.assert_not_awaited()
         process_dedup.assert_not_awaited()
@@ -291,6 +293,38 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["processedArticles"], 1)
         self.assertEqual(result["totalArticles"], 2)
         self.assertEqual(dependencies.list_target_batch.await_count, 1)
+
+    async def test_runtime_replay_gray_zone_review_timeout_is_soft_failure(self) -> None:
+        with (
+            patch.object(
+                reindex_backfill_runtime,
+                "find_current_prompt_template_id",
+                AsyncMock(return_value="template-1"),
+            ),
+            patch.object(
+                reindex_backfill_runtime,
+                "list_gray_zone_target_ids",
+                AsyncMock(return_value=["criterion-1"]),
+            ),
+            patch.object(
+                reindex_backfill_runtime,
+                "ensure_published_outbox_event",
+                AsyncMock(),
+            ),
+            patch.object(
+                reindex_backfill_runtime,
+                "process_llm_review",
+                AsyncMock(side_effect=TimeoutError),
+            ),
+        ):
+            result = await reindex_backfill_runtime.replay_gray_zone_reviews_for_doc(
+                doc_id="doc-1",
+                scope="criterion",
+            )
+
+        self.assertEqual(result["completed"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["timedOut"], 1)
 
 
 if __name__ == "__main__":

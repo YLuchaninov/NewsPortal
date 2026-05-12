@@ -85,6 +85,41 @@ def resolve_profile_gray_zone_decision(runtime: Mapping[str, Any]) -> str:
     )
 
 
+def resolve_strict_candidate_signal_guard(
+    runtime: Mapping[str, Any],
+    candidate_signal_explain: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if str(runtime.get("strictness") or "balanced").strip() != "strict":
+        return None
+    if not isinstance(candidate_signal_explain, Mapping):
+        return None
+    if str(candidate_signal_explain.get("signalSource") or "") != "selection_profile_definition":
+        return None
+
+    positive_signal_count = int(candidate_signal_explain.get("positiveSignalCount") or 0)
+    noise_signal_count = int(candidate_signal_explain.get("noiseSignalCount") or 0)
+    minimum_positive_groups = 2
+    missing_positive_groups = positive_signal_count < minimum_positive_groups
+    has_noise = noise_signal_count > 0
+    if not missing_positive_groups and not has_noise:
+        return None
+
+    final_decision = (
+        "irrelevant"
+        if str(runtime.get("unresolvedDecision") or "hold").strip() == "reject"
+        else "gray_zone"
+    )
+    return {
+        "reason": "strict_candidate_signal_guard",
+        "finalDecision": final_decision,
+        "minimumPositiveGroups": minimum_positive_groups,
+        "positiveSignalCount": positive_signal_count,
+        "noiseSignalCount": noise_signal_count,
+        "missingPositiveGroups": missing_positive_groups,
+        "hasNoise": has_noise,
+    }
+
+
 def build_selection_profile_runtime_explain(
     runtime: Mapping[str, Any],
 ) -> dict[str, Any]:

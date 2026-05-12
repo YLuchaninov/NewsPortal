@@ -93,8 +93,31 @@ test("computeAdaptiveTransition keeps failure backoff separate from freshness ad
   assert.equal(rateLimited.consecutiveFailures, 1);
   assert.equal(rateLimited.nextDueAt, "2026-03-23T10:35:00.000Z");
   assert.equal(rateLimited.adaptiveReason, "rate_limited_backoff");
-  assert.equal(hardFailure.effectivePollIntervalSeconds, 600);
+  assert.ok(hardFailure.effectivePollIntervalSeconds >= 2160);
+  assert.ok(hardFailure.effectivePollIntervalSeconds <= 2640);
   assert.equal(hardFailure.consecutiveFailures, 2);
-  assert.equal(hardFailure.nextDueAt, "2026-03-23T10:45:00.000Z");
-  assert.equal(hardFailure.adaptiveReason, "hard_failure_needs_attention");
+  assert.equal(
+    Date.parse(hardFailure.nextDueAt ?? "") - Date.parse("2026-03-23T10:35:00.000Z"),
+    hardFailure.effectivePollIntervalSeconds * 1000
+  );
+  assert.equal(hardFailure.adaptiveReason, "hard_failure_repair_backoff");
+});
+
+test("computeAdaptiveTransition uses repair cadence for repeated hard failures", () => {
+  const first = computeAdaptiveTransition({
+    basePollIntervalSeconds: 300,
+    fetchedAt: "2026-03-23T10:00:00.000Z",
+    outcome: "hard_failure",
+  });
+  const second = computeAdaptiveTransition({
+    basePollIntervalSeconds: 300,
+    fetchedAt: "2026-03-23T10:30:00.000Z",
+    outcome: "hard_failure",
+    state: first,
+  });
+
+  assert.ok(first.effectivePollIntervalSeconds >= 1080);
+  assert.ok(first.effectivePollIntervalSeconds <= 1320);
+  assert.ok(second.effectivePollIntervalSeconds > first.effectivePollIntervalSeconds);
+  assert.ok(second.effectivePollIntervalSeconds <= 2640);
 });

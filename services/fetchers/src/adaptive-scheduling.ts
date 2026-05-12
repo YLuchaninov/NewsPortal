@@ -5,6 +5,8 @@ import {
 } from "@newsportal/contracts";
 
 export const ADAPTIVE_MULTIPLIERS = [1, 2, 4, 8, 16] as const;
+const HARD_FAILURE_REPAIR_MULTIPLIERS = [4, 8, 16, 32, 64, 96] as const;
+const JITTER_RATIO = 0.1;
 
 interface RuntimeStateOverrides {
   adaptiveEnabled?: boolean | null;
@@ -36,6 +38,31 @@ function clampNonNegativeInteger(value: number, fallback = 0): number {
 
 function addSeconds(isoTimestamp: string, seconds: number): string {
   return new Date(new Date(isoTimestamp).getTime() + seconds * 1000).toISOString();
+}
+
+function deterministicJitterFactor(seed: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const normalized = (hash >>> 0) / 0xffffffff;
+  return 1 - JITTER_RATIO + normalized * JITTER_RATIO * 2;
+}
+
+function applyJitter(
+  seconds: number,
+  input: AdaptiveTransitionInput,
+  state: SourceChannelRuntimeState,
+  reason: string
+): number {
+  const factor = deterministicJitterFactor(
+    `${input.fetchedAt}:${input.outcome}:${reason}:${state.consecutiveFailures}:${seconds}`
+  );
+  return Math.min(
+    state.maxPollIntervalSeconds,
+    Math.max(input.basePollIntervalSeconds, Math.round(seconds * factor))
+  );
 }
 
 export function resolveRuntimeState(
@@ -114,7 +141,8 @@ function computeNoChangeState(
 function computeRetryDelaySeconds(
   basePollIntervalSeconds: number,
   state: SourceChannelRuntimeState,
-  retryAfterSeconds: number | null | undefined
+  retryAfterSeconds: number | null | undefined,
+  input?: AdaptiveTransitionInput
 ): number {
   if (Number.isInteger(retryAfterSeconds) && Number(retryAfterSeconds) > 0) {
     return Math.min(
@@ -124,10 +152,27 @@ function computeRetryDelaySeconds(
   }
 
   const failureMultiplier = Math.min(state.consecutiveFailures + 1, 4);
-  return Math.min(
+  const delaySeconds = Math.min(
     Math.max(basePollIntervalSeconds * failureMultiplier, basePollIntervalSeconds),
     Math.min(state.maxPollIntervalSeconds, basePollIntervalSeconds * 4)
   );
+  return input ? applyJitter(delaySeconds, input, state, "retry_backoff") : delaySeconds;
+}
+
+function computeHardFailureDelaySeconds(
+  basePollIntervalSeconds: number,
+  state: SourceChannelRuntimeState,
+  input: AdaptiveTransitionInput
+): number {
+  const multiplier =
+    HARD_FAILURE_REPAIR_MULTIPLIERS[
+      Math.min(state.consecutiveFailures, HARD_FAILURE_REPAIR_MULTIPLIERS.length - 1)
+    ];
+  const delaySeconds = Math.min(
+    Math.max(basePollIntervalSeconds * multiplier, basePollIntervalSeconds),
+    state.maxPollIntervalSeconds
+  );
+  return applyJitter(delaySeconds, input, state, "hard_failure_repair");
 }
 
 export function computeAdaptiveTransition(
@@ -155,7 +200,8 @@ export function computeAdaptiveTransition(
       const retryDelaySeconds = computeRetryDelaySeconds(
         input.basePollIntervalSeconds,
         currentState,
-        input.retryAfterSeconds
+        input.retryAfterSeconds,
+        input
       );
       return {
         ...currentState,
@@ -169,7 +215,8 @@ export function computeAdaptiveTransition(
       const retryDelaySeconds = computeRetryDelaySeconds(
         input.basePollIntervalSeconds,
         currentState,
-        input.retryAfterSeconds
+        input.retryAfterSeconds,
+        input
       );
       return {
         ...currentState,
@@ -179,14 +226,21 @@ export function computeAdaptiveTransition(
         adaptiveReason: "transient_failure_backoff"
       };
     }
-    case "hard_failure":
+    case "hard_failure": {
+      const repairDelaySeconds = computeHardFailureDelaySeconds(
+        input.basePollIntervalSeconds,
+        currentState,
+        input
+      );
       return {
         ...currentState,
-        nextDueAt: addSeconds(fetchedAt, currentState.effectivePollIntervalSeconds),
+        effectivePollIntervalSeconds: repairDelaySeconds,
+        nextDueAt: addSeconds(fetchedAt, repairDelaySeconds),
         lastResultKind: "hard_failure",
         consecutiveFailures: currentState.consecutiveFailures + 1,
-        adaptiveReason: "hard_failure_needs_attention"
+        adaptiveReason: "hard_failure_repair_backoff"
       };
+    }
     default:
       return currentState;
   }

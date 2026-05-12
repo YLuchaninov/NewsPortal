@@ -29,6 +29,39 @@ def _text_list(row: dict[str, Any], *keys: str) -> list[str]:
     return list(dict.fromkeys(values))
 
 
+def _record(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _candidate_signal_config(row: dict[str, Any]) -> dict[str, Any]:
+    definition = _record(row.get("selection_profile_definition_json"))
+    candidate_signals = definition.get("candidateSignals")
+    return dict(candidate_signals) if isinstance(candidate_signals, dict) else {}
+
+
+def _hidden_claim_extraction_policy(row: dict[str, Any]) -> dict[str, Any]:
+    definition = _record(row.get("selection_profile_definition_json"))
+    policy = _record(row.get("selection_profile_policy_json"))
+    candidate_signals = _candidate_signal_config(row)
+    configured = definition.get("hiddenClaimExtraction") or policy.get("hiddenClaimExtraction")
+    hidden_claim_extraction = dict(configured) if isinstance(configured, dict) else {}
+    if candidate_signals:
+        hidden_claim_extraction.setdefault("positiveGroups", candidate_signals.get("positiveGroups") or [])
+        hidden_claim_extraction.setdefault("negativeGroups", candidate_signals.get("negativeGroups") or [])
+    return hidden_claim_extraction
+
+
+def _interest_policy_json(row: dict[str, Any]) -> dict[str, Any]:
+    candidate_signals = _candidate_signal_config(row)
+    hidden_claim_extraction = _hidden_claim_extraction_policy(row)
+    policy: dict[str, Any] = {}
+    if candidate_signals:
+        policy["candidateSignals"] = candidate_signals
+    if hidden_claim_extraction:
+        policy["hiddenClaimExtraction"] = hidden_claim_extraction
+    return policy
+
+
 def build_target_from_system_interest(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "origin_kind": "system_interest",
@@ -42,7 +75,7 @@ def build_target_from_system_interest(row: dict[str, Any]) -> dict[str, Any]:
         "seed_urls": [],
         "seed_domains": [],
         "graph_json": {},
-        "policy_json": {},
+        "policy_json": _interest_policy_json(row),
         "autopilot_json": {},
         "created_by": "system_interest_bootstrap",
     }
@@ -75,7 +108,8 @@ def compile_interest_graph(target: dict[str, Any]) -> dict[str, Any]:
     geos = _text_list(target, "seed_geos")
     languages = _text_list(target, "seed_languages") or ["en"]
     aliases = list(dict.fromkeys([title, *topics, *[f"{entity} alternative" for entity in entities]]))
-    return {
+    policy = _record(target.get("policy_json"))
+    graph = {
         "coreTopic": title,
         "description": description,
         "positiveTexts": list(dict.fromkeys([title, description, *topics])),
@@ -116,6 +150,11 @@ def compile_interest_graph(target: dict[str, Any]) -> dict[str, Any]:
         "languages": languages,
         "sourceRoleTargets": DEFAULT_SOURCE_ROLE_TARGETS,
     }
+    if isinstance(policy.get("candidateSignals"), dict):
+        graph["candidateSignals"] = dict(policy["candidateSignals"])
+    if isinstance(policy.get("hiddenClaimExtraction"), dict):
+        graph["hiddenClaimExtraction"] = dict(policy["hiddenClaimExtraction"])
+    return graph
 
 
 def merge_graph_expansions(graph: dict[str, Any], expansions: dict[str, Any]) -> dict[str, Any]:

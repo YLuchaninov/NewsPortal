@@ -4,6 +4,7 @@ from services.workers.app.selection_profiles import (
     build_selection_profile_runtime_explain,
     coerce_selection_profile_runtime,
     resolve_profile_gray_zone_decision,
+    resolve_strict_candidate_signal_guard,
     selection_profile_allows_llm_review,
 )
 
@@ -82,6 +83,51 @@ class SelectionProfileRuntimeTests(unittest.TestCase):
 
         self.assertEqual(runtime["llmReviewMode"], "optional_high_value_only")
         self.assertFalse(selection_profile_allows_llm_review(runtime))
+
+    def test_strict_candidate_signal_guard_demotes_weak_configured_matches(self) -> None:
+        runtime = coerce_selection_profile_runtime(
+            {
+                "selection_profile_id": "profile-strict",
+                "selection_profile_policy_json": {
+                    "strictness": "strict",
+                    "unresolvedDecision": "hold",
+                },
+            }
+        )
+
+        guard = resolve_strict_candidate_signal_guard(
+            runtime,
+            {
+                "signalSource": "selection_profile_definition",
+                "positiveSignalCount": 1,
+                "noiseSignalCount": 0,
+            },
+        )
+
+        self.assertIsNotNone(guard)
+        assert guard is not None
+        self.assertEqual(guard["finalDecision"], "gray_zone")
+        self.assertEqual(guard["reason"], "strict_candidate_signal_guard")
+        self.assertTrue(guard["missingPositiveGroups"])
+
+    def test_strict_candidate_signal_guard_allows_multiple_clean_groups(self) -> None:
+        runtime = coerce_selection_profile_runtime(
+            {
+                "selection_profile_id": "profile-strict",
+                "selection_profile_policy_json": {"strictness": "strict"},
+            }
+        )
+
+        guard = resolve_strict_candidate_signal_guard(
+            runtime,
+            {
+                "signalSource": "selection_profile_definition",
+                "positiveSignalCount": 2,
+                "noiseSignalCount": 0,
+            },
+        )
+
+        self.assertIsNone(guard)
 
 
 if __name__ == "__main__":

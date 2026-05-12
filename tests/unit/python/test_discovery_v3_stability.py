@@ -12,13 +12,18 @@ from services.workers.app.discovery_v3_contracts import (
     evaluate_source_contract,
 )
 from services.workers.app.discovery_v3_eval import run_fixture_replay_eval, run_replay_eval
-from services.workers.app.discovery_v3_execution import execute_hypothesis_batch_live, execute_hypothesis_batch_with_fixtures
+from services.workers.app.discovery_v3_execution import (
+    _hidden_claim_from_results,
+    execute_hypothesis_batch_live,
+    execute_hypothesis_batch_with_fixtures,
+)
 from services.workers.app.discovery_v3_hypotheses import build_initial_frontier
 from services.workers.app.discovery_v3_identity import is_duplicate_endpoint, resolve_source_identity
 from services.workers.app.discovery_v3_negative_evidence import negative_evidence_blocks_hypothesis
 from services.workers.app.discovery_v3_orchestrator import diagnose_and_queue_repairs, filter_frontier_for_runtime_guards
 from services.workers.app.discovery_v3_provider_health import evaluate_provider_health
 from services.workers.app.discovery_v3_referee import decide_hypothesis_execution
+from services.workers.app.discovery_v3_repository import DiscoveryV3Repository
 from services.workers.app.discovery_v3_repair import rank_and_trim_by_diversity, repair_hypothesis_pack
 from services.workers.app.discovery_v3_self_healing import build_repair_rows, diagnose_run_health
 from services.workers.app.task_engine.discovery_v3_cluster_plugins import DiscoveryV3UrlClusterPlugin
@@ -35,6 +40,178 @@ from services.workers.app.task_engine.discovery_runtime import DiscoveryRuntime
 
 
 class DiscoveryV3StabilityTests(unittest.IsolatedAsyncioTestCase):
+    def test_insert_hypotheses_reuses_unexecuted_dedupe_match_for_later_run(self) -> None:
+        repository = DiscoveryV3Repository(database_url="postgresql://unused")
+        calls: list[tuple[str, tuple[object, ...]]] = []
+
+        def fake_query_one(sql: str, params: tuple[object, ...]) -> dict[str, object] | None:
+            calls.append((sql, params))
+            normalized = " ".join(sql.split()).lower()
+            if normalized.startswith("insert into discovery_hypotheses"):
+                return None
+            if normalized.startswith("select * from discovery_hypotheses"):
+                return {
+                    "hypothesis_id": "old-hypothesis-1",
+                    "run_id": "old-dry-run",
+                    "target_id": "target-1",
+                    "hypothesis_type": "source_directory",
+                    "signal_mode": "direct",
+                    "source_role": "procurement_signal",
+                    "provider_id": "web_search",
+                    "query_text": '"software development" "RFP"',
+                    "status": "queued",
+                }
+            raise AssertionError(f"Unexpected SQL: {sql}")
+
+        repository._query_one = fake_query_one  # type: ignore[method-assign]
+        rows = repository._insert_hypotheses(
+            [
+                {
+                    "run_id": "new-live-run",
+                    "target_id": "target-1",
+                    "hypothesis_type": "source_directory",
+                    "signal_mode": "direct",
+                    "source_role": "procurement_signal",
+                    "acquisition_tactic": "search_fanout",
+                    "query_text": '"software development" "RFP"',
+                    "provider_id": "web_search",
+                }
+            ]
+        )
+
+        self.assertEqual(rows[0]["hypothesis_id"], "old-hypothesis-1")
+        self.assertEqual(rows[0]["run_id"], "new-live-run")
+        self.assertEqual(len(calls), 2)
+
+    def test_seed_url_frontier_does_not_force_procurement_when_graph_has_many_roles(self) -> None:
+        target = {
+            "target_id": "target-community",
+            "title": "Developer community paid help",
+            "description": "Find GitHub, Hacker News and Stack Overflow paid-help source feeds.",
+            "seed_topics": ["GitHub issue willing to pay bounty paid feature", "Hacker News contractor MVP budget"],
+            "seed_entities": ["GitHub", "Hacker News", "Stack Overflow"],
+            "seed_urls": ["https://github.com/search?q=%22paid%20feature%22&type=issues"],
+            "graph_json": {
+                "coreTopic": "Developer community paid help",
+                "entities": ["GitHub"],
+                "sourceRoleTargets": {
+                    "procurement_signal": {"target": 1},
+                    "social_pain_signal": {"target": 1},
+                    "technical_change": {"target": 1},
+                },
+                "preferredSourceRoles": ["social_pain_signal"],
+            },
+        }
+        frontier = build_initial_frontier(
+            target=target,
+            graph=target["graph_json"],
+            coverage={"gaps_json": [{"sourceRole": "social_pain_signal", "gapScore": 0.9}]},
+            run={"run_id": "run-community", "run_kind": "hidden_signal_scan"},
+        )
+
+        seed_probe = next(item for item in frontier if item["hypothesis_type"] == "seed_endpoint_probe")
+        self.assertEqual(seed_probe["source_role"], "social_pain_signal")
+        self.assertNotIn("tender_listing", seed_probe["expected_endpoint_kinds"])
+
+    def test_seed_url_frontier_keeps_procurement_role_when_target_text_matches_procurement(self) -> None:
+        target = {
+            "target_id": "target-procurement",
+            "title": "Software development RFP tender source finder",
+            "description": "Find public procurement portals.",
+            "seed_topics": ["software development RFP tender"],
+            "seed_entities": ["SAM.gov"],
+            "seed_urls": ["https://sam.gov/content/opportunities"],
+            "graph_json": {
+                "coreTopic": "Software development RFP tender source finder",
+                "entities": ["SAM.gov"],
+                "sourceRoleTargets": {
+                    "procurement_signal": {"target": 1},
+                    "social_pain_signal": {"target": 1},
+                    "technical_change": {"target": 1},
+                },
+                "preferredSourceRoles": ["procurement_signal"],
+            },
+        }
+        frontier = build_initial_frontier(
+            target=target,
+            graph=target["graph_json"],
+            coverage={"gaps_json": [{"sourceRole": "primary_data", "gapScore": 0.9}]},
+            run={"run_id": "run-procurement", "run_kind": "source_expand"},
+        )
+
+        seed_probe = next(item for item in frontier if item["hypothesis_type"] == "seed_endpoint_probe")
+        self.assertEqual(seed_probe["source_role"], "procurement_signal")
+        self.assertIn("tender_listing", seed_probe["expected_endpoint_kinds"])
+
+    def test_frontier_filters_default_procurement_gap_for_grant_target(self) -> None:
+        target = {
+            "target_id": "target-grants",
+            "title": "Grant and funded research deliverable sources",
+            "description": "Find grant award, SBIR, research, clinical trial and foundation sources.",
+            "seed_topics": ["grant award software platform dashboard data system source"],
+            "seed_entities": ["Grants.gov", "SBIR", "NIH RePORTER", "EU Funding and Tenders"],
+            "seed_domains": ["grants.gov", "sbir.gov"],
+            "graph_json": {
+                "coreTopic": "Grant and funded research deliverable sources",
+                "preferredSourceRoles": ["primary_data", "report_research", "official_newsroom"],
+            },
+        }
+        frontier = build_initial_frontier(
+            target=target,
+            graph=target["graph_json"],
+            coverage={
+                "gaps_json": [
+                    {"sourceRole": "procurement_signal", "gapScore": 1.0},
+                    {"sourceRole": "primary_data", "gapScore": 0.8},
+                    {"sourceRole": "report_research", "gapScore": 0.7},
+                ]
+            },
+            run={"run_id": "run-grants", "run_kind": "source_expand"},
+        )
+
+        roles = {item["source_role"] for item in frontier}
+        self.assertNotIn("procurement_signal", roles)
+        self.assertIn("primary_data", roles)
+        seed_sweeps = [item for item in frontier if item["hypothesis_type"] == "seed_domain_sweep"]
+        self.assertTrue(seed_sweeps)
+        self.assertTrue(all("tender" not in str(item.get("query_text") or "").lower() for item in seed_sweeps))
+
+    def test_frontier_uses_source_directory_for_ats_hiring_target(self) -> None:
+        target = {
+            "target_id": "target-ats",
+            "title": "ATS hiring capacity gap APIs",
+            "description": "Find public job board source endpoints for hiring-spike capacity gaps.",
+            "seed_topics": ["founding engineer first engineer ATS API source"],
+            "seed_entities": ["Greenhouse", "Lever", "Workable"],
+            "seed_domains": ["jobs.lever.co", "boards.greenhouse.io"],
+            "graph_json": {
+                "coreTopic": "ATS hiring capacity gap APIs",
+                "sourceRoleTargets": {
+                    "procurement_signal": {"target": 5},
+                    "source_directory": {"target": 3},
+                    "primary_data": {"target": 3},
+                },
+                "preferredSourceRoles": ["source_directory", "primary_data", "official_newsroom"],
+            },
+        }
+        frontier = build_initial_frontier(
+            target=target,
+            graph=target["graph_json"],
+            coverage={
+                "gaps_json": [
+                    {"sourceRole": "procurement_signal", "gapScore": 1.0},
+                    {"sourceRole": "source_directory", "gapScore": 0.8},
+                    {"sourceRole": "primary_data", "gapScore": 0.7},
+                ]
+            },
+            run={"run_id": "run-ats", "run_kind": "source_expand"},
+        )
+
+        seed_sweep = next(item for item in frontier if item["hypothesis_type"] == "seed_domain_sweep")
+        self.assertEqual(seed_sweep["source_role"], "source_directory")
+        self.assertNotIn("tender", str(seed_sweep.get("query_text") or "").lower())
+        self.assertNotIn("tender_listing", seed_sweep["expected_endpoint_kinds"])
+
     def test_constructive_skeptic_additions_are_bounded(self) -> None:
         added_ideas = [
             {
@@ -158,6 +335,119 @@ class DiscoveryV3StabilityTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(scored["status"], "confirmed_signal")
         self.assertTrue(scored["canGenerateDirectFollowup"])
+
+    def test_hidden_claim_is_built_from_open_web_target_and_control_results(self) -> None:
+        target_results = [
+            {
+                "url": f"https://example-{index}.com/vmware-broadcom-migration-{index}",
+                "canonical_url": f"https://example-{index}.com/vmware-broadcom-migration-{index}",
+                "canonical_domain": f"example-{index}.com",
+                "title": "VMware customers seek alternatives after Broadcom price increases",
+                "snippet": "Teams report migration pressure, replacement planning, and implementation help needs.",
+            }
+            for index in range(10)
+        ]
+        control_results = [
+            {
+                "url": "https://generic.example/software-project-discussion",
+                "canonical_url": "https://generic.example/software-project-discussion",
+                "canonical_domain": "generic.example",
+                "title": "Software project discussion",
+                "snippet": "Generic project commentary without a specific buying pattern.",
+            }
+        ]
+        claim = _hidden_claim_from_results(
+            hypothesis={
+                "target_id": "target-1",
+                "run_id": "run-1",
+                "query_text": '"VMware Broadcom" alternative migration problem',
+                "control_query_text": "software project implementation problem alternative",
+            },
+            target_results=target_results,
+            control_results=control_results,
+        )
+
+        self.assertIsNotNone(claim)
+        assert claim is not None
+        self.assertEqual(claim["signal_mode"], "hidden")
+        self.assertEqual(claim["status"], "confirmed_signal")
+        self.assertGreaterEqual(claim["support_evidence_count"], 8)
+        self.assertGreaterEqual(claim["specificity_score"], 1.5)
+
+    def test_hidden_claim_rejects_generic_pain_without_query_context(self) -> None:
+        target_results = [
+            {
+                "url": f"https://generic-{index}.example/story",
+                "canonical_url": f"https://generic-{index}.example/story",
+                "canonical_domain": f"generic-{index}.example",
+                "title": "Game subscription is too expensive",
+                "snippet": "Readers discuss price increases and entertainment subscriptions.",
+            }
+            for index in range(5)
+        ]
+        claim = _hidden_claim_from_results(
+            hypothesis={
+                "target_id": "target-1",
+                "run_id": "run-1",
+                "query_text": '"failed ERP implementation vendor replacement" too expensive',
+                "control_query_text": "software project implementation problem alternative",
+            },
+            target_results=target_results,
+            control_results=[],
+        )
+
+        self.assertIsNone(claim)
+
+    def test_hidden_claim_uses_configured_candidate_signal_groups(self) -> None:
+        target_results = [
+            {
+                "url": f"https://local-{index}.example/discussion",
+                "canonical_url": f"https://local-{index}.example/discussion",
+                "canonical_domain": f"local-{index}.example",
+                "title": "Local workflow team asks for paid build help",
+                "snippet": "Budget approved for portal integration; seeking a specialist partner this quarter.",
+            }
+            for index in range(8)
+        ]
+        control_results = [
+            {
+                "url": "https://training.example/course",
+                "canonical_url": "https://training.example/course",
+                "canonical_domain": "training.example",
+                "title": "Workflow portal tutorial",
+                "snippet": "Training course and generic best practices.",
+            }
+        ]
+        claim = _hidden_claim_from_results(
+            hypothesis={
+                "target_id": "target-1",
+                "run_id": "run-1",
+                "query_text": "workflow portal integration",
+                "control_query_text": "workflow portal tutorial",
+                "hiddenClaimExtraction": {
+                    "positiveGroups": [
+                        {"name": "buyer_ask", "cues": ["asks for", "seeking"]},
+                        {"name": "budget", "cues": ["budget approved"]},
+                        {"name": "delivery_object", "cues": ["portal integration"]},
+                    ],
+                    "negativeGroups": [
+                        {"name": "training", "cues": ["tutorial", "training course"]},
+                    ],
+                    "thresholds": {
+                        "minPositiveGroups": 2,
+                        "minPositiveHits": 2,
+                        "maxNegativeGroups": 0,
+                    },
+                },
+            },
+            target_results=target_results,
+            control_results=control_results,
+        )
+
+        self.assertIsNotNone(claim)
+        assert claim is not None
+        self.assertEqual(claim["status"], "confirmed_signal")
+        self.assertGreaterEqual(claim["support_evidence_count"], 8)
 
     def test_confirmed_hidden_claim_generates_direct_followup_only_with_control(self) -> None:
         target = {"target_id": "target-1", "title": "VMware migration Europe"}

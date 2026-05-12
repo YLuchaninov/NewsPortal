@@ -38,6 +38,32 @@ interface FetcherState {
 
 export { classifyDuplicatePreflightInputs };
 
+const MAX_DUE_CHANNELS_PER_HOST_PER_POLL = 3;
+
+function channelHostKey(channel: SourceChannelRow): string {
+  if (!channel.fetchUrl) {
+    return `${channel.providerType}:${channel.channelId}`;
+  }
+  try {
+    return `${channel.providerType}:${new URL(channel.fetchUrl).host.toLowerCase()}`;
+  } catch {
+    return `${channel.providerType}:${channel.channelId}`;
+  }
+}
+
+function applyHostPoliteBudget(channels: SourceChannelRow[]): SourceChannelRow[] {
+  const hostCounts = new Map<string, number>();
+  return channels.filter((channel) => {
+    const key = channelHostKey(channel);
+    const count = hostCounts.get(key) ?? 0;
+    if (count >= MAX_DUE_CHANNELS_PER_HOST_PER_POLL) {
+      return false;
+    }
+    hostCounts.set(key, count + 1);
+    return true;
+  });
+}
+
 class FetcherService {
   private readonly state: FetcherState = {
     isPolling: false,
@@ -249,7 +275,7 @@ class FetcherService {
   }
 
   private async loadDueChannels(): Promise<SourceChannelRow[]> {
-    return this.persistence.loadDueChannels(this.config);
+    return applyHostPoliteBudget(await this.persistence.loadDueChannels(this.config));
   }
 
   private async loadChannelById(channelId: string): Promise<SourceChannelRow | null> {

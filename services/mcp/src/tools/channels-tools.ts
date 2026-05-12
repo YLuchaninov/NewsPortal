@@ -1,9 +1,14 @@
 import {
   applyChannelBulkOnboardingWithPool,
+  ChannelBottleneckNotFoundError,
   deleteChannelWithAudit,
+  explainChannelBottleneckWithPool,
+  listChannelBottlenecksWithPool,
+  planChannelAlternativesWithPool,
   planChannelBulkOnboardingWithPool,
   saveChannelFromPayload,
   setChannelActiveStateWithAudit,
+  summarizeChannelBottlenecksWithPool,
   verifyChannelBulkOnboardingWithPool
 } from "@newsportal/control-plane";
 import {
@@ -52,6 +57,18 @@ const channelPayloadSchema = {
   additionalProperties: false,
 } satisfies JsonSchema;
 
+const channelPayloadWithEvidenceSchema = {
+  type: "object",
+  properties: {
+    ...channelPayloadSchema.properties,
+    feedProbeEvidence: { type: "object", additionalProperties: true },
+    sourceCandidateStatus: { type: "string" },
+    candidateStatus: { type: "string" },
+    validation: { type: "object", additionalProperties: true },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
 const channelMutationSchema = {
   type: "object",
   required: ["payload"],
@@ -67,7 +84,7 @@ const bulkOnboardPlanSchema = {
   properties: {
     sources: {
       type: "array",
-      items: channelPayloadSchema,
+      items: channelPayloadWithEvidenceSchema,
     },
     mode: { type: "string", enum: ["strict", "allow_overrides"] },
     includeExisting: { type: "boolean" },
@@ -81,7 +98,7 @@ const bulkOnboardApplySchema = {
   properties: {
     sources: {
       type: "array",
-      items: channelPayloadSchema,
+      items: channelPayloadWithEvidenceSchema,
     },
     planFingerprint: { type: "string" },
     confirm: { type: "boolean" },
@@ -109,6 +126,63 @@ const channelActiveStateSchema = {
     channelId: { type: "string" },
     isActive: { type: "boolean" },
     reason: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const channelAlternativesPlanSchema = {
+  type: "object",
+  properties: {
+    channelIds: { type: "array", items: { type: "string" } },
+    urls: { type: "array", items: { type: "string" } },
+    failureKinds: { type: "array", items: { type: "string" } },
+    includeFeedProbe: { type: "boolean" },
+    maxCandidates: { type: "number" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const channelBottlenecksListSchema = {
+  type: "object",
+  properties: {
+    page: { type: "number" },
+    pageSize: { type: "number" },
+    providerType: { type: "string" },
+    failureBucket: { type: "string" },
+    repairLane: { type: "string" },
+    q: { type: "string" },
+    channelIds: { type: "array", items: { type: "string" } },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const channelBottlenecksExplainSchema = {
+  type: "object",
+  required: ["channelId"],
+  properties: {
+    channelId: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const channelAlternativesStartSchema = {
+  type: "object",
+  required: ["targetId"],
+  properties: {
+    targetId: { type: "string" },
+    channelIds: { type: "array", items: { type: "string" } },
+    urls: { type: "array", items: { type: "string" } },
+    failureKinds: { type: "array", items: { type: "string" } },
+    includeFeedProbe: { type: "boolean" },
+    maxCandidates: { type: "number" },
+    maxDepth: { type: "number" },
+    maxHypotheses: { type: "number" },
+    maxSearchResults: { type: "number" },
+    maxDomains: { type: "number" },
+    maxEndpoints: { type: "number" },
+    maxSocialItems: { type: "number" },
+    providerExecutionEnabled: { type: "boolean" },
+    requestedBy: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -220,6 +294,47 @@ function readChannelIds(value: unknown): string[] {
   return value.map((entry) => String(entry ?? "").trim()).filter(Boolean);
 }
 
+function readOptionalStringArray(value: unknown, path: string): string[] | undefined {
+  if (value == null) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new JsonRpcError(-32602, `${path} must be an array of strings.`, {
+      statusCode: 400,
+      data: { path, expectedShape: "string[]" },
+    });
+  }
+  return value.map((entry) => String(entry ?? "").trim()).filter(Boolean);
+}
+
+function readOptionalBoundedInteger(value: unknown, path: string): number | undefined {
+  const parsed = readOptionalInteger(value);
+  if (parsed == null) {
+    return undefined;
+  }
+  if (parsed <= 0) {
+    throw new JsonRpcError(-32602, `${path} must be a positive integer.`, {
+      statusCode: 400,
+      data: { path, expectedShape: "positive integer" },
+    });
+  }
+  return parsed;
+}
+
+function readOptionalNonNegativeInteger(value: unknown, path: string): number | undefined {
+  const parsed = readOptionalInteger(value);
+  if (parsed == null) {
+    return undefined;
+  }
+  if (parsed < 0) {
+    throw new JsonRpcError(-32602, `${path} must be a non-negative integer.`, {
+      statusCode: 400,
+      data: { path, expectedShape: "non-negative integer" },
+    });
+  }
+  return parsed;
+}
+
 function asMcpInvalidRequest(error: unknown, toolName: string): never {
   if (error instanceof JsonRpcError) {
     throw error;
@@ -290,6 +405,64 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   ),
   createReadTool(
+    "channels.bottlenecks.summary",
+    "Summarize source bottlenecks from the shared control-plane read model. Separates working noisy/low-yield sources from technical fetch/provider-shape failures.",
+    {
+      type: "object",
+      properties: {
+        providerType: { type: "string" },
+        failureBucket: { type: "string" },
+        repairLane: { type: "string" },
+        q: { type: "string" },
+        channelIds: { type: "array", items: { type: "string" } },
+      },
+      additionalProperties: false,
+    },
+    async ({ pool }, args) =>
+      summarizeChannelBottlenecksWithPool(pool, {
+        providerType: readOptionalString(args.providerType) ?? undefined,
+        failureBucket: readOptionalString(args.failureBucket) ?? undefined,
+        repairLane: readOptionalString(args.repairLane) ?? undefined,
+        q: readOptionalString(args.q) ?? undefined,
+        channelIds: readOptionalStringArray(args.channelIds, "channelIds"),
+      })
+  ),
+  createReadTool(
+    "channels.bottlenecks.list",
+    "List per-channel source bottlenecks with fetch outcomes, selection/projection stats, provider-shape validation, failure bucket, and repair lane.",
+    channelBottlenecksListSchema,
+    async ({ pool }, args) =>
+      listChannelBottlenecksWithPool(pool, {
+        ...readPageArgs(args),
+        providerType: readOptionalString(args.providerType) ?? undefined,
+        failureBucket: readOptionalString(args.failureBucket) ?? undefined,
+        repairLane: readOptionalString(args.repairLane) ?? undefined,
+        q: readOptionalString(args.q) ?? undefined,
+        channelIds: readOptionalStringArray(args.channelIds, "channelIds"),
+      })
+  ),
+  createReadTool(
+    "channels.bottlenecks.explain",
+    "Explain one channel bottleneck and return source-health diagnosis plus MCP read-back/repair next actions.",
+    channelBottlenecksExplainSchema,
+    async ({ pool }, args) => {
+      try {
+        return await explainChannelBottleneckWithPool(
+          pool,
+          await resolveChannelId(pool, args.channelId)
+        );
+      } catch (error) {
+        if (error instanceof ChannelBottleneckNotFoundError) {
+          throw new JsonRpcError(-32602, error.message, {
+            statusCode: 404,
+            data: { path: "channelId" },
+          });
+        }
+        throw error;
+      }
+    }
+  ),
+  createReadTool(
     "channels.bulk_onboard.plan",
     "Plan bulk channel onboarding without mutating state. Classifies each RSS/website/API/email source as create/update/duplicate/invalid/risky/override and returns a stale-safe planFingerprint.",
     bulkOnboardPlanSchema,
@@ -314,6 +487,24 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
         readChannelIds(args.channelIds),
         args.includeSamples === true
       )
+  ),
+  createReadTool(
+    "channels.alternatives.plan",
+    "Plan safer alternative channel candidates for broken or mismatched sources. Uses fetchers feed probing for RSS autodiscovery and never mutates channels.",
+    channelAlternativesPlanSchema,
+    async ({ pool }, args) => {
+      try {
+        return await planChannelAlternativesWithPool(pool, {
+          channelIds: readOptionalStringArray(args.channelIds, "channelIds"),
+          urls: readOptionalStringArray(args.urls, "urls"),
+          failureKinds: readOptionalStringArray(args.failureKinds, "failureKinds"),
+          includeFeedProbe: args.includeFeedProbe !== false,
+          maxCandidates: readOptionalBoundedInteger(args.maxCandidates, "maxCandidates"),
+        });
+      } catch (error) {
+        return asMcpInvalidRequest(error, "channels.alternatives.plan");
+      }
+    }
   ),
   createWriteTool(
     "channels.create",
@@ -344,6 +535,88 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
         );
       } catch (error) {
         return asMcpInvalidRequest(error, "channels.bulk_onboard.apply");
+      }
+    }
+  ),
+  createWriteTool(
+    "channels.alternatives.start",
+    "Start bounded discovery replacement runs for existing bad channels after planning alternatives. This does not create source channels; candidates must still pass bulk onboarding.",
+    "write.discovery",
+    channelAlternativesStartSchema,
+    async ({ pool, sdk, token }, args) => {
+      try {
+        const targetId = readRequiredString(args.targetId, "targetId");
+        const plan = await planChannelAlternativesWithPool(pool, {
+          channelIds: readOptionalStringArray(args.channelIds, "channelIds"),
+          urls: readOptionalStringArray(args.urls, "urls"),
+          failureKinds: readOptionalStringArray(args.failureKinds, "failureKinds"),
+          includeFeedProbe: args.includeFeedProbe !== false,
+          maxCandidates: readOptionalBoundedInteger(args.maxCandidates, "maxCandidates"),
+        });
+        const channelIds = Array.from(
+          new Set(
+            plan.candidates
+              .map((candidate) => candidate.sourceChannelId)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+        const runs: unknown[] = [];
+        const skipped: Array<Record<string, unknown>> = [];
+        for (const channelId of channelIds) {
+          runs.push(
+            await sdk.replaceDiscoverySourceCandidates<Record<string, unknown>>(channelId, {
+              targetId,
+              maxDepth: readOptionalBoundedInteger(args.maxDepth, "maxDepth") ?? 1,
+              maxHypotheses: readOptionalBoundedInteger(args.maxHypotheses, "maxHypotheses") ?? 6,
+              maxSearchResults:
+                readOptionalBoundedInteger(args.maxSearchResults, "maxSearchResults") ?? 8,
+              maxDomains: readOptionalBoundedInteger(args.maxDomains, "maxDomains") ?? 12,
+              maxEndpoints: readOptionalBoundedInteger(args.maxEndpoints, "maxEndpoints") ?? 20,
+              maxSocialItems:
+                readOptionalNonNegativeInteger(args.maxSocialItems, "maxSocialItems") ?? 0,
+              providerExecutionEnabled: args.providerExecutionEnabled === true,
+              requestedBy:
+                readOptionalString(args.requestedBy) ??
+                `channels.alternatives.start:${token.issuedByUserId}`,
+            })
+          );
+        }
+        for (const input of plan.inputs) {
+          if (input.channelId && !channelIds.includes(input.channelId)) {
+            skipped.push({
+              channelId: input.channelId,
+              reason:
+                "No bounded alternative candidate was returned for this input, so no replacement run was started.",
+            });
+          }
+        }
+        if ((readOptionalStringArray(args.urls, "urls") ?? []).length > 0) {
+          skipped.push({
+            reason:
+              "URL-only alternatives are plan-only until an existing channelId is available for source replacement.",
+          });
+        }
+        return {
+          plan,
+          runs,
+          skipped,
+          nextReadBack: [
+            {
+              tool: "operator.report.verify",
+              arguments: {
+                reportKind: "discovery_run",
+                entityIds: { targetIds: [targetId] },
+                includeSamples: true,
+              },
+            },
+            {
+              tool: "channels.bulk_onboard.plan",
+              arguments: { sources: "<chosen alternatives from plan.candidates>" },
+            },
+          ],
+        };
+      } catch (error) {
+        return asMcpInvalidRequest(error, "channels.alternatives.start");
       }
     }
   ),

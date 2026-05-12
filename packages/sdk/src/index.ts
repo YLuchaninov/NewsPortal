@@ -68,6 +68,11 @@ type DiscoveryV3ListQuery = PaginationQuery & {
   status?: string;
   targetId?: string;
 };
+type DiscoverySourcePriorsQuery = DiscoveryV3ListQuery & {
+  channelId?: string;
+  endpointId?: string;
+  contractId?: string;
+};
 
 function buildPath(path: string, query?: Record<string, QueryValue>): string {
   if (!query) {
@@ -452,6 +457,8 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       postJson<T>(`/maintenance/discovery/targets/${targetId}/refresh-coverage`, {}),
     createDiscoveryRun: <T>(payload: unknown) =>
       postJson<T>("/maintenance/discovery/runs", payload),
+    dispatchQueuedDiscoveryRuns: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/runs/dispatch-queued", payload),
     listDiscoveryRuns: <T>(params?: DiscoveryV3ListQuery) =>
       getPaginated<T>("/maintenance/discovery/runs", {
         status: params?.status,
@@ -465,6 +472,19 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       postJson<T>(`/maintenance/discovery/runs/${runId}/diagnose`, {}),
     cancelDiscoveryRun: <T>(runId: string) =>
       postJson<T>(`/maintenance/discovery/runs/${runId}/cancel`, {}),
+    listDiscoverySourcePriors: <T>(params?: DiscoverySourcePriorsQuery) =>
+      getPaginated<T>("/maintenance/discovery/source-priors", {
+        targetId: params?.targetId,
+        channelId: params?.channelId,
+        endpointId: params?.endpointId,
+        contractId: params?.contractId,
+        page: params?.page,
+        pageSize: params?.pageSize,
+      }),
+    evaluateDiscoverySourcePrior: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/source-priors/evaluate", payload),
+    applyDiscoverySourcePrior: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/source-priors/apply", payload),
     listDiscoveryEndpoints: <T>(params?: DiscoveryV3ListQuery) =>
       getPaginated<T>("/maintenance/discovery/endpoints", {
         status: params?.status,

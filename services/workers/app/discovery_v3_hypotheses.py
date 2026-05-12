@@ -39,9 +39,16 @@ def build_initial_frontier(
     gaps = list(coverage.get("gaps_json") or [])
     if not gaps:
         gaps = [{"sourceRole": "source_directory", "gapScore": 0.4}]
+    if str(run.get("run_kind") or run.get("runKind") or "") == "hidden_signal_scan":
+        gaps = [
+            {"sourceRole": "social_pain_signal", "gapScore": 0.95},
+            *[gap for gap in gaps if str(gap.get("sourceRole") or gap.get("source_role") or "") == "social_pain_signal"],
+        ]
+    else:
+        gaps = _filter_gaps_for_target(target=target, graph=graph, gaps=gaps)
 
     hypotheses: list[dict[str, Any]] = []
-    seed_source_role = _seed_source_role(target=target, gaps=gaps)
+    seed_source_role = _seed_source_role(target=target, graph=graph, gaps=gaps)
     seed_endpoint_patterns = _seed_endpoint_patterns(seed_source_role)
     seed_endpoint_kinds = _seed_endpoint_kinds(seed_source_role)
     for seed_url in _string_list(target.get("seed_urls") or target.get("seedUrls")):
@@ -95,31 +102,66 @@ def build_initial_frontier(
             role,
             ("source_directory", ['"{topic}" resources', '"{topic}" directory'], "direct"),
         )
+        hidden_claim_extraction = _hidden_claim_extraction_config(target=target, graph=graph)
         for template in templates:
+            topic_values = _topic_values(topic=topic, graph=graph, signal_mode=signal_mode)
             for entity in entities[:3]:
-                query = template.format(topic=topic, entity=entity)
-                hypotheses.append(
-                    {
-                        "run_id": run.get("run_id"),
-                        "target_id": target["target_id"],
-                        "hypothesis_type": hypothesis_type,
-                        "signal_mode": signal_mode,
-                        "source_role": role,
-                        "acquisition_tactic": "search_fanout",
-                        "query_text": query,
-                        "provider_id": "web_search" if signal_mode == "direct" else "reddit",
-                        "expected_provider_types": ["rss", "website"],
-                        "expected_endpoint_kinds": [],
-                        "endpoint_patterns": [],
-                        "expected_data_shape": role,
-                        "priority_score": float(gap.get("gapScore") or 0.5),
-                        "gap_score": float(gap.get("gapScore") or 0.5),
-                        "risk_score": 0.45 if signal_mode == "direct" else 0.60,
-                        "confidence_score": 0.55,
-                        "explorer_json": {"generatedBy": "deterministic_frontier"},
-                    }
-                )
+                for topic_value in topic_values[:5]:
+                    query = template.format(topic=topic_value, entity=entity)
+                    hypotheses.append(
+                        {
+                            "run_id": run.get("run_id"),
+                            "target_id": target["target_id"],
+                            "hypothesis_type": hypothesis_type,
+                            "signal_mode": signal_mode,
+                            "source_role": role,
+                            "acquisition_tactic": "search_fanout",
+                            "query_text": query,
+                            "seed_entity": entity,
+                            "provider_id": "web_search",
+                            "control_query_text": _control_query(topic_value, entity) if signal_mode == "hidden" else None,
+                            "control_provider_id": "web_search" if signal_mode == "hidden" else None,
+                            "control_expected_noise": 0.35 if signal_mode == "hidden" else None,
+                            "expected_provider_types": ["rss", "website"],
+                            "expected_endpoint_kinds": [],
+                            "endpoint_patterns": [],
+                            "expected_data_shape": role,
+                            "priority_score": float(gap.get("gapScore") or 0.5),
+                            "gap_score": float(gap.get("gapScore") or 0.5),
+                            "risk_score": 0.45 if signal_mode == "direct" else 0.60,
+                            "confidence_score": 0.55,
+                            "explorer_json": {
+                                "generatedBy": "deterministic_frontier",
+                                **(
+                                    {"hiddenClaimExtraction": hidden_claim_extraction}
+                                    if signal_mode == "hidden" and hidden_claim_extraction
+                                    else {}
+                                ),
+                            },
+                            **(
+                                {"hiddenClaimExtraction": hidden_claim_extraction}
+                                if signal_mode == "hidden" and hidden_claim_extraction
+                                else {}
+                            ),
+                        }
+                    )
     return hypotheses
+
+
+def _topic_values(*, topic: str, graph: dict[str, Any], signal_mode: str) -> list[str]:
+    if signal_mode != "hidden":
+        return [topic]
+    values = [
+        *[str(item).strip() for item in list(graph.get("subtopics") or []) if str(item).strip()],
+        *[str(item).strip() for item in list(graph.get("entities") or []) if str(item).strip()],
+        topic,
+    ]
+    return list(dict.fromkeys(value for value in values if value))
+
+
+def _control_query(topic: str, entity: str) -> str:
+    del topic, entity
+    return '"project management software"'
 
 
 def _string_list(value: Any) -> list[str]:
@@ -128,59 +170,81 @@ def _string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
-def _seed_source_role(*, target: dict[str, Any], gaps: list[dict[str, Any]]) -> str:
-    target_text = " ".join(
-        [
-            str(target.get("title") or ""),
-            str(target.get("description") or ""),
-            *(_string_list(target.get("seed_topics") or target.get("seedTopics"))),
-            *(_string_list(target.get("seed_entities") or target.get("seedEntities"))),
-        ]
-    ).lower()
-    graph = target.get("graph_json") or target.get("graphJson") or {}
+def _record(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _hidden_claim_extraction_config(*, target: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]:
+    for container in (graph, _record(target.get("policy_json")), _record(target.get("autopilot_json"))):
+        value = container.get("hiddenClaimExtraction") or container.get("hidden_claim_extraction")
+        if isinstance(value, dict):
+            return dict(value)
+        candidate_signals = container.get("candidateSignals") or container.get("candidate_signals")
+        if isinstance(candidate_signals, dict):
+            return {
+                "positiveGroups": candidate_signals.get("positiveGroups") or [],
+                "negativeGroups": candidate_signals.get("negativeGroups") or [],
+            }
+    return {}
+
+
+def _preferred_source_roles(*, target: dict[str, Any], graph: dict[str, Any]) -> list[str]:
+    for container in (
+        graph,
+        _record(target.get("graph_json") or target.get("graphJson")),
+        _record(target.get("policy_json") or target.get("policyJson")),
+        _record(target.get("autopilot_json") or target.get("autopilotJson")),
+    ):
+        for key in ("preferredSourceRoles", "preferred_source_roles", "sourceRoleHints", "source_role_hints"):
+            roles = _string_list(container.get(key))
+            if roles:
+                return roles
+    return []
+
+
+def _filter_gaps_for_target(
+    *,
+    target: dict[str, Any],
+    graph: dict[str, Any],
+    gaps: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    preferred_roles = _preferred_source_roles(target=target, graph=graph)
+    if not preferred_roles:
+        return gaps
+    preferred = [
+        gap
+        for gap in gaps
+        if str(gap.get("sourceRole") or gap.get("source_role") or "") in set(preferred_roles)
+    ]
+    if preferred:
+        return preferred
+    return [{"sourceRole": role, "gapScore": 0.65} for role in preferred_roles]
+
+
+def _seed_source_role(*, target: dict[str, Any], graph: dict[str, Any], gaps: list[dict[str, Any]]) -> str:
+    gap_roles = [str(gap.get("sourceRole") or gap.get("source_role") or "") for gap in gaps]
+    preferred_roles = _preferred_source_roles(target=target, graph=graph)
+    if preferred_roles:
+        for role in gap_roles:
+            if role in preferred_roles:
+                return role
+        return preferred_roles[0]
+    explicit_roles: set[str] = set()
     if isinstance(graph, dict):
         explicit_roles = set((graph.get("sourceRoleTargets") or graph.get("source_role_targets") or {}).keys())
-        for role in (
-            "procurement_signal",
-            "primary_data",
-            "report_research",
-            "regulatory_policy",
-            "security_advisory",
-            "technical_change",
-            "authoritative_anchor",
-            "official_newsroom",
-            "industry_niche",
-            "source_directory",
-        ):
-            if role in explicit_roles:
-                return role
-    gap_roles = [str(gap.get("sourceRole") or gap.get("source_role") or "") for gap in gaps]
+        if len(explicit_roles) == 1:
+            return next(iter(explicit_roles))
     role_priority = (
-        (
-            "procurement_signal",
-            (
-                "procurement",
-                "tender",
-                "contract award",
-                "contract opportunities",
-                "przetarg",
-                "zamówienie",
-                "zamowienie",
-                "ausschreibung",
-                "vergabe",
-            ),
-        ),
-        ("regulatory_policy", ("regulatory", "regulation", "policy", "guidance", "standards", "laws")),
-        ("primary_data", ("dataset", "open data", "statistics", "data portal", "eurostat")),
-        ("report_research", ("report", "research", "publication", "whitepaper", "publications")),
-        ("security_advisory", ("security", "advisory", "vulnerability", "cve", "psirt")),
+        "procurement_signal",
+        "regulatory_policy",
+        "primary_data",
+        "report_research",
+        "security_advisory",
     )
-    for role, tokens in role_priority:
-        if role in gap_roles or any(token in target_text for token in tokens):
+    for role in role_priority:
+        if role in gap_roles and not explicit_roles:
             return role
-    if "procurement_signal" in gap_roles or any(
-        token in target_text for token in ("procurement", "tender", "contract award", "contract opportunities")
-    ):
+    if not explicit_roles and "procurement_signal" in gap_roles:
         return "procurement_signal"
     return "technical_change"
 
@@ -214,6 +278,8 @@ def _seed_endpoint_patterns(source_role: str) -> list[str]:
         return ["/reports", "/research", "/publications", "/whitepapers", "/resources", "/downloads"]
     if source_role == "regulatory_policy":
         return ["/policy", "/policies", "/guidance", "/regulations", "/regulatory", "/laws", "/standards"]
+    if source_role == "source_directory":
+        return ["/jobs", "/careers", "/openings", "/postings", "/api", "/feed.xml", "/rss.xml", "/atom.xml", "/feed", "/rss"]
     return ["/feed.xml", "/rss.xml", "/atom.xml", "/feed", "/rss", "/blog"]
 
 
@@ -228,6 +294,8 @@ def _seed_endpoint_kinds(source_role: str) -> list[str]:
         return ["report_library", "source_directory"]
     if source_role == "regulatory_policy":
         return ["regulatory_policy"]
+    if source_role == "source_directory":
+        return ["rss_feed", "api_openapi", "source_directory"]
     return ["rss_feed", "blog"]
 
 
@@ -242,4 +310,6 @@ def _seed_domain_query(seed_domain: str, source_role: str) -> str:
         return f"site:{seed_domain} (reports OR research OR publications OR whitepaper)"
     if source_role == "regulatory_policy":
         return f"site:{seed_domain} (policy OR guidance OR regulations OR laws OR standards)"
+    if source_role == "source_directory":
+        return f"site:{seed_domain} (jobs OR careers OR postings OR api OR rss OR atom OR feed)"
     return f"site:{seed_domain} (rss OR atom OR feed)"

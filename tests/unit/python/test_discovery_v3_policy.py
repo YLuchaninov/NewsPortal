@@ -63,6 +63,14 @@ class DiscoveryV3PolicyTests(unittest.TestCase):
             "api_openapi",
         )
         self.assertEqual(
+            classify_endpoint_kind("https://sam.gov/api"),
+            "api_openapi",
+        )
+        self.assertEqual(
+            classify_endpoint_kind("https://data.ted.europa.eu/open-data"),
+            "dataset",
+        )
+        self.assertEqual(
             classify_endpoint_kind("https://example.eu/policies"),
             "regulatory_policy",
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from urllib.parse import urlparse
 from typing import Any
+from urllib.parse import urlparse
 
 
 ROLE_EXPANSION_PATTERNS: dict[str, list[str]] = {
@@ -35,11 +35,60 @@ def build_existing_source_hypotheses(
         if not domain:
             continue
         status = _classify_source(source)
+        hypotheses.extend(
+            _discovered_feed_hypotheses(target=target, graph=graph, run=run, source=source, role=role, domain=domain)
+        )
         if status in {"strong", "probation"} and not replacement_only:
             hypotheses.extend(_sibling_and_feed_hypotheses(target=target, graph=graph, run=run, source=source, role=role, domain=domain))
         if status in {"weak", "broken", "degraded"} or replacement_only:
             hypotheses.extend(_replacement_hypotheses(target=target, graph=graph, run=run, source=source, role=role, domain=domain))
     return hypotheses
+
+
+def _discovered_feed_hypotheses(
+    *,
+    target: dict[str, Any],
+    graph: dict[str, Any],
+    run: dict[str, Any],
+    source: dict[str, Any],
+    role: str,
+    domain: str,
+) -> list[dict[str, Any]]:
+    discovered_feed_urls = _source_discovered_feed_urls(source)
+    if not discovered_feed_urls:
+        return []
+    topic = str(graph.get("coreTopic") or target.get("title") or "")
+    return [
+        {
+            "run_id": run.get("run_id"),
+            "target_id": target["target_id"],
+            "hypothesis_type": "discovered_feed_candidate",
+            "signal_mode": "source_expansion",
+            "source_role": role,
+            "acquisition_tactic": "feed_probe_autodiscovery",
+            "seed_domain": domain,
+            "seed_url": feed_url,
+            "query_text": f"site:{_canonical_domain({'fetch_url': feed_url}) or domain} {topic}".strip(),
+            "provider_id": "web_search",
+            "expected_provider_types": ["rss"],
+            "expected_endpoint_kinds": ["rss_feed"],
+            "endpoint_patterns": [],
+            "seed_urls": [feed_url],
+            "expected_data_shape": role,
+            "priority_score": 0.78,
+            "gap_score": 0.35,
+            "risk_score": 0.25,
+            "confidence_score": 0.72,
+            "explorer_json": {
+                "generatedBy": "existing_source_feed_probe_evidence",
+                "channelId": str(source.get("channel_id")),
+                "sourceDomain": domain,
+                "discoveredFeedUrl": feed_url,
+                "reason": "Existing source evidence includes a discovered feed URL from fetchers feed probe.",
+            },
+        }
+        for feed_url in discovered_feed_urls
+    ]
 
 
 def _sibling_and_feed_hypotheses(
@@ -158,6 +207,50 @@ def _classify_source(source: dict[str, Any]) -> str:
     if source.get("is_active") is False:
         return "weak"
     return "strong"
+
+
+def _source_discovered_feed_urls(source: dict[str, Any]) -> list[str]:
+    urls: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            urls.append(value)
+            return
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str):
+                    urls.append(item)
+
+    for key in ("discovered_feed_urls", "discoveredFeedUrls", "hidden_rss_urls", "hiddenRssUrls"):
+        collect(source.get(key))
+
+    for container_key in ("evaluation_json", "evaluationJson", "evidence_json", "evidenceJson"):
+        container = source.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        for key in ("discovered_feed_urls", "discoveredFeedUrls", "hidden_rss_urls", "hiddenRssUrls"):
+            collect(container.get(key))
+
+    config = source.get("config_json") if isinstance(source.get("config_json"), dict) else {}
+    for container_key in ("discoveryHints", "discovery_hints", "discovery"):
+        container = config.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        for key in ("discovered_feed_urls", "discoveredFeedUrls", "hidden_rss_urls", "hiddenRssUrls"):
+            collect(container.get(key))
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for url in urls:
+        normalized = url.strip()
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            continue
+        key = normalized.rstrip("/")
+        if key not in seen:
+            seen.add(key)
+            unique.append(normalized)
+    return unique[:12]
 
 
 def _canonical_domain(source: dict[str, Any]) -> str:

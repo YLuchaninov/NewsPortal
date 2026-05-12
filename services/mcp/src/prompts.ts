@@ -121,9 +121,42 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `Plan a NewsPortal MCP discovery v3 session for objective "${objective}". ` +
                 `Read newsportal://guide/scenarios/discovery and newsportal://discovery/summary first, then inspect the relevant targets, coverage, runs, endpoints, contracts, claims, provider health, negative evidence, and eval runs. ` +
+                `If the operator references a manual/example bundle that worked before, run a funnel-calibration pass first: compare current system interests, LLM templates, channels, bottlenecks, residuals, and discovery targets against the bundle's signal families, source roles, negative cues, and review policy, then produce a portable funnel spec before starting broad source expansion. ` +
                 `Unless the operator explicitly asks for manual approval, make the plan guarded-automation-first: create or update a target, refresh coverage, start a bounded run, and rely on evidence contracts, provider capability policy, and replay-evaluated thresholds where evidence is sufficient. ` +
                 `Use discovery.constructive_skeptic.review, discovery.verification_skeptic.review, discovery.contract.review, or discovery.claim.review when hypothesis boundaries, hidden-signal claims, provider choices, or probation evidence need tightening. ` +
                 `Promote only endpoints with valid evidence and source contracts, keep new sources in probation until the contract passes, and verify promoted channels after mutation. Manual review is a fallback for missing policy/evidence or ambiguity, not the default plan.`,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: "operator.funnel.calibrate",
+    description: "Compare a prior working manual/reference bundle with current MCP state before discovery or template tuning.",
+    arguments: [
+      { name: "objective", description: "The funnel or product outcome being calibrated.", required: true },
+      { name: "referenceEvidence", description: "Manual/example bundle, JSON asset, admin settings, or observed working configuration.", required: true },
+      { name: "currentGap", description: "Observed current failure pattern, such as low selected yield, noisy sources, or missing source roles." },
+    ],
+    render: (args) => {
+      const objective = readRequiredString(args.objective, "objective");
+      const referenceEvidence = readRequiredString(args.referenceEvidence, "referenceEvidence");
+      const currentGap = readOptionalString(args.currentGap) ?? "current funnel quality or yield gap";
+      return {
+        description: "Funnel calibration guide",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                `Calibrate a NewsPortal product funnel for objective "${objective}" using reference evidence "${referenceEvidence}" and current gap "${currentGap}". ` +
+                `Read newsportal://guide/scenarios/funnel-calibration and call operator.funnel.audit plus operator.funnel.autoplan first when available, then inspect system_interests.list/read, system_interests.compile_status.list, templates.duplicates.audit, llm_templates.list/read, channels.bottlenecks.summary/list, discovery.source_families.coverage, articles.residuals.summary, content_items.list, discovery.summary.get, discovery.targets.list, and operator.report.verify before proposing writes. ` +
+                `Extract reusable patterns from the reference into a portable funnel spec: objective, actor/buyer model, signal families, source-role mix, positive cues, near-miss negative cues, allowed content kinds, strictness/review policy, LLM review scope, provider/adapter requirements, observation budget, and expected read-back proof. ` +
+                `Separate recommendations by layer: source acquisition breadth, source-family balance, source technical health/repair, candidate or gray-zone recovery, final selected-content precision, and reporting/proof. Retain working noisy, low-yield, and negative-control useful channels unless the operator explicitly disables them; recommend labeling, measurement, cadence changes, or repair instead of auto-disabling semantically plausible working sources. ` +
+                `If the operator asks only to improve the system or generalize the approach, return rules, prompts, and product-flow recommendations without mutating domain configuration. If the operator asks to run a domain product test, then return a bounded MCP-only mutation plan: which interests/templates/targets/channels should be updated or created, which source classes need adapters rather than fake RSS/website rows, what reindex/backfill is needed, and how to verify precision and web-visible selected counts. ` +
+                `Do not put domain-specific vocabulary into code; domain tuning belongs in MCP/admin configuration and replayable evidence.`,
             },
           },
         ],
@@ -550,7 +583,10 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             role: "user",
             content: {
               type: "text",
-              text: `Draft a NewsPortal system interest for topic "${topic}" aimed at ${audience}. Return a concise interest payload with positive signals, negative signals, places, languages, allowed content kinds, and a priority recommendation.`,
+              text:
+                `Draft a NewsPortal system interest for topic "${topic}" aimed at ${audience}. ` +
+                `Return a concise interest payload with positive prototypes, near-miss negative prototypes, must-not terms, candidate uplift positive/negative cue groups, allowed content kinds, places, languages, strictness/review-policy recommendation, and priority. ` +
+                `For rare-signal funnels, keep must-have terms and time windows empty unless a marker is truly mandatory; prefer negative cues and LLM review to preserve recall while filtering near-miss noise.`,
             },
           },
         ],
@@ -577,7 +613,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `Use newsportal://guide/scenarios/article-diagnostics and the current article/content diagnostics to tune the system interest "${interestName}". ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
-                `Return a bounded recommendation covering: what evidence suggests the current scope is too narrow or too broad, which positive/negative signals should change, what should stay unchanged, and what follow-up read-after-write checks an operator should perform. Do not auto-write changes.`,
+                `Return a bounded recommendation covering: what evidence suggests the current scope is too narrow or too broad, which positive/negative signals and candidate cue groups should change, whether short-form buyer/project evidence should recover items into gray/LLM/hold despite weak semantic similarity, whether hard gates such as must-have terms or time windows would harm recall for rare signals, what should stay unchanged, and what follow-up read-after-write checks an operator should perform. Do not auto-write changes.`,
             },
           },
         ],
@@ -604,7 +640,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `Use newsportal://guide/scenarios/article-diagnostics and current article/content residual evidence to tune the LLM template "${templateName}". ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
-                `Return a bounded recommendation describing which prompt instructions, output expectations, or review thresholds should change, which parts should remain stable, and how to verify the change through NewsPortal MCP after an operator applies it. Do not auto-write changes.`,
+                `Return a bounded recommendation describing which prompt instructions, output expectations, or review thresholds should change, which reference-bundle guardrails should be preserved, which parts should remain stable, and how to verify the change through NewsPortal MCP after an operator applies it. Do not auto-write changes.`,
             },
           },
         ],

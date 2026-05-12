@@ -3,6 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+_CANDIDATE_SIGNAL_TIERS = ("context", "buyer_intent", "project_intent")
+_CANDIDATE_SIGNAL_TIER_RANK = {
+    "context": 1,
+    "buyer_intent": 2,
+    "project_intent": 3,
+}
+
 _GENERIC_POSITIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
     "requestSearch": (
         "looking for",
@@ -65,8 +72,6 @@ _GENERIC_NEGATIVE_CANDIDATE_SIGNAL_GROUPS: dict[str, tuple[str, ...]] = {
         "/ hour",
         " posted ",
         " ends in ",
-        " freelancer",
-        " freelance ",
         " proposals",
         " bids",
     ),
@@ -127,6 +132,68 @@ def _resolve_candidate_signal_groups(
     return positive_groups, negative_groups, signal_source
 
 
+def _read_signal_group_tiers(
+    candidate_signal_config: Mapping[str, Any] | None,
+    group_names: list[str],
+) -> dict[str, str]:
+    config = candidate_signal_config if isinstance(candidate_signal_config, Mapping) else {}
+    default_tier = str(config.get("defaultTier") or "project_intent").strip()
+    if default_tier not in _CANDIDATE_SIGNAL_TIERS:
+        default_tier = "project_intent"
+    group_tiers = {group_name: default_tier for group_name in group_names}
+
+    positive_groups = config.get("positiveGroups")
+    if isinstance(positive_groups, list):
+        for raw_group in positive_groups:
+            if not isinstance(raw_group, Mapping):
+                continue
+            name = str(raw_group.get("name") or "").strip()
+            tier = str(raw_group.get("tier") or "").strip()
+            if name and tier in _CANDIDATE_SIGNAL_TIERS:
+                group_tiers[name] = tier
+
+    tiers = config.get("tiers")
+    if isinstance(tiers, Mapping):
+        for raw_tier_name, raw_tier_config in tiers.items():
+            tier_name = str(raw_tier_name or "").strip()
+            if tier_name not in _CANDIDATE_SIGNAL_TIERS:
+                continue
+            if not isinstance(raw_tier_config, Mapping):
+                continue
+            configured_groups = raw_tier_config.get("positiveGroups")
+            if configured_groups is None:
+                configured_groups = raw_tier_config.get("groups")
+            if not isinstance(configured_groups, list):
+                continue
+            for raw_group_name in configured_groups:
+                group_name = str(raw_group_name or "").strip()
+                if group_name:
+                    group_tiers[group_name] = tier_name
+
+    return group_tiers
+
+
+def _resolve_candidate_signal_tier(
+    positive_hits: dict[str, list[str]],
+    group_tiers: Mapping[str, str],
+) -> tuple[str | None, dict[str, list[str]], dict[str, int]]:
+    tier_groups: dict[str, list[str]] = {tier: [] for tier in _CANDIDATE_SIGNAL_TIERS}
+    for group_name in positive_hits:
+        tier = str(group_tiers.get(group_name) or "project_intent")
+        if tier not in _CANDIDATE_SIGNAL_TIERS:
+            tier = "project_intent"
+        tier_groups[tier].append(group_name)
+    tier_counts = {tier: len(groups) for tier, groups in tier_groups.items()}
+    matched_tiers = [tier for tier, count in tier_counts.items() if count > 0]
+    if not matched_tiers:
+        return None, tier_groups, tier_counts
+    dominant_tier = max(
+        matched_tiers,
+        key=lambda tier: _CANDIDATE_SIGNAL_TIER_RANK[tier],
+    )
+    return dominant_tier, tier_groups, tier_counts
+
+
 def _collect_signal_hits(text: str, groups: dict[str, tuple[str, ...]]) -> dict[str, list[str]]:
     hits: dict[str, list[str]] = {}
     for group_name, fragments in groups.items():
@@ -154,20 +221,31 @@ def evaluate_document_candidate_signals(
     base_decision: str,
     candidate_signal_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    normalized_title = str(title or "").strip().lower()
     normalized_text = " ".join(
         part.strip().lower()
         for part in (
-            str(title or ""),
+            normalized_title,
             str(lead or ""),
             str(body or "")[:800],
         )
         if str(part or "").strip()
     )
+    generic_advice_noise = _looks_like_generic_advice_title(normalized_title)
     positive_groups, noise_groups, signal_source = _resolve_candidate_signal_groups(
         candidate_signal_config
     )
     positive_hits = _collect_signal_hits(normalized_text, positive_groups)
     noise_hits = _collect_signal_hits(normalized_text, noise_groups)
+    group_tiers = _read_signal_group_tiers(candidate_signal_config, list(positive_groups))
+    candidate_signal_tier, tier_groups, tier_counts = _resolve_candidate_signal_tier(
+        positive_hits,
+        group_tiers,
+    )
+    candidate_selection_eligible = candidate_signal_tier in {
+        "buyer_intent",
+        "project_intent",
+    }
     positive_group_count = len(positive_hits)
     positive_hit_count = _count_signal_hits(positive_hits)
     noise_group_count = len(noise_hits)
@@ -195,15 +273,28 @@ def evaluate_document_candidate_signals(
     )
     document_only_uplift = (
         base_decision == "irrelevant"
+        and not generic_advice_noise
         and near_threshold
         and semantic_support
+        and candidate_selection_eligible
         and positive_group_count >= 2
+        and noise_group_count == 0
+    )
+    evidence_led_uplift = (
+        base_decision == "irrelevant"
+        and not generic_advice_noise
+        and candidate_signal_tier == "project_intent"
+        and positive_group_count >= 3
+        and positive_hit_count >= 4
+        and candidate_signal_score >= 6
         and noise_group_count == 0
     )
     context_backed_uplift = (
         base_decision == "irrelevant"
+        and not generic_advice_noise
         and context_near_threshold
         and semantic_support
+        and candidate_selection_eligible
         and positive_group_count >= 1
         and noise_group_count == 0
         and (
@@ -215,7 +306,9 @@ def evaluate_document_candidate_signals(
             )
         )
     )
-    uplifted_to_gray_zone = document_only_uplift or context_backed_uplift
+    uplifted_to_gray_zone = (
+        document_only_uplift or evidence_led_uplift or context_backed_uplift
+    )
 
     return {
         "baseDecision": base_decision,
@@ -229,17 +322,26 @@ def evaluate_document_candidate_signals(
         "contextBonus": context_bonus,
         "positiveSignalCount": positive_group_count,
         "positiveSignalHitCount": positive_hit_count,
+        "candidateSignalTier": candidate_signal_tier,
+        "candidateSignalTierCounts": tier_counts,
+        "candidateSignalTierGroups": tier_groups,
+        "candidateSelectionEligible": candidate_selection_eligible,
+        "contextOnly": candidate_signal_tier == "context",
         "noiseSignalCount": noise_group_count,
         "noiseSignalHitCount": noise_hit_count,
+        "genericAdviceNoise": generic_advice_noise,
         "candidateSignalScore": candidate_signal_score,
         "positiveSignals": positive_hits,
         "noiseSignals": noise_hits,
         "documentOnlyUplift": document_only_uplift,
+        "evidenceLedUplift": evidence_led_uplift,
         "contextBackedUplift": context_backed_uplift,
         "upliftedToGrayZone": uplifted_to_gray_zone,
         "upliftPath": (
             "context_backed"
             if context_backed_uplift
+            else "evidence_led"
+            if evidence_led_uplift
             else "document_only"
             if document_only_uplift
             else None
@@ -248,6 +350,8 @@ def evaluate_document_candidate_signals(
         "reason": (
             "context_backed_candidate_signal_uplift"
             if context_backed_uplift
+            else "evidence_led_candidate_signal_uplift"
+            if evidence_led_uplift
             else "document_candidate_signal_uplift"
             if document_only_uplift
             else None
@@ -286,7 +390,13 @@ def apply_document_candidate_signal_uplift(
         return ("gray_zone", explain)
     if explain["positiveSignalCount"] > 0 or explain["noiseSignalCount"] > 0:
         return (base_decision, explain)
+    if explain["signalSource"] == "selection_profile_definition":
+        return (base_decision, explain)
     return (base_decision, None)
+
+
+def _looks_like_generic_advice_title(normalized_title: str) -> bool:
+    return normalized_title.startswith(("how ", "how to ", "guide to ", "what is ", "why "))
 
 
 def build_downstream_selection_diagnostics(
@@ -302,6 +412,10 @@ def build_downstream_selection_diagnostics(
     selection_reason: str | None,
     selection_decision: str,
     candidate_signal_uplift_count: int = 0,
+    candidate_signal_eligible_count: int = 0,
+    candidate_signal_strong_match_count: int = 0,
+    candidate_signal_tier: str | None = None,
+    candidate_signal_tier_counts: Mapping[str, int] | None = None,
     filter_reason_counts: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     total = max(int(total_filter_count or 0), 0)
@@ -312,6 +426,14 @@ def build_downstream_selection_diagnostics(
     hold = max(int(hold_filter_count or 0), 0)
     technical_filtered_out = max(int(technical_filtered_out_count or 0), 0)
     candidate_signal_uplift = max(int(candidate_signal_uplift_count or 0), 0)
+    candidate_signal_eligible = max(int(candidate_signal_eligible_count or 0), 0)
+    candidate_signal_strong_match = max(int(candidate_signal_strong_match_count or 0), 0)
+    normalized_candidate_signal_tier = str(candidate_signal_tier or "").strip() or None
+    normalized_candidate_signal_tier_counts = {
+        str(key).strip(): max(int(value or 0), 0)
+        for key, value in (candidate_signal_tier_counts or {}).items()
+        if str(key).strip()
+    }
     normalized_verification_state = str(verification_state or "").strip() or None
     normalized_selection_reason = str(selection_reason or "").strip() or None
 
@@ -342,12 +464,40 @@ def build_downstream_selection_diagnostics(
         blocker_stage = "llm_review"
         blocker_reason = normalized_selection_reason or "llm_review_pending"
     elif hold > 0 or (
-        selection_decision == "gray_zone" and normalized_selection_reason in {"semantic_hold", "candidate_signal_hold"}
+        selection_decision == "gray_zone"
+        and normalized_selection_reason
+        in {"semantic_hold", "candidate_signal_hold", "item_level_evidence_required"}
     ):
-        downstream_loss_bucket = "gray_zone_hold"
+        if (
+            (candidate_signal_uplift > 0 or candidate_signal_eligible > 0)
+            and normalized_candidate_signal_tier == "buyer_intent"
+        ):
+            downstream_loss_bucket = "buyer_intent_hold"
+        elif (
+            (candidate_signal_uplift > 0 or candidate_signal_eligible > 0)
+            and normalized_candidate_signal_tier == "project_intent"
+        ):
+            downstream_loss_bucket = "project_intent_hold"
+        elif candidate_signal_uplift > 0 and normalized_candidate_signal_tier == "context":
+            downstream_loss_bucket = "context_candidate_not_selected"
+        elif normalized_selection_reason == "item_level_evidence_required":
+            downstream_loss_bucket = "context_candidate_not_selected"
+        else:
+            downstream_loss_bucket = "gray_zone_hold"
         blocker_stage = "hold_policy"
         blocker_reason = normalized_selection_reason or "gray_zone_hold"
-    elif technical_filtered_out > 0 and matched == 0 and no_match == 0 and gray_zone == 0:
+    elif normalized_selection_reason == "document_level_technical_filter":
+        downstream_loss_bucket = "technical_filter_rejected"
+        blocker_stage = "technical_filter"
+        blocker_reason = dominant_filter_reason or normalized_selection_reason
+    elif (
+        technical_filtered_out > 0
+        and (
+            matched == 0
+            or normalized_selection_reason == "document_level_technical_filter"
+        )
+        and gray_zone == 0
+    ):
         downstream_loss_bucket = "technical_filter_rejected"
         blocker_stage = "technical_filter"
         blocker_reason = dominant_filter_reason or normalized_selection_reason or "technical_filtered_out"
@@ -382,6 +532,10 @@ def build_downstream_selection_diagnostics(
             "hold": hold,
             "technicalFilteredOut": technical_filtered_out,
             "candidateSignalUplift": candidate_signal_uplift,
+            "candidateSignalEligible": candidate_signal_eligible,
+            "candidateSignalStrongMatch": candidate_signal_strong_match,
+            "candidateSignalTier": normalized_candidate_signal_tier,
+            "candidateSignalTierCounts": normalized_candidate_signal_tier_counts,
             "dominantFilterReason": dominant_filter_reason,
             "filterReasonCounts": normalized_filter_reason_counts,
         },
@@ -404,6 +558,10 @@ def summarize_final_selection_result(
     technical_filtered_out_count: int,
     verification_state: str | None,
     candidate_signal_uplift_count: int = 0,
+    candidate_signal_eligible_count: int = 0,
+    candidate_signal_strong_match_count: int = 0,
+    candidate_signal_tier: str | None = None,
+    candidate_signal_tier_counts: Mapping[str, int] | None = None,
     filter_reason_counts: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     total = max(int(total_filter_count or 0), 0)
@@ -414,7 +572,28 @@ def summarize_final_selection_result(
     hold = max(int(hold_filter_count or 0), 0)
     technical_filtered_out = max(int(technical_filtered_out_count or 0), 0)
     candidate_signal_uplift = max(int(candidate_signal_uplift_count or 0), 0)
+    candidate_signal_eligible = max(int(candidate_signal_eligible_count or 0), 0)
+    candidate_signal_strong_match = max(int(candidate_signal_strong_match_count or 0), 0)
     normalized_verification_state = str(verification_state or "").strip() or None
+    normalized_filter_reason_counts = {
+        str(key).strip(): max(int(value or 0), 0)
+        for key, value in (filter_reason_counts or {}).items()
+        if str(key).strip()
+    }
+    document_level_technical_veto = _has_document_level_technical_veto(
+        total=total,
+        filter_reason_counts=normalized_filter_reason_counts,
+    )
+    item_level_candidate_signal = (
+        (candidate_signal_uplift > 0 or candidate_signal_eligible > 0)
+        and str(candidate_signal_tier or "").strip()
+        in {"buyer_intent", "project_intent"}
+    )
+    clean_item_level_match = (
+        candidate_signal_strong_match > 0
+        and str(candidate_signal_tier or "").strip()
+        in {"buyer_intent", "project_intent"}
+    )
 
     strong_gray_zone_consensus = (
         gray_zone >= 4
@@ -422,10 +601,17 @@ def summarize_final_selection_result(
         and no_match <= 1
         and llm_review_pending == 0
         and technical_filtered_out == 0
+        and not document_level_technical_veto
+        and item_level_candidate_signal
     )
 
     selection_reason = "semantic_match"
-    if strong_gray_zone_consensus:
+    if document_level_technical_veto:
+        decision = "rejected"
+        compat_system_feed_decision = "filtered_out"
+        is_selected = False
+        selection_reason = "document_level_technical_filter"
+    elif strong_gray_zone_consensus:
         decision = "selected"
         compat_system_feed_decision = "eligible"
         is_selected = True
@@ -435,10 +621,16 @@ def summarize_final_selection_result(
         compat_system_feed_decision = "filtered_out"
         is_selected = False
         selection_reason = "verification_conflict"
-    elif matched > 0:
+    elif matched > 0 and clean_item_level_match:
         decision = "selected"
         compat_system_feed_decision = "eligible"
         is_selected = True
+        selection_reason = "item_level_semantic_match"
+    elif matched > 0:
+        decision = "gray_zone"
+        compat_system_feed_decision = "filtered_out"
+        is_selected = False
+        selection_reason = "item_level_evidence_required"
     elif gray_zone > 0:
         decision = "gray_zone"
         compat_system_feed_decision = "pending_llm" if llm_review_pending > 0 else "filtered_out"
@@ -452,10 +644,10 @@ def summarize_final_selection_result(
         else:
             selection_reason = "semantic_gray_zone" if llm_review_pending > 0 else "semantic_hold"
     elif total == 0:
-        decision = "selected"
-        compat_system_feed_decision = "pass_through"
-        is_selected = True
-        selection_reason = "pass_through"
+        decision = "rejected"
+        compat_system_feed_decision = "filtered_out"
+        is_selected = False
+        selection_reason = "missing_interest_filter_results"
     else:
         decision = "rejected"
         compat_system_feed_decision = "filtered_out"
@@ -475,6 +667,10 @@ def summarize_final_selection_result(
         selection_reason=selection_reason,
         selection_decision=decision,
         candidate_signal_uplift_count=candidate_signal_uplift,
+        candidate_signal_eligible_count=candidate_signal_eligible,
+        candidate_signal_strong_match_count=candidate_signal_strong_match,
+        candidate_signal_tier=candidate_signal_tier,
+        candidate_signal_tier_counts=candidate_signal_tier_counts,
         filter_reason_counts=filter_reason_counts,
     )
 
@@ -501,8 +697,32 @@ def summarize_final_selection_result(
                 "hold": hold,
                 "technicalFilteredOut": technical_filtered_out,
                 "candidateSignalUplift": candidate_signal_uplift,
+                "candidateSignalEligible": candidate_signal_eligible,
+                "candidateSignalStrongMatch": candidate_signal_strong_match,
             },
             "candidateSignalUpliftCount": candidate_signal_uplift,
+            "candidateSignalEligibleCount": candidate_signal_eligible,
+            "candidateSignalStrongMatchCount": candidate_signal_strong_match,
             **downstream_diagnostics,
         },
     }
+
+
+def _has_document_level_technical_veto(
+    *,
+    total: int,
+    filter_reason_counts: Mapping[str, int],
+) -> bool:
+    if total <= 0:
+        return False
+    document_level_reasons = {
+        "directory_listicle_noise",
+        "jobs_only_post_noise",
+        "professional_network_post_noise",
+        "repo_internal_change_noise",
+        "wrapper_directory_noise",
+    }
+    return any(
+        int(filter_reason_counts.get(reason) or 0) >= total
+        for reason in document_level_reasons
+    )

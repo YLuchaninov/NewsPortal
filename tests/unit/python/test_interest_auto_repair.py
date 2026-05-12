@@ -962,6 +962,110 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["criteriaCount"], 1)
 
+    async def test_process_match_criteria_demotes_strict_match_without_signal_groups(self) -> None:
+        criterion_row = {
+            "criterion_id": "11111111-1111-1111-1111-111111111111",
+            "selection_profile_id": "profile-strict-1",
+            "selection_profile_version": 1,
+            "selection_profile_status": "active",
+            "selection_profile_family": "compatibility_interest_template",
+            "selection_profile_definition_json": {
+                "candidateSignals": {
+                    "positiveGroups": [
+                        {"name": "buyer", "cues": ["agency"]},
+                        {"name": "project", "cues": ["rfp"]},
+                    ],
+                    "negativeGroups": [],
+                }
+            },
+            "selection_profile_policy_json": {
+                "strictness": "strict",
+                "llmReviewMode": "disabled",
+                "unresolvedDecision": "hold",
+            },
+            "source_version": 3,
+            "compiled_json": {
+                "hard_constraints": {},
+                "lexical_query": "agency cloud",
+                "target_features": {},
+                "positive_embedding_ids": [],
+                "negative_embedding_ids": [],
+            },
+        }
+        article_row = {
+            "doc_id": "22222222-2222-2222-2222-222222222222",
+            "processing_state": "embedded",
+            "title": "Agency cloud modernization update",
+            "lead": "The agency discussed cloud work.",
+            "body": "No buying notice, contract, award, implementation partner, or budget evidence was provided.",
+            "lang": "en",
+        }
+        cursor = _RecordingCursor()
+        connection = _RecordingConnection(cursor)
+
+        with (
+            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
+            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
+            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
+            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
+            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
+            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.45)),
+            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
+            patch.object(worker_main, "semantic_prototype_score", return_value=0.0),
+            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
+            patch.object(worker_main, "compute_criterion_final_score", return_value=0.9),
+            patch.object(worker_main, "decide_criterion", return_value="relevant"),
+            patch.object(worker_main, "insert_outbox_event", AsyncMock()) as insert_outbox_event,
+            patch.object(
+                worker_main,
+                "upsert_system_feed_result",
+                AsyncMock(
+                    return_value={
+                        "decision": "filtered_out",
+                        "eligible_for_feed": False,
+                        "previous_eligible_for_feed": False,
+                    }
+                ),
+            ),
+            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
+            patch.object(worker_main, "record_processed_event", AsyncMock()),
+        ):
+            result = await worker_main.process_match_criteria(
+                SimpleNamespace(
+                    data={
+                        "eventId": "evt-criteria-strict-signal-guard-1",
+                        "docId": article_row["doc_id"],
+                    }
+                ),
+                "",
+            )
+
+        insert_outbox_event.assert_not_awaited()
+        insert_sql, insert_params = next(
+            item for item in cursor.executed if "insert into criterion_match_results" in item[0]
+        )
+        del insert_sql
+        self.assertEqual(insert_params[7], "gray_zone")
+        explain_json_param = insert_params[8]
+        explain_json = (
+            explain_json_param.value
+            if hasattr(explain_json_param, "value")
+            else explain_json_param
+        )
+        self.assertEqual(
+            explain_json["strictCandidateSignalGuard"]["reason"],
+            "strict_candidate_signal_guard",
+        )
+        self.assertEqual(
+            explain_json["strictCandidateSignalGuard"]["positiveSignalCount"],
+            1,
+        )
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["criteriaCount"], 1)
+
     async def test_process_match_criteria_applies_budget_fallback_without_queueing(self) -> None:
         criterion_row = {
             "criterion_id": "11111111-1111-1111-1111-111111111111",

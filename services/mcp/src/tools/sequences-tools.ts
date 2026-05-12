@@ -46,6 +46,21 @@ const REINDEX_BACKFILL_DEFAULT_OPTIONS = {
   includeEnrichment: false,
   forceEnrichment: false,
 } as const;
+const REINDEX_BACKFILL_OPTION_KEYS = new Set([
+  "batchSize",
+  "docIds",
+  "forceEnrichment",
+  "fullReplay",
+  "includeEnrichment",
+  "interestId",
+  "parentReindexJobId",
+  "reason",
+  "replayExistingArticles",
+  "requestedBy",
+  "retroNotifications",
+  "systemFeedOnly",
+  "userId",
+]);
 
 type ReindexIndexName = (typeof REINDEX_INDEX_NAMES)[number];
 type ReindexJobKind = (typeof REINDEX_JOB_KINDS)[number];
@@ -163,6 +178,22 @@ function normalizeReindexOptions(
 ): Record<string, unknown> {
   if (jobKind !== "backfill") {
     return options;
+  }
+  const unsupported = Object.keys(options).filter((key) => !REINDEX_BACKFILL_OPTION_KEYS.has(key));
+  if (unsupported.length > 0) {
+    throw new JsonRpcError(
+      -32602,
+      `payload.options contains unsupported backfill option(s): ${unsupported.join(", ")}.`,
+      {
+        statusCode: 400,
+        data: {
+          path: "payload.options",
+          code: "unsupported_option",
+          unsupported,
+          allowedValues: [...REINDEX_BACKFILL_OPTION_KEYS].sort(),
+        },
+      }
+    );
   }
   return {
     ...REINDEX_BACKFILL_DEFAULT_OPTIONS,
@@ -310,7 +341,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "maintenance.reindex.request",
-    "Queue a valid reindex.requested event for the system Default Reindex sequence. Use jobKind=backfill for existing, historical, or old articles; rerunning content against current system interests, criteria, templates, interest_filter_results, final_selection_results, selected/pass_through noise, or after Example C/templates/criteria changes. Use jobKind=rebuild only when the operator asks to refresh centroid/vector indexes. Prefer this over calling sequences.run on migration-owned reindex sequences.",
+    "Queue a valid reindex.requested event for the system Default Reindex sequence. Use jobKind=backfill for existing, historical, or old articles; rerunning content against current system interests, criteria, templates, interest_filter_results, final_selection_results, selected/pass_through noise, or after Example C/templates/criteria changes. For enlarged retained DBs or a failed full replay, run bounded chunks by passing payload.options.docIds and parentReindexJobId/reason, then verify every chunk with maintenance.reindex_jobs.list and operator.report.verify. Use jobKind=rebuild only when the operator asks to refresh centroid/vector indexes. Prefer this over calling sequences.run on migration-owned reindex sequences.",
     "write.sequences",
     {
       type: "object",
@@ -320,7 +351,25 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
           properties: {
             indexName: { type: "string", enum: [...REINDEX_INDEX_NAMES] },
             jobKind: { type: "string", enum: [...REINDEX_JOB_KINDS] },
-            options: { type: "object", additionalProperties: true },
+            options: {
+              type: "object",
+              properties: {
+                batchSize: { type: ["integer", "number"] },
+                docIds: { type: "array", items: { type: "string" } },
+                forceEnrichment: { type: "boolean" },
+                fullReplay: { type: "boolean" },
+                includeEnrichment: { type: "boolean" },
+                interestId: { type: "string" },
+                parentReindexJobId: { type: "string" },
+                reason: { type: "string" },
+                replayExistingArticles: { type: "boolean" },
+                requestedBy: { type: "string" },
+                retroNotifications: { type: "string", enum: ["skip"] },
+                systemFeedOnly: { type: "boolean" },
+                userId: { type: "string" },
+              },
+              additionalProperties: false,
+            },
           },
           additionalProperties: false,
         },
@@ -385,6 +434,9 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
             ? [
                 "Selection replay backfill queued for existing content; wait for completed/failed before reporting success.",
                 "Backfill recalculates current-interest selection evidence such as interest_filter_results and final_selection_results.",
+                Array.isArray(optionsJson.docIds) && optionsJson.docIds.length > 0
+                  ? `Bounded replay chunk queued for ${optionsJson.docIds.length} docIds. Continue with the next bounded chunk only after read-back verification.`
+                  : "For large retained DB replay after a timeout, prefer bounded docIds chunks over another full replay.",
               ]
             : [
                 "Centroid/vector index rebuild queued; this is not a historical selection replay.",

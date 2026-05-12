@@ -262,10 +262,8 @@ BUYER_CUE_TERMS = {
     "deadline",
     "implementation",
     "migration",
-    "outsourcing",
     "procurement",
     "proposal",
     "rfp",
     "tender",
 }
-

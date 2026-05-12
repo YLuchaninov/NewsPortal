@@ -52,6 +52,21 @@ test("reindex cancellation key ignores runtime result fields and batch size", ()
   });
 
   assert.equal(first, second);
+  assert.match(first, /^reindex:interest_centroids:backfill:sha256:[a-f0-9]{64}$/);
+});
+
+test("reindex cancellation key stays index-safe for large bounded doc chunks", () => {
+  const key = buildReindexCancellationKey({
+    indexName: "interest_centroids",
+    jobKind: "backfill",
+    optionsJson: {
+      docIds: Array.from({ length: 500 }, (_, index) => `doc-${String(index).padStart(4, "0")}`),
+      includeEnrichment: false,
+      requestedBy: "operator",
+    },
+  });
+
+  assert.equal(key.length, "reindex:interest_centroids:backfill:sha256:".length + 64);
 });
 
 test("queueReindexJobWithSupersession cancels queued and requests running same-lane jobs", async () => {

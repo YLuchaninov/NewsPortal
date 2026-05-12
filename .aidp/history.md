@@ -69,8 +69,40 @@
 - `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-30` — Python task-engine and sequence maintenance typed boundaries.
 - `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-31` — deterministic API and Email IMAP provider proof lanes.
 - `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-32` — repo-owned non-deploy release verification gate.
+- `NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1` — MCP-driven outsourcing-demand product-flow capability test and operator restore snapshot.
 
 ## Завершенные items
+
+### NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1 — MCP-driven outsourcing-demand product-flow capability test
+
+- Archive outcome: completed
+- Kind: Capability / product-flow test
+- Финальный status: archived
+- Work route: capability, then docs-operator closeout
+- Planning/source: required; source `external-spec`; accepted artifacts were the user-provided product-test, rare-signal source-prior, channel validation/alternatives, bottleneck/polling, funnel calibration, adapter/search lane, precision calibration, and coverage-first funnel plans.
+- Risk: high during execution because the test used retained local dev DB state, live external discovery/search/LLM paths, MCP writes, runtime rebuilds, and a no-cleanup evidence policy; closeout risk low.
+- Approval: user explicitly approved the product-flow implementation plans, the initial local dev DB reset, repeated MCP-only tuning/discovery operations, and final capability closure. No production/shared DB cleanup, production deploy, git commit, or branch action was performed.
+- Почему существовало: to prove whether NewsPortal can model an outsourcing agency's hidden/open demand discovery flow end-to-end through MCP: configure interests/templates/targets, discover and onboard sources, ingest/fetch, select content strictly by system interests, expose selected content on web, diagnose source/hold/replay bottlenecks, and retain evidence for restore.
+- Что изменилось:
+  - added MCP/read-model and runtime support for rare-signal source priors, channel validation, RSS alternatives, source bottlenecks, polite polling, funnel calibration, hold-quality diagnostics, bounded replay, source-role/family coverage, adapter research, API/search adapters, DDGS indirect search, marketplace/forum extraction quality, selection precision audit, and coverage-first recommendations;
+  - proved that source priors/source roles/source health/search provider metadata remain acquisition diagnostics only and cannot select, rank, escalate, or publish content;
+  - corrected product behavior so web shows the pipeline-selected collection only, without a separate public selected gate;
+  - expanded and then calibrated the retained source pool, including RSS/website/API/search/marketplace/forum lanes, while preserving noisy-but-working semantic channels as monitored inventory;
+  - created the compact operational restore snapshot at `docs/product/operator/snapshots/2026-05-12-operational-restore-config/` with system interests, selection profiles, LLM templates, sources/channels/runtime state, sequences, discovery targets, operational endpoints, contracts, provider capabilities, discovery LLM task templates, manifest, restore order, and summary.
+- Выполненный proof:
+  - repeated targeted TS/Python unit, typecheck, lint, migration/runtime health and MCP read-back proof is recorded in `.aidp/work.md` for each stage;
+  - key closeout proof: compact restore snapshot exists and contains the operational restore inputs; the obsolete broad snapshot `docs/product/operator/snapshots/2026-05-12-system-config-snapshot/` and temporary helper `/private/tmp/newsportal_export_snapshot.mjs` were already removed; 59 one-off `/private/tmp/newsportal*.mjs` helper scripts were removed during closeout;
+  - heartbeat automation `continue-tuned-outsourcing-discovery` was paused on 2026-05-12 so the closed product test does not continue running periodic discovery/fine-tuning;
+  - repo cleanup audit found no `.DS_Store`, `*.tmp`, `*.bak`, or `*~` files in the workspace outside ignored build/dependency directories; the only snapshot directory left under `docs/product/operator/snapshots/` is the compact restore snapshot.
+- Cleanup:
+  - product-test DB rows, channels, discovery rows, contracts, articles/resources, MCP logs, JSON proof artifacts, and restore snapshot were intentionally retained;
+  - no DB cleanup, deletion, archive, reset, production deploy, git staging, commit, or push was performed;
+  - removed only one-off helper scripts and obsolete snapshot/helper artifacts that were not needed for restore.
+- Оставшиеся risks/gaps:
+  - worktree remains intentionally dirty with implementation and documentation changes from the product-flow capability; commit/release packaging is separate work;
+  - `/private/tmp` still contains JSON/MD proof artifacts referenced by AIDP/history and prior proof notes; they are not needed for clean-start restore, but were left as audit evidence rather than silently purged;
+  - production adapter certification, production deployment, and any destructive cleanup of retained local DB evidence remain separate approval-gated work.
+- Archived on: 2026-05-12
 
 ### NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-32 — Repo-owned non-deploy release verification gate
 

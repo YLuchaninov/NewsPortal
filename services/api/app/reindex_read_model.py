@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
-from services.api.app.json_read_model import as_json_int, as_json_object
+from services.api.app.json_read_model import as_json_int, as_json_object, as_json_str
+
+REINDEX_RUNNING_STALL_SECONDS = 300
 
 
 def build_reindex_selection_profile_payload(
@@ -47,12 +49,37 @@ def apply_reindex_selection_profile_payload(
 ) -> dict[str, Any]:
     payload = dict(job_like)
     selection_profile_snapshot = build_reindex_selection_profile_payload(job_like)
+    progress = as_json_object(job_like.get("options_json")).get("progress")
+    progress_payload = as_json_object(progress)
+    status = as_json_str(job_like.get("status")) or "queued"
+    processed_articles = as_json_int(progress_payload.get("processedArticles"))
+    total_articles = as_json_int(progress_payload.get("totalArticles"))
+    progress_elapsed_seconds = as_json_int(progress_payload.get("elapsedSeconds"))
+    review_failures = as_json_int(progress_payload.get("llmReviewFailures"))
+    derived_state = status
+    if status == "running":
+        if not progress_payload:
+            derived_state = "running_no_progress_yet"
+        elif (
+            total_articles > 0
+            and processed_articles < total_articles
+            and progress_elapsed_seconds >= REINDEX_RUNNING_STALL_SECONDS
+        ):
+            derived_state = "running_stalled"
+        else:
+            derived_state = "running_active"
+    elif status == "completed" and review_failures > 0:
+        derived_state = "completed_with_review_failures"
+
     payload["selection_profile_snapshot"] = selection_profile_snapshot
     payload["selection_profile_summary"] = (
         selection_profile_snapshot.get("summary")
         if isinstance(selection_profile_snapshot, dict)
         else None
     )
+    payload["progress"] = progress_payload or None
+    payload["derived_state"] = derived_state
+    payload["derivedState"] = derived_state
     return payload
 
 

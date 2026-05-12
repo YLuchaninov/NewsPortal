@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { PoolClient } from "pg";
 
@@ -78,11 +78,14 @@ export function buildReindexCancellationKey(input: {
   jobKind: string;
   optionsJson?: Record<string, unknown>;
 }): string {
+  const normalizedOptions = stableStringify(normalizeForCancellation(input.optionsJson ?? {}));
+  const digest = createHash("sha256").update(normalizedOptions).digest("hex");
   return [
     "reindex",
     input.indexName,
     input.jobKind,
-    stableStringify(normalizeForCancellation(input.optionsJson ?? {})),
+    "sha256",
+    digest,
   ].join(":");
 }
 

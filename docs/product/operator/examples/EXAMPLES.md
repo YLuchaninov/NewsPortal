@@ -2027,7 +2027,7 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 ### C.2. LLM-шаблоны
 
-Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/product/data-scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/product/data-scripts/outsource_balanced_templates.json` — reference asset для ручного сравнения/переноса, но не отдельный competing handbook.
+Для built-in outsourcing scenario именно эта секция должна считаться первичным operator-facing источником. `docs/product/data-scripts/outsource_balanced_templates.md` остается только focused companion по тому же сценарию, а `docs/product/data-scripts/outsource_balanced_templates.json` — stale/reference-only asset для ручного сравнения/переноса, но не отдельный competing handbook. Если оператор использует старый JSON как evidence, сначала запускайте MCP `operator.funnel.audit`, а не применяйте JSON напрямую поверх live config.
 
 Перейдите в **Rules → LLM Templates** и создайте все 3 active baseline шаблона: `interests`, `criteria` и `global`.
 

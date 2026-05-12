@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { loadFetchersConfig } from "./config";
 import { checkPostgres, createPgPool } from "./db";
 import { ArticleEnrichmentService } from "./enrichment";
+import { planFeedAlternativesForDiscovery } from "./feed-alternatives";
 import { probeFeedsForDiscovery } from "./feed-probe";
 import { ResourceEnrichmentService } from "./resource-enrichment";
 import { RssFetcherService } from "./fetchers";
@@ -121,6 +122,54 @@ app.post<{ Body: { urls?: unknown; sampleCount?: unknown } }>(
       reply.code(400);
       return {
         probed_feeds: [],
+        error: message,
+      };
+    }
+  }
+);
+
+app.post<{ Body: { urls?: unknown; sampleCount?: unknown; maxCandidatesPerUrl?: unknown } }>(
+  "/internal/discovery/feeds/alternatives",
+  async (request, reply) => {
+    const rawUrls = Array.isArray(request.body?.urls) ? request.body?.urls : [];
+    const urls = Array.from(
+      new Set(
+        rawUrls
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, MAX_DISCOVERY_PROBE_URLS);
+    const sampleCount =
+      typeof request.body?.sampleCount === "number" && Number.isFinite(request.body.sampleCount)
+        ? Math.max(1, Math.min(10, Math.round(request.body.sampleCount)))
+        : 3;
+    const maxCandidatesPerUrl =
+      typeof request.body?.maxCandidatesPerUrl === "number" && Number.isFinite(request.body.maxCandidatesPerUrl)
+        ? Math.max(1, Math.min(100, Math.round(request.body.maxCandidatesPerUrl)))
+        : 20;
+    if (urls.length === 0) {
+      reply.code(400);
+      return {
+        alternative_plans: [],
+        error: "Discovery feed alternatives require at least one URL.",
+      };
+    }
+
+    try {
+      return await planFeedAlternativesForDiscovery({
+        urls,
+        sampleCount,
+        userAgent: config.defaultUserAgent,
+        timeoutMs: config.defaultRequestTimeoutMs,
+        maxCandidatesPerUrl,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Discovery feed alternatives failed.";
+      app.log.error({ error, urls }, "Fetchers discovery feed alternatives route failed.");
+      reply.code(400);
+      return {
+        alternative_plans: [],
         error: message,
       };
     }

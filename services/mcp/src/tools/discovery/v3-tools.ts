@@ -1,4 +1,17 @@
 import {
+  explainAdapterResearchWithPool,
+  getSourceFamilyCoverageWithPool,
+  getSourceRoleCoverageWithPool,
+  listAdapterResearchWithPool,
+  planAdapterResearch,
+  planIndirectTargets,
+  planIndirectTargetChannelsWithPool,
+  planSourceRoles,
+  startAdapterResearchWithPool,
+  startIndirectTargetsWithPool,
+} from "@newsportal/control-plane";
+
+import {
   createReadTool,
   createWriteTool,
   readOptionalString,
@@ -21,10 +34,155 @@ const pageSchema = {
   additionalProperties: false,
 } as const;
 
+const sourcePriorPageSchema = {
+  type: "object",
+  properties: {
+    page: { type: "number" },
+    pageSize: { type: "number" },
+    targetId: { type: "string" },
+    channelId: { type: "string" },
+    endpointId: { type: "string" },
+    contractId: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
 const payloadSchema = {
   type: "object",
   properties: {
     payload: { type: "object", additionalProperties: true },
+  },
+  required: ["payload"],
+  additionalProperties: false,
+} as const;
+
+const sourceActionPayloadSchema = {
+  type: "object",
+  required: ["targetId"],
+  properties: {
+    targetId: { type: "string" },
+    maxDepth: { type: "number" },
+    maxHypotheses: { type: "number" },
+    maxSearchResults: { type: "number" },
+    maxDomains: { type: "number" },
+    maxEndpoints: { type: "number" },
+    maxSocialItems: { type: "number" },
+    providerExecutionEnabled: { type: "boolean" },
+    requestedBy: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const sourceRolePlanSchema = {
+  type: "object",
+  properties: {
+    objective: { type: "string" },
+    rareSignal: { type: "boolean" },
+    includeResearchOnly: { type: "boolean" },
+  },
+  additionalProperties: false,
+} as const;
+
+const sourceRoleCoverageSchema = {
+  type: "object",
+  properties: {
+    includeExamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} as const;
+
+const sourceFamilyCoverageSchema = {
+  type: "object",
+  properties: {
+    includeExamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} as const;
+
+const adapterResearchPlanSchema = {
+  type: "object",
+  properties: {
+    objective: { type: "string" },
+    sourceRoles: { type: "array", items: { type: "string" } },
+    platforms: { type: "array", items: { type: "string" } },
+    includeResearchOnly: { type: "boolean" },
+    maxCandidates: { type: "number" },
+  },
+  additionalProperties: false,
+} as const;
+
+const adapterResearchListSchema = {
+  type: "object",
+  properties: {
+    page: { type: "number" },
+    pageSize: { type: "number" },
+  },
+  additionalProperties: false,
+} as const;
+
+const adapterResearchExplainSchema = {
+  type: "object",
+  properties: {
+    endpointId: { type: "string" },
+  },
+  required: ["endpointId"],
+  additionalProperties: false,
+} as const;
+
+const indirectTargetsPlanSchema = {
+  type: "object",
+  properties: {
+    objective: { type: "string" },
+    platforms: { type: "array", items: { type: "string" } },
+    queryTerms: { type: "array", items: { type: "string" } },
+    maxQueries: { type: "number" },
+  },
+  additionalProperties: false,
+} as const;
+
+const indirectTargetChannelsPlanSchema = {
+  type: "object",
+  properties: {
+    searchProvider: {
+      type: "string",
+      enum: ["ddgs_search", "searxng_search", "brave_search", "tavily_search", "exa_search", "serpapi_google_news_research"],
+    },
+    baseUrl: { type: "string" },
+    endpointIds: { type: "array", items: { type: "string" } },
+    maxChannels: { type: "number" },
+    locale: { type: "string" },
+    timeRange: { type: "string" },
+    includeHighRisk: { type: "boolean" },
+  },
+  additionalProperties: false,
+} as const;
+
+function readStringListArg(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return value.map((entry) => String(entry ?? "").trim()).filter(Boolean);
+}
+
+function readPositiveNumberArg(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+const dispatchQueuedRunsPayloadSchema = {
+  type: "object",
+  properties: {
+    payload: {
+      type: "object",
+      properties: {
+        targetId: { type: "string" },
+        runIds: { type: "array", items: { type: "string" } },
+        limit: { type: "number" },
+        includeAlreadyDispatched: { type: "boolean" },
+        requestedBy: { type: "string" },
+        reason: { type: "string" },
+      },
+      additionalProperties: false,
+    },
   },
   required: ["payload"],
   additionalProperties: false,
@@ -58,6 +216,16 @@ function listArgs(args: Record<string, unknown>) {
     ...readPageArgs(args),
     status: readOptionalString(args.status) ?? undefined,
     targetId: readOptionalString(args.targetId) ?? undefined,
+  };
+}
+
+function sourcePriorListArgs(args: Record<string, unknown>) {
+  return {
+    ...readPageArgs(args),
+    targetId: readOptionalString(args.targetId) ?? undefined,
+    channelId: readOptionalString(args.channelId) ?? undefined,
+    endpointId: readOptionalString(args.endpointId) ?? undefined,
+    contractId: readOptionalString(args.contractId) ?? undefined,
   };
 }
 
@@ -128,6 +296,117 @@ export const DISCOVERY_V3_READ_MCP_TOOLS: readonly McpToolDefinition[] = [
       sdk.diagnoseDiscoveryRun<Record<string, unknown>>(
         readRequiredUuidString(args.runId, "runId")
       )
+  ),
+  createReadTool(
+    "discovery.source_priors.list",
+    "List applied rare-signal source priors from channel config and Source Evidence Contracts. Prior-only evidence is not selected content.",
+    sourcePriorPageSchema,
+    async ({ sdk }, args) =>
+      sdk.listDiscoverySourcePriors<Record<string, unknown>>(sourcePriorListArgs(args))
+  ),
+  createReadTool(
+    "discovery.source_priors.evaluate",
+    "Read-only rare-signal source-prior scoring for a target plus channel/endpoint/contract. This estimates whether a source deserves longer monitor/probation observation and never selects articles.",
+    payloadSchema,
+    async ({ sdk }, args) =>
+      sdk.evaluateDiscoverySourcePrior<Record<string, unknown>>(readPayload(args))
+  ),
+  createReadTool(
+    "discovery.source_roles.plan",
+    "Plan thematic source roles for a rare-signal objective. This is acquisition guidance only and never selects content.",
+    sourceRolePlanSchema,
+    async (_context, args) =>
+      planSourceRoles({
+        objective: readOptionalString(args.objective) ?? undefined,
+        rareSignal: typeof args.rareSignal === "boolean" ? args.rareSignal : undefined,
+        includeResearchOnly:
+          typeof args.includeResearchOnly === "boolean" ? args.includeResearchOnly : undefined,
+      })
+  ),
+  createReadTool(
+    "discovery.source_roles.coverage",
+    "Read DB-backed thematic source-role coverage across channels and adapter/access-required endpoint evidence.",
+    sourceRoleCoverageSchema,
+    async ({ pool }, args) =>
+      getSourceRoleCoverageWithPool(pool, {
+        includeExamples: typeof args.includeExamples === "boolean" ? args.includeExamples : false,
+      })
+  ),
+  createReadTool(
+    "discovery.source_families.coverage",
+    "Read DB-backed coverage-first source-family balance, lifecycle labels, noisy-source retention, and repair/access gaps.",
+    sourceFamilyCoverageSchema,
+    async ({ pool }, args) =>
+      getSourceFamilyCoverageWithPool(pool, {
+        includeExamples: typeof args.includeExamples === "boolean" ? args.includeExamples : false,
+      })
+  ),
+  createReadTool(
+    "discovery.adapter_research.plan",
+    "Plan adapter research candidates for thematic source roles, including official/public, research-only, closed-access, and unsupported lanes.",
+    adapterResearchPlanSchema,
+    async (_context, args) =>
+      planAdapterResearch({
+        objective: readOptionalString(args.objective) ?? undefined,
+        sourceRoles: readStringListArg(args.sourceRoles),
+        platforms: readStringListArg(args.platforms),
+        includeResearchOnly:
+          typeof args.includeResearchOnly === "boolean" ? args.includeResearchOnly : undefined,
+        maxCandidates: readPositiveNumberArg(args.maxCandidates),
+      })
+  ),
+  createReadTool(
+    "discovery.adapter_research.list",
+    "List persisted adapter research endpoint evidence. These rows do not create channels or selected content by themselves.",
+    adapterResearchListSchema,
+    async ({ pool }, args) =>
+      listAdapterResearchWithPool(pool, {
+        page: readPositiveNumberArg(args.page),
+        pageSize: readPositiveNumberArg(args.pageSize),
+      })
+  ),
+  createReadTool(
+    "discovery.adapter_research.explain",
+    "Explain one persisted adapter research endpoint and its production/research/access implications.",
+    adapterResearchExplainSchema,
+    async ({ pool }, args) =>
+      explainAdapterResearchWithPool(pool, {
+        endpointId: readRequiredUuidString(args.endpointId, "endpointId"),
+      })
+  ),
+  createReadTool(
+    "discovery.indirect_targets.plan",
+    "Plan bounded indirect aggregator queries for closed/API-gapped thematic source roles. Aggregator hits still need item-level evidence.",
+    indirectTargetsPlanSchema,
+    async (_context, args) =>
+      planIndirectTargets({
+        objective: readOptionalString(args.objective) ?? undefined,
+        platforms: readStringListArg(args.platforms),
+        queryTerms: readStringListArg(args.queryTerms),
+        maxQueries: readPositiveNumberArg(args.maxQueries),
+      })
+  ),
+  createReadTool(
+    "discovery.indirect_targets.channels.plan",
+    "Read-only planner that converts detect-only indirect aggregator endpoint evidence into API channel rows for channels.bulk_onboard.plan/apply/verify.",
+    indirectTargetChannelsPlanSchema,
+    async ({ pool }, args) =>
+      planIndirectTargetChannelsWithPool(pool, {
+        searchProvider: readOptionalString(args.searchProvider) as
+          | "ddgs_search"
+          | "searxng_search"
+          | "brave_search"
+          | "tavily_search"
+          | "exa_search"
+          | "serpapi_google_news_research"
+          | undefined,
+        baseUrl: readOptionalString(args.baseUrl) ?? undefined,
+        endpointIds: readStringListArg(args.endpointIds),
+        maxChannels: readPositiveNumberArg(args.maxChannels),
+        locale: readOptionalString(args.locale) ?? undefined,
+        timeRange: readOptionalString(args.timeRange) ?? undefined,
+        includeHighRisk: typeof args.includeHighRisk === "boolean" ? args.includeHighRisk : undefined,
+      })
   ),
   createReadTool(
     "discovery.endpoints.list",
@@ -383,12 +662,54 @@ export const DISCOVERY_V3_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
       )
   ),
   createWriteTool(
+    "discovery.runs.dispatch_queued",
+    "Dispatch retained queued discovery runs into the Sequence Runner without deleting or cleaning old run rows.",
+    "write.discovery",
+    dispatchQueuedRunsPayloadSchema,
+    async ({ sdk, token }, args) =>
+      sdk.dispatchQueuedDiscoveryRuns<Record<string, unknown>>(
+        withActorDefault(readPayload(args), "requestedBy", token.issuedByUserId)
+      )
+  ),
+  createWriteTool(
     "discovery.runs.cancel",
     "Cancel a queued or running resilient discovery run.",
     "write.discovery",
     idSchema("runId"),
     async ({ sdk }, args) =>
       sdk.cancelDiscoveryRun<Record<string, unknown>>(readRequiredUuidString(args.runId, "runId"))
+  ),
+  createWriteTool(
+    "discovery.source_priors.apply",
+    "Apply a high/medium rare-signal source prior through discovery contract/channel JSON annotations. This extends monitoring only; it does not promote or select articles.",
+    "write.discovery",
+    payloadSchema,
+    async ({ sdk, token }, args) =>
+      sdk.applyDiscoverySourcePrior<Record<string, unknown>>(
+        withActorDefault(readPayload(args), "requestedBy", token.issuedByUserId)
+      )
+  ),
+  createWriteTool(
+    "discovery.adapter_research.start",
+    "Persist bounded adapter research endpoint evidence for thematic source roles. This does not create channels or select content.",
+    "write.discovery",
+    payloadSchema,
+    async ({ pool, token }, args) =>
+      startAdapterResearchWithPool(
+        pool,
+        withActorDefault(readPayload(args), "requestedBy", token.issuedByUserId)
+      )
+  ),
+  createWriteTool(
+    "discovery.indirect_targets.start",
+    "Persist bounded indirect aggregator target evidence for closed/API-gapped thematic source roles. This does not create channels or select content.",
+    "write.discovery",
+    payloadSchema,
+    async ({ pool, token }, args) =>
+      startIndirectTargetsWithPool(
+        pool,
+        withActorDefault(readPayload(args), "requestedBy", token.issuedByUserId)
+      )
   ),
   createWriteTool(
     "discovery.endpoints.promote",
@@ -481,7 +802,15 @@ export const DISCOVERY_V3_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "discovery.sources.expand_existing",
     "Queue sibling/feed/related-domain expansion from an existing source channel.",
     "write.discovery",
-    idPayloadSchema("channelId"),
+    {
+      type: "object",
+      properties: {
+        channelId: { type: "string" },
+        payload: sourceActionPayloadSchema,
+      },
+      required: ["channelId", "payload"],
+      additionalProperties: false,
+    },
     async ({ sdk, token }, args) =>
       sdk.expandExistingDiscoverySource<Record<string, unknown>>(
         readRequiredUuidString(args.channelId, "channelId"),
@@ -492,7 +821,15 @@ export const DISCOVERY_V3_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "discovery.sources.replace_candidates",
     "Queue same-role replacement discovery for an existing weak/degraded source channel.",
     "write.discovery",
-    idPayloadSchema("channelId"),
+    {
+      type: "object",
+      properties: {
+        channelId: { type: "string" },
+        payload: sourceActionPayloadSchema,
+      },
+      required: ["channelId", "payload"],
+      additionalProperties: false,
+    },
     async ({ sdk, token }, args) =>
       sdk.replaceDiscoverySourceCandidates<Record<string, unknown>>(
         readRequiredUuidString(args.channelId, "channelId"),

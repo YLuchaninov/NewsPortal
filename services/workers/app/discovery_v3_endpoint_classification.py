@@ -81,6 +81,10 @@ def classify_endpoint_kind(url: str, evidence: dict | None = None) -> str:
         return "rss_feed"
     if any(x in lower for x in ["openapi.json", "swagger.json"]):
         return "api_openapi"
+    if any(x in lower for x in ["/data", "/datasets", "/open-data", "/downloads", "/statistics"]):
+        return "dataset"
+    if "/api" in lower:
+        return "api_openapi"
     if any(x in lower for x in ["/newsroom", "/press", "/press-releases", "/announcements"]):
         return "newsroom"
     if any(x in lower for x in ["/blog", "/insights", "/analysis"]):

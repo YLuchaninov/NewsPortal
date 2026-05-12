@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from .runtime_json import coerce_text_list
 from .runtime_values import coerce_nullable_positive_int
@@ -27,23 +28,24 @@ def passes_allowed_content_kind(
 
 _WRAPPER_DIRECTORY_TITLE_FRAGMENTS = (
     "search results",
-    "freelance jobs",
     "remote jobs",
     "jobs online",
     "work remote & earn online",
     "employment",
     "talent network",
     "browse jobs",
+    "browse profiles",
+    "provider directory",
 )
 
 _WRAPPER_DIRECTORY_BODY_FRAGMENTS = (
     "browse by category",
-    "hire freelancers",
+    "browse profiles",
     "find work",
     "search buyers can",
-    "search freelancers to request a proposal",
-    "freelancers can search projects to quote on",
-    "top freelancers",
+    "search providers to request a proposal",
+    "providers can search projects to quote on",
+    "top providers",
     "talent network",
     "work remote & earn online",
     "jobs online",
@@ -67,8 +69,29 @@ _DIRECT_REQUEST_TITLE_FRAGMENTS = (
     "support takeover",
 )
 
+_SELLER_LANDING_TITLE_FRAGMENTS = (
+    "contact us",
+    "get started",
+    "start now",
+    "it's free",
+    "4.9/5",
+    "on clutch",
+)
+
+_GENERIC_ADVICE_TITLE_PREFIXES = (
+    "how to ",
+    "how ",
+    "guide to ",
+    "what is ",
+    "why ",
+)
+
 
 def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
+    url = str(article.get("url") or "").strip()
+    if _has_search_ad_url(url) or _has_wrapper_category_url(url):
+        return True
+
     title_and_lead = " ".join(
         str(article.get(field) or "")
         for field in ("title", "lead")
@@ -77,8 +100,15 @@ def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
         str(article.get(field) or "")
         for field in ("title", "lead", "body")
     ).casefold()
+    if _has_professional_network_noise_url(url, title_and_lead):
+        return True
+    if _looks_like_job_only_page(title_and_lead):
+        return True
     if any(fragment in title_and_lead for fragment in _DIRECT_REQUEST_TITLE_FRAGMENTS):
         return False
+
+    if _looks_like_seller_landing_page(title_and_lead) or _looks_like_generic_advice(title_and_lead):
+        return True
 
     title_hits = [
         fragment for fragment in _WRAPPER_DIRECTORY_TITLE_FRAGMENTS if fragment in title_and_lead
@@ -90,6 +120,114 @@ def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
         1 for fragment in _WRAPPER_DIRECTORY_BODY_FRAGMENTS if fragment in article_text
     )
     return bool(title_hits) and body_hit_count >= 2
+
+
+def _has_search_ad_url(url: str) -> bool:
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    hostname = (parsed.hostname or "").casefold()
+    path = parsed.path.casefold()
+    return (
+        (hostname.endswith("bing.com") and path == "/aclick")
+        or hostname.endswith("googleadservices.com")
+        or hostname.endswith("doubleclick.net")
+    )
+
+
+def _has_wrapper_category_url(url: str) -> bool:
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    hostname = (parsed.hostname or "").casefold()
+    path_parts = [part for part in parsed.path.casefold().split("/") if part]
+    query = parsed.query.casefold()
+
+    if hostname.endswith("peopleperhour.com") and path_parts[:1] == ["freelance-jobs"]:
+        # PeoplePerHour project-detail URLs carry a concrete detail slug/id. Category
+        # lanes such as /freelance-jobs/technology-programming/software-testing are
+        # acquisition wrappers, not buyer-authored project asks.
+        tail = path_parts[1:]
+        if tail and not any(any(char.isdigit() for char in part) for part in tail):
+            return True
+    if hostname.endswith("upwork.com") and not path_parts and "s=" in query:
+        return True
+    if "filters=tag" in query or "filter=tag" in query:
+        return True
+    if any(part in {"tag", "tags", "category", "categories"} for part in path_parts):
+        return True
+    return False
+
+
+def _has_professional_network_noise_url(url: str, title_and_lead: str) -> bool:
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    hostname = (parsed.hostname or "").casefold()
+    path_parts = [part for part in parsed.path.casefold().split("/") if part]
+    if "linkedin." not in hostname:
+        return False
+
+    if path_parts[:1] in (["pulse"], ["in"], ["jobs"]):
+        return True
+    if path_parts[:1] == ["posts"] and _looks_like_job_only_page(title_and_lead):
+        return True
+    return False
+
+
+def _looks_like_job_only_page(title_and_lead: str) -> bool:
+    job_markers = (
+        " remote job",
+        " job ",
+        " job,",
+        " job.",
+        " job:",
+        " jobs ",
+        " job opening",
+        " hiring ",
+        " careers ",
+        " apply now",
+        " salary ",
+        " full-time",
+        " full time",
+        " part-time",
+        " part time",
+    )
+    if any(marker in f" {title_and_lead} " for marker in job_markers):
+        project_markers = (
+            "fixed price",
+            "fixed-price",
+            "open for proposals",
+            "request for proposal",
+            "rfp",
+            "rfq",
+            "quote",
+            "vendor selection",
+            "implementation partner",
+            "migration partner",
+        )
+        return not any(marker in title_and_lead for marker in project_markers)
+    return False
+
+
+def _looks_like_seller_landing_page(title_and_lead: str) -> bool:
+    return any(fragment in title_and_lead for fragment in _SELLER_LANDING_TITLE_FRAGMENTS)
+
+
+def _looks_like_generic_advice(title_and_lead: str) -> bool:
+    return any(title_and_lead.strip().startswith(prefix) for prefix in _GENERIC_ADVICE_TITLE_PREFIXES)
 
 
 def passes_hard_filters(

@@ -184,6 +184,82 @@ test("probeFeedsForDiscovery discovers alternate feeds from HTML origins", async
   }
 });
 
+test("probeFeedsForDiscovery resolves HTML alternates against base href", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url === "https://example.com/blog/page") {
+      return new Response(
+        '<html><head><base href="https://example.com/blog/"><link rel="alternate" type="application/atom+xml" href="feed.xml"></head></html>',
+        {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        },
+      );
+    }
+    return new Response(
+      '<feed xmlns="http://www.w3.org/2005/Atom"><title>Base Feed</title><entry><title>Base Story</title><link href="https://example.com/blog/story"/></entry></feed>',
+      {
+        status: 200,
+        headers: { "content-type": "application/atom+xml" },
+      },
+    );
+  };
+
+  try {
+    const result = await probeFeedsForDiscovery({
+      urls: ["https://example.com/blog/page"],
+      sampleCount: 1,
+      userAgent: "NewsPortalTest/0.1",
+      timeoutMs: 1000,
+    });
+
+    assert.equal(result.probed_feeds[0]?.is_valid_rss, true);
+    assert.deepEqual(result.probed_feeds[0]?.discovered_feed_urls, ["https://example.com/blog/feed.xml"]);
+    assert.equal(result.probed_feeds[0]?.feed_url, "https://example.com/blog/feed.xml");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("probeFeedsForDiscovery discovers feeds from HTTP Link headers", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url === "https://example.com/news") {
+      return new Response("<html><head><title>News</title></head><body>News</body></html>", {
+        status: 200,
+        headers: {
+          "content-type": "text/html",
+          link: '<https://example.com/rss.xml>; rel="alternate"; type="application/rss+xml"',
+        },
+      });
+    }
+    return new Response(
+      '<rss><channel><title>Header Feed</title><item><title>Header Story</title><link>https://example.com/story</link></item></channel></rss>',
+      {
+        status: 200,
+        headers: { "content-type": "application/rss+xml" },
+      },
+    );
+  };
+
+  try {
+    const result = await probeFeedsForDiscovery({
+      urls: ["https://example.com/news"],
+      sampleCount: 1,
+      userAgent: "NewsPortalTest/0.1",
+      timeoutMs: 1000,
+    });
+
+    assert.equal(result.probed_feeds[0]?.is_valid_rss, true);
+    assert.deepEqual(result.probed_feeds[0]?.discovered_feed_urls, ["https://example.com/rss.xml"]);
+    assert.equal(result.probed_feeds[0]?.feed_title, "Header Feed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("probeFeedsForDiscovery uses parsed HTML alternates and rejects unsafe redirects", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {

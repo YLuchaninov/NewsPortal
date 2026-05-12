@@ -4,6 +4,7 @@ import {
   validateJsonSchema,
   type JsonSchema,
 } from "@newsportal/contracts";
+import { buildProviderShapeValidation } from "@newsportal/control-plane";
 
 import { ADMIN_MCP_TOOLS } from "./tools/admin-tools";
 import { CHANNEL_MCP_TOOLS } from "./tools/channels-tools";
@@ -37,7 +38,11 @@ import {
 import {
   OPERATING_DOMAIN_VALUES,
   OPERATING_REPORT_KINDS,
+  buildFunnelAudit,
+  buildFunnelAutoplan,
+  buildFunnelIterationRecommendation,
   buildOperationalReportVerification,
+  buildSelectionPrecisionAudit,
   buildSystemHealth,
   explainOperatorIssue,
   nextReadBackForTool,
@@ -98,6 +103,7 @@ const operatorReportVerifySchema = {
       enum: [
         "channel_onboarding",
         "discovery_run",
+        "source_prior",
         "cleanup",
         "selection",
         ...OPERATING_REPORT_KINDS,
@@ -109,7 +115,10 @@ const operatorReportVerifySchema = {
         channelIds: { type: "array", items: { type: "string" } },
         targetIds: { type: "array", items: { type: "string" } },
         runIds: { type: "array", items: { type: "string" } },
+        endpointIds: { type: "array", items: { type: "string" } },
+        contractIds: { type: "array", items: { type: "string" } },
         docIds: { type: "array", items: { type: "string" } },
+        domainPrefix: { type: "string" },
       },
       additionalProperties: false,
     },
@@ -202,6 +211,63 @@ const operatorEffectVerifySchema = {
   additionalProperties: false,
 } satisfies JsonSchema;
 
+const operatorFunnelAuditSchema = {
+  type: "object",
+  required: ["objective", "referenceEvidenceKind"],
+  properties: {
+    objective: { type: "string" },
+    referenceEvidenceKind: {
+      type: "string",
+      enum: ["reference_text", "reference_bundle", "admin_settings", "json_asset", "portable_funnel_guidance"],
+    },
+    referenceId: { type: "string" },
+    referenceText: { type: "string" },
+    referenceBundleKey: { type: "string" },
+    domainPrefix: { type: "string" },
+    includeDiscovery: { type: "boolean" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelAutoplanSchema = {
+  type: "object",
+  required: ["objective"],
+  properties: {
+    objective: { type: "string" },
+    excludedOutcomes: { type: "array", items: { type: "string" } },
+    regions: { type: "array", items: { type: "string" } },
+    languages: { type: "array", items: { type: "string" } },
+    rareSignal: { type: "boolean" },
+    domainPrefix: { type: "string" },
+    maxNewChannels: { type: "number" },
+    timeboxHours: { type: "number" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelIterationRecommendSchema = {
+  type: "object",
+  required: ["objective"],
+  properties: {
+    objective: { type: "string" },
+    domainPrefix: { type: "string" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorSelectionPrecisionAuditSchema = {
+  type: "object",
+  properties: {
+    docIds: { type: "array", items: { type: "string" } },
+    pageSize: { type: "number" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
 const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
     "operator.system.health",
@@ -227,6 +293,30 @@ const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     operatorEffectVerifySchema,
     async (context, args) => verifyOperatorEffect(context, args)
   ),
+  createReadTool(
+    "operator.funnel.audit",
+    "Read-only funnel calibration audit. Compares reference/manual evidence with live system interests, LLM templates, selection residuals, discovery/source gaps and returns portable recommendations without mutating anything.",
+    operatorFunnelAuditSchema,
+    async (context, args) => buildFunnelAudit(context, args)
+  ),
+  createReadTool(
+    "operator.funnel.autoplan",
+    "Read-only coverage-first funnel planner. Builds source-family, polling, repair, negative-control, and selection-tuning guidance without disabling noisy working sources.",
+    operatorFunnelAutoplanSchema,
+    async (context, args) => buildFunnelAutoplan(context, args)
+  ),
+  createReadTool(
+    "operator.funnel.iteration.recommend",
+    "Read-only next-step recommendation for a coverage-first funnel iteration. Retains working noisy/low-yield semantic sources unless an operator explicitly disables them.",
+    operatorFunnelIterationRecommendSchema,
+    async (context, args) => buildFunnelIterationRecommendation(context, args)
+  ),
+  createReadTool(
+    "operator.selection.precision_audit",
+    "Read-only selected-content precision audit. Buckets selected rows into strong/probable/context/noise outcomes without creating a separate public selected gate.",
+    operatorSelectionPrecisionAuditSchema,
+    async (context, args) => buildSelectionPrecisionAudit(context, args)
+  ),
 ];
 
 const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
@@ -241,7 +331,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
       const includeSamples = args.includeSamples === true;
       const warnings: string[] = [];
 
-      if ((OPERATING_REPORT_KINDS as readonly string[]).includes(reportKind)) {
+      if ((OPERATING_REPORT_KINDS as readonly string[]).includes(reportKind) || reportKind === "selection") {
         return buildOperationalReportVerification(context, reportKind, entityIds, includeSamples);
       }
 
@@ -278,6 +368,23 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
         if (channelIds.length > 0 && channels.rows.length !== channelIds.length) {
           warnings.push("Some requested channelIds were not found in source_channels.");
         }
+        const providerShapeRisks = channels.rows
+          .map((row) => ({
+            channelId: row.channelId,
+            name: row.name,
+            providerType: row.providerType,
+            fetchUrl: row.fetchUrl,
+            validation: buildProviderShapeValidation(
+              String(row.providerType ?? ""),
+              String(row.fetchUrl ?? "")
+            ),
+          }))
+          .filter((row) => row.validation.blocker);
+        if (providerShapeRisks.length > 0) {
+          warnings.push(
+            `${providerShapeRisks.length} channel${providerShapeRisks.length === 1 ? "" : "s"} have provider-shape blockers; use channels.alternatives.plan before interpreting them as source-quality failures.`
+          );
+        }
         return {
           reportKind,
           verifiedAt: new Date().toISOString(),
@@ -288,6 +395,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
             byProvider: providerCounts.rows,
           },
           channels: channels.rows,
+          providerShapeRisks,
         };
       }
 
@@ -382,6 +490,30 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
           `,
           [targetIds, runIds, hasEntityFilters]
         );
+        const adapterRequiredEndpointCounts = await pool.query(
+          `
+            select target_id::text as "targetId",
+                   provider_type as "providerType",
+                   endpoint_kind as "endpointKind",
+                   recommended_action as "recommendedAction",
+                   status,
+                   count(*)::int as count
+            from discovery_source_endpoints
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or target_id::text = any($1::text[])
+                or run_id::text = any($2::text[])
+              )
+              and (
+                recommended_action in ('needs_config', 'monitor_only')
+                or provider_type not in ('rss', 'website', 'api', 'email_imap')
+              )
+            group by target_id, provider_type, endpoint_kind, recommended_action, status
+            order by target_id, provider_type, endpoint_kind, recommended_action, status
+          `,
+          [targetIds, runIds, hasEntityFilters]
+        );
         const contractStatusCounts = await pool.query(
           `
             select target_id::text as "targetId",
@@ -399,7 +531,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
           `
             select target_id::text as "targetId",
                    status,
-                   signal_type as "signalType",
+                   claim_type as "signalType",
                    count(*)::int as count
             from discovery_claims
             where
@@ -408,8 +540,8 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                 or target_id::text = any($1::text[])
                 or run_id::text = any($2::text[])
               )
-            group by target_id, status, signal_type
-            order by target_id, status, signal_type
+            group by target_id, status, claim_type
+            order by target_id, status, claim_type
           `,
           [targetIds, runIds, hasEntityFilters]
         );
@@ -498,10 +630,119 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
           coverage: coverage.rows,
           hypothesisStatusCounts: hypothesisStatusCounts.rows,
           endpointStatusCounts: endpointStatusCounts.rows,
+          adapterRequiredEndpointCounts: adapterRequiredEndpointCounts.rows,
           contractStatusCounts: contractStatusCounts.rows,
           claimStatusCounts: claimStatusCounts.rows,
           negativeEvidence: includeSamples ? negativeEvidence.rows : [],
           providerHealth: providerHealth.rows,
+        };
+      }
+
+      if (reportKind === "source_prior") {
+        const targetIds = readStringArray(entityIds.targetIds);
+        const channelIds = readStringArray(entityIds.channelIds);
+        const endpointIds = readStringArray(entityIds.endpointIds);
+        const contractIds = readStringArray(entityIds.contractIds);
+        const hasEntityFilters =
+          targetIds.length + channelIds.length + endpointIds.length + contractIds.length > 0;
+        const sourcePriors = await pool.query(
+          `
+            select *
+            from (
+              select
+                'channel' as "surface",
+                coalesce(
+                  sc.config_json #>> '{discovery,rareSignalPrior,source,targetId}',
+                  sc.config_json #>> '{discovery,targetId}'
+                ) as "targetId",
+                sc.channel_id::text as "channelId",
+                coalesce(
+                  sc.config_json #>> '{discovery,rareSignalPrior,source,endpointId}',
+                  sc.config_json #>> '{discovery,endpointId}'
+                ) as "endpointId",
+                null::text as "contractId",
+                sc.name as "sourceName",
+                sc.provider_type as "providerType",
+                sc.config_json #> '{discovery,rareSignalPrior}' as "sourcePrior",
+                sc.updated_at as "updatedAt"
+              from source_channels sc
+              where jsonb_typeof(sc.config_json #> '{discovery,rareSignalPrior}') = 'object'
+
+              union all
+
+              select
+                'contract' as "surface",
+                dsc.target_id::text as "targetId",
+                dsc.source_channel_id::text as "channelId",
+                dsc.endpoint_id::text as "endpointId",
+                dsc.contract_id::text as "contractId",
+                coalesce(dse.title, sc.name, dsc.source_role) as "sourceName",
+                dsc.provider_type as "providerType",
+                dsc.contract_json #> '{rareSignalPrior}' as "sourcePrior",
+                dsc.updated_at as "updatedAt"
+              from discovery_source_contracts dsc
+              left join discovery_source_endpoints dse on dse.endpoint_id = dsc.endpoint_id
+              left join source_channels sc on sc.channel_id = dsc.source_channel_id
+              where jsonb_typeof(dsc.contract_json #> '{rareSignalPrior}') = 'object'
+            ) priors
+            where
+              (
+                $5 = false
+                or "targetId" = any($1::text[])
+                or "channelId" = any($2::text[])
+                or "endpointId" = any($3::text[])
+                or "contractId" = any($4::text[])
+              )
+            order by "updatedAt" desc
+            limit 50
+          `,
+          [targetIds, channelIds, endpointIds, contractIds, hasEntityFilters]
+        );
+        const tierStateCounts = new Map<string, { tier: string; priorState: string; count: number }>();
+        for (const row of sourcePriors.rows) {
+          const prior = row.sourcePrior as Record<string, unknown> | undefined;
+          const tier = String(prior?.tier ?? "unknown");
+          const priorState = String(prior?.priorState ?? "unknown");
+          const key = `${tier}:${priorState}`;
+          const existing = tierStateCounts.get(key) ?? { tier, priorState, count: 0 };
+          existing.count += 1;
+          tierStateCounts.set(key, existing);
+        }
+        const unsafeImpact = sourcePriors.rows.filter((row) => {
+          const prior = row.sourcePrior as Record<string, unknown> | undefined;
+          const guardrails = prior?.selectionGuardrails as Record<string, unknown> | undefined;
+          return (
+            guardrails?.selectedContentImpact !== "none_from_prior" ||
+            guardrails?.priorCanSelectArticle !== false ||
+            guardrails?.priorCanRankArticle !== false ||
+            guardrails?.priorCanEscalateArticle !== false ||
+            guardrails?.articleFromSourceSelectionEligible !== true ||
+            prior?.coverageContribution !== 0 ||
+            prior?.downstreamWeight !== 0
+          );
+        });
+        if (unsafeImpact.length > 0) {
+          warnings.push(
+            "Some source priors violate prior-only guardrails; inspect before reporting discovery quality."
+          );
+        }
+        if (
+          hasEntityFilters &&
+          sourcePriors.rows.length <
+            targetIds.length + channelIds.length + endpointIds.length + contractIds.length
+        ) {
+          warnings.push("Some requested source-prior entities were not found.");
+        }
+        return {
+          reportKind,
+          verifiedAt: new Date().toISOString(),
+          staleReportNotes: warnings,
+          counts: {
+            sourcePriors: sourcePriors.rows.length,
+            byTierAndState: [...tierStateCounts.values()],
+            unsafePriorImpact: unsafeImpact.length,
+          },
+          sourcePriors: includeSamples ? sourcePriors.rows : [],
         };
       }
 
@@ -549,7 +790,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                  gray_zone_filter_count as "grayZoneFilterCount",
                  updated_at as "updatedAt"
           from final_selection_results
-          where cardinality($1::text[]) = 0 or doc_id = any($1::text[])
+          where cardinality($1::text[]) = 0 or doc_id::text = any($1::text[])
           order by updated_at desc
           limit $2
         `,
@@ -559,7 +800,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
         `
           select final_decision as "finalDecision", count(*)::int as count
           from final_selection_results
-          where cardinality($1::text[]) = 0 or doc_id = any($1::text[])
+          where cardinality($1::text[]) = 0 or doc_id::text = any($1::text[])
           group by final_decision
           order by final_decision
         `,
