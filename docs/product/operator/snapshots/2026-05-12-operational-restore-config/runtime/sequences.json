@@ -1,0 +1,3272 @@
+[
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "core",
+      "cutover",
+      "content-analysis"
+    ],
+    "title": "Default Article Pipeline",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 30950,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "extract_article",
+        "module": "enrichment.article_extract",
+        "options": {}
+      },
+      {
+        "key": "normalize",
+        "module": "article.normalize",
+        "options": {}
+      },
+      {
+        "key": "dedup",
+        "module": "article.dedup",
+        "options": {}
+      },
+      {
+        "key": "embed",
+        "module": "article.embed",
+        "options": {}
+      },
+      {
+        "key": "content_ner",
+        "module": "content.ner_extract",
+        "enabled": true,
+        "options": {
+          "mode": "observe",
+          "subjectType": "article"
+        }
+      },
+      {
+        "key": "content_sentiment",
+        "module": "content.sentiment_analyze",
+        "enabled": true,
+        "options": {
+          "mode": "observe",
+          "subjectType": "article"
+        }
+      },
+      {
+        "key": "content_category",
+        "module": "content.category_classify",
+        "enabled": true,
+        "options": {
+          "mode": "observe",
+          "subjectType": "article"
+        }
+      },
+      {
+        "key": "match_criteria",
+        "module": "article.match_criteria",
+        "options": {}
+      },
+      {
+        "key": "system_interest_labels",
+        "module": "content.system_interest_label_project",
+        "enabled": true,
+        "options": {
+          "mode": "observe"
+        }
+      },
+      {
+        "key": "cluster",
+        "module": "article.cluster",
+        "options": {}
+      },
+      {
+        "key": "cluster_summary",
+        "module": "content.cluster_summary_project",
+        "enabled": true,
+        "options": {
+          "mode": "observe",
+          "subjectType": "story_cluster"
+        }
+      },
+      {
+        "key": "content_filter",
+        "module": "content.filter_gate",
+        "enabled": true,
+        "options": {
+          "mode": "dry_run",
+          "policyKey": "default_recent_content_gate"
+        }
+      },
+      {
+        "key": "match_interests",
+        "module": "article.match_interests",
+        "options": {}
+      },
+      {
+        "key": "notify",
+        "module": "article.notify",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-12T05:47:05.321282+00:00",
+    "description": "Active sequence-first article pipeline for fetcher-owned enrichment, normalization, criteria gate, clustering, personalization and notify.",
+    "sequence_id": "5cc77217-7a2f-4318-9fef-c6734e0f22f1",
+    "editor_state": null,
+    "trigger_event": "article.ingest.requested"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "resource",
+      "website",
+      "enrichment"
+    ],
+    "title": "Website Resource Extract Pipeline",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 6195,
+    "created_at": "2026-05-08T09:20:05.986747+00:00",
+    "created_by": "migration:0017_web_ingestion_resource_layer",
+    "task_graph": [
+      {
+        "key": "extract_resource",
+        "module": "enrichment.resource_extract",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-12T05:43:19.986395+00:00",
+    "description": "Sequence-managed typed extraction for raw website resources with editorial compatibility projection.",
+    "sequence_id": "0f8e3894-86ef-4a29-b5dc-1a7ea708ba2d",
+    "editor_state": null,
+    "trigger_event": "resource.ingest.requested"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "maintenance",
+      "cutover"
+    ],
+    "title": "Default LLM Review Resume",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 2108,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "llm_review",
+        "module": "article.llm_review",
+        "options": {}
+      },
+      {
+        "key": "cluster",
+        "module": "article.cluster",
+        "options": {}
+      },
+      {
+        "key": "match_interests",
+        "module": "article.match_interests",
+        "options": {}
+      },
+      {
+        "key": "notify",
+        "module": "article.notify",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-12T05:43:16.627288+00:00",
+    "description": "Active sequence for criteria-scope LLM review followed by resumed downstream article processing.",
+    "sequence_id": "2161b11a-7177-4873-b48d-3dd9c30b8511",
+    "editor_state": null,
+    "trigger_event": "llm.review.requested"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "maintenance",
+      "cutover"
+    ],
+    "title": "Default Reindex",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 65,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "reindex",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "maintenance.reindex",
+        "enabled": true,
+        "options": {},
+        "timeout_ms": 7200000
+      }
+    ],
+    "updated_at": "2026-05-11T16:18:28.208203+00:00",
+    "description": "Draft default sequence for rebuild and historical backfill jobs.",
+    "sequence_id": "2aa7eb1f-6a4b-4630-bb94-dc6b92192dde",
+    "editor_state": null,
+    "trigger_event": "reindex.requested"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "maintenance",
+      "cutover"
+    ],
+    "title": "Default Criterion Compile",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 330,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "criterion_compile",
+        "module": "maintenance.criterion_compile",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-11T14:44:01.364972+00:00",
+    "description": "Draft default sequence for criterion compile jobs.",
+    "sequence_id": "a51a3f96-cb55-4685-904d-99069f1df3f5",
+    "editor_state": null,
+    "trigger_event": "criterion.compile.requested"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "discovery",
+      "v3",
+      "runner"
+    ],
+    "title": "Default Discovery V3 Runner",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 464,
+    "created_at": "2026-05-09T13:39:10.667626+00:00",
+    "created_by": "system:discovery_v3_api",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run",
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {},
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-10T13:24:59.42116+00:00",
+    "description": "Default Sequence Runner entrypoint for Discovery V3 runs created through API/MCP.",
+    "sequence_id": "c8042ae7-af48-45c8-bb37-cc61c2db0861",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "gap-fill",
+      "heartbeat-drain"
+    ],
+    "title": "[ODPT-TARGET-DRAIN 892ff848] Execute remaining queued discovery runs",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T13:39:52.292799+00:00",
+    "created_by": "codex-target-drain-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_1_3dad34d1",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "3dad34d1-522d-4bf0-a995-069ea9c158fe"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_2_bc5f9da7",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "bc5f9da7-7317-4eeb-ba40-f018b6aff631"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_3_d9492e67",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "d9492e67-ae74-4755-8d6b-edb5d1d19176"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_4_cfeef389",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "cfeef389-6e08-4100-bca2-c49b37ebd409"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_5_59014a2e",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "59014a2e-ecae-421c-a032-b171fd3dead4"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_6_0095bd14",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "0095bd14-a14b-492e-8870-adbde7090a5e"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_7_4cb87bee",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "4cb87bee-3251-4fa1-ba78-f1cd4dc9ee1c"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_8_e2bc928c",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "e2bc928c-55fa-4ef2-8d3f-9cd8c5eecadb"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_9_9d6ab0e8",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "9d6ab0e8-424e-4d1f-9b58-4d383d17d02a"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_10_89e0b34f",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "89e0b34f-b8b2-4dbe-acb2-46bd4e4fb5f1"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_11_a39851e3",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "a39851e3-f694-4445-a43c-7307ecb46f6c"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_12_f0b261d0",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "f0b261d0-a2fb-430c-b57e-38b50134c277"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_13_ba379647",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "ba379647-8485-49d6-a629-7994670158de"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_14_50bddcd2",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "50bddcd2-3536-48c2-83a4-d2a37ee24256"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_15_5762e040",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "5762e040-72b2-4467-8dbc-a66d03e496ed"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_16_68b48795",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "68b48795-412b-4bba-938d-15cd95e33b23"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T13:39:58.271441+00:00",
+    "description": "Execute remaining queued discovery runs for the ODPT SMB max-funnel target through MCP sequence runtime.",
+    "sequence_id": "6de860e4-24d8-4e1e-9bcb-de00ff164573",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "hnrss",
+      "source-expand",
+      "heartbeat-drain"
+    ],
+    "title": "[ODPT-HNRSS-DRAIN 8368abc2] Execute queued HNRSS source_expand runs",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T13:30:10.863246+00:00",
+    "created_by": "codex-hnrss-drain-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_1_a8f850f2",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "a8f850f2-0dac-4e6d-909f-6abd07437762"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_2_a3a9a2d0",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "a3a9a2d0-bb41-461a-ac4e-727de03169af"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_3_3a21694f",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "3a21694f-1cba-488a-9162-d32eee47c7e7"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_4_0a650d0b",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "0a650d0b-da58-49a0-b014-fb17e4a7ecda"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_5_662a10f2",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "662a10f2-3a91-4e5a-88ca-0ef7dd88ce98"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_6_2c22b3e3",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "2c22b3e3-8d8f-44ac-937d-895f3b6692ec"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_7_e59b3b48",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "e59b3b48-f571-4289-af3a-215bf34b0a70"
+        },
+        "timeout_ms": 420000
+      },
+      {
+        "key": "discovery_v3_run_8_b6940bc6",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "b6940bc6-0c9a-415a-8215-dabf14306cc8"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T13:30:15.533923+00:00",
+    "description": "Execute queued HNRSS source expansion discovery runs through MCP sequence runtime.",
+    "sequence_id": "38b3a2f9-10fd-401f-9339-3b8ea7f5c488",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand 9bb8a680",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:45:18.953671+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_9bb8a680",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "9bb8a680-db19-48b7-b760-0c6d6d390579"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:45:19.225206+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "0c2a8ef2-1655-49ad-b5fd-966622a0f35c",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand 8d82ed99",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:45:13.794267+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_8d82ed99",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "8d82ed99-a920-47d3-b115-2baf8fe9fb31"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:45:14.104924+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "b377a38b-bb75-461b-bda7-edd0c4b1d3e5",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand f482a25e",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:45:08.582245+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_f482a25e",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "f482a25e-efb4-4193-978d-c7e305e52fa4"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:45:08.908783+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "ded618df-4a45-4692-ab87-3c0bfc62d133",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand d30aa77b",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:45:03.375983+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_d30aa77b",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "d30aa77b-1c83-405b-b8cb-3870cb619999"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:45:03.687442+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "d4ed17fd-a5ca-4645-81c9-d4cf4cf9ac2a",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand 81e1a235",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:44:58.176324+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_81e1a235",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "81e1a235-bc07-4dde-ae5f-60924f0d2a47"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:44:58.500629+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "a0093c54-f6aa-4be3-887f-9d9a5f08a0b3",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand 8adae52f",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:44:53.017852+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_8adae52f",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "8adae52f-9914-4e18-8f84-8c904e12c34c"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:44:53.335231+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "1b1d83b9-020a-4dfe-84f2-8ba8b72155d5",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand 02ac6b26",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:44:47.775544+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_02ac6b26",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "02ac6b26-035f-4e9e-9365-289986704a31"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:44:48.122262+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "b96690b1-02db-4f38-b160-5f00a815ca79",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "source-expand",
+      "heartbeat"
+    ],
+    "title": "[ODPT-HOLD-EXPAND 9ec58220] Execute source_expand 615c967f",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:44:42.490799+00:00",
+    "created_by": "codex-hold-expand-heartbeat",
+    "task_graph": [
+      {
+        "key": "discovery_v3_source_expand_615c967f",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "615c967f-75e3-4396-82e5-c5ba1ed7725a"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:44:42.929998+00:00",
+    "description": "Execute queued local-SMB source expansion discovery run through MCP.",
+    "sequence_id": "3e3e26fb-3825-4416-ab5c-2bf875fca1ff",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "local-smb-community",
+      "direct_signal_scan"
+    ],
+    "title": "[ODPT-LOCAL-SMB 735d9b0e] Execute direct_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:15:19.403355+00:00",
+    "created_by": "codex-local-smb-community-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_direct_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "8cfeb932-5f77-426b-aa58-7c57bf38a43c"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:15:53.182308+00:00",
+    "description": "Bounded local SMB/community discovery execution through MCP.",
+    "sequence_id": "1d30c493-7967-4a09-b8c2-6de11b558bf6",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "local-smb-community",
+      "hidden_signal_scan"
+    ],
+    "title": "[ODPT-LOCAL-SMB 735d9b0e] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-09T06:15:04.029749+00:00",
+    "created_by": "codex-local-smb-community-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "f289ac60-5912-447b-8a62-fed145565901"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-09T06:15:15.485317+00:00",
+    "description": "Bounded local SMB/community discovery execution through MCP.",
+    "sequence_id": "9d643a37-dceb-4218-9643-c42dc6dec2f4",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-4dbf5170] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T14:31:53.630198+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "63677fe5-7663-41eb-a9f4-1ab655ba3fa9"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T14:33:00.745203+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "10ea8370-e7a8-4256-8218-6f775f145ab0",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-4dbf5170] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T14:30:52.558139+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "efeabc8e-1b13-430d-9203-3f3eb29a785b"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T14:31:49.563201+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "72ca904d-647f-470a-b945-a944da6f2566",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-4dbf5170] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T14:29:21.12805+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "c31df96d-4ac3-4286-a427-641155868779"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T14:30:51.700464+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "1c062d7b-dc93-460a-9a7f-0d38b4f15a78",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-4dbf5170] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T14:28:25.302011+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "c65cab7b-b020-4d51-ac74-891c7b2c47c4"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T14:29:16.650474+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "2bc388e2-8ba0-48d6-8919-289b97d965c4",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-4dbf5170] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T14:27:29.323612+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "7f9494ce-6cca-41be-a7a0-f1e53b65508a"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T14:28:23.412915+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "fcdcbeb3-4d09-4022-a36f-8b6b2a8c36ab",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-4dbf5170] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T14:26:33.279732+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "3a06f2c3-016f-4cfb-ae77-ae641d00e339"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T14:27:26.211388+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "03f40175-bb68-4460-a596-760a6ea2bbeb",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:47:52.850673+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "ebac79a2-1c2f-4a71-b600-e481f2eed557"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:50:05.596361+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "baf83b15-c7fe-4718-8054-0f01d606225b",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:46:36.679129+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "e9de5407-b03a-421a-8dec-667206b32b99"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:47:49.987776+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "d2a608e8-ee0f-48f7-8271-901703cc6419",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:45:35.636995+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "729cf8bd-e0b8-4be0-8efa-cbf46fa83b49"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:46:34.531021+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "74e86bf4-5387-48a3-bae7-0684d01eda32",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:44:39.619181+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "e028d501-7a8d-4372-bdc9-2dc5eb511747"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:45:34.170741+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "9686fa78-c1f1-4d55-beb2-372248017ce7",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:43:43.736401+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "9cfe167e-af95-458c-aa4e-80e25ee9d1e8"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:44:35.638308+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "023d4f5d-8d0f-40a9-bd5d-272a4ab06027",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "gap_fill"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute gap_fill",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:42:32.542661+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_gap_fill",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "0386214d-33a8-4e2a-9a25-42c7719fabb7"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:43:40.967594+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "eeff1316-ae1f-405f-837e-50d4d027ae9c",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-ec8cf89f] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:41:26.60972+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "efae853f-1735-420b-9b26-a21717c6fe4e"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:42:29.185191+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "42cfa8b0-d028-428c-b4af-1e1478e26f50",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-a65d3d7a] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:01:16.104029+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "0bc95e20-1997-4752-b6ba-b67e09b7ee0d"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:02:10.786134+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "65a05e08-0e44-455e-a670-22467e8ad4bf",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-a65d3d7a] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T13:00:05.154137+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "7816de95-a13c-4342-acc5-2c322fbb161a"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:01:13.155675+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "1a2e27cc-35d4-4e8b-97fb-e17cc1e44b76",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-a65d3d7a] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:59:13.936792+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "353a5d66-a1de-436c-9568-d67d88aa7a25"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T13:00:01.545156+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "c82fd186-768e-47fa-bbdc-eb22c690f7a9",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-a65d3d7a] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:58:17.87371+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "08075f5a-8b33-4d65-81ce-cdb41b11d4d9"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:59:12.226766+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "80de6ca8-fbfa-480d-adf3-6b28491f70f7",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-a65d3d7a] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:57:21.881694+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "babce47e-cf00-4c2a-8026-71f74943065e"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:58:13.743722+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "32b6d9fa-636d-4d21-9d41-4da13ef61d97",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-a65d3d7a] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:56:25.940172+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "fbd3f950-988d-40fe-9b7c-459ee2e657bc"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:57:18.408687+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "7249db3a-53f4-494b-bec6-054c43d6414e",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:21:09.258402+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "bc9c2bd1-4e59-4082-8dd7-52890241c597"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:22:08.504159+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "dfcca7eb-71f0-482c-872f-f61e2a93a4e3",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "gap_fill"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute gap_fill",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:20:03.18084+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_gap_fill",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "9680f88b-7d3f-4947-8560-e81e52948179"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:21:04.261797+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "4ee936ef-9d8c-42f0-bd86-57f37270b546",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:19:02.421244+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "c92ca1d5-8218-475e-99b9-eaec75582f5b"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:20:01.550697+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "6d67dc7c-457e-4ad7-99c1-0e9c5f81dadd",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:18:01.502131+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "bd466449-9731-4965-80b3-98aec8c52c68"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:18:58.500426+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "c7cd9c2c-df87-47d5-9248-c86a9b86a011",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:17:05.589027+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "546eb6bc-670e-4f8e-8b0c-92eeb99e06f1"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:18:00.818086+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "4ab8cac0-c6fb-4619-95cb-69749368ef6b",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:15:54.471024+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "c22de6c1-f42f-41eb-a6dd-199e57120a89"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:17:04.179951+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "5e34ea1b-c1e3-4c3a-ab06-58c6b0f7a2a0",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-scaleout",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-scaleout-6c7ccb01] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T12:14:38.280604+00:00",
+    "created_by": "codex-hidden-signal-scaleout",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "a357a40c-21ab-4eaa-9970-5bca28e5ee14"
+        },
+        "timeout_ms": 480000
+      }
+    ],
+    "updated_at": "2026-05-08T12:15:49.598075+00:00",
+    "description": "Bounded hidden-signal scale-out sequence through MCP.",
+    "sequence_id": "1d505f76-758b-469b-a4f6-b077593d9870",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "gap_fill"
+    ],
+    "title": "[hidden-proof-26298462] Execute gap_fill",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:22:53.411842+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_gap_fill",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "e5e8f91a-d203-4b8b-8d30-f75b34256b84"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:23:51.37951+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "9c7e6949-093b-498c-b760-17c50c1082cc",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-26298462] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:21:52.781114+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "ae63b7f0-e167-4a0c-8995-d2855c624190"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:22:52.263738+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "9cd4244d-4880-41dc-9e56-93cbbf543e67",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "gap_fill"
+    ],
+    "title": "[hidden-proof-70bc52de] Execute gap_fill",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:19:05.071372+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_gap_fill",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "8b0566cf-3197-4687-b059-2adc7a60e50c"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:19:57.74933+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "1753917c-3a41-44db-b6d2-3a50fb9d5e06",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-70bc52de] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:18:14.282782+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "9c37c024-7115-41a6-b122-858bd69f6d36"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:19:00.994854+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "8f09269e-7150-485b-b1e3-f387324816b9",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-fed0e7fd] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:16:34.161146+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "75f79633-8dde-4f92-bb68-47dc2b85c2c9"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:17:24.673786+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "2a1ed4dd-1ab7-47e5-abbd-451c2e0e7016",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-df6f89ac] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:14:53.596769+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "461f4096-04e8-4ed2-a986-5a784bcffa0c"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:15:39.253928+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "2f734b8c-7eb8-44ed-8978-4753a7fc9938",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-44ee383c] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:13:15.220782+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "d209f5af-0fee-408d-ba24-5d9f3a0e3b9c"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:14:09.990874+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "f22c7284-d04b-48c3-85eb-5287a80591d3",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-9feca9cc] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:10:46.447057+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "568c9d52-0b78-4894-a265-cdc84e717bce"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:11:50.575963+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "9a4c2fcf-74ed-4165-baf5-fb11fbec35f0",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-03f96c84] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:08:34.9551+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "78d9faab-f5a7-438b-b65f-b5e05e7c5b41"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:09:37.115569+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "0a5c0407-94aa-47b2-b123-70fb0e667de3",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-816943f5] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T11:06:30.602208+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "6d51fd05-1416-4614-bac6-c922950e2c54"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:07:40.822289+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "48f41966-e754-4e60-9b30-84f79cb98706",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-2798b1c4] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T11:00:23.64966+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "fd97994a-e44e-4c61-8c91-74bf944aadb9"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T11:00:23.64966+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "65a71603-5272-4b75-bade-3550294ae17a",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "hidden-signal-proof",
+      "hidden_signal_scan"
+    ],
+    "title": "[hidden-proof-92c62c3e] Execute hidden_signal_scan",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:55:38.353907+00:00",
+    "created_by": "codex-hidden-signal-proof",
+    "task_graph": [
+      {
+        "key": "discovery_v3_hidden_signal_scan",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "4e814158-776a-4802-a997-29ef82280410"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:56:33.047182+00:00",
+    "description": "Bounded hidden-signal proof sequence through MCP.",
+    "sequence_id": "928a1d6d-ca36-4ed6-b6ec-c88fbfc6dc7a",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-procurement"
+    ],
+    "title": "[odpt-db878043] Execute direct-procurement",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:23:42.850436+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-procurement",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "f245a8da-d53a-4d48-85f0-0ddb88d4436b"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:24:34.423238+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "0a2da275-102f-4cd9-90a2-e59633068357",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "tuned-followup"
+    ],
+    "title": "[odpt-a3f93198] Execute tuned-followup",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:19:36.298333+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_tuned-followup",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "39089457-67a7-4d65-803d-1cc388e55986"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:20:08.508003+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "78e54ba1-535b-40cd-8f37-0e5eac4b3fcd",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-sme-programs"
+    ],
+    "title": "[odpt-a3f93198] Execute direct-sme-programs",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:18:29.510911+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-sme-programs",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "45601ea9-39b9-4da7-a524-ca6969a6c8b6"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:19:28.27892+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "dfc40328-eb82-44f5-98a8-0bf75bcc9ada",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-compliance"
+    ],
+    "title": "[odpt-a3f93198] Execute direct-compliance",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:16:20.250478+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-compliance",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "0d3db55c-eed1-41ed-b863-32869f6e0a21"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:18:25.921714+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "548e7854-cbfb-4cc4-b91b-d13d5776ba74",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "hidden-hiring"
+    ],
+    "title": "[odpt-a3f93198] Execute hidden-hiring",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:15:37.013157+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_hidden-hiring",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "715e58aa-7c35-49da-b059-1c1b91f397b4"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:16:14.789999+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "3f2490e5-5d38-41ab-b610-487dde8911a8",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "hidden-failure"
+    ],
+    "title": "[odpt-a3f93198] Execute hidden-failure",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:14:43.670384+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_hidden-failure",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "821d67a4-2e2c-44a9-83a5-8b9ef1ef13b9"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:15:31.056644+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "3ce84827-9456-484c-8579-2c8d5b4ec124",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-funding"
+    ],
+    "title": "[odpt-a3f93198] Execute direct-funding",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:12:54.826677+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-funding",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "35d77670-ab02-40f1-b2fc-a3246a36a714"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:14:39.461196+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "630dd5f4-a9d0-4c4e-80bf-2a87c27bd3cc",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-procurement"
+    ],
+    "title": "[odpt-a3f93198] Execute direct-procurement",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:12:06.956632+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-procurement",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "1357e2be-f1b7-490f-bc90-95da364fab94"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:12:49.855818+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "12bdabea-df0f-40c4-a151-140eb17df2f9",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-procurement"
+    ],
+    "title": "[odpt-96f8b138] Execute direct-procurement",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:06:53.831842+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-procurement",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "f3e75cbc-6d37-4c15-9177-fc31d72893ae"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:07:39.32097+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "4aaaf574-4b67-48a6-a219-8c4248599c25",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-procurement"
+    ],
+    "title": "[odpt-3a349e3c] Execute direct-procurement",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:04:35.12097+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-procurement",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "78611984-b625-4b0c-91df-8fa2b0996436"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:05:15.311423+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "1031dcdf-121a-4a59-af8e-f4f61da8c03f",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "product-test",
+      "outsourcing-demand",
+      "discovery-v3",
+      "direct-procurement"
+    ],
+    "title": "[odpt-89e545dd] Execute direct-procurement",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 1,
+    "created_at": "2026-05-08T10:03:03.229142+00:00",
+    "created_by": "codex-outsourcing-product-test",
+    "task_graph": [
+      {
+        "key": "discovery_v3_run_direct-procurement",
+        "label": null,
+        "notes": null,
+        "retry": {
+          "attempts": 1,
+          "delay_ms": 1000
+        },
+        "module": "discovery.v3.run",
+        "enabled": true,
+        "options": {
+          "runId": "3ce91b41-0a6e-4c20-b810-d22069444700"
+        },
+        "timeout_ms": 420000
+      }
+    ],
+    "updated_at": "2026-05-08T10:03:50.200638+00:00",
+    "description": "Run-scoped bounded Discovery V3 product-test sequence created through MCP.",
+    "sequence_id": "fd336ec2-3d2f-45f7-8f31-a86712512b3b",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": "0 */6 * * *",
+    "tags": [
+      "discovery",
+      "adaptive",
+      "agent",
+      "discovery-legacy-archived",
+      "orchestrator"
+    ],
+    "title": "Adaptive Discovery Orchestrator",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.710122+00:00",
+    "created_by": "migration:0016_adaptive_discovery_cutover",
+    "task_graph": [
+      {
+        "key": "plan_hypotheses",
+        "module": "discovery.plan_hypotheses",
+        "options": {},
+        "timeout_ms": 300000
+      },
+      {
+        "key": "execute_hypotheses",
+        "module": "discovery.execute_hypotheses",
+        "options": {},
+        "timeout_ms": 600000
+      },
+      {
+        "key": "evaluate_results",
+        "module": "discovery.evaluate_results",
+        "options": {},
+        "timeout_ms": 180000
+      },
+      {
+        "key": "re_evaluate_sources",
+        "module": "discovery.re_evaluate_sources",
+        "options": {},
+        "timeout_ms": 180000
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "description": "Graph-first adaptive discovery orchestrator for planning, execution, evaluation and re-evaluation.",
+    "sequence_id": "0a8e8ec5-6cab-4d8b-9c28-0a1d6245bf17",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "pipeline",
+      "discovery",
+      "adaptive",
+      "discovery-legacy-archived",
+      "rss"
+    ],
+    "title": "Adaptive Discovery RSS Pipeline",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.710122+00:00",
+    "created_by": "migration:0016_adaptive_discovery_cutover",
+    "task_graph": [
+      {
+        "key": "search",
+        "module": "discovery.web_search",
+        "options": {
+          "type": "web",
+          "count": 20,
+          "query_field": "search_query"
+        }
+      },
+      {
+        "key": "validate",
+        "module": "discovery.url_validator",
+        "options": {
+          "urls_field": "search_results",
+          "deny_patterns": [
+            "facebook\\\\.com",
+            "instagram\\\\.com",
+            "twitter\\\\.com",
+            "reddit\\\\.com"
+          ]
+        }
+      },
+      {
+        "key": "probe",
+        "module": "discovery.rss_probe",
+        "options": {
+          "urls_field": "validated_urls",
+          "sample_count": 3,
+          "only_rss_candidates": false
+        },
+        "timeout_ms": 180000
+      },
+      {
+        "key": "sample",
+        "module": "discovery.content_sampler",
+        "options": {
+          "max_chars": 2000,
+          "article_count": 3,
+          "sources_field": "probed_feeds"
+        },
+        "timeout_ms": 120000
+      },
+      {
+        "key": "score",
+        "module": "discovery.relevance_scorer",
+        "options": {
+          "threshold": 0.3,
+          "sources_field": "sampled_content",
+          "target_topics_field": "target_topics"
+        }
+      },
+      {
+        "key": "analyze",
+        "module": "discovery.llm_analyzer",
+        "options": {
+          "task": "discovery_source_evaluation",
+          "output_field": "llm_analysis",
+          "payload_field": "sampled_content"
+        }
+      },
+      {
+        "key": "register_preview",
+        "module": "discovery.source_registrar",
+        "options": {
+          "dry_run": true,
+          "provider_type": "rss",
+          "sources_field": "scored_sources"
+        }
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "description": "Reusable RSS discovery child sequence for adaptive discovery hypotheses.",
+    "sequence_id": "1cb1bfec-d42b-4607-a8f0-8e3f671f0978",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "pipeline",
+      "discovery",
+      "adaptive",
+      "discovery-legacy-archived",
+      "website"
+    ],
+    "title": "Adaptive Discovery Website Pipeline",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.710122+00:00",
+    "created_by": "migration:0016_adaptive_discovery_cutover",
+    "task_graph": [
+      {
+        "key": "search",
+        "module": "discovery.web_search",
+        "options": {
+          "type": "news",
+          "count": 20,
+          "query_field": "search_query"
+        }
+      },
+      {
+        "key": "validate",
+        "module": "discovery.url_validator",
+        "options": {
+          "urls_field": "search_results",
+          "deny_patterns": [
+            "facebook\\\\.com",
+            "instagram\\\\.com",
+            "twitter\\\\.com",
+            "reddit\\\\.com"
+          ]
+        }
+      },
+      {
+        "key": "probe",
+        "module": "discovery.website_probe",
+        "options": {
+          "urls_field": "validated_urls",
+          "sample_count": 5
+        },
+        "timeout_ms": 180000
+      },
+      {
+        "key": "sample",
+        "module": "discovery.content_sampler",
+        "options": {
+          "max_chars": 2000,
+          "article_count": 3,
+          "sources_field": "probed_websites"
+        },
+        "timeout_ms": 120000
+      },
+      {
+        "key": "score",
+        "module": "discovery.relevance_scorer",
+        "options": {
+          "threshold": 0.3,
+          "sources_field": "sampled_content",
+          "target_topics_field": "target_topics"
+        }
+      },
+      {
+        "key": "analyze",
+        "module": "discovery.llm_analyzer",
+        "options": {
+          "task": "discovery_website_evaluation",
+          "output_field": "llm_analysis",
+          "payload_field": "sampled_content"
+        }
+      },
+      {
+        "key": "register_preview",
+        "module": "discovery.source_registrar",
+        "options": {
+          "dry_run": true,
+          "provider_type": "website",
+          "sources_field": "scored_sources"
+        }
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "description": "Reusable website discovery child sequence for adaptive discovery hypotheses.",
+    "sequence_id": "c7e0a3a2-8f0c-4a76-bf35-fd7d1f44774d",
+    "editor_state": null,
+    "trigger_event": null
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "legacy",
+      "archived"
+    ],
+    "title": "Default Article Cluster",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "cluster",
+        "module": "article.cluster",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for clustering eligible articles.",
+    "sequence_id": "66e2d74d-c46e-4cd9-80b3-c8f58a6c032e",
+    "editor_state": null,
+    "trigger_event": "article.criteria.matched"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "legacy",
+      "archived"
+    ],
+    "title": "Default Article Dedup",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "dedup",
+        "module": "article.dedup",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for article deduplication after normalization.",
+    "sequence_id": "29550f32-8e68-4ad0-8b50-1cad53b0995b",
+    "editor_state": null,
+    "trigger_event": "article.normalized"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "legacy",
+      "archived"
+    ],
+    "title": "Default Article Embed",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "embed",
+        "module": "article.embed",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for article embedding after normalization.",
+    "sequence_id": "1272c6ef-c795-444c-a561-0c793eb90bb8",
+    "editor_state": null,
+    "trigger_event": "article.normalized"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "legacy",
+      "archived"
+    ],
+    "title": "Default Criteria Match",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "match_criteria",
+        "module": "article.match_criteria",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for system criteria matching after embeddings.",
+    "sequence_id": "c59d3ec1-f8ae-43c5-8ff2-cac979af8610",
+    "editor_state": null,
+    "trigger_event": "article.embedded"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "maintenance",
+      "cutover"
+    ],
+    "title": "Default Feedback Ingest",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "feedback_ingest",
+        "module": "maintenance.feedback_ingest",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for notification feedback ingestion.",
+    "sequence_id": "57a90c72-3025-4f62-a718-ddc21c63e425",
+    "editor_state": null,
+    "trigger_event": "notification.feedback.recorded"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "maintenance",
+      "cutover"
+    ],
+    "title": "Default Interest Compile",
+    "status": "active",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "interest_compile",
+        "module": "maintenance.interest_compile",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for interest compile jobs.",
+    "sequence_id": "03f21748-8057-44e5-b515-7b4d489764f8",
+    "editor_state": null,
+    "trigger_event": "interest.compile.requested"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "legacy",
+      "archived"
+    ],
+    "title": "Default Interest Match",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "match_interests",
+        "module": "article.match_interests",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for user-interest matching after clustering.",
+    "sequence_id": "ba49798e-02e0-456f-a03d-4148548eb4b8",
+    "editor_state": null,
+    "trigger_event": "article.clustered"
+  },
+  {
+    "cron": null,
+    "tags": [
+      "default",
+      "article",
+      "legacy",
+      "archived"
+    ],
+    "title": "Default Notification Dispatch",
+    "status": "archived",
+    "max_runs": null,
+    "run_count": 0,
+    "created_at": "2026-05-08T09:20:05.702994+00:00",
+    "created_by": "migration:0011_sequence_engine_default_sequences",
+    "task_graph": [
+      {
+        "key": "notify",
+        "module": "article.notify",
+        "options": {}
+      }
+    ],
+    "updated_at": "2026-05-08T09:20:05.706835+00:00",
+    "description": "Draft default sequence for notification dispatch after interest matches.",
+    "sequence_id": "ae73b9db-a4f7-4853-9789-aa8a35eb4dfd",
+    "editor_state": null,
+    "trigger_event": "article.interests.matched"
+  }
+]

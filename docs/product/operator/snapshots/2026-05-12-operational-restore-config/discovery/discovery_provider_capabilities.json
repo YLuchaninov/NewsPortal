@@ -1,0 +1,354 @@
+[
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "operator_config",
+    "provider_id": "custom_api",
+    "display_name": "Custom API",
+    "auth_required": true,
+    "provider_kind": "api",
+    "promotion_mode": "needs_config",
+    "compliance_json": {
+      "piiRisk": "medium",
+      "requiresOperatorConfig": true
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "openapi",
+      "endpoint",
+      "schema"
+    ],
+    "signal_modes_json": [
+      "direct"
+    ],
+    "provider_card_json": {
+      "defaultAction": "needs_config"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "openapiProbe": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "operator_mailbox_config",
+    "provider_id": "email_imap",
+    "display_name": "Email IMAP",
+    "auth_required": true,
+    "provider_kind": "email",
+    "promotion_mode": "needs_config",
+    "compliance_json": {
+      "piiRisk": "high",
+      "requiresMailboxConfig": true
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "newsletter",
+      "message",
+      "archive"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "needs_config"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": true,
+    "query_primitives_json": {
+      "newsletterDetect": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "official_research_tool",
+    "provider_id": "meta_content_library",
+    "display_name": "Meta Content Library",
+    "auth_required": true,
+    "provider_kind": "social_research_library",
+    "promotion_mode": "monitor_only",
+    "compliance_json": {
+      "piiRisk": "high",
+      "requiresQualifiedAccess": true,
+      "unauthorizedScrapingBlocked": true
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "facebook_page_post",
+      "facebook_group_post",
+      "instagram_post",
+      "threads_post"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "monitor_only"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "keywordSearch": true,
+      "publicContentLibrary": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "official_api",
+    "provider_id": "reddit",
+    "display_name": "Reddit",
+    "auth_required": true,
+    "provider_kind": "community_forum",
+    "promotion_mode": "monitor_only",
+    "compliance_json": {
+      "piiRisk": "high",
+      "oauthRequired": true,
+      "userAgentRequired": true,
+      "deletedContentRemovalRequired": true
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "post",
+      "comment",
+      "subreddit"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "monitor_only"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "keywordSearch": true,
+      "subredditScope": true,
+      "listingPagination": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "active",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "public_http",
+    "provider_id": "rss",
+    "display_name": "RSS/Atom feed",
+    "auth_required": false,
+    "provider_kind": "feed",
+    "promotion_mode": "auto_or_manual",
+    "compliance_json": {
+      "piiRisk": "low"
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "feed",
+      "entry"
+    ],
+    "signal_modes_json": [
+      "direct"
+    ],
+    "provider_card_json": {
+      "defaultAction": "manual_promote",
+      "autoPromotionAllowed": true
+    },
+    "discovery_supported": true,
+    "ingestion_supported": true,
+    "query_primitives_json": {
+      "urlProbe": true,
+      "feedProbe": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "official_research_api",
+    "provider_id": "tiktok_research",
+    "display_name": "TikTok Research",
+    "auth_required": true,
+    "provider_kind": "social_video",
+    "promotion_mode": "monitor_only",
+    "compliance_json": {
+      "piiRisk": "high",
+      "commercialUseRestricted": true,
+      "requiresApplicationApproval": true
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "account",
+      "content",
+      "shop"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "monitor_only"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "keywordSearch": true,
+      "researchQuery": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "active",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "configured_adapter",
+    "provider_id": "web_search",
+    "display_name": "Web search fanout",
+    "auth_required": false,
+    "provider_kind": "web_search",
+    "promotion_mode": "disabled",
+    "compliance_json": {
+      "piiRisk": "low",
+      "requiresOfficialApi": false
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "web_result",
+      "news_result"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "discover_only"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "timeRange": true,
+      "keywordSearch": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "active",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "public_http",
+    "provider_id": "website",
+    "display_name": "Website",
+    "auth_required": false,
+    "provider_kind": "website",
+    "promotion_mode": "manual_or_guarded_auto",
+    "compliance_json": {
+      "piiRisk": "low",
+      "browserChallengeRequiresOperatorPolicy": true
+    },
+    "rate_limit_json": {},
+    "object_types_json": [
+      "homepage",
+      "listing",
+      "document",
+      "download"
+    ],
+    "signal_modes_json": [
+      "direct"
+    ],
+    "provider_card_json": {
+      "defaultAction": "review",
+      "autoPromotionAllowed": false
+    },
+    "discovery_supported": true,
+    "ingestion_supported": true,
+    "query_primitives_json": {
+      "sitemap": true,
+      "urlProbe": true,
+      "websiteProbe": true,
+      "endpointSweep": true
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "official_api",
+    "provider_id": "x_recent_search",
+    "display_name": "X recent search",
+    "auth_required": true,
+    "provider_kind": "social_microblog",
+    "promotion_mode": "monitor_only",
+    "compliance_json": {
+      "piiRisk": "high",
+      "requiresOfficialApi": true
+    },
+    "rate_limit_json": {
+      "recentWindowDays": 7
+    },
+    "object_types_json": [
+      "post",
+      "profile"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "monitor_only"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "hashtags": true,
+      "language": true,
+      "operators": true,
+      "keywordSearch": true,
+      "recentSearchWindowDays": 7
+    },
+    "retention_policy_json": {}
+  },
+  {
+    "status": "needs_config",
+    "updated_at": "2026-05-08T09:20:06.699947+00:00",
+    "access_mode": "official_api",
+    "provider_id": "youtube",
+    "display_name": "YouTube",
+    "auth_required": true,
+    "provider_kind": "social_video",
+    "promotion_mode": "monitor_only",
+    "compliance_json": {
+      "piiRisk": "medium",
+      "requiresOfficialApi": true
+    },
+    "rate_limit_json": {
+      "searchListCostUnits": 100
+    },
+    "object_types_json": [
+      "video",
+      "channel",
+      "playlist",
+      "comment"
+    ],
+    "signal_modes_json": [
+      "direct",
+      "hidden"
+    ],
+    "provider_card_json": {
+      "defaultAction": "monitor_only"
+    },
+    "discovery_supported": true,
+    "ingestion_supported": false,
+    "query_primitives_json": {
+      "regionCode": true,
+      "languageHint": true,
+      "channelSearch": true,
+      "keywordSearch": true
+    },
+    "retention_policy_json": {}
+  }
+]
