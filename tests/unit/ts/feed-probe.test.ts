@@ -53,6 +53,17 @@ test("validateAcquisitionUrl allows exact private compose fixture origins only w
   assert.match(adjacentHost.error ?? "", /blocked address/);
 });
 
+test("validateAcquisitionUrl rejects internal API hosts when not explicitly allowlisted", async () => {
+  const result = await validateAcquisitionUrl("http://api:8000/maintenance/discovery/search/ddgs", {
+    resolveDns: true,
+    privateHostAllowlist: [],
+    resolver: async () => [{ address: "172.20.0.10" }],
+  });
+
+  assert.equal(result.url, null);
+  assert.match(result.error ?? "", /blocked address/);
+});
+
 test("validateUrlsForDiscovery rejects unsafe inputs before fetch", async () => {
   const originalFetch = globalThis.fetch;
   let fetchCalled = false;

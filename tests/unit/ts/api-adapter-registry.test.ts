@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { parseApiChannelConfig } from "../../../packages/contracts/src/source.ts";
 import { fetchApiAdapterItems } from "../../../services/fetchers/src/api-adapter-registry.ts";
+import { fetchDirectDdgsSearchPayload } from "../../../services/fetchers/src/ddgs-direct-search.ts";
 import type { SourceChannelRow } from "../../../services/fetchers/src/fetcher-persistence.ts";
 
 function channel(fetchUrl: string): SourceChannelRow {
@@ -59,6 +60,44 @@ test("HN Algolia adapter normalizes search hits to acquisition items", async () 
   assert.equal(items[0]?.externalArticleId, "hn_algolia_search:42");
   assert.equal(items[0]?.rawPayload.fetcher, "api_adapter");
   assert.equal(items[0]?.rawPayload.sourceRole, "community_search");
+});
+
+test("fetchers direct DDGS client normalizes duck-duck-scrape text results", async () => {
+  const payload = await fetchDirectDdgsSearchPayload(
+    {
+      query: "site:upwork.com MVP budget",
+      maxResults: 5,
+      timeRange: "month",
+      locale: "us-en",
+    },
+    {
+      search: async () => ({
+        noResults: false,
+        vqd: "test-vqd",
+        results: [
+          {
+            hostname: "upwork.com",
+            url: "https://www.upwork.com/jobs/example",
+            title: "Looking for MVP developer",
+            description: "Client needs <b>MVP</b> help.",
+            rawDescription: "Client needs <b>MVP</b> help.",
+            icon: "",
+          },
+        ],
+      }),
+      searchNews: async () => ({
+        noResults: false,
+        vqd: "unused",
+        results: [],
+      }),
+    },
+  );
+
+  assert.equal(payload.meta.provider, "ddgs");
+  assert.equal(payload.meta.execution, "fetchers_direct");
+  assert.equal(payload.meta.cost_cents, 0);
+  assert.equal(payload.results[0]?.url, "https://www.upwork.com/jobs/example");
+  assert.equal(payload.results[0]?.snippet, "Client needs MVP help.");
 });
 
 test("Stack Exchange adapter converts epoch creation dates", async () => {
@@ -233,7 +272,7 @@ test("SearXNG search adapter normalizes indirect aggregator results", async () =
   assert.equal((items[0]?.rawPayload.searchQuery as Record<string, unknown>)?.platform, "upwork.com");
 });
 
-test("DDGS search adapter normalizes internal bridge results", async () => {
+test("DDGS search adapter executes directly and ignores legacy bridge fetchUrl", async () => {
   const apiConfig = parseApiChannelConfig({
     adapter: {
       adapterKey: "ddgs_search",
@@ -252,7 +291,10 @@ test("DDGS search adapter normalizes internal bridge results", async () => {
     channel: channel("http://api:8000/maintenance/discovery/search/ddgs?q=site%3Aupwork.com+MVP"),
     apiConfig,
     fetchedAt: "2026-05-11T10:00:00.000Z",
-    fetchJson: async () => ({
+    fetchJson: async () => {
+      throw new Error("fetchJson should not be called for fetchers-direct DDGS");
+    },
+    fetchSearch: async (request) => ({
       results: [
         {
           title: "Looking for developer to build MVP",
@@ -261,7 +303,15 @@ test("DDGS search adapter normalizes internal bridge results", async () => {
           provider_rank: 1,
         },
       ],
-      meta: { provider: "ddgs", backend: "auto" },
+      meta: {
+        provider: "ddgs",
+        execution: "fetchers_direct",
+        implementation: "duck-duck-scrape",
+        resultType: "text",
+        timeRange: request.timeRange ?? null,
+        locale: request.locale ?? "en-us",
+        cost_cents: 0,
+      },
     }),
     fetchText: async () => ({ text: "", finalUrl: "", status: 200 }),
   });
@@ -270,6 +320,7 @@ test("DDGS search adapter normalizes internal bridge results", async () => {
   assert.equal(items[0]?.rawPayload.adapterKey, "ddgs_search");
   assert.equal(items[0]?.rawPayload.directCoverage, false);
   assert.equal(items[0]?.rawPayload.resultRank, 1);
+  assert.equal(((items[0]?.rawPayload.ddgsMeta as Record<string, unknown>) ?? {}).execution, "fetchers_direct");
   assert.equal((items[0]?.rawPayload.searchQuery as Record<string, unknown>)?.searchProvider, "ddgs_search");
 });
 
@@ -291,7 +342,10 @@ test("search adapters drop ad-click result URLs before ingestion", async () => {
     channel: channel("http://api:8000/maintenance/discovery/search/ddgs"),
     apiConfig,
     fetchedAt: "2026-05-11T10:00:00.000Z",
-    fetchJson: async () => ({
+    fetchJson: async () => {
+      throw new Error("fetchJson should not be called for fetchers-direct DDGS");
+    },
+    fetchSearch: async () => ({
       results: [
         {
           title: "Developer services - Contact Us",

@@ -902,13 +902,8 @@ function buildSearchAdapterRow(input: {
   }
 
   if (input.provider === "ddgs_search") {
-    const url = new URL(`${trimTrailingSlash(input.baseUrl || "http://api:8000")}/maintenance/discovery/search/ddgs`);
+    const url = new URL("https://duckduckgo.com/");
     url.searchParams.set("q", input.query);
-    url.searchParams.set("count", String(input.maxResults));
-    url.searchParams.set("resultType", "text");
-    if (input.timeRange) {
-      url.searchParams.set("timeRange", input.timeRange);
-    }
     return {
       blocker: null,
       risk: "medium",
@@ -1066,7 +1061,7 @@ export async function planIndirectTargetChannelsWithPool(
     guidance: [
       "This planner is read-only; create channels through channels.bulk_onboard.plan/apply/verify.",
       "Search/indirect channels create acquisition evidence only and cannot select content by provider metadata.",
-      "DDGS uses the internal API bridge in research_only mode. SearXNG requires a configured baseUrl. Brave/Tavily/Exa require explicit Authorization configuration.",
+      "DDGS executes inside fetchers as a research_only adapter. SearXNG requires a configured baseUrl. Brave/Tavily/Exa require explicit Authorization configuration.",
     ],
   };
 }

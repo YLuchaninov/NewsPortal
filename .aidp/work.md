@@ -12,27 +12,27 @@
 
 - Workflow mode: normal
 - Разрешенные workflow modes: setup | normal | repair
-- Work route: docs-operator
+- Work route: bugfix
 - Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
-- Route phase: product-flow-capability-closeout
-- Route-specific next step: none; the outsourcing-demand product-flow capability test is closed, the heartbeat is paused, retained DB evidence is intentionally left in place, and the compact restore snapshot is the restore handoff.
-- Route-specific proof: AIDP history sync, compact restore snapshot retained at `docs/product/operator/snapshots/2026-05-12-operational-restore-config/`, obsolete broad snapshot already removed, `/private/tmp/newsportal*.mjs` helper scripts removed, product-test DB evidence retained, and `git diff --check`.
-- Planning required by route: no
-- Planning source: none
-- Plan/spec status: absent
+- Route phase: proof-complete
+- Route-specific next step: none for the local bugfix; optional follow-up is to re-materialize retained legacy DDGS channels through MCP so their display URLs become `https://duckduckgo.com/?q=...`, without deleting retained evidence.
+- Route-specific proof: `pnpm --filter @newsportal/fetchers typecheck`, `pnpm --filter @newsportal/control-plane typecheck`, `pnpm --filter @newsportal/mcp typecheck`, `pnpm unit_tests:ts -- api-adapter-registry thematic-discovery feed-probe channel-bottlenecks mcp-control-plane` (407/407), `python -m py_compile services/api/app/routes/discovery_routes.py services/workers/app/task_engine/adapters/web_search.py`, `pnpm check:dependency-compliance`, `pnpm lint:ts`, and `git diff --check` passed.
+- Planning required by route: yes
+- Planning source: external-spec
+- Plan/spec status: accepted-for-this-item
 - Audit overlay: none
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
-- Фокус аудита: close the completed outsourcing-demand product-flow capability, stop periodic continuation, retain DB evidence, verify the compact restore snapshot, and remove only safe temporary helper junk.
+- Фокус аудита: n/a for active bugfix; previous product-flow closeout remains archived below.
 - 2026-05-11 audit observation: MCP read-back shows the retained 9460-channel source pool has 0 Upwork, LinkedIn, We Work Remotely, RemoteOK, Remotive, Greenhouse, Lever, Ashby, Workable, PeoplePerHour, Guru, Reddit, or Wellfound channels; only HNRSS/Hacker News is partially present and StackOverflow appears as broken RSS-shaped channels instead of official Stack Exchange API ingestion. External source research shows direct project/hiring/community sources exist, but many are API/access/adapter-shaped rather than RSS/news-feed shaped. This is an acquisition/provider-contract gap plus filtering/hold-quality gap, not evidence that thematic demand is rare.
 - 2026-05-11 implementation update: user approved `Experimental Adapter Layer` plan. New stage will keep web/RSS lanes, add thematic source-role coverage and adapter research as MCP-readable first-class discovery evidence, use existing `provider_type=api` plus `adapterKey` for official/public and research-only GitHub-derived approaches, and keep source roles/adapter risk independent from final selection/ranking/web visibility.
 - 2026-05-11 implementation update: user approved `Coverage-First Funnel Calibration без автоматического отключения шумных каналов`. New stage adds MCP-readable source-family coverage and lifecycle labels (`working_high_signal`, `working_noisy_semantic_match`, `working_low_yield`, `negative_control_useful`, repair/access/policy labels), plus autoplan/iteration recommendations that can adjust cadence/repair/measurement but must not auto-disable working semantic-close noisy sources. Selection remains strict and source-independent.
-- Почему сейчас: user declared the product-flow capability test finished and asked to close it fully while checking for removable junk.
+- Почему сейчас: user asked to implement the approved DDGS bridge removal plan after identifying that the research lane used API as an internal search proxy.
 - Active item id: none
-- Active item status: n/a; previous primary `NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1` is archived in `.aidp/history.md`.
-- Item status: archived for `NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1`.
-- Risk: low for closeout docs/operator cleanup; retained product-test DB evidence is not cleaned/deleted/reset.
-- Approval required: no for this closeout; destructive DB/schema cleanup remains out of scope and would require a new explicit approval.
-- Approval reason: n/a for closeout; previous high-risk product-test approvals remain recorded below as history context.
+- Active item status: n/a; `NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1` completed local implementation/proof on 2026-05-12.
+- Item status: completed
+- Risk: low after local proof; production deployment and retained-channel re-materialization remain separate follow-ups.
+- Approval required: no for local source/env/test edits and dependency addition; yes for production deployment, DB cleanup/delete/reset, or destructive migration.
+- Approval reason: n/a for approved local bugfix; dependency change is scoped to `@newsportal/fetchers` and must pass dependency compliance.
 - Operator approval recorded: 2026-05-08 user request `PLEASE IMPLEMENT THIS PLAN` approves the product-test plan and no-cleanup requirement; explicit tool approval was then granted for destructive local dev DB reset before `pnpm dev:mvp:internal:down:volumes`.
 - Runtime cutover proof recorded: 2026-05-08 local dev DB reset/start approved and executed; product operations executed through MCP; retained state left in DB.
 
@@ -43,7 +43,7 @@
 - Setup route: закрыт 2026-04-24
 - Repair route: закрыт 2026-04-25 after live-state/docs cleanup repair
 - Current lifecycle mode: `normal`
-- Current work route: docs-operator
+- Current work route: bugfix
 - Last completed work route: `capability` for `NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1`.
 - Normal mode note: `normal` не является work route; next work must select an explicit route.
 
@@ -69,7 +69,7 @@
 
 - ID: none
 - Parent capability: n/a
-- Почему это primary active work: n/a; `NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1` was closed and archived on 2026-05-12 after the product-flow capability test and restore snapshot handoff.
+- Почему это primary active work: n/a; `NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1` completed local implementation/proof on 2026-05-12.
 
 ### Secondary active item
 
@@ -77,6 +77,21 @@
 - Почему существует: n/a
 - Разрешенные overlap paths: n/a
 - Условие выхода к одному primary item: n/a
+
+### Closed DDGS direct fetchers adapter bugfix
+
+- ID: NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1
+- Parent capability: Discovery acquisition / fetcher API adapters.
+- Lifecycle mode: normal.
+- Work route: bugfix.
+- Scope: `@newsportal/fetchers` direct DDGS research adapter execution, DDGS channel materialization in control-plane, removal of FastAPI DDGS bridge route, `.env.example`/`.env.dev` cleanup, MCP/operator wording updates, source-bottleneck legacy bridge warning, focused unit/static proof.
+- Out of scope: product-test DB cleanup/delete/reset, migration of retained DDGS channels, production certification for DDGS, changing selected/content semantics, production deployment, or re-enabling the closed product-flow heartbeat.
+- Accepted plan/spec: user-provided `Исправление DDGS Search Lane Без Internal API Bridge` from 2026-05-12.
+- Blueprint context checked: source/channel acquisition boundary, MCP/control-plane source onboarding, API/fetchers service boundary, external search provider risk, and source metadata not influencing selection.
+- Safety gates: DDGS remains `research_only`; existing legacy DDGS channels must keep working from adapter config without using `http://api:8000`; generic API channels must still reject private/internal hosts unless explicitly allowlisted; source/search metadata must not affect final selection/ranking/web visibility.
+- Proof completed 2026-05-12: added fetchers-owned `ddgs_search` execution through `duck-duck-scrape`, removed the FastAPI `/maintenance/discovery/search/ddgs` route, changed DDGS indirect channel materialization to safe `https://duckduckgo.com/?q=...` identity URLs, emptied baseline `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST`, updated MCP/operator guidance, and added legacy internal-bridge warnings to the channel bottleneck read model. Existing retained DDGS channels keep working because execution uses `adapter.searchQuery`, not their legacy `fetchUrl`.
+- Required proof passed: `pnpm --filter @newsportal/fetchers typecheck`, `pnpm --filter @newsportal/control-plane typecheck`, `pnpm --filter @newsportal/mcp typecheck`, `pnpm unit_tests:ts -- api-adapter-registry thematic-discovery feed-probe channel-bottlenecks mcp-control-plane` (407/407), `python -m py_compile services/api/app/routes/discovery_routes.py services/workers/app/task_engine/adapters/web_search.py`, `pnpm check:dependency-compliance`, `pnpm lint:ts`, and `git diff --check`.
+- Cleanup status: no DB cleanup/delete/reset planned.
 
 ### Closed rare-signal source-prior MCP stage
 

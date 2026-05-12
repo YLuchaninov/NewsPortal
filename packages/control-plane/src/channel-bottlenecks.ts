@@ -102,6 +102,8 @@ export interface ChannelBottleneckRow {
   providerShapeValidation: ChannelProviderShapeValidation;
   failureBucket: ChannelBottleneckFailureBucket;
   repairLane: ChannelBottleneckRepairLane;
+  legacyDdgsInternalBridge: boolean;
+  legacyBridgeWarning: string | null;
 }
 
 export interface ChannelBottleneckList {
@@ -379,12 +381,32 @@ function repairLaneFor(bucket: ChannelBottleneckFailureBucket): ChannelBottlenec
   }
 }
 
+function isLegacyDdgsInternalBridge(row: Pick<RawChannelBottleneckRow, "adapterKey" | "fetchUrl">): boolean {
+  if (normalizeStringOrNull(row.adapterKey) !== "ddgs_search") {
+    return false;
+  }
+  const rawUrl = normalizeStringOrNull(row.fetchUrl);
+  if (!rawUrl) {
+    return false;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    return (
+      parsed.pathname === "/maintenance/discovery/search/ddgs" &&
+      ["api", "api:8000"].includes(parsed.host.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
 function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
   const validation = buildProviderShapeValidation(row.providerType, row.fetchUrl);
   const failureBucket = classifyFailureBucket(row, validation);
   const repairLane = repairLaneFor(failureBucket);
   const nextDueAt = normalizeStringOrNull(row.nextDueAt);
   const nextDueTime = nextDueAt ? new Date(nextDueAt).getTime() : Number.NaN;
+  const legacyDdgsInternalBridge = isLegacyDdgsInternalBridge(row);
 
   return {
     channelId: normalizeString(row.channelId),
@@ -445,6 +467,10 @@ function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
     providerShapeValidation: validation,
     failureBucket,
     repairLane,
+    legacyDdgsInternalBridge,
+    legacyBridgeWarning: legacyDdgsInternalBridge
+      ? "Legacy DDGS channel identity still points at the removed internal API bridge. Fetchers now execute ddgs_search directly from adapter.searchQuery, so polling can continue without private-host allowlisting; re-materialize through discovery.indirect_targets.channels.plan later to replace the display URL."
+      : null,
   };
 }
 
@@ -700,6 +726,8 @@ export async function explainChannelBottleneckWithPool(
       failureBucket: row.failureBucket,
       repairLane: row.repairLane,
       providerShapeBlocker: row.providerShapeValidation.blocker,
+      legacyDdgsInternalBridge: row.legacyDdgsInternalBridge,
+      legacyBridgeWarning: row.legacyBridgeWarning,
       selectedContentEvidence: row.contentStats.selectedUniqueContent,
       projectionEvidence: row.projectionStats,
     },
@@ -709,6 +737,15 @@ export async function explainChannelBottleneckWithPool(
             {
               tool: "channels.alternatives.plan",
               arguments: { channelIds: [row.channelId], includeFeedProbe: true, maxCandidates: 20 },
+            },
+          ]
+        : []),
+      ...(row.legacyDdgsInternalBridge
+        ? [
+            {
+              tool: "discovery.indirect_targets.channels.plan",
+              arguments: { searchProvider: "ddgs_search", maxChannels: 20 },
+              reason: "Re-materialize legacy DDGS bridge channels with safe duckduckgo.com identity URLs; do not delete retained evidence.",
             },
           ]
         : []),

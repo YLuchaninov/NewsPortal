@@ -108,7 +108,7 @@ test("indirect target channel planner materializes search adapter rows without m
   assert.equal(plan.items[0]?.bulkOnboardRow?.adapter?.searchQuery.directCoverage, false);
 });
 
-test("indirect target channel planner defaults to DDGS research bridge", async () => {
+test("indirect target channel planner defaults to fetchers-direct DDGS research adapter", async () => {
   const pool = {
     async query() {
       return {
@@ -134,7 +134,8 @@ test("indirect target channel planner defaults to DDGS research bridge", async (
   assert.equal(plan.readyCount, 1);
   assert.equal(plan.items[0]?.bulkOnboardRow?.adapter?.adapterKey, "ddgs_search");
   assert.equal(plan.items[0]?.bulkOnboardRow?.adapter?.researchMode, "research_only");
-  assert.match(String(plan.items[0]?.bulkOnboardRow?.fetchUrl), /\/maintenance\/discovery\/search\/ddgs/);
+  assert.match(String(plan.items[0]?.bulkOnboardRow?.fetchUrl), /^https:\/\/duckduckgo\.com\/\?q=/);
+  assert.doesNotMatch(String(plan.items[0]?.bulkOnboardRow?.fetchUrl), /\/maintenance\/discovery\/search\/ddgs/);
 });
 
 test("indirect target channel planner reports needs_config when SearXNG base URL is absent", async () => {

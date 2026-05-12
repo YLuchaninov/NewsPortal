@@ -7,7 +7,6 @@ from fastapi import APIRouter, Body, FastAPI, Query
 
 from services.api.app import discovery_source_priors_api as source_priors
 from services.api.app import discovery_v3_api as v3
-from services.workers.app.task_engine.adapters.web_search import DdgsWebSearchAdapter
 
 
 def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
@@ -38,7 +37,6 @@ def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     router.get("/maintenance/discovery/source-priors")(_list_source_priors)
     router.post("/maintenance/discovery/source-priors/evaluate")(source_priors.evaluate_source_prior)
     router.post("/maintenance/discovery/source-priors/apply")(source_priors.apply_source_prior)
-    router.get("/maintenance/discovery/search/ddgs")(_ddgs_search)
 
     for public_name, kind in (
         ("hypotheses", "hypotheses"),
@@ -78,21 +76,6 @@ def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     router.post("/maintenance/discovery/sources/{channel_id}/replace-candidates")(v3.replace_source_candidates)
 
     app.include_router(router)
-
-
-def _ddgs_search(
-    q: str = Query(..., min_length=1, max_length=500),
-    count: int = Query(10, ge=1, le=20),
-    resultType: str = Query("text", pattern="^(text|news)$"),
-    timeRange: str | None = Query(default=None, pattern="^(day|week|month|year)$"),
-) -> dict[str, Any]:
-    adapter = DdgsWebSearchAdapter()
-    return adapter.search(
-        query=q,
-        count=count,
-        result_type=resultType,
-        time_range=timeRange,
-    )
 
 
 def _list_targets(

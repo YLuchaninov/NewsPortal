@@ -70,8 +70,24 @@
 - `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-31` — deterministic API and Email IMAP provider proof lanes.
 - `NEWSPORTAL-RELEASE-READY-COMPLIANCE-CAPABILITY-STAGE-32` — repo-owned non-deploy release verification gate.
 - `NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1` — MCP-driven outsourcing-demand product-flow capability test and operator restore snapshot.
+- `NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1` — DDGS indirect-search execution moved from internal API bridge to fetchers-owned direct research adapter.
 
 ## Завершенные items
+
+### NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1 — DDGS fetchers-direct research search adapter
+
+- Archive outcome: completed
+- Kind: Bugfix / discovery acquisition adapter
+- Финальный status: done
+- Work route: bugfix
+- Planning/source: user-approved external plan `Исправление DDGS Search Lane Без Internal API Bridge`.
+- Risk: medium before proof; low after local proof. DDGS remains research-only and not production-certified.
+- Approval: no destructive approval required; no DB cleanup/delete/reset performed.
+- Почему существовало: DDGS indirect-search channels were using `fetchers -> FastAPI /maintenance/discovery/search/ddgs -> DDGS`, which made the API service a research search proxy and required `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST=api,api:8000`.
+- Что изменилось: fetchers now execute `adapterKey="ddgs_search"` directly through a typed `duck-duck-scrape` module using `adapter.searchQuery`; the FastAPI DDGS bridge route was removed; new DDGS indirect channel plans use `https://duckduckgo.com/?q=...` display URLs; `.env.example`/`.env.dev` no longer carry DDGS private-host allowlisting; MCP/operator guidance describes fetchers-direct DDGS; channel bottleneck explain flags retained legacy internal-bridge URLs as re-materialization candidates without deleting evidence.
+- Выполненный proof: `pnpm --filter @newsportal/fetchers typecheck`, `pnpm --filter @newsportal/control-plane typecheck`, `pnpm --filter @newsportal/mcp typecheck`, `pnpm unit_tests:ts -- api-adapter-registry thematic-discovery feed-probe channel-bottlenecks mcp-control-plane` (407/407), `python -m py_compile services/api/app/routes/discovery_routes.py services/workers/app/task_engine/adapters/web_search.py`, `pnpm check:dependency-compliance`, `pnpm lint:ts`, and `git diff --check`.
+- Cleanup: removed obsolete DDGS API bridge route and DDGS-specific allowlist comments; retained product-test DB/channel evidence.
+- Оставшиеся risks/gaps: retained legacy DB channels may still display `http://api:8000/maintenance/discovery/search/ddgs` as identity URLs until re-materialized through MCP; execution no longer depends on those URLs. Production-grade search should later prefer SearXNG/Brave/Tavily/Exa or another certified provider.
 
 ### NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1 — MCP-driven outsourcing-demand product-flow capability test
 

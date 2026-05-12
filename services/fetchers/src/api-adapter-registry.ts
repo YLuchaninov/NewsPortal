@@ -2,6 +2,11 @@ import type { ApiAdapterKey, ApiChannelConfig } from "@newsportal/contracts";
 
 import type { SourceChannelRow } from "./fetcher-persistence";
 import { normalizeWhitespace } from "./fetcher-channel-helpers";
+import {
+  fetchDirectDdgsSearchPayload,
+  type DirectDdgsSearchPayload,
+  type DirectDdgsSearchRequest,
+} from "./ddgs-direct-search";
 
 export interface ApiAdapterFetchedItem {
   externalArticleId: string;
@@ -20,13 +25,13 @@ export interface ApiAdapterContext {
   fetchedAt: string;
   fetchJson: (url?: string) => Promise<unknown>;
   fetchText: (url?: string) => Promise<{ text: string; finalUrl: string; status: number }>;
+  fetchSearch?: (request: DirectDdgsSearchRequest) => Promise<DirectDdgsSearchPayload>;
 }
 
 const OFFICIAL_JSON_ADAPTERS = new Set<ApiAdapterKey>([
   "hn_algolia_search",
   "github_issues_search",
   "stack_exchange_search",
-  "ddgs_search",
   "searxng_search",
   "brave_search",
   "tavily_search",
@@ -428,7 +433,7 @@ function normalizeDdgsSearch(payload: unknown, context: ApiAdapterContext): ApiA
         context,
         item,
         rank: index + 1,
-        baseUrl: context.channel.fetchUrl ?? "http://api:8000/",
+        baseUrl: context.channel.fetchUrl ?? "https://duckduckgo.com/",
         id: firstString(item.url, item.provider_rank),
         title: item.title,
         url: item.url,
@@ -680,6 +685,18 @@ export async function fetchApiAdapterItems(
   adapterKey: ApiAdapterKey,
   context: ApiAdapterContext
 ): Promise<ApiAdapterFetchedItem[]> {
+  if (adapterKey === "ddgs_search") {
+    const searchQuery = context.apiConfig.adapter.searchQuery;
+    const payload = await (context.fetchSearch ?? fetchDirectDdgsSearchPayload)({
+      query: searchQuery.query ?? context.apiConfig.adapter.query ?? "",
+      maxResults: searchQuery.maxResults,
+      resultType: "text",
+      timeRange: searchQuery.timeRange,
+      locale: searchQuery.locale,
+    });
+    return normalizeDdgsSearch(payload, context);
+  }
+
   if (OFFICIAL_JSON_ADAPTERS.has(adapterKey)) {
     const payload = await context.fetchJson();
     switch (adapterKey) {
@@ -689,8 +706,6 @@ export async function fetchApiAdapterItems(
         return normalizeGitHubIssues(payload, context);
       case "stack_exchange_search":
         return normalizeStackExchange(payload, context);
-      case "ddgs_search":
-        return normalizeDdgsSearch(payload, context);
       case "searxng_search":
         return normalizeSearxng(payload, context);
       case "brave_search":
