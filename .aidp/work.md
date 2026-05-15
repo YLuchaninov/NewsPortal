@@ -12,29 +12,142 @@
 
 - Workflow mode: normal
 - Разрешенные workflow modes: setup | normal | repair
-- Work route: bugfix
+- Work route: docs-operator
 - Разрешенные work routes: bootstrap | micro-patch | capability | bugfix | sweep | audit | docs-operator | delivery
-- Route phase: proof-complete
-- Route-specific next step: none for the local bugfix; optional follow-up is to re-materialize retained legacy DDGS channels through MCP so their display URLs become `https://duckduckgo.com/?q=...`, without deleting retained evidence.
-- Route-specific proof: `pnpm --filter @newsportal/fetchers typecheck`, `pnpm --filter @newsportal/control-plane typecheck`, `pnpm --filter @newsportal/mcp typecheck`, `pnpm unit_tests:ts -- api-adapter-registry thematic-discovery feed-probe channel-bottlenecks mcp-control-plane` (407/407), `python -m py_compile services/api/app/routes/discovery_routes.py services/workers/app/task_engine/adapters/web_search.py`, `pnpm check:dependency-compliance`, `pnpm lint:ts`, and `git diff --check` passed.
+- Route phase: awaiting-operator-review
+- Route-specific next step: operator review of AIDP 1.8.12 migration diff; staging/commit is separate if desired.
+- Route-specific proof: owner-file alignment inspection passed; router thinness preserved; `python3 ./aidp-monitor/server.py --repo . --check` exited 0 with one dirty-worktree warning; `python3 ./aidp-monitor/server.py --repo . --check --json` exited 0 with the same warning; `python3 ./aidp-monitor/server.py --repo . --check --strict` exited 1 as expected for warnings-only strict mode; monitor server/API smoke returned `/api/state` JSON and UI GET 200; hidden reference scan found no removed distribution path refs; setup flags preserved.
 - Planning required by route: yes
 - Planning source: external-spec
 - Plan/spec status: accepted-for-this-item
-- Audit overlay: none
+- Plan summary: user-requested soft migration from AIDP 1.7.3 to 1.8.12; preserve project truth and Russian owner-file style, add monitor contract/projections/check mode/write-ahead/context/document-intake/consolidation mechanisms, do not create new routes or second canon.
+- Audit overlay: approved-for-apply
 - Разрешенные audit overlay values: none | requested | active-read-only | approved-for-apply
-- Фокус аудита: n/a for active bugfix; previous product-flow closeout remains archived below.
+- Фокус аудита: initial read-only repair audit found stale live-state/work.md ambiguity; owner-file sync is approved by the current migration request.
 - 2026-05-11 audit observation: MCP read-back shows the retained 9460-channel source pool has 0 Upwork, LinkedIn, We Work Remotely, RemoteOK, Remotive, Greenhouse, Lever, Ashby, Workable, PeoplePerHour, Guru, Reddit, or Wellfound channels; only HNRSS/Hacker News is partially present and StackOverflow appears as broken RSS-shaped channels instead of official Stack Exchange API ingestion. External source research shows direct project/hiring/community sources exist, but many are API/access/adapter-shaped rather than RSS/news-feed shaped. This is an acquisition/provider-contract gap plus filtering/hold-quality gap, not evidence that thematic demand is rare.
 - 2026-05-11 implementation update: user approved `Experimental Adapter Layer` plan. New stage will keep web/RSS lanes, add thematic source-role coverage and adapter research as MCP-readable first-class discovery evidence, use existing `provider_type=api` plus `adapterKey` for official/public and research-only GitHub-derived approaches, and keep source roles/adapter risk independent from final selection/ranking/web visibility.
 - 2026-05-11 implementation update: user approved `Coverage-First Funnel Calibration без автоматического отключения шумных каналов`. New stage adds MCP-readable source-family coverage and lifecycle labels (`working_high_signal`, `working_noisy_semantic_match`, `working_low_yield`, `negative_control_useful`, repair/access/policy labels), plus autoplan/iteration recommendations that can adjust cadence/repair/measurement but must not auto-disable working semantic-close noisy sources. Selection remains strict and source-independent.
-- Почему сейчас: user asked to implement the approved DDGS bridge removal plan after identifying that the research lane used API as an internal search proxy.
-- Active item id: none
-- Active item status: n/a; `NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1` completed local implementation/proof on 2026-05-12.
-- Item status: completed
-- Risk: low after local proof; production deployment and retained-channel re-materialization remain separate follow-ups.
-- Approval required: no for local source/env/test edits and dependency addition; yes for production deployment, DB cleanup/delete/reset, or destructive migration.
-- Approval reason: n/a for approved local bugfix; dependency change is scoped to `@newsportal/fetchers` and must pass dependency compliance.
-- Operator approval recorded: 2026-05-08 user request `PLEASE IMPLEMENT THIS PLAN` approves the product-test plan and no-cleanup requirement; explicit tool approval was then granted for destructive local dev DB reset before `pnpm dev:mvp:internal:down:volumes`.
-- Runtime cutover proof recorded: 2026-05-08 local dev DB reset/start approved and executed; product operations executed through MCP; retained state left in DB.
+- Почему сейчас: user requested migration + repair of the already initialized AIDP OS from 1.7.3 to 1.8.12 using an unpacked release package, explicitly preserving existing project-specific truth and deleting the distribution folder after installation.
+- Active item id: AIDP-OS-1-8-12-MIGRATION-REPAIR-DOCS-OPERATOR-1
+- Active item status: ready
+- Item status: ready
+- Risk: medium because runtime core, monitor tooling and routers are being changed; no product/source/config/test writes are in scope.
+- Approval required: no for the requested owner-file/router/monitor migration and package cleanup; yes for destructive cleanup outside the unpacked release package, production deployment, schema/data migration, or product/source/config/test writes.
+- Approval reason: current user request explicitly asks to migrate/repair AIDP OS and remove the unpacked distribution after installation.
+- Operator approval recorded: 2026-05-15 user request for AIDP 1.7.3 -> 1.8.12 migration + repair.
+- Request matches active item: yes
+- Pre-write work-state gate: satisfied-for-AIDP-migration; product/source/config/test writes remain blocked unless a separate matching product item is created first.
+
+<!-- aidp-monitor:start aidp_state v1 -->
+```yaml
+aidp_state:
+  schema: 1
+  projection_status: current
+  lifecycle_mode: normal
+  work_route: docs-operator
+  route_phase: awaiting-operator-review
+  active_item_id: AIDP-OS-1-8-12-MIGRATION-REPAIR-DOCS-OPERATOR-1
+  item_status: ready
+  risk: medium
+  approval_required: no
+  approval_status: not-required
+  planning_required: yes
+  planning_source: external-spec
+  plan_status: accepted-for-this-item
+  plan_summary: "Soft migration from AIDP 1.7.3 to 1.8.12: preserve NewsPortal truth, add monitor/check/write-ahead mechanisms, install root aidp-monitor, remove unpacked release."
+  blueprint_context: checked
+  proof_status: passed
+  cleanup_required: yes
+  cleanup_status: done
+  blocked: no
+  request_matches_active_item: yes
+  pre_write_state: satisfied-for-AIDP-migration
+  pre_write_ref: ".aidp/work.md#текущий-режим"
+  allowed_paths:
+    - ".aidp/**"
+    - "AGENTS.md"
+    - "aidp-monitor/**"
+  context_manifest:
+    implementation_refs:
+      - ref: ".aidp/AGENTS.md"
+        reason: "AIDP runtime contract owner"
+      - ref: ".aidp/os.yaml"
+        reason: "machine-readable package, policies, monitor contract"
+      - ref: ".aidp/work.md"
+        reason: "live state, open ledger, monitor projections"
+      - ref: ".aidp/routes.md"
+        reason: "route dispatcher and subprocedures"
+      - ref: ".aidp/blueprint.md"
+        reason: "AIDP/process boundary and durable technical index"
+      - ref: ".aidp/engineering.md"
+        reason: "engineering discipline and write-ahead rules"
+      - ref: ".aidp/history.md"
+        reason: "archive and history index"
+      - ref: "AGENTS.md"
+        reason: "root thin router"
+    verification_refs:
+      - ref: ".aidp/verification.md"
+        reason: "migration, monitor, cleanup, check-mode gates"
+    research_refs:
+      - ref: ".aidp/contracts/"
+        reason: "existing project-specific deep contracts to preserve"
+      - ref: "docs/product/"
+        reason: "existing human docs checked as observations, not canon"
+  refs:
+    active_item: ".aidp/work.md#текущий-режим"
+    route: ".aidp/routes.md#route-docs-operator"
+    plan: ".aidp/work.md#текущий-режим"
+    blueprint: ".aidp/blueprint.md#product-docs-vs-aidp-runtime"
+    proof: ".aidp/work.md#текущий-режим"
+    cleanup: ".aidp/work.md#test-artifacts-and-cleanup"
+    approval: ".aidp/work.md#текущий-режим"
+  updated_at: "2026-05-15"
+```
+<!-- aidp-monitor:end -->
+
+<!-- aidp-monitor:start aidp_open_ledger v1 -->
+```yaml
+aidp_open_ledger:
+  schema: 1
+  projection_status: current
+  open_items:
+    - id: AIDP-OS-1-8-12-MIGRATION-REPAIR-DOCS-OPERATOR-1
+      title: "Soft migration and repair of AIDP OS 1.7.3 to 1.8.12"
+      route: docs-operator
+      status: ready
+      risk: medium
+      severity: medium
+      created_at: "2026-05-15"
+      review_trigger: "before migration closure"
+      next_step: "operator review of AIDP 1.8.12 migration diff"
+      owner_ref: ".aidp/work.md#текущий-режим"
+  parked_items:
+    - id: NEWSPORTAL-DDGS-LEGACY-URL-REMATERIALIZATION
+      title: "Optional retained DDGS channel display URL re-materialization"
+      status: ready
+      risk: low
+      review_trigger: "when operator wants retained legacy DDGS channel identity URLs refreshed"
+      owner_ref: ".aidp/history.md#newsportal-ddgs-direct-fetchers-adapter-bugfix-1"
+  open_risks:
+    - id: AIDP-WORK-MD-LIVE-MEMORY-DRIFT
+      title: "work.md still carries retained historical detail from prior product work"
+      severity: medium
+      status: open
+      mitigation: "do not treat old retained sections as current active items; future consolidation should move stale detail to history through audit/docs-operator"
+      review_trigger: "next memory consolidation review"
+      owner_ref: ".aidp/work.md#активное-execution-state"
+  blockers: []
+  pending_proofs: []
+  cleanup_obligations: []
+  capabilities: []
+  document_intake: []
+  consolidation_candidates:
+    - id: CONSOLIDATE-WORK-MD-PRIOR-DETAIL
+      title: "Move retained old live details from work.md to history when operator requests memory consolidation"
+      status: candidate
+      owner_ref: ".aidp/work.md#активное-execution-state"
+```
+<!-- aidp-monitor:end -->
 
 ## Проверки закрытия route
 
@@ -67,9 +180,24 @@
 
 ### Primary active item
 
-- ID: none
-- Parent capability: n/a
-- Почему это primary active work: n/a; `NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1` completed local implementation/proof on 2026-05-12.
+- ID: AIDP-OS-1-8-12-MIGRATION-REPAIR-DOCS-OPERATOR-1
+- Parent capability: AIDP OS maintenance.
+- Почему это primary active work: текущий запрос оператора — soft migration + repair уже установленной AIDP 1.7.3 до 1.8.12.
+- Lifecycle mode: normal.
+- Work route: docs-operator.
+- Route phase: awaiting-operator-review.
+- Item status: ready.
+- Scope: `.aidp/*` owner-file migration, root router managed block, root `aidp-monitor/` install from 1.8.12, read-only monitor/check verification, cleanup of the unpacked release package.
+- Out of scope: product/source/config/test writes, new work routes, `.aidp/state.yaml`, `.aidp/events.ndjson`, `.aidp/tools/`, `.aidp/skills/`, hooks, MCP configs, Python doctor, production deploy, database/schema/data migration.
+- Allowed paths: `.aidp/**`, `AGENTS.md`, `aidp-monitor/**`, deleted unpacked release package.
+- Accepted plan/spec: user-provided migration request from 2026-05-15 accepted as external-spec for this item.
+- Context manifest: refs-only projection in `aidp_state.context_manifest`; refs were read for current migration scope.
+- Blueprint context checked: Product docs vs AIDP runtime, durable AIDP/runtime documentation boundary, canonical neighborhoods and deep contracts list.
+- Risk: medium.
+- Approval required: no for the requested migration/repair/install/remove-package work; yes for destructive cleanup outside the unpacked release package or any product/source/config/test writes.
+- Required proof: passed. Owner-file alignment inspected; setup flags preserved; route list unchanged with no forbidden new routes; monitor blocks only in owner files; router remains thin; root monitor/check installed; check/check-json/check-strict executed; monitor server/API smoke passed; no lingering distribution-path references after cleanup.
+- Cleanup status: done for the unpacked release package; distribution directory removed and hidden reference scan passed.
+- Notes: earlier product-flow/DDGS details retained below are legacy handoff/history context, not current active implementation authorization.
 
 ### Secondary active item
 

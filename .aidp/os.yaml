@@ -1,6 +1,6 @@
 # AI Dev Process OS runtime schema для NewsPortal
-package_version: 1.7.3
-schema_version: 30
+package_version: 1.8.12
+schema_version: 44
 mode: Minimal
 runtime_profile: compact-strict-anti-drift-newsportal
 initialized: true
@@ -105,6 +105,36 @@ planning_policy:
 project:
   name: news-portal
   placeholder_values_present: false
+  excluded_paths:
+    - aidp-monitor/**
+    - aidp-monitor/
+    - .aidp.backup*/**
+    - .aidp.backup*
+    - node_modules/**
+    - .pnpm-store/**
+    - .idea/**
+    - .DS_Store
+    - .env.dev
+    - .env.prod
+    - .ruff_cache/**
+    - .ruff_cache/
+    - "**/__pycache__/**"
+    - "__pycache__/"
+    - "**/.astro/**"
+    - "apps/*/.astro/"
+    - "**/dist/**"
+    - "apps/*/dist/"
+    - "services/*/dist/"
+    - "**/node_modules/**"
+    - "**/node_modules/"
+    - data/indices/**
+    - data/indices/
+    - data/models/**
+    - data/models/
+    - data/snapshots/**
+    - data/snapshots/
+    - infra/build/**
+    - infra/build/
   shape: polyglot pnpm monorepo
   language: русский runtime-core; код и продуктовые docs могут быть смешанными ru/en по существующему стилю
   package_manager: pnpm
@@ -329,6 +359,12 @@ risk_levels:
 approval_policy:
   high_risk_requires_explicit_approval: true
   approval_must_be_recorded_in: .aidp/work.md
+  approval_statuses:
+  - not-required
+  - required
+  - approved
+  - denied
+  - unknown
   approval_required_for:
   - broad_writes
   - destructive_cleanup
@@ -343,6 +379,15 @@ approval_policy:
 cleanup_policy:
   test_artifact_cleanup_required: true
   cleanup_must_be_recorded_in: .aidp/work.md
+  record_even_if_artifact_deleted_before_close: true
+  clean_git_state_is_evidence_not_cleanup_record: true
+  allowed_statuses:
+  - not-required
+  - required
+  - pending
+  - done
+  - retained
+  - unknown
   applies_to:
   - test_artifacts
   - generated_files
@@ -357,6 +402,13 @@ blueprint_boundary_policy:
   blueprint_context_required_before_boundary_writes: true
   owner: .aidp/blueprint.md
   record_in: .aidp/work.md
+  allowed_statuses:
+  - unchecked
+  - checked
+  - not-applicable
+  - gap
+  - stale
+  - unknown
   applies_to:
   - architecture
   - ownership
@@ -565,3 +617,316 @@ history_sync:
   archive_index_recommended_for_long_running_projects: true
 operator_safety:
   operator_safety_doc_included: true
+
+read_only_check_policy:
+  enabled: true
+  command: python3 ./aidp-monitor/server.py --repo . --check
+  json_command: python3 ./aidp-monitor/server.py --repo . --check --json
+  strict_command: python3 ./aidp-monitor/server.py --repo . --check --strict
+  read_only: true
+  writes_aidp: false
+  exits:
+    pass: 0
+    warning_strict: 1
+    failure: 2
+  hard_failure_examples:
+  - product_writes_without_matching_active_item
+  - product_writes_under_non_product_route
+  - invalid_monitor_block
+  - proof_passed_without_proof_ref
+  - cleanup_done_or_retained_without_cleanup_ref
+  - capability_proof_passed_without_capability_proof_ref
+  - high_risk_without_approval
+
+pre_write_work_state_policy:
+  enabled: true
+  product_source_config_test_writes_require_matching_active_item: true
+  verbal_promise_not_sufficient: true
+  active_item_mismatch_blocks_writes: true
+  system_repair_or_docs_operator_items_do_not_cover_product_writes_by_default: true
+  active_item_switch_must_be_recorded_in_work_md: true
+  minimum_active_item_fields:
+  - lifecycle_mode
+  - work_route
+  - route_phase
+  - item_status
+  - allowed_paths
+  - risk
+  - approval
+  - planning_state_when_required
+  - context_manifest_when_required
+  - route_specific_proof
+  - cleanup_expectations
+
+work_memory_policy:
+  work_md_is_live_memory_not_archive: true
+  exactly_one_current_active_item_area: true
+  completed_detail_moves_to_history: true
+  multiple_latest_item_sections_are_repair_signal: true
+  done_active_item_requires_review_archive_or_delivery_reason: true
+  active_item_mismatch_blocks_writes: true
+
+context_manifest_policy:
+  enabled: true
+  owner: .aidp/work.md
+  refs_only: true
+  no_durable_truth_in_manifest: true
+  context_manifest_is_not_canon: true
+  not_memory_store: true
+  not_required_for_routes:
+  - micro-patch
+  required_for_routes:
+  - capability
+  recommended_or_required_for:
+  - capability
+  - broad_sweep
+  - docs_operator_migration_or_document_intake
+  - complex_delivery
+  - unclear_boundary_related_bugfix
+  categories:
+  - implementation_refs
+  - verification_refs
+  - research_refs
+  required_ref_fields:
+  - ref
+  - reason
+
+document_intake_policy:
+  enabled: true
+  route: docs-operator
+  repair_route_when_contradictory: audit
+  document_is_observation_until_approved: true
+  no_auto_canonization: true
+  requires_impact_map: true
+  requires_contradiction_check: true
+  requires_operator_approval_before_canon_update: true
+  source_paths:
+  - docs/**
+  - specs/**
+  - requirements/**
+  - designs/**
+  - "*.spec.md"
+  - "*.prd.md"
+  allowed_statuses:
+  - observed
+  - candidate-prepared
+  - approved
+  - partially-approved
+  - rejected
+  - superseded
+  document_types:
+  - product-requirement
+  - module-proposal
+  - architecture-proposal
+  - engineering-convention
+  - verification-requirement
+  - release-deployment-note
+  - external-spec-artifact
+  - historical-stale-note
+  - human-onboarding
+  - unknown
+  owner_routing:
+    architecture_truth: .aidp/blueprint.md
+    engineering_rules: .aidp/engineering.md
+    verification_rules: .aidp/verification.md
+    process_or_route_notes: .aidp/routes.md
+    live_work_or_capability: .aidp/work.md
+    machine_facts_or_commands: .aidp/os.yaml
+    completed_history: .aidp/history.md
+
+finish_boundary_policy:
+  enabled: true
+  dirty_worktree_blocks_archive_without_explanation: true
+  done_active_item_requires_review_archive_or_delivery_reason: true
+  archived_requires_history_sync: true
+  awaiting_operator_review_prefers_ready_or_blocked: true
+
+subagent_delegation_policy:
+  enabled: true
+  output_is_observation_until_confirmed: true
+  terminal_status_required_when_subagent_used: true
+  promised_deliverable_must_be_verified: true
+
+projection_statuses:
+  - current
+  - stale
+  - unknown
+  - invalid
+proof_statuses:
+  - not-required
+  - pending
+  - partial
+  - passed
+  - failed
+  - unavailable
+  - unknown
+capability_stage_statuses:
+  use_item_states: true
+capability_proof_statuses:
+  use_proof_statuses: true
+
+monitoring_contract:
+  schema_version: 43
+  enabled: optional
+  visualizer_read_only: true
+  uses_global_vocabulary: true
+  excluded_observation_paths:
+  - aidp-monitor/**
+  - aidp-monitor/
+  - .aidp.backup*/**
+  - .aidp.backup*
+  - node_modules/**
+  - .pnpm-store/**
+  - .idea/**
+  - .DS_Store
+  - .env.dev
+  - .env.prod
+  - .ruff_cache/**
+  - .ruff_cache/
+  - "**/__pycache__/**"
+  - "__pycache__/"
+  - "**/.astro/**"
+  - "apps/*/.astro/"
+  - "**/dist/**"
+  - "apps/*/dist/"
+  - "services/*/dist/"
+  - "**/node_modules/**"
+  - "**/node_modules/"
+  - data/indices/**
+  - data/indices/
+  - data/models/**
+  - data/models/
+  - data/snapshots/**
+  - data/snapshots/
+  - infra/build/**
+  - infra/build/
+  vocabulary_refs:
+    lifecycle_modes: routing.lifecycle_modes
+    work_routes: routing.work_routes
+    item_statuses: item_states
+    risk_levels: risk_levels
+    approval_statuses: approval_policy.approval_statuses
+    planning_sources: planning_policy.allowed_sources
+    plan_statuses: planning_policy.allowed_statuses
+    blueprint_context_statuses: blueprint_boundary_policy.allowed_statuses
+    proof_statuses: proof_statuses
+    cleanup_statuses: cleanup_policy.allowed_statuses
+    projection_statuses: projection_statuses
+    capability_stage_statuses: capability_stage_statuses
+    capability_proof_statuses: capability_proof_statuses
+  principle:
+    monitor_blocks_are_projections: true
+    monitor_blocks_are_not_second_canon: true
+    contradiction_requires_repair: true
+    visualizer_check_mode_read_only: true
+    local_monitor_cache_must_live_outside_aidp: true
+    monitor_state_must_not_be_claimed_unless_checked: true
+  yaml_subset:
+    simple_yaml_only: true
+    no_anchors: true
+    stable_language_neutral_keys: true
+    stable_language_neutral_enum_values: true
+  allowed_block_locations:
+    aidp_state: .aidp/work.md
+    aidp_open_ledger: .aidp/work.md
+    aidp_routes_index: .aidp/routes.md
+    aidp_verification_index: .aidp/verification.md
+    aidp_blueprint_index: .aidp/blueprint.md
+    aidp_history_index: .aidp/history.md
+  forbidden_block_locations:
+  - routers
+  - root docs
+  - human-docs
+  - CLAUDE.md
+  - root AGENTS.md
+  - .github/copilot-instructions.md
+  monitor_hygiene:
+    respect_project_excluded_paths: true
+    dedupe_risks_by_id: true
+    accept_capability_proof_status_alias_with_warning: true
+    document_intake_awaiting_approval_requires_missing_operator_decision: true
+    raw_blocks_collapsed_by_default: true
+    pause_refresh_while_user_is_copying_or_editing: true
+    monitor_api_proof_is_optional_operator_tool_proof: true
+  monitor_claim_policy:
+    do_not_claim_unread_monitor_state: true
+    do_not_claim_unchecked_context_refs: true
+    require_current_monitor_output_or_local_computation_before_claim: true
+    unavailable_monitor_signal_must_be_reported_as_not_checked: true
+  monitor_required_refs_for_capability_status:
+    stage_done_requires_stage_proof_ref: true
+    capability_proof_passed_requires_capability_proof_ref: true
+  monitor_required_refs_for_green_status:
+    proof_status_passed_requires_proof_ref: true
+    blueprint_checked_requires_blueprint_ref: true
+    cleanup_done_or_retained_requires_cleanup_ref: true
+    approval_approved_requires_approval_ref: true
+  derived_monitor_signals:
+    enabled: true
+    computed_by_visualizer: true
+    computed_by_agent_when_obvious: true
+    not_canonical_truth: true
+    no_operator_filled_forms: true
+    no_new_required_fields: true
+    signal_source: existing AIDP projections plus git state
+    ai_must_surface_high_severity_warnings: true
+    ai_must_not_claim_unchecked_monitor_state: true
+    warnings_are_recommendations: true
+    warnings_are_not_proof: true
+    warnings_do_not_create_routes: true
+    signals:
+      action_boundary:
+        purpose: infer write/action boundary from route, risk, allowed paths and git state
+      plan_sufficiency:
+        purpose: infer whether planning-required route has enough accepted planning to proceed
+      proof_candidates:
+        purpose: suggest possible proof candidates from repeated failures, weak proof or proof gaps
+  consolidation_pressure:
+    enabled: true
+    computed_by_visualizer: true
+    computed_by_agent_when_needed: true
+    not_canonical_truth: true
+    operator_warning_required_on_high_or_critical: true
+    agent_warning_required_on_high_or_critical: true
+    no_auto_write_to_canon: true
+    thresholds:
+      medium: 4
+      high: 9
+      critical: 16
+    signal_sources:
+    - aidp_state
+    - aidp_open_ledger
+    - aidp_history_index
+    - aidp_blueprint_index
+    - aidp_verification_index
+    - git_status
+    signals:
+    - parked_items
+    - stale_parked_items
+    - pending_proofs
+    - open_blockers
+    - open_risks
+    - repeated_failed_attempts
+    - stale_monitor_projection
+    - monitor_projection_contradiction
+    - blueprint_gaps
+    - cleanup_pending
+    - proof_missing_ref
+    - capability_stalled
+    - router_drift
+    - changed_files_outside_allowed_paths
+    - temp_generated_artifacts_without_cleanup_tracking
+    - pending_document_intake
+    - work_md_live_memory_drift
+    - wrong_route_product_writes
+    recommended_flow:
+      medium: mention in handoff when relevant
+      high: warn operator; recommend read-only audit memory consolidation review
+      critical: warn operator before normal implementation; use repair/audit if contradiction or unsafe state exists
+      after_approval: apply accepted fixes through docs-operator or repair; monitor must not auto-write owner files
+
+adapters:
+  canonical_truth: .aidp/*
+  routers_are_thin: true
+  route_aware: true
+  monitor_blocks_forbidden_in_routers: true

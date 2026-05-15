@@ -18,6 +18,47 @@
 - `done` означает proof passed; `archived` означает completed detail перенесен из live state в history.
 - Если item superseded, archive entry должен назвать replacing item или replacement route.
 - Migration самой AIDP OS можно архивировать как completed `docs-operator` item только после проверки owner-file alignment, router thinness, setup flags, required fields и cleanup распакованного пакета.
+- `aidp_history_index` является projection архива, не заменой старой истории. Если индекс расходится с prose archive, это repair trigger.
+
+<!-- aidp-monitor:start aidp_history_index v1 -->
+```yaml
+aidp_history_index:
+  schema: 1
+  projection_status: current
+  summary:
+    total_archived: 39
+    total_superseded: 0
+    recent_limit: 50
+  recent_entries:
+    - id: NEWSPORTAL-DDGS-DIRECT-FETCHERS-ADAPTER-BUGFIX-1
+      final_status: done
+      route: bugfix
+      proof_status: passed
+      owner_ref: ".aidp/history.md#newsportal-ddgs-direct-fetchers-adapter-bugfix-1"
+      lesson_candidate: no
+    - id: NEWSPORTAL-OUTSOURCING-DEMAND-DISCOVERY-PRODUCT-TEST-1
+      final_status: archived
+      route: capability
+      proof_status: passed
+      owner_ref: ".aidp/history.md#newsportal-outsourcing-demand-discovery-product-test-1"
+      lesson_candidate: no
+    - id: AIDP-OS-1-7-3-MIGRATION-DOCS-OPERATOR-1
+      final_status: archived
+      route: docs-operator
+      proof_status: passed
+      owner_ref: ".aidp/history.md#индекс-архива"
+      lesson_candidate: no
+    - id: AIDP-OS-1-7-2-MIGRATION-DOCS-OPERATOR-1
+      final_status: archived
+      route: docs-operator
+      proof_status: passed
+      owner_ref: ".aidp/history.md#индекс-архива"
+      lesson_candidate: no
+  lesson_candidates: []
+  superseded_entries: []
+  cancelled_entries: []
+```
+<!-- aidp-monitor:end -->
 
 ## Минимальный archive entry template
 

@@ -255,6 +255,59 @@ Production-like среды и реальные внешние интеграци
 
 Cleanup gate применяется к test artifacts, generated files, fixtures, temporary data, local state, database rows, snapshots, caches and external side effects. Item нельзя честно закрыть как `done`, пока cleanup не выполнен, intentionally retained или явно parked.
 
+Temporary/generated/cache/snapshot/log/fixture/local state/DB row/ignored-file/external side effect нужно записывать в cleanup tracking даже если artifact уже удален до closure. Чистый git diff является supporting proof, но не заменяет запись cleanup/retention.
+
+## Write-ahead work-state gate
+
+Перед любым product/source/config/test write в `.aidp/work.md` уже должен существовать matching active item для текущего user request.
+
+Verbal promise создать или обновить item позже не считается. Сначала запиши work state, затем можно менять product files.
+
+Matching active item должен иметь:
+
+- lifecycle mode;
+- work route;
+- route phase;
+- item status;
+- scope and allowed paths;
+- risk and approval;
+- planning state, если route требует planning;
+- refs-only context manifest, если route требует focused context;
+- route-specific proof;
+- cleanup expectations.
+
+Если текущий active item не соответствует запросу, сначала archive / park / block / mark ready / switch / create matching item. Нельзя начинать product implementation поверх active repair, migration, monitor-boundary, docs-operator или audit item, если пользовательский запрос не про эту системную работу и allowed paths/proof явно не покрывают writes.
+
+## Monitor, check mode and projections
+
+AIDP Monitor и check mode являются read-only operator/tool surfaces. Они не пишут `.aidp/*`, не создают canon и не являются proof сами по себе.
+
+Monitor-readable blocks являются projections of owner-file truth. Они разрешены только в owner-файлах, перечисленных в `.aidp/os.yaml`, и запрещены в routers, root docs, human-docs, `CLAUDE.md`, root `AGENTS.md` и `.github/copilot-instructions.md`.
+
+Если projection расходится с prose truth, это repair trigger. Не исправляй только monitor block, если owner-file truth другая; сначала выбери owner truth и синхронизируй projection.
+
+Нельзя утверждать monitor score, pressure, dashboard state, derived warnings, context refs или delegated deliverables, если текущий monitor output не читался и сигнал не вычислялся из текущих `.aidp/*` + git state.
+
+High-severity derived warnings и high/critical consolidation pressure нужно surface оператору перед risky continuation или closure. Это рекомендации, не proof и не новые routes. Memory consolidation review начинается read-only через `audit`; accepted fixes проходят через `docs-operator` или `repair`.
+
+Check mode:
+
+- `python3 ./aidp-monitor/server.py --repo . --check`
+- `python3 ./aidp-monitor/server.py --repo . --check --json`
+- `python3 ./aidp-monitor/server.py --repo . --check --strict`
+
+Exit codes: `0` means no hard failures, `1` means warnings only with `--strict`, `2` means hard failure.
+
+## Context manifest and document intake
+
+`context_manifest` в `.aidp/work.md` является refs-only focus aid. Он не canon, не memory store и не место для durable project truth.
+
+Context manifest обычно не нужен для `micro-patch`, но требуется или strongly recommended для `capability`, broad `sweep`, `docs-operator` migration/document-intake, complex `delivery` and unclear boundary-related `bugfix`.
+
+Document Intake / Requirement Intake — subprocedure внутри `docs-operator`, а не отдельный route. Новый/измененный документ, spec, PRD, ticket или design note является observation until approved. Для durable owner-file update нужны impact map, contradiction/gap check и operator approval.
+
+Memory consolidation review — subprocedure внутри `audit`, а не отдельный route.
+
 ## Audit
 
 Audit является work route, а не lifecycle mode.

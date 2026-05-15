@@ -118,6 +118,75 @@
 - Delivery gate: required for Docker/compose/nginx/env/runtime delivery changes.
 - Release gate: `pnpm release:verify` is the repository-owned non-deploy release gate. It runs compliance, lint, typecheck, unit tests, workspace build, Node runtime build, production compose image build, runtime image checks, production image content smoke, supply-chain artifact generation and product-local core/full/cleanup proof. Production deployment remains absent by design because the repository has no declared deployment target.
 
+<!-- aidp-monitor:start aidp_verification_index v1 -->
+```yaml
+aidp_verification_index:
+  schema: 1
+  projection_status: current
+  route_proof_requirements:
+    - route: bootstrap
+      required:
+        - setup-exit-checks
+      close_requires_proof_ref: true
+    - route: micro-patch
+      required:
+        - targeted-proof
+      close_requires_proof_ref: true
+    - route: capability
+      required:
+        - accepted-plan-or-spec
+        - stage-proof
+        - capability-proof-before-capability-done
+      close_requires_proof_ref: true
+    - route: bugfix
+      required:
+        - failure-reproduced-or-existing-failing-proof
+        - patch-proof
+        - regression-proof-when-appropriate
+      close_requires_proof_ref: true
+    - route: sweep
+      required:
+        - invariant-stated
+        - baseline-proof-when-needed
+        - behavior-preservation-proof
+      close_requires_proof_ref: true
+    - route: audit
+      required:
+        - read-only-findings-first
+        - no-silent-fixes
+      close_requires_proof_ref: false
+    - route: docs-operator
+      required:
+        - owner-file-alignment
+        - no-second-canon
+        - router-thinness
+      close_requires_proof_ref: true
+    - route: delivery
+      required:
+        - artifact-verification
+        - install-or-package-shape-verification
+      close_requires_proof_ref: true
+  close_gate_requires:
+    - valid_lifecycle_and_work_route
+    - pre_write_active_item_matches_request
+    - work_route_must_match_expected_file_changes
+    - pre_write_work_state_gate_when_product_writes
+    - valid_item_status_transition
+    - risk_approval_recorded
+    - route_specific_proof
+    - planning_spec_state_when_required
+    - context_manifest_refs_when_required
+    - blueprint_context_when_boundary_relevant
+    - cleanup_status_when_artifacts_or_state_created
+    - monitor_projection_sync_when_enabled
+    - dirty_worktree_explained_before_archive
+    - subagent_terminal_result_when_delegated
+    - high_or_critical_consolidation_pressure_reported_or_deferred
+    - high_severity_derived_monitor_warnings_reported_or_deferred
+    - document_intake_gate_when_new_docs_are_ingested
+```
+<!-- aidp-monitor:end -->
+
 ## Proof по типу работы
 
 - `Patch`: targeted static/unit proof for touched area; stronger proof if stateful or boundary-sensitive.
@@ -187,6 +256,100 @@ Planning/spec artifacts may guide implementation, but durable facts from them st
 Do not copy an entire plan/spec into multiple durable files. Extract only confirmed owner-routed facts and supersede stale claims explicitly.
 
 External spec/tool plan acceptance is scoped to the active item. It must be checked against repository reality, relevant blueprint boundaries, engineering constraints and verification gates before it can guide writes.
+
+## Pre-write work-state gate
+
+Перед любым product/source/config/test write в `.aidp/work.md` уже должны быть true:
+
+- active item exists;
+- active item matches the current user request;
+- lifecycle mode and work route are selected;
+- route phase and item status are recorded;
+- allowed paths cover expected changed files;
+- risk/approval state is recorded;
+- planning/spec state is recorded when required;
+- context manifest is recorded when required;
+- route-specific proof and cleanup expectations are recorded.
+
+Verbal promise update AIDP later does not satisfy this gate. Если active item не соответствует запросу, сначала switch / park / block / mark ready / archive / create matching item.
+
+Product/source files changed while route is `docs-operator`, `audit`, `bootstrap` or repair-oriented system work require explicit explanation or repair unless the route and allowed paths intentionally cover those writes.
+
+## Context manifest gate
+
+Для `capability`, broad/boundary-changing `sweep`, `docs-operator` migration/document-intake and complex `delivery`, `.aidp/work.md` должен record refs-only context manifest before write-heavy work.
+
+Rules:
+
+- manifest contains refs and reasons only;
+- it must not restate durable truth or create second canon;
+- implementation refs, verification refs and research/spec refs point to real files/sections/artifacts;
+- if a context ref is claimed as checked, it must have actually been read or verified;
+- missing context refs on routes that require them are gaps, not silent permission.
+
+## Document intake gate
+
+Новый/измененный document, spec, PRD, ticket, design note or operator-provided module vision may update AIDP canon only after:
+
+- source document path is identified;
+- document type is classified;
+- impact map to owner files is produced;
+- contradictions/gaps against repo reality and current `.aidp/*` are recorded;
+- operator approval is recorded for accepted changes;
+- each accepted fact is routed to exactly one owner file;
+- stale claims are explicitly superseded or parked;
+- monitor projections are updated only after owner-file truth changes.
+
+Document intake is `docs-operator` subprocedure. It is not a new route and source documents remain evidence until accepted.
+
+## Monitor projection gate
+
+If monitor-readable blocks are enabled, closure requires projection sync:
+
+- relevant monitor block exists or is explicitly unknown/stale;
+- block parses successfully;
+- projection does not contradict owner-file truth;
+- green statuses have required refs;
+- capability/stage projection is synced when capability/stage state changed;
+- stale values are updated, marked unknown, or repaired.
+
+Monitor block cannot satisfy proof by itself. If prose and block contradict each other, enter repair.
+
+Check mode and visualizer are read-only. Check mode can be used before product writes, before closure, after repair and before delivery, but check mode is not proof by itself; check failures must be surfaced before risky writes or closure.
+
+## Monitor claim and derived signal gate
+
+Do not claim monitor score, consolidation pressure level, derived action boundary, derived plan sufficiency, derived proof candidate, visualizer status or dashboard warning unless it was read from current monitor output or computed from current `.aidp/*` projections and git/worktree state.
+
+Derived monitor signals are warnings/recommendations, not canonical truth and not proof. High-severity derived warnings must be surfaced before closure or risky continuation. Valid responses are resolve through the selected route, park with reason, ask the operator, or open repair/audit/docs-operator when warning indicates drift.
+
+## Consolidation pressure gate
+
+Consolidation pressure is a monitor/agent-computed warning signal, not proof and not canonical truth.
+
+When high or critical pressure is observed:
+
+- warn the operator before continuing ordinary implementation work;
+- recommended first route is read-only `audit` with memory consolidation review;
+- findings are candidate updates only;
+- canonical changes require approval and must be applied through `docs-operator` or `repair`;
+- open concerns must not be deleted, hidden or rewritten merely to reduce pressure score.
+
+## Finish / dirty-worktree gate
+
+Route may be technically complete while worktree remains dirty, but the state must be explicit. If item status is `done` and worktree is dirty, changed files must be explained, accepted, parked, committed, or marked awaiting operator review before archive.
+
+If operator review is pending, prefer `ready` or `blocked` with reason rather than leaving `done` item active. `archived` requires matching history entry and history index projection.
+
+## Delegated/subagent work gate
+
+If delegated/subagent work is used:
+
+- do not infer completion from elapsed time;
+- wait for terminal result or explicit completion signal;
+- verify promised deliverable exists and matches requested output shape;
+- treat subagent output as observation until confirmed by orchestrator;
+- missing/ambiguous deliverable means blocked/failed, not done.
 
 ## Ожидания по границам
 

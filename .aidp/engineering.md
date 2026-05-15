@@ -58,6 +58,8 @@ Before implementation, check accepted plan/spec artifacts against relevant bluep
 - Не помечай item `archived` до `.aidp/history.md` sync.
 - Не помечай item `superseded` без named replacement.
 - Не продолжай `blocked` item без записи, что unblock произошло.
+- Перед product/source/config/test writes убедись, что `.aidp/work.md` уже содержит matching active item с route, phase, allowed paths, proof, risk/approval, planning/context when required and cleanup expectations.
+- Если active item относится к repair, migration, docs-operator, audit или monitor-boundary work, он не разрешает product implementation writes без явного matching scope.
 
 ## Risk and approval discipline
 
@@ -66,6 +68,18 @@ Before implementation, check accepted plan/spec artifacts against relevant bluep
 High-risk work требует явного approval до broad writes, destructive cleanup, deployment/publishing/signing, secret access, schema/data migration, production/external state changes, off-repo effects или tool/router/runtime changes, которые могут создать второй canon.
 
 Если approval отсутствует, block или park item. Не понижай risk только чтобы продолжить.
+
+## Monitor and context discipline
+
+Monitor blocks are projections. Они помогают увидеть drift, но не являются proof и не создают второй canon.
+
+Visualizer/check mode read-only. Check failures and high-severity derived warnings must be surfaced before risky writes or closure, but derived warnings are recommendations until handled through AIDP routes.
+
+Do not claim monitor score, consolidation pressure, derived warnings, checked context refs or delegated deliverables unless they were actually read/verified or computed from current `.aidp/*` projections and git/worktree state.
+
+`context_manifest` stores refs and reasons only. It must not contain durable truth, architectural summaries or a hidden memory store.
+
+Document Intake / Requirement Intake lives inside `docs-operator`; Memory consolidation review lives inside `audit`.
 
 ## Blueprint-aware implementation
 

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIDP Monitor</title>
+<style>
+:root{
+  --bg:#0b1020; --bg2:#0f172a; --panel:#111827; --panel2:#0f1b31; --card:#111c2f;
+  --text:#e5edf6; --muted:#93a4b7; --muted2:#6f7f91; --line:#243248;
+  --green:#31d18b; --yellow:#f8c14a; --red:#ff6b6b; --blue:#75b7ff; --purple:#b692ff;
+  --shadow:0 18px 60px rgba(0,0,0,.32); --radius:18px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0; color:var(--text); background:radial-gradient(circle at top left,#172554 0,#0b1020 42%,#070a12 100%); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;}
+button,input,textarea{font:inherit}
+.shell{min-height:100%; display:grid; grid-template-columns:280px minmax(0,1fr)}
+.sidebar{position:sticky; top:0; height:100vh; padding:22px 18px; border-right:1px solid rgba(148,163,184,.16); background:linear-gradient(180deg,rgba(15,23,42,.92),rgba(2,6,23,.88)); backdrop-filter: blur(18px); overflow:auto}
+.brand{display:flex; gap:12px; align-items:center; margin-bottom:22px}
+.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#60a5fa,#34d399); box-shadow:0 0 0 1px rgba(255,255,255,.15) inset}
+.brand h1{font-size:17px;line-height:1.1;margin:0}.brand p{font-size:12px;color:var(--muted);margin:3px 0 0}.repo{font-size:12px;color:var(--muted);overflow-wrap:anywhere;margin:0 0 18px}
+.nav{display:flex;flex-direction:column;gap:6px;margin:12px 0 22px}.nav button{width:100%;border:0;background:transparent;color:var(--muted);text-align:left;padding:10px 12px;border-radius:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}.nav button:hover{background:rgba(148,163,184,.09);color:var(--text)}.nav button.active{background:linear-gradient(135deg,rgba(96,165,250,.22),rgba(52,211,153,.12));color:#fff;box-shadow:0 0 0 1px rgba(96,165,250,.25) inset}.nav .count{font-size:11px;padding:1px 7px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+.side-card{border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.62);border-radius:16px;padding:13px;margin-top:12px}.side-card h3{font-size:12px;margin:0 0 8px;color:#dbeafe;text-transform:uppercase;letter-spacing:.08em}.side-card .small{font-size:12px;color:var(--muted);line-height:1.45}
+.content{min-width:0}.topbar{position:sticky;top:0;z-index:10;padding:16px 22px;border-bottom:1px solid rgba(148,163,184,.14);background:rgba(8,13,27,.76);backdrop-filter:blur(18px);display:flex;justify-content:space-between;align-items:center;gap:16px}.topbar h2{margin:0;font-size:18px}.top-sub{font-size:12px;color:var(--muted);margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.78);color:var(--text);padding:8px 11px;border-radius:12px;cursor:pointer}.btn:hover{border-color:rgba(117,183,255,.75);background:rgba(30,41,59,.85)}.btn.primary{background:linear-gradient(135deg,#2563eb,#0891b2);border-color:rgba(125,211,252,.35)}
+.page{padding:22px;display:none}.page.active{display:block}.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}.card{grid-column:span 4;background:linear-gradient(180deg,rgba(17,28,47,.92),rgba(10,17,31,.9));border:1px solid rgba(148,163,184,.14);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}.span3{grid-column:span 3}.span4{grid-column:span 4}.span5{grid-column:span 5}.span6{grid-column:span 6}.span7{grid-column:span 7}.span8{grid-column:span 8}.span9{grid-column:span 9}.span12{grid-column:span 12}.card h3{margin:0 0 12px;font-size:14px;color:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:8px}.card h3 .hint{font-weight:400;color:var(--muted);font-size:12px}.card p{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.45}.metric{font-size:32px;font-weight:750;letter-spacing:-.04em}.metric-sub{color:var(--muted);font-size:12px}.kv{display:grid;grid-template-columns:minmax(128px,38%) minmax(0,1fr);gap:8px 12px;align-items:start}.k{color:var(--muted);font-size:12px}.v{font-size:13px;overflow-wrap:anywhere}.pill{display:inline-flex;gap:5px;align-items:center;padding:3px 9px;border-radius:999px;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.82);font-size:12px;line-height:1.35}.pill.green{color:var(--green);border-color:rgba(49,209,139,.28);background:rgba(49,209,139,.08)}.pill.yellow{color:var(--yellow);border-color:rgba(248,193,74,.31);background:rgba(248,193,74,.08)}.pill.red{color:var(--red);border-color:rgba(255,107,107,.31);background:rgba(255,107,107,.08)}.pill.blue{color:var(--blue);border-color:rgba(117,183,255,.28);background:rgba(117,183,255,.08)}.pill.purple{color:var(--purple);border-color:rgba(182,146,255,.28);background:rgba(182,146,255,.08)}
+.list{display:flex;flex-direction:column;gap:8px}.item{padding:10px 11px;border:1px solid rgba(148,163,184,.13);border-radius:13px;background:rgba(15,23,42,.52)}.item-title{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}.item-meta{color:var(--muted);font-size:12px;margin-top:4px;line-height:1.4;overflow-wrap:anywhere}.empty{color:var(--muted2);font-size:13px;border:1px dashed rgba(148,163,184,.15);border-radius:12px;padding:12px}.progress{height:8px;background:rgba(148,163,184,.14);border-radius:999px;overflow:hidden}.progress > div{height:100%;background:linear-gradient(90deg,#34d399,#60a5fa);border-radius:inherit}.stage-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:8px}.stage-title{font-size:13px}.stage-meta{font-size:12px;color:var(--muted);margin-top:2px}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.filter{border:1px solid rgba(148,163,184,.2);border-radius:12px;background:rgba(15,23,42,.8);color:var(--text);padding:8px 10px;min-width:220px}.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}.prompt-box{width:100%;min-height:132px;resize:vertical;border:1px solid rgba(148,163,184,.19);background:#080d18;color:#dbeafe;border-radius:14px;padding:12px;line-height:1.45;white-space:pre-wrap}.toast{position:fixed;right:18px;bottom:18px;padding:10px 12px;background:#0f172a;border:1px solid rgba(117,183,255,.35);border-radius:12px;box-shadow:var(--shadow);display:none;z-index:30}.modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.72);display:none;align-items:center;justify-content:center;z-index:40;padding:22px}.modal{max-width:860px;width:100%;max-height:86vh;overflow:auto;background:#0d1424;border:1px solid rgba(148,163,184,.22);border-radius:20px;box-shadow:var(--shadow);padding:18px}.modal-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.modal h3{margin:0}.close{background:transparent;border:0;color:var(--muted);font-size:22px;cursor:pointer}pre{margin:0;white-space:pre-wrap;background:#070b14;color:#cbd5e1;border:1px solid rgba(148,163,184,.16);border-radius:14px;padding:12px;font-size:12px;overflow:auto}details summary{cursor:pointer;color:var(--blue)}
+@media(max-width:1080px){.shell{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{position:relative}.card,.span3,.span4,.span5,.span6,.span7,.span8,.span9,.span12{grid-column:span 12}.split{grid-template-columns:1fr}}
+@media(max-width:640px){.nav{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.kv{grid-template-columns:1fr}.page{padding:14px}.sidebar{padding:16px}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo"></div><div><h1>AIDP Monitor</h1><p>Read-only anti-drift cockpit</p></div></div>
+    <div id="repo" class="repo">Loading repository…</div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-card"><h3>Health</h3><div id="side-health" class="small">Waiting for state…</div></div>
+    <div class="side-card"><h3>Contract</h3><div class="small">Monitor blocks are projections, not canon. The visualizer never writes to <code>.aidp/*</code>.</div></div>
+  </aside>
+  <section class="content">
+    <header class="topbar">
+      <div><h2 id="page-title">Overview</h2><div class="top-sub" id="top-sub">Refresh-safe UI · no focus reset while copying or selecting</div></div>
+      <div class="top-actions">
+        <span id="refresh-state" class="pill blue">loading</span>
+        <span id="last" class="pill">never</span>
+        <button class="btn" id="pause-btn" type="button">Pause</button>
+        <button class="btn primary" id="refresh-btn" type="button">Refresh now</button>
+      </div>
+    </header>
+    <main>
+      <section class="page active" data-page="overview"><div class="grid">
+        <div class="card span3"><h3>Health</h3><div id="health-score" class="metric">—</div><div id="health-sub" class="metric-sub">Waiting for API</div></div>
+        <div class="card span3"><h3>Lifecycle</h3><div id="state-mini" class="kv"></div></div>
+        <div class="card span3"><h3>Route</h3><div id="route-mini" class="kv"></div></div>
+        <div class="card span3"><h3>Git</h3><div id="git-mini" class="kv"></div></div>
+        <div class="card span6"><h3>Plan <span class="hint">accepted summary + ref</span></h3><div id="plan-card"></div></div>
+        <div class="card span6"><h3>Context focus <span class="hint">refs only</span></h3><div id="context-card"></div></div>
+        <div class="card span12"><h3>Top warnings</h3><div id="top-warnings"></div></div>
+      </div></section>
+      <section class="page" data-page="work"><div class="grid">
+        <div class="card span6"><h3>Capability progress</h3><div id="capability-card"></div></div>
+        <div class="card span6"><h3>Open ledger</h3><div id="ledger-card"></div></div>
+        <div class="card span6"><h3>Document intake</h3><div id="doc-card"></div></div>
+        <div class="card span6"><h3>Cleanup / proof state</h3><div id="cleanup-card" class="kv"></div></div>
+      </div></section>
+      <section class="page" data-page="intelligence"><div class="grid">
+        <div class="card span4"><h3>Derived action boundary</h3><div id="action-card" class="kv"></div></div>
+        <div class="card span4"><h3>Derived plan sufficiency</h3><div id="suff-card" class="kv"></div></div>
+        <div class="card span4"><h3>Derived proof candidates</h3><div id="proof-candidates-card"></div></div>
+        <div class="card span12"><h3>Memory hygiene / Consolidation pressure</h3><div id="pressure-card"></div></div>
+      </div></section>
+      <section class="page" data-page="knowledge"><div class="grid">
+        <div class="card span6"><h3>Blueprint index</h3><div id="blueprint-card"></div></div>
+        <div class="card span6"><h3>History index</h3><div id="history-card"></div></div>
+      </div></section>
+      <section class="page" data-page="warnings"><div class="grid">
+        <div class="card span12"><h3>Warnings</h3><div class="toolbar"><input id="warning-filter" class="filter" placeholder="Filter warnings…"><button class="btn" type="button" data-modal="warnings">Open details</button></div><div id="warnings-card"></div></div>
+        <div class="card span12"><h3>Suggested audit prompt</h3><p>Shown only when the monitor recommends consolidation or repair. Copying will not be interrupted by auto-refresh.</p><button class="btn primary" id="copy-prompt-btn" type="button">Copy prompt</button><textarea id="audit-prompt" class="prompt-box" spellcheck="false"></textarea></div>
+      </div></section>
+      <section class="page" data-page="raw"><div class="grid">
+        <div class="card span12"><h3>Raw monitor blocks <span class="hint">debug only</span></h3><details><summary>Show raw JSON</summary><pre id="raw-json"></pre></details></div>
+      </div></section>
+    </main>
+  </section>
+</div>
+<div id="toast" class="toast"></div>
+<div id="modal" class="modal-backdrop"><div class="modal"><div class="modal-head"><h3 id="modal-title">Details</h3><button class="close" id="modal-close" aria-label="Close">×</button></div><pre id="modal-body"></pre></div></div>
+<script>
+const refreshMs = 3000;
+const pages = [
+  ['overview','Overview'], ['work','Work'], ['intelligence','Intelligence'], ['knowledge','Knowledge'], ['warnings','Warnings'], ['raw','Raw']
+];
+let currentPage = 'overview';
+let lastData = null;
+let pendingData = null;
+let paused = false;
+let warningFilter = '';
+
+const $ = (id)=>document.getElementById(id);
+function esc(x){return String(x ?? '').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function get(o,path,fallback){return path.split('.').reduce((x,k)=>x&&x[k],o) ?? fallback;}
+function arr(x){return Array.isArray(x)?x:[];}
+function txt(x){return x===undefined||x===null||x===''?'—':String(x);}
+function pill(x){
+  const s=txt(x); let cls='pill blue';
+  if(['passed','current','normal','done','archived','not-required','approved','no','sufficient','low','local'].includes(s)) cls='pill green';
+  if(['pending','unknown','stale','setup','partial','partial-approved','partially-approved','yes','ready','blocked','medium','weak','limited','observed','candidate-prepared'].includes(s)) cls='pill yellow';
+  if(['failed','invalid','repair','high','required','critical','elevated','denied'].includes(s)) cls='pill red';
+  return `<span class="${cls}">${esc(s)}</span>`;
+}
+function kv(id, rows){$(id).innerHTML = rows.map(([k,v])=>`<div class="k">${esc(k)}</div><div class="v">${String(v).startsWith('<span')?v:esc(v)}</div>`).join('');}
+function lineItem(title, meta='', right='') { return `<div class="item"><div class="item-title"><span>${esc(title)}</span>${right||''}</div>${meta?`<div class="item-meta">${esc(meta)}</div>`:''}</div>`; }
+function empty(label='None'){return `<div class="empty">${esc(label)}</div>`;}
+function list(items, formatter){items=arr(items); if(!items.length) return empty(); return `<div class="list">${items.map(formatter).join('')}</div>`;}
+function asText(item){
+  if(typeof item === 'string') return item;
+  if(!item || typeof item !== 'object') return txt(item);
+  if(item.signal) return `${item.signal}: ${item.detail||''} (+${item.score||0})`;
+  if(item.message) return item.message;
+  if(item.id) return `${item.id}: ${item.title||item.reason||item.summary||item.status||''}`;
+  if(item.name) return `${item.name}${item.status?` (${item.status})`:''}${item.refs?` — refs: ${Array.isArray(item.refs)?item.refs.join(', '):item.refs}`:''}`;
+  if(item.area || item.owner_section) return `${item.area||''}${item.owner_section?`: ${item.owner_section}`:''}${item.status?` (${item.status})`:''}`;
+  return JSON.stringify(item);
+}
+function showToast(msg){const el=$('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(showToast.t); showToast.t=setTimeout(()=>el.style.display='none',1800);}
+function showModal(title, obj){$('modal-title').textContent=title; $('modal-body').textContent=typeof obj==='string'?obj:JSON.stringify(obj,null,2); $('modal').style.display='flex';}
+$('modal-close').onclick=()=>($('modal').style.display='none');
+$('modal').onclick=(e)=>{if(e.target.id==='modal') $('modal').style.display='none';};
+function isInteracting(){
+  const el=document.activeElement;
+  if(el && (el.tagName==='TEXTAREA'||el.tagName==='INPUT'||el.isContentEditable)) return true;
+  const sel=window.getSelection&&window.getSelection();
+  return !!(sel && !sel.isCollapsed && String(sel).length>0);
+}
+function navCounts(data){
+  const warnings = arr(data?.warnings).length + arr(get(data,'derived_signals.warnings',[])).length;
+  const ledger = get(data,'blocks.aidp_open_ledger.data.aidp_open_ledger',{});
+  const docs = get(data,'document_intake.pending_documents',[]).length + get(data,'document_intake.candidate_awaiting_approval',[]).length;
+  const caps = arr(ledger.capabilities).length;
+  return {overview:'', work:(caps||docs)?String(caps+docs):'', intelligence: get(data,'consolidation_pressure.level','') || '', knowledge:'', warnings:warnings?String(warnings):'', raw:''};
+}
+function buildNav(){
+  const counts=navCounts(lastData||{});
+  $('nav').innerHTML=pages.map(([id,label])=>`<button type="button" class="${id===currentPage?'active':''}" data-page="${id}"><span>${label}</span>${counts[id]?`<span class="count">${esc(counts[id])}</span>`:''}</button>`).join('');
+  document.querySelectorAll('#nav button').forEach(btn=>btn.onclick=()=>setPage(btn.dataset.page));
+}
+function setPage(id){currentPage=id; document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.page===id)); buildNav(); $('page-title').textContent=pages.find(p=>p[0]===id)?.[1]||'Monitor';}
+function warningSeverity(w){const l=(w.level||w.severity||'').toLowerCase(); return l||'info';}
+function allWarnings(data){return [...arr(data.warnings), ...arr(get(data,'derived_signals.warnings',[])), ...arr(get(data,'document_intake.warnings',[]))];}
+function health(data){
+  const warnings=allWarnings(data); const pressure=get(data,'consolidation_pressure.level','low');
+  const hasRed=warnings.some(w=>warningSeverity(w)==='red') || pressure==='critical';
+  const hasYellow=warnings.some(w=>warningSeverity(w)==='yellow') || ['high','medium'].includes(pressure);
+  if(hasRed) return ['Attention','red']; if(hasYellow) return ['Review','yellow']; return ['Healthy','green'];
+}
+function renderState(data){
+  const state=get(data,'blocks.aidp_state.data.aidp_state',{}); const git=data.git||{}; const [h,hcls]=health(data);
+  $('repo').textContent=data.repo||'Unknown repository';
+  $('side-health').innerHTML=`<div style="margin-bottom:8px">${pill(h)}</div><div>Pressure: ${pill(get(data,'consolidation_pressure.level','unknown'))}</div><div style="margin-top:8px">Warnings: ${allWarnings(data).length}</div>`;
+  $('health-score').innerHTML=`<span class="${hcls}">${esc(h)}</span>`;
+  $('health-sub').textContent=`${allWarnings(data).length} warning(s), pressure ${get(data,'consolidation_pressure.level','unknown')}`;
+  kv('state-mini', [['Lifecycle',pill(state.lifecycle_mode)],['Item',state.active_item_id],['Status',pill(state.item_status)],['Projection',pill(state.projection_status)]]);
+  kv('route-mini', [['Work route',pill(state.work_route)],['Phase',state.route_phase],['Risk',pill(state.risk)],['Blocked',pill(state.blocked)]]);
+  kv('git-mini', [['Git repo',pill(git.is_git_repo?'yes':'no')],['Branch',git.branch||'—'],['HEAD',git.head||'—'],['Changed',String(arr(git.status).length)]]);
+  kv('cleanup-card', [['Proof status',pill(state.proof_status)],['Proof ref',get(state,'refs.proof','')||'—'],['Cleanup required',pill(state.cleanup_required)],['Cleanup status',pill(state.cleanup_status)],['Cleanup ref',get(state,'refs.cleanup','')||'—'],['Allowed paths',arr(state.allowed_paths).join(', ')||'—']]);
+}
+function renderPlan(data){
+  const s=get(data,'blocks.aidp_state.data.aidp_state',{});
+  const summary=s.plan_summary||'';
+  $('plan-card').innerHTML=`<div class="kv"><div class="k">Source</div><div>${pill(s.planning_source)}</div><div class="k">Status</div><div>${pill(s.plan_status)}</div><div class="k">Summary</div><div>${esc(summary||'No plan summary')}</div><div class="k">Plan ref</div><div>${esc(get(s,'refs.plan','')||'—')}</div></div>`;
+  const cm=s.context_manifest||{};
+  const groups=[['Implementation refs',cm.implementation_refs],['Verification refs',cm.verification_refs],['Research refs',cm.research_refs]];
+  $('context-card').innerHTML=groups.map(([label,items])=>`<h4 style="margin:10px 0 6px;font-size:13px">${esc(label)}</h4>${list(items||[],i=>lineItem(i.ref||i.file||i.owner_file||asText(i),i.reason||i.owner_section||''))}`).join('');
+}
+function renderWork(data){
+  const ledger=get(data,'blocks.aidp_open_ledger.data.aidp_open_ledger',{});
+  const caps=arr(ledger.capabilities);
+  $('capability-card').innerHTML=caps.length?caps.map(cap=>{
+    const stages=arr(cap.stages); const done=stages.filter(s=>s.status==='done').length; const pct=stages.length?Math.round(done/stages.length*100):0;
+    return `<div class="item"><div class="item-title"><span><b>${esc(cap.id||'Capability')}</b> ${esc(cap.title||'')}</span>${pill(cap.status)}</div><div class="item-meta">risk ${cap.risk||'—'} · current ${cap.current_stage||'—'} · capability proof ${cap.capability_proof_status||cap.proof_status||'—'}</div><div class="progress" style="margin-top:10px"><div style="width:${pct}%"></div></div>${stages.length?stages.map(st=>`<div class="stage-row"><div><div class="stage-title">${esc(st.id||'')} ${esc(st.title||'')}</div><div class="stage-meta">proof: ${esc(st.proof_status||'unknown')} ${st.proof_ref?'· '+esc(st.proof_ref):''}</div></div><div>${pill(st.status||'unknown')}</div></div>`).join(''):'<div class="item-meta">No stages listed</div>'}</div>`;
+  }).join(''):empty('No capability projection');
+  const ledgerGroups=[['Open items',ledger.open_items],['Parked items',ledger.parked_items],['Open risks',ledger.open_risks],['Blockers',ledger.blockers],['Pending proofs',ledger.pending_proofs],['Cleanup obligations',ledger.cleanup_obligations],['Operator warnings',ledger.operator_warnings]];
+  $('ledger-card').innerHTML=ledgerGroups.map(([label,items])=>`<h4 style="margin:10px 0 6px;font-size:13px">${esc(label)} <span class="pill">${arr(items).length}</span></h4>${list(items,i=>lineItem(asText(i),i.owner_ref||i.review_trigger||i.mitigation||''))}`).join('');
+  const doc=get(data,'document_intake',{}); const tracked=arr(get(data,'blocks.aidp_open_ledger.data.aidp_open_ledger.document_intake',[]));
+  $('doc-card').innerHTML=`<div class="kv"><div class="k">Pending docs</div><div>${pill(arr(doc.pending_documents).length)}</div><div class="k">Awaiting approval</div><div>${pill(arr(doc.candidate_awaiting_approval).length)}</div><div class="k">Recommended route</div><div>${pill(doc.recommended_route||'none')}</div></div><h4 style="margin:14px 0 6px;font-size:13px">Detected documents</h4>${list(doc.pending_documents,i=>lineItem(i.path||asText(i),i.reason||''))}<h4 style="margin:14px 0 6px;font-size:13px">Tracked intake</h4>${list(tracked,i=>lineItem(i.source_document||i.id||asText(i),`status: ${i.intake_status||i.status||'unknown'} · decision: ${i.operator_decision||'—'}`))}`;
+}
+function renderIntelligence(data){
+  const d=data.derived_signals||{}; const action=d.action_boundary||{}; const suff=d.plan_sufficiency||{}; const pc=d.proof_candidates||{}; const pressure=data.consolidation_pressure||{};
+  kv('action-card', [['Level',pill(action.level)],['Confidence',pill(action.confidence)],['Source',action.source||'—'],['Indicators',arr(action.indicators).join(', ')||'—']]);
+  kv('suff-card', [['Status',pill(suff.status)],['Confidence',pill(suff.confidence)],['Source',suff.source||'—'],['Reasons',arr(suff.reasons).join(', ')||'—']]);
+  $('proof-candidates-card').innerHTML=list(arr(pc.items),i=>lineItem(i.suggested_artifact||i.reason||asText(i),`source: ${i.source_item||'—'} · confidence: ${i.confidence||'—'}`));
+  const prompt=pressure.prompt||''; $('audit-prompt').value=prompt;
+  $('pressure-card').innerHTML=`<div class="kv"><div class="k">Score</div><div>${esc(pressure.score??0)}</div><div class="k">Level</div><div>${pill(pressure.level||'unknown')}</div><div class="k">Operator warning</div><div>${pill(pressure.operator_warning_required?'yes':'no')}</div><div class="k">Agent warning</div><div>${pill(pressure.agent_warning_required?'yes':'no')}</div><div class="k">Recommended route</div><div>${pill(pressure.recommended_route||'none')}</div></div><h4 style="margin:14px 0 6px;font-size:13px">Reasons</h4>${list(arr(pressure.reasons),i=>lineItem(i.signal||asText(i),i.detail||'',pill(i.level||'info')))}`;
+}
+function renderKnowledge(data){
+  const bp=get(data,'blocks.aidp_blueprint_index.data.aidp_blueprint_index',{}); const hist=get(data,'blocks.aidp_history_index.data.aidp_history_index',{});
+  $('blueprint-card').innerHTML=`<h4 style="margin:6px 0">Durable risks</h4>${list(bp.durable_risks,i=>lineItem(i.id||i.name||i.area||asText(i),`${i.area||''} ${i.owner_section||''} ${i.status||''}`,pill(i.severity||i.risk||'info')))}<h4 style="margin:14px 0 6px">Canonical neighborhoods</h4>${list(bp.canonical_neighborhoods,i=>lineItem(i.name||i.id||asText(i),Array.isArray(i.refs)?i.refs.join(', '):(i.refs||i.owner_section||'')))}<h4 style="margin:14px 0 6px">Durable boundaries</h4>${list(bp.durable_boundaries,i=>lineItem(i.name||i.id||i.area||asText(i),`${i.owner_section||''} ${i.status||''}`,pill(i.risk||i.severity||'info')))}`;
+  $('history-card').innerHTML=`<div class="kv"><div class="k">Archived</div><div>${esc(get(hist,'summary.total_archived',0))}</div><div class="k">Superseded</div><div>${esc(get(hist,'summary.total_superseded',0))}</div><div class="k">Recent limit</div><div>${esc(get(hist,'summary.recent_limit','—'))}</div></div><h4 style="margin:14px 0 6px">Recent entries</h4>${list(hist.recent_entries,i=>lineItem(i.id||asText(i),`${i.route||''} · ${i.final_status||''} · proof ${i.proof_status||''}`))}`;
+}
+function renderWarnings(data){
+  const warnings=allWarnings(data); const f=warningFilter.toLowerCase(); const shown=warnings.filter(w=>asText(w).toLowerCase().includes(f)||JSON.stringify(w).toLowerCase().includes(f));
+  $('warnings-card').innerHTML=shown.length?`<div class="list">${shown.map((w,idx)=>lineItem(asText(w),`level: ${warningSeverity(w)}`,`<button class="btn" type="button" onclick="showWarning(${idx})">Details</button>`)).join('')}</div>`:empty('No warnings');
+  $('top-warnings').innerHTML=warnings.length?`<div class="list">${warnings.slice(0,5).map(w=>lineItem(asText(w),`level: ${warningSeverity(w)}`,pill(warningSeverity(w)))).join('')}</div>`:empty('No warnings');
+}
+function renderRaw(data){$('raw-json').textContent=JSON.stringify(data.blocks,null,2);}
+function render(data){
+  lastData=data; buildNav(); renderState(data); renderPlan(data); renderWork(data); renderIntelligence(data); renderKnowledge(data); renderWarnings(data); renderRaw(data); $('last').textContent=new Date().toLocaleTimeString(); $('refresh-state').textContent='current'; $('refresh-state').className='pill green';
+}
+function renderWhenSafe(data){
+  if(isInteracting()){ pendingData=data; $('refresh-state').textContent='paused while copying/selecting'; $('refresh-state').className='pill yellow'; return; }
+  pendingData=null; render(data);
+}
+function flushPending(){ if(pendingData&&!isInteracting()){ const d=pendingData; pendingData=null; render(d); }}
+async function load(){ const res=await fetch('/api/state',{cache:'no-store'}); if(!res.ok) throw new Error(`HTTP ${res.status}`); const data=await res.json(); renderWhenSafe(data); }
+async function loadNow(){ try{ await load(); } catch(e){ $('refresh-state').textContent='load failed'; $('refresh-state').className='pill red'; $('top-warnings').innerHTML=`<span class="red">${esc(e.message||e)}</span>`; }}
+function buildNav(){ const counts=navCounts(lastData||{}); $('nav').innerHTML=pages.map(([id,label])=>`<button type="button" class="${id===currentPage?'active':''}" data-page="${id}"><span>${label}</span>${counts[id]?`<span class="count">${esc(counts[id])}</span>`:''}</button>`).join(''); document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>setPage(b.dataset.page)); }
+function navCounts(data){ const warnings=allWarnings(data).length; const ledger=get(data,'blocks.aidp_open_ledger.data.aidp_open_ledger',{}); return {overview:'',work:String(arr(ledger.capabilities).length+arr(get(data,'document_intake.pending_documents',[])).length||''),intelligence:get(data,'consolidation_pressure.level','')||'',knowledge:'',warnings:warnings?String(warnings):'',raw:''}; }
+function setPage(id){ currentPage=id; document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.page===id)); buildNav(); $('page-title').textContent=pages.find(p=>p[0]===id)?.[1]||'Monitor'; }
+function showWarning(idx){ const warnings=allWarnings(lastData||{}); showModal('Warning details', warnings[idx]||{}); }
+window.showWarning=showWarning;
+async function copyText(value){ if(!value){showToast('Nothing to copy'); return;} try{ await navigator.clipboard.writeText(value); showToast('Copied'); } catch(e){ const ta=$('audit-prompt'); ta.focus(); ta.select(); document.execCommand('copy'); showToast('Copied'); }}
+$('copy-prompt-btn').onclick=()=>copyText($('audit-prompt').value);
+$('refresh-btn').onclick=()=>loadNow();
+$('pause-btn').onclick=()=>{paused=!paused; $('pause-btn').textContent=paused?'Resume':'Pause'; $('refresh-state').textContent=paused?'paused':'current'; $('refresh-state').className=paused?'pill yellow':'pill green'; if(!paused) loadNow();};
+$('warning-filter').addEventListener('input', e=>{ warningFilter=e.target.value; if(lastData) renderWarnings(lastData); });
+document.querySelectorAll('[data-modal]').forEach(b=>b.onclick=()=>showModal('All warnings', allWarnings(lastData||{})));
+document.addEventListener('focusout',()=>setTimeout(flushPending,100));
+document.addEventListener('selectionchange',()=>setTimeout(flushPending,160));
+setPage('overview'); loadNow(); setInterval(()=>{ if(!paused) loadNow(); }, refreshMs);
+</script>
+</body>
+</html>

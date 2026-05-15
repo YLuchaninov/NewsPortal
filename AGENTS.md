@@ -2,6 +2,7 @@
 
 Если в репозитории есть `.aidp/`, AIDP активен.
 
+<!-- aidp-router:start -->
 Этот файл является только тонким router-файлом для инструментов. Каноническая runtime-истина живет только в `.aidp/*`; не дублируй здесь архитектуру, команды, рабочее состояние или исторические решения.
 
 Перед обычной работой:
@@ -25,3 +26,10 @@ Plan Mode, Ask Mode, design mode, Spec Kit и external specs являются op
 Наблюдения не становятся канонической истиной, пока они не перепроверены по репозиторию и не записаны в правильный owner-файл под `.aidp/*`.
 Durable truth нельзя хранить в этом router-файле.
 Если явно запрошен аудит, сначала выполняй read-only анализ и применяй исправления только после явного разрешения.
+
+Monitor-readable blocks, dashboard state, derived warnings and consolidation pressure are projections/recommendations, not canon and not proof. Do not place monitor blocks in this router.
+
+Перед product/source/config/test writes `.aidp/work.md` must already contain a matching active item; a verbal promise is not enough.
+
+Document Intake / Requirement Intake is a `docs-operator` subprocedure, not a route. Memory consolidation review is an `audit` subprocedure, not a route.
+<!-- aidp-router:end -->

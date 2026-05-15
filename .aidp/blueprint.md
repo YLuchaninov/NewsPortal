@@ -128,6 +128,88 @@ Blueprint context обязателен до writes, которые меняют 
 - State/data boundary: PostgreSQL owns business truth; Redis/BullMQ/HNSW/snapshots/cache are transport or derived state.
 - Runtime boundary: compose/nginx/env/health scripts define local delivery baseline; proof harnesses and fixtures are dev/test inputs, not production runtime content.
 - Packaging boundary: production Dockerfiles must not copy `tests/**`, `infra/scripts/**` or `infra/fixtures/**`; package/release proof remains a declared gap until real release commands exist.
+- AIDP/process boundary: `.aidp/*` owns runtime truth for agents; root/tool routers, monitor output, human-docs and product docs are adapters or observations and must not become a second canon.
+
+<!-- aidp-monitor:start aidp_blueprint_index v1 -->
+```yaml
+aidp_blueprint_index:
+  schema: 1
+  projection_status: current
+  durable_risks:
+    - id: BP-RISK-ASYNC-PIPELINE-ROUTING
+      area: async_pipeline_routing
+      severity: high
+      status: tracked
+      owner_section: ".aidp/blueprint.md#зоны-риска"
+      review_trigger: "before relay/BullMQ/sequence/outbox/inbox changes"
+    - id: BP-RISK-DATABASE-MIGRATIONS
+      area: database_migrations_and_schema_repair
+      severity: high
+      status: tracked
+      owner_section: ".aidp/blueprint.md#зоны-риска"
+      review_trigger: "before migration/schema/data repair"
+    - id: BP-RISK-DISCOVERY-LIVE-LLM-BUDGET
+      area: discovery_live_search_llm_budget
+      severity: medium
+      status: tracked
+      owner_section: ".aidp/blueprint.md#зоны-риска"
+      review_trigger: "before discovery/live-provider/LLM budget changes"
+    - id: BP-RISK-AIDP-SECOND-CANON
+      area: aidp_process_truth
+      severity: medium
+      status: tracked
+      owner_section: ".aidp/blueprint.md#durable-boundary-summary"
+      review_trigger: "before AIDP/router/monitor/human-doc migration"
+  canonical_neighborhoods:
+    - id: UI-ADMIN
+      name: "Admin UI work"
+      owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
+      refs:
+        - "apps/admin"
+        - "packages/ui"
+        - "packages/control-plane"
+    - id: API-CONTROL-PLANE
+      name: "API/control-plane work"
+      owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
+      refs:
+        - "services/api"
+        - "services/mcp"
+        - "packages/sdk"
+        - "packages/control-plane"
+    - id: SOURCE-DISCOVERY-SELECTION
+      name: "Fetcher/discovery/selection work"
+      owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
+      refs:
+        - "services/fetchers"
+        - "services/workers"
+        - ".aidp/contracts/discovery-agent.md"
+        - ".aidp/contracts/article-pipeline-core.md"
+    - id: DELIVERY-RUNTIME
+      name: "Delivery/runtime work"
+      owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
+      refs:
+        - "infra/docker"
+        - "infra/nginx"
+        - ".env.example"
+  durable_boundaries:
+    - id: DB-SOURCE-OF-TRUTH
+      name: "PostgreSQL owns business truth"
+      owner_section: ".aidp/blueprint.md#ключевые-инварианты"
+      risk: high
+    - id: SOURCE-VS-PROCESSING
+      name: "Fetchers own acquisition; workers own processing/selection"
+      owner_section: ".aidp/blueprint.md#карта-границ"
+      risk: medium
+    - id: SYSTEM-SELECTION-VS-PERSONALIZATION
+      name: "System-selected content and personalization are separate layers"
+      owner_section: ".aidp/blueprint.md#ключевые-инварианты"
+      risk: medium
+    - id: AIDP-RUNTIME-TRUTH
+      name: ".aidp/* owns agent runtime truth; routers/docs/monitor are not canon"
+      owner_section: ".aidp/blueprint.md#durable-boundary-summary"
+      risk: medium
+```
+<!-- aidp-monitor:end -->
 
 ## Структурные правила
 

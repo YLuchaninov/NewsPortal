@@ -6,6 +6,73 @@ Lifecycle mode отвечает на вопрос, готова ли ОС к о�
 
 `normal` не является рабочим маршрутом. Если lifecycle mode равен `normal`, перед содержательной работой нужно выбрать ровно один work route.
 
+<!-- aidp-monitor:start aidp_routes_index v1 -->
+```yaml
+aidp_routes_index:
+  schema: 1
+  projection_status: current
+  routes:
+    - route: bootstrap
+      planning: conditional
+      blueprint_context: required
+      proof: setup-exit-proof
+      context_manifest: recommended
+      cleanup_tracking: conditional
+      default_risk: medium
+    - route: micro-patch
+      planning: not-required
+      blueprint_context: not-applicable-unless-boundary
+      proof: targeted-proof
+      context_manifest: not-required
+      cleanup_tracking: conditional
+      default_risk: low
+    - route: capability
+      planning: required
+      blueprint_context: required-if-boundary-or-architecture
+      proof: stage-proof-and-capability-proof
+      context_manifest: required
+      cleanup_tracking: conditional
+      default_risk: medium
+    - route: bugfix
+      planning: conditional
+      blueprint_context: required-if-boundary-or-state-related
+      proof: reproducer-or-regression-proof
+      context_manifest: conditional
+      cleanup_tracking: conditional
+      default_risk: low-or-medium
+    - route: sweep
+      planning: required-for-broad-or-boundary-change
+      blueprint_context: required-for-structural-change
+      proof: behavior-preservation-proof
+      context_manifest: required-for-broad-or-boundary-change
+      cleanup_tracking: conditional
+      default_risk: medium
+    - route: audit
+      planning: required-for-non-trivial-audit
+      blueprint_context: conditional
+      proof: read-only-findings-first
+      context_manifest: conditional
+      cleanup_tracking: not-required-while-read-only
+      default_risk: low
+      consolidation_review: supported
+    - route: docs-operator
+      planning: required-for-migration-runtime-docs-or-document-intake
+      blueprint_context: required-if-durable-structure-truth
+      proof: owner-file-alignment
+      context_manifest: required-for-migration-runtime-docs-or-document-intake
+      cleanup_tracking: conditional
+      default_risk: medium
+      document_intake: supported
+    - route: delivery
+      planning: required-for-complex-delivery
+      blueprint_context: required-if-package-boundary-changes
+      proof: artifact-and-install-verification
+      context_manifest: required-for-complex-delivery
+      cleanup_tracking: conditional
+      default_risk: medium-or-high
+```
+<!-- aidp-monitor:end -->
+
 ## Порядок выбора route
 
 1. Если hidden core не инициализирован, шаблонный или неполный, используй lifecycle mode `setup` и work route `bootstrap`.
@@ -83,6 +150,91 @@ Allowed planning sources:
 Planning/spec artifacts не являются canonical truth сами по себе. Они становятся accepted-for-this-item только после сверки с repository reality, selected route, blueprint, engineering и verification constraints.
 
 Не добавляй отдельные work routes `plan`, `planning`, `spec` или `spec-driven`.
+
+## Write-ahead route gate
+
+Перед product/source/config/test writes normal lifecycle mode недостаточен.
+
+1. Сначала classify request в work route.
+2. Проверь, что current active item в `.aidp/work.md` соответствует user request.
+3. Если не соответствует, archive / park / block / mark ready / switch / create matching item.
+4. Запиши allowed paths, route phase, route-specific proof, cleanup expectations, risk/approval and context refs when required.
+5. Только затем выполняй writes.
+
+Product implementation обычно идет через `capability`, `bugfix`, `sweep` или `micro-patch`. Не выполняй product/source writes под `docs-operator`, `audit`, `bootstrap` или repair-oriented work, если active route явно не покрывает эти writes и `.aidp/work.md` не записывает exception.
+
+## Context manifest / focused context
+
+`context_manifest` — refs-only focus aid в `.aidp/work.md`. Он указывает на owner-file sections, specs, research notes или proof refs, которые нужно прочитать для route.
+
+Manifest не содержит durable truth, не пересказывает architecture, requirements или proof, и не является memory store.
+
+Используй его так:
+
+- required для `capability`;
+- required для broad/boundary-changing `sweep`;
+- required для `docs-operator` migration, runtime-core changes, router updates, document intake;
+- required для complex `delivery`;
+- optional для unclear or boundary-related `bugfix`;
+- usually not required для `micro-patch`.
+
+## Document Intake / Requirement Intake subprocedure
+
+Document Intake / Requirement Intake является subprocedure внутри `docs-operator`, а не отдельным route.
+
+Нормальная форма:
+
+```text
+lifecycle mode: normal
+work route: docs-operator
+route phase: document-intake
+```
+
+Если документ выявляет contradiction, unsafe state или broken owner-file truth, используй lifecycle mode `repair` and route `audit` или `docs-operator`.
+
+Sequence:
+
+1. Treat source document as external/spec artifact, not canon.
+2. Identify source path and document type.
+3. Classify content: architecture truth, engineering convention, verification/test/release requirement, product/spec artifact, historical/stale note, or human-only onboarding.
+4. Map candidate impact to owner files.
+5. Check contradictions against code, tests, CI/manifests, current `.aidp/*`, existing docs and monitor projections if present.
+6. Produce candidate changes and unresolved gaps.
+7. Wait for operator approval before durable owner-file updates.
+8. Apply accepted changes through `docs-operator`; if implementation work is created, open/update a `capability` item.
+9. Update monitor projections only as projections of accepted owner-file truth.
+
+Do not copy a source document wholesale into `.aidp/*`. Do not create a new `document-intake` or `requirement-intake` route.
+
+## Memory consolidation review subprocedure
+
+Memory consolidation review является read-only subprocedure внутри `audit`, а не отдельным route.
+
+Используй его при high/critical consolidation pressure или когда оператор просит clean up accumulated AIDP memory.
+
+Sequence:
+
+1. Stay read-only.
+2. Review `aidp_open_ledger`, `aidp_history_index`, `aidp_blueprint_index`, `aidp_verification_index`, monitor warnings and git/worktree state.
+3. Identify stale parked items, duplicate risks, unresolved blockers, pending proofs, repeated failed attempts, stale monitor projections, blueprint gaps and unconsolidated history lessons.
+4. Classify each finding as candidate only: keep, resolve, supersede, archive, reject, needs-operator-decision.
+5. Report top reasons and recommended owner-file actions.
+6. Do not rewrite canonical owner files during read-only audit.
+7. Apply accepted fixes through `docs-operator` or `repair`.
+
+Consolidation pressure is a heuristic recommendation, not proof and not canon.
+
+## Monitor warnings and route behavior
+
+Monitor blocks are projections, not second canon. Derived monitor warnings, consolidation pressure and dashboard state do not create new routes and do not define route behavior.
+
+Use existing routes:
+
+- `audit` for read-only investigation of drift, pressure or derived warnings;
+- `docs-operator` for approved owner-file updates;
+- `repair` when contradictions or unsafe state make normal work invalid.
+
+Do not claim monitor scores or warnings unless current monitor output was read or the signal was computed from current AIDP projections and git/worktree state.
 
 ## AIDP package migration
 
