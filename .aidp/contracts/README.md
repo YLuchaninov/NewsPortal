@@ -24,9 +24,8 @@
 - `.aidp/contracts/browser-assisted-websites.md` — JS-heavy website fallback, fetchers-owned browser runtime, auth header safety, provenance and hard-site proof.
 - `.aidp/contracts/content-analysis-and-gating.md` — persisted content analysis, NER/entities, labels, content filter policies, gate results, admin/API/MCP analysis surfaces and safe enforce rollout rules.
 - `.aidp/contracts/content-model.md` — public universal content vocabulary, content items, content kinds, system-selected collection and user-match layering.
-- `.aidp/contracts/discovery-agent.md` — graph-first plus bounded recall discovery control plane, policy profiles, source scoring, portfolio, feedback and safe runtime flags.
+- `.aidp/contracts/discovery-agent.md` — Discovery vNext runs, typed artifacts, candidates, source inventory, routing, policies, replay and rollback.
 - `.aidp/contracts/feed-ingress-adapters.md` — aggregator-aware RSS/Atom adapter strategies, max-entry-age gating, canonical URL normalization and provenance.
-- `.aidp/contracts/independent-recall-discovery.md` — neutral recall missions/candidates, generic source quality and recall-candidate promotion boundaries.
 - `.aidp/contracts/mcp-control-plane.md` — remote admin MCP endpoint, token/scopes, tools/resources/prompts, audit and delivery boundary.
 - `.aidp/contracts/notifications-and-digests.md` — web push, Telegram, email digest, channel bindings, preferences, delivery logs, scheduler and Mailpit-local proof.
 - `.aidp/contracts/runtime-migrations-and-derived-state.md` — compose/nginx delivery, ordered migrations, `schema_migrations`, HNSW rebuild/check and derived-state rules.

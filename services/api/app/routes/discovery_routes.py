@@ -3,170 +3,101 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from fastapi import APIRouter, Body, FastAPI, Query
+from fastapi import APIRouter, FastAPI, Query
 
-from services.api.app import discovery_source_priors_api as source_priors
-from services.api.app import discovery_v3_api as v3
+from services.api.app import discovery_vnext_api as vnext
 
 
 def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     del deps
     router = APIRouter()
 
-    router.get("/maintenance/discovery/summary")(v3.get_summary)
-    router.get("/maintenance/discovery/autopilot-profiles")(v3.get_autopilot_profiles)
-    router.post("/maintenance/discovery/config/simplify")(v3.simplify_config)
-
-    router.get("/maintenance/discovery/targets")(_list_targets)
-    router.post("/maintenance/discovery/targets", status_code=201)(v3.create_target)
-    router.post("/maintenance/discovery/targets/create-simple", status_code=201)(v3.create_simple_target)
-    router.get("/maintenance/discovery/targets/{target_id}")(_get_target)
-    router.patch("/maintenance/discovery/targets/{target_id}")(v3.update_target)
-    router.get("/maintenance/discovery/targets/{target_id}/coverage")(v3.latest_coverage)
-    router.get("/maintenance/discovery/targets/{target_id}/coverage/explain")(v3.explain_coverage)
-    router.post("/maintenance/discovery/targets/{target_id}/refresh-coverage")(v3.refresh_coverage)
-    router.post("/maintenance/discovery/targets/{target_id}/expand-gap")(_expand_gap)
-
-    router.get("/maintenance/discovery/runs")(_list_runs)
-    router.post("/maintenance/discovery/runs", status_code=201)(v3.create_run)
-    router.post("/maintenance/discovery/runs/dispatch-queued")(v3.dispatch_queued_runs)
-    router.get("/maintenance/discovery/runs/{run_id}")(_get_run)
-    router.post("/maintenance/discovery/runs/{run_id}/diagnose")(v3.diagnose_run)
-    router.post("/maintenance/discovery/runs/{run_id}/cancel")(v3.cancel_run)
-
-    router.get("/maintenance/discovery/source-priors")(_list_source_priors)
-    router.post("/maintenance/discovery/source-priors/evaluate")(source_priors.evaluate_source_prior)
-    router.post("/maintenance/discovery/source-priors/apply")(source_priors.apply_source_prior)
+    router.post("/maintenance/discovery/brief/preview")(vnext.preview_brief)
+    router.post("/maintenance/discovery/artifacts/validate")(vnext.validate_artifact)
+    router.post("/maintenance/discovery/artifacts", status_code=201)(
+        vnext.create_artifact_from_payload
+    )
+    router.post("/maintenance/discovery/runs", status_code=201)(vnext.create_run)
+    router.post("/maintenance/discovery/runs/start", status_code=201)(vnext.start_run)
+    router.post("/maintenance/discovery/runs/{run_id}/diagnose")(vnext.diagnose_run)
+    router.post("/maintenance/discovery/runs/{run_id}/cancel")(vnext.cancel_run)
+    router.post("/maintenance/discovery/mega-loop/preview")(vnext.preview_mega_loop)
+    router.post("/maintenance/discovery/candidates/normalize")(vnext.normalize_candidates)
+    router.post("/maintenance/discovery/candidates", status_code=201)(
+        vnext.create_candidates_from_payload
+    )
+    router.post("/maintenance/discovery/probe/plan/preview")(vnext.preview_probe_plan)
+    router.post("/maintenance/discovery/probe/execute")(vnext.execute_probe_from_payload)
+    router.post("/maintenance/discovery/understand/preview")(vnext.preview_source_understanding)
+    router.post("/maintenance/discovery/route/preview")(vnext.preview_route)
+    router.post("/maintenance/discovery/routing-decisions/apply")(vnext.apply_routing_decision)
+    router.post("/maintenance/discovery/probation/handoff")(vnext.apply_probation_handoff_from_payload)
+    router.post("/maintenance/discovery/policies/validate")(vnext.validate_policy)
+    router.post("/maintenance/discovery/policies/activate", status_code=201)(vnext.activate_policy)
+    router.post("/maintenance/discovery/llm-gateway", status_code=201)(vnext.run_llm_gateway)
+    router.post("/maintenance/discovery/replay", status_code=201)(vnext.start_replay)
+    router.post("/maintenance/discovery/rollback/prepare", status_code=201)(vnext.prepare_rollback)
+    router.post("/maintenance/discovery/rollback/apply")(vnext.apply_rollback)
+    router.post("/maintenance/discovery/feedback", status_code=201)(vnext.submit_feedback)
 
     for public_name, kind in (
-        ("hypotheses", "hypotheses"),
-        ("domains", "domains"),
-        ("endpoints", "endpoints"),
-        ("actions", "actions"),
-        ("contracts", "contracts"),
-        ("claims", "claims"),
-        ("negative-evidence", "negative-evidence"),
-        ("provider-health", "provider-health"),
-        ("identities", "identities"),
-        ("eval-suites", "eval-suites"),
+        ("runs", "runs"),
+        ("artifacts", "artifacts"),
+        ("candidates", "candidates"),
+        ("source-inventory", "source-inventory"),
+        ("policies", "policies"),
+        ("adapter-backlog", "adapter-backlog"),
+        ("feedback", "feedback"),
+        ("replay-runs", "replay-runs"),
+        ("rollback-groups", "rollback-groups"),
+        ("rollback-actions", "rollback-actions"),
         ("eval-runs", "eval-runs"),
-        ("llm-decisions", "llm-decisions"),
+        ("run-steps", "run-steps"),
+        ("query-attempts", "query-attempts"),
+        ("llm-gateway-events", "llm-gateway-events"),
+        ("monitoring-state", "monitoring-state"),
+        ("source-observations", "source-observations"),
     ):
         router.get(f"/maintenance/discovery/{public_name}")(
-            _build_list_handler(kind)
+            _build_vnext_list_handler(kind)
         )
         router.get(f"/maintenance/discovery/{public_name}/{{record_id}}")(
-            _build_get_handler(kind)
+            _build_vnext_get_handler(kind)
         )
-
-    router.post("/maintenance/discovery/endpoints/{endpoint_id}/promote")(v3.promote_endpoint)
-    router.get("/maintenance/discovery/endpoints/{endpoint_id}/explain")(v3.explain_endpoint)
-    router.post("/maintenance/discovery/endpoints/{endpoint_id}/reject")(v3.reject_endpoint)
-    router.post("/maintenance/discovery/endpoints/{endpoint_id}/expand")(v3.expand_endpoint)
-    router.post("/maintenance/discovery/endpoints/{endpoint_id}/mark-duplicate")(
-        v3.mark_endpoint_duplicate
-    )
-    router.post("/maintenance/discovery/contracts/{contract_id}/evaluate")(v3.evaluate_contract)
-    router.post("/maintenance/discovery/providers/{provider_id}/repair")(v3.repair_provider)
-    router.post("/maintenance/discovery/negative-evidence/{negative_evidence_id}/clear-cooldown")(
-        v3.clear_negative_evidence_cooldown
-    )
-    router.post("/maintenance/discovery/eval-suites/{eval_suite_id}/run")(v3.run_eval_suite)
-    router.post("/maintenance/discovery/sources/{channel_id}/expand")(v3.expand_source)
-    router.post("/maintenance/discovery/sources/{channel_id}/replace-candidates")(v3.replace_source_candidates)
 
     app.include_router(router)
 
 
-def _list_targets(
-    page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=200),
-    status: str | None = None,
-) -> dict[str, Any]:
-    return v3.list_v3_records(
-        "targets",
-        page=page,
-        page_size=pageSize,
-        status=status,
-    )
-
-
-def _get_target(target_id: str) -> dict[str, Any]:
-    return v3.get_v3_record("targets", target_id)
-
-
-def _expand_gap(
-    target_id: str,
-    payload: dict[str, Any] = Body(default_factory=dict),
-) -> dict[str, Any]:
-    payload = {key: value for key, value in payload.items() if key not in {"targetId", "target_id"}}
-    return v3.create_run(
-        v3.DiscoveryV3RunCreatePayload(
-            targetId=target_id,
-            runKind="gap_fill",
-            triggerKind="coverage_gap",
-            **payload,
-        )
-    )
-
-
-def _list_runs(
-    page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=200),
-    status: str | None = None,
-    targetId: str | None = None,
-) -> dict[str, Any]:
-    return v3.list_v3_records(
-        "runs",
-        page=page,
-        page_size=pageSize,
-        status=status,
-        target_id=targetId,
-    )
-
-
-def _get_run(run_id: str) -> dict[str, Any]:
-    return v3.get_v3_record("runs", run_id)
-
-
-def _list_source_priors(
-    page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=200),
-    targetId: str | None = None,
-    channelId: str | None = None,
-    endpointId: str | None = None,
-    contractId: str | None = None,
-) -> dict[str, Any]:
-    return source_priors.list_source_priors(
-        page=page,
-        page_size=pageSize,
-        target_id=targetId,
-        channel_id=channelId,
-        endpoint_id=endpointId,
-        contract_id=contractId,
-    )
-
-
-def _build_list_handler(kind: str):
+def _build_vnext_list_handler(kind: str):
     def handler(
         page: int = Query(1, ge=1),
         pageSize: int = Query(50, ge=1, le=200),
         status: str | None = None,
-        targetId: str | None = None,
+        artifactType: str | None = None,
+        interestId: str | None = None,
+        currentState: str | None = None,
+        sourceVoice: str | None = None,
+        artifactFreshnessKind: str | None = None,
+        signalProductionMode: str | None = None,
     ) -> dict[str, Any]:
-        return v3.list_v3_records(
+        return vnext.list_vnext_records(
             kind,
             page=page,
             page_size=pageSize,
             status=status,
-            target_id=targetId,
+            artifact_type=artifactType,
+            interest_id=interestId,
+            current_state=currentState,
+            source_voice=sourceVoice,
+            artifact_freshness_kind=artifactFreshnessKind,
+            signal_production_mode=signalProductionMode,
         )
 
     return handler
 
 
-def _build_get_handler(kind: str):
+def _build_vnext_get_handler(kind: str):
     def handler(record_id: str) -> dict[str, Any]:
-        return v3.get_v3_record(kind, record_id)
+        return vnext.get_vnext_record(kind, record_id)
 
     return handler

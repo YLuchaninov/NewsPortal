@@ -63,18 +63,18 @@ test("MCP live HTTP diagnostics classify local HTML without gateway signals as b
 });
 
 test("MCP live diagnostics can serialize JSON-RPC tool errors for artifacts", () => {
-  const error = new Error("MCP tool discovery.endpoints.promote failed.");
+  const error = new Error("MCP tool discovery.routing.apply failed.");
   error.mcpDiagnostics = {
     rpcMethod: "tools/call",
-    toolName: "discovery.endpoints.promote",
+    toolName: "discovery.routing.apply",
     errorCode: -32000,
     errorMessage: "Request failed with 422 Unprocessable Entity.",
     errorData: {
       statusCode: 422,
-      detail: ["endpoint has insufficient evidence for probation promotion"],
+      detail: ["routing payload failed Discovery vNext validation"],
     },
     requestArgs: {
-      endpointId: "endpoint-1",
+      candidateId: "candidate-1",
     },
     response: {
       error: {
@@ -85,10 +85,10 @@ test("MCP live diagnostics can serialize JSON-RPC tool errors for artifacts", ()
 
   const diagnostics = extractMcpDiagnostics(error);
   assert.ok(diagnostics);
-  assert.equal(diagnostics?.toolName, "discovery.endpoints.promote");
+  assert.equal(diagnostics?.toolName, "discovery.routing.apply");
   assert.equal(diagnostics?.errorCode, -32000);
   assert.equal(diagnostics?.errorData?.statusCode, 422);
   assert.deepEqual(diagnostics?.requestArgs, {
-    endpointId: "endpoint-1",
+    candidateId: "candidate-1",
   });
 });

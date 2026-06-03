@@ -34,6 +34,10 @@ const STACK_SERVICES = [
   "nginx",
 ];
 
+if (!String(process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST ?? "").trim()) {
+  process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST = "127.0.0.1";
+}
+
 function log(message) {
   console.log(`[website-admin] ${message}`);
 }
@@ -608,6 +612,8 @@ async function main() {
     runCompose(
       "exec",
       "-T",
+      "-e",
+      `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST=127.0.0.1:${fixtureServer.port}`,
       "fetchers",
       "pnpm",
       "--filter",

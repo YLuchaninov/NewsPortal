@@ -1,6 +1,7 @@
 import {
   parseRssChannelConfig,
-  resolveSourceChannelAuthorizationHeader
+  resolveSourceChannelAuthorizationHeader,
+  type FeedIngressAdapterStrategy
 } from "@newsportal/contracts";
 
 import type { FetchersConfig } from "./config";
@@ -35,6 +36,8 @@ interface RssChannelPollerDependencies {
     completion: ChannelPollCompletion
   ) => Promise<void>;
   addDuplicateArticleCount: (count: number) => void;
+  adapterStrategy?: FeedIngressAdapterStrategy;
+  adapterMaxEntryAgeHours?: number | null;
 }
 
 export async function pollRssProviderChannel(
@@ -201,7 +204,9 @@ export async function pollRssProviderChannel(
       rssConfig,
       fetchedAt,
       contentType: response.headers.get("content-type"),
-      responseBody
+      responseBody,
+      strategy: dependencies.adapterStrategy,
+      maxEntryAgeHours: dependencies.adapterMaxEntryAgeHours
     });
     const items = adaptedFeed.entries;
     let invalidItemCount = 0;

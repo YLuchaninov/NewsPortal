@@ -396,6 +396,39 @@ test("retryArticleEnrichment posts to the dedicated maintenance route", async ()
   assert.match(requestedBody, /"requestedBy":"admin-1"/);
 });
 
+test("getArticleSelectionSummary reads the raw-versus-selected count endpoint", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(
+        JSON.stringify({
+          counts: {
+            rawArticleObservations: 185,
+            selectedArticleSignals: 0,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as typeof fetch,
+  });
+
+  const summary = await sdk.getArticleSelectionSummary<Record<string, unknown>>();
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/articles/selection-summary"
+  );
+  assert.deepEqual(summary.counts, {
+    rawArticleObservations: 185,
+    selectedArticleSignals: 0,
+  });
+});
+
 test("listSequencesPage sends pagination params to sequence maintenance", async () => {
   let requestedUrl = "";
   const sdk = createNewsPortalSdk({
@@ -551,6 +584,33 @@ test("listOutboxEvents preserves explicit limit", async () => {
   await sdk.listOutboxEvents<Record<string, unknown>[]>(15);
 
   assert.equal(requestedUrl, "http://api.example.test/maintenance/outbox?limit=15");
+});
+
+test("listOutboxEvents sends aggregate filters", async () => {
+  let requestedUrl = "";
+  const sdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch,
+  });
+
+  await sdk.listOutboxEvents<Record<string, unknown>[]>({
+    limit: 10,
+    eventType: "source.channel.sync.requested",
+    aggregateType: "source_channel",
+    aggregateId: "channel-1",
+    status: "pending",
+  });
+
+  assert.equal(
+    requestedUrl,
+    "http://api.example.test/maintenance/outbox?limit=10&eventType=source.channel.sync.requested&aggregateType=source_channel&aggregateId=channel-1&status=pending"
+  );
 });
 
 test("listLlmTemplatesPage and listSystemInterestsPage send independent pagination params", async () => {

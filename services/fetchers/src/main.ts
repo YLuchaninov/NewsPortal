@@ -5,6 +5,7 @@ import { checkPostgres, createPgPool } from "./db";
 import { ArticleEnrichmentService } from "./enrichment";
 import { planFeedAlternativesForDiscovery } from "./feed-alternatives";
 import { probeFeedsForDiscovery } from "./feed-probe";
+import { dryRunIngressAdapter } from "./ingress-adapters/dry-run";
 import { ResourceEnrichmentService } from "./resource-enrichment";
 import { RssFetcherService } from "./fetchers";
 import { validateUrlsForDiscovery } from "./url-validation";
@@ -80,6 +81,26 @@ app.post<{ Params: { resourceId: string }; Body: { force?: boolean } }>(
         documents_count: 0,
         media_count: 0,
         error: message,
+      };
+    }
+  }
+);
+
+app.post<{ Body: Record<string, unknown> }>(
+  "/internal/ingress-adapters/dry-run",
+  async (request, reply) => {
+    try {
+      return await dryRunIngressAdapter(request.body ?? {});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ingress adapter dry-run failed.";
+      app.log.error({ error }, "Fetchers ingress adapter dry-run route failed.");
+      reply.code(400);
+      return {
+        adapterKey: String(request.body?.adapterKey ?? ""),
+        status: "failed",
+        itemsPreview: [],
+        diagnostics: [{ level: "error", message }],
+        providerMetrics: { fetchedItemCount: 0, validDraftCount: 0 },
       };
     }
   }
@@ -214,7 +235,7 @@ app.post<{ Body: { urls?: unknown } }>(
   }
 );
 
-app.post<{ Body: { urls?: unknown; sampleCount?: unknown } }>(
+app.post<{ Body: { urls?: unknown; sampleCount?: unknown; allowBrowser?: unknown } }>(
   "/internal/discovery/websites/probe",
   async (request, reply) => {
     const rawUrls = Array.isArray(request.body?.urls) ? request.body?.urls : [];
@@ -230,6 +251,7 @@ app.post<{ Body: { urls?: unknown; sampleCount?: unknown } }>(
       typeof request.body?.sampleCount === "number" && Number.isFinite(request.body.sampleCount)
         ? Math.max(1, Math.min(10, Math.round(request.body.sampleCount)))
         : 5;
+    const allowBrowser = request.body?.allowBrowser === true;
     if (urls.length === 0) {
       reply.code(400);
       return {
@@ -243,6 +265,9 @@ app.post<{ Body: { urls?: unknown; sampleCount?: unknown } }>(
         pool,
         urls,
         sampleCount,
+        config: {
+          browserFallbackEnabled: allowBrowser,
+        },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Discovery website probe failed.";

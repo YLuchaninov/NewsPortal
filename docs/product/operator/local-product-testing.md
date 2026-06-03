@@ -52,9 +52,7 @@ pnpm test:product:mega-flow:compose
 - Example B: developer news discovery;
 - Example C: outsourcing / procurement discovery.
 
-Команда пишет `/tmp/newsportal-product-mega-flow-<runId>.json|md`. Она требует `pass` от live discovery для A/B/C и минимум одну live-discovery статью/новость в `final_selection_results` для каждого Example A/B/C. Стабильные deterministic fixtures используют для provider-каналов, negative/filter buckets, sequence cancel/fail/retry и согласованности Web/Admin/MCP read surfaces, но они не закрывают live-selected-article acceptance. Multi-run yield остается отдельным proof: `pnpm test:discovery:yield:compose`. Для диагностического запуска внутри parent-harness можно добавить `--with-yield-proof`.
-
-Важно: это не замена 9-domain discovery matrix. `pnpm test:discovery:mega:compose` остается отдельным residual/yield diagnostic proof, где `yield_weak` может быть допустимой классификацией live internet residuals.
+Команда пишет `/tmp/newsportal-product-mega-flow-<runId>.json|md`. После Discovery vNext cutover она проверяет только текущие product/runtime/provider/read-surface gates; отдельный live-yield proof для старой discovery модели удален.
 
 ## Total Live Product Audit
 
@@ -115,9 +113,11 @@ Discovery:
 
 ```sh
 pnpm test:discovery-enabled:compose
-pnpm test:discovery:admin:compose
-pnpm test:discovery:examples:compose
+pnpm test:mcp:http:discovery
+pnpm test:discovery:vnext-flow
 ```
+
+Optional live-provider Discovery vNext checks are separate and gated by explicit env, credentials and positive budget: `pnpm test:discovery:vnext-mcp-live-gap-flow:*` and `pnpm test:discovery:vnext-mcp-live-signal-flow:*`.
 
 MCP:
 

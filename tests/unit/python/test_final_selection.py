@@ -636,6 +636,48 @@ class FinalSelectionLogicTests(unittest.TestCase):
             "project_intent",
         )
 
+    def test_strong_item_level_project_candidate_signal_selects_without_semantic_match(self) -> None:
+        summary = summarize_final_selection_result(
+            total_filter_count=15,
+            matched_filter_count=0,
+            no_match_filter_count=13,
+            gray_zone_filter_count=2,
+            llm_review_pending_filter_count=0,
+            hold_filter_count=2,
+            technical_filtered_out_count=0,
+            verification_state="medium",
+            candidate_signal_uplift_count=2,
+            candidate_signal_eligible_count=4,
+            candidate_signal_tier="project_intent",
+            candidate_signal_tier_counts={"project_intent": 4},
+        )
+
+        self.assertEqual(summary["decision"], "selected")
+        self.assertTrue(summary["isSelected"])
+        self.assertEqual(summary["compatSystemFeedDecision"], "eligible")
+        self.assertEqual(summary["selectionReason"], "strong_item_level_candidate_signal")
+
+    def test_candidate_signal_consensus_still_respects_document_level_veto(self) -> None:
+        summary = summarize_final_selection_result(
+            total_filter_count=13,
+            matched_filter_count=0,
+            no_match_filter_count=0,
+            gray_zone_filter_count=2,
+            llm_review_pending_filter_count=0,
+            hold_filter_count=2,
+            technical_filtered_out_count=13,
+            verification_state="medium",
+            candidate_signal_uplift_count=2,
+            candidate_signal_eligible_count=4,
+            candidate_signal_tier="project_intent",
+            candidate_signal_tier_counts={"project_intent": 4},
+            filter_reason_counts={"wrapper_directory_noise": 13},
+        )
+
+        self.assertEqual(summary["decision"], "rejected")
+        self.assertFalse(summary["isSelected"])
+        self.assertEqual(summary["selectionReason"], "document_level_technical_filter")
+
     def test_candidate_signal_uplift_does_not_treat_top_vendor_listicles_as_generic_positive_signal(self) -> None:
         decision, explain = apply_document_candidate_signal_uplift(
             title="Top 10 implementation partners in 2026",

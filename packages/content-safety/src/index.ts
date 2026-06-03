@@ -52,9 +52,12 @@ const FORBIDDEN_TAGS = [
   "iframe",
   "math",
   "object",
+  "option",
   "script",
   "style",
   "svg",
+  "textarea",
+  "xmp",
 ] as const;
 
 const SAFE_URL_PROTOCOLS = ["http", "https", "mailto"] as const;

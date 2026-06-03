@@ -114,6 +114,7 @@ export const ADMIN_ACTION_TOKEN_TARGETS = [
   { scope: "content-analysis-policies", targetPath: "/bff/admin/content-analysis-policies" },
   { scope: "content-filter-policies", targetPath: "/bff/admin/content-filter-policies" },
   { scope: "discovery", targetPath: "/bff/admin/discovery" },
+  { scope: "ingress-adapters", targetPath: "/bff/admin/ingress-adapters" },
   { scope: "mcp-tokens", targetPath: "/bff/admin/mcp-tokens" },
   { scope: "moderation", targetPath: "/bff/admin/moderation" },
   { scope: "reindex", targetPath: "/bff/admin/reindex" },

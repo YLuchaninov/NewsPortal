@@ -54,6 +54,7 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareWebAction(request, {
+    actionToken: { scope: "notification-channels" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["notification-channels"],
     payloadBoundaryName: "notification-channels payload",
   });

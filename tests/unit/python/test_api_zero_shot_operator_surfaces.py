@@ -37,6 +37,58 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("as final_selection_duplicate_article_count_for_canonical", items_sql)
         self.assertIn("as final_selection_reuse_source", items_sql)
 
+    def test_list_articles_supports_channel_and_query_filters(self) -> None:
+        with (
+            patch.object(api_main, "query_count", return_value=0) as query_count,
+            patch.object(api_main, "query_all", return_value=[]) as query_all,
+        ):
+            api_main.list_articles(
+                page=1,
+                page_size=20,
+                channel_id="00000000-0000-4000-8000-000000000001",
+                q="security advisory",
+            )
+
+        count_sql, count_params = query_count.call_args.args
+        self.assertIn("a.channel_id = %s", count_sql)
+        self.assertIn("concat_ws(' ', coalesce(a.title, ''), coalesce(a.lead, ''), coalesce(a.url, '')) ilike %s escape '\\'", count_sql)
+        self.assertEqual(
+            count_params,
+            ("00000000-0000-4000-8000-000000000001", "%security advisory%"),
+        )
+        items_sql, items_params = query_all.call_args.args
+        self.assertIn("a.channel_id = %s", items_sql)
+        self.assertEqual(
+            items_params,
+            ("00000000-0000-4000-8000-000000000001", "%security advisory%", 20, 0),
+        )
+
+    def test_article_selection_summary_separates_raw_observations_from_signals(self) -> None:
+        count_values = iter([185, 1, 0])
+        decision_rows = [
+            {
+                "decision": "rejected",
+                "count": 185,
+                "selected_count": 0,
+                "hold_count": 0,
+                "llm_review_pending_count": 0,
+            }
+        ]
+        with (
+            patch.object(api_main, "query_count", side_effect=lambda *_args: next(count_values)) as query_count,
+            patch.object(api_main, "query_all", return_value=decision_rows) as query_all,
+        ):
+            summary = api_main.summarize_article_selection_counts()
+
+        self.assertEqual(summary["counts"]["rawArticleObservations"], 185)
+        self.assertEqual(summary["counts"]["blockedArticleObservations"], 1)
+        self.assertEqual(summary["counts"]["pendingSelectionRows"], 0)
+        self.assertEqual(summary["counts"]["selectedArticleSignals"], 0)
+        self.assertEqual(summary["counts"]["rejectedRows"], 185)
+        self.assertIn("Raw article observations", summary["interpretation"])
+        query_count.assert_called()
+        self.assertIn("from final_selection_results", query_all.call_args.args[0])
+
     def test_get_article_query_exposes_canonical_and_story_cluster_context(self) -> None:
         with (
             patch.object(api_main, "query_one", return_value={"doc_id": "doc-1"}) as query_one,
@@ -435,7 +487,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 ],
             ),
         ):
-            result = api_main.get_content_item_explain("editorial:doc-1")
+            result = api_main.get_content_item_explain(
+                "editorial:00000000-0000-4000-8000-000000000001"
+            )
 
         explain = result["selection_explain"]
         self.assertEqual(explain["canonicalDocumentId"], "canonical-1")
@@ -466,7 +520,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 side_effect=[None, {"decision": "eligible"}],
             ),
         ):
-            result = api_main.get_content_item_explain("editorial:doc-compat")
+            result = api_main.get_content_item_explain(
+                "editorial:00000000-0000-4000-8000-000000000002"
+            )
 
         explain = result["selection_explain"]
         self.assertEqual(explain["source"], "system_feed_results")
@@ -477,7 +533,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
 
     def test_get_content_item_falls_back_to_editorial_article_when_family_preview_hides_exact_duplicate(self) -> None:
         article = {
-            "doc_id": "doc-dup",
+            "doc_id": "00000000-0000-4000-8000-000000000003",
             "url": "https://example.test/dup",
             "title": "Duplicate article",
             "lead": "Lead",
@@ -515,14 +571,22 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                     status_code=404, detail="Content item not found."
                 ),
             ) as get_preview,
+            patch.object(api_main, "load_content_analysis_summary", return_value={}),
         ):
-            result = api_main.get_content_item("editorial:doc-dup")
+            result = api_main.get_content_item(
+                "editorial:00000000-0000-4000-8000-000000000003"
+            )
 
-        get_article.assert_called_once_with("doc-dup")
-        get_preview.assert_called_once_with("editorial:doc-dup")
-        self.assertEqual(result["content_item_id"], "editorial:doc-dup")
+        get_article.assert_called_once_with("00000000-0000-4000-8000-000000000003")
+        get_preview.assert_called_once_with(
+            "editorial:00000000-0000-4000-8000-000000000003"
+        )
+        self.assertEqual(
+            result["content_item_id"],
+            "editorial:00000000-0000-4000-8000-000000000003",
+        )
         self.assertEqual(result["origin_type"], "editorial")
-        self.assertEqual(result["origin_id"], "doc-dup")
+        self.assertEqual(result["origin_id"], "00000000-0000-4000-8000-000000000003")
         self.assertEqual(result["system_selection_decision"], "selected")
         self.assertEqual(result["system_selected"], True)
         self.assertEqual(result["summary"], "Lead")

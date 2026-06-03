@@ -14,6 +14,7 @@ export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
   const prepared = await prepareWebAction(request, {
     authSetCookie: true,
+    actionToken: { scope: "content-state" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["content-state"],
     payloadBoundaryName: "content-state payload",
   });

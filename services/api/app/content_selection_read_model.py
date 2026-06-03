@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from uuid import UUID
 from typing import Any, Mapping
 
 from fastapi import HTTPException
 
 from services.api.app.database import query_one
+from services.api.app.content_selection_summary import (
+    ABSENT_CANDIDATE_RECOVERY_SUMMARY,
+    resolve_candidate_recovery_summary,
+    resolve_selection_mode_summary,
+)
 from services.api.app.json_read_model import (
     as_json_bool,
     as_json_int,
@@ -157,6 +163,10 @@ def parse_content_item_id(content_item_id: str) -> tuple[str, str]:
     origin_type, separator, origin_id = str(content_item_id or "").partition(":")
     if separator != ":" or origin_type not in CONTENT_ITEM_ORIGINS or not origin_id:
         raise HTTPException(status_code=404, detail="Content item not found.")
+    try:
+        origin_id = str(UUID(origin_id))
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=404, detail="Content item not found.") from error
     return origin_type, origin_id
 
 
@@ -310,65 +320,20 @@ def build_selection_explain_payload(
         or None
     )
 
-    if final_decision == "gray_zone":
-        if candidate_signal_uplift_count and (
-            llm_review_pending_count > 0 or compatibility_decision == "pending_llm"
-        ):
-            selection_mode = "llm_review_pending"
-            selection_summary = "Recovered candidate waiting for LLM review"
-        elif llm_review_pending_count > 0 or compatibility_decision == "pending_llm":
-            selection_mode = "llm_review_pending"
-            selection_summary = "Gray zone pending LLM review"
-        elif candidate_signal_uplift_count and (
-            hold_count > 0 or selection_reason == "candidate_signal_hold"
-        ):
-            selection_mode = "hold"
-            selection_summary = "Recovered candidate held by profile policy"
-        elif hold_count > 0 or selection_reason == "semantic_hold":
-            selection_mode = "hold"
-            selection_summary = "Gray zone held by profile policy"
-        elif candidate_signal_uplift_count:
-            selection_mode = "gray_zone"
-            selection_summary = "Recovered candidate remains in gray zone"
-        else:
-            selection_mode = "gray_zone"
-            selection_summary = "Gray zone unresolved"
-    elif final_decision == "selected":
-        selection_mode = "selected"
-        selection_summary = "Selected by final-selection policy"
-    elif final_decision == "rejected":
-        selection_mode = "rejected"
-        selection_summary = "Rejected by final-selection policy"
-    elif compatibility_decision == "pending_llm":
-        selection_mode = "llm_review_pending"
-        selection_summary = "Compatibility projection waiting for review"
-    elif compatibility_decision:
-        selection_mode = "compatibility_only"
-        selection_summary = f"Compatibility projection: {compatibility_decision}"
-    else:
-        selection_mode = "pending"
-        selection_summary = "Selection not materialized yet"
-
-    if candidate_signal_uplift_count:
-        candidate_recovery_state = (
-            "review_pending"
-            if selection_mode == "llm_review_pending"
-            else "held"
-            if selection_mode == "hold"
-            else "present"
+    selection_mode, selection_summary = resolve_selection_mode_summary(
+        final_decision=final_decision,
+        compatibility_decision=compatibility_decision,
+        candidate_signal_uplift_count=candidate_signal_uplift_count,
+        llm_review_pending_count=llm_review_pending_count,
+        hold_count=hold_count,
+        selection_reason=selection_reason,
+    )
+    candidate_recovery_state, candidate_recovery_summary = (
+        resolve_candidate_recovery_summary(
+            selection_mode=selection_mode,
+            candidate_signal_uplift_count=candidate_signal_uplift_count,
         )
-        candidate_recovery_summary = (
-            "Recovered candidate signals are materialized and waiting for LLM review."
-            if selection_mode == "llm_review_pending"
-            else "Recovered candidate signals are materialized but currently held."
-            if selection_mode == "hold"
-            else "Recovered candidate signals are materialized on this item."
-        )
-    else:
-        candidate_recovery_state = "absent"
-        candidate_recovery_summary = (
-            "Recovered candidate signals have not materialized on this item yet."
-        )
+    )
 
     return {
         "source": (
@@ -610,7 +575,7 @@ def build_selection_diagnostics_payload_from_counts(
         "candidateRecoveryState": selection_explain.get("candidateRecoveryState")
         or "absent",
         "candidateRecoverySummary": selection_explain.get("candidateRecoverySummary")
-        or "Recovered candidate signals have not materialized on this item yet.",
+        or ABSENT_CANDIDATE_RECOVERY_SUMMARY,
         "systemCriterionRows": system_criterion_rows,
         "userInterestRows": user_interest_rows,
         "matchedRows": matched_rows,
@@ -702,8 +667,7 @@ def build_content_kind_selection_explain_payload(
         "holdCount": 0,
         "candidateSignalUpliftCount": 0,
         "candidateRecoveryState": "absent",
-        "candidateRecoverySummary":
-            "Recovered candidate signals have not materialized on this item yet.",
+        "candidateRecoverySummary": ABSENT_CANDIDATE_RECOVERY_SUMMARY,
         "canonicalReviewReused": False,
         "canonicalReviewReusedCount": 0,
         "canonicalSelectionReused": False,
@@ -745,8 +709,7 @@ def build_resource_selection_explain_payload(
         "holdCount": 0,
         "candidateSignalUpliftCount": 0,
         "candidateRecoveryState": "absent",
-        "candidateRecoverySummary":
-            "Recovered candidate signals have not materialized on this item yet.",
+        "candidateRecoverySummary": ABSENT_CANDIDATE_RECOVERY_SUMMARY,
         "canonicalReviewReused": False,
         "canonicalReviewReusedCount": 0,
         "canonicalSelectionReused": False,
@@ -895,6 +858,7 @@ def editorial_content_select_sql(*, include_internal_fields: bool = False) -> st
         internal_projection = """
             nullif(lower(btrim(coalesce(a.title, ''))), '') as _normalized_title,
             concat_ws(' ', coalesce(a.title, ''), coalesce(a.lead, ''), coalesce(a.body, '')) as _search_text,
+            a.channel_id::text as _channel_id,
         """
     return f"""
         select
@@ -928,7 +892,7 @@ def editorial_content_select_sql(*, include_internal_fields: bool = False) -> st
           ranked.matched_interest_description,
           ranked.interest_match_score,
           ranked.interest_match_decision
-          {", ranked._normalized_title, ranked._search_text" if include_internal_fields else ""}
+          {", ranked._normalized_title, ranked._search_text, ranked._channel_id" if include_internal_fields else ""}
         from (
           select
             {repr('editorial:')} || a.doc_id::text as content_item_id,
@@ -985,6 +949,7 @@ def resource_content_select_sql(*, include_internal_fields: bool = False) -> str
           ,
           nullif(lower(btrim(coalesce(wr.title, ''))), '') as _normalized_title,
           concat_ws(' ', coalesce(wr.title, ''), coalesce(wr.summary, ''), coalesce(wr.body, '')) as _search_text
+          , wr.channel_id::text as _channel_id
         """
     return f"""
         select
@@ -1003,8 +968,8 @@ def resource_content_select_sql(*, include_internal_fields: bool = False) -> str
           sc.name as source_name,
           null::text as author_name,
           null::integer as read_time_seconds,
-          'kind_enabled'::text as system_selection_decision,
-          true as system_selected,
+          fsr.final_decision as system_selection_decision,
+          coalesce(fsr.is_selected, false) as system_selected,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb)) > 0 as has_media,
           wr.media_json -> 0 ->> 'media_kind' as primary_media_kind,
           coalesce(wr.media_json -> 0 ->> 'thumbnail_url', wr.media_json -> 0 ->> 'source_url') as primary_media_url,
@@ -1021,16 +986,28 @@ def resource_content_select_sql(*, include_internal_fields: bool = False) -> str
           {internal_projection}
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
+        join articles pa on pa.doc_id = wr.projected_article_id
+        join final_selection_results fsr on fsr.doc_id = pa.doc_id
         where wr.resource_kind <> 'editorial'
           and wr.extraction_state in ('enriched', 'skipped')
+          and pa.visibility_state = 'visible'
+          and coalesce(fsr.is_selected, false) = true
           and {system_interest_kind_enabled_clause("wr.resource_kind")}
     """
 
 
 def combined_content_items_select_sql(*, include_internal_fields: bool = False) -> str:
-    return editorial_content_select_sql(
+    editorial_sql = editorial_content_select_sql(
         include_internal_fields=include_internal_fields
     )
+    resource_sql = resource_content_select_sql(
+        include_internal_fields=include_internal_fields
+    )
+    return f"""
+        select * from ({editorial_sql}) editorial_content_items
+        union all
+        select * from ({resource_sql}) resource_content_items
+    """
 
 
 def build_editorial_content_item_preview_from_article(

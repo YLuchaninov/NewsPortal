@@ -9,6 +9,20 @@ export interface NewsPortalSdkOptions {
 type QueryValue = string | number | boolean | null | undefined;
 type ChannelListQuery = PaginationQuery & { providerType?: string };
 type FetchRunsQuery = PaginationQuery & { channelId?: string };
+type OutboxEventsQuery = {
+  limit?: number;
+  eventType?: string;
+  aggregateType?: string;
+  aggregateId?: string;
+  status?: string;
+};
+type ArticleListQuery = PaginationQuery & {
+  channelId?: string;
+  finalSelectionDecision?: string;
+  selectionMode?: string;
+  visibilityState?: string;
+  q?: string;
+};
 type SequenceListQuery = PaginationQuery;
 type ArticleResidualListQuery = PaginationQuery & {
   downstreamLossBucket?: string;
@@ -64,14 +78,14 @@ type ContentFilterResultListQuery = PaginationQuery & {
   decision?: string;
   passed?: boolean;
 };
-type DiscoveryV3ListQuery = PaginationQuery & {
+type DiscoveryVNextListQuery = PaginationQuery & {
   status?: string;
-  targetId?: string;
-};
-type DiscoverySourcePriorsQuery = DiscoveryV3ListQuery & {
-  channelId?: string;
-  endpointId?: string;
-  contractId?: string;
+  artifactType?: string;
+  interestId?: string;
+  currentState?: string;
+  sourceVoice?: string;
+  artifactFreshnessKind?: string;
+  signalProductionMode?: string;
 };
 
 function buildPath(path: string, query?: Record<string, QueryValue>): string {
@@ -206,6 +220,7 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         pageSize: params?.pageSize,
         sort: params?.sort,
         q: params?.q?.trim() || undefined,
+        channelId: params?.channelId,
       }),
     getContentItem: <T>(contentItemId: string) =>
       getJson<T>(`/content-items/${encodeURIComponent(contentItemId)}`),
@@ -224,11 +239,18 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
     getSystemInterest: <T>(interestTemplateId: string) =>
       getJson<T>(`/system-interests/${interestTemplateId}`),
     listArticles: <T>() => getJson<T>("/maintenance/articles"),
-    listArticlesPage: <T>(params?: PaginationQuery) =>
+    listArticlesPage: <T>(params?: ArticleListQuery) =>
       getPaginated<T>("/maintenance/articles", {
         page: params?.page,
         pageSize: params?.pageSize,
+        channelId: params?.channelId,
+        finalSelectionDecision: params?.finalSelectionDecision,
+        selectionMode: params?.selectionMode,
+        visibilityState: params?.visibilityState,
+        q: params?.q?.trim() || undefined,
       }),
+    getArticleSelectionSummary: <T>() =>
+      getJson<T>("/maintenance/articles/selection-summary"),
     listArticleResidualsPage: <T>(params?: ArticleResidualListQuery) =>
       getPaginated<T>("/maintenance/articles/residuals", {
         page: params?.page,
@@ -301,9 +323,13 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         `/maintenance/sequence-runs/${encodeURIComponent(runId)}/retry`,
         payload ?? {}
       ),
-    listOutboxEvents: <T>(limit?: number) =>
+    listOutboxEvents: <T>(params?: number | OutboxEventsQuery) =>
       getJson<T>("/maintenance/outbox", {
-        limit,
+        limit: typeof params === "number" ? params : params?.limit,
+        eventType: typeof params === "number" ? undefined : params?.eventType,
+        aggregateType: typeof params === "number" ? undefined : params?.aggregateType,
+        aggregateId: typeof params === "number" ? undefined : params?.aggregateId,
+        status: typeof params === "number" ? undefined : params?.status,
       }),
     listWebResourcesPage: <T>(params?: WebResourceListQuery) =>
       getPaginated<T>("/maintenance/web-resources", {
@@ -430,186 +456,66 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
         page: params?.page,
         pageSize: params?.pageSize,
       }),
-    getDiscoverySummary: <T>() => getJson<T>("/maintenance/discovery/summary"),
-    listDiscoveryAutopilotProfiles: <T>() =>
-      getJson<T>("/maintenance/discovery/autopilot-profiles"),
-    simplifyDiscoveryConfig: <T>(payload: unknown) =>
-      postJson<T>("/maintenance/discovery/config/simplify", payload),
-    listDiscoveryTargets: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/targets", {
+    listDiscoveryVNextRecords: <T>(resource: string, params?: DiscoveryVNextListQuery) =>
+      getPaginated<T>(`/maintenance/discovery/${resource}`, {
         status: params?.status,
+        artifactType: params?.artifactType,
+        interestId: params?.interestId,
+        currentState: params?.currentState,
+        sourceVoice: params?.sourceVoice,
+        artifactFreshnessKind: params?.artifactFreshnessKind,
+        signalProductionMode: params?.signalProductionMode,
         page: params?.page,
         pageSize: params?.pageSize,
       }),
-    createDiscoveryTarget: <T>(payload: unknown) =>
-      postJson<T>("/maintenance/discovery/targets", payload),
-    createSimpleDiscoveryTarget: <T>(payload: unknown) =>
-      postJson<T>("/maintenance/discovery/targets/create-simple", payload),
-    getDiscoveryTarget: <T>(targetId: string) =>
-      getJson<T>(`/maintenance/discovery/targets/${targetId}`),
-    updateDiscoveryTarget: <T>(targetId: string, payload: unknown) =>
-      patchJson<T>(`/maintenance/discovery/targets/${targetId}`, payload),
-    getDiscoveryTargetCoverage: <T>(targetId: string) =>
-      getJson<T>(`/maintenance/discovery/targets/${targetId}/coverage`),
-    explainDiscoveryTargetCoverage: <T>(targetId: string) =>
-      getJson<T>(`/maintenance/discovery/targets/${targetId}/coverage/explain`),
-    refreshDiscoveryTargetCoverage: <T>(targetId: string) =>
-      postJson<T>(`/maintenance/discovery/targets/${targetId}/refresh-coverage`, {}),
-    createDiscoveryRun: <T>(payload: unknown) =>
+    getDiscoveryVNextRecord: <T>(resource: string, recordId: string) =>
+      getJson<T>(`/maintenance/discovery/${resource}/${recordId}`),
+    createDiscoveryVNextRun: <T>(payload: unknown) =>
       postJson<T>("/maintenance/discovery/runs", payload),
-    dispatchQueuedDiscoveryRuns: <T>(payload: unknown) =>
-      postJson<T>("/maintenance/discovery/runs/dispatch-queued", payload),
-    listDiscoveryRuns: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/runs", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryRun: <T>(runId: string) =>
-      getJson<T>(`/maintenance/discovery/runs/${runId}`),
-    diagnoseDiscoveryRun: <T>(runId: string) =>
-      postJson<T>(`/maintenance/discovery/runs/${runId}/diagnose`, {}),
-    cancelDiscoveryRun: <T>(runId: string) =>
+    startDiscoveryVNextRun: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/runs/start", payload),
+    cancelDiscoveryVNextRun: <T>(runId: string) =>
       postJson<T>(`/maintenance/discovery/runs/${runId}/cancel`, {}),
-    listDiscoverySourcePriors: <T>(params?: DiscoverySourcePriorsQuery) =>
-      getPaginated<T>("/maintenance/discovery/source-priors", {
-        targetId: params?.targetId,
-        channelId: params?.channelId,
-        endpointId: params?.endpointId,
-        contractId: params?.contractId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    evaluateDiscoverySourcePrior: <T>(payload: unknown) =>
-      postJson<T>("/maintenance/discovery/source-priors/evaluate", payload),
-    applyDiscoverySourcePrior: <T>(payload: unknown) =>
-      postJson<T>("/maintenance/discovery/source-priors/apply", payload),
-    listDiscoveryEndpoints: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/endpoints", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryEndpoint: <T>(endpointId: string) =>
-      getJson<T>(`/maintenance/discovery/endpoints/${endpointId}`),
-    explainDiscoveryEndpoint: <T>(endpointId: string) =>
-      getJson<T>(`/maintenance/discovery/endpoints/${endpointId}/explain`),
-    listDiscoveryHypotheses: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/hypotheses", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryHypothesis: <T>(hypothesisId: string) =>
-      getJson<T>(`/maintenance/discovery/hypotheses/${hypothesisId}`),
-    listDiscoveryDomains: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/domains", {
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryDomain: <T>(domainId: string) =>
-      getJson<T>(`/maintenance/discovery/domains/${domainId}`),
-    listDiscoveryActions: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/actions", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryAction: <T>(actionId: string) =>
-      getJson<T>(`/maintenance/discovery/actions/${actionId}`),
-    promoteDiscoveryEndpoint: <T>(endpointId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/endpoints/${endpointId}/promote`, payload ?? {}),
-    rejectDiscoveryEndpoint: <T>(endpointId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/endpoints/${endpointId}/reject`, payload ?? {}),
-    expandDiscoveryEndpoint: <T>(endpointId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/endpoints/${endpointId}/expand`, payload ?? {}),
-    markDiscoveryEndpointDuplicate: <T>(endpointId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/endpoints/${endpointId}/mark-duplicate`, payload ?? {}),
-    listDiscoveryContracts: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/contracts", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryContract: <T>(contractId: string) =>
-      getJson<T>(`/maintenance/discovery/contracts/${contractId}`),
-    evaluateDiscoveryContract: <T>(contractId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/contracts/${contractId}/evaluate`, payload ?? {}),
-    listDiscoveryClaims: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/claims", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryClaim: <T>(claimId: string) =>
-      getJson<T>(`/maintenance/discovery/claims/${claimId}`),
-    listDiscoveryNegativeEvidence: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/negative-evidence", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryNegativeEvidence: <T>(negativeEvidenceId: string) =>
-      getJson<T>(`/maintenance/discovery/negative-evidence/${negativeEvidenceId}`),
-    clearDiscoveryNegativeEvidenceCooldown: <T>(negativeEvidenceId: string) =>
-      postJson<T>(
-        `/maintenance/discovery/negative-evidence/${negativeEvidenceId}/clear-cooldown`,
-        {}
-      ),
-    listDiscoveryProviderHealth: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/provider-health", {
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryProviderHealth: <T>(providerId: string) =>
-      getJson<T>(`/maintenance/discovery/provider-health/${providerId}`),
-    repairDiscoveryProvider: <T>(providerId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/providers/${providerId}/repair`, payload ?? {}),
-    listDiscoveryIdentities: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/identities", {
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryIdentity: <T>(identityId: string) =>
-      getJson<T>(`/maintenance/discovery/identities/${identityId}`),
-    listDiscoveryEvalRuns: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/eval-runs", {
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryEvalRun: <T>(evalRunId: string) =>
-      getJson<T>(`/maintenance/discovery/eval-runs/${evalRunId}`),
-    listDiscoveryEvalSuites: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/eval-suites", {
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryEvalSuite: <T>(evalSuiteId: string) =>
-      getJson<T>(`/maintenance/discovery/eval-suites/${evalSuiteId}`),
-    runDiscoveryEvalSuite: <T>(evalSuiteId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/discovery/eval-suites/${evalSuiteId}/run`, payload ?? {}),
-    listDiscoveryLlmDecisions: <T>(params?: DiscoveryV3ListQuery) =>
-      getPaginated<T>("/maintenance/discovery/llm-decisions", {
-        status: params?.status,
-        targetId: params?.targetId,
-        page: params?.page,
-        pageSize: params?.pageSize,
-      }),
-    getDiscoveryLlmDecision: <T>(decisionId: string) =>
-      getJson<T>(`/maintenance/discovery/llm-decisions/${decisionId}`),
-    expandExistingDiscoverySource: <T>(channelId: string, payload: unknown) =>
-      postJson<T>(`/maintenance/discovery/sources/${channelId}/expand`, payload),
-    replaceDiscoverySourceCandidates: <T>(channelId: string, payload: unknown) =>
-      postJson<T>(`/maintenance/discovery/sources/${channelId}/replace-candidates`, payload),
+    diagnoseDiscoveryVNextRun: <T>(runId: string) =>
+      postJson<T>(`/maintenance/discovery/runs/${runId}/diagnose`, {}),
+    previewDiscoveryBrief: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/brief/preview", payload),
+    validateDiscoveryArtifact: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/artifacts/validate", payload),
+    createDiscoveryArtifact: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/artifacts", payload),
+    previewDiscoveryMegaLoop: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/mega-loop/preview", payload),
+    normalizeDiscoveryCandidates: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/candidates/normalize", payload),
+    createDiscoveryCandidates: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/candidates", payload),
+    previewDiscoveryProbePlan: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/probe/plan/preview", payload),
+    executeDiscoveryProbe: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/probe/execute", payload),
+    previewDiscoveryUnderstanding: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/understand/preview", payload),
+    previewDiscoveryRoute: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/route/preview", payload),
+    applyDiscoveryRoutingDecision: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/routing-decisions/apply", payload),
+    handoffDiscoveryProbation: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/probation/handoff", payload),
+    validateDiscoveryPolicy: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/policies/validate", payload),
+    activateDiscoveryPolicy: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/policies/activate", payload),
+    runDiscoveryLlmGateway: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/llm-gateway", payload),
+    startDiscoveryReplay: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/replay", payload),
+    prepareDiscoveryRollback: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/rollback/prepare", payload),
+    applyDiscoveryRollback: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/rollback/apply", payload),
+    submitDiscoveryFeedback: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/feedback", payload),
     getLlmUsageSummary: <T>() => getJson<T>("/maintenance/llm-usage-summary"),
     getLlmBudgetSummary: <T>() => getJson<T>("/maintenance/llm-budget-summary"),
     listReindexJobs: <T>() => getJson<T>("/maintenance/reindex-jobs"),

@@ -29,6 +29,8 @@ NewsPortal — платформа для управляемого отбора �
 | Auth | Firebase identity + локальные PostgreSQL users/roles |
 | Selection | System selection отдельно от user personalization |
 | Discovery | Выключен по умолчанию, включается явно и работает через review/policy gates |
+| Task execution | Sequence runtime исполняет зарегистрированные TaskPlugins с contract metadata |
+| Ingress adapters | Catalog + channel binding выбирают adapter; legacy JSON остается diagnostic evidence |
 
 ## Данные и владение truth
 
@@ -40,7 +42,7 @@ PostgreSQL владеет долговечными бизнес-данными:
 - articles and website resources;
 - deduplicated documents, clusters and verification;
 - selection, matching and notification rows;
-- discovery missions, candidates, profiles and cost ledger;
+- Discovery vNext runs, artifacts, candidates, source inventory, policies, adapter backlog, replay and rollback;
 - sequence definitions and sequence runs;
 - audit and delivery logs.
 
@@ -109,16 +111,11 @@ Gray-zone review включается только там, где policy, env и
 
 Discovery нужен для source acquisition: найти потенциальные источники, проверить кандидатов и дать оператору контролируемое продвижение.
 
-Есть два важных пути:
+Discovery vNext uses typed artifacts and deterministic routing. It must not automatically turn an uncertain external result into an active ingestion source without policy-backed routing and probation handoff.
 
-- graph-first missions — миссии от known classes/hypotheses к candidates;
-- independent recall — более широкий поиск кандидатов в шумном поле.
+Candidate recovery — важный принцип для discovery и selection. Система не должна решать релевантность только по репутации источника: шумный источник иногда дает ценный сигнал, а хороший источник может дать обычный шум. Правильный поток: wide ingest -> document/resource interpretation -> dedup/cluster context -> candidate routing -> gray-zone or LLM adjudication when allowed -> final selection.
 
-Оба пути подчиняются одному принципу: discovery не должен автоматически превращать сомнительный внешний результат в активный ingestion source без review/policy gate.
-
-Candidate recall — важный принцип для discovery и selection. Система не должна решать релевантность только по репутации источника: шумный источник иногда дает ценный сигнал, а хороший источник может дать обычный шум. Правильный поток: wide ingest -> document/resource interpretation -> dedup/cluster context -> candidate routing -> gray-zone or LLM adjudication when allowed -> final selection.
-
-Для разбора слабого recall полезнее смотреть типы потерь: obvious noise, ordinary non-match, candidate for review, strong match candidate, selected but low-confidence, rejected after review. Это рабочий язык для оператора и инженера; он не обязан быть точным enum в коде.
+Для разбора слабого candidate recovery полезнее смотреть типы потерь: obvious noise, ordinary non-match, candidate for review, strong match candidate, selected but low-confidence, rejected after review. Это рабочий язык для оператора и инженера; он не обязан быть точным enum в коде.
 
 ## Sequence runtime
 
@@ -142,7 +139,24 @@ Sequence runtime нужен не ради “плагинов”, а ради н
 - sequence definitions, runs and task status живут в PostgreSQL;
 - worker читает authoritative context из базы, а не из queue payload;
 - ошибка шага должна быть видна в run/task status;
+- каждый executable step проходит через зарегистрированный `TaskPlugin`, который публикует options/context/output schema, output caps, retry classification and error codes;
+- API/admin/MCP показывают plugin contract metadata через sequence plugin discovery, но это не означает произвольную загрузку кода из UI или БД;
 - sequence runtime не должен стать новым монолитом для любой бизнес-логики.
+
+## Ingress adapter model
+
+Ingress adapter identity теперь живет в каталоге и binding:
+
+```text
+ingress_adapter_catalog
+-> source_channel_adapter_binding
+-> fetchers adapter resolver
+-> provider poller / declarative recipe / builtin adapter
+```
+
+`source_channel_adapter_binding.adapter_key` — active adapter-selection truth. Legacy RSS `config_json.adapterStrategy` and API `adapterKey` values can remain in stored channel JSON as migration/diagnostic evidence, but active runtime and read models should resolve through a valid enabled binding or provider default.
+
+Declarative adapters are intentionally bounded: JSON/NDJSON API sources, GET or static non-secret JSON POST, selectors/mappings, bounded pagination and dry-run preview. They do not accept uploaded code, JS/WASM execution, secret-bearing adapter config or hidden persistence during dry-run.
 
 ## Operator model
 

@@ -14,6 +14,8 @@ test("parseApiChannelConfig preserves default single-page GET behavior", () => {
     nextUrlPath: "next",
     pageParam: "page",
     pageStart: 1,
+    cursorParam: "cursor",
+    cursorPath: "nextCursor",
     maxPagesPerPoll: 1,
   });
 });
@@ -48,6 +50,8 @@ test("parseApiChannelConfig accepts bounded POST and pagination options", () => 
     nextUrlPath: "paging.next",
     pageParam: "page",
     pageStart: 1,
+    cursorParam: "cursor",
+    cursorPath: "nextCursor",
     maxPagesPerPoll: 10,
   });
 });

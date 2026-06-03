@@ -25,6 +25,20 @@ function log(message) {
   console.log(`[mvp-internal] ${message}`);
 }
 
+const INTERNAL_MVP_FETCHERS_PRIVATE_HOST_ALLOWLIST = ["web", "web:4321"];
+
+function mergeCsvValues(...values) {
+  return [
+    ...new Set(
+      values
+        .join(",")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  ].join(",");
+}
+
 function readHeader(headers, name) {
   const value = headers[name.toLowerCase()];
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
@@ -788,6 +802,12 @@ async function main() {
   let stackStarted = false;
 
   try {
+    process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST = mergeCsvValues(
+      env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST,
+      process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST,
+      INTERNAL_MVP_FETCHERS_PRIVATE_HOST_ALLOWLIST.join(",")
+    );
+
     log("Starting canonical compose.dev stack.");
     runCompose(
       "up",

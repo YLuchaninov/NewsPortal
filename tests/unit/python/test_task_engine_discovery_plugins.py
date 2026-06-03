@@ -738,31 +738,17 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
-    def test_builtin_registry_includes_discovery_orchestrator_plugins(self) -> None:
+    def test_builtin_registry_includes_vnext_source_discovery_plugins(self) -> None:
         registry = TaskPluginRegistry()
         register_builtin_plugins(registry)
 
         modules = {item["module"] for item in registry.list_all()}
 
-        self.assertIn("discovery.v3.bootstrap_targets", modules)
-        self.assertIn("discovery.v3.refresh_coverage", modules)
-        self.assertIn("discovery.v3.run", modules)
-        self.assertIn("discovery.v3.expand_existing_source", modules)
-
-    async def test_executor_fails_v3_run_without_run_id(self) -> None:
-        executor, repository = self._build_executor(
-            task_graph=[
-                {
-                    "key": "run",
-                    "module": "discovery.v3.run",
-                    "options": {},
-                },
-            ],
-            initial_context={},
-        )
-
-        with self.assertRaisesRegex(ValueError, "run_id is required"):
-            await executor.execute_run("run-1")
+        self.assertIn("discovery.web_search", modules)
+        self.assertIn("discovery.website_probe", modules)
+        self.assertIn("discovery.source_registrar", modules)
+        retired_prefix = ".".join(["discovery", "v3"])
+        self.assertFalse(any(module.startswith(retired_prefix) for module in modules))
 
     async def test_executor_runs_source_discovery_sequence_end_to_end(self) -> None:
         executor, repository = self._build_executor(

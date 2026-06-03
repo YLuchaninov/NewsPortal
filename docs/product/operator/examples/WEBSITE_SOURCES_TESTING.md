@@ -4,7 +4,7 @@
 >
 > **Что этот документ покрывает:** primary operator-facing source для manual testing website channels, persisted `web_resources`, projected editorial rows, resource-only rows и bounded browser-assisted path.
 >
-> **Что этот документ не покрывает полностью:** полный MVP runbook, discovery mission planning, YouTube onboarding, login-required websites, CAPTCHA bypass, cookie/session replay и любой stealth scraping.
+> **Что этот документ не покрывает полностью:** полный MVP runbook, Discovery vNext source acquisition, YouTube onboarding, login-required websites, CAPTCHA bypass, cookie/session replay и любой stealth scraping.
 >
 > **Перед началом:** прочитайте [HOW_TO_USE.md](../HOW_TO_USE.md) для общего admin flow, [README.md](../../../../README.md) для runtime/discovery notes и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) для полного local MVP walkthrough.
 >

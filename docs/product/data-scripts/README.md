@@ -13,6 +13,8 @@
 - `web.json` — website reference bundle.
 - `outsource_balanced_templates.json` — stale/reference-only values for templates and interests; use it for manual comparison, not as a competing source of truth.
 
+Historical prose for the old outsourcing companion note was moved to [Old Operator Examples](../operator/old_examples/outsource_balanced_templates.md). Keep this directory focused on machine-readable assets.
+
 ## Channel rows
 
 Channel import rows должны явно указывать `providerType`. Importer не должен угадывать provider mode по экрану или имени файла.
@@ -60,7 +62,7 @@ Atom feeds импортируются как `rss`. Различие RSS/Atom п
 
 Если значения из этого JSON расходятся с Example C в `docs/product/operator/examples/EXAMPLES.md`, live MCP/admin read-back или `operator.funnel.audit`, JSON считается устаревшим reference evidence. Не применяйте его напрямую поверх live config без MCP calibration/read-back.
 
-Человеческое описание outsourcing scenario теперь живет в [Example Bundles](../operator/examples/EXAMPLES.md), чтобы не держать отдельную companion note рядом с asset-файлами.
+Человеческое описание outsourcing scenario теперь живет в [Example Bundles](../operator/examples/EXAMPLES.md), чтобы не держать отдельную companion note рядом с asset-файлами. Старый companion note сохранен только как historical reference в `operator/old_examples`.
 
 ## Проверка
 

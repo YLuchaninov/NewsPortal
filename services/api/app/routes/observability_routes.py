@@ -52,9 +52,19 @@ def get_maintenance_llm_budget_summary() -> dict[str, Any]:
     return get_llm_budget_summary()
 
 
-def list_outbox_events(limit: int = Query(default=50, ge=1, le=200)) -> list[dict[str, Any]]:
+def list_outbox_events(
+    limit: int = Query(default=50, ge=1, le=200),
+    event_type: str | None = Query(default=None, alias="eventType"),
+    aggregate_type: str | None = Query(default=None, alias="aggregateType"),
+    aggregate_id: str | None = Query(default=None, alias="aggregateId"),
+    status: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
     return _observability_read_model.list_outbox_events(
         limit=limit,
+        event_type=event_type,
+        aggregate_type=aggregate_type,
+        aggregate_id=aggregate_id,
+        status=status,
         query_all_func=query_all,
     )
 

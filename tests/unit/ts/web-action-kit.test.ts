@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import test from "node:test";
 
 import {
+  buildWebActionToken,
+  buildWebActionTokenSet,
   prepareWebAction,
+  readWebActionTokenForScope,
+  validateWebActionToken,
   validateWebActionCsrfMetadata,
+  WEB_ACTION_TOKEN_TARGETS,
   type WebActionSession,
 } from "../../../apps/web/src/lib/server/web-action.ts";
+import {
+  listFilesRecursive,
+  withAppSecret,
+} from "./support/action-kit-harness.ts";
 
 const repoRoot = process.cwd();
 
@@ -168,12 +177,188 @@ test("validateWebActionCsrfMetadata rejects mismatched origins and absolute refe
   );
 });
 
-function listFilesRecursive(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const fullPath = join(dir, entry.name);
-    return entry.isDirectory() ? listFilesRecursive(fullPath) : [fullPath];
+test("web action tokens validate user, path, scope, signature and expiry", () => {
+  withAppSecret("unit-web-action-secret", () => {
+    const request = new Request("http://127.0.0.1:4321/bff/reactions", {
+      method: "POST",
+    });
+    const token = buildWebActionToken({
+      request,
+      session: webSession,
+      targetPath: "/bff/reactions",
+      scope: "reactions",
+      nowMs: 1_000,
+      ttlMs: 60_000,
+    });
+
+    assert.equal(
+      validateWebActionToken(token, request, webSession, { scope: "reactions" }, 2_000),
+      true,
+    );
+    assert.equal(
+      validateWebActionToken(
+        token,
+        request,
+        { ...webSession, userId: "other-web-user" },
+        { scope: "reactions" },
+        2_000,
+      ),
+      false,
+    );
+    assert.equal(
+      validateWebActionToken(
+        token,
+        new Request("http://127.0.0.1:4321/bff/preferences", { method: "POST" }),
+        webSession,
+        { scope: "reactions" },
+        2_000,
+      ),
+      false,
+    );
+    assert.equal(
+      validateWebActionToken(token, request, webSession, { scope: "preferences" }, 2_000),
+      false,
+    );
+    assert.equal(
+      validateWebActionToken(token, request, webSession, { scope: "reactions" }, 70_000),
+      false,
+    );
+    assert.equal(
+      validateWebActionToken(`${token.slice(0, -1)}x`, request, webSession, { scope: "reactions" }, 2_000),
+      false,
+    );
   });
-}
+});
+
+test("prepareWebAction enforces required web action tokens before schema validation", async () => {
+  await withAppSecret("unit-web-action-secret", async () => {
+    const request = new Request("http://127.0.0.1:4321/bff/reactions", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+      },
+    });
+    const token = buildWebActionToken({
+      request,
+      session: webSession,
+      targetPath: "/bff/reactions",
+      scope: "reactions",
+      nowMs: Date.now(),
+    });
+
+    const accepted = await prepareWebAction(request, {
+      actionToken: { scope: "reactions" },
+      payloadSchema: {
+        type: "object",
+        required: ["docId", "reactionType"],
+        properties: {
+          docId: { type: "string" },
+          reactionType: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+      resolveSession: async () => webSession,
+      payloadReader: async () => ({
+        docId: "doc-1",
+        reactionType: "like",
+        webActionToken: token,
+      }),
+    });
+    assert.equal(accepted.ok, true);
+    if (accepted.ok) {
+      assert.deepEqual(accepted.context.payload, {
+        docId: "doc-1",
+        reactionType: "like",
+      });
+    }
+
+    const missing = await prepareWebAction(request, {
+      actionToken: { scope: "reactions" },
+      resolveSession: async () => webSession,
+      payloadReader: async () => ({
+        docId: "doc-1",
+        reactionType: "like",
+      }),
+    });
+    assert.equal(missing.ok, false);
+    if (!missing.ok) {
+      assert.equal(missing.response.status, 403);
+      assert.deepEqual(await missing.response.json(), {
+        error: "Invalid or expired web action token.",
+      });
+    }
+  });
+});
+
+test("web action token sets expose scoped payload and header tokens", () => {
+  withAppSecret("unit-web-action-secret", () => {
+    const request = new Request("http://127.0.0.1:4321/bff/preferences", {
+      method: "POST",
+    });
+    const tokens = buildWebActionTokenSet({
+      request,
+      session: webSession,
+      actions: [
+        { scope: "preferences", targetPath: "/bff/preferences" },
+        { scope: "story-follow", targetPath: "/bff/story-follow" },
+      ],
+      nowMs: 1_000,
+      ttlMs: 60_000,
+    });
+
+    assert.deepEqual(Object.keys(tokens).sort(), ["preferences", "story-follow"]);
+    assert.equal(
+      validateWebActionToken(tokens.preferences, request, webSession, { scope: "preferences" }, 2_000),
+      true,
+    );
+    assert.equal(
+      readWebActionTokenForScope({ webActionTokens: tokens }, request, "preferences"),
+      tokens.preferences,
+    );
+    assert.equal(
+      readWebActionTokenForScope(
+        {},
+        new Request("http://127.0.0.1:4321/bff/preferences", {
+          headers: {
+            "x-web-action-token-preferences": tokens.preferences,
+          },
+        }),
+        "preferences",
+      ),
+      tokens.preferences,
+    );
+  });
+});
+
+test("web action tokens allow declared route-family prefixes", () => {
+  withAppSecret("unit-web-action-secret", () => {
+    const tokenRequest = new Request("http://127.0.0.1:4321/bff/interests", {
+      method: "POST",
+    });
+    const dynamicRequest = new Request(
+      "http://127.0.0.1:4321/bff/interests/11111111-1111-4111-8111-111111111111",
+      {
+        method: "POST",
+      },
+    );
+    const token = buildWebActionToken({
+      request: tokenRequest,
+      session: webSession,
+      targetPath: "/bff/interests",
+      scope: "interests.update",
+      nowMs: 2_000,
+    });
+
+    assert.equal(
+      validateWebActionToken(token, dynamicRequest, webSession, { scope: "interests.update" }, 2_000),
+      true,
+    );
+    assert.equal(
+      validateWebActionToken(token, tokenRequest, webSession, { scope: "interests.update" }, 2_000),
+      false,
+    );
+  });
+});
 
 test("mutating web BFF POST routes use the shared web action kit", () => {
   const routeRoot = join(repoRoot, "apps/web/src/pages/bff");
@@ -211,6 +396,17 @@ test("mutating web BFF POST routes use the shared web action kit", () => {
 
     if (routeFile === "auth/bootstrap.ts" || routeFile === "auth/logout.ts") {
       assert.match(source, /requireSession:\s*false/, `${routeFile} must document sessionless action-kit use`);
+    } else {
+      const expectedScope = WEB_ACTION_TOKEN_TARGETS.find((target) => {
+        const targetFile = `${target.targetPath.replace(/^\/bff\//, "")}.ts`;
+        return targetFile === routeFile || (target.scope === "interests.update" && routeFile === "interests/[interestId].ts");
+      })?.scope;
+      assert.ok(expectedScope, `${routeFile} must have a declared web action-token scope`);
+      assert.match(
+        source,
+        new RegExp(`actionToken:\\s*\\{\\s*scope:\\s*"${expectedScope.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*\\}`),
+        `${routeFile} must require its scoped web action token`,
+      );
     }
   }
 

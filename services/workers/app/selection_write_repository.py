@@ -9,6 +9,7 @@ from psycopg.types.json import Json
 
 from .final_selection import summarize_final_selection_result
 from .runtime_json import coerce_json_object, make_json_safe
+from .selection_signal_summary import build_candidate_signal_tier_summary
 from .system_feed import summarize_system_feed_result
 
 AsyncFunc = Callable[..., Awaitable[Any]]
@@ -526,20 +527,9 @@ async def upsert_final_selection_result(
             filter_reason_counts.get(reason, 0),
             int(counts.get("total_filter_count") or 0),
         )
-    candidate_signal_tier_counts = {
-        "context": int(counts.get("candidate_signal_context_count") or 0),
-        "buyer_intent": int(counts.get("candidate_signal_buyer_intent_count") or 0),
-        "project_intent": int(counts.get("candidate_signal_project_intent_count") or 0),
-    }
-    candidate_signal_tier = None
-    positive_candidate_tiers = {
-        key: value for key, value in candidate_signal_tier_counts.items() if value > 0
-    }
-    if positive_candidate_tiers:
-        candidate_signal_tier = max(
-            positive_candidate_tiers.items(),
-            key=lambda item: (item[1], {"context": 1, "buyer_intent": 2, "project_intent": 3}[item[0]]),
-        )[0]
+    candidate_signal_tier, candidate_signal_tier_counts = build_candidate_signal_tier_summary(
+        counts
+    )
     duplicate_article_count = 1
     if selection_context.get("canonicalDocumentId") is not None:
         await cursor.execute(

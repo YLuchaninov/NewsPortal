@@ -59,6 +59,41 @@ class ApiFeedDedupTests(unittest.TestCase):
         )
         self.assertEqual(items_params, (5, 5))
 
+    def test_resource_content_items_require_projected_final_selection(self) -> None:
+        sql = api_main.resource_content_select_sql(include_internal_fields=True)
+
+        self.assertIn("join articles pa on pa.doc_id = wr.projected_article_id", sql)
+        self.assertIn("join final_selection_results fsr on fsr.doc_id = pa.doc_id", sql)
+        self.assertIn("and pa.visibility_state = 'visible'", sql)
+        self.assertIn("and coalesce(fsr.is_selected, false) = true", sql)
+        self.assertIn("fsr.final_decision as system_selection_decision", sql)
+        self.assertNotIn("'kind_enabled'::text as system_selection_decision", sql)
+
+    def test_resource_content_item_detail_requires_projected_final_selection(self) -> None:
+        with patch.object(api_main, "query_one", return_value=None) as query_one:
+            with self.assertRaises(Exception) as caught:
+                api_main.get_resource_content_item(
+                    "00000000-0000-4000-8000-000000000001"
+                )
+
+        self.assertEqual(getattr(caught.exception, "status_code", None), 404)
+        sql, params = query_one.call_args.args
+        self.assertIn("join articles pa on pa.doc_id = wr.projected_article_id", sql)
+        self.assertIn("join final_selection_results fsr on fsr.doc_id = pa.doc_id", sql)
+        self.assertIn("and pa.visibility_state = 'visible'", sql)
+        self.assertIn("and coalesce(fsr.is_selected, false) = true", sql)
+        self.assertIn("from interest_templates it", sql)
+        self.assertIn("fsr.final_decision as system_selection_decision", sql)
+        self.assertEqual(params, ("00000000-0000-4000-8000-000000000001",))
+
+    def test_invalid_public_content_item_id_returns_404_before_query(self) -> None:
+        with patch.object(api_main, "query_one") as query_one:
+            with self.assertRaises(api_main.HTTPException) as caught:
+                api_main.get_content_item("editorial:not-a-uuid")
+
+        self.assertEqual(caught.exception.status_code, 404)
+        query_one.assert_not_called()
+
     def test_list_system_selected_content_items_supports_search_and_title_sort(self) -> None:
         with (
             patch.object(api_main, "query_one", return_value={"total": 1}) as query_one,
@@ -88,6 +123,27 @@ class ApiFeedDedupTests(unittest.TestCase):
             items_sql,
         )
         self.assertEqual(items_params, ("%AI policy%", 20, 0))
+
+    def test_list_system_selected_content_items_supports_channel_filter(self) -> None:
+        channel_id = "00000000-0000-4000-8000-000000000002"
+        with (
+            patch.object(api_main, "query_one", return_value={"total": 1}) as query_one,
+            patch.object(api_main, "query_all", return_value=[]) as query_all,
+        ):
+            api_main.list_system_selected_content_items_page(
+                page=1,
+                page_size=20,
+                q="advisory",
+                channel_id=channel_id,
+            )
+
+        count_sql, count_params = query_one.call_args.args
+        self.assertIn("content_items._channel_id = %s", count_sql)
+        self.assertEqual(count_params, ("%advisory%", channel_id))
+
+        items_sql, items_params = query_all.call_args.args
+        self.assertIn("content_items._channel_id = %s", items_sql)
+        self.assertEqual(items_params, ("%advisory%", channel_id, 20, 0))
 
     def test_dashboard_summary_counts_canonical_feed_families(self) -> None:
         summary = {

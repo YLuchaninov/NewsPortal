@@ -15,10 +15,12 @@ type Page = {
   items?: Array<Record<string, unknown>>;
 };
 
-type Column = {
-  key: string;
-  label: string;
-  wide?: boolean;
+type ResourcePanel = {
+  resource: string;
+  title: string;
+  empty: string;
+  columns: Array<{ key: string; label: string; wide?: boolean }>;
+  page: Page;
 };
 
 const runtimeConfig = readRuntimeConfig(process.env, {
@@ -33,111 +35,67 @@ if (!session) {
 
 const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const flash = readFlash(Astro.url);
+const currentPath = resolveAdminCurrentPath(Astro.request);
+const discoveryBffPath = "/bff/admin/discovery";
 
-async function safe<T>(loader: () => Promise<T>, fallback: T): Promise<T> {
+const inventoryFilters = {
+  currentState: Astro.url.searchParams.get("currentState") ?? undefined,
+  sourceVoice: Astro.url.searchParams.get("sourceVoice") ?? undefined,
+  artifactFreshnessKind: Astro.url.searchParams.get("artifactFreshnessKind") ?? undefined,
+  signalProductionMode: Astro.url.searchParams.get("signalProductionMode") ?? undefined,
+};
+
+async function safePage(resource: string, pageSize = 12, filters: Record<string, string | undefined> = {}): Promise<Page> {
   try {
-    return await loader();
+    return await sdk.listDiscoveryVNextRecords<Record<string, unknown>>(resource, {
+      page: 1,
+      pageSize,
+      ...filters,
+    });
   } catch {
-    return fallback;
+    return { items: [] };
   }
 }
 
 const [
-  summary,
-  targets,
   runs,
-  endpoints,
-  contracts,
-  claims,
-  negativeEvidence,
-  providerHealth,
-  evalSuites,
-  llmDecisions,
-  autopilotProfiles,
+  artifacts,
+  candidates,
+  sourceInventory,
+  policies,
+  adapterBacklog,
+  feedback,
+  replayRuns,
+  rollbackGroups,
+  rollbackActions,
+  evalRuns,
+  runSteps,
+  queryAttempts,
+  llmGatewayEvents,
+  monitoringState,
+  sourceObservations,
 ] = await Promise.all([
-  safe(() => sdk.getDiscoverySummary<Record<string, unknown>>(), {}),
-  safe(() => sdk.listDiscoveryTargets<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryRuns<Record<string, unknown>>({ page: 1, pageSize: 12 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryEndpoints<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryContracts<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryClaims<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryNegativeEvidence<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryProviderHealth<Record<string, unknown>>({ page: 1, pageSize: 20 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryEvalSuites<Record<string, unknown>>({ page: 1, pageSize: 10 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryLlmDecisions<Record<string, unknown>>({ page: 1, pageSize: 12 }), { items: [] } as Page),
-  safe(() => sdk.listDiscoveryAutopilotProfiles<Record<string, unknown>>(), { items: [] }),
+  safePage("runs"),
+  safePage("artifacts"),
+  safePage("candidates"),
+  safePage("source-inventory", 12, inventoryFilters),
+  safePage("policies"),
+  safePage("adapter-backlog"),
+  safePage("feedback"),
+  safePage("replay-runs"),
+  safePage("rollback-groups"),
+  safePage("rollback-actions"),
+  safePage("eval-runs"),
+  safePage("run-steps"),
+  safePage("query-attempts"),
+  safePage("llm-gateway-events"),
+  safePage("monitoring-state"),
+  safePage("source-observations"),
 ]);
 
-const targetItems = targets.items ?? [];
-const runItems = runs.items ?? [];
-const endpointItems = endpoints.items ?? [];
-const contractItems = contracts.items ?? [];
-const claimItems = claims.items ?? [];
-const negativeItems = negativeEvidence.items ?? [];
-const providerItems = providerHealth.items ?? [];
-const evalItems = evalSuites.items ?? [];
-const llmDecisionItems = llmDecisions.items ?? [];
-const autopilotItems = Array.isArray(autopilotProfiles.items) ? autopilotProfiles.items : [];
-
-const targetColumns: Column[] = [
-  { key: "title", label: "Target", wide: true },
-  { key: "origin_kind", label: "Origin" },
-  { key: "status", label: "Status" },
-  { key: "priority", label: "Priority" },
-  { key: "updated_at", label: "Updated" },
-];
-
-const runColumns: Column[] = [
-  { key: "run_kind", label: "Kind" },
-  { key: "trigger_kind", label: "Trigger" },
-  { key: "status", label: "Status" },
-  { key: "created_at", label: "Created" },
-];
-
-const contractColumns: Column[] = [
-  { key: "source_role", label: "Role" },
-  { key: "status", label: "Status" },
-  { key: "coverage_contribution", label: "Coverage" },
-  { key: "health_score", label: "Health" },
-  { key: "failure_reason", label: "Failure", wide: true },
-];
-
-const claimColumns: Column[] = [
-  { key: "title", label: "Claim", wide: true },
-  { key: "status", label: "Status" },
-  { key: "confidence_score", label: "Confidence" },
-  { key: "specificity_score", label: "Specificity" },
-  { key: "independent_source_count", label: "Sources" },
-];
-
-const negativeColumns: Column[] = [
-  { key: "failure_mode", label: "Failure" },
-  { key: "provider_id", label: "Provider" },
-  { key: "query_text", label: "Query", wide: true },
-  { key: "cooldown_until", label: "Cooldown" },
-];
-
-const providerColumns: Column[] = [
-  { key: "provider_id", label: "Provider" },
-  { key: "status", label: "Status" },
-  { key: "error_rate", label: "Error rate" },
-  { key: "cooldown_until", label: "Cooldown" },
-  { key: "last_error_kind", label: "Last error" },
-];
-
-const evalColumns: Column[] = [
-  { key: "name", label: "Suite", wide: true },
-  { key: "status", label: "Status" },
-  { key: "created_at", label: "Created" },
-];
-
-const llmDecisionColumns: Column[] = [
-  { key: "task_name", label: "Task", wide: true },
-  { key: "status", label: "Status" },
-  { key: "fallback_used", label: "Fallback" },
-  { key: "schema_name", label: "Schema" },
-  { key: "created_at", label: "Created" },
-];
+function items(page: Page): Array<Record<string, unknown>> {
+  return Array.isArray(page.items) ? page.items : [];
+}
 
 function text(value: unknown, fallback = "n/a"): string {
   if (Array.isArray(value)) {
@@ -151,35 +109,273 @@ function text(value: unknown, fallback = "n/a"): string {
   return normalized || fallback;
 }
 
-function score(value: unknown): string {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+function count(page: Page): string {
+  return String(items(page).length);
 }
 
-function metricValue(...keys: string[]): string {
-  for (const key of keys) {
-    const value = summary[key];
-    if (value != null) {
-      return text(value, "0");
-    }
-  }
-  return "0";
-}
-
-function cellValue(row: Record<string, unknown>, key: string): string {
-  if (key.endsWith("_score") || key === "priority" || key === "coverage_contribution" || key === "health_score" || key === "error_rate") {
-    return score(row[key]);
+function cell(row: Record<string, unknown>, key: string): string {
+  if (key === "definition_json" || key.endsWith("_json")) {
+    return text(row[key], "empty");
   }
   return text(row[key]);
 }
+
+function reviewReason(row: Record<string, unknown>): string {
+  const state = text(row.current_state, "");
+  const policy = row.monitoring_policy_json != null && typeof row.monitoring_policy_json === "object"
+    ? row.monitoring_policy_json as Record<string, unknown>
+    : {};
+  const risk = row.risk_json != null && typeof row.risk_json === "object"
+    ? row.risk_json as Record<string, unknown>
+    : {};
+  if (text(policy.sampleReviewRequired, "") === "true") return "sample review";
+  if (state === "adapter_backlog") return "adapter required";
+  if (state === "manual_review") return "access/risk uncertainty";
+  if (text(row.source_voice, "") === "unknown" || text(row.signal_production_mode, "") === "unknown") return "classification uncertain";
+  if (text(risk.overallRisk, "") === "high") return "risk policy";
+  return text(row.inventory_reason ?? row.monitoring_policy_json, "policy issue");
+}
+
+const manualReviewRows = items(sourceInventory).filter((row) =>
+  ["manual_review", "adapter_backlog"].includes(text(row.current_state, ""))
+  || reviewReason(row) === "sample review"
+);
+
+function recordId(panel: ResourcePanel, row: Record<string, unknown>): string {
+  const candidates = [
+    `${panel.resource.replace(/-/g, "_").replace(/s$/, "")}_id`,
+    "vnext_run_id",
+    "artifact_id",
+    "candidate_id",
+    "source_inventory_id",
+    "policy_id",
+    "adapter_backlog_id",
+    "feedback_id",
+    "replay_run_id",
+    "rollback_group_id",
+    "rollback_action_id",
+    "eval_run_id",
+    "run_step_id",
+    "query_attempt_id",
+    "llm_gateway_event_id",
+    "observation_id",
+  ];
+  for (const key of candidates) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+const panels: ResourcePanel[] = [
+  {
+    resource: "runs",
+    title: "Runs",
+    empty: "No vNext runs recorded.",
+    page: runs,
+    columns: [
+      { key: "run_kind", label: "Kind" },
+      { key: "trigger_kind", label: "Trigger" },
+      { key: "status", label: "Status" },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "artifacts",
+    title: "Artifacts",
+    empty: "No artifacts recorded.",
+    page: artifacts,
+    columns: [
+      { key: "artifact_type", label: "Type" },
+      { key: "status", label: "Status" },
+      { key: "schema_version", label: "Schema" },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "candidates",
+    title: "Candidates",
+    empty: "No candidates recorded.",
+    page: candidates,
+    columns: [
+      { key: "canonical_url", label: "Canonical URL", wide: true },
+      { key: "status", label: "Status" },
+      { key: "rediscovery_count", label: "Rediscovery" },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "source-inventory",
+    title: "Source Inventory",
+    empty: "No inventory records recorded.",
+    page: sourceInventory,
+    columns: [
+      { key: "canonical_domain", label: "Domain" },
+      { key: "current_state", label: "State" },
+      { key: "current_provider_type", label: "Provider" },
+      { key: "source_voice", label: "Voice" },
+      { key: "artifact_freshness_kind", label: "Freshness" },
+      { key: "signal_production_mode", label: "Signal mode" },
+      { key: "source_role_confidence", label: "Confidence" },
+      { key: "registered_channel_id", label: "Channel" },
+      { key: "updated_at", label: "Updated" },
+    ],
+  },
+  {
+    resource: "policies",
+    title: "Policies",
+    empty: "No vNext policies recorded.",
+    page: policies,
+    columns: [
+      { key: "policy_name", label: "Name", wide: true },
+      { key: "policy_version", label: "Version" },
+      { key: "policy_type", label: "Type" },
+      { key: "status", label: "Status" },
+    ],
+  },
+  {
+    resource: "adapter-backlog",
+    title: "Adapter Backlog",
+    empty: "No adapter backlog items recorded.",
+    page: adapterBacklog,
+    columns: [
+      { key: "adapter_need", label: "Need" },
+      { key: "status", label: "Status" },
+      { key: "priority", label: "Priority" },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "replay-runs",
+    title: "Replay",
+    empty: "No replay runs recorded.",
+    page: replayRuns,
+    columns: [
+      { key: "replay_kind", label: "Kind" },
+      { key: "status", label: "Status" },
+      { key: "dry_run", label: "Dry run" },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "rollback-groups",
+    title: "Rollback",
+    empty: "No rollback groups recorded.",
+    page: rollbackGroups,
+    columns: [
+      { key: "rollback_group_id", label: "Group", wide: true },
+      { key: "status", label: "Status" },
+      { key: "reason", label: "Reason", wide: true },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "feedback",
+    title: "Feedback",
+    empty: "No feedback events recorded.",
+    page: feedback,
+    columns: [
+      { key: "target_type", label: "Target" },
+      { key: "feedback_type", label: "Type" },
+      { key: "created_by", label: "Actor" },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "rollback-actions",
+    title: "Rollback Actions",
+    empty: "No rollback actions recorded.",
+    page: rollbackActions,
+    columns: [
+      { key: "action_kind", label: "Action" },
+      { key: "status", label: "Status" },
+      { key: "applied_by", label: "Actor" },
+      { key: "applied_at", label: "Applied" },
+    ],
+  },
+  {
+    resource: "eval-runs",
+    title: "Eval Runs",
+    empty: "No vNext eval runs recorded.",
+    page: evalRuns,
+    columns: [
+      { key: "eval_kind", label: "Kind" },
+      { key: "status", label: "Status" },
+      { key: "score_json", label: "Score", wide: true },
+      { key: "created_at", label: "Created" },
+    ],
+  },
+  {
+    resource: "run-steps",
+    title: "Run Steps",
+    empty: "No run steps recorded.",
+    page: runSteps,
+    columns: [
+      { key: "step_kind", label: "Step" },
+      { key: "status", label: "Status" },
+      { key: "started_at", label: "Started" },
+      { key: "completed_at", label: "Completed" },
+    ],
+  },
+  {
+    resource: "query-attempts",
+    title: "Query Attempts",
+    empty: "No query attempts recorded.",
+    page: queryAttempts,
+    columns: [
+      { key: "provider", label: "Provider" },
+      { key: "query_text", label: "Query", wide: true },
+      { key: "status", label: "Status" },
+      { key: "result_count", label: "Results" },
+    ],
+  },
+  {
+    resource: "llm-gateway-events",
+    title: "LLM Gateway",
+    empty: "No LLM gateway events recorded.",
+    page: llmGatewayEvents,
+    columns: [
+      { key: "task", label: "Task" },
+      { key: "model", label: "Model" },
+      { key: "status", label: "Status" },
+      { key: "cost_cents", label: "Cost" },
+    ],
+  },
+  {
+    resource: "monitoring-state",
+    title: "Monitoring State",
+    empty: "No monitoring state recorded.",
+    page: monitoringState,
+    columns: [
+      { key: "monitoring_mode", label: "Mode" },
+      { key: "effective_poll_interval_seconds", label: "Poll" },
+      { key: "next_due_at", label: "Next due" },
+      { key: "updated_at", label: "Updated" },
+    ],
+  },
+  {
+    resource: "source-observations",
+    title: "Source Observations",
+    empty: "No source observations recorded.",
+    page: sourceObservations,
+    columns: [
+      { key: "observation_kind", label: "Kind" },
+      { key: "source_inventory_id", label: "Inventory", wide: true },
+      { key: "observed_at", label: "Observed" },
+      { key: "observation_json", label: "Observation", wide: true },
+    ],
+  },
+];
 ---
 
-<AdminShell title="Discovery — Admin" session={session} flash={flash} activeNav="discovery">
+<AdminShell title="Discovery vNext — Admin" session={session} flash={flash} activeNav="discovery">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href="/" class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <span class="font-medium text-foreground">Resilient Discovery</span>
+      <span class="font-medium text-foreground">Discovery vNext</span>
     </nav>
   </Fragment>
 
@@ -192,132 +388,238 @@ function cellValue(row: Record<string, unknown>, key: string): string {
   <div class="space-y-8">
     <section class="space-y-4">
       <div>
-        <h1 class="text-2xl font-semibold tracking-normal">Resilient Discovery</h1>
+        <h1 class="text-2xl font-semibold tracking-normal">Discovery vNext</h1>
         <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Coverage-driven source acquisition with endpoint evidence, probation contracts, hidden-signal claims, negative evidence and provider circuit breakers.
+          Typed artifacts, source inventory, deterministic routing, replay, rollback, and fail-closed policy control.
         </p>
-      </div>
-      <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-        <form method="post" action="/api/admin/discovery/targets/create-simple" class="rounded-md border bg-card p-4">
-          <h2 class="text-base font-semibold tracking-normal">Create simple target</h2>
-          <div class="mt-3 grid gap-3 md:grid-cols-[1fr_180px_auto]">
-            <input name="prompt" required class="h-9 rounded-md border bg-background px-3 text-sm" placeholder="Topic, entities, geos and signals to discover" />
-            <select name="autopilotProfile" class="h-9 rounded-md border bg-background px-3 text-sm">
-              {autopilotItems.map((profile) => <option value={text(profile.profileId)}>{text(profile.profileId)}</option>)}
-              {autopilotItems.length === 0 && <option value="balanced">balanced</option>}
-            </select>
-            <button class="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Create</button>
-          </div>
-        </form>
-        <div class="rounded-md border bg-card p-4">
-          <h2 class="text-base font-semibold tracking-normal">Operator guardrails</h2>
-          <div class="mt-2 text-sm text-muted-foreground">
-            LLM decisions are proposal-only, website auto-promotion is disabled, social providers stay monitor-only or needs-config, and probation sources count as partial coverage until contracts pass.
-          </div>
-        </div>
       </div>
       <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Active targets</div>
-          <div class="mt-2 text-2xl font-semibold">{metricValue("active_targets", "activeTargets")}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Runs</div>
+          <div class="mt-2 text-2xl font-semibold">{count(runs)}</div>
         </div>
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Active runs</div>
-          <div class="mt-2 text-2xl font-semibold">{metricValue("active_runs", "activeRuns")}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Artifacts</div>
+          <div class="mt-2 text-2xl font-semibold">{count(artifacts)}</div>
         </div>
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Review endpoints</div>
-          <div class="mt-2 text-2xl font-semibold">{metricValue("review_endpoints", "reviewEndpoints")}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Candidates</div>
+          <div class="mt-2 text-2xl font-semibold">{count(candidates)}</div>
         </div>
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Probation</div>
-          <div class="mt-2 text-2xl font-semibold">{metricValue("probation_sources", "probationSources")}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Inventory</div>
+          <div class="mt-2 text-2xl font-semibold">{count(sourceInventory)}</div>
         </div>
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Open claims</div>
-          <div class="mt-2 text-2xl font-semibold">{metricValue("open_claims", "openClaims")}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Policies</div>
+          <div class="mt-2 text-2xl font-semibold">{count(policies)}</div>
         </div>
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Provider alerts</div>
-          <div class="mt-2 text-2xl font-semibold">{metricValue("unhealthy_providers", "unhealthyProviders")}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Rollback</div>
+          <div class="mt-2 text-2xl font-semibold">{count(rollbackGroups)}</div>
         </div>
       </div>
     </section>
 
     <section class="grid gap-6 xl:grid-cols-2">
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3">
-          <h2 class="text-base font-semibold tracking-normal">Targets</h2>
+      <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+        <input type="hidden" name="intent" value="start-run" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <h2 class="text-base font-semibold tracking-normal">Run Workflow</h2>
+        <div class="mt-4 grid gap-3">
+          <select name="runKind" class="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="brief_compile">brief_compile</option>
+            <option value="mega_loop">mega_loop</option>
+            <option value="candidate_acquisition">candidate_acquisition</option>
+            <option value="probe">probe</option>
+            <option value="understand_route">understand_route</option>
+            <option value="full">full</option>
+          </select>
+          <select name="triggerKind" class="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="operator">operator</option>
+            <option value="api">api</option>
+            <option value="mcp">mcp</option>
+            <option value="eval">eval</option>
+          </select>
+          <textarea name="requestJson" rows="4" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"systemInterest":{"name":"Security advisory updates","description":"Track public security advisory updates."},"maxBatches":3}`}</textarea>
+          <textarea name="budgetJson" rows="2" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"maxRunCostCents":1}`}</textarea>
+          <label class="flex items-center gap-2 text-sm text-muted-foreground">
+            <input name="liveProviderExecution" type="checkbox" checked class="h-4 w-4 rounded border-input" />
+            Live provider execution
+          </label>
+          <button class="h-9 w-fit rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Start</button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-              <tr>{targetColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr>
-            </thead>
-            <tbody>
-              {targetItems.length === 0 && <tr><td colspan={targetColumns.length} class="px-3 py-4 text-muted-foreground">No discovery targets.</td></tr>}
-              {targetItems.map((row) => (
-                <tr class="border-t align-top">
-                  {targetColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </form>
 
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3">
-          <h2 class="text-base font-semibold tracking-normal">Runs</h2>
+      <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+        <input type="hidden" name="intent" value="brief-preview" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <h2 class="text-base font-semibold tracking-normal">Brief Compiler</h2>
+        <div class="mt-4 grid gap-3">
+          <input name="name" required value="Security advisory updates" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <textarea name="description" rows="3" class="rounded-md border bg-background px-3 py-2 text-sm">Track public security advisory updates.</textarea>
+          <textarea name="operatorConstraintsJson" rows="3" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{}`}</textarea>
+          <button class="h-9 w-fit rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Compile</button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-              <tr>{runColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr>
-            </thead>
-            <tbody>
-              {runItems.length === 0 && <tr><td colspan={runColumns.length} class="px-3 py-4 text-muted-foreground">No discovery runs.</td></tr>}
-              {runItems.map((row) => (
-                <tr class="border-t align-top">
-                  {runColumns.map((column) => <td class="whitespace-nowrap px-3 py-2">{cellValue(row, column.key)}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      </form>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-2">
+      <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+        <input type="hidden" name="intent" value="llm-gateway" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <h2 class="text-base font-semibold tracking-normal">LLM Gateway</h2>
+        <div class="mt-4 grid gap-3">
+          <input name="task" required value="discovery_compile_interest_graph" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <textarea name="payloadJson" rows="5" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"goal":"Detect public observable signals.","artifactExpectations":["article","document","dataset"]}`}</textarea>
+          <textarea name="budgetJson" rows="2" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"maxRunCostCents":1}`}</textarea>
+          <label class="flex items-center gap-2 text-sm text-muted-foreground">
+            <input name="liveProviderExecution" type="checkbox" class="h-4 w-4 rounded border-input" />
+            Live provider execution
+          </label>
+          <button class="h-9 w-fit rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Run</button>
         </div>
+      </form>
+
+      <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+        <input type="hidden" name="intent" value="start-replay" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <h2 class="text-base font-semibold tracking-normal">Replay</h2>
+        <div class="mt-4 grid gap-3">
+          <select name="replayKind" class="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="full_non_live">full_non_live</option>
+            <option value="artifact_lineage">artifact_lineage</option>
+            <option value="routing_policy">routing_policy</option>
+            <option value="candidate_acquisition">candidate_acquisition</option>
+          </select>
+          <textarea name="inputJson" rows="3" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{}`}</textarea>
+          <label class="flex items-center gap-2 text-sm text-muted-foreground">
+            <input name="dryRun" type="checkbox" checked class="h-4 w-4 rounded border-input" />
+            Dry run
+          </label>
+          <button class="h-9 w-fit rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Run replay</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-2">
+      <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+        <input type="hidden" name="intent" value="activate-policy" />
+        <input type="hidden" name="redirectTo" value={currentPath} />
+        <h2 class="text-base font-semibold tracking-normal">Policy Editor</h2>
+        <div class="mt-4 grid gap-3 md:grid-cols-2">
+          <input name="policyName" required value="discovery-routing" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <input name="policyVersion" required value="vnext-operator" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <select name="policyType" class="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="routing">routing</option>
+            <option value="probe">probe</option>
+            <option value="mega_loop">mega_loop</option>
+            <option value="risk">risk</option>
+            <option value="rollback">rollback</option>
+            <option value="permissions">permissions</option>
+          </select>
+          <input name="createdBy" value={session.userId} class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <input name="maxAutoRisk" type="number" min="0" max="1" step="0.01" value="0.35" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <input name="maxWatchRisk" type="number" min="0" max="1" step="0.01" value="0.6" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <input name="maxProbeCandidatesPerRun" type="number" min="1" max="50" value="8" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <input name="maxProbeCandidatesPerHypothesis" type="number" min="1" max="10" value="2" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <input name="sampleReviewPercent" type="number" min="0" max="100" value="10" class="h-9 rounded-md border bg-background px-3 text-sm" />
+          <label class="flex items-center gap-2 text-sm text-muted-foreground">
+            <input name="createCheapWatchChannel" type="checkbox" class="h-4 w-4 rounded border-input" />
+            Cheap watch channels
+          </label>
+        </div>
+        <textarea name="definitionJson" rows="6" class="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"yieldIndependent":true,"allowedAutoRegisterSignalProductionModes":["direct_event_feed","direct_request_or_listing","official_update","source_directory"],"allowedAutoRegisterFreshnessKinds":["recurring_listing","recurring_feed","official_update","dataset_or_registry"],"blockedAutoRegisterSourceVoices":["seller_or_vendor","third_party_commentary"],"maxWatchRisk":0.6,"maxAutoRisk":0.35,"maxProbeCandidatesPerRun":8,"maxBrowserRequests":0,"sampleReviewPercent":10,"rollbackEnabled":true}`}</textarea>
+        <button class="mt-3 h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Activate</button>
+      </form>
+
+      <div class="grid gap-6">
+        <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+          <input type="hidden" name="intent" value="prepare-rollback" />
+          <input type="hidden" name="redirectTo" value={currentPath} />
+          <h2 class="text-base font-semibold tracking-normal">Prepare Rollback</h2>
+          <div class="mt-4 grid gap-3">
+            <input name="sourceInventoryId" required placeholder="source_inventory_id" class="h-9 rounded-md border bg-background px-3 text-sm" />
+            <input name="reason" required placeholder="Reason" class="h-9 rounded-md border bg-background px-3 text-sm" />
+            <button class="h-9 w-fit rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Prepare</button>
+          </div>
+        </form>
+
+        <form method="post" action={discoveryBffPath} class="rounded-md border bg-card p-4">
+          <input type="hidden" name="intent" value="apply-rollback" />
+          <input type="hidden" name="redirectTo" value={currentPath} />
+          <h2 class="text-base font-semibold tracking-normal">Apply Rollback</h2>
+          <div class="mt-4 grid gap-3">
+            <input name="rollbackGroupId" required placeholder="rollback_group_id" class="h-9 rounded-md border bg-background px-3 text-sm" />
+            <label class="flex items-center gap-2 text-sm text-muted-foreground">
+              <input name="confirm" type="checkbox" class="h-4 w-4 rounded border-input" />
+              Confirm destructive rollback
+            </label>
+            <button class="h-9 w-fit rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground" type="submit">Apply</button>
+          </div>
+        </form>
       </div>
     </section>
 
-    <section class="space-y-4">
-      <h2 class="text-lg font-semibold tracking-normal">Endpoint Review</h2>
-      <div class="overflow-x-auto rounded-md border bg-card">
+    <section class="rounded-md border bg-card p-4">
+      <h2 class="text-base font-semibold tracking-normal">Inventory Filters</h2>
+      <form method="get" action="/discovery" class="mt-4 grid gap-3 md:grid-cols-5">
+        <select name="currentState" class="h-9 rounded-md border bg-background px-3 text-sm">
+          <option value="">Any state</option>
+          {["inventory", "inventory_context", "cheap_watch", "probation_channel", "manual_review", "adapter_backlog", "blocked"].map((value) => (
+            <option value={value} selected={inventoryFilters.currentState === value}>{value}</option>
+          ))}
+        </select>
+        <select name="sourceVoice" class="h-9 rounded-md border bg-background px-3 text-sm">
+          <option value="">Any voice</option>
+          {["owner_or_operator", "public_authority", "seller_or_vendor", "aggregator_or_directory", "community_or_ugc", "third_party_commentary", "unknown"].map((value) => (
+            <option value={value} selected={inventoryFilters.sourceVoice === value}>{value}</option>
+          ))}
+        </select>
+        <select name="artifactFreshnessKind" class="h-9 rounded-md border bg-background px-3 text-sm">
+          <option value="">Any freshness</option>
+          {["recurring_listing", "recurring_feed", "official_update", "dataset_or_registry", "community_thread", "documentation_or_guide", "evergreen_article", "static_service_page", "unknown"].map((value) => (
+            <option value={value} selected={inventoryFilters.artifactFreshnessKind === value}>{value}</option>
+          ))}
+        </select>
+        <select name="signalProductionMode" class="h-9 rounded-md border bg-background px-3 text-sm">
+          <option value="">Any mode</option>
+          {["direct_event_feed", "direct_request_or_listing", "official_update", "source_directory", "precursor_context", "secondary_context", "unlikely", "unknown"].map((value) => (
+            <option value={value} selected={inventoryFilters.signalProductionMode === value}>{value}</option>
+          ))}
+        </select>
+        <button class="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Filter</button>
+      </form>
+    </section>
+
+    <section class="rounded-md border bg-card">
+      <div class="border-b px-4 py-3">
+        <h2 class="text-base font-semibold tracking-normal">Manual Review Queue</h2>
+      </div>
+      <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
           <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
-              <th class="px-3 py-2">Endpoint</th>
-              <th class="px-3 py-2">Provider</th>
-              <th class="px-3 py-2">Role</th>
-              <th class="px-3 py-2">Score</th>
-              <th class="px-3 py-2">Action</th>
-              <th class="px-3 py-2">Why found</th>
-              <th class="px-3 py-2">Why not promoted</th>
-              <th class="px-3 py-2">Missing evidence</th>
+              <th class="px-3 py-2">Source</th>
+              <th class="px-3 py-2">Reason</th>
+              <th class="px-3 py-2">Voice</th>
+              <th class="px-3 py-2">Signal mode</th>
+              <th class="px-3 py-2">Risk</th>
             </tr>
           </thead>
           <tbody>
-            {endpointItems.length === 0 && (
-              <tr><td colspan="8" class="px-3 py-4 text-muted-foreground">No endpoint candidates.</td></tr>
+            {manualReviewRows.length === 0 && (
+              <tr><td colspan="5" class="px-3 py-4 text-muted-foreground">No manual review sources queued.</td></tr>
             )}
-            {endpointItems.map((item) => (
+            {manualReviewRows.map((row) => (
               <tr class="border-t align-top">
-                <td class="max-w-md break-all px-3 py-2">{text(item.endpoint_url)}</td>
-                <td class="whitespace-nowrap px-3 py-2">{text(item.provider_type)}</td>
-                <td class="whitespace-nowrap px-3 py-2">{text(item.source_role)}</td>
-                <td class="whitespace-nowrap px-3 py-2">{score(item.total_score)}</td>
-                <td class="whitespace-nowrap px-3 py-2">{text(item.recommended_action)}</td>
-                <td class="max-w-sm break-words px-3 py-2 text-muted-foreground">{text(item.why_found_json, "No explanation yet")}</td>
-                <td class="max-w-sm break-words px-3 py-2 text-muted-foreground">{text(item.why_not_promoted_json, "No blocker recorded")}</td>
-                <td class="max-w-sm break-words px-3 py-2 text-muted-foreground">{text(item.missing_evidence_json, "No missing evidence recorded")}</td>
+                <td class="max-w-md break-words px-3 py-2">
+                  <a class="font-medium text-primary hover:underline" href={`/discovery/source-inventory/${recordId({ resource: "source-inventory", title: "", empty: "", page: sourceInventory, columns: [] }, row)}`}>{text(row.canonical_url)}</a>
+                </td>
+                <td class="px-3 py-2">{reviewReason(row)}</td>
+                <td class="whitespace-nowrap px-3 py-2">{text(row.source_voice)}</td>
+                <td class="whitespace-nowrap px-3 py-2">{text(row.signal_production_mode)}</td>
+                <td class="max-w-sm break-words px-3 py-2">{text(row.risk_json)}</td>
               </tr>
             ))}
           </tbody>
@@ -326,87 +628,32 @@ function cellValue(row: Record<string, unknown>, key: string): string {
     </section>
 
     <section class="grid gap-6 xl:grid-cols-2">
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Source Evidence Contracts</h2></div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{contractColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
-            <tbody>
-              {contractItems.length === 0 && <tr><td colspan={contractColumns.length} class="px-3 py-4 text-muted-foreground">No source evidence contracts.</td></tr>}
-              {contractItems.map((row) => <tr class="border-t align-top">{contractColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
-            </tbody>
-          </table>
+      {panels.map((panel) => (
+        <div class="rounded-md border bg-card">
+          <div class="border-b px-4 py-3">
+            <h2 class="text-base font-semibold tracking-normal">{panel.title}</h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                <tr>{panel.columns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {items(panel.page).length === 0 && <tr><td colspan={panel.columns.length} class="px-3 py-4 text-muted-foreground">{panel.empty}</td></tr>}
+                {items(panel.page).map((row) => (
+                  <tr class="border-t align-top">
+                    {panel.columns.map((column, index) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>
+                      {index === 0 && recordId(panel, row) ? (
+                        <a class="font-medium text-primary hover:underline" href={`/discovery/${panel.resource}/${recordId(panel, row)}`}>{cell(row, column.key)}</a>
+                      ) : cell(row, column.key)}
+                    </td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Hidden Claims</h2></div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{claimColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
-            <tbody>
-              {claimItems.length === 0 && <tr><td colspan={claimColumns.length} class="px-3 py-4 text-muted-foreground">No hidden-signal claims.</td></tr>}
-              {claimItems.map((row) => <tr class="border-t align-top">{claimColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Negative Evidence</h2></div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{negativeColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
-            <tbody>
-              {negativeItems.length === 0 && <tr><td colspan={negativeColumns.length} class="px-3 py-4 text-muted-foreground">No negative evidence cooldowns.</td></tr>}
-              {negativeItems.map((row) => <tr class="border-t align-top">{negativeColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Provider Health</h2></div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{providerColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
-            <tbody>
-              {providerItems.length === 0 && <tr><td colspan={providerColumns.length} class="px-3 py-4 text-muted-foreground">No provider health alerts.</td></tr>}
-              {providerItems.map((row) => <tr class="border-t align-top">{providerColumns.map((column) => <td class="whitespace-nowrap px-3 py-2">{cellValue(row, column.key)}</td>)}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">Replay Eval Suites</h2></div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{evalColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
-            <tbody>
-              {evalItems.length === 0 && <tr><td colspan={evalColumns.length} class="px-3 py-4 text-muted-foreground">No replay eval suites.</td></tr>}
-              {evalItems.map((row) => <tr class="border-t align-top">{evalColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="rounded-md border bg-card">
-        <div class="border-b px-4 py-3"><h2 class="text-base font-semibold tracking-normal">LLM Decisions</h2></div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr>{llmDecisionColumns.map((column) => <th class="px-3 py-2">{column.label}</th>)}</tr></thead>
-            <tbody>
-              {llmDecisionItems.length === 0 && <tr><td colspan={llmDecisionColumns.length} class="px-3 py-4 text-muted-foreground">No discovery LLM decisions recorded.</td></tr>}
-              {llmDecisionItems.map((row) => <tr class="border-t align-top">{llmDecisionColumns.map((column) => <td class:list={["px-3 py-2", column.wide ? "max-w-md break-words" : "whitespace-nowrap"]}>{cellValue(row, column.key)}</td>)}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      ))}
     </section>
   </div>
 </AdminShell>

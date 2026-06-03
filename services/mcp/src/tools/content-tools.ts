@@ -1,6 +1,5 @@
 import {
   createReadTool,
-  pagingSchema,
   readPageArgs,
   readOptionalContentSort,
   shapeContentLikeRecord,
@@ -73,6 +72,17 @@ const articleHoldsListSchema = {
     downstreamLossBucket: { type: "string" },
     verificationState: { type: "string" },
     docIds: { type: "array", items: { type: "string" } },
+    q: { type: "string" },
+  },
+  additionalProperties: false,
+} as const;
+
+const articleListSchema = {
+  type: "object",
+  properties: {
+    page: { type: "number" },
+    pageSize: { type: "number" },
+    channelId: { type: "string" },
     q: { type: "string" },
   },
   additionalProperties: false,
@@ -179,10 +189,14 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
     "articles.list",
     "List editorial article observations from the maintenance API.",
-    pagingSchema,
+    articleListSchema,
     async ({ sdk }, args) =>
       shapePaginatedContentItems(
-        await sdk.listArticlesPage<Record<string, unknown>>(readPageArgs(args)),
+        await sdk.listArticlesPage<Record<string, unknown>>({
+          ...readPageArgs(args),
+          channelId: readOptionalString(args.channelId) ?? undefined,
+          q: readOptionalString(args.q) ?? undefined,
+        }),
         args
       )
   ),
@@ -221,6 +235,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
         pageSize: { type: "number" },
         sort: { type: "string" },
         q: { type: "string" },
+        channelId: { type: "string" },
       },
       additionalProperties: false,
     },
@@ -230,6 +245,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
           ...readPageArgs(args),
           sort: readOptionalContentSort(args.sort),
           q: readOptionalString(args.q) ?? undefined,
+          channelId: readOptionalString(args.channelId) ?? undefined,
         }),
         args
       )

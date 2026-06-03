@@ -29,6 +29,7 @@ const services = {
     external: [
       "@extractus/article-extractor",
       "@extractus/oembed-extractor",
+      "duck-duck-scrape",
       "fast-xml-parser",
       "fastify",
       "feedsmith",

@@ -32,6 +32,8 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(overlap_ratio(["AI"], []), 0.0)
         self.assertEqual(place_match_score(["Warsaw"], ["Warsaw", "Berlin"]), 1.0)
         self.assertEqual(place_match_score(["Warsaw"], ["Berlin", "Paris"]), 0.0)
+        self.assertEqual(place_match_score(["Netherlands"], ["global"]), 1.0)
+        self.assertEqual(place_match_score([], ["worldwide"]), 1.0)
         self.assertAlmostEqual(
             semantic_prototype_score(
                 title_vector=[1.0, 0.0],

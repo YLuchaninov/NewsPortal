@@ -566,6 +566,10 @@ test("channel bulk onboarding applies fetchUrl matches as updates after override
         assert.equal(params?.[0], existingChannelId);
         return { rows: [], rowCount: 1 };
       }
+      if (sql.includes("insert into source_channel_adapter_binding")) {
+        assert.deepEqual(params, [existingChannelId, "rss.hn_comments_feed", "{}", "admin-channel-save"]);
+        return { rows: [], rowCount: 1 };
+      }
       throw new Error(`Unexpected client query: ${sql}`);
     },
     release() {}

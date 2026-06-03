@@ -630,6 +630,15 @@ function parseSseEvents(text) {
     });
 }
 
+function completeSseText(text) {
+  const value = String(text ?? "");
+  if (value.endsWith("\n\n")) {
+    return value;
+  }
+  const lastDelimiter = value.lastIndexOf("\n\n");
+  return lastDelimiter >= 0 ? value.slice(0, lastDelimiter + 2) : "";
+}
+
 export async function assertMcpSseHandshake(token, { timeoutMs = 10000 } = {}) {
   const target = new URL(mcpBaseUrl);
   const client = target.protocol === "https:" ? https : http;
@@ -732,7 +741,7 @@ export async function assertMcpSseHandshake(token, { timeoutMs = 10000 } = {}) {
         });
 
         response.on("data", () => {
-          const messageEvent = parseSseEvents(text).find((item) => item.event === "message");
+          const messageEvent = parseSseEvents(completeSseText(text)).find((item) => item.event === "message");
           if (!messageEvent) {
             return;
           }

@@ -9,6 +9,7 @@ def list_system_selected_content_items_page(
     page_size: int,
     sort: str | None,
     q: str | None,
+    channel_id: str | None,
     normalize_web_content_list_sort_func: Callable[[str | None], str],
     normalize_web_content_search_query_func: Callable[[str | None], str | None],
     combined_content_items_select_sql_func: Callable[..., str],
@@ -31,14 +32,22 @@ def list_system_selected_content_items_page(
     base_select = combined_content_items_select_sql_func(include_internal_fields=True)
     visible_select = f"select * from ({base_select}) content_items"
     search_clause, search_params = build_web_content_search_clause_func(resolved_query)
+    filters: list[str] = []
+    params = list(search_params)
+    if search_clause.strip():
+        filters.append(search_clause.strip().removeprefix("where").strip())
+    if channel_id:
+        filters.append("content_items._channel_id = %s")
+        params.append(channel_id)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
     order_clause = build_web_content_order_clause_func(resolved_sort)
     filtered_select = f"""
         {visible_select}
-        {search_clause}
+        {where_clause}
     """
     total = query_count_func(
         f"select count(*)::int as total from ({filtered_select}) counted",
-        search_params,
+        tuple(params),
     )
     items = strip_web_content_internal_fields_func(
         query_all_func(
@@ -48,7 +57,7 @@ def list_system_selected_content_items_page(
             limit %s
             offset %s
             """,
-            tuple([*search_params, page_size, offset]),
+            tuple([*params, page_size, offset]),
         )
     )
     return build_paginated_response_func(items, page, page_size, total)

@@ -99,6 +99,17 @@ Browser assistance включайте только для публичных JS-
 
 Примеры лежат в [Data Script Assets](../data-scripts/README.md).
 
+### Ingress adapters
+
+Для RSS/API/website/email источников adapter identity теперь живет в catalog/binding:
+
+- `/admin/ingress-adapters` показывает builtin и declarative adapters;
+- channel binding выбирает конкретный `adapter_key`;
+- legacy RSS `adapterStrategy` или API `adapterKey` в старом JSON — только diagnostic history;
+- dry-run preview не должен писать `articles`, `web_resources`, cursors, outbox events or fetch runs.
+
+Custom declarative adapters должны оставаться bounded: JSON/NDJSON, GET или static non-secret JSON POST, selectors/mappings, max items and bounded pagination.
+
 ## Rules
 
 Rules отвечают за system selection.
@@ -148,6 +159,17 @@ Reindex нужен, когда изменились rules/profiles/templates и�
 - результат должен объяснять counts and residuals;
 - если job завис, смотрите maintenance/read-model surfaces и worker logs.
 
+## Automation and Task Plugins
+
+Sequence runtime показывает multi-step work как visible runs and task runs. Каждый step использует зарегистрированный TaskPlugin с options/context/output contract metadata.
+
+Практически:
+
+- смотрите available plugins before editing a sequence;
+- не пытайтесь загрузить произвольный код через admin/MCP;
+- для Default Reindex используйте `maintenance.reindex.request`, а не ручной запуск sequence без reindex job context;
+- после write action всегда делайте read-back и, для итоговых отчетов, `operator.report.verify`.
+
 ## Observability
 
 Observability должна отвечать на вопросы:
@@ -158,22 +180,22 @@ Observability должна отвечать на вопросы:
 - что можно retry;
 - какие errors являются upstream residuals, а какие regression.
 
-Для LLM смотрите budget summary and review history. Для website смотрите fetch runs, resources and enrichment/projection state. Для discovery смотрите missions, candidates, cost summary and promotion status.
+Для LLM смотрите budget summary and review history. Для website смотрите fetch runs, resources and enrichment/projection state. Для discovery смотрите vNext runs, artifacts, candidates, source inventory, policies, adapter backlog, replay and rollback.
 
 ## Discovery
 
 Discovery выключен по умолчанию.
 
-Используйте его, когда нужно найти новые источники или проверить candidate recall:
+Используйте его, когда нужно найти новые источники через vNext artifacts and source inventory:
 
 1. Включите env/config явно.
 2. Проверьте bounded smoke.
-3. Создайте или используйте profile.
-4. Запустите mission/recall.
-5. Review candidates.
-6. Promote только понятные sources.
+3. Создайте vNext run and `DiscoveryBrief`.
+4. Запустите bounded candidate/probe/understand/route flow.
+5. Review candidates, SourceUnderstanding and RoutingDecision.
+6. Register probation only through the vNext handoff/source registrar path.
 
-Для подробного сценария используйте [Discovery Mode Testing](./examples/DISCOVERY_MODE_TESTING.md).
+Для подробного сценария используйте `/admin/discovery` and `discovery.*` MCP vNext tools.
 
 ## MCP
 

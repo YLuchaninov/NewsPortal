@@ -1,12 +1,7 @@
-export async function readRequestPayload(request: Request): Promise<Record<string, FormDataEntryValue>> {
-  const contentType = request.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    const payload = (await request.json()) as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.entries(payload).map(([key, value]) => [key, String(value ?? "")])
-    );
-  }
+import { readRequestPayload as readSharedRequestPayload } from "@newsportal/bff-server";
 
-  const formData = await request.formData();
-  return Object.fromEntries(formData.entries());
+export async function readRequestPayload(request: Request): Promise<Record<string, FormDataEntryValue>> {
+  return readSharedRequestPayload(request, {
+    jsonPayloadMode: "stringify-values",
+  }) as Promise<Record<string, FormDataEntryValue>>;
 }

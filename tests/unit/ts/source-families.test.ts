@@ -198,7 +198,7 @@ test("source-family coverage read model reports retained noisy sources", async (
           ],
         };
       }
-      if (/from discovery_source_endpoints/i.test(sql)) {
+      if (/from source_inventory/i.test(sql)) {
         return { rows: [] };
       }
       throw new Error(`Unexpected SQL: ${sql}`);

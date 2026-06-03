@@ -16,6 +16,7 @@ import { prepareWebAction } from "../../../lib/server/web-action";
 export const prerender = false;
 export const POST: APIRoute = async ({ request, params }) => {
   const prepared = await prepareWebAction(request, {
+    actionToken: { scope: "interests.update" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["interests.update"],
     payloadBoundaryName: "interest mutation payload",
   });

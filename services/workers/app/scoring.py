@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 EPSILON = 1e-9
+GLOBAL_PLACE_CONSTRAINTS = {"all", "global", "international", "world", "worldwide"}
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
@@ -66,6 +67,8 @@ def place_match_score(doc_places: Sequence[str], target_places: Sequence[str]) -
 
     doc_keys = {str(value).casefold() for value in doc_places if str(value).strip()}
     target_keys = {str(value).casefold() for value in target_places if str(value).strip()}
+    if target_keys & GLOBAL_PLACE_CONSTRAINTS:
+        return 1.0
     if not doc_keys or not target_keys:
         return 0.0
 

@@ -24,6 +24,7 @@ export const GET: APIRoute = async ({ request }) => {
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareWebAction(request, {
     authSetCookie: true,
+    actionToken: { scope: "digest-settings" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["digest-settings"],
     payloadBoundaryName: "digest-settings payload",
   });

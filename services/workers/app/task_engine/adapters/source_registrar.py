@@ -8,7 +8,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
-from ...discovery_v3_contracts import (
+from ...source_evidence_contracts import (
     build_discovery_config_fragment,
     build_source_evidence_contract,
 )
@@ -17,6 +17,12 @@ from .common import build_database_url, normalize_url
 
 SOURCE_CHANNEL_SYNC_REQUESTED_EVENT = "source.channel.sync.requested"
 SUPPORTED_PROVIDER_TYPES = {"rss", "website", "api", "email_imap", "youtube"}
+DEFAULT_INGRESS_ADAPTER_BY_PROVIDER = {
+    "rss": "rss.generic",
+    "website": "website.generic_discovery",
+    "api": "api.generic_json_mapping",
+    "email_imap": "email_imap.generic_mailbox",
+}
 
 
 class PostgresSourceRegistrarAdapter:
@@ -89,6 +95,12 @@ class PostgresSourceRegistrarAdapter:
                         created_by=created_by,
                         tags=tags,
                     )
+                    self._insert_adapter_binding(
+                        connection,
+                        channel_id=channel_id,
+                        source=source,
+                        enabled=enabled,
+                    )
                     self._insert_runtime_state(connection, channel_id=channel_id)
                     self._insert_outbox_event(connection, channel_id=channel_id, source=source)
                     existing_rows.append(
@@ -108,79 +120,6 @@ class PostgresSourceRegistrarAdapter:
                         }
                     )
                 return results
-
-    def register_endpoint_source(
-        self,
-        *,
-        endpoint: dict[str, Any],
-        enabled: bool,
-        created_by: str | None,
-        tags: list[str],
-        operator_config: dict[str, Any] | None = None,
-        reason: str | None = None,
-    ) -> dict[str, Any]:
-        source = self._normalize_endpoint_candidate(
-            endpoint,
-            created_by=created_by,
-            tags=tags,
-            operator_config=operator_config or {},
-        )
-        endpoint_id = str(endpoint.get("endpoint_id") or endpoint.get("endpointId") or "").strip()
-        if not endpoint_id:
-            raise ValueError("endpoint_id is required for endpoint promotion.")
-
-        with psycopg.connect(self._database_url, row_factory=dict_row) as connection:
-            with connection.transaction():
-                provider_ids = self._load_provider_ids(connection)
-                existing_rows = self._load_existing_channels(connection)
-                duplicate = self._find_duplicate(existing_rows, source["normalized_url"])
-                if duplicate is not None:
-                    return self._mark_endpoint_duplicate(
-                        connection,
-                        endpoint_id=endpoint_id,
-                        source_channel_id=duplicate["channel_id"],
-                        reviewed_by=created_by,
-                        reason=reason or "duplicate_source_channel",
-                    )
-
-                channel_id = str(uuid.uuid4())
-                provider_id = provider_ids.get(source["provider_type"])
-                self._insert_channel(
-                    connection,
-                    channel_id=channel_id,
-                    provider_id=provider_id,
-                    source=source,
-                    enabled=enabled,
-                    created_by=created_by,
-                    tags=tags,
-                )
-                self._insert_runtime_state(
-                    connection,
-                    channel_id=channel_id,
-                    poll_interval_seconds=int(source.get("poll_interval_seconds") or 1800),
-                )
-                self._insert_outbox_event(connection, channel_id=channel_id, source=source)
-                self._insert_source_contract(connection, channel_id=channel_id, endpoint=source)
-                promoted_endpoint = self._mark_endpoint_registered(
-                    connection,
-                    endpoint_id=endpoint_id,
-                    channel_id=channel_id,
-                    reviewed_by=created_by,
-                )
-                self._insert_discovery_action(
-                    connection,
-                    endpoint=source,
-                    endpoint_id=endpoint_id,
-                    channel_id=channel_id,
-                    requested_by=created_by,
-                    reason=reason,
-                    payload={
-                        "enabled": enabled,
-                        "tags": tags,
-                        "operatorConfig": operator_config or {},
-                    },
-                )
-                return promoted_endpoint
 
     def _normalize_source_candidate(
         self,
@@ -249,11 +188,20 @@ class PostgresSourceRegistrarAdapter:
             discovery_hints["challengeKind"] = challenge_kind
 
         config_json: dict[str, Any] = {
-            "discoveredBy": "ai_discovery_agent",
+            "discoveredBy": "discovery_vnext",
             "createdBy": created_by if (created_by := source.get("created_by")) else None,
             "tags": [tag for tag in source.get("tags", []) if isinstance(tag, str)],
             "discoveryHints": discovery_hints,
         }
+        if isinstance(source.get("discovery"), dict):
+            config_json["discovery"] = dict(source["discovery"])
+        elif "discovery-vnext" in config_json["tags"]:
+            contract = build_source_evidence_contract(source)
+            config_json["discovery"] = build_discovery_config_fragment(
+                source,
+                contract,
+                trust_stage="probation",
+            )
         if effective_provider_type == "website" and browser_assisted_recommended:
             config_json["browserFallbackEnabled"] = True
             config_json["maxBrowserFetchesPerPoll"] = 2
@@ -270,70 +218,8 @@ class PostgresSourceRegistrarAdapter:
             "homepage_url": (
                 str(source.get("homepage_url") or source.get("final_url") or raw_url).strip()
             ),
+            "poll_interval_seconds": source.get("poll_interval_seconds"),
             "config_json": config_json,
-        }
-
-    def _normalize_endpoint_candidate(
-        self,
-        endpoint: dict[str, Any],
-        *,
-        created_by: str | None,
-        tags: list[str],
-        operator_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        raw_url = str(
-            endpoint.get("endpoint_url")
-            or endpoint.get("endpointUrl")
-            or endpoint.get("fetch_url")
-            or endpoint.get("fetchUrl")
-            or ""
-        ).strip()
-        if not raw_url:
-            raise ValueError("endpoint_url is required for endpoint promotion.")
-
-        normalized_url = str(
-            endpoint.get("normalized_endpoint_url")
-            or endpoint.get("normalizedEndpointUrl")
-            or normalize_url(raw_url)
-        )
-        provider_type = str(endpoint.get("provider_type") or endpoint.get("providerType") or "website").strip()
-        if provider_type not in SUPPORTED_PROVIDER_TYPES:
-            raise ValueError(f"Unsupported provider_type for source channel promotion: {provider_type}")
-
-        contract = build_source_evidence_contract(endpoint)
-        discovery_config = build_discovery_config_fragment(endpoint, contract, trust_stage="probation")
-        if operator_config:
-            discovery_config["operatorConfig"] = dict(operator_config)
-        if endpoint.get("total_score") is not None:
-            discovery_config["totalScore"] = float(endpoint.get("total_score") or 0)
-
-        source_role = str(endpoint.get("source_role") or endpoint.get("sourceRole") or "unknown")
-        endpoint_kind = str(endpoint.get("endpoint_kind") or endpoint.get("endpointKind") or "unknown")
-        config_json: dict[str, Any] = {
-            "discoveredBy": "resilient_discovery",
-            "createdBy": created_by,
-            "discovery": discovery_config,
-            "tags": _unique_strings(["discovery", source_role, *tags]),
-        }
-        if provider_type == "website":
-            config_json.update(_website_endpoint_config(raw_url, source_role, endpoint_kind))
-
-        parsed = urlparse(raw_url)
-        return {
-            "url": raw_url,
-            "normalized_url": normalized_url,
-            "provider_type": provider_type,
-            "title": str(endpoint.get("title") or raw_url).strip() or parsed.netloc,
-            "homepage_url": str(endpoint.get("homepage_url") or endpoint.get("homepageUrl") or raw_url).strip(),
-            "poll_interval_seconds": 1800 if provider_type == "rss" else 3600,
-            "config_json": config_json,
-            "contract_json": contract,
-            "target_id": endpoint.get("target_id") or endpoint.get("targetId"),
-            "endpoint_id": endpoint.get("endpoint_id") or endpoint.get("endpointId"),
-            "source_role": source_role,
-            "signal_mode": endpoint.get("signal_mode") or endpoint.get("signalMode") or "direct",
-            "endpoint_kind": endpoint_kind,
-            "expected_data_shape": endpoint.get("expected_data_shape") or endpoint.get("expectedDataShape"),
         }
 
     def _load_provider_ids(self, connection: Any) -> dict[str, str]:
@@ -431,6 +317,48 @@ class PostgresSourceRegistrarAdapter:
                 ),
             )
 
+    def _insert_adapter_binding(
+        self,
+        connection: Any,
+        *,
+        channel_id: str,
+        source: dict[str, Any],
+        enabled: bool,
+    ) -> None:
+        adapter_key = DEFAULT_INGRESS_ADAPTER_BY_PROVIDER.get(str(source["provider_type"]))
+        if not adapter_key:
+            return
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into source_channel_adapter_binding (
+                  channel_id,
+                  adapter_key,
+                  config_json,
+                  selection_mode,
+                  enabled
+                )
+                select %s, iac.adapter_key, %s::jsonb, 'auto', %s
+                from ingress_adapter_catalog iac
+                where iac.adapter_key = %s
+                  and iac.provider_type = %s
+                  and iac.status = 'active'
+                on conflict (channel_id) do update
+                set adapter_key = excluded.adapter_key,
+                    config_json = excluded.config_json,
+                    selection_mode = excluded.selection_mode,
+                    enabled = excluded.enabled,
+                    updated_at = now()
+                """,
+                (
+                    channel_id,
+                    Json(dict(source.get("config_json") or {})),
+                    enabled,
+                    adapter_key,
+                    source["provider_type"],
+                ),
+            )
+
     def _insert_runtime_state(
         self,
         connection: Any,
@@ -487,185 +415,3 @@ class PostgresSourceRegistrarAdapter:
                     Json(payload),
                 ),
             )
-
-    def _insert_source_contract(
-        self,
-        connection: Any,
-        *,
-        channel_id: str,
-        endpoint: dict[str, Any],
-    ) -> None:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                insert into discovery_source_contracts (
-                  target_id, endpoint_id, source_channel_id, source_role, signal_mode,
-                  provider_type, endpoint_kind, expected_data_shape, contract_json,
-                  coverage_contribution, downstream_weight
-                )
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, 0.25, 0.3)
-                """,
-                (
-                    endpoint.get("target_id"),
-                    endpoint.get("endpoint_id"),
-                    channel_id,
-                    endpoint.get("source_role"),
-                    endpoint.get("signal_mode"),
-                    endpoint.get("provider_type"),
-                    endpoint.get("endpoint_kind"),
-                    endpoint.get("expected_data_shape"),
-                    Json(endpoint.get("contract_json") or {}),
-                ),
-            )
-
-    def _mark_endpoint_registered(
-        self,
-        connection: Any,
-        *,
-        endpoint_id: str,
-        channel_id: str,
-        reviewed_by: str | None,
-    ) -> dict[str, Any]:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                update discovery_source_endpoints
-                set source_channel_id = %s,
-                    status = 'registered',
-                    recommended_action = 'manual_promote',
-                    reviewed_by = %s,
-                    reviewed_at = now(),
-                    updated_at = now()
-                where endpoint_id = %s
-                returning *
-                """,
-                (channel_id, reviewed_by, endpoint_id),
-            )
-            row = cursor.fetchone()
-            if row is None:
-                raise LookupError(f"Discovery endpoint {endpoint_id} was not found.")
-            return dict(row)
-
-    def _mark_endpoint_duplicate(
-        self,
-        connection: Any,
-        *,
-        endpoint_id: str,
-        source_channel_id: str | None,
-        reviewed_by: str | None,
-        reason: str,
-    ) -> dict[str, Any]:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                update discovery_source_endpoints
-                set source_channel_id = coalesce(%s, source_channel_id),
-                    status = 'duplicate',
-                    recommended_action = 'reject',
-                    rejection_reason = %s,
-                    reviewed_by = %s,
-                    reviewed_at = now(),
-                    updated_at = now()
-                where endpoint_id = %s
-                returning *
-                """,
-                (source_channel_id, reason, reviewed_by, endpoint_id),
-            )
-            row = cursor.fetchone()
-            if row is None:
-                raise LookupError(f"Discovery endpoint {endpoint_id} was not found.")
-            return dict(row)
-
-    def _insert_discovery_action(
-        self,
-        connection: Any,
-        *,
-        endpoint: dict[str, Any],
-        endpoint_id: str,
-        channel_id: str,
-        requested_by: str | None,
-        reason: str | None,
-        payload: dict[str, Any],
-    ) -> None:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                insert into discovery_actions (
-                  target_id, endpoint_id, source_channel_id,
-                  action_type, status, requested_by, decided_by, reason,
-                  payload_json, result_json, completed_at
-                )
-                values (%s, %s, %s, 'promote_endpoint', 'completed', %s, %s, %s, %s::jsonb, %s::jsonb, now())
-                """,
-                (
-                    endpoint.get("target_id"),
-                    endpoint_id,
-                    channel_id,
-                    requested_by,
-                    requested_by,
-                    reason,
-                    Json(payload),
-                    Json({"channelId": channel_id, "trustStage": "probation"}),
-                ),
-            )
-
-
-def _unique_strings(values: list[Any]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        text = str(value or "").strip()
-        if text and text not in seen:
-            seen.add(text)
-            result.append(text)
-    return result
-
-
-def _website_endpoint_config(endpoint_url: str, source_role: str, endpoint_kind: str) -> dict[str, Any]:
-    config: dict[str, Any] = {
-        "collectionSeedUrls": [endpoint_url],
-        "curated": {
-            "preferCollectionDiscovery": True,
-        },
-    }
-    if source_role in {"procurement_signal", "report_research", "primary_data"} or endpoint_kind in {
-        "procurement",
-        "report_library",
-        "dataset",
-    }:
-        config["downloadDiscoveryEnabled"] = True
-        config["downloadPatterns"] = [".pdf", ".csv", ".xlsx", ".json", ".xml", ".zip"]
-        config["extraction"] = {"extractTables": True, "extractDownloads": True}
-    if source_role == "procurement_signal" or endpoint_kind == "procurement":
-        config["curated"]["listingUrlPatterns"] = [
-            "procurement",
-            "tenders",
-            "contracts",
-            "przetargi",
-            "zamowienia",
-            "postepowania",
-            "bip",
-            "ausschreibungen",
-            "vergaben",
-            "bekanntmachungen",
-        ]
-        config["curated"]["documentUrlPatterns"] = [
-            "notice",
-            "contract",
-            "award",
-            "tender",
-            "rfp",
-            "ogloszenie",
-            "bekanntmachung",
-        ]
-    elif source_role == "report_research" or endpoint_kind == "report_library":
-        config["curated"]["documentUrlPatterns"] = [
-            "report",
-            "reports",
-            "research",
-            "publication",
-            "whitepaper",
-        ]
-    elif source_role == "primary_data" or endpoint_kind == "dataset":
-        config["curated"]["dataFileUrlPatterns"] = ["data", "dataset", "csv", "xlsx", "json"]
-    return config

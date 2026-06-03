@@ -3,8 +3,6 @@ import {
   buildCoverageFirstAutoplan,
   buildCoverageFirstIterationRecommendation,
   getSourceFamilyCoverageWithPool,
-  getSourceRoleCoverageWithPool,
-  listAdapterResearchWithPool,
   listChannelBottlenecksWithPool,
   summarizeChannelBottlenecksWithPool,
 } from "@newsportal/control-plane";
@@ -32,9 +30,7 @@ export const OPERATING_REPORT_KINDS = [
   "funnel_calibration",
   "selection_precision",
   "selection_hold_quality",
-  "source_role_coverage",
   "source_family_balance",
-  "adapter_research",
   "indirect_search_execution",
   "marketplace_extraction_quality",
   "website_pipeline",
@@ -42,7 +38,6 @@ export const OPERATING_REPORT_KINDS = [
   "content_analysis",
   "llm_budget",
   "sequence_run",
-  "discovery_yield",
 ] as const;
 
 export const OPERATIONAL_RESOURCE_URIS = [
@@ -154,17 +149,17 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
   discovery: {
     domain: "discovery",
     title: "Discovery",
-    lifecycle: ["target", "coverage", "hypotheses", "evidence", "endpoint/claim review", "contract probation", "coverage refresh"],
-    keyMetrics: ["active targets/runs", "coverage gaps", "endpoint actions", "contract health", "claim confidence", "provider health"],
+    lifecycle: ["run", "artifact", "candidate", "probe", "understanding", "routing", "inventory", "replay/rollback"],
+    keyMetrics: ["active runs", "artifact validation", "candidate rediscovery", "probe quality", "routing decisions", "inventory state", "policy version"],
     normalStates: [
-      "Newly promoted direct sources count only as probation coverage until the Source Evidence Contract passes.",
-      "Hidden/social signals remain claims or monitor-only evidence until independent support and control comparison justify direct-source follow-up.",
-      "Provider errors should update provider health/circuit breakers rather than being interpreted as bad hypotheses.",
+      "Probation handoff uses existing source_channels and outbox sync after vNext routing accepts a source.",
+      "Provider failures are negative transport evidence only and must not punish a source's capability score.",
+      "Historical yield is reporting telemetry and never drives keep/drop routing decisions.",
     ],
-    commonSymptoms: ["coverage stuck", "too many rejected endpoints", "contract probation failures", "hidden signal noise", "provider degraded"],
-    commonCauses: ["query diversity collapsed", "negative evidence cooldown ignored", "source identity duplicates", "provider auth/rate limits", "missing control comparison"],
-    tuningLevers: ["coverage policy", "diversity budget", "provider capability card", "Source Evidence Contract", "replay eval thresholds"],
-    readBackChecks: ["discovery.summary.get", "discovery.targets.list", "discovery.endpoints.list", "discovery.contracts.list", "operator.report.verify"],
+    commonSymptoms: ["artifact rejected", "candidate dedupe unexpected", "probe blocked", "routing rejected", "inventory stale", "rollback pending"],
+    commonCauses: ["invalid artifact schema", "missing active policy", "source identity duplicates", "provider auth/rate limits", "risk policy denial"],
+    tuningLevers: ["routing policy", "probe policy", "mega-loop budget", "risk policy", "rollback policy", "replay eval thresholds"],
+    readBackChecks: ["discovery.runs.list", "discovery.artifacts.list", "discovery.candidates.list", "discovery.source_inventory.list", "discovery.policies.list"],
   },
   sequences: {
     domain: "sequences",
@@ -222,6 +217,111 @@ function compactStringList(value: unknown): string[] {
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+async function queryCount(pool: Pool, sql: string, params: unknown[] = []): Promise<number> {
+  const result = await pool.query<Record<string, unknown>>(sql, params);
+  const row = result.rows[0] ?? {};
+  return Number(row.total ?? row.count ?? 0);
+}
+
+export async function buildSelectionDashboard(context: McpToolContext) {
+  const { pool, sdk } = context;
+  const [
+    rawArticleObservations,
+    blockedArticleObservations,
+    pendingSelectionRows,
+    decisionRows,
+    contentItemsPage,
+  ] = await Promise.all([
+    queryCount(pool, "select count(*)::int as total from articles"),
+    queryCount(
+      pool,
+      `
+      select count(*)::int as total
+      from articles
+      where visibility_state = 'blocked'
+      `
+    ),
+    queryCount(
+      pool,
+      `
+      select count(*)::int as total
+      from articles a
+      left join final_selection_results fsr on fsr.doc_id = a.doc_id
+      where fsr.doc_id is null
+      `
+    ),
+    pool.query<Record<string, unknown>>(
+      `
+      select
+        coalesce(final_decision, 'unknown') as decision,
+        count(*)::int as count,
+        count(*) filter (where is_selected = true)::int as "selectedCount",
+        count(*) filter (
+          where coalesce(explain_json ->> 'selectionMode', '') = 'hold'
+        )::int as "holdCount",
+        count(*) filter (
+          where coalesce(explain_json ->> 'selectionMode', '') = 'llm_review_pending'
+            or coalesce((explain_json -> 'filterCounts' ->> 'llmReviewPending')::int, 0) > 0
+        )::int as "llmReviewPendingCount"
+      from final_selection_results
+      group by coalesce(final_decision, 'unknown')
+      order by decision
+      `
+    ),
+    sdk.listContentItemsPage<Record<string, unknown>>({ page: 1, pageSize: 1 }),
+  ]);
+  const byDecision = decisionRows.rows.map((row) => ({
+    decision: String(row.decision ?? "unknown"),
+    count: Number(row.count ?? 0),
+  }));
+  const selectedArticleSignals = decisionRows.rows.reduce(
+    (sum, row) => sum + Number(row.selectedCount ?? 0),
+    0
+  );
+  const holdRows = decisionRows.rows.reduce((sum, row) => sum + Number(row.holdCount ?? 0), 0);
+  const llmReviewPendingRows = decisionRows.rows.reduce(
+    (sum, row) => sum + Number(row.llmReviewPendingCount ?? 0),
+    0
+  );
+  const countForDecision = (decision: string) =>
+    byDecision.find((entry) => entry.decision === decision)?.count ?? 0;
+  const materializedSelectionRows = byDecision.reduce((sum, entry) => sum + entry.count, 0);
+  const visibleContentItems = Number(contentItemsPage.total ?? 0);
+  return {
+    readOnly: true,
+    sourceOfTruth: {
+      rawArticleObservations: "articles",
+      articleSelection: "final_selection_results",
+      publicSelectedContent: "content_items",
+    },
+    counts: {
+      rawArticleObservations,
+      materializedSelectionRows,
+      pendingSelectionRows,
+      selectedArticleSignals,
+      visibleContentItems,
+      rejectedRows: countForDecision("rejected"),
+      grayZoneRows: countForDecision("gray_zone"),
+      holdRows,
+      llmReviewPendingRows,
+      blockedArticleObservations,
+    },
+    byDecision,
+    discrepancyExplanation:
+      "articles.list and the admin Articles page show raw editorial observations. content_items.list and final_selection_results selected rows show public selected lead signals.",
+    operatorGuidance:
+      visibleContentItems === 0 && rawArticleObservations > 0
+        ? "The corpus still exists for audit/replay, but strict selection currently exposes zero public selected signals. Tune interests/templates or discovery sources before broad replay."
+        : "Compare rawArticleObservations with visibleContentItems before reporting signal yield.",
+    readBackChecks: [
+      "articles.list",
+      "content_items.list",
+      "operator.report.verify reportKind=selection",
+      "operator.selection.reindex_plan",
+    ],
+  };
 }
 
 function readPageWindow(args: Record<string, unknown>, defaultPageSize = 25) {
@@ -410,7 +510,7 @@ export async function buildArticleHoldQualitySummary(
     interpretation: [
       "context candidates are diagnostics and should not be treated as selected evidence",
       "buyer_intent/project_intent holds are the preferred bounded replay pool",
-      "source health and source priors are intentionally absent from selection eligibility",
+      "source health and vNext routing telemetry are intentionally absent from selection eligibility",
     ],
   };
 }
@@ -788,7 +888,7 @@ export async function buildSelectionPrecisionAudit(
     interpretation: [
       "selected is the only web truth; this audit does not create a second public/private selected split",
       "context_only/noise selected rows are precision defects to fix through system interests, LLM templates, candidate-signal groups, and bounded replay",
-      "source role, source health, source prior, adapter risk, and search provider metadata are intentionally absent from selection eligibility",
+      "source capability, source health, vNext routing telemetry, adapter risk, and search provider metadata are intentionally absent from selection eligibility",
     ],
     samples: includeSamples
       ? {
@@ -833,6 +933,145 @@ export async function buildSelectionPrecisionAudit(
       "maintenance.reindex_jobs.list",
       "content_items.list",
     ],
+  };
+}
+
+function boundedChunk<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+function docIdFromRow(row: unknown): string | null {
+  return isRecord(row) && typeof row.docId === "string" ? row.docId : null;
+}
+
+function buildReindexRequestTemplate(label: string, docIds: string[], reason: string) {
+  return {
+    bucket: label,
+    docIds,
+    request: {
+      payload: {
+        indexName: "interest_centroids",
+        jobKind: "backfill",
+        options: {
+          docIds,
+          retroNotifications: "skip",
+          reason,
+        },
+      },
+    },
+  };
+}
+
+export async function buildSelectionReindexPlan(
+  context: McpToolContext,
+  args: Record<string, unknown> = {}
+) {
+  const requestedDocIds = readStringArray(args.docIds);
+  const chunkSize = Math.min(Math.max(readOptionalInteger(args.chunkSize) ?? 25, 1), 50);
+  const maxDocIds = Math.min(Math.max(readOptionalInteger(args.maxDocIds) ?? 100, 1), 500);
+  const includeSamples = args.includeSamples !== false;
+  const reason =
+    readOptionalString(args.reason) ?? "selection calibration bounded historical replay";
+  const precision = await buildSelectionPrecisionAudit(context, {
+    docIds: requestedDocIds,
+    pageSize: maxDocIds,
+    includeSamples: true,
+  });
+  const samples = isRecord(precision.samples) ? precision.samples : {};
+  const weakSelectedRows = Array.isArray(samples.weakSelected) ? samples.weakSelected : [];
+  const weakSelectedDocIds = uniqueStrings(weakSelectedRows.map(docIdFromRow).filter(Boolean) as string[]);
+  const contextOnlyDocIds = uniqueStrings(
+    weakSelectedRows
+      .filter((row) => isRecord(row) && isRecord(row.precision) && row.precision.outcome === "context_only")
+      .map(docIdFromRow)
+      .filter(Boolean) as string[]
+  );
+
+  const [projectHolds, buyerHolds, contextHolds] = await Promise.all([
+    listArticleHoldQuality(context, { candidateSignalTier: "project_intent", pageSize: maxDocIds }),
+    listArticleHoldQuality(context, { candidateSignalTier: "buyer_intent", pageSize: maxDocIds }),
+    listArticleHoldQuality(context, { candidateSignalTier: "context", pageSize: maxDocIds }),
+  ]);
+  const buyerHoldRows = [
+    ...(Array.isArray(projectHolds.items) ? projectHolds.items : []),
+    ...(Array.isArray(buyerHolds.items) ? buyerHolds.items : []),
+  ];
+  const buyerHoldDocIds = uniqueStrings(buyerHoldRows.map(docIdFromRow).filter(Boolean) as string[]);
+  const contextHoldDocIds = uniqueStrings(
+    (Array.isArray(contextHolds.items) ? contextHolds.items : []).map(docIdFromRow).filter(Boolean) as string[]
+  );
+
+  const buckets = [
+    {
+      bucket: "weak_selected",
+      docIds: weakSelectedDocIds.slice(0, maxDocIds),
+      source: "operator.selection.precision_audit samples.weakSelected",
+      purpose:
+        "Replay selected rows classified as context_only/noise after tightening interests/templates.",
+    },
+    {
+      bucket: "buyer_hold",
+      docIds: buyerHoldDocIds.slice(0, maxDocIds),
+      source: "articles.holds.list candidateSignalTier=project_intent,buyer_intent",
+      purpose:
+        "Replay held buyer/project candidates when increasing recall or recovering direct evidence.",
+    },
+    {
+      bucket: "context_only",
+      docIds: uniqueStrings([...contextOnlyDocIds, ...contextHoldDocIds]).slice(0, maxDocIds),
+      source: "selection precision context_only rows plus articles.holds.list candidateSignalTier=context",
+      purpose:
+        "Replay context-only rows only to confirm they stay context/noise unless item-level buyer evidence appears.",
+    },
+  ];
+  const chunks = buckets.flatMap((bucket) =>
+    boundedChunk(bucket.docIds, chunkSize).map((docIds, index) =>
+      buildReindexRequestTemplate(
+        `${bucket.bucket}:${index + 1}`,
+        docIds,
+        `${reason}: ${bucket.bucket}`
+      )
+    )
+  );
+  return {
+    generatedAt: new Date().toISOString(),
+    readOnly: true,
+    chunkSize,
+    maxDocIds,
+    requestedDocIds,
+    buckets: buckets.map((bucket) => ({
+      ...bucket,
+      count: bucket.docIds.length,
+      docIds: includeSamples ? bucket.docIds : [],
+    })),
+    chunks: includeSamples ? chunks : chunks.map((chunk) => ({ ...chunk, docIds: [], request: undefined })),
+    recommendedOrder: ["weak_selected", "buyer_hold", "context_only"],
+    mutationPolicy:
+      "This planner is read-only. Queue only one bounded maintenance.reindex.request chunk at a time, keep retroNotifications=skip, and verify with maintenance.reindex_jobs.list plus operator.report.verify/operator.effect.verify before continuing.",
+    nextReadBack: [
+      "maintenance.reindex.request",
+      "maintenance.reindex_jobs.list",
+      "operator.report.verify reportKind=selection",
+      "operator.report.verify reportKind=selection_hold_quality",
+      "operator.effect.verify domain=selection",
+    ],
+    diagnostics: {
+      precisionSummary: {
+        inspectedSelectedCount: precision.inspectedSelectedCount,
+        highQualityCount: precision.highQualityCount,
+        weakSelectedCount: precision.weakSelectedCount,
+        buckets: precision.buckets,
+      },
+      holdTotals: {
+        projectIntent: projectHolds.total,
+        buyerIntent: buyerHolds.total,
+        context: contextHolds.total,
+      },
+    },
   };
 }
 
@@ -1056,7 +1295,7 @@ function buildFunnelRecommendedActions(
     actions.push({
       tool: "llm_templates.update",
       reason:
-        "Add missing LLM guardrails from the portable reference spec without changing source-prior or source-health selection independence.",
+        "Add missing LLM guardrails from the portable reference spec without changing source health or vNext routing independence.",
       payloadGuidance: {
         guardrails:
           "direct request beats wrapper noise; seller-authored pages reject; formal notices can be valid without exact keywords; bland titles can pass when body has concrete evidence",
@@ -1236,14 +1475,14 @@ async function readFunnelLiveState(
     ? await pool.query<Record<string, unknown>>(
         `
           select
-            target_id::text as "targetId",
-            source_count as "sourceCount",
-            strong_source_count as "strongSourceCount",
-            missing_role_count as "missingRoleCount",
-            coverage_score as "coverageScore",
-            created_at as "createdAt"
-          from discovery_coverage_snapshots
-          order by created_at desc
+            source_inventory_id::text as "sourceInventoryId",
+            canonical_domain as "canonicalDomain",
+            current_state as "currentState",
+            current_provider_type as "providerType",
+            risk_json as "riskJson",
+            updated_at as "updatedAt"
+          from source_inventory
+          order by updated_at desc
           limit 25
         `
       )
@@ -1252,16 +1491,13 @@ async function readFunnelLiveState(
     ? await pool.query<Record<string, unknown>>(
         `
           select
-            provider_type as "providerType",
-            endpoint_kind as "endpointKind",
-            recommended_action as "recommendedAction",
+            adapter_need as "adapterNeed",
+            priority,
             status,
             count(*)::int as count
-          from discovery_source_endpoints
-          where recommended_action in ('needs_config', 'monitor_only')
-             or provider_type not in ('rss', 'website', 'api', 'email_imap')
-          group by provider_type, endpoint_kind, recommended_action, status
-          order by provider_type, endpoint_kind, recommended_action, status
+          from adapter_backlog
+          group by adapter_need, priority, status
+          order by adapter_need, priority, status
           limit 50
         `
       )
@@ -1356,7 +1592,7 @@ export async function buildFunnelAudit(
       count: drift.sourceRoleGap.length,
       evidence: includeSamples ? drift.sourceRoleGap.slice(0, 10) : [],
       interpretation:
-        "Discovery coverage gaps should be handled by source expansion/repair, not by loosening final content selection.",
+        "Discovery vNext inventory or adapter gaps should be handled by source expansion/repair, not by loosening final content selection.",
     },
     {
       findingType: "adapterRequiredGap",
@@ -1393,7 +1629,7 @@ export async function buildFunnelAudit(
     riskNotes: [
       "Reference evidence is calibration input, not canonical runtime truth.",
       "Domain vocabulary must remain in MCP/admin configuration and tests, not hardcoded selection/discovery runtime logic.",
-      "Source health and source priors remain independent from article selection, ranking, escalation, web visibility, and counts.",
+      "Source health and vNext routing telemetry remain independent from article selection, ranking, escalation, web visibility, and counts.",
       "If async workers are running, repeat report verification after bounded replay or fetch cycles complete.",
     ],
     nextReadBack: [
@@ -1423,7 +1659,7 @@ export async function buildFunnelAutoplan(context: McpToolContext, args: Record<
     recommendedMcpActions: [
       { tool: "discovery.source_families.coverage", arguments: { includeExamples } },
       { tool: "operator.report.verify", arguments: { reportKind: "source_family_balance", entityIds: {}, includeSamples: includeExamples } },
-      { tool: "discovery.source_roles.plan", arguments: { objective: readOptionalString(args.objective) ?? "coverage-first rare-signal funnel", rareSignal: true } },
+      { tool: "discovery.mega_loop.preview", arguments: { interest: readOptionalString(args.objective) ?? "coverage-first rare-signal funnel" } },
       { tool: "operator.selection.precision_audit", arguments: { includeSamples: includeExamples } },
     ],
     nextReadBack: [
@@ -1699,15 +1935,15 @@ export async function buildSystemHealth(
       `
           select kind, status, count(*)::int as count
         from (
-          select 'target' as kind, status from discovery_targets
+          select 'run' as kind, status from discovery_vnext_runs
           union all
-          select 'run' as kind, status from discovery_runs
+          select 'artifact' as kind, status from discovery_artifacts
           union all
-          select 'endpoint' as kind, status from discovery_source_endpoints
+          select 'candidate' as kind, status from discovery_candidates
           union all
-          select 'contract' as kind, status from discovery_source_contracts
+          select 'source_inventory' as kind, current_state as status from source_inventory
           union all
-          select 'claim' as kind, status from discovery_claims
+          select 'adapter_backlog' as kind, status from adapter_backlog
         ) state
         group by kind, status
         order by kind, status
@@ -1746,7 +1982,10 @@ export async function buildSystemHealth(
     ),
     allSettledRecord({
       dashboardSummary: sdk.getDashboardSummary<Record<string, unknown>>(),
-      discoverySummary: sdk.getDiscoverySummary<Record<string, unknown>>(),
+      discoveryRuns: sdk.listDiscoveryVNextRecords<Record<string, unknown>>("runs", {
+        page: 1,
+        pageSize: 20,
+      }),
       llmBudgetSummary: sdk.getLlmBudgetSummary<Record<string, unknown>>(),
       residualSummary: sdk.getArticleResidualSummary<Record<string, unknown>>(),
     }),
@@ -2242,15 +2481,15 @@ function buildTuningRecommendations(
   }
   if (domain === "discovery" || objective === "stabilize_discovery") {
     base.riskLevel = "medium";
-    base.expectedEffect = "Improve coverage and endpoint quality without forcing weak promotions or noisy hidden signals.";
+    base.expectedEffect = "Improve Discovery vNext artifact, probe, routing, and inventory quality without forcing weak registrations.";
     base.recommendedChanges.push({
-      target: "discovery coverage/provider/contract policy",
-      action: "Inspect gaps, endpoints, contracts, negative evidence and provider health before changing thresholds; prove threshold changes through replay eval.",
+      target: "Discovery vNext policy and artifact flow",
+      action: "Inspect runs, artifacts, candidates, source inventory, routing decisions, adapter backlog and active policies before changing thresholds; prove changes through replay eval.",
       reason: residualBucket ?? "discovery yield needs tuning",
     });
     base.suggestedToolCalls.push(
-      { toolName: "discovery.endpoints.list", argumentsTemplate: { status: "rejected" } },
-      { toolName: "discovery.negative_evidence.list", argumentsTemplate: {} },
+      { toolName: "discovery.artifacts.list", argumentsTemplate: { status: "rejected" } },
+      { toolName: "discovery.source_inventory.list", argumentsTemplate: {} },
       { toolName: "discovery.eval_runs.list", argumentsTemplate: {} }
     );
     return base;
@@ -2428,14 +2667,14 @@ function effectQueryForDomain(domain: OperatingDomain) {
   }
   if (domain === "discovery") {
     return {
-      metric: "discovery endpoint statuses",
+      metric: "discovery vNext inventory states",
       sql: `
-        select provider_type as "providerType", status, recommended_action as "recommendedAction", count(*)::int as count
-        from discovery_source_endpoints
+        select current_provider_type as "providerType", current_state as status, count(*)::int as count
+        from source_inventory
         where created_at >= now() - ($1::int * interval '1 hour')
           and created_at < now() - ($2::int * interval '1 hour')
-        group by provider_type, status, recommended_action
-        order by provider_type, status, recommended_action
+        group by current_provider_type, current_state
+        order by current_provider_type, current_state
       `,
     };
   }
@@ -2475,9 +2714,7 @@ export async function buildOperationalReportVerification(
     system_health: "selection",
     channel_health: "channels",
     source_bottleneck: "channels",
-    source_role_coverage: "discovery",
     source_family_balance: "discovery",
-    adapter_research: "discovery",
     indirect_search_execution: "discovery",
     marketplace_extraction_quality: "discovery",
     funnel_calibration: "selection",
@@ -2488,7 +2725,6 @@ export async function buildOperationalReportVerification(
     content_analysis: "content_analysis",
     llm_budget: "llm_budget",
     sequence_run: "sequences",
-    discovery_yield: "discovery",
   };
   const domain = domainByKind[reportKind] ?? "selection";
   if (reportKind === "funnel_calibration") {
@@ -2590,7 +2826,7 @@ export async function buildOperationalReportVerification(
       staleReportNotes: [
         "This verification is read-only and DB-backed.",
         "selected remains the only web truth; this report does not create internal/public selected divergence.",
-        "Source health, source role, source prior, adapter risk, and search provider metadata are acquisition diagnostics only.",
+        "Source health, source capability, vNext routing telemetry, adapter risk, and search provider metadata are acquisition diagnostics only.",
       ],
       nextReadBack: audit.nextReadBack,
     };
@@ -2690,56 +2926,6 @@ export async function buildOperationalReportVerification(
       ],
     };
   }
-  if (reportKind === "source_role_coverage") {
-    const coverage = await getSourceRoleCoverageWithPool(context.pool, { includeExamples: includeSamples });
-    return {
-      reportKind,
-      verifiedAt: new Date().toISOString(),
-      entityIds,
-      domain,
-      counts: {
-        missingRoles: coverage.missingRoles,
-        risks: coverage.risks,
-        roles: coverage.roles.map((row) => ({
-          sourceRole: row.sourceRole,
-          channels: row.channels,
-          activeChannels: row.activeChannels,
-          adapterChannels: row.adapterChannels,
-          researchOnlyChannels: row.researchOnlyChannels,
-          candidateEndpoints: row.candidateEndpoints,
-          detectOnlyEndpoints: row.detectOnlyEndpoints,
-          adapterRequiredEndpoints: row.adapterRequiredEndpoints,
-          accessRequiredEndpoints: row.accessRequiredEndpoints,
-        })),
-      },
-      samples: includeSamples ? coverage.roles.flatMap((row) => row.examples) : [],
-      warnings: [
-        ...(coverage.missingRoles.length > 0
-          ? [
-              issue(
-                "warning",
-                "discovery",
-                "Thematic source-role coverage has missing roles.",
-                { missingRoles: coverage.missingRoles, risks: coverage.risks },
-                [
-                  "Use discovery.source_roles.plan/coverage before adding more RSS channels.",
-                  "Use discovery.adapter_research.plan/start for missing API/marketplace/community roles.",
-                ],
-              ),
-            ]
-          : []),
-      ],
-      staleReportNotes: [
-        "This verification is read-only and DB-backed.",
-        "Source role coverage is acquisition diagnostics only and cannot select, rank, escalate, or publish content.",
-      ],
-      nextReadBack: [
-        "discovery.source_roles.coverage",
-        "discovery.adapter_research.plan",
-        "operator.report.verify reportKind=adapter_research",
-      ],
-    };
-  }
   if (reportKind === "source_family_balance") {
     const coverage = await getSourceFamilyCoverageWithPool(context.pool, { includeExamples: includeSamples });
     return {
@@ -2803,68 +2989,22 @@ export async function buildOperationalReportVerification(
       staleReportNotes: [
         "This verification is read-only and DB-backed.",
         "Working noisy, low-yield, and negative-control useful channels are retained acquisition inventory unless an operator explicitly disables them.",
-        "Source family, lifecycle label, source health, source prior, and adapter risk cannot select, rank, escalate, or publish content.",
+        "Source family, lifecycle label, source health, vNext routing telemetry, and adapter risk cannot select, rank, escalate, or publish content.",
       ],
       autoDisablePolicy: coverage.autoDisablePolicy,
       recommendations: coverage.recommendations,
       nextReadBack: coverage.nextReadBack,
     };
   }
-  if (reportKind === "adapter_research") {
-    const research = await listAdapterResearchWithPool(context.pool, {
-      pageSize: includeSamples ? 50 : 10,
-    });
-    const accessCounts = research.items.reduce<Record<string, number>>((acc, item) => {
-      const accessKind = String(
-        ((item.adapterResearch as Record<string, unknown> | null)?.accessKind ?? "unknown")
-      );
-      acc[accessKind] = (acc[accessKind] ?? 0) + 1;
-      return acc;
-    }, {});
-    return {
-      reportKind,
-      verifiedAt: new Date().toISOString(),
-      entityIds,
-      domain,
-      counts: {
-        total: research.total,
-        accessCounts,
-        pageSize: research.pageSize,
-      },
-      samples: includeSamples ? research.items : [],
-      warnings: [
-        ...((accessCounts.closed_access ?? 0) > 0 || (accessCounts.github_unofficial_restricted ?? 0) > 0
-          ? [
-              issue(
-                "warning",
-                "discovery",
-                "Adapter research includes access-restricted source roles.",
-                { accessCounts },
-                [
-                  "Use indirect aggregator targets or explicit operator-approved access for restricted platforms.",
-                  "Do not disguise API/social/ATS/project-marketplace sources as RSS or website rows.",
-                ],
-              ),
-            ]
-          : []),
-      ],
-      staleReportNotes: [
-        "This verification is read-only and DB-backed.",
-        "Adapter research rows do not create channels or selected content until separately onboarded/fetched/filtered.",
-      ],
-      nextReadBack: [
-        "discovery.adapter_research.list",
-        "discovery.source_roles.coverage",
-        "channels.bulk_onboard.plan",
-      ],
-    };
-  }
   if (reportKind === "indirect_search_execution") {
     const endpointCounts = await context.pool.query(`
       select
-        count(*) filter (where source_role = 'indirect_aggregator')::int as indirect_endpoints,
-        count(*) filter (where source_role = 'indirect_aggregator' and (status = 'detect_only' or signal_mode = 'hidden'))::int as detect_only_endpoints
-      from discovery_source_endpoints
+        count(*) filter (where tags @> array['indirect-search']::text[])::int as indirect_sources,
+        count(*) filter (
+          where tags @> array['indirect-search']::text[]
+            and current_state in ('inventory', 'cheap_watch', 'adapter_backlog')
+        )::int as watch_or_backlog_sources
+      from source_inventory
     `);
     const channelCounts = await context.pool.query(`
       select
@@ -2892,33 +3032,34 @@ export async function buildOperationalReportVerification(
       group by 1
       order by articles desc
     `);
-    const detectOnlyEndpoints = Number(endpointCounts.rows[0]?.detect_only_endpoints ?? 0);
+    const watchOrBacklogSources = Number(endpointCounts.rows[0]?.watch_or_backlog_sources ?? 0);
     return {
       reportKind,
       verifiedAt: new Date().toISOString(),
       entityIds,
       domain,
       counts: {
-        indirectEndpoints: Number(endpointCounts.rows[0]?.indirect_endpoints ?? 0),
-        detectOnlyEndpoints,
+        indirectSources: Number(endpointCounts.rows[0]?.indirect_sources ?? 0),
+        watchOrBacklogSources,
         channels: channelCounts.rows,
         articles: articleCounts.rows,
       },
       warnings: [
-        ...(detectOnlyEndpoints > 0 && channelCounts.rows.length === 0
+        ...(watchOrBacklogSources > 0 && channelCounts.rows.length === 0
           ? [
               issue(
                 "warning",
                 "discovery",
-                "Indirect aggregator evidence exists but no executable search channels are active.",
-                { detectOnlyEndpoints },
-                ["Use discovery.indirect_targets.channels.plan, then channels.bulk_onboard.plan/apply/verify."]
+                "Indirect search inventory exists but no executable search channels are active.",
+                { watchOrBacklogSources },
+                ["Use discovery.candidates.create or adapter backlog policy, then channels.bulk_onboard.plan/apply/verify."]
               ),
             ]
           : []),
       ],
       nextReadBack: [
-        "discovery.indirect_targets.channels.plan",
+        "discovery.candidates.list",
+        "discovery.adapter_backlog.list",
         "channels.bulk_onboard.plan",
         "fetch_runs.list",
         "articles.residuals.summary",
@@ -3066,7 +3207,7 @@ export function affectedOperationalResourcesForTool(toolName: string): string[] 
 }
 
 export function nextReadBackForTool(toolName: string): Record<string, unknown> {
-  if (toolName === "discovery.runs.start") {
+  if (toolName === "discovery.runs.create") {
     return {
       nextReadBack: {
         resources: [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"],
@@ -3075,21 +3216,21 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
             name: "operator.report.verify",
             arguments: {
               reportKind: "discovery_run",
-              entityIds: { targetIds: ["<targetId>"], runIds: ["<runId-from-response>"] },
+              entityIds: { runIds: ["<vnextRunId-from-response>"] },
               includeSamples: true,
             },
             verify:
-              "Treat discovery.runs.start as asynchronous discovery. Poll until the run is completed or failed; inspect coverage, hypotheses, endpoints, contracts, claims, negative evidence and provider health before reporting outcomes.",
+              "Treat discovery.runs.create as asynchronous discovery. Poll until the run is completed or failed; inspect artifacts, candidates, source inventory, policy, replay, and rollback state before reporting outcomes.",
           },
           {
-            name: "discovery.endpoints.list",
+            name: "discovery.artifacts.list",
             arguments: { page: 1, pageSize: 20 },
             verify:
-              "Use endpoints plus why-found/why-not-promoted/missing-evidence fields as review evidence; rejected or low-score endpoints are not a successful source discovery outcome.",
+              "Use ProbeReport, SourceUnderstanding, RoutingDecision, and validation fields as review evidence; rejected artifacts are not successful source discovery outcomes.",
           },
         ],
         note:
-          "Discovery runs are asynchronous and may execute child search/probe/provider work. Do not report completed discovery from the mutation response alone. New sources remain probation until contract evaluation proves stable yield.",
+          "Discovery vNext runs are asynchronous and may execute child search/probe/provider work. Do not report completed discovery from the mutation response alone. New sources enter probation only through source inventory and source_channels/outbox handoff.",
       },
     };
   }

@@ -1,12 +1,12 @@
 ---
 import {
   DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH,
+  defaultMaxEntryAgeHoursForFeedIngressAdapter,
+  ingressAdapterKeyToLegacyRssStrategy,
   parseApiChannelConfig,
   parseEmailImapChannelConfig,
   parseRssChannelConfig,
   parseWebsiteChannelConfig,
-  resolveRssChannelAdapterStrategy,
-  resolveRssChannelMaxEntryAgeHours,
 } from "@newsportal/contracts";
 import { readRuntimeConfig } from "@newsportal/config";
 import { createNewsPortalSdk } from "@newsportal/sdk";
@@ -26,6 +26,7 @@ import {
 } from "../../../lib/channel-providers";
 import { ADMIN_HERO_CARD_CLASS } from "../../../lib/admin-ui-classes";
 import { asRecord, formatTimestamp } from "../../../lib/view-helpers";
+import { queryRows } from "../../../lib/server/db";
 
 export const prerender = false;
 
@@ -70,6 +71,84 @@ const deleteLabel = storedItemCount > 0 ? "Archive channel" : "Delete channel";
 const deleteDescription = storedItemCount > 0
   ? `This source already has ${storedItemCount} stored item${storedItemCount === 1 ? "" : "s"}. It will be archived, not deleted.`
   : `This ${providerSubject} has no stored history yet, so deleting it removes it permanently.`;
+type AdapterBindingRow = {
+  adapter_key: string;
+  title: string;
+  runtime_kind: string;
+  output_mode: string;
+  status: string;
+  selection_mode: string;
+  enabled: boolean;
+  config_json: Record<string, unknown>;
+};
+type AdapterOptionRow = {
+  adapter_key: string;
+  title: string;
+  runtime_kind: string;
+  status: string;
+};
+type FetchRunAdapterRow = {
+  adapter_key: string | null;
+  adapter_runtime_kind: string | null;
+  adapter_selection_mode: string | null;
+  provider_metrics_json: Record<string, unknown>;
+  outcome_kind: string;
+  started_at: string;
+};
+const [adapterBinding] = await queryRows<AdapterBindingRow>(
+  `
+    select
+      scab.adapter_key,
+      iac.title,
+      iac.runtime_kind,
+      iac.output_mode,
+      iac.status,
+      scab.selection_mode,
+      scab.enabled,
+      scab.config_json
+    from source_channel_adapter_binding scab
+    join ingress_adapter_catalog iac on iac.adapter_key = scab.adapter_key
+    where scab.channel_id = $1
+    limit 1
+  `,
+  [channelId]
+);
+const adapterOptions = providerType
+  ? await queryRows<AdapterOptionRow>(
+      `
+        select adapter_key, title, runtime_kind, status
+        from ingress_adapter_catalog
+        where provider_type = $1
+          and status in ('active', 'draft')
+        order by priority desc, adapter_key
+      `,
+      [providerType]
+    )
+  : [];
+const [lastAdapterRun] = await queryRows<FetchRunAdapterRow>(
+  `
+    select
+      adapter_key,
+      adapter_runtime_kind,
+      adapter_selection_mode,
+      provider_metrics_json,
+      outcome_kind,
+      started_at::text as started_at
+    from channel_fetch_runs
+    where channel_id = $1
+    order by started_at desc
+    limit 1
+  `,
+  [channelId]
+);
+const bindingConfigJson = JSON.stringify(adapterBinding?.config_json ?? {}, null, 2);
+const bindingAdapterKey = adapterBinding?.adapter_key ?? "";
+const rssBindingStrategy = ingressAdapterKeyToLegacyRssStrategy(bindingAdapterKey);
+const adapterBindingConfigRecord = asRecord(adapterBinding?.config_json);
+const bindingMaxEntryAgeHours =
+  typeof adapterBindingConfigRecord.maxEntryAgeHours === "number"
+    ? adapterBindingConfigRecord.maxEntryAgeHours
+    : null;
 ---
 
 <AdminShell title="Edit Channel — Admin" session={session} flash={flash} activeNav="channels">
@@ -119,6 +198,61 @@ const deleteDescription = storedItemCount > 0
         </section>
       </div>
 
+      <section class="rounded-lg border border-border bg-card p-5 shadow-sm">
+        <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+          <div>
+            <h2 class="text-base font-semibold text-foreground">Ingress adapter binding</h2>
+            <div class="mt-3 grid gap-2 text-sm text-muted-foreground">
+              <p>
+                Current:{" "}
+                <span class="font-medium text-foreground">
+                  {adapterBinding ? `${adapterBinding.title} (${adapterBinding.adapter_key})` : "provider default"}
+                </span>
+              </p>
+              <p>Selection: {adapterBinding?.selection_mode ?? "fallback"} · enabled: {adapterBinding?.enabled === false ? "no" : "yes"}</p>
+              <p>
+                Last run:{" "}
+                {lastAdapterRun
+                  ? `${lastAdapterRun.adapter_key ?? "none"} / ${lastAdapterRun.adapter_selection_mode ?? "none"} / ${lastAdapterRun.outcome_kind}`
+                  : "none"}
+              </p>
+            </div>
+          </div>
+          <form method="post" action={appPath("/bff/admin/ingress-adapters")} class="grid gap-3">
+            <input type="hidden" name="intent" value="set-binding" />
+            <input type="hidden" name="channelId" value={channelId} />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <label class="grid gap-1 text-sm font-medium">
+              Adapter
+              <select name="adapterKey" class="h-10 rounded-md border border-input bg-transparent px-3 text-sm">
+                {adapterOptions.map((adapter) => (
+                  <option value={adapter.adapter_key} selected={adapter.adapter_key === bindingAdapterKey}>
+                    {adapter.title} ({adapter.adapter_key})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="grid gap-1 text-sm font-medium">
+              Binding config JSON
+              <textarea name="configJson" rows="4" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{bindingConfigJson}</textarea>
+            </label>
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
+              Set binding
+            </button>
+          </form>
+        </div>
+        {adapterBinding ? (
+          <form method="post" action={appPath("/bff/admin/ingress-adapters")} class="mt-4">
+            <input type="hidden" name="intent" value="delete-binding" />
+            <input type="hidden" name="channelId" value={channelId} />
+            <input type="hidden" name="redirectTo" value={currentPath} />
+            <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition hover:bg-accent">
+              Delete binding
+            </button>
+          </form>
+        ) : null}
+      </section>
+
       <ChannelEditorForm
         action={appPath("/bff/admin/channels")}
         mode="edit"
@@ -149,6 +283,7 @@ const deleteDescription = storedItemCount > 0
               allowedUrlPatternsText: (websiteConfig?.allowedUrlPatterns ?? []).join("\n"),
               blockedUrlPatternsText: (websiteConfig?.blockedUrlPatterns ?? []).join("\n"),
               hasAuthorizationHeader: channel.has_authorization_header === true,
+              adapterKey: bindingAdapterKey || null,
             }
           : providerType === "api"
             ? {
@@ -178,6 +313,8 @@ const deleteDescription = storedItemCount > 0
                   DEFAULT_CHANNEL_ENRICHMENT_MIN_BODY_LENGTH
                 ),
                 hasAuthorizationHeader: channel.has_authorization_header === true,
+                adapterKey: null,
+                ingressAdapterKey: bindingAdapterKey || null,
               }
             : providerType === "email_imap"
               ? {
@@ -205,6 +342,7 @@ const deleteDescription = storedItemCount > 0
                   mailbox: emailImapConfig?.mailbox ?? "INBOX",
                   searchFrom: emailImapConfig?.searchFrom ?? "",
                   hasPassword: Boolean(String(emailImapConfig?.password ?? "").trim()),
+                  adapterKey: bindingAdapterKey || null,
                 }
               : {
                   channelId,
@@ -220,16 +358,14 @@ const deleteDescription = storedItemCount > 0
                   userAgent: rssConfig?.userAgent ?? "NewsPortalFetchers/0.1",
                   maxItemsPerPoll: rssConfig?.maxItemsPerPoll ?? 20,
                   preferContentEncoded: rssConfig?.preferContentEncoded ?? true,
-                  adapterStrategy: rssConfig?.adapterStrategy ?? null,
-                  maxEntryAgeHours: rssConfig?.maxEntryAgeHours ?? null,
-                  resolvedAdapterStrategy: resolveRssChannelAdapterStrategy(
-                    String(channel.fetch_url ?? ""),
-                    rssConfig ?? parseRssChannelConfig({})
-                  ),
-                  resolvedMaxEntryAgeHours: resolveRssChannelMaxEntryAgeHours(
-                    String(channel.fetch_url ?? ""),
-                    rssConfig ?? parseRssChannelConfig({})
-                  ),
+                  adapterStrategy: rssBindingStrategy ?? null,
+                  adapterKey: bindingAdapterKey || null,
+                  maxEntryAgeHours: bindingMaxEntryAgeHours ?? rssConfig?.maxEntryAgeHours ?? null,
+                  resolvedAdapterStrategy: rssBindingStrategy ?? "generic",
+                  resolvedMaxEntryAgeHours:
+                    bindingMaxEntryAgeHours != null
+                      ? bindingMaxEntryAgeHours
+                      : defaultMaxEntryAgeHoursForFeedIngressAdapter(rssBindingStrategy ?? "generic"),
                   enrichmentEnabled: channel.enrichment_enabled !== false,
                   enrichmentMinBodyLength: asInt(
                     channel.enrichment_min_body_length,

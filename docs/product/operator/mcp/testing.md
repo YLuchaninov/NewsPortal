@@ -83,21 +83,7 @@ What these prove:
 
 ## 2. Local provider-backed evidence
 
-Use this when you want a more life-like run while still staying on the local compose baseline.
-
-```bash
-pnpm test:mcp:http:live
-```
-
-This still runs against the local NewsPortal stack, but it allows outbound provider/runtime behavior and writes `/tmp/newsportal-mcp-http-live-*.json|md` artifacts.
-
-Use it for:
-
-- live-like discovery and recall journeys
-- bounded runtime-backed sequence execution
-- classifying runtime vs provider vs usefulness residuals
-
-Do not confuse this with testing a shared staging deployment. It is still a local NewsPortal stack plus live/provider pressure.
+Provider-backed MCP evidence now comes from targeted provider/fetcher and vNext discovery HTTP groups, not from a separate live discovery harness.
 
 ## 3. Non-local or shared-environment smoke
 
@@ -151,7 +137,7 @@ For article/content diagnostics in shared environments:
 
 - stay read-only unless you have an explicit bounded tuning task;
 - start with `articles.residuals.summary` and only then inspect `articles.residuals.list`, `articles.explain`, and `content_items.explain`;
-- use `system_interest.polish`, `llm_template.tune`, or `discovery.profile.tune` as recommendation prompts, not as an excuse to skip read-after-write verification on the actual entity.
+- use `system_interest.polish`, `llm_template.tune`, or `discovery.policy.tune` as recommendation prompts, not as an excuse to skip read-after-write verification on the actual entity.
 
 ### Remote smoke checklist
 
@@ -169,7 +155,7 @@ For article/content diagnostics in shared environments:
 - do not reuse browser cookies as MCP auth;
 - do not hardcode tokens into committed config files;
 - do not run the local compose proof scripts and assume they are exercising a remote shared deployment;
-- do not treat `pnpm test:mcp:http:live` as a production smoke against a deployed environment.
+- do not treat local compose proof scripts as production smokes against a deployed environment.
 
 ## 5. Recommended operator order
 

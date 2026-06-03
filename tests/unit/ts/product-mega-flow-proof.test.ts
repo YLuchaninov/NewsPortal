@@ -43,10 +43,10 @@ function caseRun(key: string) {
       profile_key: `${key}_proof`,
     },
     manualReplaySettings: {
-      graphMissionId: "graph",
-      recallMissionId: "recall",
+      runId: "vnext-run",
+      replayRunId: "vnext-replay",
     },
-    graphLane: {
+    vnextLane: {
       candidates: [
         {
           decision: "approved",
@@ -54,9 +54,6 @@ function caseRun(key: string) {
           registeredChannelId: `${key}-channel`,
         },
       ],
-    },
-    recallLane: {
-      candidates: [],
     },
     baselineEvidence: [
       {

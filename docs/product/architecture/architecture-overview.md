@@ -46,6 +46,8 @@ PostgreSQL хранит бизнес-истину. Redis, BullMQ, HNSW-инде�
 
 Website-источники важны отдельно: `web_resources` не являются “почти статьями” и не должны тихо превращаться в RSS. Editorial-compatible resources могут проецироваться в `articles`, но resource truth остается видимой в admin `Resources`.
 
+Adapter selection для source channels идет через `ingress_adapter_catalog` и `source_channel_adapter_binding`. Старые RSS/API hints в `config_json` могут объяснять историю канала, но не должны быть текущей runtime truth, если binding уже есть.
+
 ## Selection и personalization
 
 Система сначала строит общий system-selected слой, а уже потом персонализацию.
@@ -72,16 +74,20 @@ Discovery помогает находить новые источники, но 
 
 - по умолчанию discovery выключен;
 - live search и LLM требуют явных env/config;
-- auto-promotion зависит от profile policy и review gates;
-- graph-first missions и independent recall — разные, но связанные пути;
+- probation handoff depends on vNext routing policy and review gates;
+- vNext candidates, probe reports, source understanding and routing decisions are the operator model;
 - browser-assisted hints для website candidates не превращают source в RSS и не обходят CAPTCHA/login/manual challenge.
+
+## Task plugins and sequences
+
+Sequence runtime исполняет зарегистрированные TaskPlugins, а не произвольный код из админки. Plugin contract metadata виден через API/MCP/admin discovery, чтобы оператор понимал options, required context, outputs, retry class and failure codes before running or editing a sequence.
 
 ## Операторские поверхности
 
 Оператору важны не внутренние классы, а видимые точки контроля:
 
 - `/admin` — dashboard, channels, rules, articles, clusters, resources, reindex, observability.
-- `/admin/discovery` и соседние discovery routes — missions, profiles, recall, candidates, sources.
+- `/admin/discovery` — vNext runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, replay and rollback.
 - `/maintenance/*` FastAPI endpoints — read/debug/maintenance контур.
 - MCP service — безопасный control-plane для внешних operator tools.
 - Mailpit в dev compose — локальная проверка email delivery без реальных писем.

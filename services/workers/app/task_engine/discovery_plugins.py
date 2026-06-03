@@ -10,10 +10,6 @@ from .discovery_storage_plugins import DbStorePlugin
 from .discovery_sampling_plugins import ContentSamplerPlugin
 from .discovery_scoring_plugins import RelevanceScorerPlugin
 from .discovery_search_plugins import WebSearchPlugin
-from .discovery_v3_cluster_plugins import DiscoveryV3UrlClusterPlugin
-from .discovery_v3_endpoint_sweep_plugins import DiscoveryV3EndpointSweepPlugin
-from .discovery_v3_scoring_plugins import DiscoveryV3ActionDeciderPlugin, DiscoveryV3EndpointScorerPlugin
-from .discovery_v3_source_directory_plugins import DiscoveryV3SourceDirectoryExtractorPlugin
 from .plugins import TASK_REGISTRY, TaskPluginRegistry
 from .discovery_runtime import get_discovery_runtime as _get_discovery_runtime
 
@@ -31,11 +27,6 @@ DISCOVERY_PLUGIN_CLASSES = (
     RelevanceScorerPlugin,
     LlmAnalyzerPlugin,
     SourceRegistrarPlugin,
-    DiscoveryV3UrlClusterPlugin,
-    DiscoveryV3SourceDirectoryExtractorPlugin,
-    DiscoveryV3EndpointSweepPlugin,
-    DiscoveryV3EndpointScorerPlugin,
-    DiscoveryV3ActionDeciderPlugin,
 )
 
 UTILITY_PLUGIN_CLASSES = (DbStorePlugin,)

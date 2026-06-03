@@ -39,6 +39,17 @@ const STACK_SERVICES = [
   "admin",
   "nginx",
 ];
+const PRIVATE_HOST_ALLOWLIST_ENV = "FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST";
+const UI_AUDIT_FIXTURE_ALLOWLIST = ["web"];
+
+function ensureFixtureAllowlist() {
+  const existing = String(process.env[PRIVATE_HOST_ALLOWLIST_ENV] ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const merged = new Set([...existing, ...UI_AUDIT_FIXTURE_ALLOWLIST]);
+  process.env[PRIVATE_HOST_ALLOWLIST_ENV] = [...merged].join(",");
+}
 
 function log(message) {
   console.log(`[ui-button-audit] ${message}`);
@@ -47,6 +58,7 @@ function log(message) {
 const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
 async function ensureComposeStack() {
+  ensureFixtureAllowlist();
   log("Ensuring compose stack is available for the UI button audit.");
   log("Rebuilding admin and fetchers so the audit uses current BFF and acquisition-guard code.");
   runCompose("build", "admin");
@@ -704,121 +716,114 @@ async function seedAdminFixtures(env, adminCookie, runId) {
   const editableChannelId = String(editableChannel.json?.channelId ?? "");
   assert.ok(editableChannelId);
 
-  const discoveryTargetId = firstResultLine(queryPostgres(
-    env,
-    `
-      insert into discovery_targets (
-        origin_kind,
-        title,
-        description,
-        seed_topics,
-        seed_languages,
-        graph_json,
-        policy_json,
-        created_by
-      )
-      values (
-        'manual_prompt',
-        ${sqlLiteral(`UI audit discovery target ${runId}`)},
-        'Browser click audit resilient discovery target',
-        array['browser audit discovery']::text[],
-        array['en']::text[],
-        '{"sourceRoleTargets":{"technical_change":{"min":1,"target":1}}}'::jsonb,
-        '{"targetSafety":{"manualReviewRequired":true}}'::jsonb,
-        'ui-button-audit'
-      )
-      returning target_id::text;
-    `
-  ));
-  assert.ok(discoveryTargetId);
-
   const discoveryRunId = firstResultLine(queryPostgres(
     env,
     `
-      insert into discovery_runs (
-        target_id,
+      insert into discovery_vnext_runs (
         run_kind,
         trigger_kind,
         status,
-        summary_json,
+        request_json,
+        result_json,
         created_by
       )
       values (
-        ${sqlLiteral(discoveryTargetId)},
-        'manual',
-        'manual',
-        'completed',
+        'full',
+        'operator',
+        'succeeded',
+        ${sqlLiteral(JSON.stringify({ uiAudit: true, title: `UI audit discovery run ${runId}` }))}::jsonb,
         '{"uiAudit":true}'::jsonb,
         'ui-button-audit'
       )
-      returning run_id::text;
+      returning vnext_run_id::text;
     `
   ));
   assert.ok(discoveryRunId);
 
-  const discoveryEndpointId = firstResultLine(queryPostgres(
+  const discoveryArtifactId = firstResultLine(queryPostgres(
     env,
     `
-      insert into discovery_source_endpoints (
-        target_id,
-        run_id,
-        provider_id,
-        provider_type,
-        canonical_domain,
-        homepage_url,
-        endpoint_url,
-        normalized_endpoint_url,
-        endpoint_kind,
-        source_role,
-        signal_mode,
-        title,
-        evidence_json,
-        interest_fit_score,
-        evidence_score,
-        quality_score,
-        yield_score,
-        freshness_score,
-        novelty_score,
-        extraction_ready_score,
-        coverage_gap_score,
-        compliance_score,
-        adversarial_confidence_score,
-        total_score,
+      insert into discovery_artifacts (
+        artifact_type,
+        schema_version,
+        vnext_run_id,
+        created_by,
+        policy_version,
         status,
-        recommended_action
+        payload_json,
+        validation_json
       )
       values (
-        ${sqlLiteral(discoveryTargetId)},
+        'DiscoveryBrief',
+        '1.0',
         ${sqlLiteral(discoveryRunId)},
-        'rss',
-        'rss',
-        ${sqlLiteral(`audit-${runId}.example.test`)},
-        ${sqlLiteral(`https://audit-${runId}.example.test`)},
-        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
-        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
-        'rss_feed',
-        'technical_change',
-        'direct',
-        ${sqlLiteral(`UI audit endpoint ${runId}`)},
-        '{"whyFound":["UI audit v3 endpoint"],"whyNotPromoted":["manual audit only"]}'::jsonb,
-        0.8,
-        0.8,
-        0.8,
-        0.8,
-        0.8,
-        1.0,
-        0.9,
-        1.0,
-        1.0,
-        0.8,
-        0.84,
-        'manual_review',
-        'manual_promote'
+        'ui-button-audit',
+        'vnext-1',
+        'validated',
+        ${sqlLiteral(JSON.stringify({
+          interestSummary: `UI audit discovery brief ${runId}`,
+          neutrality: { domainSpecificRules: false },
+        }))}::jsonb,
+        '{"valid":true}'::jsonb
       )
-      returning endpoint_id::text;
+      returning artifact_id::text;
     `
   ));
-  assert.ok(discoveryEndpointId);
+  assert.ok(discoveryArtifactId);
+
+  const discoveryCandidateId = firstResultLine(queryPostgres(
+    env,
+    `
+      insert into discovery_candidates (
+        vnext_run_id,
+        interest_id,
+        hypothesis_artifact_id,
+        canonical_url,
+        canonical_domain,
+        candidate_kind_guess,
+        acquisition_json,
+        status
+      )
+      values (
+        ${sqlLiteral(discoveryRunId)},
+        null,
+        ${sqlLiteral(discoveryArtifactId)},
+        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
+        ${sqlLiteral(`audit-${runId}.example.test`)},
+        'rss_feed',
+        '{"uiAudit":true,"queryFamily":"button-audit"}'::jsonb,
+        'routed'
+      )
+      returning candidate_id::text;
+    `
+  ));
+  assert.ok(discoveryCandidateId);
+
+  const discoveryInventoryId = firstResultLine(queryPostgres(
+    env,
+    `
+      insert into source_inventory (
+        canonical_domain,
+        canonical_url,
+        source_identity_key,
+        current_state,
+        current_provider_type,
+        risk_json,
+        tags
+      )
+      values (
+        ${sqlLiteral(`audit-${runId}.example.test`)},
+        ${sqlLiteral(`https://audit-${runId}.example.test/feed.xml`)},
+        ${sqlLiteral(`ui-audit:${runId}`)},
+        'manual_review',
+        'rss',
+        '{"uiAudit":true}'::jsonb,
+        array['ui-audit']::text[]
+      )
+      returning source_inventory_id::text;
+    `
+  ));
+  assert.ok(discoveryInventoryId);
 
   const articleDocId = firstResultLine(queryPostgres(
     env,
@@ -855,9 +860,10 @@ async function seedAdminFixtures(env, adminCookie, runId) {
     systemInterestId,
     editableChannelId,
     deletableChannelId,
-    discoveryTargetId,
     discoveryRunId,
-    discoveryEndpointId,
+    discoveryArtifactId,
+    discoveryCandidateId,
+    discoveryInventoryId,
     articleDocId,
     resourceId,
   };
@@ -1414,21 +1420,24 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   result.checked.push("admin:/automation request run");
 
   await openPage(page, automationEditorUrl);
-  page.once("dialog", (dialog) => {
-    void dialog.accept();
-  });
+  await page.getByRole("button", { name: "Archive" }).click();
+  await page.getByRole("alertdialog").waitFor({ state: "visible", timeout: 3000 });
   await Promise.all([
     page.waitForURL(/\/automation(?:\?.*)?$/u, { waitUntil: "domcontentloaded", timeout: 30000 }),
-    page.getByRole("button", { name: "Archive" }).click(),
+    page
+      .locator('[role="alertdialog"] button')
+      .filter({ hasText: /^\s*Archive\s*$/u })
+      .first()
+      .click(),
   ]);
   result.checked.push("admin:/automation archive workflow");
 
   log("Admin: discovery smoke.");
-  await openPage(page, "/discovery?tab=missions");
+  await openPage(page, "/discovery?tab=runs");
   result.skipped.push({
     route: "/discovery",
     action: "discovery action buttons",
-    reason: "covered by test:discovery:admin:compose in the full local product contour",
+    reason: "covered by admin discovery workspace checks in the full local product contour",
   });
 
   await openPage(page, "/templates");

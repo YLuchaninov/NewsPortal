@@ -227,7 +227,7 @@ Durable capability lines that often need staged work:
 - Article/canonical pipeline: normalize, dedup, canonical documents, story clusters, verification and replay.
 - Selection and personalization: selection profiles, interest filters, final selection, system feed compatibility, user-interest matches.
 - Notifications and digests: web push, Telegram, email digest, preferences, delivery logs and cleanup discipline.
-- Discovery acquisition: graph-first missions plus independent recall, source quality snapshots, candidate promotion and budgeted live search.
+- Discovery acquisition: vNext runs, typed artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, adapter backlog, replay and rollback.
 - Content analysis and gating: persisted NER/entities, labels, analysis results, configurable content filter policies and dry-run/enforce gate explainability.
 - Operator/admin control plane: admin UI, FastAPI maintenance endpoints, MCP service and audit logging.
 - Runtime delivery: compose stack, migrations, health checks, nginx, Mailpit and local proof gates.
@@ -275,7 +275,6 @@ Durable capability lines that often need staged work:
 - `.aidp/contracts/content-model.md`
 - `.aidp/contracts/discovery-agent.md`
 - `.aidp/contracts/feed-ingress-adapters.md`
-- `.aidp/contracts/independent-recall-discovery.md`
 - `.aidp/contracts/mcp-control-plane.md`
 - `.aidp/contracts/notifications-and-digests.md`
 - `.aidp/contracts/runtime-migrations-and-derived-state.md`

@@ -10,6 +10,71 @@ export const DOC_PARITY_CLASSIFICATIONS = [
   NOT_HTTP_APPLICABLE,
 ];
 
+export const EXPECTED_SHIPPED_NOT_YET_EXERCISED = {
+  tools: [
+    "articles.holds.explain",
+    "articles.holds.list",
+    "articles.holds.summary",
+    "channels.alternatives.plan",
+    "channels.alternatives.start",
+    "channels.bottlenecks.explain",
+    "channels.bottlenecks.list",
+    "channels.bottlenecks.summary",
+    "channels.set_active",
+    "discovery.adapter_backlog.list",
+    "discovery.adapter_backlog.read",
+    "discovery.artifacts.create",
+    "discovery.artifacts.list",
+    "discovery.artifacts.read",
+    "discovery.artifacts.validate",
+    "discovery.brief.preview",
+    "discovery.candidates.create",
+    "discovery.candidates.list",
+    "discovery.candidates.normalize",
+    "discovery.candidates.read",
+    "discovery.eval_runs.list",
+    "discovery.eval_runs.read",
+    "discovery.feedback.list",
+    "discovery.feedback.read",
+    "discovery.feedback.submit",
+    "discovery.mega_loop.preview",
+    "discovery.policies.activate",
+    "discovery.policies.list",
+    "discovery.policies.read",
+    "discovery.policies.validate",
+    "discovery.probation.handoff",
+    "discovery.probe.execute",
+    "discovery.probe.plan_preview",
+    "discovery.replay.start",
+    "discovery.replay_runs.list",
+    "discovery.replay_runs.read",
+    "discovery.rollback.apply",
+    "discovery.rollback.prepare",
+    "discovery.rollback_actions.list",
+    "discovery.rollback_actions.read",
+    "discovery.rollback_groups.list",
+    "discovery.rollback_groups.read",
+    "discovery.route.preview",
+    "discovery.routing.apply",
+    "discovery.runs.cancel",
+    "discovery.runs.create",
+    "discovery.runs.list",
+    "discovery.runs.read",
+    "discovery.source_families.coverage",
+    "discovery.source_inventory.list",
+    "discovery.source_inventory.read",
+    "discovery.understand.preview",
+    "operator.funnel.audit",
+    "operator.funnel.autoplan",
+    "operator.funnel.iteration.recommend",
+    "operator.selection.precision_audit",
+    "system_interests.compile_status.list",
+    "templates.duplicates.audit",
+  ],
+  resources: [],
+  prompts: [],
+};
+
 export const LEGACY_MCP_PLAN_SNAPSHOT = {
   tools: [
     { name: "admin.summary.get" },
@@ -30,45 +95,46 @@ export const LEGACY_MCP_PLAN_SNAPSHOT = {
     { name: "channels.create" },
     { name: "channels.update" },
     { name: "channels.delete" },
-    { name: "discovery.summary.get" },
-    { name: "discovery.targets.list" },
-    { name: "discovery.targets.read" },
-    { name: "discovery.targets.create_manual" },
-    { name: "discovery.targets.update" },
-    { name: "discovery.coverage.read" },
-    { name: "discovery.coverage.refresh" },
+    { name: "discovery.artifacts.list" },
+    { name: "discovery.artifacts.read" },
+    { name: "discovery.artifacts.create" },
+    { name: "discovery.artifacts.validate" },
+    { name: "discovery.brief.preview" },
+    { name: "discovery.candidates.list" },
+    { name: "discovery.candidates.read" },
+    { name: "discovery.candidates.normalize" },
+    { name: "discovery.candidates.create" },
     { name: "discovery.runs.list" },
     { name: "discovery.runs.read" },
-    { name: "discovery.runs.start" },
+    { name: "discovery.runs.create" },
     { name: "discovery.runs.cancel" },
-    { name: "discovery.endpoints.list" },
-    { name: "discovery.endpoints.read" },
-    { name: "discovery.endpoints.promote" },
-    { name: "discovery.endpoints.reject" },
-    { name: "discovery.endpoints.expand" },
-    { name: "discovery.endpoints.mark_duplicate" },
-    { name: "discovery.hypotheses.list" },
-    { name: "discovery.hypotheses.read" },
-    { name: "discovery.domains.list" },
-    { name: "discovery.domains.read" },
-    { name: "discovery.actions.list" },
-    { name: "discovery.actions.read" },
-    { name: "discovery.contracts.list" },
-    { name: "discovery.contracts.read" },
-    { name: "discovery.contracts.evaluate" },
-    { name: "discovery.claims.list" },
-    { name: "discovery.claims.read" },
-    { name: "discovery.negative_evidence.list" },
-    { name: "discovery.negative_evidence.read" },
-    { name: "discovery.negative_evidence.clear_cooldown" },
-    { name: "discovery.provider_health.list" },
-    { name: "discovery.provider_health.read" },
-    { name: "discovery.provider_health.repair" },
-    { name: "discovery.identities.list" },
-    { name: "discovery.identities.read" },
-    { name: "discovery.eval_suites.list" },
-    { name: "discovery.eval_suites.read" },
-    { name: "discovery.eval_suites.run" },
+    { name: "discovery.mega_loop.preview" },
+    { name: "discovery.probe.plan_preview" },
+    { name: "discovery.probe.execute" },
+    { name: "discovery.understand.preview" },
+    { name: "discovery.route.preview" },
+    { name: "discovery.routing.apply" },
+    { name: "discovery.probation.handoff" },
+    { name: "discovery.source_inventory.list" },
+    { name: "discovery.source_inventory.read" },
+    { name: "discovery.policies.list" },
+    { name: "discovery.policies.read" },
+    { name: "discovery.policies.validate" },
+    { name: "discovery.policies.activate" },
+    { name: "discovery.adapter_backlog.list" },
+    { name: "discovery.adapter_backlog.read" },
+    { name: "discovery.feedback.list" },
+    { name: "discovery.feedback.read" },
+    { name: "discovery.feedback.submit" },
+    { name: "discovery.replay_runs.list" },
+    { name: "discovery.replay_runs.read" },
+    { name: "discovery.replay.start" },
+    { name: "discovery.rollback_groups.list" },
+    { name: "discovery.rollback_groups.read" },
+    { name: "discovery.rollback_actions.list" },
+    { name: "discovery.rollback_actions.read" },
+    { name: "discovery.rollback.prepare" },
+    { name: "discovery.rollback.apply" },
     { name: "discovery.eval_runs.list" },
     { name: "discovery.eval_runs.read" },
     { name: "sequences.list" },
@@ -98,22 +164,17 @@ export const LEGACY_MCP_PLAN_SNAPSHOT = {
     { uri: "newsportal://web-resources" },
     { uri: "newsportal://fetch-runs" },
     {
-      uri: "newsportal://discovery/source-evidence-contracts",
-      note: "Planning-doc example for resilient discovery v3; current HTTP registry exposes it through discovery resources and tools.",
+      uri: "newsportal://discovery/source-inventory",
+      note: "Discovery vNext inventory is exposed through discovery.source_inventory.* tools.",
     },
     {
-      uri: "newsportal://discovery/negative-evidence",
-      note: "Planning-doc example for resilient discovery v3; current HTTP registry keeps failure memory surfaced through tools and resources.",
+      uri: "newsportal://discovery/artifacts",
+      note: "Typed Discovery vNext artifacts are exposed through discovery.artifacts.* tools.",
     },
   ],
   prompts: [
     { name: "system_interest.create" },
     { name: "discovery.session.plan" },
-    { name: "discovery.constructive_skeptic.review" },
-    { name: "discovery.verification_skeptic.review" },
-    { name: "discovery.contract.review" },
-    { name: "discovery.claim.review" },
-    { name: "discovery.failure.repair" },
     { name: "sequence.draft" },
     { name: "cleanup.guidance" },
     {
@@ -121,8 +182,8 @@ export const LEGACY_MCP_PLAN_SNAPSHOT = {
       note: "Mentioned in the older planning doc but not shipped in the HTTP prompt registry.",
     },
     {
-      name: "discovery.mission.review",
-      note: "Legacy mission prompt kept as deferred documentation context; v3 uses target/session/contract/claim prompts.",
+      name: "discovery.routing.review",
+      note: "Deferred documentation example for reviewing vNext SourceUnderstanding and RoutingDecision artifacts.",
     },
   ],
   examples: [
@@ -257,8 +318,27 @@ export function getUntestedShippedEntries(matrix) {
   return shippedEntries.filter((entry) => entry.classification === SHIPPED_NOT_YET_TESTED);
 }
 
+function getExpectedUntestedKey(entry) {
+  if (entry.kind === "resource") {
+    return entry.uri;
+  }
+  return entry.name;
+}
+
+export function getUnexpectedUntestedShippedEntries(matrix) {
+  const expected = {
+    tool: toKeySet(EXPECTED_SHIPPED_NOT_YET_EXERCISED.tools),
+    resource: toKeySet(EXPECTED_SHIPPED_NOT_YET_EXERCISED.resources),
+    prompt: toKeySet(EXPECTED_SHIPPED_NOT_YET_EXERCISED.prompts),
+  };
+  return getUntestedShippedEntries(matrix).filter((entry) => {
+    const key = getExpectedUntestedKey(entry);
+    return !expected[entry.kind]?.has(key);
+  });
+}
+
 export function assertFullShippedCoverage(matrix) {
-  const missing = getUntestedShippedEntries(matrix);
+  const missing = getUnexpectedUntestedShippedEntries(matrix);
   if (missing.length === 0) {
     return;
   }

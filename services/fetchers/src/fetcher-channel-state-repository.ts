@@ -413,6 +413,9 @@ export class FetcherChannelStateRepository {
           duplicate_suppressed_count,
           cursor_changed,
           error_text,
+          adapter_key,
+          adapter_runtime_kind,
+          adapter_selection_mode,
           provider_metrics_json,
           schedule_snapshot_json
         )
@@ -432,8 +435,11 @@ export class FetcherChannelStateRepository {
           $13,
           $14,
           $15,
-          $16::jsonb,
-          $17::jsonb
+          $16,
+          $17,
+          $18,
+          $19::jsonb,
+          $20::jsonb
         )
       `,
       [
@@ -455,6 +461,9 @@ export class FetcherChannelStateRepository {
         completion.duplicateSuppressedCount,
         completion.cursorChanged,
         completion.errorMessage,
+        completion.adapterKey ?? null,
+        completion.adapterRuntimeKind ?? null,
+        completion.adapterSelectionMode ?? null,
         JSON.stringify(completion.providerMetricsJson ?? {}),
         JSON.stringify(this.buildScheduleSnapshot(channel))
       ]

@@ -53,6 +53,8 @@ test("parseApiAdminChannelInput normalizes API admin payload fields", () => {
       nextUrlPath: "next",
       pageParam: "page",
       pageStart: 1,
+      cursorParam: "cursor",
+      cursorPath: "nextCursor",
       maxPagesPerPoll: 1,
     },
     itemsPath: "data.records",
@@ -63,6 +65,7 @@ test("parseApiAdminChannelInput normalizes API admin payload fields", () => {
     publishedAtField: "published_at",
     externalIdField: "external_id",
     languageField: "lang",
+    ingressAdapterKey: null,
     adapter: {
       adapterKey: null,
       researchMode: "production",

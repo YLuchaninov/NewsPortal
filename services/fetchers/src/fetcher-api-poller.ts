@@ -1,4 +1,5 @@
 import {
+  ingressAdapterKeyToLegacyApiAdapterKey,
   parseApiChannelConfig,
   resolveSourceChannelAuthorizationHeader
 } from "@newsportal/contracts";
@@ -7,9 +8,7 @@ import type { FetchersConfig } from "./config";
 import {
   ChannelFetchError,
   classifyHttpFailure,
-  getByPath,
   normalizeExternalUrl,
-  normalizeWhitespace,
   parseRetryAfterSeconds
 } from "./fetcher-channel-helpers";
 import type {
@@ -20,6 +19,8 @@ import type {
 } from "./fetcher-persistence";
 import { validateAcquisitionUrl } from "./probe-url-guard";
 import { fetchApiAdapterItems } from "./api-adapter-registry";
+import type { ResolvedIngressAdapter } from "./ingress-adapters/resolver";
+import { executeDeclarativeApiRuntime } from "./ingress-adapters/declarative-api-runtime";
 
 interface ApiChannelPollerDependencies {
   config: FetchersConfig;
@@ -32,6 +33,7 @@ interface ApiChannelPollerDependencies {
     channel: SourceChannelRow,
     completion: ChannelPollCompletion
   ) => Promise<void>;
+  resolvedAdapter?: ResolvedIngressAdapter | null;
 }
 
 const MAX_API_RESPONSE_BODY_BYTES = 5_000_000;
@@ -51,16 +53,6 @@ interface ApiTextFetchResult {
   retryAfterSeconds: number | null;
 }
 
-function buildPagedUrl(rawUrl: string, pageParam: string, pageNumber: number): string {
-  const url = new URL(rawUrl);
-  url.searchParams.set(pageParam, String(pageNumber));
-  return url.toString();
-}
-
-function resolveApiItemUrl(rawUrl: string, baseUrl: string): string {
-  return normalizeExternalUrl(new URL(rawUrl, baseUrl).toString());
-}
-
 function readApiPageCursor(cursors: CursorMap): string | null {
   return cursors[API_PAGE_CURSOR_TYPE]?.cursorValue ?? null;
 }
@@ -70,6 +62,17 @@ function buildApiRequestBody(apiConfig: ReturnType<typeof parseApiChannelConfig>
     return undefined;
   }
   return JSON.stringify(apiConfig.requestBodyJson);
+}
+
+function parseApiPayload(text: string, responseFormat: ReturnType<typeof parseApiChannelConfig>["responseFormat"]): unknown {
+  if (responseFormat === "ndjson") {
+    return text
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as unknown);
+  }
+  return JSON.parse(text) as unknown;
 }
 
 async function fetchApiPage(input: {
@@ -96,7 +99,7 @@ async function fetchApiPage(input: {
 
   const headers = new Headers({
     "user-agent": input.apiConfig.userAgent || input.defaultUserAgent,
-    accept: "application/json"
+    accept: input.apiConfig.responseFormat === "ndjson" ? "application/x-ndjson,application/json" : "application/json"
   });
   for (const [name, value] of Object.entries(input.apiConfig.requestHeaders)) {
     headers.set(name, value);
@@ -178,7 +181,7 @@ async function fetchApiPage(input: {
   }
 
   return {
-    payload: JSON.parse(new TextDecoder().decode(responseBytes)) as unknown,
+    payload: parseApiPayload(new TextDecoder().decode(responseBytes), input.apiConfig.responseFormat),
     status: response.status,
     finalUrl: guardedFinalUrl.url,
     retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after"))
@@ -300,10 +303,15 @@ export async function pollApiProviderChannel(
   const apiConfig = parseApiChannelConfig(channel.configJson);
   const cursors = await dependencies.loadCursorMap(channel.channelId);
   const fetchedAt = new Date().toISOString();
-  if (apiConfig.adapter.adapterKey) {
+  const registryAdapterKey =
+    dependencies.resolvedAdapter?.providerType === "api" &&
+    dependencies.resolvedAdapter.runtimeKind === "builtin"
+      ? ingressAdapterKeyToLegacyApiAdapterKey(dependencies.resolvedAdapter.adapterKey)
+      : null;
+  if (registryAdapterKey) {
     let lastStatus: number | null = null;
     let lastRetryAfterSeconds: number | null = null;
-    const adapterItems = await fetchApiAdapterItems(apiConfig.adapter.adapterKey, {
+    const adapterItems = await fetchApiAdapterItems(registryAdapterKey, {
       channel,
       apiConfig,
       fetchedAt,
@@ -373,7 +381,7 @@ export async function pollApiProviderChannel(
           cursorJson: {
             provider: "api",
             fetcher: "api_adapter",
-            adapterKey: apiConfig.adapter.adapterKey,
+            adapterKey: registryAdapterKey,
             researchMode: apiConfig.adapter.researchMode
           }
         }
@@ -382,105 +390,41 @@ export async function pollApiProviderChannel(
     return;
   }
 
-  const inputs: PersistArticleInput[] = [];
-  const fetchedItems: unknown[] = [];
-  let latestPublishedAt: string | null = null;
-  let lastStatus: number | null = null;
-  let lastRetryAfterSeconds: number | null = null;
-  let nextPageCursorValue: string | null = null;
-  let nextRequestUrl =
-    apiConfig.pagination.mode === "next_url" && readApiPageCursor(cursors)
-      ? readApiPageCursor(cursors) ?? channel.fetchUrl
-      : channel.fetchUrl;
-  let nextPageNumber =
-    apiConfig.pagination.mode === "page"
-      ? Number(readApiPageCursor(cursors) ?? apiConfig.pagination.pageStart)
-      : apiConfig.pagination.pageStart;
-  if (!Number.isInteger(nextPageNumber) || nextPageNumber <= 0) {
-    nextPageNumber = apiConfig.pagination.pageStart;
-  }
-
-  for (let pageIndex = 0; pageIndex < apiConfig.pagination.maxPagesPerPoll; pageIndex += 1) {
-    const pageUrl =
-      apiConfig.pagination.mode === "page"
-        ? buildPagedUrl(nextRequestUrl, apiConfig.pagination.pageParam, nextPageNumber)
-        : nextRequestUrl;
-    const page = await fetchApiPage({
-      channel,
-      url: pageUrl,
-      apiConfig,
-      authConfigJson: channel.authConfigJson,
-      defaultUserAgent: dependencies.config.defaultUserAgent
-    });
-    lastStatus = page.status;
-    lastRetryAfterSeconds = page.retryAfterSeconds;
-    const itemsCandidate = getByPath(page.payload, apiConfig.itemsPath);
-    const items = Array.isArray(itemsCandidate)
-      ? itemsCandidate
-      : Array.isArray(page.payload)
-        ? page.payload
-        : [];
-    fetchedItems.push(...items);
-
-    for (const item of items) {
-      if (inputs.length >= apiConfig.maxItemsPerPoll) {
-        break;
-      }
-      const record = (item ?? {}) as Record<string, unknown>;
-      const rawUrl = String(getByPath(record, apiConfig.urlField) ?? "").trim();
-      if (!rawUrl) {
-        continue;
-      }
-      const publishedAt = String(getByPath(record, apiConfig.publishedAtField) ?? fetchedAt);
-      latestPublishedAt = (latestPublishedAt ?? "") > publishedAt ? latestPublishedAt : publishedAt;
-      inputs.push({
+  const runtimeResult = await executeDeclarativeApiRuntime({
+    fetchUrl: channel.fetchUrl,
+    apiConfig,
+    fetchedAt,
+    limit: apiConfig.maxItemsPerPoll,
+    initialPageCursorValue: readApiPageCursor(cursors),
+    channelLanguage: channel.language,
+    fetchPage: async (url) =>
+      fetchApiPage({
         channel,
-        externalArticleId:
-          String(getByPath(record, apiConfig.externalIdField) ?? rawUrl).trim() || rawUrl,
-        url: resolveApiItemUrl(rawUrl, page.finalUrl),
-        publishedAt,
-        title: normalizeWhitespace(String(getByPath(record, apiConfig.titleField) ?? "Untitled article")),
-        lead: normalizeWhitespace(String(getByPath(record, apiConfig.leadField) ?? "")),
-        body: normalizeWhitespace(String(getByPath(record, apiConfig.bodyField) ?? "")),
-        lang:
-          String(getByPath(record, apiConfig.languageField) ?? channel.language ?? "").trim() ||
-          null,
-        confidence: channel.language ? 0.8 : 0.5,
-        rawPayload: {
-          fetcher: "api",
-          fetchedAt,
-          pageIndex,
-          sourceItem: record
-        }
+        url,
+        apiConfig,
+        authConfigJson: channel.authConfigJson,
+        defaultUserAgent: dependencies.config.defaultUserAgent
+      }),
+    resolveNextUrl: async (rawUrl, baseUrl) => {
+      const guardedNextUrl = await validateAcquisitionUrl(rawUrl, {
+        baseUrl,
+        resolveDns: true
       });
+      return guardedNextUrl.url ?? null;
     }
-
-    if (apiConfig.pagination.mode === "none" || inputs.length >= apiConfig.maxItemsPerPoll) {
-      break;
-    }
-    if (apiConfig.pagination.mode === "page") {
-      nextPageNumber += 1;
-      nextPageCursorValue = String(nextPageNumber);
-      nextRequestUrl = channel.fetchUrl;
-      continue;
-    }
-
-    const nextUrlValue = String(getByPath(page.payload, apiConfig.pagination.nextUrlPath) ?? "").trim();
-    if (!nextUrlValue) {
-      nextPageCursorValue = null;
-      break;
-    }
-    const guardedNextUrl = await validateAcquisitionUrl(nextUrlValue, {
-      baseUrl: page.finalUrl,
-      resolveDns: true
-    });
-    if (!guardedNextUrl.url) {
-      nextPageCursorValue = null;
-      break;
-    }
-    nextRequestUrl = guardedNextUrl.url;
-    nextPageCursorValue = guardedNextUrl.url;
-  }
+  });
+  const inputs: PersistArticleInput[] = runtimeResult.items.map((item) => ({
+    channel,
+    externalArticleId: item.externalArticleId,
+    url: item.url,
+    publishedAt: item.publishedAt,
+    title: item.title,
+    lead: item.lead,
+    body: item.body,
+    lang: item.lang,
+    confidence: channel.language ? 0.8 : 0.5,
+    rawPayload: item.rawPayload
+  }));
   const { ingestedCount, duplicateCount } = await dependencies.persistInputsWithPreflight(
     channel.channelId,
     inputs
@@ -490,26 +434,26 @@ export async function pollApiProviderChannel(
     startedAt,
     finishedAt: fetchedAt,
     outcome: ingestedCount > 0 ? "new_content" : "no_change",
-    httpStatus: lastStatus,
-    retryAfterSeconds: lastRetryAfterSeconds,
-    fetchedItemCount: Math.min(fetchedItems.length, apiConfig.maxItemsPerPoll),
+    httpStatus: runtimeResult.lastStatus,
+    retryAfterSeconds: runtimeResult.lastRetryAfterSeconds,
+    fetchedItemCount: runtimeResult.fetchedItemCount,
     newArticleCount: ingestedCount,
     duplicateSuppressedCount: duplicateCount,
     cursorChanged:
-      latestPublishedAt !== (cursors.timestamp?.cursorValue ?? null) ||
-      nextPageCursorValue !== (cursors[API_PAGE_CURSOR_TYPE]?.cursorValue ?? null),
+      runtimeResult.latestPublishedAt !== (cursors.timestamp?.cursorValue ?? null) ||
+      runtimeResult.nextPageCursorValue !== (cursors[API_PAGE_CURSOR_TYPE]?.cursorValue ?? null),
     errorMessage: null,
     cursorUpdates: [
       {
         cursorType: "timestamp",
-        cursorValue: latestPublishedAt ?? fetchedAt,
+        cursorValue: runtimeResult.latestPublishedAt ?? fetchedAt,
         cursorJson: {
           provider: "api"
         }
       },
       {
         cursorType: API_PAGE_CURSOR_TYPE,
-        cursorValue: nextPageCursorValue,
+        cursorValue: runtimeResult.nextPageCursorValue,
         cursorJson: {
           provider: "api",
           paginationMode: apiConfig.pagination.mode

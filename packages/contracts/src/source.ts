@@ -232,21 +232,25 @@ export interface ApiChannelConfig {
   requestMethod: "GET" | "POST";
   requestHeaders: Record<string, string>;
   requestBodyJson: unknown | null;
+  responseFormat: "json" | "ndjson";
   pagination: {
-    mode: "none" | "next_url" | "page";
+    mode: "none" | "next_url" | "page" | "cursor";
     nextUrlPath: string;
     pageParam: string;
     pageStart: number;
+    cursorParam: string;
+    cursorPath: string;
     maxPagesPerPoll: number;
   };
   itemsPath: string;
-  titleField: string;
-  leadField: string;
-  bodyField: string;
-  urlField: string;
-  publishedAtField: string;
-  externalIdField: string;
-  languageField: string;
+  titleField: string | string[];
+  leadField: string | string[];
+  bodyField: string | string[];
+  urlField: string | string[];
+  urlTemplate: string | null;
+  publishedAtField: string | string[];
+  externalIdField: string | string[];
+  languageField: string | string[];
   adapter: {
     adapterKey: ApiAdapterKey | null;
     researchMode: ApiAdapterResearchMode;
@@ -347,11 +351,14 @@ const DEFAULT_API_CHANNEL_CONFIG: ApiChannelConfig = {
   requestMethod: "GET",
   requestHeaders: {},
   requestBodyJson: null,
+  responseFormat: "json",
   pagination: {
     mode: "none",
     nextUrlPath: "next",
     pageParam: "page",
     pageStart: 1,
+    cursorParam: "cursor",
+    cursorPath: "nextCursor",
     maxPagesPerPoll: 1
   },
   itemsPath: "items",
@@ -359,6 +366,7 @@ const DEFAULT_API_CHANNEL_CONFIG: ApiChannelConfig = {
   leadField: "lead",
   bodyField: "body",
   urlField: "url",
+  urlTemplate: null,
   publishedAtField: "publishedAt",
   externalIdField: "id",
   languageField: "language",
@@ -508,6 +516,32 @@ function readString(value: unknown, fallback: string, fieldName: string): string
   return value.trim() || fallback;
 }
 
+function readStringOrStringList(
+  value: unknown,
+  fallback: string | string[],
+  fieldName: string
+): string | string[] {
+  if (value == null) {
+    return Array.isArray(fallback) ? [...fallback] : fallback;
+  }
+
+  if (typeof value === "string") {
+    return value.trim() || fallback;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Source channel config field "${fieldName}" must be a string or string array.`);
+  }
+
+  const paths = value.map((item, index) => {
+    if (typeof item !== "string") {
+      throw new Error(`Source channel config field "${fieldName}[${index}]" must be a string.`);
+    }
+    return item.trim();
+  }).filter(Boolean);
+  return paths.length > 0 ? paths : fallback;
+}
+
 function readOptionalString(
   value: unknown,
   fallback: string | null,
@@ -592,10 +626,24 @@ function readApiPaginationMode(value: unknown): ApiChannelConfig["pagination"]["
     throw new Error('Source channel config field "pagination.mode" must be a string.');
   }
   const normalized = value.trim().toLowerCase();
-  if (normalized === "none" || normalized === "next_url" || normalized === "page") {
+  if (normalized === "none" || normalized === "next_url" || normalized === "page" || normalized === "cursor") {
     return normalized;
   }
-  throw new Error('Source channel config field "pagination.mode" must be none, next_url, or page.');
+  throw new Error('Source channel config field "pagination.mode" must be none, next_url, page, or cursor.');
+}
+
+function readApiResponseFormat(value: unknown): ApiChannelConfig["responseFormat"] {
+  if (value == null) {
+    return DEFAULT_API_CHANNEL_CONFIG.responseFormat;
+  }
+  if (typeof value !== "string") {
+    throw new Error('Source channel config field "responseFormat" must be a string.');
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "json" || normalized === "ndjson") {
+    return normalized;
+  }
+  throw new Error('Source channel config field "responseFormat" must be json or ndjson.');
 }
 
 function readApiAdapterEnum<T extends readonly string[]>(
@@ -1192,6 +1240,7 @@ export function parseApiChannelConfig(config: unknown): ApiChannelConfig {
       candidate.requestBodyJson === undefined
         ? DEFAULT_API_CHANNEL_CONFIG.requestBodyJson
         : assertJsonCompatible(candidate.requestBodyJson, "requestBodyJson"),
+    responseFormat: readApiResponseFormat(candidate.responseFormat),
     pagination: {
       mode: readApiPaginationMode(pagination.mode),
       nextUrlPath: readString(
@@ -1209,6 +1258,16 @@ export function parseApiChannelConfig(config: unknown): ApiChannelConfig {
         DEFAULT_API_CHANNEL_CONFIG.pagination.pageStart,
         "pagination.pageStart"
       ),
+      cursorParam: readString(
+        pagination.cursorParam,
+        DEFAULT_API_CHANNEL_CONFIG.pagination.cursorParam,
+        "pagination.cursorParam"
+      ),
+      cursorPath: readString(
+        pagination.cursorPath,
+        DEFAULT_API_CHANNEL_CONFIG.pagination.cursorPath,
+        "pagination.cursorPath"
+      ),
       maxPagesPerPoll: Math.min(
         10,
         readPositiveInteger(
@@ -1219,25 +1278,30 @@ export function parseApiChannelConfig(config: unknown): ApiChannelConfig {
       )
     },
     itemsPath: readString(candidate.itemsPath, DEFAULT_API_CHANNEL_CONFIG.itemsPath, "itemsPath"),
-    titleField: readString(
+    titleField: readStringOrStringList(
       candidate.titleField,
       DEFAULT_API_CHANNEL_CONFIG.titleField,
       "titleField"
     ),
-    leadField: readString(candidate.leadField, DEFAULT_API_CHANNEL_CONFIG.leadField, "leadField"),
-    bodyField: readString(candidate.bodyField, DEFAULT_API_CHANNEL_CONFIG.bodyField, "bodyField"),
-    urlField: readString(candidate.urlField, DEFAULT_API_CHANNEL_CONFIG.urlField, "urlField"),
-    publishedAtField: readString(
+    leadField: readStringOrStringList(candidate.leadField, DEFAULT_API_CHANNEL_CONFIG.leadField, "leadField"),
+    bodyField: readStringOrStringList(candidate.bodyField, DEFAULT_API_CHANNEL_CONFIG.bodyField, "bodyField"),
+    urlField: readStringOrStringList(candidate.urlField, DEFAULT_API_CHANNEL_CONFIG.urlField, "urlField"),
+    urlTemplate: readOptionalString(
+      candidate.urlTemplate,
+      DEFAULT_API_CHANNEL_CONFIG.urlTemplate,
+      "urlTemplate"
+    ),
+    publishedAtField: readStringOrStringList(
       candidate.publishedAtField,
       DEFAULT_API_CHANNEL_CONFIG.publishedAtField,
       "publishedAtField"
     ),
-    externalIdField: readString(
+    externalIdField: readStringOrStringList(
       candidate.externalIdField,
       DEFAULT_API_CHANNEL_CONFIG.externalIdField,
       "externalIdField"
     ),
-    languageField: readString(
+    languageField: readStringOrStringList(
       candidate.languageField,
       DEFAULT_API_CHANNEL_CONFIG.languageField,
       "languageField"

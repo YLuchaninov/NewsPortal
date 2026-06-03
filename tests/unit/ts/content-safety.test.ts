@@ -20,6 +20,17 @@ test("sanitizeHtmlFragment removes active content and unsafe handlers", () => {
   assert.match(sanitized ?? "", /<p>Safe <strong>prose<\/strong><\/p>/);
 });
 
+test("sanitizeHtmlFragment does not rehydrate markup hidden inside xmp raw text", () => {
+  const sanitized = sanitizeHtmlFragment(`
+    <xmp><script>alert(1)</script></xmp>
+    <xmp><img src=x onerror=alert(1)></xmp>
+  `);
+
+  assert.equal(sanitized?.includes("<script") ?? false, false);
+  assert.equal(sanitized?.includes("<img") ?? false, false);
+  assert.equal(sanitized?.includes("onerror") ?? false, false);
+});
+
 test("sanitizeHtmlFragment allows prose but rewrites links and images safely", () => {
   const sanitized = sanitizeHtmlFragment(
     `

@@ -71,20 +71,12 @@ export const PRODUCT_TOTAL_LIVE_REQUIRED_COMMANDS = [
 ];
 
 export const PRODUCT_TOTAL_LIVE_DIAGNOSTIC_COMMANDS = [
-  command("discovery-mega-compose", "live-diagnostic", ["test:discovery:mega:compose"], {
-    proves: ["nine-domain-discovery-yield-diagnostic"],
-    weakAllowed: true,
-  }),
   command("website-matrix-compose", "live-diagnostic", ["test:website:matrix:compose"], {
     proves: ["live-website-matrix-diagnostic"],
     weakAllowed: true,
   }),
   command("hard-sites-compose", "live-diagnostic", ["test:hard-sites:compose"], {
     proves: ["hard-site-browser-assisted-boundary"],
-  }),
-  command("mcp-http-live", "live-diagnostic", ["test:mcp:http:live"], {
-    proves: ["mcp-live-http-diagnostic"],
-    weakAllowed: true,
   }),
 ];
 
@@ -201,52 +193,6 @@ export function summarizeProviderExternalResiduals(commandResults) {
   };
 }
 
-function classifyDiscoveryMega(commandResult) {
-  const artifact = findArtifact(commandResult, (item) => item?.kind === "newsportal-live-discovery-domain-matrix");
-  if (!artifact) {
-    if (commandResult?.status === "passed") {
-      return {
-        status: PRODUCT_TOTAL_LIVE_STATUSES.passed,
-        reason: null,
-      };
-    }
-    return {
-      status: PRODUCT_TOTAL_LIVE_STATUSES.failed,
-      reason: "missing_discovery_mega_artifact",
-    };
-  }
-
-  if (artifact.finalVerdict === "pass") {
-    return {
-      status: PRODUCT_TOTAL_LIVE_STATUSES.passed,
-      reason: null,
-      artifactFinalVerdict: artifact.finalVerdict,
-      runtimeVerdict: artifact.runtimeVerdict,
-      yieldVerdict: artifact.yieldVerdict,
-    };
-  }
-  if (
-    artifact.runtimeVerdict === "pass"
-    && (artifact.finalVerdict === "yield_weak" || artifact.yieldVerdict === "weak")
-  ) {
-    return {
-      status: PRODUCT_TOTAL_LIVE_STATUSES.weak,
-      reason: "classified_live_discovery_yield_residual",
-      artifactFinalVerdict: artifact.finalVerdict,
-      runtimeVerdict: artifact.runtimeVerdict,
-      yieldVerdict: artifact.yieldVerdict,
-      residualCounts: artifact.matrix?.rootCauseCounts ?? null,
-    };
-  }
-  return {
-    status: PRODUCT_TOTAL_LIVE_STATUSES.failed,
-    reason: `unclassified_discovery_mega_verdict_${artifact.finalVerdict ?? "unknown"}`,
-    artifactFinalVerdict: artifact.finalVerdict,
-    runtimeVerdict: artifact.runtimeVerdict,
-    yieldVerdict: artifact.yieldVerdict,
-  };
-}
-
 function classifyWebsiteMatrix(commandResult) {
   const artifact = findArtifact(commandResult, (item) =>
     item?.evidencePath || item?.summary?.verdictCounts || item?.siteResults
@@ -288,57 +234,9 @@ function classifyWebsiteMatrix(commandResult) {
   };
 }
 
-function classifyMcpHttpLive(commandResult) {
-  const artifact = findArtifact(commandResult, (item) => item?.kind === "newsportal-mcp-http-live-proof");
-  if (!artifact) {
-    if (commandResult?.status === "passed") {
-      return {
-        status: PRODUCT_TOTAL_LIVE_STATUSES.passed,
-        reason: null,
-      };
-    }
-    return {
-      status: PRODUCT_TOTAL_LIVE_STATUSES.failed,
-      reason: "missing_mcp_http_live_artifact",
-    };
-  }
-
-  if (artifact.runtimeVerdict === "implementation-regression" || commandResult?.status !== "passed") {
-    return {
-      status: PRODUCT_TOTAL_LIVE_STATUSES.failed,
-      reason: "mcp_http_live_implementation_regression",
-      runtimeVerdict: artifact.runtimeVerdict,
-      usefulnessVerdict: artifact.usefulnessVerdict,
-    };
-  }
-  if (
-    artifact.runtimeVerdict === "external-runtime-residual"
-    || artifact.usefulnessVerdict === "yield-usefulness-weak-but-runtime-healthy"
-  ) {
-    return {
-      status: PRODUCT_TOTAL_LIVE_STATUSES.weak,
-      reason: "classified_mcp_live_external_or_yield_residual",
-      runtimeVerdict: artifact.runtimeVerdict,
-      usefulnessVerdict: artifact.usefulnessVerdict,
-    };
-  }
-  return {
-    status: PRODUCT_TOTAL_LIVE_STATUSES.passed,
-    reason: null,
-    runtimeVerdict: artifact.runtimeVerdict,
-    usefulnessVerdict: artifact.usefulnessVerdict,
-  };
-}
-
 function classifyDiagnosticCommand(commandResult) {
-  if (commandResult?.key === "discovery-mega-compose") {
-    return classifyDiscoveryMega(commandResult);
-  }
   if (commandResult?.key === "website-matrix-compose") {
     return classifyWebsiteMatrix(commandResult);
-  }
-  if (commandResult?.key === "mcp-http-live") {
-    return classifyMcpHttpLive(commandResult);
   }
   return summarizeRequiredCommand(commandResult);
 }

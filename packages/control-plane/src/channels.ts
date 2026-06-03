@@ -3,28 +3,28 @@ import type { Pool } from "pg";
 
 import {
   deleteOrArchiveSourceChannel,
-} from "../../../apps/admin/src/lib/server/source-channels";
+} from "./source-channels";
 import {
   parseApiAdminChannelInput,
   upsertApiChannels,
-} from "../../../apps/admin/src/lib/server/api-channels";
+} from "./api-channels";
 import {
   parseEmailImapAdminChannelInput,
   upsertEmailImapChannels,
-} from "../../../apps/admin/src/lib/server/email-imap-channels";
+} from "./email-imap-channels";
 import {
   parseRssAdminChannelInput,
   upsertRssChannels,
-} from "../../../apps/admin/src/lib/server/rss-channels";
+} from "./rss-channels";
 import {
   parseWebsiteAdminChannelInput,
   upsertWebsiteChannels,
-} from "../../../apps/admin/src/lib/server/website-channels";
+} from "./website-channels";
 import {
   formatAdminChannelProviderLabel,
   isAdminChannelProviderType,
   type AdminChannelProviderType,
-} from "../../../apps/admin/src/lib/channel-providers";
+} from "./channel-providers";
 import { writeAuditLog } from "./audit";
 
 type ChannelWriteInput =
@@ -77,27 +77,35 @@ function parseChannelInput(
 async function upsertChannelInput(
   pool: Pool,
   providerType: AdminChannelProviderType,
-  channel: ChannelWriteInput
+  channel: ChannelWriteInput,
+  actorUserId: string
 ): Promise<ChannelWriteResult> {
   switch (providerType) {
     case "website":
       return upsertWebsiteChannels(
         pool,
-        [channel as ReturnType<typeof parseWebsiteAdminChannelInput>]
+        [channel as ReturnType<typeof parseWebsiteAdminChannelInput>],
+        actorUserId
       );
     case "api":
       return upsertApiChannels(
         pool,
-        [channel as ReturnType<typeof parseApiAdminChannelInput>]
+        [channel as ReturnType<typeof parseApiAdminChannelInput>],
+        actorUserId
       );
     case "email_imap":
       return upsertEmailImapChannels(
         pool,
-        [channel as ReturnType<typeof parseEmailImapAdminChannelInput>]
+        [channel as ReturnType<typeof parseEmailImapAdminChannelInput>],
+        actorUserId
       );
     case "rss":
     default:
-      return upsertRssChannels(pool, [channel as ReturnType<typeof parseRssAdminChannelInput>]);
+      return upsertRssChannels(
+        pool,
+        [channel as ReturnType<typeof parseRssAdminChannelInput>],
+        actorUserId
+      );
   }
 }
 
@@ -123,7 +131,7 @@ export async function saveChannelFromPayload(
   });
   const providerType = resolveProviderType(channelPayload);
   const channel = parseChannelInput(providerType, channelPayload);
-  const result = await upsertChannelInput(pool, providerType, channel);
+  const result = await upsertChannelInput(pool, providerType, channel, actorUserId);
   const channelId = channel.channelId ?? result.createdChannelIds[0] ?? null;
   const providerLabel = formatAdminChannelProviderLabel(channel.providerType);
 

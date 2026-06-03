@@ -15,10 +15,11 @@ def get_resource_content_item(
     resource_id: str,
     *,
     query_one_func: Callable[[str, tuple[Any, ...]], dict[str, Any] | None],
+    system_interest_kind_enabled_clause_func: Callable[[str], str],
     load_content_analysis_summary_func: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
     resource = query_one_func(
-        """
+        f"""
         select
           wr.resource_id::text as origin_id,
           'resource:' || wr.resource_id::text as content_item_id,
@@ -37,8 +38,8 @@ def get_resource_content_item(
           sc.channel_id::text as channel_id,
           sc.name as channel_name,
           sc.name as source_name,
-          null::text as system_selection_decision,
-          false as system_selected,
+          fsr.final_decision as system_selection_decision,
+          coalesce(fsr.is_selected, false) as system_selected,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb)) > 0 as has_media,
           wr.media_json -> 0 ->> 'media_kind' as primary_media_kind,
           coalesce(wr.media_json -> 0 ->> 'thumbnail_url', wr.media_json -> 0 ->> 'source_url') as primary_media_url,
@@ -59,7 +60,14 @@ def get_resource_content_item(
           wr.projection_error
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
+        join articles pa on pa.doc_id = wr.projected_article_id
+        join final_selection_results fsr on fsr.doc_id = pa.doc_id
         where wr.resource_id = %s
+          and wr.resource_kind <> 'editorial'
+          and wr.extraction_state in ('enriched', 'skipped')
+          and pa.visibility_state = 'visible'
+          and coalesce(fsr.is_selected, false) = true
+          and {system_interest_kind_enabled_clause_func("wr.resource_kind")}
         """,
         (resource_id,),
     )

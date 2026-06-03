@@ -17,7 +17,7 @@
 - foundation tables для users, roles, profiles, channels, outbox и inbox idempotency;
 - Astro web/admin apps с Firebase-backed session bridge и локальными write routes;
 - FastAPI read/debug/explain endpoints для articles, clusters, notifications, channels, templates и maintenance views;
-- discovery orchestration for source acquisition: missions, hypotheses, candidates, cost ledger, reusable child sequences and maintenance/admin review surfaces with safe-by-default runtime flags;
+- Discovery vNext source acquisition with typed artifacts, candidates, probe reports, source understanding, routing decisions, inventory, policy-gated handoff and safe-by-default runtime flags;
 - multi-provider fetchers для RSS, website/http, external JSON APIs и IMAP-polled email feeds;
 - SSR-ready Astro build/runtime path для `web` и `admin` через Node adapter;
 - canonical internal-test compose.dev path c локальным SMTP sink для `email_digest`;
@@ -39,6 +39,8 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 - [Example Bundles](docs/product/operator/examples/EXAMPLES.md)
 - [MCP Operator Docs](docs/product/operator/mcp/README.md)
 - [Architecture Overview](docs/product/architecture/architecture-overview.md)
+- [Nonstandard Technical Decisions](docs/product/architecture/nonstandard-technical-decisions.md)
+- [Documentation Inventory](docs/documentation-inventory.md)
 - [Data Script Assets](docs/product/data-scripts/README.md)
 
 ## Базовая структура
@@ -215,21 +217,20 @@ pnpm test:product:local:core
 
 ## Discovery Runtime
 
-- Discovery capability lives on top of the same Universal Task Engine runtime and stays disabled unless `DISCOVERY_ENABLED=true`.
+- Discovery vNext lives on top of the same Universal Task Engine plugin/runtime model and stays disabled unless `DISCOVERY_ENABLED=true`.
 - Default rollout is intentionally safe:
   - `DISCOVERY_SEARCH_PROVIDER=ddgs`
-  - live search still stays dormant until `DISCOVERY_ENABLED=true`
-  - manual approval by default
-  - profile thresholds own auto-approval / promote gates; `DISCOVERY_AUTO_APPROVE_THRESHOLD` only remains as a legacy fallback for profile-less missions
-  - reusable RSS/website child sequences stay seeded as draft until explicitly activated
+  - live search/LLM stays dormant until `DISCOVERY_ENABLED=true`, credentials are present, active policies are valid and positive budget is configured
+  - candidate promotion is policy-gated and goes through deterministic routing plus probation handoff
+  - missing or invalid required vNext policy fails closed rather than silently falling back to a non-live path
 - Main discovery env surface:
   - `DISCOVERY_ENABLED`
   - `DISCOVERY_CRON`
   - `DISCOVERY_BUDGET_CENTS_DEFAULT`
   - `DISCOVERY_MAX_HYPOTHESES_PER_RUN`
   - `DISCOVERY_MAX_SOURCES_DEFAULT`
-  - `DISCOVERY_AUTO_APPROVE_THRESHOLD`
   - `DISCOVERY_SEARCH_PROVIDER`
+  - `DISCOVERY_SEARCH_PROVIDERS`
   - `DISCOVERY_DDGS_BACKEND`
   - `DISCOVERY_DDGS_REGION`
   - `DISCOVERY_DDGS_SAFESEARCH`
@@ -242,7 +243,8 @@ pnpm test:product:local:core
   - `DISCOVERY_BRAVE_API_KEY`
   - `DISCOVERY_SERPER_API_KEY`
 - Supported discovery search adapters are `stub`, `ddgs`, `brave`, and `serper`; the default stays `ddgs`, but runtime/provider semantics no longer assume DDGS outside the selected adapter.
-- Admin discovery surfaces live under `/admin/discovery` behind the existing allowlisted admin/session boundary and keep same-origin BFF writes with audit logging. The cutover workspace is v3-only: targets, coverage, runs, endpoints, source contracts, hidden claims, negative evidence, provider health and replay eval are shown in the single resilient discovery operator workspace. Legacy mission/recall/candidate/profile/source subroutes are retired after the resilient discovery rebuild.
+- Admin discovery surfaces live under `/admin/discovery` behind the existing allowlisted admin/session boundary and keep same-origin BFF writes with audit logging. The active workspace is vNext-only: runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, feedback, replay and rollback.
+- MCP exposes the same vNext model through `discovery.*` tools. Use `tools/list`, `resources/list` and `prompts/list` to discover the current surface instead of relying on historical tool names.
 
 ### Discovery live enable runbook
 
@@ -253,19 +255,25 @@ pnpm test:product:local:core
    - `DISCOVERY_SEARCH_PROVIDER=ddgs`
 2. Start the local compose stack with `pnpm dev:mvp:internal`.
 3. Prove the bounded enabled-runtime path with `pnpm test:discovery-enabled:compose`.
-4. Prove the profile-backed Example B/C discovery harness with `pnpm test:discovery:examples:compose` if you want a repo-owned live run that materializes reusable `Discovery Profiles` and emits canonical `manualReplaySettings` for later manual replay.
-5. For a real local enable, restart the relevant containers with `DISCOVERY_ENABLED=1` in the runtime env, then verify:
-   - `GET /maintenance/discovery/summary` shows `enabled=true`, the expected discovery LLM model, and the monthly quota fields;
-   - `/admin/discovery` overview shows the active provider/model plus the monthly quota state, while the focused discovery routes keep profiles, missions, recall, candidates, and source quality easier to inspect separately;
-   - manual mission runs succeed before quota exhaustion and return `409` after the hard cap is reached.
-6. Monitor discovery live via:
-   - `/maintenance/discovery/summary`
-   - `/maintenance/discovery/costs/summary`
+4. Prove the current vNext operator/API/MCP surface with `pnpm test:mcp:http:discovery`.
+5. For deterministic end-to-end vNext flow evidence without external search/LLM calls, run `pnpm test:discovery:vnext-flow`.
+6. Optional live provider checks are explicit and budgeted:
+   - preflight: `pnpm test:discovery:vnext-mcp-live-gap-flow:preflight`
+   - gap-hunting: `pnpm test:discovery:vnext-mcp-live-gap-flow`
+   - signal funnel preflight: `pnpm test:discovery:vnext-mcp-live-signal-flow:preflight`
+   - signal funnel: `pnpm test:discovery:vnext-mcp-live-signal-flow`
+7. For a real local enable, restart the relevant containers with `DISCOVERY_ENABLED=1` in the runtime env, then verify:
+   - `/admin/discovery` shows vNext runs, artifacts, candidates, source inventory and policy state;
+   - `discovery.runs.*`, `discovery.artifacts.*`, `discovery.candidates.*`, `discovery.source_inventory.*`, `discovery.policies.*`, `discovery.adapter_backlog.*`, `discovery.replay_runs.*` and `discovery.rollback_groups.*` are discoverable through MCP;
+   - invalid writes fail before backend mutation and live execution fails closed without enabled runtime, credentials and positive budget.
+8. Monitor discovery live via:
    - `/admin/discovery`
-   - worker logs for discovery planning/execution errors
-7. Roll back by setting `DISCOVERY_ENABLED=0` or switching `DISCOVERY_SEARCH_PROVIDER=stub`, then restart the affected runtime.
+   - `/maintenance/discovery/*` vNext read/action endpoints
+   - MCP `discovery.*` reads and `operator.report.verify`
+   - worker logs for vNext run/probe/routing errors
+9. Roll back by setting `DISCOVERY_ENABLED=0`, switching `DISCOVERY_SEARCH_PROVIDER=stub`, or using vNext replay/rollback tools for vNext-owned effects, then restart affected runtime when env changed.
 
-For a dedicated operator-facing testing handbook for this subsystem, including bounded enable smoke, profile-backed Example B/C replay, graph-first mission testing, and independent recall/promotion checks, use [docs/product/operator/examples/DISCOVERY_MODE_TESTING.md](docs/product/operator/examples/DISCOVERY_MODE_TESTING.md).
+For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_vnext_blueprint.md), [Operator Guide](docs/product/operator/HOW_TO_USE.md), and [MCP Operator Docs](docs/product/operator/mcp/README.md).
 
 ### Browser-assisted website and hard-site notes
 
@@ -287,7 +295,7 @@ For a dedicated operator-facing testing handbook for this subsystem, including b
 - Для Astro SSR/BFF теперь используются отдельные app base URLs: `NEWSPORTAL_WEB_APP_BASE_URL` и `NEWSPORTAL_ADMIN_APP_BASE_URL`; compose прокидывает их в контейнеры как `NEWSPORTAL_APP_BASE_URL`, чтобы redirects и trusted host reconstruction не деградировали в `http://localhost/`.
 - `apps/web` и `apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
 - Browser/session routes `web` и `admin` больше не делят `/api/*` c Python API: public/read API остается на `/api/*`, а Astro BFF живет на `/bff/*`; через nginx admin surface доступен на `/admin/`, поэтому его browser/BFF paths снаружи имеют вид `/admin/bff/*`.
-- Admin now also exposes the discovery control plane under `/admin/discovery` for mission planning, candidate review, hypothesis inspection, recall, and cost summaries, while FastAPI keeps the canonical `/maintenance/discovery/*` read/action surface for SDK/BFF consumers.
+- Admin now exposes the Discovery vNext control plane under `/admin/discovery` for runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, replay and rollback, while FastAPI keeps the canonical `/maintenance/discovery/*` read/action surface for SDK/BFF consumers.
 - Для first-run admin bootstrap используется `ADMIN_ALLOWLIST_EMAILS`; allowlisted email получает локальную роль `admin` при первом успешном Firebase sign-in, а exact allowlisted address допускает repeatable `+alias` sign-in для internal tests. После bootstrap PostgreSQL остается источником истины для authorization.
 - Active admin `interest_templates` materialize-ятся в live system-interest rules, поэтому операторский system layer уже участвует и во fresh ingest, и в historical backfill.
 - Fresh ingest и historical backfill теперь идут в system-first порядке: `system interests -> system-interest-scope gray-zone LLM -> system-selected collection -> optional per-user user_interests`.

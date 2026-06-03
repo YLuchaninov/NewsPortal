@@ -29,6 +29,7 @@ import {
   readOptionalInteger,
   readOptionalString,
   readRequiredString,
+  writeMcpMutationAudit,
   type McpToolDefinition
 } from "./shared";
 
@@ -126,6 +127,28 @@ const channelActiveStateSchema = {
     channelId: { type: "string" },
     isActive: { type: "boolean" },
     reason: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const channelSyncRequestSchema = {
+  type: "object",
+  required: ["channelId"],
+  properties: {
+    channelId: { type: "string" },
+    reason: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const outboxEventsListSchema = {
+  type: "object",
+  properties: {
+    limit: { type: "number" },
+    eventType: { type: "string" },
+    aggregateType: { type: "string" },
+    aggregateId: { type: "string" },
+    status: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -405,6 +428,19 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   ),
   createReadTool(
+    "outbox.events.list",
+    "List outbox events with optional event/aggregate/status filters for read-after-write source sync proof.",
+    outboxEventsListSchema,
+    async ({ sdk }, args) =>
+      sdk.listOutboxEvents<Record<string, unknown>[]>({
+        limit: readOptionalInteger(args.limit) ?? undefined,
+        eventType: readOptionalString(args.eventType) ?? undefined,
+        aggregateType: readOptionalString(args.aggregateType) ?? undefined,
+        aggregateId: readOptionalString(args.aggregateId) ?? undefined,
+        status: readOptionalString(args.status) ?? undefined,
+      })
+  ),
+  createReadTool(
     "channels.bottlenecks.summary",
     "Summarize source bottlenecks from the shared control-plane read model. Separates working noisy/low-yield sources from technical fetch/provider-shape failures.",
     {
@@ -564,18 +600,27 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
         const skipped: Array<Record<string, unknown>> = [];
         for (const channelId of channelIds) {
           runs.push(
-            await sdk.replaceDiscoverySourceCandidates<Record<string, unknown>>(channelId, {
-              targetId,
-              maxDepth: readOptionalBoundedInteger(args.maxDepth, "maxDepth") ?? 1,
-              maxHypotheses: readOptionalBoundedInteger(args.maxHypotheses, "maxHypotheses") ?? 6,
-              maxSearchResults:
-                readOptionalBoundedInteger(args.maxSearchResults, "maxSearchResults") ?? 8,
-              maxDomains: readOptionalBoundedInteger(args.maxDomains, "maxDomains") ?? 12,
-              maxEndpoints: readOptionalBoundedInteger(args.maxEndpoints, "maxEndpoints") ?? 20,
-              maxSocialItems:
-                readOptionalNonNegativeInteger(args.maxSocialItems, "maxSocialItems") ?? 0,
-              providerExecutionEnabled: args.providerExecutionEnabled === true,
-              requestedBy:
+            await sdk.createDiscoveryVNextRun<Record<string, unknown>>({
+              runKind: "candidate_acquisition",
+              triggerKind: "mcp",
+              request: {
+                source: "channels.alternatives.start",
+                targetId,
+                channelId,
+                maxDepth: readOptionalBoundedInteger(args.maxDepth, "maxDepth") ?? 1,
+                maxHypotheses: readOptionalBoundedInteger(args.maxHypotheses, "maxHypotheses") ?? 6,
+                maxSearchResults:
+                  readOptionalBoundedInteger(args.maxSearchResults, "maxSearchResults") ?? 8,
+                maxDomains: readOptionalBoundedInteger(args.maxDomains, "maxDomains") ?? 12,
+                maxEndpoints: readOptionalBoundedInteger(args.maxEndpoints, "maxEndpoints") ?? 20,
+                maxSocialItems:
+                  readOptionalNonNegativeInteger(args.maxSocialItems, "maxSocialItems") ?? 0,
+                providerExecutionEnabled: args.providerExecutionEnabled === true,
+              },
+              budget: {
+                liveProviderExecution: args.providerExecutionEnabled === true,
+              },
+              createdBy:
                 readOptionalString(args.requestedBy) ??
                 `channels.alternatives.start:${token.issuedByUserId}`,
             })
@@ -654,6 +699,61 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
               reportKind: "channel_health",
               entityIds: { channelIds: [result.channelId] },
               includeSamples: true,
+            },
+          },
+        ],
+      };
+    }
+  ),
+  createWriteTool(
+    "channels.sync.request",
+    "Queue a source.channel.sync.requested outbox event for an existing source channel without mutating channel configuration.",
+    "write.channels",
+    channelSyncRequestSchema,
+    async ({ pool, token }, args) => {
+      const channelId = await resolveChannelId(pool, args.channelId);
+      const result = await pool.query(
+        `
+        insert into outbox_events (
+          event_id,
+          event_type,
+          aggregate_type,
+          aggregate_id,
+          payload_json
+        )
+        values (gen_random_uuid(), 'source.channel.sync.requested', 'source_channel', $1, $2::jsonb)
+        returning *
+        `,
+        [
+          channelId,
+          JSON.stringify({
+            channelId,
+            source: "mcp.channels.sync.request",
+            reason: readOptionalString(args.reason) ?? null,
+          }),
+        ]
+      );
+      const event = result.rows[0] as Record<string, unknown>;
+      await writeMcpMutationAudit(pool, token, {
+        actionType: "channel_sync_requested",
+        entityType: "source_channel",
+        entityId: channelId,
+        payloadJson: {
+          eventId: event.event_id,
+          reason: readOptionalString(args.reason) ?? null,
+        },
+      });
+      return {
+        ...event,
+        nextReadBack: [
+          { tool: "channels.read", arguments: { channelId } },
+          {
+            tool: "outbox.events.list",
+            arguments: {
+              eventType: "source.channel.sync.requested",
+              aggregateType: "source_channel",
+              aggregateId: channelId,
+              limit: 10,
             },
           },
         ],

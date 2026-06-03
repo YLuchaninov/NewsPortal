@@ -61,14 +61,34 @@ def list_fetch_runs(
 def list_outbox_events(
     *,
     limit: int = 50,
+    event_type: str | None = None,
+    aggregate_type: str | None = None,
+    aggregate_id: str | None = None,
+    status: str | None = None,
     query_all_func: QueryAllFunc = query_all,
 ) -> list[dict[str, Any]]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if event_type:
+        filters.append("event_type = %s")
+        params.append(event_type)
+    if aggregate_type:
+        filters.append("aggregate_type = %s")
+        params.append(aggregate_type)
+    if aggregate_id:
+        filters.append("aggregate_id = %s")
+        params.append(aggregate_id)
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+    where_clause = f"where {' and '.join(filters)}" if filters else ""
     return query_all_func(
-        """
+        f"""
         select *
         from outbox_events
+        {where_clause}
         order by created_at desc
         limit %s
         """,
-        (limit,),
+        tuple([*params, limit]),
     )

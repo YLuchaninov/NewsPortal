@@ -1,8 +1,13 @@
 import json
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import sys
 from unittest.mock import patch
+
+if "services.workers.app.gemini" in sys.modules and not hasattr(
+    sys.modules["services.workers.app.gemini"],
+    "_estimate_cost_usd",
+):
+    del sys.modules["services.workers.app.gemini"]
 
 from services.workers.app.gemini import (
     _estimate_cost_usd,
@@ -12,24 +17,18 @@ from services.workers.app.gemini import (
 )
 
 
-class _FakeGeminiHandler(BaseHTTPRequestHandler):
-    response_payload: dict[str, object] = {}
-    request_paths: list[str] = []
+class _FakeGeminiResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
 
-    def do_POST(self) -> None:  # noqa: N802 - stdlib handler contract
-        content_length = int(self.headers.get("Content-Length", "0") or 0)
-        if content_length > 0:
-            self.rfile.read(content_length)
-        type(self).request_paths.append(self.path)
-        encoded = json.dumps(type(self).response_payload, ensure_ascii=True).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(encoded)))
-        self.end_headers()
-        self.wfile.write(encoded)
+    def __enter__(self) -> "_FakeGeminiResponse":
+        return self
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A003 - stdlib signature
+    def __exit__(self, *_args: object) -> None:
         return None
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload, ensure_ascii=True).encode("utf-8")
 
 
 class GeminiTests(unittest.TestCase):
@@ -98,10 +97,7 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(result.provider_usage_json, {})
 
     def test_review_with_gemini_parses_usage_metadata_from_provider_response(self) -> None:
-        class Handler(_FakeGeminiHandler):
-            pass
-
-        Handler.response_payload = {
+        response_payload: dict[str, object] = {
             "candidates": [
                 {
                     "content": {
@@ -119,27 +115,26 @@ class GeminiTests(unittest.TestCase):
                 "totalTokenCount": 300,
             },
         }
-        Handler.request_paths = []
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
+        request_urls: list[str] = []
+
+        def fake_urlopen(request: object, timeout: int = 30) -> _FakeGeminiResponse:
+            request_urls.append(getattr(request, "full_url"))
+            self.assertEqual(timeout, 30)
+            return _FakeGeminiResponse(response_payload)
+
+        with patch("services.workers.app.gemini.urlopen", fake_urlopen):
             with patch.dict(
                 "os.environ",
                 {
                     "GEMINI_API_KEY": "local-proof-key",
                     "GEMINI_MODEL": "gemini-2.0-flash",
-                    "GEMINI_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+                    "GEMINI_BASE_URL": "http://gemini.local.test",
                     "LLM_INPUT_COST_PER_MILLION_USD": "0.10",
                     "LLM_OUTPUT_COST_PER_MILLION_USD": "0.40",
                 },
                 clear=False,
             ):
                 result = review_with_gemini("review this article")
-        finally:
-            server.shutdown()
-            thread.join(timeout=5)
-            server.server_close()
 
         self.assertEqual(result.decision, "approve")
         self.assertEqual(result.prompt_tokens, 200)
@@ -151,14 +146,11 @@ class GeminiTests(unittest.TestCase):
             result.provider_usage_json["usageMetadata"]["totalTokenCount"],
             300,
         )
-        self.assertEqual(len(Handler.request_paths), 1)
-        self.assertIn("/models/gemini-2.0-flash:generateContent", Handler.request_paths[0])
+        self.assertEqual(len(request_urls), 1)
+        self.assertIn("/models/gemini-2.0-flash:generateContent", request_urls[0])
 
     def test_review_with_gemini_accepts_provider_json_array_response(self) -> None:
-        class Handler(_FakeGeminiHandler):
-            pass
-
-        Handler.response_payload = {
+        response_payload: dict[str, object] = {
             "candidates": [
                 {
                     "content": {
@@ -176,23 +168,21 @@ class GeminiTests(unittest.TestCase):
                 "totalTokenCount": 15,
             },
         }
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
+
+        def fake_urlopen(_request: object, timeout: int = 30) -> _FakeGeminiResponse:
+            self.assertEqual(timeout, 30)
+            return _FakeGeminiResponse(response_payload)
+
+        with patch("services.workers.app.gemini.urlopen", fake_urlopen):
             with patch.dict(
                 "os.environ",
                 {
                     "GEMINI_API_KEY": "local-proof-key",
-                    "GEMINI_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+                    "GEMINI_BASE_URL": "http://gemini.local.test",
                 },
                 clear=False,
             ):
                 result = review_with_gemini("review this article")
-        finally:
-            server.shutdown()
-            thread.join(timeout=5)
-            server.server_close()
 
         self.assertEqual(result.decision, "reject")
         self.assertEqual(result.score, 0.2)

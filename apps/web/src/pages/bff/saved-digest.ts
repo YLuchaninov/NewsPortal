@@ -30,7 +30,9 @@ export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareWebAction(request, {
     authSetCookie: true,
-    readPayload: false,
+    actionToken: { scope: "saved-digest" },
+    payloadReader: async (actionRequest) =>
+      Object.fromEntries((await actionRequest.clone().formData()).entries()),
   });
   if (!action.ok) {
     return action.response;

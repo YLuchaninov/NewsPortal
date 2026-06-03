@@ -4,6 +4,10 @@ import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
 import { FlashToast } from "../components/FlashToast";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { UserLiveUpdateCoordinator } from "../components/UserLiveUpdateCoordinator";
+import {
+  buildWebActionTokenSet,
+  WEB_ACTION_TOKEN_TARGETS,
+} from "../lib/server/web-action";
 
 export interface Props {
   title?: string;
@@ -40,6 +44,19 @@ const navItems = [
   { href: "/notifications", label: "Notifications", key: "notifications" },
   { href: "/settings", label: "Settings", key: "settings" },
 ] as const;
+
+const webActionTokens = session
+  ? buildWebActionTokenSet({
+      request: Astro.request,
+      session,
+    })
+  : {};
+const webActionTokenTargets = WEB_ACTION_TOKEN_TARGETS.map((target) => ({
+  scope: target.scope,
+  targetPath: target.targetPath,
+  routePrefix: target.routePrefix ?? false,
+  routePrefixOnly: target.routePrefixOnly ?? false,
+}));
 ---
 
 <html lang="en" class={themeClass}>
@@ -173,7 +190,78 @@ const navItems = [
       <slot />
     </main>
 
+    <script is:inline type="application/json" id="web-action-tokens" set:html={JSON.stringify(webActionTokens)}></script>
+    <script is:inline type="application/json" id="web-action-token-targets" set:html={JSON.stringify(webActionTokenTargets)}></script>
     <script>
+      const webActionTokensElement = document.getElementById("web-action-tokens");
+      const webActionTokenTargetsElement = document.getElementById("web-action-token-targets");
+      const webActionTokens = JSON.parse(webActionTokensElement?.textContent || "{}");
+      const webActionTokenTargets = JSON.parse(webActionTokenTargetsElement?.textContent || "[]");
+
+      function normalizeWebActionPath(value: string): string {
+        try {
+          const pathname = new URL(value, window.location.href).pathname;
+          const bffIndex = pathname.indexOf("/bff/");
+          return bffIndex >= 0 ? pathname.slice(bffIndex) : pathname;
+        } catch {
+          return "";
+        }
+      }
+
+      function resolveWebActionScope(value: string): string {
+        const path = normalizeWebActionPath(value);
+        const exactTarget = webActionTokenTargets.find((target: { targetPath: string; routePrefix?: boolean }) =>
+          !target.routePrefix && path === target.targetPath
+        );
+        if (exactTarget) {
+          return exactTarget.scope;
+        }
+        const prefixTarget = webActionTokenTargets.find((target: { targetPath: string; routePrefix?: boolean }) =>
+          target.routePrefix && path.startsWith(`${target.targetPath}/`)
+        );
+        return prefixTarget?.scope || "";
+      }
+
+      function readWebActionToken(value: string): string {
+        const scope = resolveWebActionScope(value);
+        return scope ? String(webActionTokens[scope] || "") : "";
+      }
+
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : null;
+        const actionUrl = request?.url ?? String(input);
+        const method = String(init?.method ?? request?.method ?? "GET").toUpperCase();
+        const token = method === "GET" || method === "HEAD" ? "" : readWebActionToken(actionUrl);
+        if (!token) {
+          return nativeFetch(input, init);
+        }
+        const nextInit: RequestInit = { ...(init ?? {}) };
+        const headers = new Headers(request?.headers ?? init?.headers ?? {});
+        headers.set("x-web-action-token", token);
+        nextInit.headers = headers;
+        return nativeFetch(input, nextInit);
+      };
+
+      document.addEventListener("submit", (event) => {
+        const form = event.target instanceof HTMLFormElement ? event.target : null;
+        if (!form || String(form.method || "GET").toUpperCase() !== "POST") {
+          return;
+        }
+        const token = readWebActionToken(form.action);
+        if (!token) {
+          return;
+        }
+        let tokenInput = form.querySelector('input[name="webActionToken"]') as HTMLInputElement | null;
+        if (!tokenInput) {
+          tokenInput = document.createElement("input");
+          tokenInput.type = "hidden";
+          tokenInput.name = "webActionToken";
+          form.appendChild(tokenInput);
+        }
+        tokenInput.value = token;
+      }, { capture: true });
+
       // Mobile menu toggle
       const btn = document.getElementById("mobile-menu-btn");
       const nav = document.getElementById("mobile-nav");

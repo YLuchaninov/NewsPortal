@@ -9,6 +9,8 @@ import { randomUUID } from "node:crypto";
 import {
   assertFullShippedCoverage,
   buildMcpDocParityMatrix,
+  getUnexpectedUntestedShippedEntries,
+  getUntestedShippedEntries,
 } from "./mcp-http-doc-parity.mjs";
 export {
   DETERMINISTIC_SCENARIO_GROUPS,
@@ -1164,530 +1166,242 @@ async function scenarioSequenceOperatorFlows(harness) {
 async function scenarioDiscoveryOperatorFlows(harness) {
   const evidence = [];
   const token = harness.tokens.discovery.token;
-  const suffix = harness.runId.replace(/-/g, "").slice(0, 12);
+  const sourceUrl = `https://mcp-${harness.runId.replace(/-/g, "").slice(0, 12)}.example.test/feed.xml`;
 
-  await harness.mcpToolCall(token, "discovery.summary.get", {});
+  const brief = await harness.mcpToolCall(token, "discovery.brief.preview", {
+    interestId: harness.runId,
+    name: "MCP deterministic policy updates",
+    description: "Track public policy and regulatory update sources.",
+    languages: ["en"],
+    operatorConstraints: { publicOnly: true },
+  });
+  const discoveryBrief = brief.payload ?? brief;
+  pushEvidence(evidence, "brief-preview", brief);
 
-  const target = await harness.mcpToolCall(token, "discovery.targets.create_manual", {
-    payload: {
-      originKind: "manual_prompt",
-      title: `MCP Discovery Target ${harness.runId}`,
-      description: "Deterministic HTTP resilient discovery target.",
-      seedTopics: ["policy", "regulation"],
-      seedEntities: ["Example"],
-      seedGeos: ["Europe"],
-      seedLanguages: ["en"],
-      graphJson: {
-        coreTopic: "policy regulation",
-        sourceRoleTargets: {
-          technical_change: { min: 1, target: 1 },
-          report_research: { min: 1, target: 1 },
-        },
-      },
-      policyJson: {
-        hypothesisBudget: { total: 12 },
-      },
-    },
+  const run = await harness.mcpToolCall(token, "discovery.runs.create", {
+    runKind: "full",
+    triggerKind: "mcp",
+    createdBy: "mcp-http-scenarios",
+    request: { sourceUrl },
+    budget: { maxCandidates: 1, maxProbeRequests: 3 },
   });
-  const targetId = String(target.target_id ?? target.targetId ?? "");
-  assert(targetId, "discovery.targets.create_manual must return a target id.");
-  harness.rememberEntity("targetId", targetId);
-  await harness.mcpToolCall(token, "discovery.targets.update", {
-    targetId,
-    payload: {
-      title: `MCP Discovery Target ${harness.runId} updated`,
-      status: "active",
-    },
-  });
-  await harness.mcpToolCall(token, "discovery.targets.read", { targetId });
-  await harness.mcpToolCall(token, "discovery.targets.list", { page: 1, pageSize: 20, status: "active" });
-  await harness.mcpToolCall(token, "discovery.coverage.refresh", { targetId });
-  await harness.mcpToolCall(token, "discovery.coverage.read", { targetId });
-
-  const run = await harness.mcpToolCall(token, "discovery.runs.start", {
-    payload: {
-      targetId,
-      runKind: "manual",
-      triggerKind: "mcp",
-      maxDepth: 1,
-      maxHypotheses: 12,
-    },
-  });
-  const runId = String(run.run_id ?? run.runId ?? "");
-  assert(runId, "discovery.runs.start must return a run id.");
+  const runId = String(run.vnext_run_id ?? run.vnextRunId ?? run.runId ?? "");
+  assert(runId, "discovery.runs.create must return a vNext run id.");
   harness.rememberEntity("runId", runId);
-  await harness.mcpToolCall(token, "discovery.runs.read", { runId });
-  await harness.mcpToolCall(token, "discovery.runs.list", { targetId, page: 1, pageSize: 20 });
+  await harness.mcpToolCall(token, "discovery.runs.read", { recordId: runId });
+  await harness.mcpToolCall(token, "discovery.runs.list", { page: 1, pageSize: 20 });
   await harness.mcpToolCall(token, "discovery.runs.cancel", { runId });
 
-  const hypothesisId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_hypotheses (
-        run_id,
-        target_id,
-        hypothesis_type,
-        signal_mode,
-        source_role,
-        acquisition_tactic,
-        query_text,
-        provider_id,
-        status,
-        priority_score,
-        confidence_score
-      )
-      values (
-        ${sqlLiteral(runId)}::uuid,
-        ${sqlLiteral(targetId)}::uuid,
-        'technical_source',
-        'direct',
-        'technical_change',
-        'fixture',
-        ${sqlLiteral(`mcp resilient discovery ${suffix}`)},
-        'web_search',
-        'queued',
-        0.91,
-        0.82
-      )
-      returning hypothesis_id::text;
-    `)
-  );
-  assert(hypothesisId, "Failed to seed deterministic v3 discovery hypothesis.");
-  harness.rememberEntity("hypothesisId", hypothesisId);
-
-  const domainId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_domain_inventory (
-        canonical_domain,
-        homepage_url,
-        first_seen_run_id,
-        first_seen_target_id,
-        domain_kind,
-        organization_name,
-        authority_score,
-        evidence_json
-      )
-      values (
-        ${sqlLiteral(`mcp-${suffix}.example.test`)},
-        ${sqlLiteral(`https://mcp-${suffix}.example.test`)},
-        ${sqlLiteral(runId)}::uuid,
-        ${sqlLiteral(targetId)}::uuid,
-        'organization',
-        ${sqlLiteral(`MCP Discovery Org ${suffix}`)},
-        0.82,
-        '{"source":"mcp-http-deterministic"}'::jsonb
-      )
-      on conflict (canonical_domain) do update set updated_at = now()
-      returning domain_id::text;
-    `)
-  );
-  assert(domainId, "Failed to seed deterministic v3 discovery domain.");
-  harness.rememberEntity("domainId", domainId);
-
-  const endpointId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_source_endpoints (
-        target_id,
-        run_id,
-        hypothesis_id,
-        domain_id,
-        provider_id,
-        provider_type,
-        canonical_domain,
-        homepage_url,
-        endpoint_url,
-        normalized_endpoint_url,
-        endpoint_kind,
-        source_role,
-        signal_mode,
-        title,
-        evidence_json,
-        why_found_json,
-        missing_evidence_json,
-        interest_fit_score,
-        evidence_score,
-        quality_score,
-        yield_score,
-        freshness_score,
-        novelty_score,
-        extraction_ready_score,
-        coverage_gap_score,
-        compliance_score,
-        adversarial_confidence_score,
-        total_score,
-        status,
-        recommended_action
-      )
-      values (
-        ${sqlLiteral(targetId)}::uuid,
-        ${sqlLiteral(runId)}::uuid,
-        ${sqlLiteral(hypothesisId)}::uuid,
-        ${sqlLiteral(domainId)}::uuid,
-        'rss',
-        'rss',
-        ${sqlLiteral(`mcp-${suffix}.example.test`)},
-        ${sqlLiteral(`https://mcp-${suffix}.example.test/changelog`)},
-        ${sqlLiteral(`https://mcp-${suffix}.example.test/changelog/feed.xml`)},
-        ${sqlLiteral(`https://mcp-${suffix}.example.test/changelog/feed.xml`)},
-        'rss_feed',
-        'technical_change',
-        'direct',
-        ${sqlLiteral(`MCP Discovery Feed ${suffix}`)},
-        '{"rss":{"isValid":true,"sampleEntryCount":3}}'::jsonb,
-        '["Matches technical_change gap","RSS probe fixture is valid"]'::jsonb,
-        '[]'::jsonb,
-        0.95,
-        0.86,
-        0.84,
-        0.8,
-        0.8,
-        1,
-        0.95,
-        1,
-        0.99,
-        0.8,
-        0.9,
-        'manual_review',
-        'manual_promote'
-      )
-      returning endpoint_id::text;
-    `)
-  );
-  assert(endpointId, "Failed to seed deterministic v3 discovery endpoint.");
-  harness.rememberEntity("endpointId", endpointId);
-
-  const duplicateEndpointId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_source_endpoints (
-        target_id,
-        run_id,
-        provider_id,
-        provider_type,
-        canonical_domain,
-        homepage_url,
-        endpoint_url,
-        normalized_endpoint_url,
-        endpoint_kind,
-        source_role,
-        signal_mode,
-        title,
-        status,
-        recommended_action
-      )
-      values (
-        ${sqlLiteral(targetId)}::uuid,
-        ${sqlLiteral(runId)}::uuid,
-        'website',
-        'website',
-        ${sqlLiteral(`mcp-duplicate-${suffix}.example.test`)},
-        ${sqlLiteral(`https://mcp-duplicate-${suffix}.example.test`)},
-        ${sqlLiteral(`https://mcp-duplicate-${suffix}.example.test/news`)},
-        ${sqlLiteral(`https://mcp-duplicate-${suffix}.example.test/news`)},
-        'newsroom',
-        'authoritative_anchor',
-        'direct',
-        ${sqlLiteral(`MCP Duplicate Endpoint ${suffix}`)},
-        'manual_review',
-        'review'
-      )
-      returning endpoint_id::text;
-    `)
-  );
-  assert(duplicateEndpointId, "Failed to seed deterministic duplicate endpoint.");
-  harness.rememberEntity("duplicateEndpointId", duplicateEndpointId);
-
-  const claimId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_claims (
-        target_id,
-        run_id,
-        claim_type,
-        signal_mode,
-        title,
-        normalized_claim,
-        summary,
-        related_entities,
-        support_evidence_count,
-        independent_source_count,
-        unique_author_count,
-        control_query_text,
-        control_signal_rate,
-        target_signal_rate,
-        specificity_score,
-        confidence_score,
-        risk_score,
-        novelty_score,
-        status
-      )
-      values (
-        ${sqlLiteral(targetId)}::uuid,
-        ${sqlLiteral(runId)}::uuid,
-        'migration_pressure',
-        'hidden',
-        ${sqlLiteral(`MCP Hidden Claim ${suffix}`)},
-        ${sqlLiteral(`mcp hidden claim ${suffix}`)},
-        'Deterministic claim with control comparison.',
-        array['Example']::text[],
-        12,
-        4,
-        8,
-        'generic software alternative',
-        0.1,
-        0.35,
-        3.5,
-        0.78,
-        0.2,
-        0.7,
-        'confirmed_signal'
-      )
-      returning claim_id::text;
-    `)
-  );
-  assert(claimId, "Failed to seed deterministic v3 claim.");
-  harness.rememberEntity("claimId", claimId);
-
-  const negativeEvidenceId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_negative_evidence (
-        target_id,
-        run_id,
-        evidence_kind,
-        provider_id,
-        query_text,
-        source_role,
-        signal_mode,
-        failure_mode,
-        severity,
-        details_json,
-        cooldown_until
-      )
-      values (
-        ${sqlLiteral(targetId)}::uuid,
-        ${sqlLiteral(runId)}::uuid,
-        'negative_evidence',
-        'web_search',
-        ${sqlLiteral(`mcp bad query ${suffix}`)},
-        'industry_niche',
-        'direct',
-        'seo_noise',
-        0.7,
-        '{"source":"mcp-http-deterministic"}'::jsonb,
-        now() + interval '7 days'
-      )
-      returning negative_evidence_id::text;
-    `)
-  );
-  assert(negativeEvidenceId, "Failed to seed deterministic v3 negative evidence.");
-  harness.rememberEntity("negativeEvidenceId", negativeEvidenceId);
-
-  await harness.queryPostgres(`
-    insert into discovery_provider_health (
-      provider_id,
-      status,
-      success_rate,
-      error_rate,
-      last_error_kind,
-      cooldown_until,
-      metrics_json
-    )
-    values (
-      'web_search',
-      'degraded',
-      0.4,
-      0.6,
-      'provider_error',
-      now() + interval '30 minutes',
-      '{"source":"mcp-http-deterministic"}'::jsonb
-    )
-    on conflict (provider_id) do update set
-      status = excluded.status,
-      success_rate = excluded.success_rate,
-      error_rate = excluded.error_rate,
-      last_error_kind = excluded.last_error_kind,
-      cooldown_until = excluded.cooldown_until,
-      metrics_json = excluded.metrics_json,
-      updated_at = now();
-  `);
-
-  const identityId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_source_identities (
-        canonical_organization,
-        canonical_domain,
-        known_domains,
-        known_feed_urls,
-        known_homepage_urls,
-        identity_confidence,
-        evidence_json
-      )
-      values (
-        ${sqlLiteral(`MCP Identity ${suffix}`)},
-        ${sqlLiteral(`mcp-identity-${suffix}.example.test`)},
-        array[${sqlLiteral(`mcp-identity-${suffix}.example.test`)}]::text[],
-        array[${sqlLiteral(`https://mcp-identity-${suffix}.example.test/feed.xml`)}]::text[],
-        array[${sqlLiteral(`https://mcp-identity-${suffix}.example.test`)}]::text[],
-        0.88,
-        '{"source":"mcp-http-deterministic"}'::jsonb
-      )
-      on conflict (canonical_domain) do update set updated_at = now()
-      returning source_identity_id::text;
-    `)
-  );
-  assert(identityId, "Failed to seed deterministic v3 source identity.");
-  harness.rememberEntity("identityId", identityId);
-
-  const evalSuiteId = firstResultLine(
-    await harness.queryPostgres(`
-      insert into discovery_eval_suites (name, description)
-      values (
-        ${sqlLiteral(`MCP Discovery Eval ${suffix}`)},
-        'Deterministic resilient discovery replay eval.'
-      )
-      returning eval_suite_id::text;
-    `)
-  );
-  assert(evalSuiteId, "Failed to seed deterministic v3 eval suite.");
-  harness.rememberEntity("evalSuiteId", evalSuiteId);
-  await harness.queryPostgres(`
-    insert into discovery_eval_cases (
-      eval_suite_id,
-      target_json,
-      provider_fixtures_json,
-      expected_sources_json,
-      expected_rejects_json,
-      expected_hidden_claims_json
-    )
-    values (
-      ${sqlLiteral(evalSuiteId)}::uuid,
-      '{"title":"MCP deterministic eval"}'::jsonb,
-      ${sqlLiteral(JSON.stringify({
-        sources: [{ url: `https://mcp-${suffix}.example.test/changelog/feed.xml` }],
-        rejects: [{ url: `https://mcp-bad-${suffix}.example.test` }],
-        hiddenClaims: [{ normalized_claim: `mcp hidden claim ${suffix}` }],
-        cost: 0.1,
-      }))}::jsonb,
-      ${sqlLiteral(JSON.stringify([{ url: `https://mcp-${suffix}.example.test/changelog/feed.xml` }]))}::jsonb,
-      ${sqlLiteral(JSON.stringify([{ url: `https://mcp-bad-${suffix}.example.test` }]))}::jsonb,
-      ${sqlLiteral(JSON.stringify([{ normalized_claim: `mcp hidden claim ${suffix}` }]))}::jsonb
-    );
-  `);
-
-  await harness.mcpToolCall(token, "discovery.hypotheses.list", { targetId, page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.hypotheses.read", { hypothesisId });
-  await harness.mcpToolCall(token, "discovery.domains.list", { targetId, page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.domains.read", { domainId });
-  await harness.mcpToolCall(token, "discovery.endpoints.list", { targetId, page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.endpoints.read", { endpointId });
-  await harness.mcpToolCall(token, "discovery.claims.list", { targetId, page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.claims.read", { claimId });
-  await harness.mcpToolCall(token, "discovery.negative_evidence.list", { targetId, page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.negative_evidence.read", { negativeEvidenceId });
-  await harness.mcpToolCall(token, "discovery.negative_evidence.clear_cooldown", { negativeEvidenceId });
-  await harness.mcpToolCall(token, "discovery.provider_health.list", { page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.provider_health.read", { providerId: "web_search" });
-  await harness.mcpToolCall(token, "discovery.provider_health.repair", {
-    providerId: "web_search",
-    payload: {
-      repairKind: "repair_provider_auth",
-      reason: "Deterministic MCP provider repair proof.",
-    },
-  });
-  await harness.mcpToolCall(token, "discovery.identities.list", { page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.identities.read", { identityId });
-  await harness.mcpToolCall(token, "discovery.eval_suites.list", { page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.eval_suites.read", { evalSuiteId });
-  const evalRun = await harness.mcpToolCall(token, "discovery.eval_suites.run", {
-    evalSuiteId,
-    payload: {
-      configJson: {
-        thresholdVersion: "mcp-deterministic",
-      },
-    },
-  });
-  const evalRunId = String(evalRun.eval_run_id ?? evalRun.evalRunId ?? "");
-  assert(evalRunId, "discovery.eval_suites.run must return an eval run id.");
-  harness.rememberEntity("evalRunId", evalRunId);
-  await harness.mcpToolCall(token, "discovery.eval_runs.list", { page: 1, pageSize: 20 });
-  await harness.mcpToolCall(token, "discovery.eval_runs.read", { evalRunId });
-
-  const promoted = await harness.mcpToolCall(token, "discovery.endpoints.promote", {
-    endpointId,
-    payload: {
-      tags: ["mcp", "deterministic"],
-      reason: "Deterministic MCP resilient discovery endpoint promotion.",
-    },
-  });
-  const promotedChannelId = String(promoted.source_channel_id ?? promoted.sourceChannelId ?? "");
-  assert(promotedChannelId, "discovery.endpoints.promote must register a source channel.");
-  harness.rememberEntity("promotedChannelId", promotedChannelId);
-  await harness.mcpToolCall(token, "discovery.endpoints.expand", {
-    endpointId,
-    payload: {
-      reason: "Deterministic expansion proof.",
-    },
-  });
-  await harness.mcpToolCall(token, "discovery.endpoints.mark_duplicate", {
-    endpointId: duplicateEndpointId,
-    payload: {
-      reason: "Deterministic duplicate proof.",
-    },
-  });
-  const rejected = await harness.mcpToolCall(token, "discovery.endpoints.reject", {
-    endpointId: duplicateEndpointId,
-    payload: {
-      reason: "Deterministic reject proof after duplicate marking.",
-    },
-  });
-  assert(rejected, "discovery.endpoints.reject should return the endpoint row.");
-
-  const contractList = await harness.mcpToolCall(token, "discovery.contracts.list", {
-    targetId,
-    page: 1,
-    pageSize: 20,
-  });
-  const contractId = readIdentifier(readFirstRow(contractList), ["contract_id", "contractId"]);
-  assert(contractId, "Promoted discovery endpoint should create a Source Evidence Contract.");
-  harness.rememberEntity("contractId", contractId);
-  await harness.mcpToolCall(token, "discovery.contracts.read", { contractId });
-  await harness.mcpToolCall(token, "discovery.contracts.evaluate", {
-    contractId,
-    payload: {
-      metrics: {
-        successful_fetch_count: 3,
-        useful_item_count: 4,
-        duplicate_rate: 0.1,
-        noise_rate: 0.1,
-        topic_fit_score: 0.8,
-        extraction_success_rate: 0.95,
-      },
-    },
-  });
-  await harness.mcpToolCall(token, "discovery.actions.list", { targetId, page: 1, pageSize: 20 });
-
-  harness.addCleanup("delete-promoted-discovery-channel", async () => {
-    await harness.mcpToolCall(token, "channels.delete", {
-      channelId: promotedChannelId,
-      confirm: true,
-    });
-  });
-
-  pushEvidence(evidence, "discovery-ids", {
-    targetId,
+  const candidate = await harness.mcpToolCall(token, "discovery.candidates.normalize", {
+    results: [{ url: sourceUrl, title: "Deterministic policy feed", candidateKindGuess: "rss" }],
+    hypothesisId: `${harness.runId}:hypothesis:mcp`,
+    queryAttemptId: `${harness.runId}:query:mcp`,
+    query: "public policy regulatory updates feed",
+    queryFamilyIntent: "official_update_feed",
     runId,
-    hypothesisId,
-    domainId,
-    endpointId,
-    duplicateEndpointId,
-    claimId,
-    negativeEvidenceId,
-    identityId,
-    evalSuiteId,
-    evalRunId,
-    promotedChannelId,
+    interestId: harness.runId,
   });
+  pushEvidence(evidence, "candidate-normalize", candidate);
+  await harness.mcpToolCall(token, "discovery.probe.plan_preview", {
+    candidateUrl: sourceUrl,
+    candidateKindGuess: "rss",
+  });
+  const understanding = await harness.mcpToolCall(token, "discovery.understand.preview", {
+    discoveryBrief,
+    probeReport: {
+      probeSummary: { validFeed: true, sampleEntryCount: 3 },
+      evidence: ["deterministic MCP probe fixture"],
+    },
+    candidate: {
+      canonicalUrl: sourceUrl,
+      canonicalDomain: "example.test",
+      candidateKindGuess: "rss",
+    },
+  });
+  const sourceUnderstanding = understanding.payload ?? understanding.sourceUnderstanding?.payload ?? understanding.sourceUnderstanding ?? understanding;
+  const routing = await harness.mcpToolCall(token, "discovery.route.preview", {
+    sourceUnderstanding,
+    providerType: "rss",
+    accessPattern: "public",
+  });
+  pushEvidence(evidence, "routing-preview", routing);
+
+  await harness.mcpToolCall(token, "discovery.artifacts.validate", {
+    artifactType: "DiscoveryBrief",
+    payload: discoveryBrief,
+  });
+  const feedback = await harness.mcpToolCall(token, "discovery.feedback.submit", {
+    targetType: "artifact",
+    targetId: runId,
+    feedbackType: "mark_useful",
+    feedback: {
+      note: "deterministic MCP vNext classification/usefulness proof",
+      usefulnessKind: "classification_usefulness",
+      classificationCorrect: true,
+      sourceUsefulAsClassified: true,
+    },
+    createdBy: "mcp-http-scenarios",
+  });
+  pushEvidence(evidence, "feedback", feedback);
+
+  await harness.mcpToolCall(token, "discovery.policies.validate", {
+    policyName: "discovery-routing",
+    policyVersion: "mcp-scenario",
+    policyType: "routing",
+    definition: { yieldIndependent: true },
+  });
+  await harness.mcpToolCall(token, "discovery.replay.start", {
+    replayKind: "full_non_live",
+    input: { runId },
+    createdBy: "mcp-http-scenarios",
+    dryRun: true,
+  });
+  await harness.mcpToolCall(token, "discovery.runs.list", { page: 1, pageSize: 20 });
+  await harness.mcpToolCall(token, "discovery.artifacts.list", { page: 1, pageSize: 20 });
+  await harness.mcpToolCall(token, "discovery.candidates.list", { page: 1, pageSize: 20 });
+  await harness.mcpToolCall(token, "discovery.source_inventory.list", { page: 1, pageSize: 20 });
+  await harness.mcpToolCall(token, "discovery.adapter_backlog.list", { page: 1, pageSize: 20 });
+
+  pushEvidence(evidence, "discovery-ids", { runId });
 
   return {
     key: "discovery-operator-flows",
-    summary: "Ran resilient discovery v3 target/run/coverage/endpoint/contract/claim/negative-evidence/provider-health/eval flows through HTTP MCP.",
+    summary: "Ran Discovery vNext run/artifact/candidate/probe/understanding/routing/replay/feedback flows through HTTP MCP.",
+    evidence,
+  };
+}
+
+async function scenarioDiscoveryVnextFullFlow(harness) {
+  const evidence = [];
+  const token = harness.tokens.discovery.token;
+  const sourceUrl = `https://mcp-full-${harness.runId.replace(/-/g, "").slice(0, 12)}.example.test/feed.xml`;
+  const interestId = harness.runId;
+
+  const run = await harness.mcpToolCall(token, "discovery.runs.execute", {
+    runKind: "full",
+    triggerKind: "mcp",
+    request: {
+      interest: {
+        interestId,
+        name: "MCP full Discovery vNext flow",
+        description: "Track deterministic public regulatory update feeds.",
+        languages: ["en"],
+      },
+      searchProvider: "stub",
+      maxBatches: 1,
+    },
+    budget: { maxRunCostCents: 1 },
+    liveProviderExecution: false,
+    createdBy: "mcp-http-scenarios",
+  });
+  const runId = String(run?.run?.vnext_run_id ?? run?.run?.vnextRunId ?? "");
+  assert(runId, "discovery.runs.execute must return a vNext run id.");
+  assert(
+    Array.isArray(run?.result?.steps) && run.result.steps.includes("candidate_acquisition"),
+    "discovery.runs.execute full mode must run candidate acquisition."
+  );
+  pushEvidence(evidence, "full-run", { runId, steps: run.result.steps });
+
+  const briefArtifact = (run?.result?.briefArtifact ?? {});
+  const discoveryBrief = briefArtifact.payload_json ?? briefArtifact.payload ?? {};
+  const candidateCreate = await harness.mcpToolCall(token, "discovery.candidates.create", {
+    results: [{ url: sourceUrl, title: "MCP full flow feed", candidateKindGuess: "rss" }],
+    hypothesisId: `${harness.runId}:hypothesis:full`,
+    query: "mcp deterministic full discovery feed",
+    queryFamilyIntent: "official_update_feed",
+    runId,
+    interestId,
+    createdBy: "mcp-http-scenarios",
+  });
+  const candidateRows = Array.isArray(candidateCreate?.candidates)
+    ? candidateCreate.candidates
+    : readRows(candidateCreate);
+  const candidate = candidateRows[0] ?? {};
+  const candidateId = String(candidate.candidate_id ?? candidate.candidateId ?? "");
+  assert(candidateId, "discovery.candidates.create must persist a candidate.");
+
+  const understanding = await harness.mcpToolCall(token, "discovery.understand.preview", {
+    discoveryBrief,
+    probeReport: {
+      probeSummary: {
+        validFeed: true,
+        sampleEntryCount: 3,
+        technicalObservability: 0.9,
+        discoveredFeedUrls: [sourceUrl],
+      },
+      evidence: ["deterministic MCP full flow probe fixture"],
+    },
+    candidate: {
+      candidateId,
+      canonicalUrl: sourceUrl,
+      canonicalDomain: "example.test",
+      candidateKindGuess: "rss",
+    },
+  });
+  const sourceUnderstanding =
+    understanding.payload ?? understanding.sourceUnderstanding?.payload ?? understanding.sourceUnderstanding ?? understanding;
+  const routing = await harness.mcpToolCall(token, "discovery.routing.apply", {
+    sourceUnderstanding,
+    canonicalUrl: sourceUrl,
+    canonicalDomain: "example.test",
+    sourceIdentityKey: `${harness.runId}:mcp-full-flow`,
+    providerType: "rss",
+    accessPattern: "public",
+    runId,
+    interestId,
+    candidateId,
+    createdBy: "mcp-http-scenarios",
+  });
+  const sourceInventoryId = String(
+    routing?.sourceInventory?.source_inventory_id ?? routing?.sourceInventory?.sourceInventoryId ?? ""
+  );
+  assert(sourceInventoryId, "discovery.routing.apply must persist source inventory.");
+  pushEvidence(evidence, "routing-apply", {
+    sourceInventoryId,
+    decision: routing?.routingDecisionArtifact?.payload_json?.decision,
+  });
+
+  const llm = await harness.mcpToolCall(token, "discovery.llm_gateway.run", {
+    task: "discovery_compile_interest_graph",
+    prompt: "Return deterministic MCP full-flow evidence.",
+    payload: { runId, sourceInventoryId },
+    budget: { maxRunCostCents: 1 },
+    liveProviderExecution: false,
+    runId,
+    createdBy: "mcp-http-scenarios",
+  });
+  pushEvidence(evidence, "llm-gateway", { status: llm?.event?.status });
+
+  const prepared = await harness.mcpToolCall(token, "discovery.rollback.prepare", {
+    sourceInventoryId,
+    reason: "MCP full-flow rollback proof.",
+    createdBy: "mcp-http-scenarios",
+  });
+  const rollbackGroupId = String(
+    prepared?.rollbackGroup?.rollback_group_id ?? prepared?.rollbackGroup?.rollbackGroupId ?? ""
+  );
+  assert(rollbackGroupId, "discovery.rollback.prepare must return a rollback group.");
+  await harness.mcpToolCall(token, "discovery.rollback.apply", {
+    rollbackGroupId,
+    appliedBy: "mcp-http-scenarios",
+    confirm: true,
+  });
+
+  const diagnosticReads = [
+    ["run-steps", await harness.mcpToolCall(token, "discovery.run_steps.list", { page: 1, pageSize: 20 })],
+    ["query-attempts", await harness.mcpToolCall(token, "discovery.query_attempts.list", { page: 1, pageSize: 20 })],
+    ["llm-gateway-events", await harness.mcpToolCall(token, "discovery.llm_gateway_events.list", { page: 1, pageSize: 20 })],
+    ["monitoring-state", await harness.mcpToolCall(token, "discovery.monitoring_state.list", { page: 1, pageSize: 20 })],
+    ["source-observations", await harness.mcpToolCall(token, "discovery.source_observations.list", { page: 1, pageSize: 20 })],
+  ];
+  for (const [label, payload] of diagnosticReads) {
+    assert(Array.isArray(payload?.items), `discovery ${label} read surface must return items.`);
+  }
+  pushEvidence(evidence, "diagnostic-reads", diagnosticReads.map(([label]) => label));
+
+  return {
+    key: "discovery-vnext-full-flow",
+    summary: "Executed full Discovery vNext MCP flow and read run-step/query/LLM/monitoring/observation diagnostics.",
     evidence,
   };
 }
@@ -1709,20 +1423,18 @@ function buildReadToolCalls() {
     ] } },
     { name: "sequences.list", args: { page: 1, pageSize: 20 } },
     { name: "sequences.plugins.list", args: {} },
-    { name: "discovery.summary.get", args: {} },
-    { name: "discovery.targets.list", args: { page: 1, pageSize: 20 } },
     { name: "discovery.runs.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.endpoints.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.hypotheses.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.domains.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.actions.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.contracts.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.claims.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.negative_evidence.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.provider_health.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.identities.list", args: { page: 1, pageSize: 20 } },
-    { name: "discovery.eval_suites.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.artifacts.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.candidates.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.source_inventory.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.policies.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.adapter_backlog.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.feedback.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.replay_runs.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.rollback_groups.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.rollback_actions.list", args: { page: 1, pageSize: 20 } },
     { name: "discovery.eval_runs.list", args: { page: 1, pageSize: 20 } },
+    { name: "discovery.source_families.coverage", args: { includeExamples: false } },
     { name: "articles.list", args: { page: 1, pageSize: 20 } },
     { name: "content_items.list", args: { page: 1, pageSize: 20 } },
     { name: "articles.residuals.summary", args: {} },
@@ -2015,86 +1727,16 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
     }
   }
 
-  const firstTarget = readFirstRow(listResults["discovery.targets.list"] ?? {});
-  const targetId = readIdentifier(firstTarget, ["target_id", "targetId"]);
-  if (targetId) {
-    await harness.mcpToolCall(token, "discovery.targets.read", { targetId });
-    await harness.mcpToolCall(token, "discovery.coverage.read", { targetId });
-  }
-
   const firstRun = readFirstRow(listResults["discovery.runs.list"] ?? {});
-  const runId = readIdentifier(firstRun, ["run_id", "runId"]);
+  const runId = readIdentifier(firstRun, ["vnext_run_id", "vnextRunId", "run_id", "runId"]);
   if (runId) {
-    await harness.mcpToolCall(token, "discovery.runs.read", { runId });
-  }
-
-  const firstEndpoint = readFirstRow(listResults["discovery.endpoints.list"] ?? {});
-  const endpointId = readIdentifier(firstEndpoint, ["endpoint_id", "endpointId"]);
-  if (endpointId) {
-    await harness.mcpToolCall(token, "discovery.endpoints.read", { endpointId });
-  }
-
-  const firstHypothesis = readFirstRow(listResults["discovery.hypotheses.list"] ?? {});
-  const hypothesisId = readIdentifier(firstHypothesis, ["hypothesis_id", "hypothesisId"]);
-  if (hypothesisId) {
-    await harness.mcpToolCall(token, "discovery.hypotheses.read", { hypothesisId });
-  }
-
-  const firstDomain = readFirstRow(listResults["discovery.domains.list"] ?? {});
-  const domainId = readIdentifier(firstDomain, ["domain_id", "domainId"]);
-  if (domainId) {
-    await harness.mcpToolCall(token, "discovery.domains.read", { domainId });
-  }
-
-  const firstAction = readFirstRow(listResults["discovery.actions.list"] ?? {});
-  const actionId = readIdentifier(firstAction, ["action_id", "actionId"]);
-  if (actionId) {
-    await harness.mcpToolCall(token, "discovery.actions.read", { actionId });
-  }
-
-  const firstContract = readFirstRow(listResults["discovery.contracts.list"] ?? {});
-  const contractId = readIdentifier(firstContract, ["contract_id", "contractId"]);
-  if (contractId) {
-    await harness.mcpToolCall(token, "discovery.contracts.read", { contractId });
-  }
-
-  const firstClaim = readFirstRow(listResults["discovery.claims.list"] ?? {});
-  const claimId = readIdentifier(firstClaim, ["claim_id", "claimId"]);
-  if (claimId) {
-    await harness.mcpToolCall(token, "discovery.claims.read", { claimId });
-  }
-
-  const firstNegativeEvidence = readFirstRow(listResults["discovery.negative_evidence.list"] ?? {});
-  const negativeEvidenceId = readIdentifier(firstNegativeEvidence, [
-    "negative_evidence_id",
-    "negativeEvidenceId",
-  ]);
-  if (negativeEvidenceId) {
-    await harness.mcpToolCall(token, "discovery.negative_evidence.read", { negativeEvidenceId });
-  }
-
-  const firstProviderHealth = readFirstRow(listResults["discovery.provider_health.list"] ?? {});
-  const providerId = String(firstProviderHealth.provider_id ?? firstProviderHealth.providerId ?? "");
-  if (providerId) {
-    await harness.mcpToolCall(token, "discovery.provider_health.read", { providerId });
-  }
-
-  const firstIdentity = readFirstRow(listResults["discovery.identities.list"] ?? {});
-  const identityId = readIdentifier(firstIdentity, ["source_identity_id", "sourceIdentityId", "identityId"]);
-  if (identityId) {
-    await harness.mcpToolCall(token, "discovery.identities.read", { identityId });
-  }
-
-  const firstEvalSuite = readFirstRow(listResults["discovery.eval_suites.list"] ?? {});
-  const evalSuiteId = readIdentifier(firstEvalSuite, ["eval_suite_id", "evalSuiteId"]);
-  if (evalSuiteId) {
-    await harness.mcpToolCall(token, "discovery.eval_suites.read", { evalSuiteId });
+    await harness.mcpToolCall(token, "discovery.runs.read", { recordId: runId });
   }
 
   const firstEvalRun = readFirstRow(listResults["discovery.eval_runs.list"] ?? {});
   const evalRunId = readIdentifier(firstEvalRun, ["eval_run_id", "evalRunId"]);
   if (evalRunId) {
-    await harness.mcpToolCall(token, "discovery.eval_runs.read", { evalRunId });
+    await harness.mcpToolCall(token, "discovery.eval_runs.read", { recordId: evalRunId });
   }
 
   const firstWebResource = readFirstRow(webResourceList ?? {});
@@ -2327,18 +1969,18 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
       expectStatus: 400,
     }
   );
-  const invalidDiscoveryTargetCreatePayload = await postJson(
+  const invalidDiscoveryArtifactCreatePayload = await postJson(
     mcpBaseUrl,
     {
       jsonrpc: "2.0",
-      id: `${harness.runId}-discovery-target-nested-payload-denied`,
+      id: `${harness.runId}-discovery-artifact-nested-payload-denied`,
       method: "tools/call",
       params: {
-        name: "discovery.targets.create_manual",
+        name: "discovery.artifacts.create",
         arguments: {
           payload: {
             payload: {
-              title: `Nested payload target ${harness.runId}`,
+              artifactType: "DiscoveryBrief",
             },
           },
         },
@@ -2356,11 +1998,11 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
       id: `${harness.runId}-discovery-run-nested-payload-denied`,
       method: "tools/call",
       params: {
-        name: "discovery.runs.start",
+        name: "discovery.runs.create",
         arguments: {
           payload: {
             payload: {
-              targetId: "00000000-0000-4000-8000-000000000000",
+              runKind: "full",
             },
           },
         },
@@ -2372,16 +2014,16 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     }
   );
 
-  const invalidDiscoveryReviewPayload = await postJson(
+  const invalidDiscoveryRoutePayload = await postJson(
     mcpBaseUrl,
     {
       jsonrpc: "2.0",
       id: `${harness.runId}-invalid-discovery-review-payload`,
       method: "tools/call",
       params: {
-        name: "discovery.endpoints.promote",
+        name: "discovery.route.preview",
         arguments: {
-          endpointId: "not-a-uuid",
+          sourceUnderstanding: "not-an-object",
           payload: {
             reason: "cleanup",
           },
@@ -2394,19 +2036,16 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     }
   );
 
-  const invalidEndpointDuplicatePayload = await postJson(
+  const invalidDiscoveryRollbackPayload = await postJson(
     mcpBaseUrl,
     {
       jsonrpc: "2.0",
-      id: `${harness.runId}-invalid-recall-candidate-payload`,
+      id: `${harness.runId}-invalid-discovery-rollback-payload`,
       method: "tools/call",
       params: {
-        name: "discovery.endpoints.mark_duplicate",
+        name: "discovery.rollback.apply",
         arguments: {
-          endpointId: "not-a-uuid",
-          payload: {
-            reason: "cleanup",
-          },
+          rollbackGroupId: "00000000-0000-4000-8000-000000000000",
         },
       },
     },
@@ -2416,17 +2055,17 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     }
   );
 
-  const invalidDiscoveryTargetJsonString = await postJson(
+  const invalidDiscoveryArtifactJsonString = await postJson(
     mcpBaseUrl,
     {
       jsonrpc: "2.0",
-      id: `${harness.runId}-discovery-target-json-string-denied`,
+      id: `${harness.runId}-discovery-artifact-json-string-denied`,
       method: "tools/call",
       params: {
-        name: "discovery.targets.create_manual",
+        name: "discovery.artifacts.create",
         arguments: {
           payload: JSON.stringify({
-            title: "Bad target",
+            artifactType: "DiscoveryBrief",
           }),
         },
       },
@@ -2437,19 +2076,18 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     }
   );
 
-  const invalidDiscoveryEvalNestedPayload = await postJson(
+  const invalidDiscoveryPolicyNestedPayload = await postJson(
     mcpBaseUrl,
     {
       jsonrpc: "2.0",
-      id: `${harness.runId}-discovery-eval-nested-payload-denied`,
+      id: `${harness.runId}-discovery-policy-nested-payload-denied`,
       method: "tools/call",
       params: {
-        name: "discovery.eval_suites.run",
+        name: "discovery.policies.activate",
         arguments: {
-          evalSuiteId: "00000000-0000-4000-8000-000000000000",
           payload: {
             payload: {
-              configJson: {},
+              policyName: "bad",
             },
           },
         },
@@ -2533,16 +2171,16 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     }
   );
 
-  const invalidDiscoveryProviderRepairPayload = await postJson(
+  const invalidDiscoveryFeedbackPayload = await postJson(
     mcpBaseUrl,
     {
       jsonrpc: "2.0",
-      id: `${harness.runId}-discovery-provider-repair-missing-payload-denied`,
+      id: `${harness.runId}-discovery-feedback-missing-target-denied`,
       method: "tools/call",
       params: {
-        name: "discovery.provider_health.repair",
+        name: "discovery.feedback.submit",
         arguments: {
-          providerId: "web_search",
+          feedbackType: "approve",
         },
       },
     },
@@ -2809,28 +2447,28 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     "Invalid bulk onboarding source rows should be rejected by MCP schema before backend/control-plane writes."
   );
   assert(
-    readJsonRpcErrorMessage(invalidDiscoveryTargetCreatePayload.json).includes("payload.payload"),
-    "Nested discovery target create payloads should be rejected by MCP schema before backend 422."
+    readJsonRpcErrorMessage(invalidDiscoveryArtifactCreatePayload.json).includes("payload"),
+    "Nested discovery artifact create payloads should be rejected by MCP schema before backend 422."
   );
   assert(
-    readJsonRpcErrorMessage(invalidDiscoveryRunCreatePayload.json).includes("payload.payload"),
+    readJsonRpcErrorMessage(invalidDiscoveryRunCreatePayload.json).includes("payload"),
     "Nested discovery run create payloads should be rejected by MCP schema before backend 422."
   );
   assert(
-    readJsonRpcErrorMessage(invalidDiscoveryReviewPayload.json).includes("endpointId"),
-    "Invalid discovery endpoint ids should be rejected by MCP schema before backend 422."
+    readJsonRpcErrorMessage(invalidDiscoveryRoutePayload.json).includes("sourceUnderstanding"),
+    "Invalid discovery route payloads should be rejected by MCP schema before backend 422."
   );
   assert(
-    readJsonRpcErrorMessage(invalidEndpointDuplicatePayload.json).includes("endpointId"),
-    "Invalid endpoint duplicate payload should be rejected by MCP schema before backend 422."
+    readJsonRpcErrorMessage(invalidDiscoveryRollbackPayload.json).includes("confirm"),
+    "Invalid rollback payload should be rejected by MCP schema before backend 422."
   );
   assert(
-    invalidDiscoveryTargetJsonString.json?.error?.data?.path === "payload",
+    invalidDiscoveryArtifactJsonString.json?.error?.data?.path === "payload",
     "JSON-string write payloads should fail at the MCP payload boundary with data.path=payload."
   );
   assert(
-    readJsonRpcErrorMessage(invalidDiscoveryEvalNestedPayload.json).includes("payload.payload"),
-    "Nested discovery eval run payloads should be rejected by MCP schema before backend 422."
+    readJsonRpcErrorMessage(invalidDiscoveryPolicyNestedPayload.json).includes("payload"),
+    "Nested discovery policy payloads should be rejected by MCP schema before backend 422."
   );
   assert(
     readJsonRpcErrorMessage(invalidSequenceCreateExtraPayload.json).includes("payload.target"),
@@ -2845,8 +2483,8 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     "Content analysis policy create should reject nested payload envelopes before backend 422."
   );
   assert(
-    readJsonRpcErrorMessage(invalidDiscoveryProviderRepairPayload.json).toLowerCase().includes("payload"),
-    "Provider repair should require an explicit payload envelope at the MCP boundary."
+    readJsonRpcErrorMessage(invalidDiscoveryFeedbackPayload.json).includes("target"),
+    "Discovery feedback should require an explicit target at the MCP boundary."
   );
   assert(
     readJsonRpcErrorMessage(tokenRevokeWithoutAdminScope.json).includes("admin.tokens"),
@@ -2893,16 +2531,16 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
     invalidPayload: invalidPayload.status,
     invalidChannelPayload: invalidChannelPayload.status,
     invalidBulkOnboardSource: invalidBulkOnboardSource.status,
-    invalidDiscoveryTargetCreatePayload: invalidDiscoveryTargetCreatePayload.status,
+    invalidDiscoveryArtifactCreatePayload: invalidDiscoveryArtifactCreatePayload.status,
     invalidDiscoveryRunCreatePayload: invalidDiscoveryRunCreatePayload.status,
-    invalidDiscoveryReviewPayload: invalidDiscoveryReviewPayload.status,
-    invalidEndpointDuplicatePayload: invalidEndpointDuplicatePayload.status,
-    invalidDiscoveryTargetJsonString: invalidDiscoveryTargetJsonString.status,
-    invalidDiscoveryEvalNestedPayload: invalidDiscoveryEvalNestedPayload.status,
+    invalidDiscoveryRoutePayload: invalidDiscoveryRoutePayload.status,
+    invalidDiscoveryRollbackPayload: invalidDiscoveryRollbackPayload.status,
+    invalidDiscoveryArtifactJsonString: invalidDiscoveryArtifactJsonString.status,
+    invalidDiscoveryPolicyNestedPayload: invalidDiscoveryPolicyNestedPayload.status,
     invalidSequenceCreateExtraPayload: invalidSequenceCreateExtraPayload.status,
     invalidTemplateExtraPayload: invalidTemplateExtraPayload.status,
     invalidContentPolicyExtraPayload: invalidContentPolicyExtraPayload.status,
-    invalidDiscoveryProviderRepairPayload: invalidDiscoveryProviderRepairPayload.status,
+    invalidDiscoveryFeedbackPayload: invalidDiscoveryFeedbackPayload.status,
     tokenRevokeWithoutAdminScope: tokenRevokeWithoutAdminScope.status,
     tokenSelfRevoke: tokenSelfRevoke.status,
     systemSequenceArchive: systemSequenceArchive.status,
@@ -2919,6 +2557,123 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
   return {
     key: "negative-scope-and-destructive-policy",
     summary: "Asserted real HTTP policy failures for auth, scope, destructive confirmation, invalid payloads, and unknown MCP methods.",
+    evidence,
+  };
+}
+
+async function scenarioIngressAdapterOperatorFlows(harness) {
+  const evidence = [];
+  const token = harness.tokens.config.token;
+  const runKey = harness.runId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const adapterKey = `api.mcp_operator_${runKey}`;
+
+  await harness.mcpToolCall(token, "ingress.adapters.list", { providerType: "api" });
+  await harness.mcpToolCall(token, "ingress.adapters.read", { adapterKey: "api.generic_json_mapping" });
+  const fallbackReportBefore = await harness.mcpToolCall(token, "ingress.adapters.legacy_fallback_report", {});
+  assert(
+    fallbackReportBefore.totals && typeof fallbackReportBefore.totals === "object",
+    "ingress.adapters.legacy_fallback_report must return totals."
+  );
+  assert(
+    Array.isArray(fallbackReportBefore.channels),
+    "ingress.adapters.legacy_fallback_report must include channel-level readiness evidence."
+  );
+  assert(
+    Number(fallbackReportBefore.totals.lastRunLegacyConfigCount ?? 0) === 0,
+    "Clean MCP ingress adapter scenario expects zero legacy_config fetch-run resolutions."
+  );
+  const created = await harness.mcpToolCall(token, "ingress.adapters.create_declarative", {
+    payload: {
+      adapterKey,
+      providerType: "api",
+      title: `MCP operator JSON API ${harness.runId}`,
+      description: "Deterministic MCP coverage adapter.",
+      outputMode: "articles",
+      status: "draft",
+      matchRules: { urlHostContains: ["example.com"], allowAutoSelect: false },
+      configSchema: {},
+      recipe: {
+        request: { method: "GET" },
+        response: { format: "json" },
+        pagination: { mode: "none", maxPagesPerPoll: 1 },
+        items: "items",
+        map: { title: "title", url: "url", externalId: "id" },
+      },
+      metadata: { scenario: "ingress-adapter-operator-flows" },
+    },
+  });
+  assert(created.created === true, "ingress.adapters.create_declarative must create a row.");
+  await harness.mcpToolCall(token, "ingress.adapters.update_declarative", {
+    adapterKey,
+    payload: {
+      title: `MCP operator JSON API ${harness.runId} updated`,
+      status: "active",
+      metadata: { scenario: "ingress-adapter-operator-flows", updated: true },
+    },
+  });
+  await harness.mcpToolCall(token, "ingress.adapters.read", { adapterKey });
+
+  const dryRun = await harness.mcpToolCall(token, "ingress.adapters.dry_run", {
+    adapterKey: "website.generic_discovery",
+    providerType: "website",
+  });
+  assert(dryRun.status === "unsupported", "Non-API dry-run should return unsupported without writes.");
+
+  const channel = await harness.mcpToolCall(token, "channels.create", {
+    payload: {
+      providerType: "api",
+      name: `MCP adapter channel ${harness.runId}`,
+      fetchUrl: `https://example.com/${runKey}/items.json`,
+      language: "en",
+      isActive: true,
+      itemsPath: "items",
+      titleField: "title",
+      urlField: "url",
+      externalIdField: "id",
+    },
+  });
+  const channelId = String(channel.channelId ?? channel.createdChannelIds?.[0] ?? "");
+  assert(channelId, "channels.create must return a channel id for ingress adapter scenario.");
+
+  harness.addCleanup("delete-ingress-adapter-operator-flow-rows", async () => {
+    await harness.queryPostgres(`
+      delete from source_channel_adapter_binding where channel_id = ${sqlLiteral(channelId)};
+      delete from source_channels where channel_id = ${sqlLiteral(channelId)};
+      delete from ingress_adapter_catalog where adapter_key = ${sqlLiteral(adapterKey)};
+    `);
+  });
+
+  const initialBinding = await harness.mcpToolCall(token, "ingress.bindings.read", { channelId });
+  await harness.mcpToolCall(token, "ingress.adapters.recommend_for_channel", { channelId });
+  const bindingAfterRecommend = await harness.mcpToolCall(token, "ingress.bindings.read", { channelId });
+  assert(
+    initialBinding.adapter_key === bindingAfterRecommend.adapter_key ||
+      initialBinding.adapterKey === bindingAfterRecommend.adapterKey,
+    "ingress.adapters.recommend_for_channel must not mutate the current binding."
+  );
+
+  await harness.mcpToolCall(token, "ingress.bindings.set", {
+    channelId,
+    adapterKey,
+    config: { maxItemsPerPoll: 3 },
+    selectionMode: "mcp",
+    selectionReason: "deterministic MCP operator scenario",
+  });
+  const updatedBinding = await harness.mcpToolCall(token, "ingress.bindings.read", { channelId });
+  assert(
+    updatedBinding.adapter_key === adapterKey || updatedBinding.adapterKey === adapterKey,
+    "ingress.bindings.set must attach the requested adapter."
+  );
+  await harness.mcpToolCall(token, "ingress.bindings.delete", { channelId });
+
+  pushEvidence(evidence, "adapter-key", adapterKey);
+  pushEvidence(evidence, "channel-id", channelId);
+  pushEvidence(evidence, "dry-run-status", dryRun.status);
+  pushEvidence(evidence, "legacy-fallback-report-status", fallbackReportBefore.status);
+
+  return {
+    key: "ingress-adapter-operator-flows",
+    summary: "Covered ingress adapter catalog, binding, recommendation, and dry-run MCP operator tools.",
     evidence,
   };
 }
@@ -3027,6 +2782,8 @@ async function scenarioDocParityMatrix(harness) {
   pushEvidence(evidence, "coverage-mode", {
     assertedFullShippedCoverage: isFullMatrix,
     selectedScenarios: selectedScenarioKeys,
+    expectedNotYetExercisedCount: getUntestedShippedEntries(matrix).length,
+    unexpectedNotYetExercisedCount: getUnexpectedUntestedShippedEntries(matrix).length,
   });
 
   return {
@@ -3042,9 +2799,11 @@ export const DETERMINISTIC_SCENARIOS = {
   "template-interest-channel-flows": scenarioTemplateInterestChannelFlows,
   "sequence-operator-flows": scenarioSequenceOperatorFlows,
   "discovery-operator-flows": scenarioDiscoveryOperatorFlows,
+  "discovery-vnext-full-flow": scenarioDiscoveryVnextFullFlow,
   "content-analysis-operator-flows": scenarioContentAnalysisOperatorFlows,
   "read-only-operator-needs": scenarioReadOnlyOperatorNeeds,
   "negative-scope-and-destructive-policy": scenarioNegativeScopeAndDestructivePolicy,
+  "ingress-adapter-operator-flows": scenarioIngressAdapterOperatorFlows,
   "request-log-and-audit-evidence": scenarioRequestLogAndAuditEvidence,
   "doc-parity-matrix": scenarioDocParityMatrix,
 };

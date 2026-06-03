@@ -8,6 +8,9 @@ from fastapi import APIRouter, FastAPI
 def register_content_routes(app: FastAPI, deps: dict[str, Any]) -> None:
     router = APIRouter()
     router.get("/maintenance/articles")(deps["list_articles"])
+    router.get("/maintenance/articles/selection-summary")(
+        deps["summarize_article_selection_counts"]
+    )
     router.get("/maintenance/articles/residuals")(deps["list_article_residuals"])
     router.get("/maintenance/articles/residuals/summary")(
         deps["summarize_article_residuals"]

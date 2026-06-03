@@ -65,11 +65,18 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
         summary: "Operate source channels, schedules, and provider-specific ingest setup.",
       },
       {
+        href: "/ingress-adapters",
+        label: "Adapters",
+        key: "ingress-adapters",
+        icon: "database",
+        summary: "Inspect ingress adapter catalog rows and active channel bindings.",
+      },
+      {
         href: "/discovery",
         label: "Discovery",
         key: "discovery",
         icon: "compass",
-        summary: "Manage graph-first missions, recall acquisition, and candidate review.",
+        summary: "Operate vNext runs, artifacts, candidates, inventory, policy, replay, and rollback.",
       },
       {
         href: "/resources",
@@ -165,8 +172,8 @@ export const ADMIN_CONTINUE_ACTIONS: readonly AdminDashboardAction[] = [
   },
   {
     href: "/discovery",
-    label: "Review discovery queues",
-    summary: "Continue mission, recall, and candidate work from the discovery control plane.",
+    label: "Review Discovery vNext",
+    summary: "Inspect typed artifacts, source inventory, policy state, replay, and rollback.",
     section: "Sources",
   },
   {

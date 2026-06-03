@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-import type { AdminChannelProviderType } from "../../../apps/admin/src/lib/channel-providers";
+import type { AdminChannelProviderType } from "./channel-providers";
 import {
   buildProviderShapeValidation,
   classifyChannelProviderShape,

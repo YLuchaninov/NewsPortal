@@ -63,15 +63,9 @@
 - UI button/accessibility audit: `pnpm test:web:ui-audit`
 - Discovery enabled runtime proof: `pnpm test:discovery-enabled:compose`
 - Discovery local smoke: `pnpm test:discovery-enabled:smoke`
-- Discovery admin flow: `pnpm test:discovery:admin:compose`
-- Discovery example proof: `pnpm test:discovery:examples:compose`
-- Discovery mega comprehensive matrix proof: `pnpm test:discovery:mega:compose` (`pnpm test:discovery:domains:compose` is a compatibility alias)
-- Discovery live calibration proof: `pnpm test:discovery:live-calibration:compose`; strict MVP gate: `pnpm test:discovery:live-acceptance:compose`; manual/overnight soak: `pnpm test:discovery:live-soak:compose`
-- Discovery nonregression proof: `pnpm test:discovery:nonregression:compose`
-- Discovery yield proof: `pnpm test:discovery:yield:compose`
+- Discovery vNext operator/API/MCP proof: `pnpm test:mcp:http:discovery`, `pnpm unit_tests:ts -- mcp-control-plane`, and targeted admin/API tests for the touched surface.
 - MCP compose proof: `pnpm test:mcp:compose`
 - MCP HTTP groups: `pnpm test:mcp:http:matrix`, `pnpm test:mcp:http:auth`, `pnpm test:mcp:http:reads`, `pnpm test:mcp:http:writes`, `pnpm test:mcp:http:discovery`
-- MCP live HTTP proof: `pnpm test:mcp:http:live`
 - Fetcher/provider smoke: `pnpm test:feed-ingress-adapters:smoke`, `pnpm test:channel-auth:compose`, `pnpm test:providers:compose`, `pnpm test:enrichment:compose`, `pnpm test:hard-sites:compose`
 - Worker local smoke: `pnpm test:criterion-compile:smoke`, `pnpm test:cluster-match-notify:smoke`, `pnpm test:discovery-enabled:smoke`, `pnpm test:embed:smoke`, `pnpm test:interest-compile:smoke`, `pnpm test:llm-budget-stop:smoke`, `pnpm test:normalize-dedup:smoke`
 - Worker compose smoke: `pnpm test:criterion-compile:compose`, `pnpm test:cluster-match-notify:compose`, `pnpm test:embed:compose`, `pnpm test:interest-compile:compose`, `pnpm test:llm-budget-stop:compose`, `pnpm test:normalize-dedup:compose`, `pnpm test:reindex-backfill:compose`
@@ -96,6 +90,7 @@
 - Compliance guard: `pnpm check:compliance` proves scaffold, test/runtime layout, runtime artifact, dependency, supply-chain inventory, env key-sync and secret-leak invariants without starting compose services or printing secret values.
 - Dependency compliance guard: `pnpm check:dependency-compliance` proves direct Node dependencies have locally installed package metadata with approved license families, direct specs avoid floating/git/url sources, forbidden parser dependencies stay out, and runtime Python requirements remain exactly pinned.
 - Supply-chain inventory guard: `pnpm check:supply-chain-inventory` proves a deterministic SBOM-lite inventory can be built from local workspace manifests, installed direct Node package metadata, Python requirement files and dependency source file hashes without network access.
+- Dependency compromise and pinning check: before any dependency install/add/update/re-enable, the active item must record exact package/version checks against current public advisory and malware/compromised-package evidence, and the manifest/lockfile diff must show fixed versions rather than floating, range, tag or mutable source specs unless an explicit security exception is recorded. This is intentionally external/current-information proof and is not satisfied by the deterministic local supply-chain inventory guard alone.
 - Layout guard: `pnpm check:test-layout` proves tracked test/proof files are outside production source trees.
 - Runtime artifact guard: `pnpm check:runtime-artifacts` proves production Dockerfiles/compose do not pull tests/proofs/local envs/AIDP hidden state or derived `data` payloads into runtime artifacts, forbidden parser dependencies stay out of manifests, Node service runtime startup does not depend on TS source loaders, Node final image stages avoid source/build-only inputs while installing production dependencies and dropping root privileges, and the Python API/worker final image stage runs non-root from builder-produced wheels without build-essential.
 - Production image content guard: `pnpm check:production-image-contents` proves already-built production compose images do not contain repo-owned `tests/**`, `infra/scripts/**`, `infra/fixtures/**`, `.aidp/**`, `.env*` files or derived `data/**` files.
@@ -108,7 +103,7 @@
 - Compose smoke gates: commands that assume local Docker Compose services, use the dev/test compose overlay for `infra/scripts/**` and `infra/fixtures/**`, and may create persistent PostgreSQL/Mailpit/Redis state.
 - Full acceptance gates: `pnpm test:mvp:internal`, website/admin/discovery/MCP live harnesses and multi/soak ingest.
 - Diagnostic/remediation utilities: commands that inspect or repair runtime-derived state; they are not default close gates unless the active item touches their area. `pnpm index:check:derived-vectors` is the read-only combined HNSW consistency gate when vector index/registry behavior is touched.
-- Live/external-provider gates: discovery live examples/yield, website live matrix and MCP live proof may involve external networks/providers or nondeterminism; residual gaps must be explicit if skipped.
+- Live/external-provider gates: Discovery vNext live smoke/gap/signal-flow proofs, website live matrix and MCP live proof may involve external networks/providers or nondeterminism; residual gaps must be explicit if skipped.
 
 ## Таксономия gates
 

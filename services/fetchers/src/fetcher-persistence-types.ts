@@ -84,6 +84,9 @@ export interface ChannelPollCompletion {
   errorMessage: string | null;
   cursorUpdates: CursorUpdateInput[];
   providerMetricsJson?: Record<string, unknown>;
+  adapterKey?: string | null;
+  adapterRuntimeKind?: string | null;
+  adapterSelectionMode?: string | null;
 }
 
 export type CursorMap = Record<string, FetchCursorRow>;

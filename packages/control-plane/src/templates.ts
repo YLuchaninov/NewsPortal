@@ -13,8 +13,8 @@ import {
   setLlmTemplateActiveState,
   syncInterestTemplateCriterion,
   syncInterestTemplateSelectionProfile,
-} from "../../../apps/admin/src/lib/server/admin-templates";
-import { insertOutboxEvent } from "../../../apps/admin/src/lib/server/outbox";
+} from "./admin-templates";
+import { insertOutboxEvent } from "./outbox";
 import { writeAuditLog } from "./audit";
 
 export type TemplateKind = "interest" | "llm";

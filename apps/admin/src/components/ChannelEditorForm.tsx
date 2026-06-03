@@ -75,6 +75,8 @@ export function ChannelEditorForm({
       <input type="hidden" name="providerType" value={value.providerType} />
       <input type="hidden" name="redirectTo" value={redirectTo} />
       {value.channelId && <input type="hidden" name="channelId" value={value.channelId} />}
+      {value.adapterKey && <input type="hidden" name="adapterKey" value={value.adapterKey} />}
+      {value.ingressAdapterKey && <input type="hidden" name="ingressAdapterKey" value={value.ingressAdapterKey} />}
 
       <ChannelEditorOverview
         items={[

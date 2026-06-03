@@ -81,6 +81,80 @@ def install_bullmq_stub(job_cls: type[Any], worker_cls: type[Any]) -> None:
         sys.modules["bullmq"] = bullmq_stub
 
 
+class _FastApiRoute:
+    def __init__(self, path: str, endpoint: Any, methods: tuple[str, ...]):
+        self.path = path
+        self.endpoint = endpoint
+        self.methods = set(methods)
+
+
+class _FastApiRouter:
+    def __init__(self):
+        self.routes: list[_FastApiRoute] = []
+
+    def _route(self, method: str, path: str, **_kwargs: Any):
+        def decorator(endpoint: Any):
+            self.routes.append(_FastApiRoute(path, endpoint, (method,)))
+            return endpoint
+
+        return decorator
+
+    def get(self, path: str, **kwargs: Any):
+        return self._route("GET", path, **kwargs)
+
+    def post(self, path: str, **kwargs: Any):
+        return self._route("POST", path, **kwargs)
+
+    def put(self, path: str, **kwargs: Any):
+        return self._route("PUT", path, **kwargs)
+
+    def patch(self, path: str, **kwargs: Any):
+        return self._route("PATCH", path, **kwargs)
+
+    def delete(self, path: str, **kwargs: Any):
+        return self._route("DELETE", path, **kwargs)
+
+
+class _FastApiApp(_FastApiRouter):
+    def __init__(self, *, title: str = "FastAPI", **_kwargs: Any):
+        super().__init__()
+        self.title = title
+
+    def include_router(self, router: _FastApiRouter, **_kwargs: Any) -> None:
+        self.routes.extend(router.routes)
+
+
+class _FastApiHTTPException(Exception):
+    def __init__(self, status_code: int, detail: Any = None, headers: dict[str, str] | None = None):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+        self.headers = headers
+
+
+def _fastapi_param_default(*args: Any, **kwargs: Any) -> Any:
+    if "default_factory" in kwargs:
+        return kwargs["default_factory"]()
+    if "default" in kwargs:
+        return kwargs["default"]
+    if args:
+        return args[0]
+    return None
+
+
+def install_fastapi_stub() -> None:
+    if "fastapi" in sys.modules:
+        return
+
+    fastapi_stub = types.ModuleType("fastapi")
+    fastapi_stub.APIRouter = _FastApiRouter
+    fastapi_stub.FastAPI = _FastApiApp
+    fastapi_stub.HTTPException = _FastApiHTTPException
+    fastapi_stub.Query = _fastapi_param_default
+    fastapi_stub.Body = _fastapi_param_default
+    sys.modules["fastapi"] = fastapi_stub
+
+
 def install_gemini_stub() -> None:
     if "services.workers.app.gemini" not in sys.modules:
         gemini_stub = types.ModuleType("services.workers.app.gemini")

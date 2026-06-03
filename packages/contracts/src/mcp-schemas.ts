@@ -22,14 +22,6 @@ const nullableJsonObjectSchema = {
   type: ["object", "null"],
   additionalProperties: true,
 } satisfies JsonSchema;
-const providerTypeSchema = {
-  type: "string",
-  enum: ["rss", "website", "api", "email_imap", "youtube"],
-} satisfies JsonSchema;
-const providerTypeListSchema = {
-  type: ["string", "array"],
-  items: providerTypeSchema,
-} satisfies JsonSchema;
 const taskGraphSchema = {
   type: "array",
   items: jsonObjectSchema,
@@ -51,283 +43,129 @@ function payloadEnvelopeSchema(
   };
 }
 
-const discoveryMissionCreatePayloadSchema = {
+const discoveryArtifactPayloadSchema = {
   type: "object",
-  required: ["title"],
+  required: ["artifactType", "payload"],
   properties: {
-    title: stringSchema,
-    description: nullableStringSchema,
-    sourceKind: { type: "string", enum: ["interest_template", "manual"] },
-    sourceRefId: nullableStringSchema,
-    seedTopics: stringListSchema,
-    seedLanguages: stringListSchema,
-    seedRegions: stringListSchema,
-    targetProviderTypes: providerTypeListSchema,
-    interestGraph: jsonObjectSchema,
-    maxHypotheses: integerSchema,
-    maxSources: integerSchema,
-    budgetCents: integerSchema,
-    priority: integerSchema,
-    profileId: nullableStringSchema,
-    createdBy: nullableStringSchema,
-    confirmLargeRun: booleanSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryMissionUpdatePayloadSchema = {
-  type: "object",
-  properties: {
-    title: stringSchema,
-    description: nullableStringSchema,
-    seedTopics: stringListSchema,
-    seedLanguages: stringListSchema,
-    seedRegions: stringListSchema,
-    targetProviderTypes: providerTypeListSchema,
-    interestGraph: jsonObjectSchema,
-    maxHypotheses: integerSchema,
-    maxSources: integerSchema,
-    budgetCents: integerSchema,
-    priority: integerSchema,
-    status: {
+    artifactType: {
       type: "string",
-      enum: ["planned", "active", "completed", "paused", "failed", "archived"],
+      enum: [
+        "DiscoveryBrief",
+        "HypothesisBatch",
+        "ProbePlan",
+        "ProbeReport",
+        "SourceUnderstanding",
+        "RoutingDecision",
+        "QueryQualityReport",
+      ],
     },
-    profileId: nullableStringSchema,
-    confirmLargeRun: booleanSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryRecallMissionCreatePayloadSchema = {
-  type: "object",
-  required: ["title"],
-  properties: {
-    title: stringSchema,
-    description: nullableStringSchema,
-    missionKind: { type: "string", enum: ["manual", "domain_seed", "query_seed"] },
-    seedDomains: stringListSchema,
-    seedUrls: stringListSchema,
-    seedQueries: stringListSchema,
-    targetProviderTypes: providerTypeListSchema,
-    scopeJson: jsonObjectSchema,
-    maxCandidates: integerSchema,
-    profileId: nullableStringSchema,
-    createdBy: nullableStringSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryRecallMissionUpdatePayloadSchema = {
-  type: "object",
-  properties: {
-    title: stringSchema,
-    description: stringSchema,
-    missionKind: { type: "string", enum: ["manual", "domain_seed", "query_seed"] },
-    seedDomains: stringListSchema,
-    seedUrls: stringListSchema,
-    seedQueries: stringListSchema,
-    targetProviderTypes: providerTypeListSchema,
-    scopeJson: jsonObjectSchema,
-    maxCandidates: integerSchema,
-    status: { type: "string", enum: ["planned", "active", "completed", "paused", "failed"] },
-    profileId: nullableStringSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryProfileCreatePayloadSchema = {
-  type: "object",
-  required: ["profileKey", "displayName"],
-  properties: {
-    profileKey: stringSchema,
-    displayName: stringSchema,
-    description: nullableStringSchema,
-    status: { type: "string", enum: ["draft", "active", "archived"] },
-    graphPolicyJson: jsonObjectSchema,
-    recallPolicyJson: jsonObjectSchema,
-    yieldBenchmarkJson: jsonObjectSchema,
+    payload: jsonObjectSchema,
+    vnextRunId: stringSchema,
+    runId: stringSchema,
+    interestId: stringSchema,
+    candidateId: stringSchema,
+    parentArtifactIds: { type: "array", items: stringSchema },
+    memoryMode: stringSchema,
+    lens: stringSchema,
+    policyVersion: stringSchema,
     createdBy: stringSchema,
   },
   additionalProperties: false,
 } satisfies JsonSchema;
 
-const discoveryProfileUpdatePayloadSchema = {
+const discoveryRunPayloadSchema = {
   type: "object",
+  required: ["runKind"],
   properties: {
-    displayName: stringSchema,
-    description: nullableStringSchema,
-    status: { type: "string", enum: ["draft", "active", "archived"] },
-    graphPolicyJson: jsonObjectSchema,
-    recallPolicyJson: jsonObjectSchema,
-    yieldBenchmarkJson: jsonObjectSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryClassCreatePayloadSchema = {
-  type: "object",
-  required: ["classKey", "displayName"],
-  properties: {
-    classKey: stringSchema,
-    displayName: stringSchema,
-    description: nullableStringSchema,
-    status: { type: "string", enum: ["draft", "active", "archived"] },
-    generationBackend: { type: "string", enum: ["graph_seed_llm", "graph_seed_only"] },
-    defaultProviderTypes: providerTypeListSchema,
-    promptInstructions: nullableStringSchema,
-    seedRulesJson: jsonObjectSchema,
-    maxPerMission: integerSchema,
-    sortOrder: integerSchema,
-    configJson: jsonObjectSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryClassUpdatePayloadSchema = {
-  type: "object",
-  properties: {
-    displayName: stringSchema,
-    description: stringSchema,
-    status: { type: "string", enum: ["draft", "active", "archived"] },
-    generationBackend: { type: "string", enum: ["graph_seed_llm", "graph_seed_only"] },
-    defaultProviderTypes: providerTypeListSchema,
-    promptInstructions: stringSchema,
-    seedRulesJson: jsonObjectSchema,
-    maxPerMission: integerSchema,
-    sortOrder: integerSchema,
-    configJson: jsonObjectSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryRecallCandidateCreatePayloadSchema = {
-  type: "object",
-  required: ["recallMissionId", "url"],
-  properties: {
-    recallMissionId: stringSchema,
-    sourceProfileId: stringSchema,
-    url: stringSchema,
-    finalUrl: stringSchema,
-    title: stringSchema,
-    description: stringSchema,
-    providerType: providerTypeSchema,
-    status: { type: "string", enum: ["pending", "shortlisted", "rejected", "duplicate"] },
-    qualitySignalSource: stringSchema,
-    rejectionReason: nullableStringSchema,
+    runKind: {
+      type: "string",
+      enum: ["brief_compile", "mega_loop", "candidate_acquisition", "probe", "understand_route", "replay", "rollback", "full"],
+    },
+    triggerKind: { type: "string", enum: ["operator", "mcp", "api", "replay", "rollback", "eval"] },
+    request: jsonObjectSchema,
+    budget: jsonObjectSchema,
     createdBy: stringSchema,
   },
   additionalProperties: false,
 } satisfies JsonSchema;
 
-const discoveryRecallCandidateUpdatePayloadSchema = {
+const discoveryPolicyPayloadSchema = {
   type: "object",
+  required: ["policyName", "policyVersion", "policyType", "definition"],
   properties: {
-    status: { type: "string", enum: ["pending", "shortlisted", "rejected", "duplicate"] },
-    reviewedBy: stringSchema,
-    rejectionReason: nullableStringSchema,
-    qualitySignalSource: stringSchema,
+    policyName: stringSchema,
+    policyVersion: stringSchema,
+    policyType: { type: "string", enum: ["routing", "probe", "mega_loop", "risk", "rollback", "permissions"] },
+    definition: jsonObjectSchema,
+    createdBy: stringSchema,
   },
   additionalProperties: false,
 } satisfies JsonSchema;
 
-const discoveryRecallCandidatePromotePayloadSchema = {
+const discoveryFeedbackPayloadSchema = {
   type: "object",
+  required: ["targetType", "targetId", "feedbackType"],
   properties: {
-    reviewedBy: stringSchema,
-    enabled: booleanSchema,
-    tags: stringListSchema,
-    overrideReason: stringSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryCandidateReviewPayloadSchema = {
-  type: "object",
-  required: ["status"],
-  properties: {
-    status: { type: "string", enum: ["approved", "rejected", "pending"] },
-    reviewedBy: stringSchema,
-    rejectionReason: nullableStringSchema,
-  },
-  additionalProperties: false,
-} satisfies JsonSchema;
-
-const discoveryFeedbackCreatePayloadSchema = {
-  type: "object",
-  required: ["feedbackType"],
-  properties: {
-    missionId: nullableStringSchema,
-    candidateId: nullableStringSchema,
-    sourceProfileId: nullableStringSchema,
-    feedbackType: stringSchema,
-    feedbackValue: nullableStringSchema,
-    notes: nullableStringSchema,
+    targetType: { type: "string", enum: ["artifact", "candidate", "source_inventory", "routing_decision", "policy"] },
+    targetId: stringSchema,
+    feedbackType: { type: "string", enum: ["approve", "reject", "correct", "rollback", "mark_noise", "mark_useful", "policy_issue"] },
+    feedback: jsonObjectSchema,
     createdBy: stringSchema,
   },
   additionalProperties: false,
 } satisfies JsonSchema;
 
 export const MCP_DISCOVERY_PAYLOAD_SCHEMAS = {
-  profileCreate: discoveryProfileCreatePayloadSchema,
-  profileUpdate: discoveryProfileUpdatePayloadSchema,
-  missionCreate: discoveryMissionCreatePayloadSchema,
-  missionUpdate: discoveryMissionUpdatePayloadSchema,
-  missionRun: {
+  runCreate: discoveryRunPayloadSchema,
+  artifactCreate: discoveryArtifactPayloadSchema,
+  artifactValidate: discoveryArtifactPayloadSchema,
+  policyActivate: discoveryPolicyPayloadSchema,
+  policyValidate: discoveryPolicyPayloadSchema,
+  feedbackSubmit: discoveryFeedbackPayloadSchema,
+  replayStart: {
     type: "object",
+    required: ["replayKind"],
     properties: {
-      requestedBy: stringSchema,
+      replayKind: { type: "string", enum: ["artifact_lineage", "routing_policy", "candidate_acquisition", "full_non_live"] },
+      input: jsonObjectSchema,
+      dryRun: booleanSchema,
+      createdBy: stringSchema,
     },
     additionalProperties: false,
   },
-  recallMissionCreate: discoveryRecallMissionCreatePayloadSchema,
-  recallMissionUpdate: discoveryRecallMissionUpdatePayloadSchema,
-  classCreate: discoveryClassCreatePayloadSchema,
-  classUpdate: discoveryClassUpdatePayloadSchema,
-  recallCandidateCreate: discoveryRecallCandidateCreatePayloadSchema,
-  recallCandidateUpdate: discoveryRecallCandidateUpdatePayloadSchema,
-  recallCandidatePromote: discoveryRecallCandidatePromotePayloadSchema,
-  candidateReview: discoveryCandidateReviewPayloadSchema,
-  feedbackCreate: discoveryFeedbackCreatePayloadSchema,
-  reEvaluate: {
+  rollbackPrepare: {
     type: "object",
+    required: ["sourceInventoryId", "reason"],
     properties: {
-      missionId: nullableStringSchema,
+      sourceInventoryId: stringSchema,
+      reason: stringSchema,
+      prepared: jsonObjectSchema,
+      createdBy: stringSchema,
+    },
+    additionalProperties: false,
+  },
+  rollbackApply: {
+    type: "object",
+    required: ["rollbackGroupId", "confirm"],
+    properties: {
+      rollbackGroupId: stringSchema,
+      confirm: booleanSchema,
+      appliedBy: stringSchema,
     },
     additionalProperties: false,
   },
 } as const satisfies Record<string, JsonSchema>;
 
 export const MCP_DISCOVERY_ARGUMENT_SCHEMAS = {
-  profileCreate: payloadEnvelopeSchema(discoveryProfileCreatePayloadSchema),
-  profileUpdate: payloadEnvelopeSchema(discoveryProfileUpdatePayloadSchema, {
-    profileId: stringSchema,
-  }, ["profileId", "payload"]),
-  missionCreate: payloadEnvelopeSchema(discoveryMissionCreatePayloadSchema),
-  missionUpdate: payloadEnvelopeSchema(discoveryMissionUpdatePayloadSchema, {
-    missionId: stringSchema,
-  }, ["missionId", "payload"]),
-  missionRun: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.missionRun, { missionId: stringSchema }, ["missionId"]),
-  recallMissionCreate: payloadEnvelopeSchema(discoveryRecallMissionCreatePayloadSchema),
-  recallMissionUpdate: payloadEnvelopeSchema(discoveryRecallMissionUpdatePayloadSchema, {
-    recallMissionId: stringSchema,
-  }, ["recallMissionId", "payload"]),
-  classCreate: payloadEnvelopeSchema(discoveryClassCreatePayloadSchema),
-  classUpdate: payloadEnvelopeSchema(discoveryClassUpdatePayloadSchema, {
-    classKey: stringSchema,
-  }, ["classKey", "payload"]),
-  recallCandidateCreate: payloadEnvelopeSchema(discoveryRecallCandidateCreatePayloadSchema),
-  recallCandidateUpdate: payloadEnvelopeSchema(discoveryRecallCandidateUpdatePayloadSchema, {
-    recallCandidateId: stringSchema,
-  }, ["recallCandidateId", "payload"]),
-  recallCandidatePromote: payloadEnvelopeSchema(discoveryRecallCandidatePromotePayloadSchema, {
-    recallCandidateId: stringSchema,
-  }, ["recallCandidateId"]),
-  candidateReview: payloadEnvelopeSchema(discoveryCandidateReviewPayloadSchema, {
-    candidateId: stringSchema,
-  }, ["candidateId", "payload"]),
-  feedbackCreate: payloadEnvelopeSchema(discoveryFeedbackCreatePayloadSchema),
-  reEvaluate: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.reEvaluate, {}, []),
+  runCreate: payloadEnvelopeSchema(discoveryRunPayloadSchema),
+  artifactCreate: payloadEnvelopeSchema(discoveryArtifactPayloadSchema),
+  artifactValidate: payloadEnvelopeSchema(discoveryArtifactPayloadSchema),
+  policyActivate: payloadEnvelopeSchema(discoveryPolicyPayloadSchema),
+  policyValidate: payloadEnvelopeSchema(discoveryPolicyPayloadSchema),
+  feedbackSubmit: payloadEnvelopeSchema(discoveryFeedbackPayloadSchema),
+  replayStart: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.replayStart),
+  rollbackPrepare: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.rollbackPrepare),
+  rollbackApply: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.rollbackApply),
 } as const satisfies Record<string, JsonSchema>;
 
 const sequenceCreatePayloadSchema = {

@@ -55,6 +55,7 @@ function readOptionalBoolean(value: unknown): boolean | null {
 
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareWebAction(request, {
+    actionToken: { scope: "preferences" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS.preferences,
     payloadBoundaryName: "preferences payload",
   });

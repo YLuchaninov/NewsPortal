@@ -1,0 +1,325 @@
+---
+import AdminShell from "../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+import { queryRows } from "../lib/server/db";
+import {
+  ADMIN_SECTION_CARD_CLASS,
+  ADMIN_TABLE_HEADER_CLASS,
+} from "../lib/admin-ui-classes";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+
+type AdapterRow = {
+  adapter_key: string;
+  title: string;
+  provider_type: string;
+  runtime_kind: string;
+  output_mode: string;
+  status: string;
+  priority: number;
+  is_system: boolean;
+  editable: boolean;
+  active_binding_count: number;
+  metadata_json: Record<string, unknown>;
+};
+
+type LegacyFallbackRow = {
+  provider_type: string;
+  active_channel_count: number;
+  valid_binding_count: number;
+  channels_without_valid_binding_count: number;
+  legacy_config_field_count: number;
+  provider_default_resolution_count: number;
+};
+
+const adapters = await queryRows<AdapterRow>(`
+  select
+    iac.adapter_key,
+    iac.title,
+    iac.provider_type,
+    iac.runtime_kind,
+    iac.output_mode,
+    iac.status,
+    iac.priority,
+    iac.is_system,
+    iac.editable,
+    iac.metadata_json,
+    count(scab.channel_id) filter (where scab.enabled = true)::int as active_binding_count
+  from ingress_adapter_catalog iac
+  left join source_channel_adapter_binding scab on scab.adapter_key = iac.adapter_key
+  group by iac.adapter_key
+  order by iac.provider_type, iac.priority desc, iac.adapter_key
+`);
+
+const countsByProvider = adapters.reduce<Record<string, number>>((acc, row) => {
+  acc[row.provider_type] = (acc[row.provider_type] ?? 0) + 1;
+  return acc;
+}, {});
+
+const legacyFallbackRows = await queryRows<LegacyFallbackRow>(`
+  with classified as (
+    select
+      sc.provider_type,
+      (
+        scab.channel_id is not null
+        and scab.enabled = true
+        and iac.adapter_key is not null
+        and iac.status = 'active'
+        and iac.provider_type = sc.provider_type
+      ) as has_valid_binding,
+      (
+        (
+          sc.provider_type = 'rss'
+          and (
+            sc.config_json ? 'adapterStrategy'
+            or lower(coalesce(sc.fetch_url, '')) like '%news.google.com/rss/%'
+            or lower(coalesce(sc.fetch_url, '')) like '%hnrss.org/%'
+            or lower(coalesce(sc.fetch_url, '')) like '%reddit.com/search.rss%'
+          )
+        )
+        or (
+          sc.provider_type = 'api'
+          and coalesce(
+            nullif(sc.config_json #>> '{api,adapterKey}', ''),
+            nullif(sc.config_json #>> '{adapter,adapterKey}', ''),
+            nullif(sc.config_json #>> '{adapterKey}', '')
+          ) is not null
+        )
+      ) as has_legacy_adapter_hint
+    from source_channels sc
+    left join source_channel_adapter_binding scab on scab.channel_id = sc.channel_id
+    left join ingress_adapter_catalog iac on iac.adapter_key = scab.adapter_key
+    where sc.provider_type in ('rss', 'api', 'website', 'email_imap')
+      and sc.is_active = true
+  )
+  select
+    provider_type,
+    count(*)::int as active_channel_count,
+    count(*) filter (where has_valid_binding)::int as valid_binding_count,
+    count(*) filter (where not has_valid_binding)::int as channels_without_valid_binding_count,
+    count(*) filter (where has_legacy_adapter_hint)::int as legacy_config_field_count,
+    count(*) filter (where not has_valid_binding)::int as provider_default_resolution_count
+  from classified
+  group by provider_type
+  order by provider_type
+`);
+const legacyFallbackTotals = legacyFallbackRows.reduce(
+  (acc, row) => ({
+    active: acc.active + row.active_channel_count,
+    valid: acc.valid + row.valid_binding_count,
+    missing: acc.missing + row.channels_without_valid_binding_count,
+    legacy: acc.legacy + row.legacy_config_field_count,
+    providerDefault: acc.providerDefault + row.provider_default_resolution_count,
+  }),
+  { active: 0, valid: 0, missing: 0, legacy: 0, providerDefault: 0 }
+);
+---
+
+<AdminShell title="Ingress Adapters" session={session} flash={flash} activeNav="ingress-adapters">
+  <main class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <section class="flex flex-col gap-2">
+      <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Sources</p>
+      <h1 class="text-2xl font-semibold text-slate-950 dark:text-slate-50">Ingress Adapters</h1>
+      <p class="max-w-3xl text-sm text-slate-600 dark:text-slate-300">
+        Catalog view for provider adapters, sticky channel bindings, and migration state.
+      </p>
+    </section>
+
+    <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {Object.entries(countsByProvider).map(([provider, count]) => (
+        <div class={ADMIN_SECTION_CARD_CLASS}>
+          <p class="text-xs font-medium uppercase text-slate-500">{provider}</p>
+          <p class="mt-1 text-2xl font-semibold text-slate-950 dark:text-slate-50">{count}</p>
+        </div>
+      ))}
+    </section>
+
+    <section class={ADMIN_SECTION_CARD_CLASS}>
+      <div class="mb-4 flex flex-col gap-2">
+        <h2 class="text-base font-semibold text-slate-950 dark:text-slate-50">Legacy readiness</h2>
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+          Runtime selection ignores legacy adapter fields; removal proof is blocked until every active supported channel has a valid enabled binding and clean fetch runs show zero historical legacy resolutions.
+        </p>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-4">
+        <div>
+          <p class="text-xs font-medium uppercase text-slate-500">Active channels</p>
+          <p class="mt-1 text-xl font-semibold">{legacyFallbackTotals.active}</p>
+        </div>
+        <div>
+          <p class="text-xs font-medium uppercase text-slate-500">Valid bindings</p>
+          <p class="mt-1 text-xl font-semibold">{legacyFallbackTotals.valid}</p>
+        </div>
+        <div>
+          <p class="text-xs font-medium uppercase text-slate-500">Without valid binding</p>
+          <p class="mt-1 text-xl font-semibold">{legacyFallbackTotals.missing}</p>
+        </div>
+        <div>
+          <p class="text-xs font-medium uppercase text-slate-500">Legacy fields</p>
+          <p class="mt-1 text-xl font-semibold">{legacyFallbackTotals.legacy}</p>
+        </div>
+      </div>
+      {legacyFallbackRows.length > 0 && (
+        <div class="mt-4 overflow-x-auto">
+          <table class="admin-table min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+            <thead>
+              <tr>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Provider</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Active</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Valid binding</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Missing/invalid binding</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Legacy fields</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Provider default</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              {legacyFallbackRows.map((row) => (
+                <tr>
+                  <td class="px-3 py-2 font-medium">{row.provider_type}</td>
+                  <td class="px-3 py-2">{row.active_channel_count}</td>
+                  <td class="px-3 py-2">{row.valid_binding_count}</td>
+                  <td class="px-3 py-2">{row.channels_without_valid_binding_count}</td>
+                  <td class="px-3 py-2">{row.legacy_config_field_count}</td>
+                  <td class="px-3 py-2">{row.provider_default_resolution_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+
+    <section class={ADMIN_SECTION_CARD_CLASS}>
+      <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-slate-950 dark:text-slate-50">Catalog</h2>
+          <p class="text-sm text-slate-600 dark:text-slate-300">System adapters are read-only; declarative adapters can be created and edited here.</p>
+        </div>
+        <a href="#new-adapter" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
+          New declarative adapter
+        </a>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="admin-table min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          <thead>
+            <tr>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Adapter</th>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Provider</th>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Runtime</th>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Output</th>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Status</th>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Bindings</th>
+              <th class={ADMIN_TABLE_HEADER_CLASS}>Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {adapters.map((adapter) => (
+              <tr>
+                <td class="px-3 py-3">
+                  <div class="flex flex-col gap-1">
+                    <span class="font-medium text-slate-950 dark:text-slate-50">{adapter.title}</span>
+                    <code class="text-xs text-slate-500">{adapter.adapter_key}</code>
+                  </div>
+                </td>
+                <td class="px-3 py-3 text-slate-700 dark:text-slate-300">{adapter.provider_type}</td>
+                <td class="px-3 py-3 text-slate-700 dark:text-slate-300">
+                  {adapter.runtime_kind}{adapter.is_system ? " · system" : ""}
+                </td>
+                <td class="px-3 py-3 text-slate-700 dark:text-slate-300">{adapter.output_mode}</td>
+                <td class="px-3 py-3 text-slate-700 dark:text-slate-300">
+                  {adapter.status}{adapter.editable ? " · editable" : ""}
+                </td>
+                <td class="px-3 py-3 text-slate-700 dark:text-slate-300">{adapter.active_binding_count}</td>
+                <td class="px-3 py-3">
+                  <a
+                    href={appPath(`/ingress-adapters/${encodeURIComponent(adapter.adapter_key)}`)}
+                    class="text-sm font-medium text-primary hover:underline"
+                  >
+                    Open
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="new-adapter" class={ADMIN_SECTION_CARD_CLASS}>
+      <div class="max-w-3xl">
+        <h2 class="text-base font-semibold text-slate-950 dark:text-slate-50">Create declarative adapter</h2>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          Declarative adapters are bounded JSON API recipes. Credentials stay out of adapter config.
+        </p>
+      </div>
+      <form method="post" action={appPath("/bff/admin/ingress-adapters")} class="mt-5 grid gap-4 lg:grid-cols-2">
+        <input type="hidden" name="intent" value="create" />
+        <input type="hidden" name="redirectTo" value={appPath("/ingress-adapters")} />
+        <label class="grid gap-1 text-sm font-medium">
+          Adapter key
+          <input name="adapterKey" required placeholder="api.example_json" class="h-10 rounded-md border border-input bg-transparent px-3 text-sm" />
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Title
+          <input name="title" required placeholder="Example JSON API" class="h-10 rounded-md border border-input bg-transparent px-3 text-sm" />
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Provider
+          <input type="hidden" name="providerType" value="api" />
+          <span class="inline-flex h-10 items-center rounded-md border border-input px-3 text-sm text-slate-700 dark:text-slate-300">
+            API JSON
+          </span>
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Status
+          <select name="status" class="h-10 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </label>
+        <label class="grid gap-1 text-sm font-medium lg:col-span-2">
+          Description
+          <textarea name="description" rows="2" class="rounded-md border border-input bg-transparent px-3 py-2 text-sm"></textarea>
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Match rules JSON
+          <textarea name="matchRulesJson" rows="6" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{`{}`}</textarea>
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Recipe JSON
+          <textarea name="recipeJson" rows="6" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{`null`}</textarea>
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Config schema JSON
+          <textarea name="configSchemaJson" rows="6" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{`{}`}</textarea>
+        </label>
+        <label class="grid gap-1 text-sm font-medium">
+          Metadata JSON
+          <textarea name="metadataJson" rows="6" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{`{}`}</textarea>
+        </label>
+        <div class="lg:col-span-2">
+          <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
+            Create adapter
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+</AdminShell>

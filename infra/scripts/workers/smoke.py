@@ -34,7 +34,6 @@ from services.workers.app.main import (
     process_interest_compile,
     process_reindex,
 )
-from services.workers.app.discovery_orchestrator import load_discovery_settings
 from services.workers.app.task_engine import (
     configure_discovery_runtime,
     get_discovery_runtime,
@@ -59,16 +58,22 @@ class FakeJob:
 async def ensure_embed_fixture() -> str:
     channel_id = stable_uuid("embed-channel")
     doc_id = stable_uuid("embed-article")
+    smoke_title = (
+        "European Union AI policy implementation request for proposal reaches Brussels and Warsaw"
+    )
+    smoke_lead = (
+        "European Union AI policy implementation request for proposal reaches Brussels and Warsaw."
+    )
     long_feed_body = " ".join(
         [
-            "European Union AI policy response reaches Brussels and Warsaw as regulators in Warsaw and Brussels publish coordinated EU AI compliance guidance with 42 pages of response details."
+            "European Union AI policy implementation request for proposal reaches Brussels and Warsaw as regulators publish coordinated EU AI compliance guidance, integration requirements, vendor evaluation notes, and project implementation details."
             for _ in range(10)
         ]
     )
     raw_payload_json = {
         "entry": {
-            "title": "European Union AI policy response reaches Brussels and Warsaw",
-            "description": "European Union AI policy response reaches Brussels and Warsaw.",
+            "title": smoke_title,
+            "description": smoke_lead,
             "contentEncoded": f"<p>{long_feed_body}</p>",
             "mediaContentUrl": "https://example.test/media/phase3-embed-smoke.jpg",
         }
@@ -121,8 +126,8 @@ async def ensure_embed_fixture() -> str:
                       'phase3-embed-smoke',
                       'https://example.test/articles/phase3-embed-smoke',
                       now(),
-                      'European Union AI policy response reaches Brussels and Warsaw',
-                      'European Union AI policy response reaches Brussels and Warsaw.',
+                      %s,
+                      %s,
                       %s,
                       %s::jsonb,
                       'en',
@@ -162,7 +167,14 @@ async def ensure_embed_fixture() -> str:
                       embedded_at = null,
                       updated_at = now()
                     """,
-                    (doc_id, channel_id, long_feed_body, json.dumps(raw_payload_json)),
+                    (
+                        doc_id,
+                        channel_id,
+                        smoke_title,
+                        smoke_lead,
+                        long_feed_body,
+                        json.dumps(raw_payload_json),
+                    ),
                 )
                 await cursor.execute(
                     """
@@ -188,8 +200,8 @@ async def ensure_embed_fixture() -> str:
                       'article',
                       'https://example.test/articles/phase3-embed-smoke',
                       'example.test',
-                      'European Union AI policy response reaches Brussels and Warsaw',
-                      'European Union AI policy response reaches Brussels and Warsaw.',
+                      %s,
+                      %s,
                       %s,
                       'en',
                       0.9,
@@ -213,7 +225,7 @@ async def ensure_embed_fixture() -> str:
                       observation_count = excluded.observation_count,
                       updated_at = now()
                     """,
-                    (doc_id, long_feed_body),
+                    (doc_id, smoke_title, smoke_lead, long_feed_body),
                 )
                 await cursor.execute(
                     """
@@ -317,7 +329,7 @@ async def ensure_interest_fixture() -> str:
                       '["US sports coverage", "consumer gadget reviews"]'::jsonb,
                       '["policy"]'::jsonb,
                       '["sports"]'::jsonb,
-                      '["Brussels", "Warsaw"]'::jsonb,
+                      '[]'::jsonb,
                       '["en"]'::jsonb,
                       '["EU", "AI"]'::jsonb,
                       '["NBA"]'::jsonb,
@@ -429,12 +441,12 @@ async def ensure_criterion_fixture() -> str:
                     )
                     values (
                       %s,
-                      'European Union AI policy response',
-                      '["European Union AI policy response Brussels Warsaw coordinated EU AI compliance guidance regulators"]'::jsonb,
+                      'European Union AI policy implementation request for proposal',
+                      '["European Union AI policy implementation request for proposal Brussels Warsaw coordinated EU AI compliance guidance integration vendor evaluation"]'::jsonb,
                       '["entertainmentcoverage fashionindustry marketcommentary"]'::jsonb,
                       '["AI", "European Union"]'::jsonb,
                       '[]'::jsonb,
-                      '["Brussels", "Warsaw"]'::jsonb,
+                      '[]'::jsonb,
                       '["en"]'::jsonb,
                       '["AI", "EU"]'::jsonb,
                       '[]'::jsonb,
@@ -3141,7 +3153,7 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                 "content": {
                     "parts": [
                         {
-                            "text": '[{"source_url":"https://news.example.com/eu-ai","verdict":"review","relevance":0.93,"reasoning":"synthetic resilient discovery smoke"}]'
+                            "text": '[{"source_url":"https://news.example.com/eu-ai","verdict":"review","relevance":0.93,"reasoning":"synthetic discovery vNext smoke"}]'
                         }
                     ]
                 }
@@ -3185,13 +3197,11 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
 
                     configure_discovery_runtime(build_live_discovery_runtime())
                     runtime = get_discovery_runtime()
-                    settings = load_discovery_settings()
-
                     if runtime.web_search.__class__.__name__ != "DdgsWebSearchAdapter":
                         raise RuntimeError("Discovery enabled smoke failed: live DDGS adapter was not configured.")
                     if runtime.llm_analyzer.__class__.__name__ != "GeminiLlmAnalyzerAdapter":
                         raise RuntimeError("Discovery enabled smoke failed: live Gemini analyzer was not configured.")
-                    search_provider = settings.search_providers[0] if settings.search_providers else ""
+                    search_provider = os.getenv("DISCOVERY_SEARCH_PROVIDER", "").strip()
                     monthly_budget_cents = int(os.getenv("DISCOVERY_MONTHLY_BUDGET_CENTS") or "0")
                     if search_provider != "ddgs":
                         raise RuntimeError("Discovery enabled smoke failed: discovery settings did not resolve DDGS.")
@@ -3237,7 +3247,7 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                     return {
                         "status": "discovery-enabled-ok",
                         "enabled": True,
-                        "resilientDiscoveryV3": True,
+                        "discoveryVNext": True,
                         "searchProvider": search_provider,
                         "llmModel": discovered_model,
                         "monthlyBudgetCents": monthly_budget_cents,

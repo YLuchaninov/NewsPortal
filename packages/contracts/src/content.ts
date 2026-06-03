@@ -15,6 +15,7 @@ export type ContentItemSelectionDecision =
 export interface WebContentListQuery extends PaginationQuery {
   sort?: WebContentListSort;
   q?: string;
+  channelId?: string;
 }
 
 export interface ContentItemPreview {

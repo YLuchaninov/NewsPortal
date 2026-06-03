@@ -27,11 +27,19 @@ def _fetchers_internal_timeout_seconds() -> float:
 
 
 class FetchersWebsiteProbeAdapter:
-    def probe_websites(self, *, urls: list[str], sample_count: int) -> list[dict[str, Any]]:
+    def probe_websites(
+        self,
+        *,
+        urls: list[str],
+        sample_count: int,
+        allow_browser: bool | None = None,
+        timeout_seconds: float | None = None,
+    ) -> list[dict[str, Any]]:
         request_body = json.dumps(
             {
                 "urls": urls,
                 "sampleCount": sample_count,
+                **({} if allow_browser is None else {"allowBrowser": allow_browser}),
             }
         ).encode("utf-8")
         request = Request(
@@ -45,7 +53,7 @@ class FetchersWebsiteProbeAdapter:
         )
 
         try:
-            with urlopen(request, timeout=_fetchers_internal_timeout_seconds()) as response:
+            with urlopen(request, timeout=timeout_seconds or _fetchers_internal_timeout_seconds()) as response:
                 payload = response.read().decode("utf-8")
         except HTTPError as error:
             error_body = error.read().decode("utf-8", errors="replace")

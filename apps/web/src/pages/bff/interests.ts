@@ -28,6 +28,7 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareWebAction(request, {
+    actionToken: { scope: "interests" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS["interests.create"],
     payloadBoundaryName: "interest create payload",
   });

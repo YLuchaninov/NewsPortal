@@ -22,11 +22,7 @@ const CORE_COMMANDS = [
 
 const FULL_ONLY_COMMANDS = [
   command("discovery-enabled-compose", "live-enabled", ["test:discovery-enabled:compose"]),
-  command("discovery-admin-compose", "live-enabled", ["test:discovery:admin:compose"]),
-  command("discovery-examples-compose", "live-provider", ["test:discovery:examples:compose"]),
-  command("discovery-yield-compose", "live-provider", ["test:discovery:yield:compose"]),
   command("website-matrix-compose", "live-provider", ["test:website:matrix:compose"]),
-  command("mcp-http-live", "live-provider", ["test:mcp:http:live"]),
 ];
 
 const CORE_REQUIRED_ENV = [

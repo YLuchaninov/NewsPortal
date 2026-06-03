@@ -69,5 +69,5 @@ test("channel bottleneck explain flags legacy DDGS internal bridge URLs without 
   assert.equal(result.legacyDdgsInternalBridge, true);
   assert.match(result.legacyBridgeWarning ?? "", /Fetchers now execute ddgs_search directly/);
   assert.equal(result.diagnosis.legacyDdgsInternalBridge, true);
-  assert.ok(result.nextActions.some((action) => action.tool === "discovery.indirect_targets.channels.plan"));
+  assert.ok(result.nextActions.some((action) => action.tool === "channels.bulk_onboard.plan"));
 });

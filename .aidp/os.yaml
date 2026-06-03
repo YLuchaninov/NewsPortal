@@ -22,7 +22,6 @@ core:
   - .aidp/contracts/content-model.md
   - .aidp/contracts/discovery-agent.md
   - .aidp/contracts/feed-ingress-adapters.md
-  - .aidp/contracts/independent-recall-discovery.md
   - .aidp/contracts/mcp-control-plane.md
   - .aidp/contracts/notifications-and-digests.md
   - .aidp/contracts/runtime-migrations-and-derived-state.md
@@ -181,7 +180,9 @@ capabilities:
   migrations: true
 commands:
   install: pnpm install
-  python_dev_requirements: python -m pip install -r infra/docker/python.dev-requirements.txt
+  python_dev_venv: python3 -m venv .venv
+  python_dev_requirements: .venv/bin/python -m pip install -r infra/docker/python.requirements.txt -r infra/docker/python.dev-requirements.txt
+  ci_fast: pnpm ci:fast
   dev: pnpm dev:mvp:internal
   dev_no_build: pnpm dev:mvp:internal:no-build
   dev_stop: pnpm dev:mvp:internal:stop
@@ -235,25 +236,12 @@ commands:
   automation_admin_compose: pnpm test:automation:admin:compose
   discovery_enabled_compose: pnpm test:discovery-enabled:compose
   discovery_enabled_smoke: pnpm test:discovery-enabled:smoke
-  discovery_admin_compose: pnpm test:discovery:admin:compose
-  discovery_domains_compose: pnpm test:discovery:domains:compose
-  discovery_mega_compose: pnpm test:discovery:mega:compose
-  discovery_examples_compose: pnpm test:discovery:examples:compose
-  discovery_live_calibration_compose: pnpm test:discovery:live-calibration:compose
-  discovery_live_acceptance_compose: pnpm test:discovery:live-acceptance:compose
-  discovery_live_soak_compose: pnpm test:discovery:live-soak:compose
-  discovery_live_polish_compose: pnpm test:discovery:live-polish:compose
-  discovery_live_polish_acceptance_compose: pnpm test:discovery:live-polish-acceptance:compose
-  discovery_live_polish_soak_compose: pnpm test:discovery:live-polish-soak:compose
-  discovery_nonregression_compose: pnpm test:discovery:nonregression:compose
-  discovery_yield_compose: pnpm test:discovery:yield:compose
   mcp_compose: pnpm test:mcp:compose
   mcp_http_matrix: pnpm test:mcp:http:matrix
   mcp_http_auth: pnpm test:mcp:http:auth
   mcp_http_reads: pnpm test:mcp:http:reads
   mcp_http_writes: pnpm test:mcp:http:writes
   mcp_http_discovery: pnpm test:mcp:http:discovery
-  mcp_http_live: pnpm test:mcp:http:live
   web_viewports: pnpm test:web:viewports
   web_ui_audit: pnpm test:web:ui-audit
   db_migrate: pnpm db:migrate
@@ -566,7 +554,6 @@ deep_contract_docs:
   - .aidp/contracts/content-model.md
   - .aidp/contracts/discovery-agent.md
   - .aidp/contracts/feed-ingress-adapters.md
-  - .aidp/contracts/independent-recall-discovery.md
   - .aidp/contracts/mcp-control-plane.md
   - .aidp/contracts/notifications-and-digests.md
   - .aidp/contracts/runtime-migrations-and-derived-state.md

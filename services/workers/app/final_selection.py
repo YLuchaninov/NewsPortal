@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .candidate_signal_text import looks_like_generic_advice_title
+
 _CANDIDATE_SIGNAL_TIERS = ("context", "buyer_intent", "project_intent")
 _CANDIDATE_SIGNAL_TIER_RANK = {
     "context": 1,
@@ -231,7 +233,7 @@ def evaluate_document_candidate_signals(
         )
         if str(part or "").strip()
     )
-    generic_advice_noise = _looks_like_generic_advice_title(normalized_title)
+    generic_advice_noise = looks_like_generic_advice_title(normalized_title)
     positive_groups, noise_groups, signal_source = _resolve_candidate_signal_groups(
         candidate_signal_config
     )
@@ -393,10 +395,6 @@ def apply_document_candidate_signal_uplift(
     if explain["signalSource"] == "selection_profile_definition":
         return (base_decision, explain)
     return (base_decision, None)
-
-
-def _looks_like_generic_advice_title(normalized_title: str) -> bool:
-    return normalized_title.startswith(("how ", "how to ", "guide to ", "what is ", "why "))
 
 
 def build_downstream_selection_diagnostics(
@@ -604,6 +602,19 @@ def summarize_final_selection_result(
         and not document_level_technical_veto
         and item_level_candidate_signal
     )
+    strong_item_level_candidate_consensus = (
+        matched == 0
+        and gray_zone > 0
+        and llm_review_pending == 0
+        and technical_filtered_out == 0
+        and normalized_verification_state != "conflicting"
+        and not document_level_technical_veto
+        and item_level_candidate_signal
+        and (
+            candidate_signal_uplift >= 2
+            or candidate_signal_eligible >= 4
+        )
+    )
 
     selection_reason = "semantic_match"
     if document_level_technical_veto:
@@ -611,6 +622,11 @@ def summarize_final_selection_result(
         compat_system_feed_decision = "filtered_out"
         is_selected = False
         selection_reason = "document_level_technical_filter"
+    elif strong_item_level_candidate_consensus:
+        decision = "selected"
+        compat_system_feed_decision = "eligible"
+        is_selected = True
+        selection_reason = "strong_item_level_candidate_signal"
     elif strong_gray_zone_consensus:
         decision = "selected"
         compat_system_feed_decision = "eligible"

@@ -1,0 +1,235 @@
+---
+import { IngressAdapterDryRunPanel } from "../../components/IngressAdapterDryRunPanel";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { ADMIN_SECTION_CARD_CLASS } from "../../lib/admin-ui-classes";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+import { queryRows } from "../../lib/server/db";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+const adapterKey = String(Astro.params.adapterKey ?? "");
+
+type AdapterRow = {
+  adapter_key: string;
+  title: string;
+  description: string;
+  provider_type: string;
+  runtime_kind: string;
+  output_mode: string;
+  status: string;
+  priority: number;
+  match_rules_json: Record<string, unknown>;
+  config_schema_json: Record<string, unknown>;
+  recipe_json: Record<string, unknown> | null;
+  module_name: string | null;
+  metadata_json: Record<string, unknown>;
+  is_system: boolean;
+  editable: boolean;
+  active_binding_count: number;
+};
+
+type BindingRow = {
+  channel_id: string;
+  channel_name: string;
+  provider_type: string;
+  enabled: boolean;
+  selection_mode: string;
+  updated_at: string;
+};
+
+const [adapter] = await queryRows<AdapterRow>(
+  `
+    select
+      iac.*,
+      count(scab.channel_id) filter (where scab.enabled = true)::int as active_binding_count
+    from ingress_adapter_catalog iac
+    left join source_channel_adapter_binding scab on scab.adapter_key = iac.adapter_key
+    where iac.adapter_key = $1
+    group by iac.adapter_key
+  `,
+  [adapterKey]
+);
+
+if (!adapter) {
+  return new Response("Not found", { status: 404 });
+}
+
+const bindings = await queryRows<BindingRow>(
+  `
+    select
+      sc.channel_id::text as channel_id,
+      sc.name as channel_name,
+      sc.provider_type,
+      scab.enabled,
+      scab.selection_mode,
+      scab.updated_at::text as updated_at
+    from source_channel_adapter_binding scab
+    join source_channels sc on sc.channel_id = scab.channel_id
+    where scab.adapter_key = $1
+    order by scab.updated_at desc
+    limit 25
+  `,
+  [adapterKey]
+);
+
+const canEdit = adapter.runtime_kind === "declarative" && !adapter.is_system && adapter.editable;
+const matchRulesJson = JSON.stringify(adapter.match_rules_json ?? {}, null, 2);
+const configSchemaJson = JSON.stringify(adapter.config_schema_json ?? {}, null, 2);
+const recipeJson = JSON.stringify(adapter.recipe_json ?? null, null, 2);
+const metadataJson = JSON.stringify(adapter.metadata_json ?? {}, null, 2);
+---
+
+<AdminShell title={`${adapter.title} — Ingress Adapter`} session={session} flash={flash} activeNav="ingress-adapters">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/ingress-adapters")} class="hover:text-foreground">Ingress Adapters</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">{adapter.adapter_key}</span>
+    </nav>
+  </Fragment>
+
+  <main class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <section class={ADMIN_SECTION_CARD_CLASS}>
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">{adapter.provider_type}</p>
+          <h1 class="mt-2 text-2xl font-semibold tracking-tight text-foreground">{adapter.title}</h1>
+          <code class="mt-2 block text-sm text-muted-foreground">{adapter.adapter_key}</code>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">{adapter.description || "No description."}</p>
+        </div>
+        <div class="grid gap-2 text-sm sm:grid-cols-2 lg:min-w-72">
+          <span class="rounded-md bg-muted px-3 py-2">runtime: {adapter.runtime_kind}</span>
+          <span class="rounded-md bg-muted px-3 py-2">status: {adapter.status}</span>
+          <span class="rounded-md bg-muted px-3 py-2">output: {adapter.output_mode}</span>
+          <span class="rounded-md bg-muted px-3 py-2">bindings: {adapter.active_binding_count}</span>
+        </div>
+      </div>
+    </section>
+
+    {canEdit ? (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold text-foreground">Edit declarative adapter</h2>
+        <form method="post" action={appPath("/bff/admin/ingress-adapters")} class="mt-5 grid gap-4 lg:grid-cols-2">
+          <input type="hidden" name="intent" value="update" />
+          <input type="hidden" name="adapterKey" value={adapter.adapter_key} />
+          <input type="hidden" name="redirectTo" value={appPath(`/ingress-adapters/${encodeURIComponent(adapter.adapter_key)}`)} />
+          <label class="grid gap-1 text-sm font-medium">
+            Title
+            <input name="title" value={adapter.title} class="h-10 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1 text-sm font-medium">
+            Status
+            <select name="status" class="h-10 rounded-md border border-input bg-transparent px-3 text-sm">
+              {["draft", "active", "disabled", "archived"].map((status) => (
+                <option value={status} selected={status === adapter.status}>{status}</option>
+              ))}
+            </select>
+          </label>
+          <input type="hidden" name="providerType" value={adapter.provider_type} />
+          <input type="hidden" name="outputMode" value={adapter.output_mode} />
+          <label class="grid gap-1 text-sm font-medium">
+            Priority
+            <input name="priority" type="number" value={String(adapter.priority)} class="h-10 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1 text-sm font-medium">
+            Module name
+            <input name="moduleName" value={adapter.module_name ?? "declarative.api.custom"} class="h-10 rounded-md border border-input bg-transparent px-3 text-sm" />
+          </label>
+          <label class="grid gap-1 text-sm font-medium lg:col-span-2">
+            Description
+            <textarea name="description" rows="2" class="rounded-md border border-input bg-transparent px-3 py-2 text-sm">{adapter.description}</textarea>
+          </label>
+          <label class="grid gap-1 text-sm font-medium">
+            Match rules JSON
+            <textarea name="matchRulesJson" rows="8" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{matchRulesJson}</textarea>
+          </label>
+          <label class="grid gap-1 text-sm font-medium">
+            Recipe JSON
+            <textarea name="recipeJson" rows="8" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{recipeJson}</textarea>
+          </label>
+          <label class="grid gap-1 text-sm font-medium">
+            Config schema JSON
+            <textarea name="configSchemaJson" rows="8" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{configSchemaJson}</textarea>
+          </label>
+          <label class="grid gap-1 text-sm font-medium">
+            Metadata JSON
+            <textarea name="metadataJson" rows="8" class="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs">{metadataJson}</textarea>
+          </label>
+          <div class="lg:col-span-2">
+            <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
+              Save adapter
+            </button>
+          </div>
+        </form>
+      </section>
+    ) : (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold text-foreground">Read-only adapter</h2>
+        <p class="mt-1 text-sm text-muted-foreground">System and builtin adapters are changed through repository code and migrations.</p>
+        <div class="mt-4 grid gap-4 lg:grid-cols-2">
+          <pre class="max-h-80 overflow-auto rounded-md bg-slate-950 p-3 text-xs text-slate-50">{matchRulesJson}</pre>
+          <pre class="max-h-80 overflow-auto rounded-md bg-slate-950 p-3 text-xs text-slate-50">{recipeJson}</pre>
+        </div>
+      </section>
+    )}
+
+    {adapter.provider_type === "api" ? (
+      <IngressAdapterDryRunPanel
+        action={appPath("/bff/admin/ingress-adapters")}
+        adapterKey={adapter.adapter_key}
+        providerType={adapter.provider_type}
+        client:load
+      />
+    ) : null}
+
+    <section class={ADMIN_SECTION_CARD_CLASS}>
+      <h2 class="text-base font-semibold text-foreground">Recent bindings</h2>
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full divide-y divide-border text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase text-muted-foreground">
+              <th class="px-3 py-2">Channel</th>
+              <th class="px-3 py-2">Provider</th>
+              <th class="px-3 py-2">Mode</th>
+              <th class="px-3 py-2">Enabled</th>
+              <th class="px-3 py-2">Updated</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            {bindings.map((binding) => (
+              <tr>
+                <td class="px-3 py-2">
+                  <a href={appPath(`/channels/${binding.channel_id}/edit`)} class="font-medium text-primary hover:underline">
+                    {binding.channel_name}
+                  </a>
+                </td>
+                <td class="px-3 py-2">{binding.provider_type}</td>
+                <td class="px-3 py-2">{binding.selection_mode}</td>
+                <td class="px-3 py-2">{binding.enabled ? "yes" : "no"}</td>
+                <td class="px-3 py-2">{binding.updated_at}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {bindings.length === 0 ? <p class="mt-3 text-sm text-muted-foreground">No channel bindings yet.</p> : null}
+      </div>
+    </section>
+  </main>
+</AdminShell>

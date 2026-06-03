@@ -11,6 +11,7 @@ import { prepareWebAction } from "../../lib/server/web-action";
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareWebAction(request, {
+    actionToken: { scope: "reactions" },
     payloadSchema: WEB_BFF_ACTION_PAYLOAD_SCHEMAS.reactions,
     payloadBoundaryName: "reactions payload",
   });

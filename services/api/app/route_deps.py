@@ -66,6 +66,7 @@ ROUTE_DEPENDENCY_KEYS = (
     "request_content_item_enrichment_retry_route",
     "retry_sequence_run_request",
     "summarize_article_residuals",
+    "summarize_article_selection_counts",
     "update_content_analysis_policy",
     "update_content_filter_policy",
     "update_sequence_definition",

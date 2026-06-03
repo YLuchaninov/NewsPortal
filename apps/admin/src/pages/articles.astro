@@ -44,12 +44,80 @@ const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: 
 const bffPaths = { moderation: appPath("/bff/admin/moderation") };
 const pagePaths = { dashboard: appPath("/") };
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
-const currentView = String(Astro.url.searchParams.get("view") ?? "needs-review").trim() || "needs-review";
+const currentView = String(Astro.url.searchParams.get("view") ?? "selected").trim() || "selected";
 const selectedArticleId = String(Astro.url.searchParams.get("selected") ?? "").trim();
 
 type R = Record<string, unknown>;
+function readInt(value: unknown, fallback = 0): number {
+  const parsed =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.trunc(value)
+      : Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
-const articles = await sdk.listArticlesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE });
+const articleListFilters =
+  currentView === "observations"
+    ? {}
+    : currentView === "held"
+      ? { finalSelectionDecision: "gray_zone" }
+      : currentView === "rejected"
+        ? { finalSelectionDecision: "rejected" }
+        : currentView === "blocked"
+          ? { visibilityState: "blocked" }
+          : currentView === "recent-failures"
+            ? {}
+            : { finalSelectionDecision: "selected" };
+const [articles, articleSelectionSummary, visibleContentItemsPage] = await Promise.all([
+  sdk.listArticlesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE, ...articleListFilters }),
+  sdk.getArticleSelectionSummary<R>(),
+  sdk.listContentItemsPage<R>({ page: 1, pageSize: 1 }),
+]);
+const selectionCounts =
+  articleSelectionSummary.counts && typeof articleSelectionSummary.counts === "object"
+    ? (articleSelectionSummary.counts as R)
+    : {};
+const rawArticleObservationCount = readInt(selectionCounts.rawArticleObservations, articles.total);
+const selectedArticleSignalCount = readInt(selectionCounts.selectedArticleSignals);
+const visibleContentItemCount = readInt(visibleContentItemsPage.total);
+const rejectedSelectionCount = readInt(selectionCounts.rejectedRows);
+const grayZoneSelectionCount = readInt(selectionCounts.grayZoneRows);
+const holdSelectionCount = readInt(selectionCounts.holdRows);
+const pendingSelectionCount = readInt(selectionCounts.pendingSelectionRows);
+const llmReviewPendingCount = readInt(selectionCounts.llmReviewPendingRows);
+const selectionMetricTiles = [
+  {
+    label: "Article observations",
+    value: rawArticleObservationCount,
+    detail: "Raw ingested corpus",
+  },
+  {
+    label: "Selected signals",
+    value: selectedArticleSignalCount,
+    detail: "Final-selection article leads",
+  },
+  {
+    label: "Visible content",
+    value: visibleContentItemCount,
+    detail: "Public content_items",
+  },
+  {
+    label: "Rejected",
+    value: rejectedSelectionCount,
+    detail: "Materialized final rejects",
+  },
+  {
+    label: "Held / gray zone",
+    value: holdSelectionCount + grayZoneSelectionCount,
+    detail: "Operator or policy review",
+  },
+  {
+    label: "Pending",
+    value: pendingSelectionCount + llmReviewPendingCount,
+    detail: "No final row or LLM review",
+  },
+] as const;
 const articleRows = articles.items.map((article) => {
   const operatorState = resolveArticleOperatorState(article);
   const operatorGuidance = resolveArticleOperatorGuidance(article);
@@ -57,11 +125,17 @@ const articleRows = articles.items.map((article) => {
 });
 
 const visibleArticleRows = articleRows.filter(({ article, operatorState }) => {
+  if (currentView === "observations") {
+    return true;
+  }
   if (currentView === "selected") {
     return operatorState.selectionDecision === "selected";
   }
   if (currentView === "held") {
     return operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone";
+  }
+  if (currentView === "rejected") {
+    return operatorState.selectionDecision === "rejected";
   }
   if (currentView === "blocked") {
     return String(article.visibility_state ?? "") === "blocked";
@@ -73,11 +147,10 @@ const visibleArticleRows = articleRows.filter(({ article, operatorState }) => {
 });
 
 const articleViews = [
-  { key: "needs-review", label: "Needs review", count: articleRows.filter(({ article, operatorState }) => operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone" || String(article.visibility_state ?? "") === "blocked").length },
-  { key: "selected", label: "Selected", count: articleRows.filter(({ operatorState }) => operatorState.selectionDecision === "selected").length },
-  { key: "held", label: "Held", count: articleRows.filter(({ operatorState }) => operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone").length },
-  { key: "blocked", label: "Blocked", count: articleRows.filter(({ article }) => String(article.visibility_state ?? "") === "blocked").length },
-  { key: "recent-failures", label: "Recent failures", count: articleRows.filter(({ operatorState }) => String(operatorState.enrichmentState ?? "") === "failed" || String(operatorState.processingState ?? "") === "pending").length },
+  { key: "selected", label: "Selected", count: selectedArticleSignalCount },
+  { key: "held", label: "Held", count: holdSelectionCount + grayZoneSelectionCount },
+  { key: "rejected", label: "Rejected", count: rejectedSelectionCount },
+  { key: "observations", label: "Observations", count: rawArticleObservationCount },
 ] as const;
 const ARTICLE_PANE_ID = "articles-preview";
 
@@ -92,7 +165,7 @@ const resolvePageHref = createPageHrefResolver(Astro.url, {
 });
 
 const resolveViewHref = createViewHrefResolver(Astro.url, {
-  defaultView: "needs-review",
+  defaultView: "selected",
   resetParams: ["selected", "page"],
 });
 
@@ -169,7 +242,19 @@ function shortId(value: unknown): string {
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Operations</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Article triage</h1>
       <p class="mt-2 text-sm leading-6 text-muted-foreground">
-        Use saved views to narrow the current page to the dominant operator task, then open article detail only when you need the full explainability stack.
+        This page shows raw article observations for audit and replay. Lead-signal yield is counted separately from final selection and public content items.
+      </p>
+      <div class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {selectionMetricTiles.map((tile) => (
+          <div class="rounded-md border border-border/80 bg-background/70 px-3 py-2">
+            <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{tile.label}</p>
+            <p class="mt-1 text-xl font-semibold tabular-nums">{tile.value}</p>
+            <p class="mt-0.5 text-[11px] text-muted-foreground">{tile.detail}</p>
+          </div>
+        ))}
+      </div>
+      <p class="mt-3 text-xs leading-5 text-muted-foreground">
+        If observations stay high while selected signals are low, the corpus is still available for explainability and backfill; the current interests/templates are simply rejecting it as non-lead evidence.
       </p>
       <div class="mt-5 flex flex-wrap gap-2">
         {articleViews.map((view) => (

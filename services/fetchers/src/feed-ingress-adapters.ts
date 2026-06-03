@@ -15,6 +15,8 @@ export interface FeedIngressAdapterContext {
   fetchedAt: string;
   contentType: string | null;
   responseBody: string;
+  strategy?: FeedIngressAdapterStrategy;
+  maxEntryAgeHours?: number | null;
 }
 
 export interface FeedIngressAdapterProvenance {
@@ -309,8 +311,10 @@ const FEED_INGRESS_ADAPTERS: Record<FeedIngressAdapterStrategy, FeedIngressAdapt
 export async function adaptFeedIngress(
   context: FeedIngressAdapterContext
 ): Promise<AdaptedFeedResult> {
-  const strategy = resolveRssChannelAdapterStrategy(context.fetchUrl, context.rssConfig);
-  const maxEntryAgeHours = resolveRssChannelMaxEntryAgeHours(context.fetchUrl, context.rssConfig);
+  const strategy =
+    context.strategy ?? resolveRssChannelAdapterStrategy(context.fetchUrl, context.rssConfig);
+  const maxEntryAgeHours =
+    context.maxEntryAgeHours ?? resolveRssChannelMaxEntryAgeHours(context.fetchUrl, context.rssConfig);
   const adapterContext: FeedIngressAdapterRuntimeContext = {
     ...context,
     strategy,

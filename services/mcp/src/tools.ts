@@ -4,12 +4,13 @@ import {
   validateJsonSchema,
   type JsonSchema,
 } from "@newsportal/contracts";
-import { buildProviderShapeValidation } from "@newsportal/control-plane";
+import { buildProviderShapeValidation, getSourceFamilyCoverageWithPool } from "@newsportal/control-plane";
 
 import { ADMIN_MCP_TOOLS } from "./tools/admin-tools";
 import { CHANNEL_MCP_TOOLS } from "./tools/channels-tools";
 import { CONTENT_MCP_TOOLS } from "./tools/content-tools";
 import { DISCOVERY_MCP_TOOLS } from "./tools/discovery-tools";
+import { INGRESS_ADAPTER_MCP_TOOLS } from "./tools/ingress-adapters-tools";
 import { SEQUENCE_MCP_TOOLS } from "./tools/sequences-tools";
 import { TEMPLATE_MCP_TOOLS } from "./tools/templates-tools";
 import {
@@ -19,7 +20,6 @@ import {
   detailSchema,
   pagingSchema,
   readBooleanFlag,
-  normalizePayloadStringListFields,
   readOptionalString,
   readPageArgs,
   readPayload,
@@ -36,6 +36,12 @@ import {
   buildToolDescription,
 } from "./context";
 import {
+  expectedShapeForSchema,
+  normalizeContentAnalysisBackfillPayload,
+  readEntityIds,
+  readStringArray,
+} from "./tools/content-analysis-helpers";
+import {
   OPERATING_DOMAIN_VALUES,
   OPERATING_REPORT_KINDS,
   buildFunnelAudit,
@@ -43,56 +49,14 @@ import {
   buildFunnelIterationRecommendation,
   buildOperationalReportVerification,
   buildSelectionPrecisionAudit,
+  buildSelectionDashboard,
+  buildSelectionReindexPlan,
   buildSystemHealth,
   explainOperatorIssue,
   nextReadBackForTool,
   recommendOperatorTuning,
   verifyOperatorEffect,
 } from "./operating-intelligence";
-
-const CONTENT_ANALYSIS_SUBJECT_TYPES = ["article", "web_resource", "story_cluster"] as const;
-const CONTENT_ANALYSIS_MODULES = [
-  "ner",
-  "sentiment",
-  "category",
-  "cluster_summary",
-  "system_interest_labels",
-  "content_filter",
-  "structured_extraction",
-] as const;
-
-function normalizeContentAnalysisBackfillPayload(
-  payload: Record<string, unknown>
-): Record<string, unknown> {
-  return normalizePayloadStringListFields(payload, {
-    subjectTypes: { allowedValues: CONTENT_ANALYSIS_SUBJECT_TYPES },
-    modules: { allowedValues: CONTENT_ANALYSIS_MODULES },
-    subjectIds: undefined,
-  });
-}
-
-function expectedShapeForSchema(schema: JsonSchema): Record<string, unknown> {
-  const properties = schema.properties ? Object.keys(schema.properties) : [];
-  return {
-    type: schema.type ?? "any",
-    required: [...(schema.required ?? [])],
-    allowedProperties: properties,
-    additionalProperties: schema.additionalProperties ?? true,
-  };
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.map((entry) => readOptionalString(entry)).filter((entry): entry is string => Boolean(entry))
-    : [];
-}
-
-function readEntityIds(args: Record<string, unknown>): Record<string, unknown> {
-  const entityIds = args.entityIds;
-  return entityIds != null && typeof entityIds === "object" && !Array.isArray(entityIds)
-    ? (entityIds as Record<string, unknown>)
-    : {};
-}
 
 const operatorReportVerifySchema = {
   type: "object",
@@ -103,7 +67,6 @@ const operatorReportVerifySchema = {
       enum: [
         "channel_onboarding",
         "discovery_run",
-        "source_prior",
         "cleanup",
         "selection",
         ...OPERATING_REPORT_KINDS,
@@ -115,6 +78,9 @@ const operatorReportVerifySchema = {
         channelIds: { type: "array", items: { type: "string" } },
         targetIds: { type: "array", items: { type: "string" } },
         runIds: { type: "array", items: { type: "string" } },
+        artifactIds: { type: "array", items: { type: "string" } },
+        candidateIds: { type: "array", items: { type: "string" } },
+        sourceInventoryIds: { type: "array", items: { type: "string" } },
         endpointIds: { type: "array", items: { type: "string" } },
         contractIds: { type: "array", items: { type: "string" } },
         docIds: { type: "array", items: { type: "string" } },
@@ -268,6 +234,32 @@ const operatorSelectionPrecisionAuditSchema = {
   additionalProperties: false,
 } satisfies JsonSchema;
 
+const emptyReadSchema = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorSelectionReindexPlanSchema = {
+  type: "object",
+  properties: {
+    docIds: { type: "array", items: { type: "string" } },
+    chunkSize: { type: "number" },
+    maxDocIds: { type: "number" },
+    reason: { type: "string" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const discoverySourceFamiliesCoverageSchema = {
+  type: "object",
+  properties: {
+    includeExamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
 const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
     "operator.system.health",
@@ -316,6 +308,25 @@ const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "Read-only selected-content precision audit. Buckets selected rows into strong/probable/context/noise outcomes without creating a separate public selected gate.",
     operatorSelectionPrecisionAuditSchema,
     async (context, args) => buildSelectionPrecisionAudit(context, args)
+  ),
+  createReadTool(
+    "operator.selection.dashboard",
+    "Read-only count dashboard that separates raw article observations from selected/public lead signals. Use this when article totals appear inconsistent with selected signal yield.",
+    emptyReadSchema,
+    async (context) => buildSelectionDashboard(context)
+  ),
+  createReadTool(
+    "operator.selection.reindex_plan",
+    "Read-only bounded historical replay planner for final selection. Builds weak_selected, buyer_hold, and context_only docId buckets plus maintenance.reindex.request templates with retroNotifications=skip.",
+    operatorSelectionReindexPlanSchema,
+    async (context, args) => buildSelectionReindexPlan(context, args)
+  ),
+  createReadTool(
+    "discovery.source_families.coverage",
+    "Read-only Discovery vNext source-family coverage report for coverage-first gap hunting.",
+    discoverySourceFamiliesCoverageSchema,
+    async (context, args) =>
+      getSourceFamilyCoverageWithPool(context.pool, { includeExamples: args.includeExamples === true })
   ),
 ];
 
@@ -400,190 +411,111 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
       }
 
       if (reportKind === "discovery_run") {
-        const targetIds = readStringArray(entityIds.targetIds);
         const runIds = readStringArray(entityIds.runIds);
-        const hasEntityFilters = targetIds.length + runIds.length > 0;
-        const targets = await pool.query(
-          `
-            select target_id::text as "targetId", title, origin_kind as "originKind",
-                   status, priority, last_run_id::text as "lastRunId",
-                   last_coverage_snapshot_id::text as "lastCoverageSnapshotId",
-                   updated_at as "updatedAt"
-            from discovery_targets
-            where (cardinality($1::text[]) = 0 and $2 = false) or target_id::text = any($1::text[])
-            order by updated_at desc, priority desc
-            limit 25
-          `,
-          [targetIds, hasEntityFilters]
-        );
+        const artifactIds = readStringArray(entityIds.artifactIds);
+        const candidateIds = readStringArray(entityIds.candidateIds);
+        const inventoryIds = readStringArray(entityIds.sourceInventoryIds);
+        const hasEntityFilters = runIds.length + artifactIds.length + candidateIds.length + inventoryIds.length > 0;
         const runs = await pool.query(
           `
-            select run_id::text as "runId", target_id::text as "targetId",
+            select vnext_run_id::text as "runId",
                    run_kind as "runKind", trigger_kind as "triggerKind",
-                   status, started_at as "startedAt", finished_at as "finishedAt",
-                   error_text as "errorText", created_at as "createdAt"
-            from discovery_runs
+                   status, started_at as "startedAt", completed_at as "completedAt",
+                   error_json as "errorJson", result_json as "resultJson", created_at as "createdAt"
+            from discovery_vnext_runs
+            where (cardinality($1::text[]) = 0 and $2 = false) or vnext_run_id::text = any($1::text[])
+            order by created_at desc
+            limit 25
+          `,
+          [runIds, hasEntityFilters]
+        );
+        const artifacts = await pool.query(
+          `
+            select artifact_id::text as "artifactId",
+                   vnext_run_id::text as "runId",
+                   artifact_type as "artifactType",
+                   status,
+                   policy_version as "policyVersion",
+                   validation_json as "validationJson",
+                   created_at as "createdAt"
+            from discovery_artifacts
             where
               (
                 (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or target_id::text = any($1::text[])
-                or run_id::text = any($2::text[])
+                or vnext_run_id::text = any($1::text[])
+                or artifact_id::text = any($2::text[])
               )
             order by created_at desc
             limit 25
           `,
-          [targetIds, runIds, hasEntityFilters]
+          [runIds, artifactIds, hasEntityFilters]
         );
-        const coverage = await pool.query(
+        const candidateStatusCounts = await pool.query(
           `
-            select distinct on (target_id)
-                   target_id::text as "targetId",
-                   coverage_score as "coverageScore",
-                   source_count as "sourceCount",
-                   strong_source_count as "strongSourceCount",
-                   missing_role_count as "missingRoleCount",
-                   summary_json as "summaryJson",
-                   created_at as "createdAt"
-            from discovery_coverage_snapshots
-            where (cardinality($1::text[]) = 0 and $2 = false) or target_id::text = any($1::text[])
-            order by target_id, created_at desc
+            select vnext_run_id::text as "runId",
+                   status,
+                   candidate_kind_guess as "candidateKindGuess",
+                   count(*)::int as count
+            from discovery_candidates
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or vnext_run_id::text = any($1::text[])
+                or candidate_id::text = any($2::text[])
+              )
+            group by vnext_run_id, status, candidate_kind_guess
+            order by vnext_run_id, status, candidate_kind_guess
+          `,
+          [runIds, candidateIds, hasEntityFilters]
+        );
+        const inventoryStateCounts = await pool.query(
+          `
+            select current_state as "currentState",
+                   current_provider_type as "providerType",
+                   count(*)::int as count
+            from source_inventory
+            where
+              (cardinality($1::text[]) = 0 and $2 = false)
+              or source_inventory_id::text = any($1::text[])
+            group by current_state, current_provider_type
+            order by current_state, current_provider_type
+          `,
+          [inventoryIds, hasEntityFilters]
+        );
+        const adapterBacklogCounts = await pool.query(
+          `
+            select status, adapter_need as "adapterNeed", priority,
+                   count(*)::int as count
+            from adapter_backlog
+            where
+              (
+                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
+                or source_inventory_id::text = any($1::text[])
+                or candidate_id::text = any($2::text[])
+              )
+            group by status, adapter_need, priority
+            order by status, adapter_need, priority
+          `,
+          [inventoryIds, candidateIds, hasEntityFilters]
+        );
+        const recentObservations = await pool.query(
+          `
+            select so.source_inventory_id::text as "sourceInventoryId",
+                   so.observation_kind as "observationKind",
+                   so.observation_json as "observationJson",
+                   so.observed_at as "observedAt"
+            from source_observations so
+            where (cardinality($1::text[]) = 0 and $2 = false) or so.source_inventory_id::text = any($1::text[])
+            order by so.observed_at desc
             limit 25
           `,
-          [targetIds, hasEntityFilters]
-        );
-        const hypothesisStatusCounts = await pool.query(
-          `
-            select target_id::text as "targetId",
-                   run_id::text as "runId",
-                   status,
-                   source_role as "sourceRole",
-                   signal_mode as "signalMode",
-                   count(*)::int as count
-            from discovery_hypotheses
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or target_id::text = any($1::text[])
-                or run_id::text = any($2::text[])
-              )
-            group by target_id, run_id, status, source_role, signal_mode
-            order by target_id, run_id, status, source_role, signal_mode
-          `,
-          [targetIds, runIds, hasEntityFilters]
-        );
-        const endpointStatusCounts = await pool.query(
-          `
-            select target_id::text as "targetId",
-                   status,
-                   recommended_action as "recommendedAction",
-                   provider_type as "providerType",
-                   count(*)::int as count
-            from discovery_source_endpoints
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or target_id::text = any($1::text[])
-                or run_id::text = any($2::text[])
-              )
-            group by target_id, status, recommended_action, provider_type
-            order by target_id, status, recommended_action, provider_type
-          `,
-          [targetIds, runIds, hasEntityFilters]
-        );
-        const adapterRequiredEndpointCounts = await pool.query(
-          `
-            select target_id::text as "targetId",
-                   provider_type as "providerType",
-                   endpoint_kind as "endpointKind",
-                   recommended_action as "recommendedAction",
-                   status,
-                   count(*)::int as count
-            from discovery_source_endpoints
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or target_id::text = any($1::text[])
-                or run_id::text = any($2::text[])
-              )
-              and (
-                recommended_action in ('needs_config', 'monitor_only')
-                or provider_type not in ('rss', 'website', 'api', 'email_imap')
-              )
-            group by target_id, provider_type, endpoint_kind, recommended_action, status
-            order by target_id, provider_type, endpoint_kind, recommended_action, status
-          `,
-          [targetIds, runIds, hasEntityFilters]
-        );
-        const contractStatusCounts = await pool.query(
-          `
-            select target_id::text as "targetId",
-                   status,
-                   source_role as "sourceRole",
-                   count(*)::int as count
-            from discovery_source_contracts
-            where (cardinality($1::text[]) = 0 and $2 = false) or target_id::text = any($1::text[])
-            group by target_id, status, source_role
-            order by target_id, status, source_role
-          `,
-          [targetIds, hasEntityFilters]
-        );
-        const claimStatusCounts = await pool.query(
-          `
-            select target_id::text as "targetId",
-                   status,
-                   claim_type as "signalType",
-                   count(*)::int as count
-            from discovery_claims
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or target_id::text = any($1::text[])
-                or run_id::text = any($2::text[])
-              )
-            group by target_id, status, claim_type
-            order by target_id, status, claim_type
-          `,
-          [targetIds, runIds, hasEntityFilters]
-        );
-        const negativeEvidence = await pool.query(
-          `
-            select negative_evidence_id::text as "negativeEvidenceId",
-                   target_id::text as "targetId",
-                   provider_id as "providerId",
-                   failure_mode as "failureMode",
-                   severity,
-                   cooldown_until as "cooldownUntil",
-                   created_at as "createdAt"
-            from discovery_negative_evidence
-            where
-              (
-                (cardinality($1::text[]) = 0 and cardinality($2::text[]) = 0 and $3 = false)
-                or target_id::text = any($1::text[])
-                or run_id::text = any($2::text[])
-              )
-            order by created_at desc
-            limit 25
-          `,
-          [targetIds, runIds, hasEntityFilters]
-        );
-        const providerHealth = await pool.query(
-          `
-            select provider_id as "providerId", status, error_rate as "errorRate",
-                   last_error_kind as "lastErrorKind", cooldown_until as "cooldownUntil"
-            from discovery_provider_health
-            where status <> 'healthy'
-            order by updated_at desc
-            limit 25
-          `,
+          [inventoryIds, hasEntityFilters],
         );
         const runningRows = runs.rows.filter((row) =>
           ["queued", "running"].includes(String(row.status ?? ""))
         );
         if (runIds.length > 0 && runs.rows.length !== runIds.length) {
           warnings.push("Some requested discovery runIds were not found.");
-        }
-        if (targetIds.length > 0 && targets.rows.length !== targetIds.length) {
-          warnings.push("Some requested discovery targetIds were not found.");
         }
         if (runningRows.length > 0) {
           warnings.push(
@@ -595,23 +527,15 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
         );
         if (failedRows.length > 0) {
           warnings.push(
-            "Some discovery runs failed; inspect run error_text, negative evidence and provider health before claiming yield."
+            "Some discovery vNext runs failed; inspect errorJson, artifacts, observations and adapter backlog before claiming coverage."
           );
         }
-        const pendingEndpointCount = endpointStatusCounts.rows
-          .filter((row) => ["candidate", "promotable", "manual_review"].includes(String(row.status ?? "")))
+        const pendingInventoryCount = inventoryStateCounts.rows
+          .filter((row) => ["manual_review", "adapter_backlog", "cheap_watch"].includes(String(row.currentState ?? "")))
           .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
-        if (pendingEndpointCount > 0) {
+        if (pendingInventoryCount > 0) {
           warnings.push(
-            `${pendingEndpointCount} discovery endpoints still require evidence review; do not report source onboarding as complete.`
-          );
-        }
-        const probationContractCount = contractStatusCounts.rows
-          .filter((row) => String(row.status ?? "") === "probation")
-          .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
-        if (probationContractCount > 0) {
-          warnings.push(
-            `${probationContractCount} promoted sources are still in contract probation and do not count as strong coverage.`
+            `${pendingInventoryCount} discovery inventory rows still need watch/backlog/manual follow-up; do not report source onboarding as complete.`
           );
         }
         return {
@@ -619,130 +543,16 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
           verifiedAt: new Date().toISOString(),
           staleReportNotes: warnings,
           counts: {
-            targets: targets.rows.length,
             runs: runs.rows.length,
-            coverageSnapshots: coverage.rows.length,
-            negativeEvidence: negativeEvidence.rows.length,
-            providerAlerts: providerHealth.rows.length,
+            artifacts: artifacts.rows.length,
+            observationSamples: recentObservations.rows.length,
           },
-          targets: targets.rows,
           runs: runs.rows,
-          coverage: coverage.rows,
-          hypothesisStatusCounts: hypothesisStatusCounts.rows,
-          endpointStatusCounts: endpointStatusCounts.rows,
-          adapterRequiredEndpointCounts: adapterRequiredEndpointCounts.rows,
-          contractStatusCounts: contractStatusCounts.rows,
-          claimStatusCounts: claimStatusCounts.rows,
-          negativeEvidence: includeSamples ? negativeEvidence.rows : [],
-          providerHealth: providerHealth.rows,
-        };
-      }
-
-      if (reportKind === "source_prior") {
-        const targetIds = readStringArray(entityIds.targetIds);
-        const channelIds = readStringArray(entityIds.channelIds);
-        const endpointIds = readStringArray(entityIds.endpointIds);
-        const contractIds = readStringArray(entityIds.contractIds);
-        const hasEntityFilters =
-          targetIds.length + channelIds.length + endpointIds.length + contractIds.length > 0;
-        const sourcePriors = await pool.query(
-          `
-            select *
-            from (
-              select
-                'channel' as "surface",
-                coalesce(
-                  sc.config_json #>> '{discovery,rareSignalPrior,source,targetId}',
-                  sc.config_json #>> '{discovery,targetId}'
-                ) as "targetId",
-                sc.channel_id::text as "channelId",
-                coalesce(
-                  sc.config_json #>> '{discovery,rareSignalPrior,source,endpointId}',
-                  sc.config_json #>> '{discovery,endpointId}'
-                ) as "endpointId",
-                null::text as "contractId",
-                sc.name as "sourceName",
-                sc.provider_type as "providerType",
-                sc.config_json #> '{discovery,rareSignalPrior}' as "sourcePrior",
-                sc.updated_at as "updatedAt"
-              from source_channels sc
-              where jsonb_typeof(sc.config_json #> '{discovery,rareSignalPrior}') = 'object'
-
-              union all
-
-              select
-                'contract' as "surface",
-                dsc.target_id::text as "targetId",
-                dsc.source_channel_id::text as "channelId",
-                dsc.endpoint_id::text as "endpointId",
-                dsc.contract_id::text as "contractId",
-                coalesce(dse.title, sc.name, dsc.source_role) as "sourceName",
-                dsc.provider_type as "providerType",
-                dsc.contract_json #> '{rareSignalPrior}' as "sourcePrior",
-                dsc.updated_at as "updatedAt"
-              from discovery_source_contracts dsc
-              left join discovery_source_endpoints dse on dse.endpoint_id = dsc.endpoint_id
-              left join source_channels sc on sc.channel_id = dsc.source_channel_id
-              where jsonb_typeof(dsc.contract_json #> '{rareSignalPrior}') = 'object'
-            ) priors
-            where
-              (
-                $5 = false
-                or "targetId" = any($1::text[])
-                or "channelId" = any($2::text[])
-                or "endpointId" = any($3::text[])
-                or "contractId" = any($4::text[])
-              )
-            order by "updatedAt" desc
-            limit 50
-          `,
-          [targetIds, channelIds, endpointIds, contractIds, hasEntityFilters]
-        );
-        const tierStateCounts = new Map<string, { tier: string; priorState: string; count: number }>();
-        for (const row of sourcePriors.rows) {
-          const prior = row.sourcePrior as Record<string, unknown> | undefined;
-          const tier = String(prior?.tier ?? "unknown");
-          const priorState = String(prior?.priorState ?? "unknown");
-          const key = `${tier}:${priorState}`;
-          const existing = tierStateCounts.get(key) ?? { tier, priorState, count: 0 };
-          existing.count += 1;
-          tierStateCounts.set(key, existing);
-        }
-        const unsafeImpact = sourcePriors.rows.filter((row) => {
-          const prior = row.sourcePrior as Record<string, unknown> | undefined;
-          const guardrails = prior?.selectionGuardrails as Record<string, unknown> | undefined;
-          return (
-            guardrails?.selectedContentImpact !== "none_from_prior" ||
-            guardrails?.priorCanSelectArticle !== false ||
-            guardrails?.priorCanRankArticle !== false ||
-            guardrails?.priorCanEscalateArticle !== false ||
-            guardrails?.articleFromSourceSelectionEligible !== true ||
-            prior?.coverageContribution !== 0 ||
-            prior?.downstreamWeight !== 0
-          );
-        });
-        if (unsafeImpact.length > 0) {
-          warnings.push(
-            "Some source priors violate prior-only guardrails; inspect before reporting discovery quality."
-          );
-        }
-        if (
-          hasEntityFilters &&
-          sourcePriors.rows.length <
-            targetIds.length + channelIds.length + endpointIds.length + contractIds.length
-        ) {
-          warnings.push("Some requested source-prior entities were not found.");
-        }
-        return {
-          reportKind,
-          verifiedAt: new Date().toISOString(),
-          staleReportNotes: warnings,
-          counts: {
-            sourcePriors: sourcePriors.rows.length,
-            byTierAndState: [...tierStateCounts.values()],
-            unsafePriorImpact: unsafeImpact.length,
-          },
-          sourcePriors: includeSamples ? sourcePriors.rows : [],
+          artifacts: artifacts.rows,
+          candidateStatusCounts: candidateStatusCounts.rows,
+          inventoryStateCounts: inventoryStateCounts.rows,
+          adapterBacklogCounts: adapterBacklogCounts.rows,
+          recentObservations: includeSamples ? recentObservations.rows : [],
         };
       }
 
@@ -753,9 +563,9 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
               (select count(*)::int from source_channels where is_active = true) as "activeChannels",
               (select count(*)::int from interest_templates where is_active = true) as "activeSystemInterests",
               (select count(*)::int from llm_prompt_templates where is_active = true) as "activeLlmTemplates",
-              (select count(*)::int from discovery_targets where status = 'active') as "activeDiscoveryTargets",
-              (select count(*)::int from discovery_runs where status in ('queued', 'running')) as "activeDiscoveryRuns",
-              (select count(*)::int from discovery_source_contracts where status = 'probation') as "probationDiscoveryContracts",
+              (select count(*)::int from discovery_vnext_runs where status in ('queued', 'running')) as "activeDiscoveryRuns",
+              (select count(*)::int from source_inventory where current_state = 'probation_channel') as "probationDiscoverySources",
+              (select count(*)::int from adapter_backlog where status in ('open', 'planned')) as "openAdapterBacklogItems",
               (select count(*)::int from sequences where status in ('draft', 'active')) as "activeSequences",
               (select count(*)::int from mcp_access_tokens where status = 'active' and (expires_at is null or expires_at > now())) as "activeMcpTokens"
           `
@@ -1188,6 +998,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   ...ADMIN_MCP_TOOLS,
   ...TEMPLATE_MCP_TOOLS,
   ...CHANNEL_MCP_TOOLS,
+  ...INGRESS_ADAPTER_MCP_TOOLS,
   ...CONTENT_MCP_TOOLS,
   ...SEQUENCE_MCP_TOOLS,
   ...DISCOVERY_MCP_TOOLS,

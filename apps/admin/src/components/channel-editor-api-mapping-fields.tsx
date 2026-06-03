@@ -7,6 +7,13 @@ interface ChannelEditorApiMappingFieldsProps {
   inputClassName: string;
 }
 
+function formatApiFieldPath(value: string | string[] | undefined, fallback: string): string {
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+  return value ?? fallback;
+}
+
 export function ChannelEditorApiMappingFields({
   value,
   inputClassName,
@@ -45,7 +52,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-title-field"
             name="titleField"
-            defaultValue={value.titleField ?? "title"}
+            defaultValue={formatApiFieldPath(value.titleField, "title")}
             className={inputClassName}
           />
         </FormField>
@@ -58,7 +65,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-lead-field"
             name="leadField"
-            defaultValue={value.leadField ?? "lead"}
+            defaultValue={formatApiFieldPath(value.leadField, "lead")}
             className={inputClassName}
           />
         </FormField>
@@ -71,7 +78,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-body-field"
             name="bodyField"
-            defaultValue={value.bodyField ?? "body"}
+            defaultValue={formatApiFieldPath(value.bodyField, "body")}
             className={inputClassName}
           />
         </FormField>
@@ -84,7 +91,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-url-field"
             name="urlField"
-            defaultValue={value.urlField ?? "url"}
+            defaultValue={formatApiFieldPath(value.urlField, "url")}
             className={inputClassName}
           />
         </FormField>
@@ -97,7 +104,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-published-at-field"
             name="publishedAtField"
-            defaultValue={value.publishedAtField ?? "publishedAt"}
+            defaultValue={formatApiFieldPath(value.publishedAtField, "publishedAt")}
             className={inputClassName}
           />
         </FormField>
@@ -110,7 +117,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-external-id-field"
             name="externalIdField"
-            defaultValue={value.externalIdField ?? "id"}
+            defaultValue={formatApiFieldPath(value.externalIdField, "id")}
             className={inputClassName}
           />
         </FormField>
@@ -123,7 +130,7 @@ export function ChannelEditorApiMappingFields({
           <Input
             id="channel-language-field"
             name="languageField"
-            defaultValue={value.languageField ?? "language"}
+            defaultValue={formatApiFieldPath(value.languageField, "language")}
             className={inputClassName}
           />
         </FormField>

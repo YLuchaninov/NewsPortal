@@ -127,6 +127,9 @@ Dependency and build changes are architecture changes when they affect runtime t
 Правила:
 
 - New dependencies require an owner, runtime surface, reason-to-change, license/security review proportional to risk and proof that the existing workspace boundary is still respected.
+- Before adding, installing, updating or re-enabling any third-party dependency, the active item MUST record an exact package-name plus target-version compromise check against current public supply-chain evidence, including at least one package-advisory source and, for npm/PyPI packages, a malware/compromised-package source such as OSV/GitHub Advisory/OpenSSF malicious-package data or an equivalent vendor incident advisory. If the exact package/version is flagged as malicious, compromised, typosquatted, maintainer-takeover affected, protestware, credential-exfiltrating, or unverifiable for the intended source, installing it is blocked until a separate security decision chooses a safe version, replacement or quarantine path.
+- New or changed third-party dependency specs MUST use fixed versions. Do not introduce floating, range or source-moving specs such as `latest`, `*`, `^`, `~`, inequality ranges, registry tags, unpinned Git URLs, branch names, local archive URLs or other mutable references unless a separate explicit security exception is recorded in the active item with owner, expiry and compensating proof. The compromise check must be performed against the exact version that will be locked and installed, not only against the package name.
+- Dependency proof must distinguish ordinary vulnerability advisories from supply-chain compromise or malware. A clean license/local inventory guard is not enough to install a package unless the exact package/version compromise check is also recorded.
 - Lockfile changes must be intentional and tied to the active item; do not mix broad dependency churn with unrelated feature or refactor work.
 - Generated artifacts, container images and bundled outputs are not source truth unless the active item explicitly changes release packaging policy.
 - Build/release integrity should stay ready for SBOM/provenance/SLSA-style evolution: keep build inputs explicit, avoid hidden download/codegen steps and record release proof gaps honestly.
@@ -139,7 +142,7 @@ Observable behavior is part of the interface for async, operator and maintenance
 
 Правила:
 
-- Important async/runtime paths should emit structured status with stable identifiers such as job id, run id, channel id, resource id, mission id, user id, provider type or correlation id where applicable.
+- Important async/runtime paths should emit structured status with stable identifiers such as job id, run id, channel id, resource id, discovery artifact/candidate/source inventory id, user id, provider type or correlation id where applicable.
 - Logs, metrics, traces or durable audit rows must answer the operator question "what happened, to which entity, why, and what can be retried" for non-trivial failures.
 - Error classification should preserve domain status and retryability; do not collapse timeout, auth, validation, rate-limit, budget and unsupported-state failures into the same generic bucket.
 - New polling loops, batch processors, external calls and background jobs must define their health/progress signal or an explicit no-extra-observability rationale.

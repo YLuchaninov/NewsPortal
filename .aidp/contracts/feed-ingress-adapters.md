@@ -1,6 +1,6 @@
 # Контракт feed ingress adapters
 
-Этот contract обязателен, когда работа трогает RSS/Atom parsing, aggregator-aware normalization, `adapterStrategy`, feed URL canonicalization, max-entry-age gating or feed provenance.
+Этот contract обязателен, когда работа трогает RSS/Atom parsing, aggregator-aware normalization, ingress adapter binding selection, feed URL canonicalization, max-entry-age gating or feed provenance.
 
 ## Назначение
 
@@ -21,7 +21,8 @@ The canonical parser module is `services/fetchers/src/feed-parser/index.ts` plus
 
 ## Resolution rules
 
-- `source_channels.config_json.adapterStrategy` is authoritative if set.
+- `source_channel_adapter_binding.adapter_key` is the only live adapter-selection truth for RSS runtime. Historical `source_channels.config_json.adapterStrategy` may remain in stored JSON as diagnostics, but fetchers/read models must not use it as a runtime fallback.
+- If a valid enabled binding is missing, fetchers use the provider default (`rss.generic`) and report `adapterResolutionSource=provider_default`; they do not infer runtime selection from URL or legacy config.
 - Otherwise infer from `fetch_url`: Reddit search RSS, hnrss.org, Google News RSS, else `generic`.
 - Admin/API read models should expose resolved strategy even when config is auto/empty.
 - `provider_type` remains `rss`.

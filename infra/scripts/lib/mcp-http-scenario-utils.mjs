@@ -91,8 +91,20 @@ export function buildPromptArguments(name, runId) {
       };
     case "discovery.yield.review":
       return {
-        missionId: "",
-        recallMissionId: "",
+        runId: "",
+        sourceInventoryId: "",
+      };
+    case "operator.funnel.calibrate":
+      return {
+        objective: `deterministic funnel calibration ${runId}`,
+        referenceEvidence: "MCP deterministic scenario fixture",
+        currentGap: "operator proof coverage drift",
+      };
+    case "discovery.live_gap_hunting.plan":
+      return {
+        objective: `domain-neutral Discovery vNext live gap hunting ${runId}`,
+        scenarioPacks: "public_procurement, security_advisories, policy_regulatory",
+        budget: "bounded deterministic prompt-render proof",
       };
     case "system_interest.create":
       return {
@@ -109,14 +121,14 @@ export function buildPromptArguments(name, runId) {
         templateName: `Operator template ${runId}`,
         residualPattern: "llm_review_pending repeated in gray-zone article residuals",
       };
-    case "discovery.profile.tune":
+    case "discovery.policy.tune":
       return {
-        profileName: `Operator profile ${runId}`,
-        residualPattern: "gray_zone_hold repeated after recall-style candidate recovery",
+        targetTitle: `Operator vNext policy ${runId}`,
+        residualPattern: "source inventory routing gap repeated in channel coverage",
       };
-    case "discovery.mission.review":
+    case "discovery.artifact.review":
       return {
-        missionTitle: `Review live mission ${runId}`,
+        targetTitle: `Operator vNext artifact ${runId}`,
         goal: "find net-new high-signal sources",
       };
     case "sequence.draft":

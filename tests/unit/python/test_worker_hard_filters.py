@@ -75,6 +75,22 @@ class WorkerHardFilterTests(unittest.TestCase):
         self.assertEqual(reasons, [])
         self.assertTrue(within_window)
 
+    def test_global_place_constraint_behaves_as_worldwide_wildcard(self) -> None:
+        passes, reasons, within_window = worker_main.passes_hard_filters(
+            article=self._make_article(
+                title="Netherlands software development tender notice"
+            ),
+            article_features={"places": ["Netherlands"], "short_tokens": [], "entities": [], "numbers": []},
+            hard_constraints={
+                "places": ["global"],
+                "time_window_hours": 168,
+            },
+        )
+
+        self.assertTrue(passes)
+        self.assertEqual(reasons, [])
+        self.assertTrue(within_window)
+
     def test_rejects_wrapper_directory_noise_without_direct_request_signal(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
             article=self._make_article(

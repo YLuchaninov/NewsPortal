@@ -43,6 +43,17 @@ const VIEWPORTS = [
   { name: "tablet", width: 820, height: 1180, mobile: false },
   { name: "mobile", width: 390, height: 844, mobile: true },
 ];
+const PRIVATE_HOST_ALLOWLIST_ENV = "FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST";
+const VIEWPORT_FIXTURE_ALLOWLIST = ["web"];
+
+function ensureFixtureAllowlist() {
+  const existing = String(process.env[PRIVATE_HOST_ALLOWLIST_ENV] ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const merged = new Set([...existing, ...VIEWPORT_FIXTURE_ALLOWLIST]);
+  process.env[PRIVATE_HOST_ALLOWLIST_ENV] = [...merged].join(",");
+}
 
 function log(message) {
   console.log(`[web-viewports] ${message}`);
@@ -51,6 +62,7 @@ function log(message) {
 const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
 async function ensureComposeStack() {
+  ensureFixtureAllowlist();
   log("Ensuring compose stack is available for web viewport smoke.");
   runCompose("up", "-d", ...STACK_SERVICES);
   const healthOptions = { timeoutMs: 120000, intervalMs: 1500 };

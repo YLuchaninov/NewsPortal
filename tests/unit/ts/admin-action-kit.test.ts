@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import test from "node:test";
 
@@ -19,6 +19,10 @@ import {
   type AdminActionSession,
 } from "../../../apps/admin/src/lib/server/admin-action.ts";
 import { submitAdminForm } from "../../../apps/admin/src/components/admin-form-submit.ts";
+import {
+  listFilesRecursive,
+  withAppSecret,
+} from "./support/action-kit-harness.ts";
 
 const adminSession: AdminActionSession = {
   userId: "admin-user-1",
@@ -32,29 +36,6 @@ const adminSession: AdminActionSession = {
 };
 
 const repoRoot = process.cwd();
-
-function withAppSecret<T>(secret: string, callback: () => T): T {
-  const previous = process.env.APP_SECRET;
-  process.env.APP_SECRET = secret;
-  const restore = () => {
-    if (previous == null) {
-      delete process.env.APP_SECRET;
-    } else {
-      process.env.APP_SECRET = previous;
-    }
-  };
-  try {
-    const result = callback();
-    if (result instanceof Promise) {
-      return result.finally(restore) as T;
-    }
-    restore();
-    return result;
-  } catch (error) {
-    restore();
-    throw error;
-  }
-}
 
 test("prepareAdminAction denies JSON writes before reading payload", async () => {
   let payloadRead = false;
@@ -489,13 +470,6 @@ test("submitAdminForm honors cancelled submit fallback", () => {
   assert.deepEqual(calls, ["submit:true:true"]);
 });
 
-function listFilesRecursive(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const fullPath = join(dir, entry.name);
-    return entry.isDirectory() ? listFilesRecursive(fullPath) : [fullPath];
-  });
-}
-
 test("mutating admin BFF POST routes declare signed action-token scopes", () => {
   const routeRoot = join(repoRoot, "apps/admin/src/pages/bff/admin");
   const expectedScopesByRoute = new Map<string, string>([
@@ -509,6 +483,7 @@ test("mutating admin BFF POST routes declare signed action-token scopes", () => 
     ["content-analysis-policies.ts", "content-analysis-policies"],
     ["content-filter-policies.ts", "content-filter-policies"],
     ["discovery.ts", "discovery"],
+    ["ingress-adapters.ts", "ingress-adapters"],
     ["mcp-tokens.ts", "mcp-tokens"],
     ["moderation.ts", "moderation"],
     ["reindex.ts", "reindex"],

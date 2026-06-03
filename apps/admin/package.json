@@ -9,8 +9,9 @@
     "typecheck": "astro check"
   },
   "dependencies": {
-    "@astrojs/node": "^9.5.5",
-    "@astrojs/react": "^5.0.1",
+    "@astrojs/node": "10.1.1",
+    "@astrojs/react": "5.0.5",
+    "@newsportal/bff-server": "workspace:*",
     "@newsportal/config": "workspace:*",
     "@newsportal/content-safety": "workspace:*",
     "@newsportal/contracts": "workspace:*",
@@ -19,7 +20,7 @@
     "@newsportal/ui": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "@xyflow/react": "^12.10.2",
-    "astro": "^5.13.4",
+    "astro": "6.3.5",
     "lucide-react": "^1.0.1",
     "pg": "^8.16.3",
     "react": "^19.2.4",

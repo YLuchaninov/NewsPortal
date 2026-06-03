@@ -8,6 +8,9 @@ ENV NEWSPORTAL_APP_BASE_URL=$NEWSPORTAL_APP_BASE_URL
 RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json ./
+COPY packages/bff-server/package.json packages/bff-server/package.json
+COPY packages/bff-server/tsconfig.json packages/bff-server/tsconfig.json
+COPY packages/bff-server/src packages/bff-server/src
 COPY packages/config/package.json packages/config/package.json
 COPY packages/config/tsconfig.json packages/config/tsconfig.json
 COPY packages/config/src packages/config/src
@@ -45,6 +48,7 @@ ENV NEWSPORTAL_APP_BASE_URL=$NEWSPORTAL_APP_BASE_URL
 RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/bff-server/package.json packages/bff-server/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/content-safety/package.json packages/content-safety/package.json
 COPY packages/contracts/package.json packages/contracts/package.json

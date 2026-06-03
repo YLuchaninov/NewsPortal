@@ -3,6 +3,94 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def summarize_article_selection_counts(
+    *,
+    query_all_func: Callable[[str, tuple[Any, ...]], list[dict[str, Any]]],
+    query_count_func: Callable[[str, tuple[Any, ...]], int],
+) -> dict[str, Any]:
+    raw_article_observations = query_count_func(
+        "select count(*)::int as total from articles",
+        (),
+    )
+    blocked_article_observations = query_count_func(
+        """
+        select count(*)::int as total
+        from articles
+        where visibility_state = 'blocked'
+        """,
+        (),
+    )
+    pending_selection_rows = query_count_func(
+        """
+        select count(*)::int as total
+        from articles a
+        left join final_selection_results fsr on fsr.doc_id = a.doc_id
+        where fsr.doc_id is null
+        """,
+        (),
+    )
+    decision_rows = query_all_func(
+        """
+        select
+          coalesce(final_decision, 'unknown') as decision,
+          count(*)::int as count,
+          count(*) filter (where is_selected = true)::int as selected_count,
+          count(*) filter (
+            where coalesce(explain_json ->> 'selectionMode', '') = 'hold'
+          )::int as hold_count,
+          count(*) filter (
+            where coalesce(explain_json ->> 'selectionMode', '') = 'llm_review_pending'
+              or coalesce((explain_json -> 'filterCounts' ->> 'llmReviewPending')::int, 0) > 0
+          )::int as llm_review_pending_count
+        from final_selection_results
+        group by coalesce(final_decision, 'unknown')
+        order by decision
+        """,
+        (),
+    )
+    by_decision = {
+        str(row.get("decision") or "unknown"): int(row.get("count") or 0)
+        for row in decision_rows
+    }
+    selected_article_signals = sum(
+        int(row.get("selected_count") or 0) for row in decision_rows
+    )
+    hold_rows = sum(int(row.get("hold_count") or 0) for row in decision_rows)
+    llm_review_pending_rows = sum(
+        int(row.get("llm_review_pending_count") or 0) for row in decision_rows
+    )
+    materialized_selection_rows = sum(by_decision.values())
+    rejected_rows = by_decision.get("rejected", 0)
+    gray_zone_rows = by_decision.get("gray_zone", 0)
+    return {
+        "sourceOfTruth": {
+            "rawArticleObservations": "articles",
+            "articleSelection": "final_selection_results",
+            "publicSelectedContent": "content_items",
+        },
+        "counts": {
+            "rawArticleObservations": raw_article_observations,
+            "materializedSelectionRows": materialized_selection_rows,
+            "pendingSelectionRows": pending_selection_rows,
+            "selectedArticleSignals": selected_article_signals,
+            "rejectedRows": rejected_rows,
+            "grayZoneRows": gray_zone_rows,
+            "holdRows": hold_rows,
+            "llmReviewPendingRows": llm_review_pending_rows,
+            "blockedArticleObservations": blocked_article_observations,
+        },
+        "byDecision": [
+            {"decision": decision, "count": count}
+            for decision, count in sorted(by_decision.items())
+        ],
+        "interpretation": (
+            "Raw article observations are the ingested corpus. Selected lead signals are "
+            "materialized separately by final_selection_results/content_items, so a high "
+            "article count can coexist with zero selected signals after strict calibration."
+        ),
+    }
+
+
 def list_articles(
     *,
     limit: int,
@@ -13,6 +101,11 @@ def list_articles(
     label_key: str | None,
     content_filter_passed: bool | None,
     content_filter_decision: str | None,
+    channel_id: str | None,
+    final_selection_decision: str | None,
+    selection_mode: str | None,
+    visibility_state: str | None,
+    q: str | None,
     page: int | None,
     page_size: int | None,
     build_content_analysis_filter_clause_func: Callable[..., tuple[list[str], list[Any]]],
@@ -45,6 +138,29 @@ def list_articles(
             content_filter_decision
         ),
     )
+    if channel_id:
+        filters.append("a.channel_id = %s")
+        params.append(channel_id)
+    if final_selection_decision:
+        filters.append("fsr.final_decision = %s")
+        params.append(final_selection_decision)
+    if selection_mode:
+        filters.append("coalesce(fsr.explain_json ->> 'selectionMode', '') = %s")
+        params.append(selection_mode)
+    if visibility_state:
+        filters.append("a.visibility_state = %s")
+        params.append(visibility_state)
+    normalized_query = q.strip() if q else ""
+    if normalized_query:
+        escaped_query = (
+            normalized_query.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
+        filters.append(
+            "concat_ws(' ', coalesce(a.title, ''), coalesce(a.lead, ''), coalesce(a.url, '')) ilike %s escape '\\'"
+        )
+        params.append(f"%{escaped_query}%")
     where_clause = f"where {' and '.join(filters)}" if filters else ""
     article_select = f"""
         select
@@ -115,6 +231,7 @@ def list_articles(
         f"""
         select count(*)::int as total
         from articles a
+        {final_selection_join_clause_func("a", "fsr")}
         {where_clause}
         """,
         tuple(params),

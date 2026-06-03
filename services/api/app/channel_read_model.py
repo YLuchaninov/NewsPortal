@@ -61,6 +61,14 @@ CHANNEL_LIST_SELECT = """
           last_run.outcome_kind as last_run_outcome_kind,
           last_run.fetch_duration_ms as last_run_duration_ms,
           last_run.error_text as last_run_error_text,
+          scab.adapter_key as adapter_binding_key,
+          scab.config_json as adapter_binding_config_json,
+          scab.selection_mode as adapter_binding_selection_mode,
+          scab.enabled as adapter_binding_enabled,
+          iac.title as adapter_binding_title,
+          iac.runtime_kind as adapter_binding_runtime_kind,
+          iac.output_mode as adapter_binding_output_mode,
+          iac.status as adapter_binding_status,
           recent_runs.recent_failure_count_24h,
           channel_item_counts.stored_item_count,
           sp.provider_id,
@@ -68,6 +76,8 @@ CHANNEL_LIST_SELECT = """
         from source_channels sc
         left join source_providers sp on sp.provider_id = sc.provider_id
         left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+        left join source_channel_adapter_binding scab on scab.channel_id = sc.channel_id
+        left join ingress_adapter_catalog iac on iac.adapter_key = scab.adapter_key
         left join lateral (
           select
             started_at,
@@ -163,6 +173,14 @@ CHANNEL_GET_SELECT = """
             coalesce(scrs.last_result_kind, '') = 'hard_failure'
             or coalesce(scrs.consecutive_failures, 0) >= 2
           ) as needs_attention,
+          scab.adapter_key as adapter_binding_key,
+          scab.config_json as adapter_binding_config_json,
+          scab.selection_mode as adapter_binding_selection_mode,
+          scab.enabled as adapter_binding_enabled,
+          iac.title as adapter_binding_title,
+          iac.runtime_kind as adapter_binding_runtime_kind,
+          iac.output_mode as adapter_binding_output_mode,
+          iac.status as adapter_binding_status,
           (
             coalesce(
               (
@@ -188,6 +206,8 @@ CHANNEL_GET_SELECT = """
         from source_channels sc
         left join source_providers sp on sp.provider_id = sc.provider_id
         left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+        left join source_channel_adapter_binding scab on scab.channel_id = sc.channel_id
+        left join ingress_adapter_catalog iac on iac.adapter_key = scab.adapter_key
 """
 
 

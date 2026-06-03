@@ -4,6 +4,7 @@ import {
 } from "../lib/channel-providers";
 
 export type ChannelProviderType = AdminChannelProviderType;
+export type ApiFieldPathValue = string | string[];
 
 export interface ChannelEditorFormValue {
   channelId?: string;
@@ -20,6 +21,8 @@ export interface ChannelEditorFormValue {
   maxItemsPerPoll?: number;
   preferContentEncoded?: boolean;
   adapterStrategy?: string | null;
+  adapterKey?: string | null;
+  ingressAdapterKey?: string | null;
   maxEntryAgeHours?: number | null;
   resolvedAdapterStrategy?: string | null;
   resolvedMaxEntryAgeHours?: number | null;
@@ -38,13 +41,13 @@ export interface ChannelEditorFormValue {
   blockedUrlPatternsText?: string;
   hasAuthorizationHeader?: boolean;
   itemsPath?: string;
-  titleField?: string;
-  leadField?: string;
-  bodyField?: string;
-  urlField?: string;
-  publishedAtField?: string;
-  externalIdField?: string;
-  languageField?: string;
+  titleField?: ApiFieldPathValue;
+  leadField?: ApiFieldPathValue;
+  bodyField?: ApiFieldPathValue;
+  urlField?: ApiFieldPathValue;
+  publishedAtField?: ApiFieldPathValue;
+  externalIdField?: ApiFieldPathValue;
+  languageField?: ApiFieldPathValue;
   host?: string;
   port?: number;
   secure?: boolean;

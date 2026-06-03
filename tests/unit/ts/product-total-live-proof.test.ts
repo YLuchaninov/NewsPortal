@@ -131,7 +131,7 @@ test("total-live returns weak when only live diagnostic lanes have classified re
     env: { status: "passed" },
     commandResults,
     diagnosticCommands: PRODUCT_TOTAL_LIVE_DIAGNOSTIC_COMMANDS.filter((item) =>
-      ["discovery-mega-compose", "website-matrix-compose"].includes(item.key)
+      ["website-matrix-compose"].includes(item.key)
     ),
   });
 
@@ -139,7 +139,7 @@ test("total-live returns weak when only live diagnostic lanes have classified re
   assert.equal(verdict.finalVerdict, "weak");
   assert.deepEqual(
     verdict.diagnosticWeak.map((item) => item.key).sort(),
-    ["discovery-mega-compose", "website-matrix-compose"]
+    ["website-matrix-compose"]
   );
 });
 

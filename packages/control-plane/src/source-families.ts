@@ -179,6 +179,10 @@ function normalizeLower(value: unknown): string {
   return normalizeString(value).toLowerCase();
 }
 
+function normalizeAdapterKey(value: unknown): string {
+  return normalizeLower(value).replace(/^(api|rss|website|email_imap)\./u, "");
+}
+
 function toNumber(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -240,7 +244,7 @@ function isNegativeControl(config: Record<string, unknown> | null | undefined): 
 
 export function classifySourceFamily(input: SourceFamilyChannelLike): SourceFamilyKey {
   const providerType = normalizeLower(input.providerType);
-  const adapterKey = normalizeLower(input.adapterKey);
+  const adapterKey = normalizeAdapterKey(input.adapterKey);
   const sourceRole = normalizeLower(input.sourceRole);
   const url = normalizeLower(input.fetchUrl);
   const host = hostFromUrl(input.fetchUrl);
@@ -279,7 +283,7 @@ function classifyTechnicalLifecycle(input: SourceFamilyChannelLike): SourceLifec
   const providerType = normalizeString(input.providerType);
   const fetchUrl = normalizeString(input.fetchUrl);
   const validation = buildProviderShapeValidation(providerType, fetchUrl);
-  const adapterKey = normalizeLower(input.adapterKey);
+  const adapterKey = normalizeAdapterKey(input.adapterKey);
   const tosRisk = nestedString(input.configJson, ["api", "tosRisk"]) || nestedString(input.configJson, ["adapter", "tosRisk"]);
   const researchMode =
     nestedString(input.configJson, ["api", "researchMode"]) || nestedString(input.configJson, ["adapter", "researchMode"]);
@@ -426,7 +430,7 @@ function addRecommendation(recommendations: Array<Record<string, unknown>>, row:
 
 function endpointFamily(row: RawSourceFamilyEndpointRow): SourceFamilyKey {
   const evidence = row.evidenceJson ?? {};
-  const adapterResearch = (evidence.adapterResearch ?? {}) as Record<string, unknown>;
+  const adapterResearch = (evidence.adapterBacklog ?? evidence.adapterResearch ?? {}) as Record<string, unknown>;
   const accessKind = normalizeLower(adapterResearch.accessKind);
   if (accessKind === "closed_access" || accessKind === "github_unofficial_restricted") {
     return "access_required";
@@ -451,7 +455,7 @@ export async function getSourceFamilyCoverageWithPool(
       sc.channel_id::text as "channelId",
       sc.name,
       sc.provider_type as "providerType",
-      coalesce(sc.config_json #>> '{api,adapterKey}', sc.config_json #>> '{adapter,adapterKey}', sc.config_json #>> '{adapterKey}') as "adapterKey",
+      scab.adapter_key as "adapterKey",
       coalesce(sc.config_json #>> '{api,researchMode}', sc.config_json #>> '{adapter,researchMode}', sc.config_json #>> '{researchMode}') as "researchMode",
       coalesce(sc.config_json #>> '{api,tosRisk}', sc.config_json #>> '{adapter,tosRisk}', sc.config_json #>> '{tosRisk}') as "tosRisk",
       coalesce(sc.config_json #>> '{api,sourceRole}', sc.config_json #>> '{adapter,sourceRole}', sc.config_json #>> '{discovery,sourceRole}', sc.config_json #>> '{sourceRole}') as "sourceRole",
@@ -475,6 +479,7 @@ export async function getSourceFamilyCoverageWithPool(
       sc.config_json as "configJson"
     from source_channels sc
     left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+    left join source_channel_adapter_binding scab on scab.channel_id = sc.channel_id and scab.enabled = true
     left join lateral (
       select cfr.outcome_kind, cfr.http_status, cfr.error_text
       from channel_fetch_runs cfr
@@ -513,17 +518,32 @@ export async function getSourceFamilyCoverageWithPool(
 
   const endpointResult = await pool.query<RawSourceFamilyEndpointRow>(`
     select
-      source_role as "sourceRole",
-      provider_type as "providerType",
-      endpoint_url as "endpointUrl",
-      status,
-      recommended_action as "recommendedAction",
-      evidence_json as "evidenceJson"
-    from discovery_source_endpoints
-    where status in ('detect_only', 'needs_config', 'monitor_only', 'review')
-       or recommended_action in ('needs_config', 'monitor', 'detect_only')
-       or evidence_json ? 'adapterResearch'
-       or evidence_json ? 'indirectAggregator'
+      coalesce(
+        su.payload_json #>> '{sourceRoleDescription}',
+        si.risk_json #>> '{sourceRole}',
+        'unknown'
+      ) as "sourceRole",
+      si.current_provider_type as "providerType",
+      si.canonical_url as "endpointUrl",
+      si.current_state as status,
+      case
+        when ab.adapter_backlog_id is not null then 'needs_config'
+        when si.current_state = 'cheap_watch' then 'monitor'
+        else si.current_state
+      end as "recommendedAction",
+      jsonb_build_object(
+        'adapterBacklog', ab.reason_json,
+        'inventoryRisk', si.risk_json,
+        'currentState', si.current_state
+      ) as "evidenceJson"
+    from source_inventory si
+    left join discovery_artifacts su
+      on su.artifact_id = si.latest_source_understanding_artifact_id
+    left join adapter_backlog ab
+      on ab.source_inventory_id = si.source_inventory_id
+     and ab.status in ('open', 'planned')
+    where si.current_state in ('inventory', 'cheap_watch', 'manual_review', 'adapter_backlog', 'blocked')
+       or ab.adapter_backlog_id is not null
   `);
 
   const rows = new Map<SourceFamilyKey, SourceFamilyCoverageRow>(
@@ -649,8 +669,8 @@ export function buildCoverageFirstAutoplan(input: {
       maxCandidates: Math.max(1, Math.floor(maxNewChannels / Math.max(1, missingFamilies.length))),
       preferredMcpFlow:
         sourceFamily === "indirect_search"
-          ? "discovery.indirect_targets.plan -> discovery.indirect_targets.channels.plan -> channels.bulk_onboard.plan/apply/verify"
-          : "discovery.source_roles.plan -> discovery.adapter_research.plan/start -> channels.bulk_onboard.plan/apply/verify",
+          ? "discovery.candidates.create -> discovery.probe.execute -> discovery.route.preview"
+          : "discovery.mega_loop.preview -> discovery.candidates.create -> discovery.probe.execute -> discovery.route.preview",
       autoDisablesSources: false,
     })),
     pollingPlan: {
@@ -723,9 +743,10 @@ export function buildCoverageFirstIterationRecommendation(input: {
           ]
         : nextAction.action === "expand_source_family"
           ? [
-              "discovery.source_roles.plan",
-              "discovery.adapter_research.plan/start",
-              "discovery.indirect_targets.plan/channels.plan when direct access is closed",
+              "discovery.mega_loop.preview",
+              "discovery.candidates.create",
+              "discovery.probe.execute",
+              "discovery.route.preview",
               "channels.bulk_onboard.plan/apply/verify",
             ]
           : [

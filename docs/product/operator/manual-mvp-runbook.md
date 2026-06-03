@@ -80,25 +80,10 @@ Discovery по умолчанию выключен.
    pnpm test:discovery-enabled:compose
    ```
 
-3. Для operator acceptance:
+3. Для operator/API/MCP acceptance используйте touched-surface proof: `pnpm test:mcp:http:discovery`, targeted admin/API tests, `pnpm unit_tests:ts -- mcp-control-plane`.
+4. Для deterministic vNext full-flow simulation без внешнего search/LLM используйте `pnpm test:discovery:vnext-flow`.
 
-   ```sh
-   pnpm test:discovery:admin:compose
-   ```
-
-4. Для profile-backed examples:
-
-   ```sh
-   pnpm test:discovery:examples:compose
-   ```
-
-5. Для мега-комплексного A/B/C discovery matrix, когда нужно проверить repeated live yield по профильным доменам:
-
-   ```sh
-   pnpm test:discovery:mega:compose
-   ```
-
-После этого можно проверять `/admin/discovery`: profiles, missions, recall, candidates, sources and costs.
+После этого можно проверять `/admin/discovery`: runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, replay and rollback.
 
 ## MCP lane
 
@@ -120,6 +105,14 @@ pnpm test:mcp:http:discovery
 ```
 
 Подробнее: [MCP docs](./mcp/README.md).
+
+## Ingress adapter lane
+
+Admin `/ingress-adapters` управляет catalog/read-detail/create-edit declarative API adapters, channel binding card, legacy fallback readiness and dry-run preview. System/builtin adapters are read-only; custom declarative adapters cannot carry secrets and are limited to bounded JSON/NDJSON recipes with GET or static non-secret JSON POST.
+
+Channel adapter truth is `source_channel_adapter_binding`. New admin/channel saves create or preserve this binding; legacy `config_json.adapterStrategy` and old API `adapterKey` may remain as historical JSON diagnostics, but runtime selection and read-model resolution ignore them. `ingress.adapters.legacy_fallback_report` is now readiness evidence: removal stays safe only when every active supported channel has a valid enabled binding and clean smoke proof shows zero historical `legacy_config` fetch-run resolutions.
+
+Dry-run is preview-only: it must not write `articles`, `web_resources`, `fetch_cursors`, `outbox_events` or `channel_fetch_runs`.
 
 ## Delivery checks
 

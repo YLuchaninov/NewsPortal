@@ -52,14 +52,6 @@ class _FakeCursor:
             ]
         elif "from source_channels" in lowered:
             self.rows = []
-        elif "update discovery_source_endpoints" in lowered and "returning *" in lowered:
-            self.rows = [
-                {
-                    "endpoint_id": params[2],
-                    "source_channel_id": params[0],
-                    "status": "registered",
-                }
-            ]
         else:
             self.rows = []
 
@@ -135,8 +127,61 @@ class FetchersWebsiteProbeAdapterTests(unittest.TestCase):
         self.assertTrue(rows[0]["browser_assisted_recommended"])
         self.assertEqual(rows[0]["challenge_kind"], "captcha")
 
+    def test_probe_websites_can_explicitly_disable_browser_probe(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_urlopen(request, timeout):  # type: ignore[no-untyped-def]
+            del timeout
+            captured["body"] = json.loads(request.data.decode("utf-8"))
+            return _FakeHttpResponse({"probed_websites": []})
+
+        adapter = FetchersWebsiteProbeAdapter()
+        with patch(
+            "services.workers.app.task_engine.adapters.website_probe.urlopen",
+            new=fake_urlopen,
+        ):
+            adapter.probe_websites(
+                urls=["https://news.example.com"],
+                sample_count=3,
+                allow_browser=False,
+            )
+
+        self.assertEqual(
+            captured["body"],
+            {
+                "urls": ["https://news.example.com"],
+                "sampleCount": 3,
+                "allowBrowser": False,
+            },
+        )
+
 
 class SourceRegistrarBrowserConfigTests(unittest.TestCase):
+    def test_normalize_source_candidate_preserves_vnext_probation_discovery_contract(
+        self,
+    ) -> None:
+        adapter = PostgresSourceRegistrarAdapter(database_url="postgresql://stub")
+        normalized = adapter._normalize_source_candidate(  # noqa: SLF001 - targeted unit coverage
+            {
+                "url": "https://example.org/feed.xml",
+                "title": "Example feed",
+                "provider_type": "rss",
+                "discovery": {
+                    "version": "vnext-1",
+                    "trustStage": "probation",
+                    "coverageContribution": 0.25,
+                    "downstreamWeight": 0.3,
+                },
+                "poll_interval_seconds": 1800,
+            },
+            provider_type="rss",
+        )
+
+        assert normalized is not None
+        self.assertEqual(normalized["poll_interval_seconds"], 1800)
+        self.assertEqual(normalized["config_json"]["discovery"]["version"], "vnext-1")
+        self.assertEqual(normalized["config_json"]["discovery"]["trustStage"], "probation")
+
     def test_normalize_source_candidate_enables_browser_fallback_only_when_recommended(
         self,
     ) -> None:
@@ -177,42 +222,38 @@ class SourceRegistrarBrowserConfigTests(unittest.TestCase):
             "captcha",
         )
 
-    def test_normalize_endpoint_candidate_builds_probation_contract_config(
+    def test_normalize_source_candidate_builds_vnext_probation_contract_config(
         self,
     ) -> None:
         adapter = PostgresSourceRegistrarAdapter(database_url="postgresql://stub")
-        normalized = adapter._normalize_endpoint_candidate(  # noqa: SLF001 - targeted unit coverage
+        normalized = adapter._normalize_source_candidate(  # noqa: SLF001 - targeted unit coverage
             {
-                "target_id": "target-1",
-                "endpoint_id": "endpoint-1",
-                "endpoint_url": "https://example.gov/przetargi",
-                "normalized_endpoint_url": "https://example.gov/przetargi",
+                "url": "https://example.gov/przetargi",
                 "homepage_url": "https://example.gov",
                 "provider_type": "website",
                 "source_role": "procurement_signal",
-                "signal_mode": "direct",
                 "endpoint_kind": "procurement",
                 "expected_data_shape": "procurement_notice",
                 "total_score": 0.82,
+                "tags": ["discovery-vnext", "vmware"],
+                "created_by": "operator",
+                "operator_config": {"reviewTicket": "DISC-1"},
             },
-            created_by="operator",
-            tags=["vmware"],
-            operator_config={"reviewTicket": "DISC-1"},
+            provider_type="website",
         )
 
+        assert normalized is not None
         discovery = normalized["config_json"]["discovery"]
         self.assertEqual(normalized["provider_type"], "website")
-        self.assertEqual(normalized["poll_interval_seconds"], 3600)
+        self.assertIsNone(normalized["poll_interval_seconds"])
         self.assertEqual(discovery["trustStage"], "probation")
         self.assertEqual(discovery["coverageContribution"], 0.25)
         self.assertEqual(discovery["downstreamWeight"], 0.3)
-        self.assertEqual(discovery["operatorConfig"], {"reviewTicket": "DISC-1"})
         self.assertEqual(discovery["evidenceContract"]["sourceRole"], "procurement_signal")
-        self.assertTrue(normalized["config_json"]["downloadDiscoveryEnabled"])
-        self.assertIn("przetargi", normalized["config_json"]["curated"]["listingUrlPatterns"])
-        self.assertEqual(normalized["config_json"]["tags"], ["discovery", "procurement_signal", "vmware"])
+        self.assertEqual(normalized["config_json"]["discoveredBy"], "discovery_vnext")
+        self.assertEqual(normalized["config_json"]["tags"], ["discovery-vnext", "vmware"])
 
-    def test_register_endpoint_source_writes_channel_contract_outbox_and_action(
+    def test_register_sources_writes_channel_runtime_state_and_sync_outbox(
         self,
     ) -> None:
         connection = _FakeConnection()
@@ -223,31 +264,29 @@ class SourceRegistrarBrowserConfigTests(unittest.TestCase):
             "connect",
             return_value=connection,
         ):
-            result = adapter.register_endpoint_source(
-                endpoint={
-                    "target_id": "target-1",
-                    "endpoint_id": "endpoint-1",
-                    "endpoint_url": "https://example.com/feed.xml",
-                    "normalized_endpoint_url": "https://example.com/feed.xml",
-                    "homepage_url": "https://example.com",
-                    "provider_type": "rss",
-                    "source_role": "technical_change",
-                    "signal_mode": "direct",
-                    "endpoint_kind": "rss_feed",
-                    "title": "Example feed",
-                },
+            result = adapter.register_sources(
+                sources=[
+                    {
+                        "url": "https://example.com/feed.xml",
+                        "homepage_url": "https://example.com",
+                        "provider_type": "rss",
+                        "source_role": "technical_change",
+                        "endpoint_kind": "rss_feed",
+                        "title": "Example feed",
+                        "tags": ["discovery-vnext", "vmware"],
+                    }
+                ],
                 enabled=True,
+                dry_run=False,
                 created_by="operator",
                 tags=["vmware"],
-                operator_config={},
-                reason="manual review passed",
+                provider_type="rss",
             )
 
         sql_text = "\n".join(sql.lower() for sql, _params in connection.statements)
-        self.assertEqual(result["status"], "registered")
+        self.assertEqual(result[0]["status"], "registered")
         self.assertIn("insert into source_channels", sql_text)
         self.assertIn("insert into source_channel_runtime_state", sql_text)
         self.assertIn("insert into outbox_events", sql_text)
-        self.assertIn("insert into discovery_source_contracts", sql_text)
-        self.assertIn("update discovery_source_endpoints", sql_text)
-        self.assertIn("insert into discovery_actions", sql_text)
+        self.assertNotIn("discovery_source", sql_text)
+        self.assertNotIn("discovery_actions", sql_text)

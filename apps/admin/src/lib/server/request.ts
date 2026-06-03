@@ -1,9 +1,5 @@
-export async function readRequestPayload(request: Request): Promise<Record<string, unknown>> {
-  const contentType = request.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    return (await request.json()) as Record<string, unknown>;
-  }
+import { readRequestPayload as readSharedRequestPayload } from "@newsportal/bff-server";
 
-  const formData = await request.formData();
-  return Object.fromEntries(formData.entries());
+export async function readRequestPayload(request: Request): Promise<Record<string, unknown>> {
+  return readSharedRequestPayload(request);
 }

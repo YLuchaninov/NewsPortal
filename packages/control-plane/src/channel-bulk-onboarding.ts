@@ -7,7 +7,7 @@ import {
   formatAdminChannelProviderLabel,
   isAdminChannelProviderType,
   type AdminChannelProviderType
-} from "../../../apps/admin/src/lib/channel-providers";
+} from "./channel-providers";
 import {
   parseApiAdminChannelInput,
   planApiBulkImport,
@@ -15,7 +15,7 @@ import {
   type ApiBulkImportPlan,
   type NormalizedApiAdminChannelInput,
   type UpsertApiChannelsResult
-} from "../../../apps/admin/src/lib/server/api-channels";
+} from "./api-channels";
 import {
   parseEmailImapAdminChannelInput,
   planEmailImapBulkImport,
@@ -23,7 +23,7 @@ import {
   type EmailImapBulkImportPlan,
   type NormalizedEmailImapAdminChannelInput,
   type UpsertEmailImapChannelsResult
-} from "../../../apps/admin/src/lib/server/email-imap-channels";
+} from "./email-imap-channels";
 import {
   parseRssAdminChannelInput,
   planRssBulkImport,
@@ -31,7 +31,7 @@ import {
   type NormalizedRssAdminChannelInput,
   type RssBulkImportPlan,
   type UpsertRssChannelsResult
-} from "../../../apps/admin/src/lib/server/rss-channels";
+} from "./rss-channels";
 import {
   parseWebsiteAdminChannelInput,
   planWebsiteBulkImport,
@@ -39,7 +39,7 @@ import {
   type NormalizedWebsiteAdminChannelInput,
   type UpsertWebsiteChannelsResult,
   type WebsiteBulkImportPlan
-} from "../../../apps/admin/src/lib/server/website-channels";
+} from "./website-channels";
 import { writeAuditLog } from "./audit";
 
 export type BulkImportChannel =

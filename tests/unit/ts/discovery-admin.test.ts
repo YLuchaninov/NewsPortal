@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { readRuntimeConfig } from "../../../packages/config/src/index.ts";
 import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
-import * as legacyDiscoveryBff from "../../../apps/admin/src/pages/bff/admin/discovery.ts";
+import * as discoveryBff from "../../../apps/admin/src/pages/bff/admin/discovery.ts";
 
-test("listDiscoveryEndpoints preserves v3 filters and pagination params", async () => {
+test("listDiscoveryVNextRecords preserves vNext filters and pagination params", async () => {
   let requestedUrl = "";
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -29,48 +30,98 @@ test("listDiscoveryEndpoints preserves v3 filters and pagination params", async 
     }) as typeof fetch,
   });
 
-  await sdk.listDiscoveryEndpoints<Record<string, unknown>>({
-    targetId: "target-1",
-    status: "manual_review",
+  await sdk.listDiscoveryVNextRecords<Record<string, unknown>>("artifacts", {
+    artifactType: "RoutingDecision",
+    status: "validated",
     page: 2,
     pageSize: 12,
   });
 
   assert.equal(
     requestedUrl,
-    "http://api.example.test/maintenance/discovery/endpoints?status=manual_review&targetId=target-1&page=2&pageSize=12"
+    "http://api.example.test/maintenance/discovery/artifacts?status=validated&artifactType=RoutingDecision&page=2&pageSize=12"
   );
 });
 
-test("listDiscoveryClaims preserves v3 target and status filters", async () => {
+test("createDiscoveryVNextRun posts to the vNext runs endpoint", async () => {
   let requestedUrl = "";
+  let requestedMethod = "";
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
-    fetchImpl: (async (input: RequestInfo | URL) => {
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = String(input);
-      return new Response(JSON.stringify({ items: [] }), {
+      requestedMethod = String(init?.method ?? "GET");
+      return new Response(JSON.stringify({ vnext_run_id: "run-1" }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
     }) as typeof fetch,
   });
 
-  await sdk.listDiscoveryClaims<Record<string, unknown>>({
-    targetId: "target-2",
-    status: "confirmed",
+  await sdk.createDiscoveryVNextRun<Record<string, unknown>>({
+    runKind: "full",
+    triggerKind: "operator",
+    request: {},
+    budget: {},
   });
 
-  assert.equal(
-    requestedUrl,
-    "http://api.example.test/maintenance/discovery/claims?status=confirmed&targetId=target-2"
-  );
+  assert.equal(requestedMethod, "POST");
+  assert.equal(requestedUrl, "http://api.example.test/maintenance/discovery/runs");
 });
 
-test("legacy discovery admin BFF exports only the retired POST handler", () => {
-  assert.equal(typeof legacyDiscoveryBff.POST, "function");
-  assert.equal("buildDiscoveryMissionCreateApiPayload" in legacyDiscoveryBff, false);
-  assert.equal("buildDiscoveryRecallMissionCreateApiPayload" in legacyDiscoveryBff, false);
-  assert.equal("buildDiscoveryCandidateReviewApiPayload" in legacyDiscoveryBff, false);
+test("Discovery vNext admin BFF exports only the POST action handler", () => {
+  assert.equal(typeof discoveryBff.POST, "function");
+  assert.equal("buildDiscoveryMissionCreateApiPayload" in discoveryBff, false);
+  assert.equal("buildDiscoveryRecallMissionCreateApiPayload" in discoveryBff, false);
+  assert.equal("buildDiscoveryCandidateReviewApiPayload" in discoveryBff, false);
+});
+
+test("Discovery vNext admin BFF exposes full workflow intents and guarded rollback", async () => {
+  const source = await readFile(
+    new URL("../../../apps/admin/src/pages/bff/admin/discovery.ts", import.meta.url),
+    "utf8"
+  );
+
+  for (const intent of [
+    "start-run",
+    "llm-gateway",
+    "start-replay",
+    "prepare-rollback",
+    "apply-rollback",
+  ]) {
+    assert.match(source, new RegExp(`intent === ["']${intent}["']`));
+  }
+  assert.match(source, /actionToken:\s*\{\s*scope:\s*"discovery"\s*\}/);
+  assert.match(source, /Confirm destructive rollback before applying it\./);
+  assert.match(source, /parseObjectJson\(payload\.requestJson\)/);
+  assert.match(source, /parseObjectJson\(payload\.budgetJson/);
+});
+
+test("Discovery vNext admin workspace exposes full resources and detail links", async () => {
+  const source = await readFile(
+    new URL("../../../apps/admin/src/pages/discovery.astro", import.meta.url),
+    "utf8"
+  );
+
+  for (const title of [
+    "Runs",
+    "Artifacts",
+    "Candidates",
+    "Source Inventory",
+    "Policies",
+    "Adapter Backlog",
+    "Replay",
+    "Rollback",
+    "Run Steps",
+    "Query Attempts",
+    "LLM Gateway",
+    "Monitoring State",
+    "Source Observations",
+  ]) {
+    assert.match(source, new RegExp(`title:\\s*["']${title}["']`));
+  }
+  assert.match(source, /href=\{`\/discovery\/\$\{panel\.resource\}\/\$\{recordId\(panel, row\)\}`\}/);
+  assert.doesNotMatch(source, /Discovery v3|source priors|coverage graph|endpoint promotion/i);
 });
 
 test("readRuntimeConfig keeps discovery runtime defaults and quota support", () => {

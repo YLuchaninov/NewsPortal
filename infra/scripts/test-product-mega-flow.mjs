@@ -16,7 +16,6 @@ import {
   repoRoot,
   waitFor,
 } from "./lib/mcp-http-testkit.mjs";
-import { runLiveDiscoveryExamplesReport } from "./test-live-discovery-examples.mjs";
 
 const log = createLogger("product-mega-flow");
 const CRITERION_COMPILE_REQUESTED_EVENT = "criterion.compile.requested";
@@ -39,14 +38,20 @@ const DISCOVERY_REQUIRED_ENV = [
   "DISCOVERY_MONTHLY_BUDGET_CENTS",
 ];
 
-const YIELD_PROOF_COMMAND = {
-  key: "discovery-yield-compose",
-  lane: "live-provider",
-  executable: "pnpm",
-  args: ["test:discovery:yield:compose"],
-  proves: ["a-b-c-three-repeat-live-yield"],
-};
 let runtimeDependenciesPromise;
+
+async function runLiveDiscoveryExamplesReport() {
+  return {
+    report: {
+      finalVerdict: "not_applicable_after_discovery_vnext_cutover",
+      runtimeVerdict: "not_applicable_after_discovery_vnext_cutover",
+      yieldVerdict: "not_applicable_after_discovery_vnext_cutover",
+      caseRuns: [],
+    },
+    jsonPath: null,
+    mdPath: null,
+  };
+}
 
 function parseArgs(argv) {
   const parsed = {
@@ -791,7 +796,6 @@ async function main() {
   const commandResults = [];
   let discoveryResult = null;
   let liveSelectionReplay = null;
-  let yieldProofReport = null;
   let capturedError = null;
 
   log(`Run ${runId} started.`);
@@ -808,15 +812,13 @@ async function main() {
       );
       liveSelectionReplay = await runLiveSelectionReplayProof(discoveryResult?.report ?? null);
 
-      const commands = args.includeYieldProof
-        ? [...PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS, YIELD_PROOF_COMMAND]
-        : PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS;
+      if (args.includeYieldProof) {
+        log("Ignoring --with-yield-proof after Discovery vNext cutover; yield-specific live provider proof was retired.");
+      }
+      const commands = PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS;
       for (const item of commands) {
         const result = await runMegaCommand(item);
         commandResults.push(result);
-        if (item.key === "discovery-yield-compose") {
-          yieldProofReport = findParsedArtifact(commandResults, "discovery-yield-compose");
-        }
         if (args.failFast && result.status !== "passed") {
           log(`Stopping after ${item.key} because --fail-fast is enabled.`);
           break;
@@ -839,7 +841,7 @@ async function main() {
     discoveryReport: discoveryResult?.report ?? null,
     commandResults,
     mcpArtifact,
-    yieldProofReport: args.includeYieldProof ? yieldProofReport : null,
+    yieldProofReport: null,
     liveSelectionProof: liveSelectionReplay?.byScenario ?? null,
   });
   const failures = [
@@ -852,8 +854,6 @@ async function main() {
       .map((item) => `${item.example} ${item.productDomain} did not satisfy mega-flow acceptance.`),
   ];
   const strippedCommands = stripParsedArtifacts(commandResults);
-  const yieldCommandArtifact =
-    strippedCommands.find((item) => item.key === "discovery-yield-compose")?.artifacts?.[0] ?? null;
   const report = await writeArtifacts({
     kind: "newsportal-product-mega-flow-proof",
     runId,
@@ -875,7 +875,7 @@ async function main() {
           finalVerdict: discoveryResult.report?.finalVerdict ?? null,
         }
       : null,
-    yieldProofArtifact: yieldCommandArtifact,
+    yieldProofArtifact: null,
     failures,
     error: capturedError,
     artifacts: null,

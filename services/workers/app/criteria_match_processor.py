@@ -7,6 +7,11 @@ from typing import Any
 
 from psycopg.types.json import Json
 
+from .criteria_review_policy import (
+    build_runtime_review_state,
+    is_candidate_recovery_protected,
+    should_queue_criterion_llm_review,
+)
 from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
 from .runtime_values import coerce_bool
 from .worker_queues import (
@@ -259,9 +264,8 @@ async def process_match_criteria_with_dependencies(
                         if strict_candidate_signal_guard is not None:
                             decision = str(strict_candidate_signal_guard["finalDecision"])
                             explain_json["strictCandidateSignalGuard"] = strict_candidate_signal_guard
-                    candidate_recovery_protected = bool(
+                    candidate_recovery_protected = is_candidate_recovery_protected(
                         candidate_signal_explain
-                        and candidate_signal_explain.get("upliftedToGrayZone")
                     )
                     if decision == "gray_zone":
                         if llm_review_allowed:
@@ -293,26 +297,22 @@ async def process_match_criteria_with_dependencies(
                                 "finalDecision": decision,
                                 "llmReviewQueued": False,
                             }
-                    llm_review_queued = (
-                        decision == "gray_zone"
-                        and runtime_resolution is None
-                        and llm_review_allowed
-                        and not historical_backfill
+                    llm_review_queued = should_queue_criterion_llm_review(
+                        decision=decision,
+                        runtime_resolution=runtime_resolution,
+                        llm_review_allowed=llm_review_allowed,
+                        historical_backfill=historical_backfill,
                     )
                     if decision == "gray_zone":
-                        runtime_review_reason = "queued" if llm_review_queued else None
-                        if runtime_review_reason is None and historical_backfill and llm_review_allowed:
-                            runtime_review_reason = "historical_backfill_skip"
-                        if runtime_review_reason is None:
-                            runtime_review_reason = str(
-                                coerce_json_object(explain_json.get("grayZonePolicy")).get("reason")
-                                or ""
-                            ).strip() or "not_queued"
-                        explain_json["runtimeReviewState"] = {
-                            "reviewQueued": llm_review_queued,
-                            "reason": runtime_review_reason,
-                            "candidateRecoveryProtected": candidate_recovery_protected,
-                        }
+                        explain_json["runtimeReviewState"] = build_runtime_review_state(
+                            llm_review_queued=llm_review_queued,
+                            historical_backfill=historical_backfill,
+                            llm_review_allowed=llm_review_allowed,
+                            candidate_recovery_protected=candidate_recovery_protected,
+                            gray_zone_policy=coerce_json_object(
+                                explain_json.get("grayZonePolicy")
+                            ),
+                        )
                     await cursor.execute(
                         """
                         insert into criterion_match_results (

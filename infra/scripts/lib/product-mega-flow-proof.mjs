@@ -46,9 +46,6 @@ export const PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS = [
     proves: ["saved-digest", "notification-feedback", "admin-automation-buttons"],
     maxAttempts: 2,
   }),
-  command("discovery-admin-compose", "operator-fixtures", ["test:discovery:admin:compose"], {
-    proves: ["admin-discovery-diagnostics"],
-  }),
   command("mcp-compose", "operator-fixtures", ["test:mcp:compose"], {
     proves: [
       "mcp-canonical-reads",
@@ -130,10 +127,9 @@ function countDownstreamRows(caseRun) {
 
 function countPositiveDiscoveryEndpoints(caseRun) {
   const allEndpoints = [
-    ...asArray(caseRun?.graphLane?.endpoints),
-    ...asArray(caseRun?.recallLane?.endpoints),
-    ...asArray(caseRun?.graphLane?.candidates),
-    ...asArray(caseRun?.recallLane?.candidates),
+    ...asArray(caseRun?.vnextLane?.sourceInventory),
+    ...asArray(caseRun?.vnextLane?.candidates),
+    ...asArray(caseRun?.artifactLane?.candidates),
   ];
   return allEndpoints.filter((endpoint) => {
     const decision = normalizeText(endpoint?.decision ?? endpoint?.recommendedAction).toLowerCase();

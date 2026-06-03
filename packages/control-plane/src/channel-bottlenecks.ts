@@ -208,6 +208,11 @@ function normalizeStringOrNull(value: unknown): string | null {
   return normalized || null;
 }
 
+function normalizeAdapterKeyOrNull(value: unknown): string | null {
+  const normalized = normalizeString(value).replace(/^(api|rss|website|email_imap)\./u, "");
+  return normalized || null;
+}
+
 function toNumber(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -382,7 +387,7 @@ function repairLaneFor(bucket: ChannelBottleneckFailureBucket): ChannelBottlenec
 }
 
 function isLegacyDdgsInternalBridge(row: Pick<RawChannelBottleneckRow, "adapterKey" | "fetchUrl">): boolean {
-  if (normalizeStringOrNull(row.adapterKey) !== "ddgs_search") {
+  if (normalizeAdapterKeyOrNull(row.adapterKey) !== "ddgs_search") {
     return false;
   }
   const rawUrl = normalizeStringOrNull(row.fetchUrl);
@@ -469,7 +474,7 @@ function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
     repairLane,
     legacyDdgsInternalBridge,
     legacyBridgeWarning: legacyDdgsInternalBridge
-      ? "Legacy DDGS channel identity still points at the removed internal API bridge. Fetchers now execute ddgs_search directly from adapter.searchQuery, so polling can continue without private-host allowlisting; re-materialize through discovery.indirect_targets.channels.plan later to replace the display URL."
+      ? "DDGS channel identity still points at the removed internal API bridge. Fetchers now execute ddgs_search directly from adapter.searchQuery, so polling can continue without private-host allowlisting; re-materialize through channels.bulk_onboard.plan later to replace the display URL."
       : null,
   };
 }
@@ -487,7 +492,7 @@ async function readRawBottleneckRows(
         sc.channel_id::text as "channelId",
         sc.name,
         sc.provider_type as "providerType",
-        coalesce(sc.config_json #>> '{api,adapterKey}', sc.config_json #>> '{adapter,adapterKey}', sc.config_json #>> '{adapterKey}') as "adapterKey",
+        scab.adapter_key as "adapterKey",
         coalesce(sc.config_json #>> '{api,researchMode}', sc.config_json #>> '{adapter,researchMode}', sc.config_json #>> '{researchMode}') as "researchMode",
         coalesce(sc.config_json #>> '{api,tosRisk}', sc.config_json #>> '{adapter,tosRisk}', sc.config_json #>> '{tosRisk}') as "tosRisk",
         coalesce(sc.config_json #>> '{api,sourceRole}', sc.config_json #>> '{adapter,sourceRole}', sc.config_json #>> '{discovery,sourceRole}', sc.config_json #>> '{sourceRole}') as "sourceRole",
@@ -538,6 +543,7 @@ async function readRawBottleneckRows(
         coalesce(web_stats.projected_rejected_rows, 0)::int as "projectedRejectedRows"
       from source_channels sc
       left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+      left join source_channel_adapter_binding scab on scab.channel_id = sc.channel_id and scab.enabled = true
       left join lateral (
         select cfr.outcome_kind,
                cfr.http_status,
@@ -743,8 +749,8 @@ export async function explainChannelBottleneckWithPool(
       ...(row.legacyDdgsInternalBridge
         ? [
             {
-              tool: "discovery.indirect_targets.channels.plan",
-              arguments: { searchProvider: "ddgs_search", maxChannels: 20 },
+              tool: "channels.bulk_onboard.plan",
+              arguments: { providerType: "api", maxChannels: 20 },
               reason: "Re-materialize legacy DDGS bridge channels with safe duckduckgo.com identity URLs; do not delete retained evidence.",
             },
           ]

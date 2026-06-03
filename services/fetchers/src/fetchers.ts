@@ -1,5 +1,7 @@
 import {
   createHealthResponse,
+  defaultMaxEntryAgeHoursForFeedIngressAdapter,
+  ingressAdapterKeyToLegacyRssStrategy,
   type HealthResponse
 } from "@newsportal/contracts";
 import type { Pool } from "pg";
@@ -22,6 +24,12 @@ import {
   type PersistResourceInput,
   type SourceChannelRow
 } from "./fetcher-persistence";
+import {
+  applyResolvedIngressAdapterToChannel,
+  buildIngressAdapterProviderMetrics,
+  resolveIngressAdapterForChannel,
+  type ResolvedIngressAdapter,
+} from "./ingress-adapters/resolver";
 import { runWithConcurrency } from "./scheduler";
 import { CrawlPolicyCacheService } from "./web-ingestion";
 
@@ -79,7 +87,7 @@ class FetcherService {
   private readonly persistence: FetcherPersistenceRepository;
 
   constructor(
-    pool: Pool,
+    private readonly pool: Pool,
     private readonly config: FetchersConfig
   ) {
     this.crawlPolicyCache = new CrawlPolicyCacheService(pool);
@@ -206,18 +214,20 @@ class FetcherService {
   }
 
   private async pollLoadedChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
-    switch (channel.providerType) {
+    const resolved = await resolveIngressAdapterForChannel(this.pool, channel);
+    const resolvedChannel = applyResolvedIngressAdapterToChannel(channel, resolved);
+    switch (resolvedChannel.providerType) {
       case "rss":
-        await this.pollRssChannel(channel, startedAt);
+        await this.pollRssChannel(resolvedChannel, startedAt, resolved);
         return;
       case "website":
-        await this.pollWebsiteChannel(channel, startedAt);
+        await this.pollWebsiteChannel(resolvedChannel, startedAt, resolved);
         return;
       case "api":
-        await this.pollApiChannel(channel, startedAt);
+        await this.pollApiChannel(resolvedChannel, startedAt, resolved);
         return;
       case "email_imap":
-        await this.pollEmailImapChannel(channel, startedAt);
+        await this.pollEmailImapChannel(resolvedChannel, startedAt, resolved);
         return;
       case "youtube":
         throw new ChannelFetchError("YouTube is future-ready only in the local MVP.", {
@@ -228,49 +238,101 @@ class FetcherService {
           newArticleCount: 0,
           duplicateSuppressedCount: 0,
           cursorChanged: false,
-          errorMessage: "YouTube is future-ready only in the local MVP."
+          errorMessage: "YouTube is future-ready only in the local MVP.",
+          adapterKey: resolved?.adapterKey ?? null,
+          adapterRuntimeKind: resolved?.runtimeKind ?? null,
+          adapterSelectionMode: resolved?.selectionMode ?? null,
         });
       default:
-        throw new Error(`Unsupported provider type: ${channel.providerType}`);
+        throw new Error(`Unsupported provider type: ${resolvedChannel.providerType}`);
     }
   }
 
-  private async pollRssChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
+  private enrichPollCompletion(
+    completion: ChannelPollCompletion,
+    resolved: ResolvedIngressAdapter | null
+  ): ChannelPollCompletion {
+    if (!resolved) {
+      return completion;
+    }
+    return {
+      ...completion,
+      adapterKey: resolved.adapterKey,
+      adapterRuntimeKind: resolved.runtimeKind,
+      adapterSelectionMode: resolved.selectionMode,
+      providerMetricsJson: {
+        ...(completion.providerMetricsJson ?? {}),
+        ...buildIngressAdapterProviderMetrics(resolved),
+      },
+    };
+  }
+
+  private async pollRssChannel(
+    channel: SourceChannelRow,
+    startedAt: string,
+    resolved: ResolvedIngressAdapter | null
+  ): Promise<void> {
+    const adapterStrategy =
+      resolved?.providerType === "rss"
+        ? ingressAdapterKeyToLegacyRssStrategy(resolved.adapterKey) ?? "generic"
+        : "generic";
     await pollRssProviderChannel(channel, startedAt, {
       config: this.config,
       loadCursorMap: this.loadCursorMap.bind(this),
       persistInputsWithPreflight: this.persistInputsWithPreflight.bind(this),
-      markChannelSuccess: this.markChannelSuccess.bind(this),
+      markChannelSuccess: (successChannel, completion) =>
+        this.markChannelSuccess(successChannel, this.enrichPollCompletion(completion, resolved)),
       addDuplicateArticleCount: (count) => {
         this.state.duplicateArticleCount += count;
-      }
+      },
+      adapterStrategy,
+      adapterMaxEntryAgeHours:
+        typeof resolved?.bindingConfigJson.maxEntryAgeHours === "number"
+          ? resolved.bindingConfigJson.maxEntryAgeHours
+          : defaultMaxEntryAgeHoursForFeedIngressAdapter(adapterStrategy)
     });
   }
 
-  private async pollWebsiteChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
+  private async pollWebsiteChannel(
+    channel: SourceChannelRow,
+    startedAt: string,
+    resolved: ResolvedIngressAdapter | null
+  ): Promise<void> {
     await pollWebsiteProviderChannel(channel, startedAt, {
       config: this.config,
       crawlPolicyCache: this.crawlPolicyCache,
       loadCursorMap: this.loadCursorMap.bind(this),
       persistWebsiteResourcesWithPreflight: this.persistWebsiteResourcesWithPreflight.bind(this),
-      markChannelSuccess: this.markChannelSuccess.bind(this)
+      markChannelSuccess: (successChannel, completion) =>
+        this.markChannelSuccess(successChannel, this.enrichPollCompletion(completion, resolved))
     });
   }
 
-  private async pollApiChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
+  private async pollApiChannel(
+    channel: SourceChannelRow,
+    startedAt: string,
+    resolved: ResolvedIngressAdapter | null
+  ): Promise<void> {
     await pollApiProviderChannel(channel, startedAt, {
       config: this.config,
+      resolvedAdapter: resolved,
       loadCursorMap: this.loadCursorMap.bind(this),
       persistInputsWithPreflight: this.persistInputsWithPreflight.bind(this),
-      markChannelSuccess: this.markChannelSuccess.bind(this)
+      markChannelSuccess: (successChannel, completion) =>
+        this.markChannelSuccess(successChannel, this.enrichPollCompletion(completion, resolved))
     });
   }
 
-  private async pollEmailImapChannel(channel: SourceChannelRow, startedAt: string): Promise<void> {
+  private async pollEmailImapChannel(
+    channel: SourceChannelRow,
+    startedAt: string,
+    resolved: ResolvedIngressAdapter | null
+  ): Promise<void> {
     await pollEmailImapProviderChannel(channel, startedAt, {
       loadCursorMap: this.loadCursorMap.bind(this),
       persistInputsWithPreflight: this.persistInputsWithPreflight.bind(this),
-      markChannelSuccess: this.markChannelSuccess.bind(this)
+      markChannelSuccess: (successChannel, completion) =>
+        this.markChannelSuccess(successChannel, this.enrichPollCompletion(completion, resolved))
     });
   }
 

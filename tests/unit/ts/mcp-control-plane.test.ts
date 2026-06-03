@@ -61,6 +61,12 @@ const WRITE_DISCOVERY_TOKEN = {
   recentRequestCount: 0,
 } as const;
 
+const DESTRUCTIVE_DISCOVERY_TOKEN = {
+  ...WRITE_DISCOVERY_TOKEN,
+  tokenId: "token-destructive-discovery",
+  scopes: ["read", "write.discovery", "write.destructive"],
+} as const;
+
 const WRITE_CHANNELS_TOKEN = {
   tokenId: "token-write-channels",
   label: "channel-writer",
@@ -553,28 +559,27 @@ function createFakeFunnelAuditPool() {
           ],
         };
       }
-      if (/from discovery_coverage_snapshots/i.test(sql)) {
+      if (/from source_inventory/i.test(sql)) {
         return {
           rows: [
             {
-              targetId: "target-1",
-              sourceCount: 25,
-              strongSourceCount: 8,
-              missingRoleCount: 2,
-              coverageScore: 0.62,
-              createdAt: "2026-05-11T10:03:00.000Z",
+              sourceInventoryId: "inventory-1",
+              canonicalDomain: "example.com",
+              currentState: "cheap_watch",
+              providerType: "website",
+              riskJson: { risk: "low" },
+              updatedAt: "2026-05-11T10:03:00.000Z",
             },
           ],
         };
       }
-      if (/from discovery_source_endpoints/i.test(sql)) {
+      if (/from adapter_backlog/i.test(sql)) {
         return {
           rows: [
             {
-              providerType: "github",
-              endpointKind: "api",
-              recommendedAction: "needs_config",
-              status: "candidate",
+              adapterNeed: "custom_adapter",
+              priority: "normal",
+              status: "open",
               count: 5,
             },
           ],
@@ -626,7 +631,7 @@ function createFakeSourceFamilyPool() {
           ],
         };
       }
-      if (/from discovery_source_endpoints/i.test(sql)) {
+      if (/from source_inventory/i.test(sql)) {
         return {
           rows: [
             {
@@ -780,6 +785,126 @@ function createFakeSelectionPrecisionPool() {
   };
 }
 
+function createFakeSelectionDashboardPool() {
+  const state = {
+    queries: [] as Array<{ sql: string; params: unknown[] }>,
+  };
+  const counts = [185, 1, 0];
+  return {
+    state,
+    async query(sql: string, params: unknown[] = []) {
+      state.queries.push({ sql, params });
+      if (/group by coalesce\(final_decision/i.test(sql)) {
+        return {
+          rows: [
+            {
+              decision: "rejected",
+              count: 185,
+              selectedCount: 0,
+              holdCount: 0,
+              llmReviewPendingCount: 0,
+            },
+          ],
+        };
+      }
+      if (/select count\(\*\)::int as total/i.test(sql)) {
+        return { rows: [{ total: counts.shift() ?? 0 }] };
+      }
+      throw new Error(`Unexpected SQL in fake selection-dashboard pool: ${sql}`);
+    },
+  };
+}
+
+function createFakeSelectionReindexPlanPool() {
+  const state = {
+    queries: [] as Array<{ sql: string; params: unknown[] }>,
+  };
+  const holdByTier: Record<string, Record<string, unknown>> = {
+    project_intent: {
+      docId: "cccccccc-1111-4111-8111-111111111111",
+      title: "Need ERP migration implementation partner",
+      url: "https://example.test/marketplace/project",
+      finalDecision: "gray_zone",
+      isSelected: false,
+      candidateSignalTier: "project_intent",
+      downstreamLossBucket: "project_intent_hold",
+      holdEvidence: [{ semanticDecision: "gray_zone" }],
+    },
+    buyer_intent: {
+      docId: "dddddddd-1111-4111-8111-111111111111",
+      title: "Looking for a mobile app vendor",
+      url: "https://example.test/forum/buyer",
+      finalDecision: "gray_zone",
+      isSelected: false,
+      candidateSignalTier: "buyer_intent",
+      downstreamLossBucket: "buyer_intent_hold",
+      holdEvidence: [{ semanticDecision: "gray_zone" }],
+    },
+    context: {
+      docId: "eeeeeeee-1111-4111-8111-111111111111",
+      title: "Funding portfolio archive",
+      url: "https://example.test/funding/archive",
+      finalDecision: "gray_zone",
+      isSelected: false,
+      candidateSignalTier: "context",
+      downstreamLossBucket: "context_candidate_not_selected",
+      holdEvidence: [{ semanticDecision: "gray_zone" }],
+    },
+  };
+  return {
+    state,
+    async query(sql: string, params: unknown[] = []) {
+      state.queries.push({ sql, params });
+      if (/from final_selection_results fsr\s+join articles a/i.test(sql) && /selectionEvidence/i.test(sql)) {
+        return {
+          rows: [
+            {
+              docId: "aaaaaaaa-1111-4111-8111-111111111111",
+              title: "RFP for CRM implementation partner",
+              lead: "Buyer seeks proposals with budget and scope for a migration project.",
+              url: "https://example.test/rfp/crm",
+              totalFilterCount: 3,
+              matchedFilterCount: 1,
+              finalDecision: "selected",
+              isSelected: true,
+              selectionReason: "semantic_match",
+              candidateSignalTier: "project_intent",
+              finalSelectionExplain: { semanticSignalSummary: { filterReasonCounts: {} } },
+              selectionEvidence: [{ semanticDecision: "match" }],
+            },
+            {
+              docId: "bbbbbbbb-1111-4111-8111-111111111111",
+              title: "How to hire a software development agency",
+              lead: "A generic guide and ranking page.",
+              url: "https://example.test/top-agencies",
+              totalFilterCount: 2,
+              matchedFilterCount: 1,
+              finalDecision: "selected",
+              isSelected: true,
+              selectionReason: "semantic_match",
+              candidateSignalTier: "",
+              finalSelectionExplain: { semanticSignalSummary: { filterReasonCounts: {} } },
+              selectionEvidence: [{ semanticDecision: "match" }],
+            },
+          ],
+        };
+      }
+      if (/stalePassThroughCount/i.test(sql)) {
+        return { rows: [{ stalePassThroughCount: 0, missingInterestFilterResults: 0 }] };
+      }
+      if (/jsonb_agg/i.test(sql)) {
+        const tier = params.find((value) => typeof value === "string" && value in holdByTier) as string | undefined;
+        return { rows: tier ? [holdByTier[tier]] : [] };
+      }
+      if (/select count\(\*\)::int as count/i.test(sql)) {
+        const tier = params.find((value) => typeof value === "string" && value in holdByTier) as string | undefined;
+        return { rows: [{ count: tier ? 1 : 0 }] };
+      }
+      throw new Error(`Unexpected SQL in fake selection-reindex-plan pool: ${sql}`);
+    },
+  };
+}
+
 function createFakeDiscoveryPrefixPool() {
   const state = {
     queries: [] as Array<{ sql: string; params: unknown[] }>,
@@ -820,87 +945,6 @@ function createFakeDiscoveryPrefixPool() {
         };
       }
       throw new Error(`Unexpected SQL in fake read-id prefix pool: ${sql}`);
-    },
-  };
-}
-
-function createFakeDiscoveryReportPool() {
-  const state = {};
-  return {
-    state,
-    async query(sql: string) {
-      if (/from discovery_targets/i.test(sql)) {
-        return {
-          rows: [
-            {
-              targetId: "target-1",
-              title: "Manual resilient target",
-              status: "active",
-              originKind: "manual_prompt",
-              priority: 1,
-              lastRunId: "run-1",
-              lastCoverageSnapshotId: "coverage-1",
-              updatedAt: "2026-05-06T11:00:00.000Z",
-            },
-          ],
-        };
-      }
-      if (/from discovery_runs/i.test(sql)) {
-        return {
-          rows: [
-            {
-              runId: "run-1",
-              targetId: "target-1",
-              runKind: "manual",
-              triggerKind: "mcp",
-              status: "running",
-              createdAt: "2026-05-06T11:05:00.000Z",
-            },
-          ],
-        };
-      }
-      if (/from discovery_coverage_snapshots/i.test(sql)) {
-        return {
-          rows: [
-            {
-              coverageSnapshotId: "coverage-1",
-              targetId: "target-1",
-              coverageScore: 0.42,
-              sourceCount: 3,
-              strongSourceCount: 1,
-              missingRoleCount: 4,
-              createdAt: "2026-05-06T11:08:00.000Z",
-            },
-          ],
-        };
-      }
-      if (/from discovery_hypotheses/i.test(sql)) {
-        return { rows: [{ status: "queued", count: 4 }] };
-      }
-      if (/from discovery_source_endpoints/i.test(sql)) {
-        return {
-          rows: [
-            {
-              status: "manual_review",
-              providerType: "rss",
-              count: 2,
-            },
-          ],
-        };
-      }
-      if (/from discovery_source_contracts/i.test(sql)) {
-        return { rows: [{ status: "probation", count: 1 }] };
-      }
-      if (/from discovery_claims/i.test(sql)) {
-        return { rows: [{ status: "candidate", count: 1 }] };
-      }
-      if (/from discovery_negative_evidence/i.test(sql)) {
-        return { rows: [] };
-      }
-      if (/from discovery_provider_health/i.test(sql)) {
-        return { rows: [] };
-      }
-      throw new Error(`Unexpected SQL in fake discovery report pool: ${sql}`);
     },
   };
 }
@@ -1129,28 +1173,28 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(toolNames.includes("content_items.list"));
   assert.ok(toolNames.includes("content_items.read"));
   assert.ok(toolNames.includes("content_items.explain"));
+  assert.ok(toolNames.includes("outbox.events.list"));
+  assert.ok(toolNames.includes("channels.sync.request"));
   assert.ok(toolNames.includes("articles.residuals.list"));
   assert.ok(toolNames.includes("articles.residuals.summary"));
   assert.ok(toolNames.includes("articles.holds.summary"));
   assert.ok(toolNames.includes("articles.holds.list"));
   assert.ok(toolNames.includes("articles.holds.explain"));
   assert.ok(toolNames.includes("sequences.create"));
-  assert.ok(toolNames.includes("discovery.provider_health.list"));
-  assert.ok(toolNames.includes("discovery.runs.dispatch_queued"));
-  assert.ok(toolNames.includes("discovery.source_priors.evaluate"));
-  assert.ok(toolNames.includes("discovery.source_priors.apply"));
-  assert.ok(toolNames.includes("discovery.source_priors.list"));
-  assert.ok(toolNames.includes("discovery.source_roles.plan"));
-  assert.ok(toolNames.includes("discovery.source_roles.coverage"));
-  assert.ok(toolNames.includes("discovery.source_families.coverage"));
-  assert.ok(toolNames.includes("discovery.adapter_research.plan"));
-  assert.ok(toolNames.includes("discovery.adapter_research.start"));
-  assert.ok(toolNames.includes("discovery.adapter_research.list"));
-  assert.ok(toolNames.includes("discovery.adapter_research.explain"));
-  assert.ok(toolNames.includes("discovery.indirect_targets.plan"));
-  assert.ok(toolNames.includes("discovery.indirect_targets.channels.plan"));
-  assert.ok(toolNames.includes("discovery.indirect_targets.start"));
-  assert.ok(toolNames.includes("discovery.endpoints.promote"));
+  assert.ok(toolNames.includes("discovery.runs.create"));
+  assert.ok(toolNames.includes("discovery_vnext.start_run"));
+  assert.ok(toolNames.includes("discovery_vnext.preview_brief"));
+  assert.ok(toolNames.includes("discovery_vnext.apply_routing"));
+  assert.ok(toolNames.includes("discovery.artifacts.list"));
+  assert.ok(toolNames.includes("discovery.candidates.list"));
+  assert.ok(toolNames.includes("discovery.source_inventory.list"));
+  assert.ok(toolNames.includes("discovery.policies.activate"));
+  assert.ok(toolNames.includes("discovery.replay.start"));
+  assert.ok(toolNames.includes("discovery.rollback.prepare"));
+  assert.ok(toolNames.includes("discovery.rollback.apply"));
+  assert.equal(toolNames.some((name) => name.includes(["source", "priors"].join("_"))), false);
+  assert.equal(toolNames.some((name) => name.includes("endpoints.promote")), false);
+  assert.equal(toolNames.some((name) => name.includes("targets.")), false);
   assert.ok(toolNames.includes("channels.alternatives.plan"));
   assert.ok(toolNames.includes("channels.alternatives.start"));
   assert.ok(toolNames.includes("channels.bottlenecks.summary"));
@@ -1160,6 +1204,9 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(toolNames.includes("operator.funnel.audit"));
   assert.ok(toolNames.includes("operator.funnel.autoplan"));
   assert.ok(toolNames.includes("operator.funnel.iteration.recommend"));
+  assert.ok(toolNames.includes("operator.selection.dashboard"));
+  assert.ok(toolNames.includes("operator.selection.reindex_plan"));
+  assert.ok(toolNames.includes("discovery.source_families.coverage"));
 
   const resourceUris = listMcpResources().map((entry) => entry.uri);
   assert.ok(resourceUris.includes("newsportal://guide/server-overview"));
@@ -1173,6 +1220,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/observability"));
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/cleanup"));
   assert.ok(resourceUris.includes("newsportal://guide/scenarios/funnel-calibration"));
+  assert.ok(resourceUris.includes("newsportal://guide/scenarios/discovery-live-gap-hunting"));
   assert.ok(resourceUris.includes("newsportal://articles/residuals-summary"));
   const resource = resolveMcpResource("newsportal://admin/summary");
   assert.equal(resource.name, "admin.summary");
@@ -1191,11 +1239,12 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(promptNames.includes("channels.session.plan"));
   assert.ok(promptNames.includes("observability.session.plan"));
   assert.ok(promptNames.includes("operator.funnel.calibrate"));
+  assert.ok(promptNames.includes("discovery.live_gap_hunting.plan"));
   assert.ok(promptNames.includes("system_interest.polish"));
   assert.ok(promptNames.includes("llm_template.tune"));
-  assert.ok(promptNames.includes("discovery.coverage.tune"));
-  assert.ok(promptNames.includes("discovery.target.review"));
-  assert.ok(promptNames.includes("discovery.contract.review"));
+  assert.ok(promptNames.includes("discovery.policy.tune"));
+  assert.ok(promptNames.includes("discovery.artifact.review"));
+  assert.ok(promptNames.includes("discovery.source_understanding.review"));
   const prompt = resolveMcpPrompt("sequence.draft");
   assert.equal(prompt.name, "sequence.draft");
   const orientationPrompt = resolveMcpPrompt("operator.session.start");
@@ -1224,6 +1273,15 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.match(funnelRendered.messages[0]?.content.text ?? "", /operator\.funnel\.audit/i);
   const funnelGuide = resolveMcpResource("newsportal://guide/scenarios/funnel-calibration");
   assert.equal(funnelGuide.name, "guide.scenarios.funnel-calibration");
+  const liveGapGuide = resolveMcpResource("newsportal://guide/scenarios/discovery-live-gap-hunting");
+  assert.equal(liveGapGuide.name, "guide.scenarios.discovery-live-gap-hunting");
+  const liveGapPrompt = resolveMcpPrompt("discovery.live_gap_hunting.plan");
+  const liveGapRendered = liveGapPrompt.render({
+    objective: "prove real discovery gaps",
+    scenarioPacks: "public_procurement, security_advisories",
+    budget: "deep bounded live run",
+  });
+  assert.match(liveGapRendered.messages[0]?.content.text ?? "", /missing_mcp_surface/i);
   const observabilitySessionPrompt = resolveMcpPrompt("observability.session.plan");
   const observabilityRendered = observabilitySessionPrompt.render({
     question: "why did yesterday's recall yield weaken",
@@ -1399,7 +1457,7 @@ test("MCP funnel calibration report verify returns DB-backed drift counts", asyn
   assert.match(serialized, /operator\.funnel\.audit/);
 });
 
-test("MCP coverage-first funnel tools retain noisy source inventory", async () => {
+test("MCP coverage-first funnel guidance retains noisy source inventory", async () => {
   const dummySdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
@@ -1407,20 +1465,6 @@ test("MCP coverage-first funnel tools retain noisy source inventory", async () =
     }) as typeof fetch,
   });
   const pool = createFakeSourceFamilyPool();
-
-  const coverage = (await executeMcpTool(
-    {
-      sdk: dummySdk,
-      pool,
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.source_families.coverage",
-    { includeExamples: true }
-  )) as Record<string, unknown>;
-
-  assert.equal(coverage.retainedWorkingNoisyChannels, 1);
-  assert.match(JSON.stringify(coverage), /working_noisy_semantic_match/);
-  assert.match(JSON.stringify(coverage), /semanticNoisyAutoDisableAllowed/);
 
   const plan = (await executeMcpTool(
     {
@@ -1572,6 +1616,80 @@ test("MCP selection precision audit buckets selected rows without a public gate 
   assert.match(JSON.stringify(report), /Do not add a separate public selected gate/);
 });
 
+test("MCP selection dashboard explains raw article totals versus selected signals", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/content-items")) {
+        return new Response(
+          JSON.stringify({
+            items: [],
+            page: 1,
+            pageSize: 1,
+            total: 0,
+            totalPages: 0,
+            hasPrev: false,
+            hasNext: false,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected SDK call: ${url}`);
+    }) as typeof fetch,
+  });
+  const pool = createFakeSelectionDashboardPool();
+
+  const dashboard = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.selection.dashboard",
+    {}
+  )) as Record<string, unknown>;
+
+  const counts = dashboard.counts as Record<string, unknown>;
+  assert.equal(dashboard.readOnly, true);
+  assert.equal(counts.rawArticleObservations, 185);
+  assert.equal(counts.selectedArticleSignals, 0);
+  assert.equal(counts.visibleContentItems, 0);
+  assert.match(JSON.stringify(dashboard), /raw editorial observations/i);
+  assert.match(JSON.stringify(dashboard), /strict selection currently exposes zero/i);
+});
+
+test("MCP selection reindex planner builds bounded replay buckets and request templates", async () => {
+  const dummySdk = createNewsPortalSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("operator.selection.reindex_plan should use the DB-backed pool");
+    }) as typeof fetch,
+  });
+  const pool = createFakeSelectionReindexPlanPool();
+
+  const plan = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.selection.reindex_plan",
+    { chunkSize: 2, maxDocIds: 10, reason: "unit-test replay", includeSamples: true }
+  )) as Record<string, unknown>;
+
+  assert.equal(plan.readOnly, true);
+  assert.equal(plan.chunkSize, 2);
+  assert.match(JSON.stringify(plan), /weak_selected/);
+  assert.match(JSON.stringify(plan), /buyer_hold/);
+  assert.match(JSON.stringify(plan), /context_only/);
+  assert.match(JSON.stringify(plan), /maintenance\.reindex\.request/);
+  assert.match(JSON.stringify(plan), /retroNotifications/);
+  assert.match(JSON.stringify(plan), /skip/);
+  assert.match(JSON.stringify(plan), /cccccccc-1111-4111-8111-111111111111/);
+  assert.match(JSON.stringify(plan), /dddddddd-1111-4111-8111-111111111111/);
+});
+
 test("MCP operator funnel audit rejects unknown arguments at schema boundary", async () => {
   await assert.rejects(
     () =>
@@ -1629,7 +1747,7 @@ test("MCP channel active-state tool avoids full provider payload guessing", asyn
   assert.match(JSON.stringify(result), /operator\.report\.verify/);
 });
 
-test("MCP discovery endpoint lists use v3 filters before API calls", async () => {
+test("MCP Discovery vNext artifact lists validate filters before API calls", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1650,17 +1768,17 @@ test("MCP discovery endpoint lists use v3 filters before API calls", async () =>
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.endpoints.list",
+    "discovery.artifacts.list",
     {
-      targetId: "target-1",
-      status: "manual_review",
+      artifactType: "RoutingDecision",
+      status: "validated",
       pageSize: 50,
     }
   );
 
   assert.match(
     requests[0] ?? "",
-    /\/maintenance\/discovery\/endpoints\?status=manual_review&targetId=target-1&pageSize=50/
+    /\/maintenance\/discovery\/artifacts\?status=validated&artifactType=RoutingDecision&pageSize=50/
   );
 
   await assert.rejects(
@@ -1671,7 +1789,7 @@ test("MCP discovery endpoint lists use v3 filters before API calls", async () =>
           pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.endpoints.list",
+        "discovery.artifacts.list",
         {
           unexpected: true,
           pageSize: 50,
@@ -1679,10 +1797,10 @@ test("MCP discovery endpoint lists use v3 filters before API calls", async () =>
       ),
     (error) => error instanceof JsonRpcError && error.code === -32602
   );
-  assert.equal(requests.length, 1, "invalid v3 list args should fail before backend fetch");
+  assert.equal(requests.length, 1, "invalid vNext list args should fail before backend fetch");
 });
 
-test("MCP discovery source-prior tools use dedicated v3 endpoints", async () => {
+test("MCP Discovery vNext write tools use strict schemas and vNext endpoints", async () => {
   const requests: Array<{ method: string | undefined; url: string; body?: string }> = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1694,18 +1812,8 @@ test("MCP discovery source-prior tools use dedicated v3 endpoints", async () => 
       });
       return new Response(
         JSON.stringify({
-          applied: init?.method === "POST",
-          sourcePrior: {
-            priorState: "monitor_only",
-            selectionGuardrails: {
-              selectedContentImpact: "none_from_prior",
-              priorCanSelectArticle: false,
-              priorCanRankArticle: false,
-              priorCanEscalateArticle: false,
-              articleFromSourceSelectionEligible: true,
-            },
-          },
-          items: [],
+          ok: true,
+          vnext_run_id: "run-1",
         }),
         {
           status: 200,
@@ -1723,12 +1831,12 @@ test("MCP discovery source-prior tools use dedicated v3 endpoints", async () => 
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.source_priors.evaluate",
+    "discovery.runs.create",
     {
-      payload: {
-        targetId: "target-1",
-        channelId: "channel-1",
-      },
+      runKind: "full",
+      triggerKind: "mcp",
+      request: {},
+      budget: {},
     }
   );
   await executeMcpTool(
@@ -1737,44 +1845,47 @@ test("MCP discovery source-prior tools use dedicated v3 endpoints", async () => 
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.source_priors.apply",
+    "discovery.artifacts.create",
     {
+      artifactType: "DiscoveryBrief",
       payload: {
-        targetId: "target-1",
-        channelId: "channel-1",
+        briefId: "brief-1",
+        domainNeutral: true,
+        searchIntents: [],
+        constraints: {},
       },
-    }
-  );
-  await executeMcpTool(
-    {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.source_priors.list",
-    {
-      targetId: "target-1",
-      channelId: "channel-1",
-      pageSize: 20,
+      vnextRunId: "run-1",
     }
   );
 
-  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/source-priors\/evaluate$/);
-  assert.match(requests[1]?.url ?? "", /\/maintenance\/discovery\/source-priors\/apply$/);
-  assert.match(
-    requests[2]?.url ?? "",
-    /\/maintenance\/discovery\/source-priors\?targetId=target-1&channelId=channel-1&pageSize=20/
+  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/runs$/);
+  assert.match(requests[1]?.url ?? "", /\/maintenance\/discovery\/artifacts$/);
+  assert.match(requests[0]?.body ?? "", /"createdBy":"550e8400-e29b-41d4-a716-446655440000"/);
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool: createFakeMcpPool(),
+          token: WRITE_DISCOVERY_TOKEN,
+        },
+        "discovery.runs.create",
+        {
+          runKind: "old_target_run",
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
   );
-  assert.match(requests[1]?.body ?? "", /"requestedBy":"550e8400-e29b-41d4-a716-446655440000"/);
+  assert.equal(requests.length, 2, "invalid vNext write payloads should fail before backend fetch");
 });
 
-test("MCP discovery target read accepts full v3 target ids", async () => {
+test("MCP Discovery vNext read accepts artifact ids and rejects missing ids", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
-      return new Response(JSON.stringify({ targetId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }), {
+      return new Response(JSON.stringify({ artifactId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13" }), {
         status: 200,
         headers: {
           "content-type": "application/json",
@@ -1789,9 +1900,9 @@ test("MCP discovery target read accepts full v3 target ids", async () => {
       pool: createFakeMcpPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
-    "discovery.targets.read",
+    "discovery.artifacts.read",
     {
-      targetId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13",
+      recordId: "f3dbf7b8-72ad-41e9-94d5-7d113b28ca13",
     }
   );
 
@@ -1805,16 +1916,16 @@ test("MCP discovery target read accepts full v3 target ids", async () => {
           pool: createFakeMcpPool(),
           token: WRITE_DISCOVERY_TOKEN,
         },
-        "discovery.targets.read",
+        "discovery.artifacts.read",
         {}
       ),
     (error) =>
       error instanceof JsonRpcError &&
       error.code === -32602
-  );
+);
 });
 
-test("MCP discovery read tools expose v3 target, coverage and run surfaces", async () => {
+test("MCP Discovery vNext read tools expose artifact, inventory and run surfaces", async () => {
   const requests: string[] = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -1832,21 +1943,22 @@ test("MCP discovery read tools expose v3 target, coverage and run surfaces", asy
 
   await executeMcpTool(
     { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.targets.read",
-    { targetId: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25" }
+    "discovery.artifacts.read",
+    { recordId: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25" }
   );
   await executeMcpTool(
     { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
-    "discovery.coverage.read",
-    { targetId: "9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25" }
+    "discovery.source_inventory.read",
+    { recordId: "8a88d3e8-7fc9-4ef2-a0a6-0cd591de6a25" }
   );
   await executeMcpTool(
     { sdk, pool, token: WRITE_DISCOVERY_TOKEN },
     "discovery.runs.read",
-    { runId: "d0e6f11f-1111-4111-8111-111111111111" }
+    { recordId: "d0e6f11f-1111-4111-8111-111111111111" }
   );
 
   assert.match(requests.join("\n"), /9b88d3e8-7fc9-4ef2-a0a6-0cd591de6a25/);
+  assert.match(requests.join("\n"), /8a88d3e8-7fc9-4ef2-a0a6-0cd591de6a25/);
   assert.match(requests.join("\n"), /d0e6f11f-1111-4111-8111-111111111111/);
 });
 
@@ -2000,34 +2112,12 @@ test("MCP adjacent write tools reject malformed UUID ids before backend or DB wo
     expectedMessage?: string;
   }> = [
     {
-      toolName: "discovery.targets.update",
+      toolName: "discovery.runs.create",
       token: WRITE_DISCOVERY_TOKEN,
-      args: { targetId: malformedId, payload: { title: "Nope" } },
-      expectedPath: "targetId",
-    },
-    {
-      toolName: "discovery.coverage.refresh",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { targetId: malformedId },
-      expectedPath: "targetId",
-    },
-    {
-      toolName: "discovery.runs.cancel",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { runId: malformedId },
-      expectedPath: "runId",
-    },
-    {
-      toolName: "discovery.endpoints.promote",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { endpointId: malformedId, payload: { enabled: true } },
-      expectedPath: "endpointId",
-    },
-    {
-      toolName: "discovery.endpoints.reject",
-      token: WRITE_DISCOVERY_TOKEN,
-      args: { endpointId: malformedId, payload: { reason: "Nope" } },
-      expectedPath: "endpointId",
+      args: { runKind: "legacy_target_run" },
+      expectedPath: "runKind",
+      expectedMessage:
+        'MCP tool "discovery.runs.create" arguments failed schema validation: runKind contains an unsupported value.',
     },
     {
       toolName: "system_interests.update",
@@ -2085,8 +2175,9 @@ test("MCP adjacent write tools reject malformed UUID ids before backend or DB wo
       (error) =>
         error instanceof JsonRpcError &&
         error.code === -32602 &&
-        error.message ===
-          (invalidCall.expectedMessage ?? `${invalidCall.expectedPath} must be a full UUID.`)
+        error.message.includes(
+          invalidCall.expectedMessage ?? `${invalidCall.expectedPath} must be a full UUID.`
+        )
     );
   }
 
@@ -2228,7 +2319,7 @@ test("MCP tool execution validates declared input schemas before handler work", 
   );
 });
 
-test("MCP discovery target create applies actor defaults and v3 payload passthrough", async () => {
+test("MCP Discovery vNext route, policy, replay and rollback use vNext endpoints", async () => {
   const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -2237,112 +2328,7 @@ test("MCP discovery target create applies actor defaults and v3 payload passthro
         url: String(input),
         body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
       });
-      return new Response(JSON.stringify({ targetId: "target-1", status: "active" }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      });
-    }) as typeof fetch,
-  });
-
-  const result = await executeMcpTool(
-    {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.targets.create_manual",
-    {
-      payload: {
-        originKind: "manual_prompt",
-        title: "Manual resilient target",
-        seedTopics: ["AI rollout failures", "LLM integration blockers"],
-        seedLanguages: ["en", "de"],
-        seedGeos: ["us", "eu"],
-      },
-    }
-  );
-
-  assert.equal((result as Record<string, unknown>).targetId, "target-1");
-  assert.deepEqual(requests[0]?.body.seedTopics, [
-    "AI rollout failures",
-    "LLM integration blockers",
-  ]);
-  assert.deepEqual(requests[0]?.body.seedLanguages, ["en", "de"]);
-  assert.deepEqual(requests[0]?.body.seedGeos, ["us", "eu"]);
-  assert.equal(requests[0]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
-
-  await assert.rejects(
-    () =>
-      executeMcpTool(
-        {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.targets.create_manual",
-        {
-          payload: "invalid",
-        }
-      ),
-    (error) => error instanceof JsonRpcError && error.code === -32602
-  );
-  assert.equal(requests.length, 1, "invalid v3 target payloads should fail before backend fetch");
-});
-
-test("MCP discovery run start calls v3 run endpoint", async () => {
-  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const sdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async (input, init) => {
-      requests.push({
-        url: String(input),
-        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
-      });
-      return (
-      new Response(JSON.stringify({ runId: "run-1", status: "pending" }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      }))
-    }) as typeof fetch,
-  });
-
-  const result = await executeMcpTool(
-    {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.runs.start",
-    {
-      payload: {
-        targetId: "11111111-1111-4111-8111-111111111111",
-        runKind: "manual",
-        triggerKind: "mcp",
-        providerExecutionEnabled: true,
-      },
-    }
-  );
-
-  assert.equal((result as Record<string, unknown>).runId, "run-1");
-  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/runs$/);
-  assert.equal(requests[0]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
-  assert.equal(requests[0]?.body.providerExecutionEnabled, true);
-});
-
-test("MCP discovery queued-run dispatch validates payload and calls repair endpoint", async () => {
-  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const sdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async (input, init) => {
-      requests.push({
-        url: String(input),
-        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
-      });
-      return new Response(JSON.stringify({ dispatchedCount: 1, failureCount: 0 }), {
+      return new Response(JSON.stringify({ ok: true, policy_id: "policy-1" }), {
         status: 200,
         headers: {
           "content-type": "application/json",
@@ -2352,342 +2338,78 @@ test("MCP discovery queued-run dispatch validates payload and calls repair endpo
   });
 
   await executeMcpTool(
+    { sdk, pool: createFakeMcpPool(), token: WRITE_DISCOVERY_TOKEN },
+    "discovery.route.preview",
     {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.runs.dispatch_queued",
-    {
-      payload: {
-        targetId: "11111111-1111-4111-8111-111111111111",
-        limit: 10,
-        reason: "repair retained queued discovery rows",
+      sourceUnderstanding: {
+        sourceUrl: "https://example.com/feed.xml",
+        sourceName: "Example feed",
+        capabilities: { feed: true },
+        observability: { staticFetch: true },
+        risk: { level: "low" },
+        yieldIndependent: true,
       },
+      providerType: "rss",
+      accessPattern: "public",
+      policy: { yieldIndependent: true },
     }
   );
-
-  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/runs\/dispatch-queued$/);
-  assert.equal(requests[0]?.body.targetId, "11111111-1111-4111-8111-111111111111");
-  assert.equal(requests[0]?.body.requestedBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
-
-  await assert.rejects(
-    () =>
-      executeMcpTool(
-        {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.runs.dispatch_queued",
-        {
-          payload: {
-            limit: 10,
-            cleanup: true,
-          },
-        }
-      ),
-    /discovery\.runs\.dispatch_queued.*cleanup is not allowed/i
-  );
-
-  assert.equal(requests.length, 1, "invalid dispatch repair payloads should fail before backend");
-});
-
-test("MCP discovery source expansion validates payload before backend", async () => {
-  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const sdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async (input, init) => {
-      requests.push({
-        url: String(input),
-        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
-      });
-      return new Response(JSON.stringify({ runId: "run-1", status: "queued" }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      });
-    }) as typeof fetch,
-  });
-
-  const validChannelId = "22222222-2222-4222-8222-222222222222";
   await executeMcpTool(
+    { sdk, pool: createFakeMcpPool(), token: WRITE_DISCOVERY_TOKEN },
+    "discovery.policies.activate",
     {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.sources.expand_existing",
+      policyName: "discovery-routing",
+      policyVersion: "vnext-test",
+      policyType: "routing",
+      definition: { yieldIndependent: true },
+    }
+  );
+  await executeMcpTool(
+    { sdk, pool: createFakeMcpPool(), token: WRITE_DISCOVERY_TOKEN },
+    "discovery.replay.start",
     {
-      channelId: validChannelId,
-      payload: {
-        targetId: "11111111-1111-4111-8111-111111111111",
-        maxDepth: 2,
-        providerExecutionEnabled: true,
-      },
+      replayKind: "full_non_live",
+      input: {},
+      dryRun: true,
+    }
+  );
+  await executeMcpTool(
+    { sdk, pool: createFakeMcpPool(), token: WRITE_DISCOVERY_TOKEN },
+    "discovery.rollback.prepare",
+    {
+      sourceInventoryId: "source-inventory-1",
+      reason: "bad source handoff",
+    }
+  );
+  await executeMcpTool(
+    { sdk, pool: createFakeMcpPool(), token: DESTRUCTIVE_DISCOVERY_TOKEN },
+    "discovery.rollback.apply",
+    {
+      rollbackGroupId: "rollback-group-1",
+      confirm: true,
     }
   );
 
-  assert.match(
-    requests[0]?.url ?? "",
-    /\/maintenance\/discovery\/sources\/22222222-2222-4222-8222-222222222222\/expand$/
-  );
-  assert.equal(requests[0]?.body.targetId, "11111111-1111-4111-8111-111111111111");
-  assert.equal(requests[0]?.body.providerExecutionEnabled, true);
-  assert.equal(requests[0]?.body.requestedBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
+  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/route\/preview$/);
+  assert.match(requests[1]?.url ?? "", /\/maintenance\/discovery\/policies\/activate$/);
+  assert.match(requests[2]?.url ?? "", /\/maintenance\/discovery\/replay$/);
+  assert.match(requests[3]?.url ?? "", /\/maintenance\/discovery\/rollback\/prepare$/);
+  assert.match(requests[4]?.url ?? "", /\/maintenance\/discovery\/rollback\/apply$/);
+  assert.equal(requests[1]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
 
   await assert.rejects(
     () =>
       executeMcpTool(
+        { sdk, pool: createFakeMcpPool(), token: WRITE_DISCOVERY_TOKEN },
+        "discovery.rollback.apply",
         {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.sources.expand_existing",
-        {
-          channelId: validChannelId,
-          payload: {
-            requestedByNote: "wrong field should not reach backend",
-          },
+          rollbackGroupId: "rollback-group-1",
+          confirm: false,
         }
       ),
-    /discovery\.sources\.expand_existing.*targetId is required/i
+    (error) => error instanceof JsonRpcError && error.code === -32004
   );
-
-  await assert.rejects(
-    () =>
-      executeMcpTool(
-        {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.sources.replace_candidates",
-        {
-          channelId: validChannelId,
-          payload: {
-            targetId: "11111111-1111-4111-8111-111111111111",
-            requestedByNote: "wrong field should not reach backend",
-          },
-        }
-      ),
-    /discovery\.sources\.replace_candidates.*requestedByNote is not allowed/i
-  );
-
-  assert.equal(
-    requests.length,
-    1,
-    "invalid source expansion payloads should fail before backend fetch"
-  );
-});
-
-test("MCP endpoint promotion sends probation-review payload through v3", async () => {
-  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const sdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async (input, init) => {
-      requests.push({
-        url: String(input),
-        body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {},
-      });
-      return new Response(
-        JSON.stringify({
-          endpointId: "22222222-2222-4222-8222-222222222222",
-          status: "registered",
-          trustStage: "probation",
-        }),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-          },
-        }
-      );
-    }) as typeof fetch,
-  });
-
-  const createResult = await executeMcpTool(
-    {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.endpoints.promote",
-    {
-      endpointId: "22222222-2222-4222-8222-222222222222",
-      payload: {
-        enabled: true,
-        tags: ["discovery", "technical_change"],
-      },
-    }
-  );
-
-  assert.match(JSON.stringify(createResult), /probation/i);
-  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/endpoints\/22222222-2222-4222-8222-222222222222\/promote$/);
-  assert.deepEqual(requests[0]?.body.tags, ["discovery", "technical_change"]);
-  assert.equal(requests[0]?.body.reviewedBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
-
-  const rejectResult = await executeMcpTool(
-    {
-      sdk,
-      pool: createFakeMcpPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "discovery.endpoints.reject",
-    {
-      endpointId: "22222222-2222-4222-8222-222222222222",
-      payload: {
-        reason: "insufficient evidence",
-      },
-    }
-  );
-
-  assert.match(JSON.stringify(rejectResult), /registered|probation/i);
-  assert.match(requests[1]?.url ?? "", /\/maintenance\/discovery\/endpoints\/22222222-2222-4222-8222-222222222222\/reject$/);
-});
-
-test("MCP endpoint promote/reject reject malformed ids before backend calls", async () => {
-  const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async (input) => {
-      requests.push(String(input));
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      });
-    }) as typeof fetch,
-  });
-
-  await assert.rejects(
-    () =>
-      executeMcpTool(
-        {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.endpoints.promote",
-        {
-          endpointId: "not-a-uuid",
-          payload: { enabled: true },
-        }
-      ),
-    (error) =>
-      error instanceof JsonRpcError &&
-      error.code === -32602 &&
-      /endpointId must be a full UUID/i.test(error.message)
-  );
-
-  await assert.rejects(
-    () =>
-      executeMcpTool(
-        {
-          sdk,
-          pool: createFakeMcpPool(),
-          token: WRITE_DISCOVERY_TOKEN,
-        },
-        "discovery.endpoints.reject",
-        {
-          endpointId: "not-a-uuid",
-          payload: { reason: "bad evidence" },
-        }
-      ),
-    (error) =>
-      error instanceof JsonRpcError &&
-      error.code === -32602 &&
-      /endpointId must be a full UUID/i.test(error.message)
-  );
-  assert.equal(requests.length, 0, "malformed endpoint ids must fail before backend fetch");
-});
-
-test("MCP discovery report verify warns for v3 in-progress runs and probation contracts", async () => {
-  const dummySdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async () => {
-      throw new Error("operator.report.verify should use the DB-backed pool");
-    }) as typeof fetch,
-  });
-
-  const result = await executeMcpTool(
-    {
-      sdk: dummySdk,
-      pool: createFakeDiscoveryReportPool(),
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "operator.report.verify",
-    {
-      reportKind: "discovery_run",
-      entityIds: { targetIds: ["target-1"], runIds: ["run-1"] },
-      includeSamples: true,
-    }
-  );
-
-  const serialized = JSON.stringify(result);
-  assert.match(serialized, /queued\/running|in progress/i);
-  assert.match(serialized, /2 discovery endpoints still require evidence review/i);
-  assert.match(serialized, /1 promoted sources are still in contract probation/i);
-  assert.match(serialized, /coverageScore/i);
-});
-
-test("MCP source-prior report verify keeps prior-only guardrails visible", async () => {
-  const dummySdk = createNewsPortalSdk({
-    baseUrl: "http://api.example.test",
-    fetchImpl: (async () => {
-      throw new Error("operator.report.verify should use the DB-backed pool");
-    }) as typeof fetch,
-  });
-  const pool = {
-    async query(sql: string) {
-      assert.match(sql, /rareSignalPrior/);
-      return {
-        rows: [
-          {
-            surface: "contract",
-            targetId: "target-1",
-            channelId: "channel-1",
-            endpointId: "endpoint-1",
-            contractId: "contract-1",
-            sourcePrior: {
-              tier: "medium",
-              priorState: "monitor_only",
-              coverageContribution: 0,
-              downstreamWeight: 0,
-              selectionGuardrails: {
-                selectedContentImpact: "none_from_prior",
-                priorCanSelectArticle: false,
-                priorCanRankArticle: false,
-                priorCanEscalateArticle: false,
-                articleFromSourceSelectionEligible: true,
-              },
-            },
-          },
-        ],
-      };
-    },
-  };
-
-  const result = await executeMcpTool(
-    {
-      sdk: dummySdk,
-      pool,
-      token: WRITE_DISCOVERY_TOKEN,
-    },
-    "operator.report.verify",
-    {
-      reportKind: "source_prior",
-      entityIds: { targetIds: ["target-1"] },
-      includeSamples: true,
-    }
-  );
-
-  const serialized = JSON.stringify(result);
-  assert.match(serialized, /monitor_only/);
-  assert.match(serialized, /unsafePriorImpact":0/);
+  assert.equal(requests.length, 5, "unconfirmed rollback must fail before backend fetch");
 });
 
 test("MCP source-bottleneck report verify uses the shared channel read model", async () => {
@@ -2777,9 +2499,10 @@ test("MCP source-bottleneck report verify uses the shared channel read model", a
 test("MCP channels.alternatives.start respects bounded candidates", async () => {
   const calls: Array<{ channelId: string; payload: Record<string, unknown> }> = [];
   const sdk = {
-    async replaceDiscoverySourceCandidates(channelId: string, payload: Record<string, unknown>) {
-      calls.push({ channelId, payload });
-      return { channelId, status: "queued" };
+    async createDiscoveryVNextRun(payload: Record<string, unknown>) {
+      const request = payload.request as Record<string, unknown>;
+      calls.push({ channelId: String(request.channelId), payload });
+      return { vnextRunId: String(request.channelId), status: "queued" };
     },
   };
   const pool = {
@@ -2831,7 +2554,7 @@ test("MCP channels.alternatives.start respects bounded candidates", async () => 
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.channelId, "11111111-1111-4111-8111-111111111111");
-  assert.equal(calls[0]?.payload.maxSocialItems, 0);
+  assert.equal((calls[0]?.payload.request as Record<string, unknown>).maxSocialItems, 0);
   assert.equal((result as { plan: { candidates: unknown[] } }).plan.candidates.length, 1);
   assert.match(JSON.stringify(result), /No bounded alternative candidate/);
 });
@@ -3080,7 +2803,7 @@ test("content analysis backfill response warns that final selection is not recom
   assert.match(JSON.stringify(result), /operator\.report\.verify/i);
 });
 
-test("SDK exposes resilient discovery mutation routes needed by MCP parity", async () => {
+test("SDK exposes Discovery vNext mutation routes needed by MCP parity", async () => {
   const requests = [];
   const sdk = createNewsPortalSdk({
     baseUrl: "http://api.example.test",
@@ -3098,15 +2821,17 @@ test("SDK exposes resilient discovery mutation routes needed by MCP parity", asy
     }) as typeof fetch,
   });
 
-  await sdk.cancelDiscoveryRun<Record<string, unknown>>("11111111-1111-4111-8111-111111111111");
-  await sdk.promoteDiscoveryEndpoint<Record<string, unknown>>(
-    "22222222-2222-4222-8222-222222222222",
-    { enabled: true }
-  );
-  await sdk.rejectDiscoveryEndpoint<Record<string, unknown>>(
-    "33333333-3333-4333-8333-333333333333",
-    { reason: "low evidence" }
-  );
+  await sdk.cancelDiscoveryVNextRun<Record<string, unknown>>("11111111-1111-4111-8111-111111111111");
+  await sdk.applyDiscoveryRoutingDecision<Record<string, unknown>>({
+    sourceUnderstanding: {},
+    canonicalUrl: "https://example.com/feed.xml",
+    canonicalDomain: "example.com",
+    sourceIdentityKey: "example.com:rss",
+  });
+  await sdk.applyDiscoveryRollback<Record<string, unknown>>({
+    rollbackGroupId: "33333333-3333-4333-8333-333333333333",
+    confirm: true,
+  });
 
   assert.deepEqual(requests, [
     {
@@ -3114,11 +2839,11 @@ test("SDK exposes resilient discovery mutation routes needed by MCP parity", asy
       method: "POST",
     },
     {
-      url: "http://api.example.test/maintenance/discovery/endpoints/22222222-2222-4222-8222-222222222222/promote",
+      url: "http://api.example.test/maintenance/discovery/routing-decisions/apply",
       method: "POST",
     },
     {
-      url: "http://api.example.test/maintenance/discovery/endpoints/33333333-3333-4333-8333-333333333333/reject",
+      url: "http://api.example.test/maintenance/discovery/rollback/apply",
       method: "POST",
     },
   ]);

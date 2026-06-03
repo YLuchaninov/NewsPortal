@@ -17,6 +17,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
 
         self.assertIn("/maintenance/articles/{doc_id}/enrichment/retry", paths)
         self.assertIn("/maintenance/articles", paths)
+        self.assertIn("/maintenance/articles/selection-summary", paths)
         self.assertIn("/maintenance/articles/residuals", paths)
         self.assertIn("/maintenance/articles/residuals/summary", paths)
         self.assertIn("/maintenance/articles/{doc_id}", paths)
@@ -279,17 +280,19 @@ class ApiSequenceManagementTests(unittest.TestCase):
             return_value={"run_id": "run-2", "status": "pending"},
         ) as request_retry:
             result = api_main.request_content_item_enrichment_retry_route(
-                "editorial:doc-2",
+                "editorial:00000000-0000-4000-8000-000000000002",
                 api_main.ArticleEnrichmentRetryPayload.model_validate({"requestedBy": "operator-1"}),
             )
 
         self.assertEqual(result, {"run_id": "run-2", "status": "pending"})
         request_retry.assert_called_once()
-        self.assertEqual(request_retry.call_args.args[0], "doc-2")
+        self.assertEqual(request_retry.call_args.args[0], "00000000-0000-4000-8000-000000000002")
 
     def test_request_content_item_enrichment_retry_rejects_non_editorial_items(self) -> None:
         with self.assertRaises(api_main.HTTPException) as error:
-            api_main.request_content_item_enrichment_retry_route("resource:item-2")
+            api_main.request_content_item_enrichment_retry_route(
+                "resource:00000000-0000-4000-8000-000000000002"
+            )
 
         self.assertEqual(error.exception.status_code, 409)
 

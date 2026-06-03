@@ -93,7 +93,7 @@ const pagePaths = {
         <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Acquire</p>
           <p class="mt-2 text-sm font-medium">Channels, Resources, Discovery</p>
-          <p class="mt-2 text-xs text-muted-foreground">Bring sources in, inspect source quality, and separate mission fit from generic recall quality before content enters the editorial pipeline.</p>
+          <p class="mt-2 text-xs text-muted-foreground">Bring sources in, inspect source quality, and separate vNext routing evidence from downstream selection before content enters the editorial pipeline.</p>
         </article>
         <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Decide</p>
@@ -111,15 +111,15 @@ const pagePaths = {
     <section id="discovery" class="space-y-3">
       <h2 class="text-lg font-bold border-b border-border pb-2">Discovery Control Plane</h2>
       <p class="text-sm text-muted-foreground">
-        <a href={pagePaths.discovery} class="text-primary hover:underline">Discovery</a> is a dual-path operator surface. Graph-first missions own mission planning, hypotheses, and portfolio fit, while recall owns neutral acquisition backlog, source-quality snapshots, and bounded promotion into normal channels.
+        <a href={pagePaths.discovery} class="text-primary hover:underline">Discovery</a> is the vNext operator workspace for typed artifacts, source inventory, deterministic routing, policy state, replay, and rollback.
       </p>
       <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
         <div class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold">Debug order</p>
           <ol class="mt-3 list-decimal list-inside space-y-2 text-xs text-muted-foreground">
-            <li>Check mission fit or recall quality before changing downstream rules.</li>
-            <li>Read generic source quality separately from system-selected outcomes.</li>
-            <li>Only promote a discovery result once the source quality looks durable enough for normal channel operations.</li>
+            <li>Check run and artifact validation before changing policy.</li>
+            <li>Read SourceUnderstanding and RoutingDecision records before touching inventory.</li>
+            <li>Use replay before applying rollback or registering probation channels.</li>
           </ol>
         </div>
         <div class={ADMIN_SMALL_CARD_CLASS}>

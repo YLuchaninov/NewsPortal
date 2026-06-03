@@ -33,6 +33,7 @@ from services.api.app import notification_read_model as _notification_read_model
 from services.api.app import reindex_read_model as _reindex_read_model
 from services.api.app import sequence_commands as _sequence_commands
 from services.api.app import sequence_payloads as _sequence_payloads
+from services.api.app import sequence_route_compat as _sequence_route_compat
 from services.api.app import sequence_read_model as _sequence_read_model
 from services.api.app import system_interest_read_model as _system_interest_read_model
 from services.api.app import user_interest_read_model as _user_interest_read_model
@@ -81,7 +82,6 @@ from services.api.app.llm_review_budget import (
 from services.api.app.status_constants import (
     SEQUENCE_RUN_CANCELLABLE_STATUSES,
 )
-from services.api.app.discovery_worker_boundary import configure_api_discovery_runtime
 from services.api.app.sequence_worker_boundary import (
     RESERVED_CONTEXT_KEYS,
     parse_cron_expression,
@@ -143,9 +143,6 @@ def normalize_optional_query_bool(value: Any) -> bool | None:
 
 def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
     return _content_selection_query_count(sql, params, query_one_func=query_one)
-
-
-configure_api_discovery_runtime()
 
 
 def _raise_content_analysis_policy_write_error(error: Exception) -> None:
@@ -501,15 +498,7 @@ def list_sequence_task_runs(run_id: str) -> list[dict[str, Any]]:
 
 
 def raise_sequence_http_exception(error: Exception) -> None:
-    if isinstance(error, SequenceNotFoundError):
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    if isinstance(error, SequenceConflictError):
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    if isinstance(error, SequenceValidationError):
-        raise HTTPException(status_code=422, detail=error.errors) from error
-    if isinstance(error, SequenceDispatchError):
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    raise error
+    return _sequence_route_compat.raise_sequence_http_exception(globals(), error)
 
 
 def list_sequences(
@@ -517,128 +506,72 @@ def list_sequences(
     page: int | None = None,
     page_size: int | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    return list_sequences_page(limit=limit, page=page, page_size=page_size)
+    return _sequence_route_compat.list_sequences(
+        globals(),
+        limit=limit,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def get_sequence(sequence_id: str) -> dict[str, Any]:
-    try:
-        return get_sequence_definition(sequence_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.get_sequence(globals(), sequence_id)
 
 
 def create_sequence(payload: SequenceCreatePayload) -> dict[str, Any]:
-    try:
-        return create_sequence_definition(payload)
-    except (
-        SequenceConflictError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.create_sequence(globals(), payload)
 
 
 def update_sequence(
     sequence_id: str,
     payload: SequenceUpdatePayload,
 ) -> dict[str, Any]:
-    try:
-        return update_sequence_definition(sequence_id, payload)
-    except (
-        SequenceConflictError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.update_sequence(globals(), sequence_id, payload)
 
 
 def delete_sequence(sequence_id: str) -> dict[str, Any]:
-    try:
-        return archive_sequence_definition(sequence_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.delete_sequence(globals(), sequence_id)
 
 
 def get_sequence_plugins() -> list[dict[str, Any]]:
-    return list_sequence_plugins()
+    return _sequence_route_compat.get_sequence_plugins(globals())
 
 
 def get_agent_sequence_tools() -> dict[str, Any]:
-    return list_agent_sequence_tools()
+    return _sequence_route_compat.get_agent_sequence_tools(globals())
 
 
 def create_agent_sequence(payload: AgentSequenceCreatePayload) -> dict[str, Any]:
-    try:
-        return create_agent_sequence_request(payload)
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.create_agent_sequence(globals(), payload)
 
 
 def request_sequence_run(
     sequence_id: str,
     payload: SequenceManualRunPayload,
 ) -> dict[str, Any]:
-    try:
-        return create_sequence_run_request(sequence_id, payload)
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.request_sequence_run(globals(), sequence_id, payload)
 
 
 def get_sequence_run_status(run_id: str) -> dict[str, Any]:
-    try:
-        return get_sequence_run(run_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.get_sequence_run_status(globals(), run_id)
 
 
 def get_sequence_run_task_runs(run_id: str) -> list[dict[str, Any]]:
-    try:
-        return list_sequence_task_runs(run_id)
-    except SequenceNotFoundError as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.get_sequence_run_task_runs(globals(), run_id)
 
 
 def cancel_sequence_run(
     run_id: str,
     payload: SequenceCancelPayload | None = None,
 ) -> dict[str, Any]:
-    try:
-        return cancel_sequence_run_request(
-            run_id,
-            reason=payload.reason if payload is not None else None,
-        )
-    except (
-        SequenceConflictError,
-        SequenceNotFoundError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.cancel_sequence_run(globals(), run_id, payload)
 
 
 def retry_sequence_run(
     run_id: str,
     payload: SequenceRetryRunPayload | None = None,
 ) -> dict[str, Any]:
-    try:
-        return retry_sequence_run_request(
-            run_id,
-            payload or SequenceRetryRunPayload(),
-        )
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.retry_sequence_run(globals(), run_id, payload)
 
 
 def list_articles(
@@ -650,6 +583,11 @@ def list_articles(
     label_key: str | None = Query(default=None, alias="labelKey"),
     content_filter_passed: bool | None = Query(default=None, alias="contentFilterPassed"),
     content_filter_decision: str | None = Query(default=None, alias="contentFilterDecision"),
+    channel_id: str | None = Query(default=None, alias="channelId"),
+    final_selection_decision: str | None = Query(default=None, alias="finalSelectionDecision"),
+    selection_mode: str | None = Query(default=None, alias="selectionMode"),
+    visibility_state: str | None = Query(default=None, alias="visibilityState"),
+    q: str | None = Query(default=None),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
 ) -> dict[str, Any] | list[dict[str, Any]]:
@@ -662,6 +600,11 @@ def list_articles(
         label_key=label_key,
         content_filter_passed=content_filter_passed,
         content_filter_decision=content_filter_decision,
+        channel_id=channel_id,
+        final_selection_decision=final_selection_decision,
+        selection_mode=selection_mode,
+        visibility_state=visibility_state,
+        q=q,
         page=page,
         page_size=page_size,
         build_content_analysis_filter_clause_func=build_content_analysis_filter_clause,
@@ -676,6 +619,13 @@ def list_articles(
         query_count_func=query_count,
         build_paginated_response_func=build_paginated_response,
         apply_article_selection_payload_func=apply_article_selection_payload,
+    )
+
+
+def summarize_article_selection_counts() -> dict[str, Any]:
+    return _article_list_read_model.summarize_article_selection_counts(
+        query_all_func=query_all,
+        query_count_func=query_count,
     )
 
 
@@ -806,12 +756,14 @@ def list_system_selected_content_items_page(
     page_size: int = 20,
     sort: str | None = None,
     q: str | None = None,
+    channel_id: str | None = None,
 ) -> dict[str, Any]:
     return _content_item_list_read_model.list_system_selected_content_items_page(
         page=page,
         page_size=page_size,
         sort=sort,
         q=q,
+        channel_id=channel_id,
         normalize_web_content_list_sort_func=normalize_web_content_list_sort,
         normalize_web_content_search_query_func=normalize_web_content_search_query,
         combined_content_items_select_sql_func=combined_content_items_select_sql,
@@ -833,12 +785,14 @@ def list_system_selected_content_items(
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
     sort: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    channel_id: str | None = Query(default=None, alias="channelId"),
 ) -> dict[str, Any]:
     return list_system_selected_content_items_page(
         page=page,
         page_size=page_size,
         sort=sort,
         q=q,
+        channel_id=channel_id,
     )
 
 
@@ -847,12 +801,14 @@ def list_content_items(
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
     sort: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    channel_id: str | None = Query(default=None, alias="channelId"),
 ) -> dict[str, Any]:
     return list_system_selected_content_items_page(
         page=page,
         page_size=page_size,
         sort=sort,
         q=q,
+        channel_id=channel_id,
     )
 
 
@@ -861,6 +817,7 @@ def get_resource_content_item(resource_id: str) -> dict[str, Any]:
         return _content_detail_read_model.get_resource_content_item(
             resource_id,
             query_one_func=query_one,
+            system_interest_kind_enabled_clause_func=system_interest_kind_enabled_clause,
             load_content_analysis_summary_func=load_content_analysis_summary,
         )
     except _content_detail_read_model.ContentItemNotFoundError:
@@ -1414,31 +1371,22 @@ def request_article_enrichment_retry_route(
     doc_id: str,
     payload: ArticleEnrichmentRetryPayload | None = None,
 ) -> dict[str, Any]:
-    try:
-        return request_article_enrichment_retry(
-            doc_id,
-            payload or ArticleEnrichmentRetryPayload.model_validate({}),
-        )
-    except (
-        SequenceConflictError,
-        SequenceDispatchError,
-        SequenceNotFoundError,
-        SequenceValidationError,
-    ) as error:
-        raise_sequence_http_exception(error)
+    return _sequence_route_compat.request_article_enrichment_retry_route(
+        globals(),
+        doc_id,
+        payload,
+    )
 
 
 def request_content_item_enrichment_retry_route(
     content_item_id: str,
     payload: ArticleEnrichmentRetryPayload | None = None,
 ) -> dict[str, Any]:
-    origin_type, origin_id = parse_content_item_id(content_item_id)
-    if origin_type != "editorial":
-        raise HTTPException(
-            status_code=409,
-            detail="Manual retry is only supported for editorial content items in the current runtime.",
-        )
-    return request_article_enrichment_retry_route(origin_id, payload)
+    return _sequence_route_compat.request_content_item_enrichment_retry_route(
+        globals(),
+        content_item_id,
+        payload,
+    )
 
 
 app = create_api_app(ApiAppContext(route_deps=build_route_deps(globals())))
