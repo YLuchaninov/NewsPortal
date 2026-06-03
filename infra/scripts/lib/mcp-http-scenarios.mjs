@@ -1,5 +1,6 @@
 import {
   assertMcpSseHandshake,
+  apiBaseUrl,
   mcpBaseUrl,
   postJson,
   readIdentifier,
@@ -1206,12 +1207,68 @@ async function scenarioDiscoveryOperatorFlows(harness) {
     candidateUrl: sourceUrl,
     candidateKindGuess: "rss",
   });
+  const probeReport = {
+    candidateUrl: sourceUrl,
+    accessPattern: "public",
+    technicalObservability: {
+      observable: true,
+      score: 0.9,
+      feedValid: true,
+      hasRecurringStructure: true,
+      providerFailuresAreTelemetryOnly: true,
+    },
+    probeSummary: { validFeed: true, sampleEntryCount: 3 },
+    evidence: ["deterministic MCP probe fixture"],
+    observations: [
+      {
+        kind: "feed_probe",
+        valid: true,
+        url: sourceUrl,
+        sampleEntryCount: 3,
+      },
+    ],
+  };
+  const scopeResolveArgs = {
+    discoveryBrief,
+    probeReport,
+    candidate: {
+      canonicalUrl: sourceUrl,
+      canonicalDomain: "example.test",
+      candidateKindGuess: "rss",
+    },
+    runId,
+    interestId: harness.runId,
+    createdBy: "mcp-http-scenarios",
+  };
+  const scopePreview = await harness.mcpToolCall(token, "discovery.scope.resolve_preview", scopeResolveArgs);
+  const scopePreviewPayload = scopePreview.payload ?? scopePreview;
+  assert(scopePreviewPayload?.sourceScopeType === "feed", "discovery.scope.resolve_preview must classify valid RSS as feed.");
+  pushEvidence(evidence, "scope-resolve-preview", {
+    sourceScopeType: scopePreviewPayload?.sourceScopeType,
+    resolvedSourceUrl: scopePreviewPayload?.resolvedSourceUrl,
+  });
+  const scopeApply = await harness.mcpToolCall(token, "discovery.scope.resolve_apply", scopeResolveArgs);
+  const sourceScopeResolutionArtifact = scopeApply?.sourceScopeResolutionArtifact ?? {};
+  const sourceScopeResolution =
+    sourceScopeResolutionArtifact.payload_json ??
+    sourceScopeResolutionArtifact.payload ??
+    scopePreviewPayload;
+  const sourceScopeResolutionArtifactId = String(
+    sourceScopeResolutionArtifact.artifact_id ?? sourceScopeResolutionArtifact.artifactId ?? ""
+  );
+  assert(sourceScopeResolutionArtifactId, "discovery.scope.resolve_apply must persist a SourceScopeResolution artifact.");
+  assert(
+    sourceScopeResolution?.sourceScopeType === "feed",
+    "Persisted SourceScopeResolution artifact must keep feed scope."
+  );
+  pushEvidence(evidence, "scope-resolve-apply", {
+    sourceScopeResolutionArtifactId,
+    sourceScopeType: sourceScopeResolution.sourceScopeType,
+  });
   const understanding = await harness.mcpToolCall(token, "discovery.understand.preview", {
     discoveryBrief,
-    probeReport: {
-      probeSummary: { validFeed: true, sampleEntryCount: 3 },
-      evidence: ["deterministic MCP probe fixture"],
-    },
+    probeReport,
+    sourceScopeResolution,
     candidate: {
       canonicalUrl: sourceUrl,
       canonicalDomain: "example.test",
@@ -1225,6 +1282,62 @@ async function scenarioDiscoveryOperatorFlows(harness) {
     accessPattern: "public",
   });
   pushEvidence(evidence, "routing-preview", routing);
+  const routingApply = await harness.mcpToolCall(token, "discovery.routing.apply", {
+    sourceUnderstanding,
+    canonicalUrl: sourceScopeResolution.resolvedSourceUrl ?? sourceUrl,
+    canonicalDomain: "example.test",
+    sourceIdentityKey: `rss|example.test|${sourceScopeResolution.resolvedSourceUrl ?? sourceUrl}`,
+    providerType: "rss",
+    accessPattern: "public",
+    runId,
+    interestId: harness.runId,
+    createdBy: "mcp-http-scenarios",
+  });
+  const sourceInventoryId = String(
+    routingApply?.sourceInventory?.source_inventory_id ?? routingApply?.sourceInventory?.sourceInventoryId ?? ""
+  );
+  assert(sourceInventoryId, "discovery.routing.apply must persist a source inventory row for scope proof.");
+  assert(
+    routingApply?.sourceInventory?.latest_source_scope_resolution_artifact_id ||
+      routingApply?.sourceInventory?.source_scope_type,
+    "Scope-aware routing apply must write source inventory scope fields."
+  );
+  const explain = await harness.mcpToolCall(token, "discovery.source_inventory.explain", {
+    sourceInventoryId,
+  });
+  assert(
+    explain?.lineage?.sourceScopeResolutionArtifactId || explain?.sourceInventory?.source_scope_type,
+    "discovery.source_inventory.explain must return scope lineage."
+  );
+  const resolveScopesPreview = await harness.mcpToolCall(token, "discovery.source_inventory.resolve_scopes", {
+    sourceInventoryIds: [sourceInventoryId],
+    limit: 1,
+    apply: false,
+    createdBy: "mcp-http-scenarios",
+  });
+  assert(resolveScopesPreview?.status === "preview", "resolve_scopes apply=false must remain a preview.");
+  assert(Number(resolveScopesPreview?.count ?? 0) === 1, "resolve_scopes preview must inspect the bounded inventory id.");
+  assert(
+    Array.isArray(resolveScopesPreview?.destructiveActions) && resolveScopesPreview.destructiveActions.length === 0,
+    "resolve_scopes preview must not include destructive actions."
+  );
+  const resolveScopesApply = await harness.mcpToolCall(token, "discovery.source_inventory.resolve_scopes", {
+    sourceInventoryIds: [sourceInventoryId],
+    limit: 1,
+    apply: true,
+    createdBy: "mcp-http-scenarios",
+  });
+  assert(resolveScopesApply?.status === "applied", "resolve_scopes apply=true must apply non-destructive metadata.");
+  assert(
+    resolveScopesApply?.destructiveConfirmationRequired === false,
+    "resolve_scopes apply must not require destructive confirmation for metadata-only scope resolution."
+  );
+  pushEvidence(evidence, "source-inventory-scope-tools", {
+    sourceInventoryId,
+    explainLineage: explain?.lineage ?? {},
+    resolvePreviewCount: resolveScopesPreview?.count,
+    resolveApplyCount: resolveScopesApply?.count,
+  });
 
   await harness.mcpToolCall(token, "discovery.artifacts.validate", {
     artifactType: "DiscoveryBrief",
@@ -1243,6 +1356,51 @@ async function scenarioDiscoveryOperatorFlows(harness) {
     createdBy: "mcp-http-scenarios",
   });
   pushEvidence(evidence, "feedback", feedback);
+  const typedFeedback = await harness.mcpToolCall(token, "discovery.feedback.submit", {
+    targetType: "source_inventory",
+    targetId: sourceInventoryId,
+    feedbackType: "source_scope_correct",
+    feedback: {
+      note: "deterministic MCP source scope typed feedback proof",
+      sourceScopeType: sourceScopeResolution.sourceScopeType,
+      sourceScopeResolutionArtifactId,
+    },
+    createdBy: "mcp-http-scenarios",
+  });
+  pushEvidence(evidence, "typed-scope-feedback", {
+    feedbackId: typedFeedback?.feedbackEvent?.feedback_event_id ?? typedFeedback?.feedback_event_id ?? null,
+    feedbackType: "source_scope_correct",
+  });
+
+  await harness.assertAdminHtmlAt(`/discovery/source-inventory/${sourceInventoryId}`, [
+    "Operator Actions",
+    "Source Scope",
+    sourceUrl,
+    sourceInventoryId,
+    "Risk",
+  ]);
+  const adminAction = await postJson(`${apiBaseUrl}/maintenance/discovery/source-inventory/action`, {
+    sourceInventoryId,
+    action: "confirm_scope",
+    reason: "deterministic MCP/admin source scope smoke",
+    createdBy: "mcp-http-scenarios",
+  });
+  assert(
+    adminAction?.json?.sourceInventory?.scope_confirmation_json?.scopeStatus === "confirmed",
+    "confirm_scope action must confirm scope without destructive rollback."
+  );
+  const confirmationStatus = firstResultLine(
+    await harness.queryPostgres(`
+      select coalesce(scope_confirmation_json->>'scopeStatus', '')
+      from source_inventory
+      where source_inventory_id = ${sqlLiteral(sourceInventoryId)}
+    `)
+  );
+  assert(confirmationStatus === "confirmed", "source inventory confirm_scope must be readable from DB.");
+  pushEvidence(evidence, "admin-source-inventory-smoke", {
+    sourceInventoryId,
+    scopeStatus: confirmationStatus,
+  });
 
   await harness.mcpToolCall(token, "discovery.policies.validate", {
     policyName: "discovery-routing",
@@ -1394,8 +1552,21 @@ async function scenarioDiscoveryVnextFullFlow(harness) {
     ["monitoring-state", await harness.mcpToolCall(token, "discovery.monitoring_state.list", { page: 1, pageSize: 20 })],
     ["source-observations", await harness.mcpToolCall(token, "discovery.source_observations.list", { page: 1, pageSize: 20 })],
   ];
+  const diagnosticReadIds = {
+    "run-steps": ["discovery.run_steps.read", "run_step_id", "runStepId"],
+    "query-attempts": ["discovery.query_attempts.read", "query_attempt_id", "queryAttemptId"],
+    "llm-gateway-events": ["discovery.llm_gateway_events.read", "llm_gateway_event_id", "llmGatewayEventId"],
+    "monitoring-state": ["discovery.monitoring_state.read", "source_inventory_id", "sourceInventoryId"],
+    "source-observations": ["discovery.source_observations.read", "observation_id", "observationId"],
+  };
   for (const [label, payload] of diagnosticReads) {
     assert(Array.isArray(payload?.items), `discovery ${label} read surface must return items.`);
+    const [readTool, snakeId, camelId] = diagnosticReadIds[label] ?? [];
+    const firstItem = payload.items[0];
+    const recordId = String(firstItem?.[snakeId] ?? firstItem?.[camelId] ?? "");
+    if (readTool && recordId) {
+      await harness.mcpToolCall(token, readTool, { recordId });
+    }
   }
   pushEvidence(evidence, "diagnostic-reads", diagnosticReads.map(([label]) => label));
 
@@ -1448,6 +1619,8 @@ function buildReadToolCalls() {
     { name: "operator.report.verify", args: { reportKind: "cleanup", entityIds: {}, includeSamples: true } },
     { name: "operator.report.verify", args: { reportKind: "system_health", entityIds: {}, includeSamples: true } },
     { name: "operator.report.verify", args: { reportKind: "website_pipeline", entityIds: {}, includeSamples: true } },
+    { name: "operator.selection.dashboard", args: {} },
+    { name: "operator.selection.reindex_plan", args: { maxDocIds: 5, chunkSize: 2, reason: "deterministic MCP read-only proof" } },
   ];
 }
 
@@ -1690,6 +1863,20 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
       keys: output && typeof output === "object" ? Object.keys(output).slice(0, 6) : [],
     });
   }
+
+  const syncRequest = await harness.mcpToolCall(harness.tokens.config.token, "channels.sync.request", {
+    channelId: readOnlyCanary.channelId,
+    reason: "deterministic MCP outbox coverage proof",
+  });
+  const syncEventId = String(syncRequest?.event_id ?? syncRequest?.eventId ?? "");
+  assert(syncEventId, "channels.sync.request must enqueue an outbox event for the canary channel.");
+  const outboxEvents = await harness.mcpToolCall(token, "outbox.events.list", {
+    eventType: "source.channel.sync.requested",
+    aggregateId: readOnlyCanary.channelId,
+    limit: 5,
+  });
+  assert(readRows(outboxEvents).length > 0, "outbox.events.list must expose the requested source sync event.");
+  listResults["outbox.events.list"] = outboxEvents;
 
   const firstSystemInterest = readFirstRow(listResults["system_interests.list"] ?? {});
   const interestTemplateId = readIdentifier(firstSystemInterest, [
@@ -2064,8 +2251,9 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
       params: {
         name: "discovery.artifacts.create",
         arguments: {
+          artifactType: "DiscoveryBrief",
           payload: JSON.stringify({
-            artifactType: "DiscoveryBrief",
+            name: "String payload should be rejected",
           }),
         },
       },

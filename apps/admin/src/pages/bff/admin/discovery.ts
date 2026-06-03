@@ -144,6 +144,14 @@ export const POST: APIRoute = async ({ request }) => {
         confirm: true,
       });
       auditType = "discovery_vnext_rollback_applied";
+    } else if (intent === "source-inventory-action") {
+      result = await sdk.applyDiscoverySourceInventoryAction<Record<string, unknown>>({
+        sourceInventoryId: String(payload.sourceInventoryId ?? "").trim(),
+        action: String(payload.action ?? "").trim(),
+        reason: String(payload.reason ?? "").trim(),
+        createdBy: session.userId,
+      });
+      auditType = "discovery_vnext_source_inventory_action_applied";
     } else {
       throw new Error("Unknown Discovery vNext admin action.");
     }

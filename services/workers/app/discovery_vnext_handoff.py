@@ -26,7 +26,13 @@ def build_probation_source_candidate(
     selected_provider_type = provider_type or _provider_type_from_decision(source_understanding, routing_decision)
     decision = str(routing_decision.get("decision") or "auto_register_probation")
     trust_stage = "cheap_watch" if decision == "cheap_watch" else "probation"
-    source_url = str(source_understanding.get("sourceUrl") or "").strip()
+    scope_resolution = (
+        source_understanding.get("sourceScopeResolution")
+        if isinstance(source_understanding.get("sourceScopeResolution"), dict)
+        else {}
+    )
+    source_url = str(scope_resolution.get("resolvedSourceUrl") or routing_decision.get("resolvedSourceUrl") or source_understanding.get("sourceUrl") or "").strip()
+    seed_item_url = str(scope_resolution.get("seedItemUrl") or routing_decision.get("seedItemUrl") or source_understanding.get("seedItemUrl") or "").strip() or None
     probe_summary = (
         source_understanding.get("probeSummary")
         if isinstance(source_understanding.get("probeSummary"), dict)
@@ -41,8 +47,13 @@ def build_probation_source_candidate(
         "tags": ["discovery-vnext", trust_stage, selected_provider_type],
         "poll_interval_seconds": 1800 if selected_provider_type == "rss" else 3600,
         "evaluation_json": {
+            "sourceScopeResolution": scope_resolution,
             "sourceUnderstanding": source_understanding,
             "routingDecision": routing_decision,
+            "seedEvidence": {
+                "candidateUrl": scope_resolution.get("candidateUrl"),
+                "seedItemUrl": seed_item_url,
+            },
             "probeSummary": probe_summary,
             "discovered_feed_urls": _discovered_feed_urls(source_understanding),
         },
@@ -130,9 +141,12 @@ def _handoff_guard(
     source_voice = str(source_understanding.get("sourceVoice") or "unknown")
     mode = str(source_understanding.get("signalProductionMode") or "unknown")
     freshness = str(source_understanding.get("artifactFreshnessKind") or "unknown")
+    scope_type = str(source_understanding.get("sourceScopeType") or routing_decision.get("sourceScopeType") or "unknown")
     decision = str(routing_decision.get("decision") or "")
     if access_pattern != "public":
         return "access_pattern_not_public"
+    if scope_type in {"single_item", "context_page", "api_endpoint", "document_collection", "blocked_or_unusable", "search_endpoint"}:
+        return f"source_scope_not_channel_eligible:{scope_type}"
     if provider_type == "rss" and summary.get("validFeed") is not True:
         return "rss_feed_not_validated"
     if decision == "cheap_watch" and routing_decision.get("allowChannelCreation") is not True:

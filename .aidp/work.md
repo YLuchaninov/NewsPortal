@@ -5,14 +5,14 @@
 - id: `NEWSPORTAL-DISCOVERY-VNEXT-COMPLETION-2`
 - lifecycle: `normal`
 - route: `capability`
-- route phase: `discovery-vnext-outsourcing-calibration-reindex`
+- route phase: `discovery-vnext-system-scope-resolution-completion`
 - status: `active`
 - risk: `medium`
 - approval: approved by operator request on 2026-05-31 to implement the Discovery vNext Completion Plan from `docs/discovery_vnext_completion_blueprint.md`.
 - planning required: yes
 - planning source: `external-spec` + `tool-native`
 - planning status: `accepted-for-this-item`
-- accepted plan: `docs/discovery_vnext_completion_blueprint.md`, the operator-provided implementation plan on 2026-05-31, and the tool-native `Discovery vNext Blueprint Completion Plan` accepted by operator request on 2026-05-31.
+- accepted plan: `docs/discovery_vnext_completion_blueprint.md`, the operator-provided implementation plan on 2026-05-31, the tool-native `Discovery vNext Blueprint Completion Plan` accepted by operator request on 2026-05-31, `docs/next step/discovery_vnext_system_completion_plan.md`, the operator-requested `Discovery vNext System Completion Implementation Plan` accepted for implementation on 2026-06-03, and the operator-requested `Plan implementation points 1-4 without destructive maintenance` accepted for implementation on 2026-06-03.
 
 ## Scope
 
@@ -29,6 +29,7 @@ In scope:
 - improve MegaLoop and QueryQuality deterministic fallback behavior without adding domain hardcode;
 - update MCP/admin surfaces and tests needed to prove the completed behavior.
 - complete the remaining blueprint acceptance gaps: artifact lineage, MegaLoop memory wiring, policy-driven full-run candidate selection, QueryQuality persistence/feedback, deterministic eval suite, MCP aliases, admin manual review/policy surfaces and hard proof gates.
+- complete follow-up proof/closure items 1-4: final diff review and commit, deterministic MCP proof for scope tools, admin source-inventory visual/action smoke, and safe PDF/document extraction in fetchers.
 - calibrate the outsourcing client-signal funnel through MCP feedback/configuration and replay historical content with bounded `maintenance.reindex.request jobKind=backfill` chunks after the clean live verification exposed seller/service/SEO noise.
 
 Out of scope:
@@ -38,6 +39,7 @@ Out of scope:
 - using historical yield, selected-count or recent useful-hit telemetry as a keep/drop or auto-register input;
 - bypassing login, CAPTCHA, browser challenge or provider policy boundaries;
 - automatically creating production adapters without operator review.
+- automatic destructive pause/delete for `source_inventory.resolve_scopes`; destructive maintenance remains only through existing rollback confirmation.
 
 Allowed paths:
 
@@ -46,6 +48,7 @@ Allowed paths:
 - `packages/contracts/**`
 - `database/migrations/**`
 - `services/workers/**`
+- `services/fetchers/**`
 - `services/api/**`
 - `services/mcp/**`
 - `apps/admin/**`
@@ -54,6 +57,14 @@ Allowed paths:
 - `tests/**`
 - `infra/scripts/**`
 - `package.json`
+- `pnpm-lock.yaml`
+
+Dependency addition note:
+
+- planned dependency: `pdfjs-dist@6.0.227` as an exact direct dependency of `@newsportal/fetchers`;
+- runtime owner/surface: fetchers resource enrichment only, for PDF text extraction on already URL-guarded and robots-bounded `web_resources`;
+- license/advisory evidence checked on 2026-06-03: npm metadata reports `Apache-2.0`, exact version `6.0.227`, integrity `sha512-/P6M4SXw+70waMVLUM7rdRtvo+dEzqE1t6W/zQNvBETo2MaRa5rrvCcAYdfWGiUzadTgM0lJmRApUrW0d9zgKg==`, Node engine `>=22.13.0 || >=24`; Snyk package page reports latest/non-vulnerable `6.0.227` with no known security issues for latest; public search did not identify exact-version malware/compromise evidence for `pdfjs-dist@6.0.227`;
+- rejected alternatives: `pdf-parse@2.4.5` because it pulls older `pdfjs-dist@5.4.296` plus native `@napi-rs/canvas`; `pdf2json@4.0.3` because it is not the primary PDF.js line; Python `pypdf` because workers do not own fetch/resource extraction boundary for this item.
 
 Protected boundaries:
 
@@ -104,6 +115,27 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
 
 ## Current Proof Status
 
+- passed locally on 2026-06-03 for `discovery-vnext-system-scope-resolution-completion`:
+  - `python3 -m py_compile services/workers/app/discovery_vnext_artifacts.py services/workers/app/discovery_vnext_scope_resolution.py services/workers/app/discovery_vnext_understanding.py services/workers/app/discovery_vnext_routing.py services/workers/app/discovery_vnext_handoff.py services/workers/app/discovery_vnext_candidates.py services/workers/app/discovery_vnext_megaloop.py services/api/app/discovery_vnext_api.py services/api/app/routes/discovery_routes.py`;
+  - `pnpm unit_tests:py -- tests/unit/python/test_discovery_vnext_foundation.py`;
+  - `pnpm unit_tests:ts -- tests/unit/ts/discovery-vnext-contracts.test.ts tests/unit/ts/mcp-control-plane.test.ts tests/unit/ts/ingress-adapter-contracts.test.ts tests/unit/ts/discovery-admin.test.ts`;
+  - `pnpm lint:ts`;
+  - `pnpm lint:py`;
+  - `pnpm typecheck` (completed with existing Astro hints, no errors);
+  - `pnpm test:migrations:smoke`;
+  - `pnpm test:discovery:vnext-flow`;
+  - `git diff --check`.
+- passed locally on 2026-06-03 for `plan-points-1-4-without-destructive-maintenance`:
+  - implementation scope closed: final diff review, strict deterministic MCP proof for new Discovery scope tools, admin source-inventory visual/action smoke, and fetcher-owned PDF/document extraction with exact pinned `pdfjs-dist@6.0.227`;
+  - destructive maintenance remains out of scope: no automatic pause/delete path was added to `source_inventory.resolve_scopes`; destructive rollback remains confirmation-gated through the existing `confirm=true` flow only;
+  - PDF extraction constraints: no OCR dependency, no native canvas dependency, bounded bytes/pages/text/time, scanned/image-only PDFs are recorded as skipped/failed instead of hallucinated text, and extracted evidence is persisted as `resourceKind=document` with parser/version/metadata audit fields;
+  - dependency/security proof passed: `pnpm check:dependency-compliance`, `pnpm check:supply-chain-inventory --json`, and `pnpm audit --prod`;
+  - targeted PDF proof passed via `pnpm unit_tests:ts -- tests/unit/ts/resource-enrichment-website.test.ts tests/unit/ts/document-observations.test.ts` (repo script executed the TS unit suite, 417/417);
+  - targeted MCP/admin proof passed via `pnpm unit_tests:ts -- tests/unit/ts/mcp-control-plane.test.ts tests/unit/ts/discovery-admin.test.ts` (repo script executed the TS unit suite, 417/417), `pnpm test:mcp:http:discovery`, and `pnpm test:mcp:compose --skip-build`;
+  - deterministic MCP proof artifact: `/tmp/newsportal-mcp-http-deterministic-a0d12be7-0e22-4732-8176-8bd781e828d9.json`;
+  - deterministic MCP proof report: `/tmp/newsportal-mcp-http-deterministic-a0d12be7-0e22-4732-8176-8bd781e828d9.md`;
+  - full flow proof passed via `pnpm test:discovery:vnext-flow`, report `/tmp/newsportal-discovery-vnext-flow-dvf-55baf0c9-3c1.json`;
+  - final gates passed: `python3 -m py_compile services/api/app/discovery_vnext_api.py services/workers/app/discovery_vnext_scope_resolution.py services/workers/app/discovery_vnext_understanding.py services/workers/app/discovery_vnext_routing.py`, `pnpm lint:ts`, `pnpm lint:py`, `pnpm typecheck`, `pnpm test:migrations:smoke`, and `git diff --check`.
 - passed locally on 2026-05-31:
   - `python3 -m py_compile services/workers/app/discovery_vnext_understanding.py services/workers/app/discovery_vnext_routing.py services/workers/app/discovery_vnext_probe.py services/workers/app/discovery_vnext_candidates.py services/workers/app/discovery_vnext_megaloop.py services/api/app/discovery_vnext_api.py`;
   - `python3 -m py_compile services/api/app/discovery_vnext_api.py`;

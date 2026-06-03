@@ -494,6 +494,10 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       postJson<T>("/maintenance/discovery/probe/plan/preview", payload),
     executeDiscoveryProbe: <T>(payload: unknown) =>
       postJson<T>("/maintenance/discovery/probe/execute", payload),
+    previewDiscoveryScopeResolution: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/scope/resolve-preview", payload),
+    applyDiscoveryScopeResolution: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/scope/resolve-apply", payload),
     previewDiscoveryUnderstanding: <T>(payload: unknown) =>
       postJson<T>("/maintenance/discovery/understand/preview", payload),
     previewDiscoveryRoute: <T>(payload: unknown) =>
@@ -516,6 +520,12 @@ export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
       postJson<T>("/maintenance/discovery/rollback/apply", payload),
     submitDiscoveryFeedback: <T>(payload: unknown) =>
       postJson<T>("/maintenance/discovery/feedback", payload),
+    explainDiscoverySourceInventory: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/source-inventory/explain", payload),
+    resolveDiscoverySourceInventoryScopes: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/source-inventory/resolve-scopes", payload),
+    applyDiscoverySourceInventoryAction: <T>(payload: unknown) =>
+      postJson<T>("/maintenance/discovery/source-inventory/action", payload),
     getLlmUsageSummary: <T>() => getJson<T>("/maintenance/llm-usage-summary"),
     getLlmBudgetSummary: <T>() => getJson<T>("/maintenance/llm-budget-summary"),
     listReindexJobs: <T>() => getJson<T>("/maintenance/reindex-jobs"),

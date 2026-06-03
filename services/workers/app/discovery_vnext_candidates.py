@@ -77,6 +77,7 @@ def query_quality_report(
     return {
         "query": query,
         "queryFamilyIntent": query_family_intent,
+        "queryPurpose": _query_purpose(query_family_intent, query),
         "observedResultMix": mix,
         "quality": quality,
         "refinementHints": _refinement_hints(quality),
@@ -86,13 +87,14 @@ def query_quality_report(
 
 def classify_result_mix(candidates: list[dict[str, Any]], *, raw_result_count: int) -> dict[str, int]:
     mix = {
-        "ownerOrOfficialSources": 0,
+        "primaryOrOwnerSources": 0,
+        "officialSources": 0,
         "recurringListingSources": 0,
         "sourceDirectories": 0,
-        "datasetsOrRegistries": 0,
+        "datasetsOrApis": 0,
         "secondaryExplainers": 0,
         "sellerOrVendorPages": 0,
-        "seoOrContentFarm": 0,
+        "seoNoise": 0,
         "deadOrBlocked": 0,
         "duplicates": 0,
         "unknown": 0,
@@ -110,17 +112,18 @@ def classify_result_mix(candidates: list[dict[str, Any]], *, raw_result_count: i
         if _looks_dead_or_blocked(text):
             mix["deadOrBlocked"] += 1
         elif _looks_seo_or_content_farm(text):
-            mix["seoOrContentFarm"] += 1
+            mix["seoNoise"] += 1
         elif _looks_seller_or_vendor(text):
             mix["sellerOrVendorPages"] += 1
         elif _looks_source_directory(text):
             mix["sourceDirectories"] += 1
         elif _looks_dataset_or_registry(text):
-            mix["datasetsOrRegistries"] += 1
+            mix["datasetsOrApis"] += 1
         elif _looks_recurring_listing(text):
             mix["recurringListingSources"] += 1
         elif _looks_owner_or_official(text):
-            mix["ownerOrOfficialSources"] += 1
+            mix["primaryOrOwnerSources"] += 1
+            mix["officialSources"] += 1
         elif _looks_secondary_explainer(text):
             mix["secondaryExplainers"] += 1
         else:
@@ -133,13 +136,13 @@ def classify_result_mix(candidates: list[dict[str, Any]], *, raw_result_count: i
 
 def query_quality_from_result_mix(mix: dict[str, int]) -> str:
     primary = (
-        mix.get("ownerOrOfficialSources", 0)
+        mix.get("primaryOrOwnerSources", 0)
         + mix.get("recurringListingSources", 0)
         + mix.get("sourceDirectories", 0)
-        + mix.get("datasetsOrRegistries", 0)
+        + mix.get("datasetsOrApis", 0)
     )
     context = mix.get("secondaryExplainers", 0)
-    noise = mix.get("sellerOrVendorPages", 0) + mix.get("seoOrContentFarm", 0) + mix.get("deadOrBlocked", 0)
+    noise = mix.get("sellerOrVendorPages", 0) + mix.get("seoNoise", 0) + mix.get("deadOrBlocked", 0)
     if primary >= 3 and noise <= primary:
         return "useful_for_acquisition"
     if primary > 0:
@@ -198,6 +201,23 @@ def _recommended_next_action(quality: str) -> str:
         "noisy": "use_different_lens",
         "exhausted": "stop_family",
     }[quality]
+
+
+def _query_purpose(intent: str, query: str) -> str:
+    text = f"{intent} {query}".lower()
+    if any(token in text for token in ("directory", "registry", "catalog")):
+        return "find_source_directories"
+    if any(token in text for token in ("terminology", "terms", "vocabulary", "synonym")):
+        return "find_terminology"
+    if any(token in text for token in ("document", "pdf", "report", "notice")):
+        return "find_documents"
+    if any(token in text for token in ("forum", "discussion", "community", "thread")):
+        return "find_discussions"
+    if any(token in text for token in ("official", "owner", "authority", "agency")):
+        return "find_official_owners"
+    if any(token in text for token in ("local language", "locale", "translated")):
+        return "find_local_language_forms"
+    return "find_direct_sources"
 
 
 def _looks_owner_or_official(text: str) -> bool:

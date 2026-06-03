@@ -28,6 +28,8 @@ def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     )
     router.post("/maintenance/discovery/probe/plan/preview")(vnext.preview_probe_plan)
     router.post("/maintenance/discovery/probe/execute")(vnext.execute_probe_from_payload)
+    router.post("/maintenance/discovery/scope/resolve-preview")(vnext.preview_scope_resolution)
+    router.post("/maintenance/discovery/scope/resolve-apply", status_code=201)(vnext.apply_scope_resolution)
     router.post("/maintenance/discovery/understand/preview")(vnext.preview_source_understanding)
     router.post("/maintenance/discovery/route/preview")(vnext.preview_route)
     router.post("/maintenance/discovery/routing-decisions/apply")(vnext.apply_routing_decision)
@@ -39,6 +41,9 @@ def register_discovery_routes(app: FastAPI, deps: Mapping[str, Any]) -> None:
     router.post("/maintenance/discovery/rollback/prepare", status_code=201)(vnext.prepare_rollback)
     router.post("/maintenance/discovery/rollback/apply")(vnext.apply_rollback)
     router.post("/maintenance/discovery/feedback", status_code=201)(vnext.submit_feedback)
+    router.post("/maintenance/discovery/source-inventory/explain")(vnext.explain_source_inventory)
+    router.post("/maintenance/discovery/source-inventory/resolve-scopes")(vnext.resolve_source_inventory_scopes)
+    router.post("/maintenance/discovery/source-inventory/action")(vnext.apply_source_inventory_action)
 
     for public_name, kind in (
         ("runs", "runs"),

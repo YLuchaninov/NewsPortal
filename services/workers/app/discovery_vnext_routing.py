@@ -138,12 +138,18 @@ def route_source_understanding(
     return {
         "candidateId": source_understanding.get("candidateId"),
         "sourceUnderstandingArtifactId": source_understanding.get("artifactId"),
+        "sourceScopeResolutionArtifactId": source_understanding.get("sourceScopeResolutionArtifactId"),
+        "resolvedSourceUrl": source_understanding.get("sourceUrl"),
+        "seedItemUrl": source_understanding.get("seedItemUrl"),
+        "sourceScopeType": source_understanding.get("sourceScopeType"),
         "decision": decision,
         "reason": _reason(decision, components, hard_blockers, provider_type, access_pattern),
         "policyVersion": str(active_policy.get("policyVersion") or "discovery-routing-vnext-1"),
         "scoreComponents": components,
         "actions": _actions(decision, provider_type),
         "manualReviewRequired": decision == "manual_review",
+        "allowChannelCreation": decision == "auto_register_probation",
+        "adapterNeed": _adapter_need(decision, source_understanding, provider_type),
         "rollbackGroupId": rollback_group_id,
     }
 
@@ -167,6 +173,9 @@ def _decision(
 ) -> str:
     if hard_blockers & HARD_BLOCKERS:
         return "blocked"
+    scope_decision = _scope_gate_decision(source_understanding)
+    if scope_decision:
+        return scope_decision
     if access_policy.get("defaultAction") in {"blocked", "adapter_backlog"}:
         return str(access_policy["defaultAction"])
     if provider_policy.get("defaultAction") == "adapter_backlog" or source_understanding.get("adapterRequired"):
@@ -233,7 +242,7 @@ def _actions(decision: str, provider_type: str) -> list[dict[str, Any]]:
     if decision == "auto_register_probation":
         return [
             {"actionType": "store_in_inventory", "status": "pending"},
-            {"actionType": "create_probation_channel", "providerType": provider_type, "status": "pending"},
+            {"actionType": "create_probation_channel", "providerType": provider_type, "status": "pending", "usesResolvedSourceUrl": True},
         ]
     if decision == "cheap_watch":
         return [
@@ -243,7 +252,7 @@ def _actions(decision: str, provider_type: str) -> list[dict[str, Any]]:
     if decision == "adapter_backlog":
         return [
             {"actionType": "store_in_inventory", "status": "pending"},
-            {"actionType": "create_adapter_backlog_item", "status": "pending"},
+            {"actionType": "create_adapter_backlog_item", "status": "pending", "adapterNeed": "custom_adapter"},
         ]
     if decision in {"inventory", "inventory_low_priority", "manual_review"}:
         return [{"actionType": "store_in_inventory", "status": "pending"}]
@@ -256,6 +265,8 @@ def _actions(decision: str, provider_type: str) -> list[dict[str, Any]]:
 
 
 def _is_context_only(source_understanding: dict[str, Any]) -> bool:
+    if str(source_understanding.get("sourceScopeType") or "") in {"single_item", "context_page"}:
+        return True
     voice = str(source_understanding.get("sourceVoice") or "unknown")
     freshness = str(source_understanding.get("artifactFreshnessKind") or "unknown")
     mode = str(source_understanding.get("signalProductionMode") or "unknown")
@@ -276,10 +287,14 @@ def _is_auto_register_eligible_source_mode(
     freshness = str(source_understanding.get("artifactFreshnessKind") or "unknown")
     voice = str(source_understanding.get("sourceVoice") or "unknown")
     access_pattern = str(source_understanding.get("accessPattern") or "unknown")
+    scope_type = str(source_understanding.get("sourceScopeType") or "unknown")
+    allowed_scope_types = {"section", "feed", "listing_page", "domain_root"}
     allowed_modes = {str(item) for item in policy.get("allowedAutoRegisterSignalProductionModes") or []}
     allowed_freshness = {str(item) for item in policy.get("allowedAutoRegisterFreshnessKinds") or []}
     blocked_voices = {str(item) for item in policy.get("blockedAutoRegisterSourceVoices") or []}
     if access_pattern != "public":
+        return False
+    if scope_type not in allowed_scope_types:
         return False
     if voice in blocked_voices:
         return False
@@ -305,6 +320,8 @@ def _provider_validated_for_auto_register(source_understanding: dict[str, Any], 
 
 
 def _is_cheap_watch_eligible(source_understanding: dict[str, Any]) -> bool:
+    if str(source_understanding.get("sourceScopeType") or "") in {"blocked_or_unusable", "api_endpoint", "single_item", "context_page"}:
+        return False
     mode = str(source_understanding.get("signalProductionMode") or "unknown")
     return mode in {
         "official_update",
@@ -313,3 +330,35 @@ def _is_cheap_watch_eligible(source_understanding: dict[str, Any]) -> bool:
         "direct_event_feed",
         "direct_request_or_listing",
     }
+
+
+def _scope_gate_decision(source_understanding: dict[str, Any]) -> str | None:
+    scope_type = str(source_understanding.get("sourceScopeType") or "unknown")
+    provider_type = str(source_understanding.get("suggestedProviderType") or "unknown")
+    summary = source_understanding.get("probeSummary") if isinstance(source_understanding.get("probeSummary"), dict) else {}
+    if scope_type == "blocked_or_unusable":
+        return "blocked"
+    if scope_type in {"api_endpoint", "document_collection"} or (
+        source_understanding.get("adapterRequired") and provider_type in {"api", "document_portal"}
+    ):
+        return "adapter_backlog"
+    if scope_type in {"single_item", "context_page"}:
+        return "inventory_context"
+    if scope_type == "feed" and (provider_type != "rss" or summary.get("validFeed") is not True):
+        return "manual_review"
+    if scope_type == "search_endpoint" and not summary.get("listingSignals"):
+        return "manual_review"
+    return None
+
+
+def _adapter_need(decision: str, source_understanding: dict[str, Any], provider_type: str) -> str | None:
+    if decision != "adapter_backlog":
+        return None
+    scope_type = str(source_understanding.get("sourceScopeType") or "")
+    if provider_type == "api" or scope_type == "api_endpoint":
+        return "custom_adapter"
+    if scope_type == "document_collection":
+        return "parser"
+    if str(source_understanding.get("accessPattern") or "") == "requires_auth":
+        return "auth_config"
+    return "custom_adapter"

@@ -131,6 +131,10 @@ export function buildPromptArguments(name, runId) {
         targetTitle: `Operator vNext artifact ${runId}`,
         goal: "find net-new high-signal sources",
       };
+    case "discovery.source_understanding.review":
+      return {
+        contract: `SourceUnderstanding/RoutingDecision deterministic fixture ${runId}`,
+      };
     case "sequence.draft":
       return {
         objective: `validate deterministic MCP matrix ${runId}`,

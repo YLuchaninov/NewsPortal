@@ -73,6 +73,45 @@ test("SourceUnderstanding payload requires yieldIndependent flag", () => {
   assert.ok(issues.some((issue) => issue.path === "yieldIndependent"));
 });
 
+test("SourceScopeResolution payload schema accepts resolved source scope", () => {
+  const issues = validateDiscoveryVNextPayload("SourceScopeResolution", {
+    candidateUrl: "https://example.org/news/2026/launch",
+    resolvedSourceUrl: "https://example.org/news",
+    sourceScopeType: "section",
+    sourceScopeConfidence: 0.82,
+    seedItemUrl: "https://example.org/news/2026/launch",
+    monitoringEntryUrls: ["https://example.org/news", "https://example.org/feed.xml"],
+    itemExtractionHints: {
+      itemUrlPattern: "/news/{slug}",
+      listingUrlPattern: "/news",
+      datePatternObserved: true,
+      paginationObserved: false,
+      documentLinksObserved: false,
+    },
+    resolutionEvidence: ["Candidate URL looks like an item detail page."],
+    notMonitoringReason: null,
+    risk: { overallRisk: "low" },
+  });
+
+  assert.deepEqual(issues, []);
+});
+
+test("SourceScopeResolution payload rejects unsupported scope enum", () => {
+  const issues = validateDiscoveryVNextPayload("SourceScopeResolution", {
+    candidateUrl: "https://example.org",
+    resolvedSourceUrl: "https://example.org",
+    sourceScopeType: "procurement_portal",
+    sourceScopeConfidence: 0.8,
+    seedItemUrl: null,
+    monitoringEntryUrls: ["https://example.org"],
+    itemExtractionHints: {},
+    resolutionEvidence: ["scope"],
+    risk: {},
+  });
+
+  assert.ok(issues.some((issue) => issue.path === "sourceScopeType"));
+});
+
 test("ProbePlan payload schema requires bounded limits and disallowed actions", () => {
   const issues = validateDiscoveryVNextPayload("ProbePlan", {
     candidateUrl: "https://example.org",
@@ -101,6 +140,7 @@ test("QueryQualityReport payload schema keeps quality enum strict", () => {
   const issues = validateDiscoveryVNextPayload("QueryQualityReport", {
     query: "public updates",
     queryFamilyIntent: "Find public updates.",
+    queryPurpose: "find_direct_sources",
     observedResultMix: {},
     quality: "excellent",
   });
@@ -112,7 +152,8 @@ test("QueryQualityReport payload schema accepts result-mix quality values", () =
   const issues = validateDiscoveryVNextPayload("QueryQualityReport", {
     query: "public updates",
     queryFamilyIntent: "Find official update sources.",
-    observedResultMix: { ownerOrOfficialSources: 2, duplicates: 0 },
+    queryPurpose: "find_official_owners",
+    observedResultMix: { primaryOrOwnerSources: 2, officialSources: 2, duplicates: 0 },
     quality: "useful_for_acquisition",
     recommendedNextAction: "probe_top_candidates",
   });

@@ -97,7 +97,15 @@ export function getByPath(value: unknown, path: string): unknown {
   const segments = path.split(".").map((segment) => segment.trim()).filter(Boolean);
   let current: unknown = value;
   for (const segment of segments) {
-    if (current == null || typeof current !== "object" || Array.isArray(current)) {
+    if (Array.isArray(current)) {
+      const index = Number.parseInt(segment, 10);
+      if (!Number.isInteger(index) || index < 0 || index >= current.length) {
+        return undefined;
+      }
+      current = current[index];
+      continue;
+    }
+    if (current == null || typeof current !== "object") {
       return undefined;
     }
     current = (current as Record<string, unknown>)[segment];

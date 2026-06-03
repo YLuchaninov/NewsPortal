@@ -391,6 +391,47 @@ test("declarative JSON dry-run supports URL templates from record fields", async
   }));
 });
 
+test("declarative JSON dry-run supports numeric array field paths", async () => {
+  const port = 18087;
+
+  await withAcquisitionAllowlist(`127.0.0.1:${port}`, async () => withMockFetch(async () => {
+    return new Response(JSON.stringify({
+      releases: [
+        {
+          ocid: "ocds-123",
+          tender: {
+            title: "Case management platform",
+            documents: [{ url: "/docs/rfp.pdf" }],
+          },
+          awards: [{ suppliers: [{ name: "Supplier A" }] }],
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }, async () => {
+    const result = await dryRunIngressAdapter({
+      adapterKey: "api.generic_json_mapping",
+      providerType: "api",
+      fetchUrl: `http://127.0.0.1:${port}/releases`,
+      limit: 1,
+      config: {
+        itemsPath: "releases",
+        titleField: "awards.0.suppliers.0.name",
+        bodyField: "tender.title",
+        urlField: "tender.documents.0.url",
+        externalIdField: "ocid",
+        pagination: { mode: "none" },
+      },
+    });
+    assert.equal(result.status, "ok");
+    const item = (result.itemsPreview as Array<Record<string, unknown>>)[0];
+    assert.equal(item?.url, `http://127.0.0.1:${port}/docs/rfp.pdf`);
+    assert.equal(item?.title, "Supplier A");
+  }));
+});
+
 test("declarative JSON dry-run supports cursor pagination", async () => {
   const requests: string[] = [];
   const port = 18083;

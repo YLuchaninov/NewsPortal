@@ -48,11 +48,13 @@ def synthesize_source_understanding(
     *,
     discovery_brief: dict[str, Any],
     probe_report: dict[str, Any],
+    source_scope_resolution: dict[str, Any] | None = None,
     candidate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = build_source_understanding_payload(
         discovery_brief=discovery_brief,
         probe_report=probe_report,
+        source_scope_resolution=source_scope_resolution or {},
         candidate=candidate or {},
     )
     issues = validate_source_understanding(payload)
@@ -69,24 +71,38 @@ def build_source_understanding_payload(
     *,
     discovery_brief: dict[str, Any],
     probe_report: dict[str, Any],
+    source_scope_resolution: dict[str, Any],
     candidate: dict[str, Any],
 ) -> dict[str, Any]:
+    scope_payload = (
+        source_scope_resolution.get("payload")
+        if isinstance(source_scope_resolution.get("payload"), dict)
+        else source_scope_resolution
+    )
+    if not scope_payload:
+        scope_payload = _fallback_scope_from_probe(probe_report, candidate)
     source_url = str(
-        probe_report.get("candidateUrl")
+        scope_payload.get("resolvedSourceUrl")
+        or probe_report.get("candidateUrl")
         or candidate.get("canonicalUrl")
         or candidate.get("url")
         or ""
     )
-    role_context = _role_context(probe_report, candidate)
+    role_context = _role_context(probe_report, candidate, scope_payload)
     technical_observability = _technical_score(probe_report)
     access_pattern = str(probe_report.get("accessPattern") or "unknown")
     artifact_fit = _artifact_fit(discovery_brief, probe_report, role_context)
     evidence_directness = _evidence_directness(probe_report, role_context)
-    risk = _risk(probe_report)
+    risk = _risk(probe_report, scope_payload)
     signals = _signals(discovery_brief, probe_report, role_context, artifact_fit, technical_observability, risk)
     payload = {
         "candidateId": candidate.get("candidateId") or candidate.get("candidate_id"),
         "sourceUrl": source_url,
+        "sourceScopeResolutionArtifactId": source_scope_resolution.get("artifact_id")
+        or source_scope_resolution.get("artifactId"),
+        "seedItemUrl": scope_payload.get("seedItemUrl"),
+        "sourceScopeType": scope_payload.get("sourceScopeType") or "unknown",
+        "sourceScopeEvidence": scope_payload.get("resolutionEvidence") or [],
         "sourceRoleDescription": _source_role_description(source_url, role_context),
         "sourceVoice": role_context["sourceVoice"],
         "artifactProducingBehavior": _artifact_behavior(probe_report, role_context),
@@ -95,6 +111,7 @@ def build_source_understanding_payload(
         "observedArtifactTypes": role_context["observedArtifactTypes"],
         "canProduceSignals": signals,
         "notExpectedToProduce": _not_expected_to_produce(discovery_brief, role_context),
+        "negativeRoleEvidence": _negative_role_evidence(role_context, scope_payload),
         "artifactFit": artifact_fit,
         "technicalObservability": technical_observability,
         "evidenceDirectness": evidence_directness,
@@ -110,13 +127,14 @@ def build_source_understanding_payload(
         "hardBlockers": [],
         "classificationUncertain": role_context["classificationUncertain"],
         "potentialHigh": role_context["potentialHigh"],
-        "adapterRequired": _adapter_required(probe_report, access_pattern),
+        "adapterRequired": _adapter_required(probe_report, access_pattern, scope_payload),
         "yieldIndependent": True,
         "reasonToKeep": _reason_to_keep(role_context),
         "reasonNotToAutoRegister": _reason_not_to_auto_register(role_context, access_pattern, risk),
         "accessPattern": access_pattern,
-        "suggestedProviderType": _suggested_provider_type(candidate, probe_report),
+        "suggestedProviderType": _suggested_provider_type(candidate, probe_report, scope_payload),
         "probeSummary": _probe_summary(probe_report),
+        "sourceScopeResolution": scope_payload,
     }
     hard_blocker = _hard_blocker(access_pattern, risk)
     if hard_blocker:
@@ -160,6 +178,27 @@ def _signals(
         }
         for index, signal in enumerate(desired[:5])
     ]
+
+
+def _fallback_scope_from_probe(probe_report: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    candidate_url = str(probe_report.get("candidateUrl") or candidate.get("canonicalUrl") or candidate.get("url") or "")
+    observations = probe_report.get("observations") if isinstance(probe_report.get("observations"), list) else []
+    technical = probe_report.get("technicalObservability") if isinstance(probe_report.get("technicalObservability"), dict) else {}
+    valid_feed = bool(technical.get("feedValid")) or any(isinstance(item, dict) and item.get("valid") for item in observations)
+    listing = any(isinstance(item, dict) and int(item.get("listingCountEstimate") or 0) > 0 for item in observations)
+    scope_type = "feed" if valid_feed else "listing_page" if listing else "unknown"
+    return {
+        "candidateUrl": candidate_url,
+        "resolvedSourceUrl": candidate_url,
+        "sourceScopeType": scope_type,
+        "sourceScopeConfidence": 0.65 if scope_type != "unknown" else 0.35,
+        "seedItemUrl": None,
+        "monitoringEntryUrls": [candidate_url] if candidate_url else [],
+        "itemExtractionHints": {},
+        "resolutionEvidence": ["Fallback scope inferred from probe evidence."],
+        "notMonitoringReason": None,
+        "risk": {},
+    }
 
 
 def _probe_evidence(probe_report: dict[str, Any]) -> list[str]:
@@ -245,11 +284,13 @@ def _capability_label(score: float) -> str:
     return "unknown"
 
 
-def _risk(probe_report: dict[str, Any]) -> dict[str, Any]:
+def _risk(probe_report: dict[str, Any], source_scope_resolution: dict[str, Any] | None = None) -> dict[str, Any]:
     access_pattern = str(probe_report.get("accessPattern") or "unknown")
     provider_failures = probe_report.get("providerFailures") if isinstance(probe_report.get("providerFailures"), list) else []
+    scope_risk = source_scope_resolution.get("risk") if isinstance(source_scope_resolution, dict) and isinstance(source_scope_resolution.get("risk"), dict) else {}
     if access_pattern == "captcha_blocked":
         return {
+            **scope_risk,
             "overallRisk": "high",
             "riskScore": 0.9,
             "authOrCaptchaRisk": "high",
@@ -257,6 +298,7 @@ def _risk(probe_report: dict[str, Any]) -> dict[str, Any]:
         }
     if access_pattern == "blocked":
         return {
+            **scope_risk,
             "overallRisk": "high",
             "riskScore": 0.95,
             "authOrCaptchaRisk": "high",
@@ -264,6 +306,7 @@ def _risk(probe_report: dict[str, Any]) -> dict[str, Any]:
         }
     if access_pattern == "requires_auth":
         return {
+            **scope_risk,
             "overallRisk": "medium",
             "riskScore": 0.55,
             "authOrCaptchaRisk": "medium",
@@ -271,12 +314,14 @@ def _risk(probe_report: dict[str, Any]) -> dict[str, Any]:
         }
     if access_pattern == "requires_browser":
         return {
+            **scope_risk,
             "overallRisk": "medium",
             "riskScore": 0.45,
             "authOrCaptchaRisk": "low",
             "providerFailureCount": len(provider_failures),
         }
     return {
+        **scope_risk,
         "overallRisk": "low" if _technical_score(probe_report) >= 0.35 else "unknown",
         "riskScore": 0.2 if _technical_score(probe_report) >= 0.35 else 0.5,
         "authOrCaptchaRisk": "low",
@@ -331,7 +376,14 @@ def _probe_summary(probe_report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _suggested_provider_type(candidate: dict[str, Any], probe_report: dict[str, Any]) -> str:
+def _suggested_provider_type(candidate: dict[str, Any], probe_report: dict[str, Any], source_scope_resolution: dict[str, Any] | None = None) -> str:
+    scope_type = str((source_scope_resolution or {}).get("sourceScopeType") or "")
+    if scope_type == "feed":
+        return "rss"
+    if scope_type == "api_endpoint":
+        return "api"
+    if scope_type == "document_collection":
+        return "document_portal"
     candidate_guess = str(candidate.get("candidateKindGuess") or candidate.get("providerType") or "").strip()
     observations = probe_report.get("observations") if isinstance(probe_report.get("observations"), list) else []
     if any(isinstance(item, dict) and item.get("valid") for item in observations):
@@ -363,6 +415,18 @@ def _not_expected_to_produce(discovery_brief: dict[str, Any], role_context: dict
     return negatives[:5]
 
 
+def _negative_role_evidence(role_context: dict[str, Any], source_scope_resolution: dict[str, Any]) -> list[str]:
+    evidence: list[str] = []
+    scope_type = str(source_scope_resolution.get("sourceScopeType") or "unknown")
+    if scope_type in {"single_item", "context_page"}:
+        evidence.append(f"{scope_type} scopes are evidence or context, not recurring source channels.")
+    if role_context["sourceVoice"] in {"seller_or_vendor", "third_party_commentary"}:
+        evidence.append(f"{role_context['sourceVoice']} voice is not authoritative enough for auto-registration.")
+    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_article", "documentation_or_guide"}:
+        evidence.append("Static/evergreen artifacts are useful context but weak recurring signal sources.")
+    return evidence[:5]
+
+
 def _hard_blocker(access_pattern: str, risk: dict[str, Any]) -> str | None:
     if access_pattern == "captcha_blocked":
         return "unsupported_auth_or_captcha"
@@ -373,12 +437,22 @@ def _hard_blocker(access_pattern: str, risk: dict[str, Any]) -> str | None:
     return None
 
 
-def _role_context(probe_report: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+def _role_context(probe_report: dict[str, Any], candidate: dict[str, Any], source_scope_resolution: dict[str, Any] | None = None) -> dict[str, Any]:
     hints = _page_role_hints(probe_report)
     observed_types = _observed_artifact_types(probe_report)
     source_voice = _source_voice(hints, probe_report, candidate)
     freshness = _artifact_freshness(hints, observed_types, probe_report)
     production_mode = _signal_production_mode(source_voice, freshness, hints, probe_report)
+    scope_type = str((source_scope_resolution or {}).get("sourceScopeType") or "unknown")
+    if scope_type in {"single_item", "context_page"}:
+        production_mode = "secondary_context" if source_voice != "seller_or_vendor" else "unlikely"
+        if scope_type == "context_page":
+            freshness = "static_service_page" if source_voice == "seller_or_vendor" else freshness
+    if scope_type == "api_endpoint":
+        freshness = "dataset_or_registry"
+        production_mode = "source_directory"
+    if scope_type == "document_collection":
+        freshness = "documentation_or_guide"
     confidence = _source_role_confidence(hints, observed_types, probe_report)
     return {
         "sourceVoice": source_voice,
@@ -560,8 +634,10 @@ def _reason_not_to_auto_register(role_context: dict[str, Any], access_pattern: s
     return "No source-mode blocker; automatic registration still depends on routing policy thresholds and provider validation."
 
 
-def _adapter_required(probe_report: dict[str, Any], access_pattern: str) -> bool:
-    return access_pattern in {"requires_auth", "requires_browser"} or any(
+def _adapter_required(probe_report: dict[str, Any], access_pattern: str, source_scope_resolution: dict[str, Any] | None = None) -> bool:
+    scope_type = str((source_scope_resolution or {}).get("sourceScopeType") or "")
+    candidate_url = str((source_scope_resolution or {}).get("candidateUrl") or probe_report.get("candidateUrl") or "").lower()
+    return scope_type in {"api_endpoint", "document_collection"} or candidate_url.endswith((".pdf", ".doc", ".docx", ".xls", ".xlsx")) or access_pattern in {"requires_auth", "requires_browser"} or any(
         isinstance(item, dict) and item.get("adapterRequired")
         for item in probe_report.get("observations") or []
     )

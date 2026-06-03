@@ -25,9 +25,15 @@ UNIVERSAL_LENSES = [
 
 DEFAULT_GENERATOR_CONFIGS = [
     {"memoryMode": "blind", "lens": "official_owners"},
-    {"memoryMode": "thin", "lens": "documents_and_reports"},
-    {"memoryMode": "gap_only", "lens": "datasets_and_apis"},
-    {"memoryMode": "artifact_lens", "lens": "announcements_and_newsrooms"},
+    {"memoryMode": "thin", "lens": "registries_and_directories"},
+    {"memoryMode": "gap_only", "lens": "documents_and_reports"},
+    {"memoryMode": "artifact_lens", "lens": "datasets_and_apis"},
+    {"memoryMode": "thin", "lens": "announcements_and_newsrooms"},
+    {"memoryMode": "gap_only", "lens": "change_logs_and_updates"},
+    {"memoryMode": "adversarial", "lens": "public_discussions"},
+    {"memoryMode": "artifact_lens", "lens": "marketplaces_and_listings"},
+    {"memoryMode": "locale", "lens": "local_language_forms"},
+    {"memoryMode": "adversarial", "lens": "weird_public_artifacts"},
     {"memoryMode": "adversarial", "lens": "adversarial_missing_sources"},
 ]
 
@@ -55,6 +61,7 @@ def run_mega_loop_preview(
     source_inventory: list[dict[str, Any]] | None = None,
     feedback_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    coverage_policy = _coverage_policy(max_batches=max_batches)
     configs = DEFAULT_GENERATOR_CONFIGS[: max(1, min(max_batches, len(DEFAULT_GENERATOR_CONFIGS)))]
     batches = [
         generate_hypothesis_batch(discovery_brief, config["memoryMode"], config["lens"], locale=locale)
@@ -66,15 +73,40 @@ def run_mega_loop_preview(
         source_inventory=source_inventory,
         feedback_events=feedback_events,
     )
+    executed_lenses = {str(batch.get("lens") or batch.get("payload", {}).get("lens") or "") for batch in batches}
+    missing_lenses = [lens for lens in coverage_policy["requiredLensCoverage"] if lens not in executed_lenses]
+    warnings = []
+    if missing_lenses:
+        warnings.append(
+            {
+                "code": "missing_required_lenses",
+                "message": "MegaLoop budget ended before all universal lenses executed.",
+                "missingLenses": missing_lenses,
+            }
+        )
     return {
         "artifactType": "HypothesisMegaLoopPreview",
+        "status": "completed_with_coverage_gap" if missing_lenses else "completed",
         "batches": batches,
-        "comparison": comparison,
+        "comparison": {**comparison, "missingLenses": missing_lenses, "warnings": warnings},
+        "coveragePolicy": coverage_policy,
+        "warnings": warnings,
         "limits": {
             "maxBatches": max_batches,
             "actualBatches": len(batches),
             "liveProviderExecution": False,
         },
+    }
+
+
+def _coverage_policy(*, max_batches: int) -> dict[str, Any]:
+    return {
+        "loopStrategy": "universal_broad_coverage",
+        "requiredLensCoverage": UNIVERSAL_LENSES,
+        "minHypothesesPerLens": 5,
+        "minQueriesPerHypothesis": 3,
+        "minProbeCandidatesPerLens": 5,
+        "maxBatches": max_batches,
     }
 
 
@@ -226,6 +258,8 @@ def _hypotheses_for_lens(
                 "description": "Public sources with this role/artifact behavior may expose desired signals.",
                 "sourceRoleDescription": _source_role_description(lens, locale, role),
                 "expectedArtifacts": artifact_slice,
+                "expectedSourceScopeTypes": _expected_scope_types(lens, artifact_slice),
+                "badIfScopeIs": ["single_item", "static_service_page", "context_page"],
                 "expectedSignalLinks": [
                     {
                         "signalId": str(signal.get("signalId") or f"signal-{index + 1}"),
@@ -238,6 +272,8 @@ def _hypotheses_for_lens(
                     for index, signal in enumerate(desired_signals[:5])
                 ],
                 "queryFamilies": families,
+                "negativePatterns": ["seller pages", "generic SEO content", "static explainers"],
+                "whyThisCouldWork": "The universal lens targets recurring public artifacts whose scope can be resolved before channel projection.",
                 "riskAssumption": _risk_assumption(lens),
                 "actionability": _actionability(lens, role),
                 "memoryMode": memory_mode,
@@ -245,6 +281,18 @@ def _hypotheses_for_lens(
             }
         )
     return hypotheses[:20]
+
+
+def _expected_scope_types(lens: str, artifacts: list[str]) -> list[str]:
+    if lens == "datasets_and_apis":
+        return ["api_endpoint", "section", "domain_root"]
+    if "document" in artifacts or "report" in artifacts:
+        return ["document_collection", "section", "listing_page"]
+    if "listing" in artifacts or "registry_entry" in artifacts:
+        return ["listing_page", "section", "feed"]
+    if lens in {"public_discussions", "marketplaces_and_listings"}:
+        return ["listing_page", "search_endpoint", "section"]
+    return ["section", "feed", "domain_root"]
 
 
 def _query_terms(discovery_brief: dict[str, Any], lens: str, locale: str | None) -> list[str]:

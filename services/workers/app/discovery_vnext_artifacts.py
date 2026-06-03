@@ -9,12 +9,13 @@ ARTIFACT_TYPES = {
     "HypothesisBatch",
     "ProbePlan",
     "ProbeReport",
+    "SourceScopeResolution",
     "SourceUnderstanding",
     "RoutingDecision",
     "QueryQualityReport",
 }
 ARTIFACT_STATUSES = {"draft", "generated", "validated", "rejected", "superseded", "applied", "expired"}
-MEMORY_MODES = {"blind", "thin", "gap_only", "locale", "artifact_lens", "adversarial", "full"}
+MEMORY_MODES = {"blind", "thin", "gap_only", "locale", "artifact_lens", "adversarial", "full", "full_evaluator_only"}
 FRESHNESS_NEEDS = {"fast", "normal", "slow", "rare", "unknown"}
 DIRECTNESS_VALUES = {"direct", "indirect", "precursor", "contextual"}
 CAPABILITY_VALUES = {"high", "medium", "low", "unknown"}
@@ -70,6 +71,19 @@ SIGNAL_PRODUCTION_MODES = {
     "source_directory",
     "secondary_context",
     "unlikely",
+    "unknown",
+}
+SOURCE_SCOPE_TYPES = {
+    "domain_root",
+    "section",
+    "feed",
+    "api_endpoint",
+    "listing_page",
+    "search_endpoint",
+    "document_collection",
+    "single_item",
+    "context_page",
+    "blocked_or_unusable",
     "unknown",
 }
 HARD_BLOCKERS = {
@@ -174,6 +188,7 @@ def validate_artifact_payload(artifact_type: str, payload: dict[str, Any]) -> li
         "HypothesisBatch": validate_hypothesis_batch,
         "ProbePlan": validate_probe_plan,
         "ProbeReport": validate_probe_report,
+        "SourceScopeResolution": validate_source_scope_resolution,
         "SourceUnderstanding": validate_source_understanding,
         "RoutingDecision": validate_routing_decision,
         "QueryQualityReport": validate_query_quality_report,
@@ -306,9 +321,29 @@ def validate_probe_report(payload: dict[str, Any]) -> list[ValidationIssue]:
     return issues
 
 
+def validate_source_scope_resolution(payload: dict[str, Any]) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    _require_string(payload, "candidateUrl", issues)
+    _require_string(payload, "resolvedSourceUrl", issues)
+    _enum(payload.get("sourceScopeType"), SOURCE_SCOPE_TYPES, issues, "$.sourceScopeType")
+    if payload.get("sourceScopeConfidence") is None:
+        _push(issues, "$.sourceScopeConfidence", "required", "SourceScopeResolution must include confidence.")
+    if not isinstance(payload.get("monitoringEntryUrls"), list):
+        _push(issues, "$.monitoringEntryUrls", "required", "monitoringEntryUrls must be a list.")
+    if not _is_record(payload.get("itemExtractionHints")):
+        _push(issues, "$.itemExtractionHints", "required", "itemExtractionHints must be an object.")
+    if not _list(payload.get("resolutionEvidence")):
+        _push(issues, "$.resolutionEvidence", "required", "resolutionEvidence must be a non-empty list.")
+    if not _is_record(payload.get("risk")):
+        _push(issues, "$.risk", "required", "risk must be an object.")
+    return issues
+
+
 def validate_source_understanding(payload: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     _require_string(payload, "sourceUrl", issues)
+    if payload.get("sourceScopeType") is not None:
+        _enum(payload.get("sourceScopeType"), SOURCE_SCOPE_TYPES, issues, "$.sourceScopeType")
     _require_string(payload, "sourceRoleDescription", issues)
     _enum(payload.get("sourceVoice"), SOURCE_VOICES, issues, "$.sourceVoice")
     _enum(payload.get("artifactFreshnessKind"), ARTIFACT_FRESHNESS_KINDS, issues, "$.artifactFreshnessKind")
@@ -371,6 +406,20 @@ def validate_query_quality_report(payload: dict[str, Any]) -> list[ValidationIss
     issues: list[ValidationIssue] = []
     _require_string(payload, "query", issues)
     _require_string(payload, "queryFamilyIntent", issues)
+    _enum(
+        payload.get("queryPurpose"),
+        {
+            "find_direct_sources",
+            "find_source_directories",
+            "find_terminology",
+            "find_documents",
+            "find_discussions",
+            "find_official_owners",
+            "find_local_language_forms",
+        },
+        issues,
+        "$.queryPurpose",
+    )
     _enum(
         payload.get("quality"),
         {

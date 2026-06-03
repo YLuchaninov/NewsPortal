@@ -84,6 +84,7 @@ const artifactCreateSchema = {
         "HypothesisBatch",
         "ProbePlan",
         "ProbeReport",
+        "SourceScopeResolution",
         "SourceUnderstanding",
         "RoutingDecision",
         "QueryQualityReport",
@@ -180,7 +181,26 @@ const understandPreviewSchema = {
   properties: {
     discoveryBrief: { type: "object", additionalProperties: true },
     probeReport: { type: "object", additionalProperties: true },
+    sourceScopeResolution: { type: "object", additionalProperties: true },
     candidate: { type: "object", additionalProperties: true },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const scopeResolveSchema = {
+  type: "object",
+  required: ["probeReport"],
+  properties: {
+    discoveryBrief: { type: "object", additionalProperties: true },
+    candidate: { type: "object", additionalProperties: true },
+    probeReport: { type: "object", additionalProperties: true },
+    previousMemory: { type: "object", additionalProperties: true },
+    vnextRunId: { type: "string" },
+    runId: { type: "string" },
+    interestId: { type: "string" },
+    candidateId: { type: "string" },
+    parentArtifactIds: { type: "array", items: { type: "string" } },
+    createdBy: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -227,6 +247,26 @@ const handoffSchema = {
     providerType: { type: "string" },
     createdBy: { type: "string" },
     dryRun: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const sourceInventoryExplainSchema = {
+  type: "object",
+  required: ["sourceInventoryId"],
+  properties: {
+    sourceInventoryId: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const sourceInventoryResolveScopesSchema = {
+  type: "object",
+  properties: {
+    sourceInventoryIds: { type: "array", items: { type: "string" } },
+    limit: { type: "integer" },
+    apply: { type: "boolean" },
+    createdBy: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -316,7 +356,27 @@ const feedbackSchema = {
     targetId: { type: "string" },
     feedbackType: {
       type: "string",
-      enum: ["approve", "reject", "correct", "rollback", "mark_noise", "mark_useful", "policy_issue"],
+      enum: [
+        "approve",
+        "reject",
+        "correct",
+        "rollback",
+        "mark_noise",
+        "mark_useful",
+        "policy_issue",
+        "source_scope_correct",
+        "source_scope_wrong",
+        "source_understanding_correct",
+        "source_understanding_wrong",
+        "routing_correct",
+        "routing_wrong",
+        "source_useful_as_inventory",
+        "source_not_useful",
+        "lead_useful",
+        "lead_false_positive",
+        "adapter_gap_confirmed",
+        "adapter_gap_wrong",
+      ],
     },
     feedback: { type: "object", additionalProperties: true },
     createdBy: { type: "string" },
@@ -466,8 +526,23 @@ export const DISCOVERY_VNEXT_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
       sdk.executeDiscoveryProbe<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
   createWriteTool(
+    "discovery.scope.resolve_preview",
+    "Resolve the monitorable source scope from a candidate and ProbeReport without persistence.",
+    "write.discovery",
+    scopeResolveSchema,
+    async ({ sdk }, args) => sdk.previewDiscoveryScopeResolution<Record<string, unknown>>(args)
+  ),
+  createWriteTool(
+    "discovery.scope.resolve_apply",
+    "Persist a SourceScopeResolution artifact for a probed candidate.",
+    "write.discovery",
+    scopeResolveSchema,
+    async ({ sdk, token }, args) =>
+      sdk.applyDiscoveryScopeResolution<Record<string, unknown>>(actor(args, token.issuedByUserId))
+  ),
+  createWriteTool(
     "discovery.understand.preview",
-    "Synthesize SourceUnderstanding from DiscoveryBrief and ProbeReport.",
+    "Synthesize SourceUnderstanding from DiscoveryBrief, ProbeReport and SourceScopeResolution.",
     "write.discovery",
     understandPreviewSchema,
     async ({ sdk }, args) => sdk.previewDiscoveryUnderstanding<Record<string, unknown>>(args)
@@ -494,6 +569,21 @@ export const DISCOVERY_VNEXT_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
     handoffSchema,
     async ({ sdk, token }, args) =>
       sdk.handoffDiscoveryProbation<Record<string, unknown>>(actor(args, token.issuedByUserId))
+  ),
+  createWriteTool(
+    "discovery.source_inventory.explain",
+    "Explain a Discovery source inventory row with scope, understanding, routing and observation lineage.",
+    "write.discovery",
+    sourceInventoryExplainSchema,
+    async ({ sdk }, args) => sdk.explainDiscoverySourceInventory<Record<string, unknown>>(args)
+  ),
+  createWriteTool(
+    "discovery.source_inventory.resolve_scopes",
+    "Preview or apply non-destructive SourceScopeResolution metadata for bounded source inventory rows.",
+    "write.discovery",
+    sourceInventoryResolveScopesSchema,
+    async ({ sdk, token }, args) =>
+      sdk.resolveDiscoverySourceInventoryScopes<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
   createWriteTool(
     "discovery.policies.validate",
@@ -583,9 +673,13 @@ export const DISCOVERY_VNEXT_CANONICAL_ALIAS_MCP_TOOLS: readonly McpToolDefiniti
   aliasTool(toolByName("discovery.candidates.normalize"), "discovery_vnext.normalize_candidates", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.probe.plan_preview"), "discovery_vnext.create_probe_plan", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.probe.execute"), "discovery_vnext.execute_probe", "Canonical vNext alias for"),
+  aliasTool(toolByName("discovery.scope.resolve_preview"), "discovery_vnext.preview_scope_resolution", "Canonical vNext alias for"),
+  aliasTool(toolByName("discovery.scope.resolve_apply"), "discovery_vnext.apply_scope_resolution", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.understand.preview"), "discovery_vnext.preview_source_understanding", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.routing.apply"), "discovery_vnext.apply_routing", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.probation.handoff"), "discovery_vnext.apply_probation_handoff", "Canonical vNext alias for"),
+  aliasTool(toolByName("discovery.source_inventory.explain"), "discovery_vnext.explain_source_inventory", "Canonical vNext alias for"),
+  aliasTool(toolByName("discovery.source_inventory.resolve_scopes"), "discovery_vnext.resolve_source_inventory_scopes", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.feedback.submit"), "discovery_vnext.submit_feedback", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.rollback.prepare"), "discovery_vnext.prepare_rollback", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.rollback.apply"), "discovery_vnext.apply_rollback", "Canonical vNext alias for"),

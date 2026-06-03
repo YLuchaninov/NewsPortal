@@ -6,6 +6,74 @@ import {
   resolveEditorialExtractorDecision,
   shouldRetainDiscoveryEditorialKind,
 } from "../../../services/fetchers/src/resource-enrichment.ts";
+import { extractPdfDocument } from "../../../services/fetchers/src/resource-pdf-extraction.ts";
+
+function bytes(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
+}
+
+function textPdfFixture(): Uint8Array {
+  return bytes(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 95 >>
+stream
+BT /F1 24 Tf 72 720 Td (RFP Document Title) Tj 0 -32 Td (Issuer City deadline June 30 2026) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Title (Procurement RFP Metadata Title) /CreationDate (D:20260601120000Z) >>
+endobj
+xref
+0 7
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000241 00000 n
+0000000311 00000 n
+0000000456 00000 n
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+548
+%%EOF`);
+}
+
+function emptyPdfFixture(): Uint8Array {
+  return bytes(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+190
+%%EOF`);
+}
 
 test("resolveEditorialExtractorDecision invokes extractor for materially incomplete base editorial content", () => {
   assert.deepEqual(
@@ -162,4 +230,46 @@ test("buildWebsiteResourceClassificationJson can record an editorial-retention g
     reasons: ["guard:retain_editorial_detail"],
   });
   assert.ok((classification.reasons as string[]).includes("guard:retain_editorial_detail"));
+});
+
+test("PDF extraction maps text PDFs to bounded document evidence", async () => {
+  const result = await extractPdfDocument(textPdfFixture(), {
+    fallbackTitle: "fallback.pdf",
+    maxPages: 5,
+    maxTextChars: 500,
+    timeoutMs: 5_000,
+  });
+
+  assert.equal(result.status, "extracted");
+  assert.equal(result.title, "Procurement RFP Metadata Title");
+  assert.match(result.body ?? "", /Issuer City deadline June 30 2026/);
+  assert.equal(result.pageCount, 1);
+  assert.equal(result.parsedPageCount, 1);
+  assert.equal(result.truncated, false);
+  assert.equal(result.publishedAt, "2026-06-01T12:00:00.000Z");
+  assert.equal(result.parser.name, "pdfjs-dist");
+  assert.equal(result.parser.version, "6.0.227");
+});
+
+test("PDF extraction keeps image-only or empty PDFs explicit instead of hallucinating text", async () => {
+  const result = await extractPdfDocument(emptyPdfFixture(), {
+    fallbackTitle: "empty.pdf",
+    timeoutMs: 5_000,
+  });
+
+  assert.equal(result.status, "skipped");
+  assert.equal(result.body, null);
+  assert.equal(result.errorReason, "pdf_text_empty_or_image_only");
+  assert.equal(result.pageCount, 1);
+});
+
+test("PDF extraction rejects oversized PDFs before parsing", async () => {
+  const result = await extractPdfDocument(new Uint8Array(32), {
+    fallbackTitle: "oversized.pdf",
+    maxBytes: 16,
+  });
+
+  assert.equal(result.status, "skipped");
+  assert.equal(result.errorReason, "pdf_size_exceeds_limit");
+  assert.equal(result.truncated, true);
 });

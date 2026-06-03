@@ -38,6 +38,7 @@ import {
   type ExtractionPersistShape,
   type WebResourceRow,
 } from "./resource-enrichment-persistence";
+import { extractPdfDocument } from "./resource-pdf-extraction";
 import {
   CrawlPolicyCacheService,
   classifyResourceCandidate,
@@ -86,6 +87,10 @@ function buildArticleParserOptions() {
     contentLengthThreshold: 120,
     wordsPerMinute: 240,
   };
+}
+
+function isPdfResource(finalUrl: string, contentType: string): boolean {
+  return contentType.includes("application/pdf") || /\.pdf(?:$|\?)/i.test(finalUrl);
 }
 
 export class ResourceEnrichmentService {
@@ -285,11 +290,89 @@ export class ResourceEnrichmentService {
     const contentLanguage = response.headers.get("content-language");
 
     if (!contentType.includes("html")) {
-      const text = await response.text();
       const resourceKind = /\.(csv|xlsx|xls|json|xml|zip)(?:$|\?)/i.test(finalUrl)
         ? "data_file"
         : "document";
       const documentTitle = resource.title || finalUrl.split("/").at(-1) || resource.channelName;
+      if (isPdfResource(finalUrl, contentType)) {
+        const pdfBytes = new Uint8Array(await response.arrayBuffer());
+        const pdf = await extractPdfDocument(pdfBytes, {
+          fallbackTitle: documentTitle,
+        });
+        const pdfAttributes = {
+          contentType,
+          sizeBytes: readOptionalString(response.headers.get("content-length")) ?? String(pdfBytes.byteLength),
+          pdfExtraction: {
+            status: pdf.status,
+            parser: pdf.parser.name,
+            parserVersion: pdf.parser.version,
+            pageCount: pdf.pageCount,
+            parsedPageCount: pdf.parsedPageCount,
+            extractedChars: pdf.extractedChars,
+            truncated: pdf.truncated,
+            metadataKeys: Object.keys(pdf.metadata).sort(),
+            errorReason: pdf.errorReason,
+          },
+          observability: {
+            structuredTypes: [],
+            linkCount: 0,
+            downloadCount: 1,
+            hasRepeatedCards: false,
+            hasPagination: false,
+            hintedKinds: inferResourceKindsFromUrl(finalUrl),
+            discoverySource: readOptionalString(
+              extractDiscoveryClassification(resource.classificationJson).discoverySource
+            ),
+          },
+        };
+        const extractedTitle = pdf.title || documentTitle;
+        return {
+          status: pdf.status === "extracted" ? "enriched" : "skipped",
+          resourceKind: "document",
+          finalUrl,
+          title: extractedTitle,
+          summary: pdf.summary || resource.summary || summarizeBody(extractedTitle),
+          body: pdf.body,
+          bodyHtml: null,
+          lang: contentLanguage ? contentLanguage.split(",")[0]?.trim() ?? null : resource.lang,
+          langConfidence: contentLanguage ? 0.7 : resource.langConfidence,
+          publishedAt: pdf.publishedAt ?? resource.publishedAt,
+          modifiedAt: pdf.modifiedAt ?? modifiedAt ?? resource.modifiedAt,
+          classificationJson: buildWebsiteResourceClassificationJson({
+            priorClassificationJson: resource.classificationJson,
+            enrichmentClassification: {
+              kind: "document",
+              confidence: pdf.status === "extracted" ? 0.92 : 0.78,
+              reasons: [
+                "content_type:pdf",
+                pdf.status === "extracted" ? "pdf:text_extracted" : `pdf:${pdf.errorReason ?? "not_extracted"}`,
+              ],
+            },
+            resolvedKind: "document",
+            structuredTypes: [],
+            hintedKinds: inferResourceKindsFromUrl(finalUrl),
+            reasonSource: "enrichment",
+          }),
+          attributesJson: pdfAttributes,
+          documentsJson: [
+            {
+              url: finalUrl,
+              title: extractedTitle,
+              contentType,
+              pageCount: pdf.pageCount,
+              extractionSource: pdf.parser.name,
+              extractionStatus: pdf.status,
+            },
+          ],
+          mediaJson: [],
+          childResourcesJson: [],
+          linksOutJson: [],
+          contentHash: pdf.body ? computeContentHash(pdf.body) : null,
+          errorText: pdf.errorReason,
+          projectedDocId: null,
+        };
+      }
+      const text = await response.text();
       const body = normalizeText(text).slice(0, 4000) || null;
       return {
         status: "enriched",

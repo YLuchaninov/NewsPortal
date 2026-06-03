@@ -10,6 +10,7 @@ export const DISCOVERY_VNEXT_ARTIFACT_TYPES = [
   "HypothesisBatch",
   "ProbePlan",
   "ProbeReport",
+  "SourceScopeResolution",
   "SourceUnderstanding",
   "RoutingDecision",
   "QueryQualityReport",
@@ -35,6 +36,21 @@ export const DISCOVERY_VNEXT_MEMORY_MODES = [
   "artifact_lens",
   "adversarial",
   "full",
+  "full_evaluator_only",
+] as const;
+
+export const DISCOVERY_VNEXT_SOURCE_SCOPE_TYPES = [
+  "domain_root",
+  "section",
+  "feed",
+  "api_endpoint",
+  "listing_page",
+  "search_endpoint",
+  "document_collection",
+  "single_item",
+  "context_page",
+  "blocked_or_unusable",
+  "unknown",
 ] as const;
 
 export const DISCOVERY_VNEXT_ROUTING_DECISIONS = [
@@ -222,6 +238,34 @@ export const PROBE_REPORT_PAYLOAD_SCHEMA = {
   additionalProperties: true,
 } as const satisfies JsonSchema;
 
+export const SOURCE_SCOPE_RESOLUTION_PAYLOAD_SCHEMA = {
+  type: "object",
+  required: [
+    "candidateUrl",
+    "resolvedSourceUrl",
+    "sourceScopeType",
+    "sourceScopeConfidence",
+    "seedItemUrl",
+    "monitoringEntryUrls",
+    "itemExtractionHints",
+    "resolutionEvidence",
+    "risk",
+  ],
+  properties: {
+    candidateUrl: STRING_SCHEMA,
+    resolvedSourceUrl: STRING_SCHEMA,
+    sourceScopeType: { type: "string", enum: DISCOVERY_VNEXT_SOURCE_SCOPE_TYPES },
+    sourceScopeConfidence: NUMBER_SCHEMA,
+    seedItemUrl: { type: ["string", "null"] },
+    monitoringEntryUrls: { type: "array", items: STRING_SCHEMA },
+    itemExtractionHints: JSON_OBJECT_SCHEMA,
+    resolutionEvidence: STRING_LIST_SCHEMA,
+    notMonitoringReason: { type: ["string", "null"] },
+    risk: JSON_OBJECT_SCHEMA,
+  },
+  additionalProperties: true,
+} as const satisfies JsonSchema;
+
 export const SOURCE_UNDERSTANDING_PAYLOAD_SCHEMA = {
   type: "object",
   required: [
@@ -244,6 +288,10 @@ export const SOURCE_UNDERSTANDING_PAYLOAD_SCHEMA = {
   properties: {
     candidateId: { type: ["string", "null"] },
     sourceUrl: STRING_SCHEMA,
+    sourceScopeResolutionArtifactId: { type: ["string", "null"] },
+    seedItemUrl: { type: ["string", "null"] },
+    sourceScopeType: { type: "string", enum: DISCOVERY_VNEXT_SOURCE_SCOPE_TYPES },
+    sourceScopeEvidence: STRING_LIST_SCHEMA,
     sourceRoleDescription: STRING_SCHEMA,
     sourceVoice: {
       type: "string",
@@ -305,6 +353,7 @@ export const SOURCE_UNDERSTANDING_PAYLOAD_SCHEMA = {
       },
     },
     notExpectedToProduce: { type: "array", items: JSON_OBJECT_SCHEMA },
+    negativeRoleEvidence: STRING_LIST_SCHEMA,
     artifactFit: NUMBER_SCHEMA,
     technicalObservability: NUMBER_SCHEMA,
     evidenceDirectness: NUMBER_SCHEMA,
@@ -327,6 +376,7 @@ export const SOURCE_UNDERSTANDING_PAYLOAD_SCHEMA = {
       enum: ["rss", "website", "api", "document_portal", "unknown"],
     },
     probeSummary: JSON_OBJECT_SCHEMA,
+    sourceScopeResolution: SOURCE_SCOPE_RESOLUTION_PAYLOAD_SCHEMA,
   },
   additionalProperties: true,
 } as const satisfies JsonSchema;
@@ -337,6 +387,10 @@ export const ROUTING_DECISION_PAYLOAD_SCHEMA = {
   properties: {
     candidateId: { type: ["string", "null"] },
     sourceUnderstandingArtifactId: { type: ["string", "null"] },
+    sourceScopeResolutionArtifactId: { type: ["string", "null"] },
+    resolvedSourceUrl: { type: ["string", "null"] },
+    seedItemUrl: { type: ["string", "null"] },
+    sourceScopeType: { type: ["string", "null"], enum: [...DISCOVERY_VNEXT_SOURCE_SCOPE_TYPES, null] },
     decision: { type: "string", enum: DISCOVERY_VNEXT_ROUTING_DECISIONS },
     reason: STRING_SCHEMA,
     policyVersion: STRING_SCHEMA,
@@ -347,16 +401,29 @@ export const ROUTING_DECISION_PAYLOAD_SCHEMA = {
     sampleReviewReason: STRING_SCHEMA,
     allowChannelCreation: { type: "boolean" },
     rollbackGroupId: { type: ["string", "null"] },
+    adapterNeed: { type: ["string", "null"] },
   },
   additionalProperties: false,
 } as const satisfies JsonSchema;
 
 export const QUERY_QUALITY_REPORT_PAYLOAD_SCHEMA = {
   type: "object",
-  required: ["query", "queryFamilyIntent", "observedResultMix", "quality", "recommendedNextAction"],
+  required: ["query", "queryFamilyIntent", "queryPurpose", "observedResultMix", "quality", "recommendedNextAction"],
   properties: {
     query: STRING_SCHEMA,
     queryFamilyIntent: STRING_SCHEMA,
+    queryPurpose: {
+      type: "string",
+      enum: [
+        "find_direct_sources",
+        "find_source_directories",
+        "find_terminology",
+        "find_documents",
+        "find_discussions",
+        "find_official_owners",
+        "find_local_language_forms",
+      ],
+    },
     observedResultMix: JSON_OBJECT_SCHEMA,
     quality: {
       type: "string",
@@ -382,6 +449,7 @@ export const DISCOVERY_VNEXT_PAYLOAD_SCHEMAS = {
   HypothesisBatch: HYPOTHESIS_BATCH_PAYLOAD_SCHEMA,
   ProbePlan: PROBE_PLAN_PAYLOAD_SCHEMA,
   ProbeReport: PROBE_REPORT_PAYLOAD_SCHEMA,
+  SourceScopeResolution: SOURCE_SCOPE_RESOLUTION_PAYLOAD_SCHEMA,
   SourceUnderstanding: SOURCE_UNDERSTANDING_PAYLOAD_SCHEMA,
   RoutingDecision: ROUTING_DECISION_PAYLOAD_SCHEMA,
   QueryQualityReport: QUERY_QUALITY_REPORT_PAYLOAD_SCHEMA,

@@ -27,6 +27,7 @@ from services.workers.app.discovery_vnext_megaloop import run_mega_loop_preview
 from services.workers.app.discovery_vnext_handoff import apply_probation_handoff
 from services.workers.app.discovery_vnext_probe import build_probe_plan, execute_probe_plan
 from services.workers.app.discovery_vnext_routing import route_source_understanding
+from services.workers.app.discovery_vnext_scope_resolution import resolve_source_scope
 from services.workers.app.discovery_vnext_understanding import synthesize_source_understanding
 from services.workers.app.task_engine.adapters.source_registrar import PostgresSourceRegistrarAdapter
 from services.workers.app.task_engine.adapters.llm_analyzer import GeminiLlmAnalyzerAdapter
@@ -189,6 +190,7 @@ class DiscoveryVNextArtifactValidatePayload(BaseModel):
         "HypothesisBatch",
         "ProbePlan",
         "ProbeReport",
+        "SourceScopeResolution",
         "SourceUnderstanding",
         "RoutingDecision",
         "QueryQualityReport",
@@ -204,6 +206,7 @@ class DiscoveryVNextArtifactCreatePayload(BaseModel):
         "HypothesisBatch",
         "ProbePlan",
         "ProbeReport",
+        "SourceScopeResolution",
         "SourceUnderstanding",
         "RoutingDecision",
         "QueryQualityReport",
@@ -233,7 +236,7 @@ class DiscoveryVNextMegaLoopPreviewPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     discovery_brief: dict[str, Any] = Field(alias="discoveryBrief")
-    max_batches: int = Field(default=5, ge=1, le=12, alias="maxBatches")
+    max_batches: int = Field(default=11, ge=1, le=12, alias="maxBatches")
     locale: str | None = None
     previous_hypotheses: list[dict[str, Any]] = Field(default_factory=list, alias="previousHypotheses")
     source_inventory: list[dict[str, Any]] = Field(default_factory=list, alias="sourceInventory")
@@ -283,7 +286,23 @@ class DiscoveryVNextUnderstandPayload(BaseModel):
 
     discovery_brief: dict[str, Any] = Field(alias="discoveryBrief")
     probe_report: dict[str, Any] = Field(alias="probeReport")
+    source_scope_resolution: dict[str, Any] = Field(default_factory=dict, alias="sourceScopeResolution")
     candidate: dict[str, Any] = Field(default_factory=dict)
+
+
+class DiscoveryVNextScopeResolvePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    discovery_brief: dict[str, Any] = Field(default_factory=dict, alias="discoveryBrief")
+    candidate: dict[str, Any] = Field(default_factory=dict)
+    probe_report: dict[str, Any] = Field(alias="probeReport")
+    previous_memory: dict[str, Any] = Field(default_factory=dict, alias="previousMemory")
+    run_id: str | None = Field(default=None, alias="runId")
+    vnext_run_id: str | None = Field(default=None, alias="vnextRunId")
+    interest_id: str | None = Field(default=None, alias="interestId")
+    candidate_id: str | None = Field(default=None, alias="candidateId")
+    parent_artifact_ids: list[str] = Field(default_factory=list, alias="parentArtifactIds")
+    created_by: str = Field(default="api", alias="createdBy")
 
 
 class DiscoveryVNextRoutingApplyPayload(BaseModel):
@@ -334,6 +353,18 @@ class DiscoveryVNextFeedbackPayload(BaseModel):
         "mark_noise",
         "mark_useful",
         "policy_issue",
+        "source_scope_correct",
+        "source_scope_wrong",
+        "source_understanding_correct",
+        "source_understanding_wrong",
+        "routing_correct",
+        "routing_wrong",
+        "source_useful_as_inventory",
+        "source_not_useful",
+        "lead_useful",
+        "lead_false_positive",
+        "adapter_gap_confirmed",
+        "adapter_gap_wrong",
     ] = Field(alias="feedbackType")
     feedback: dict[str, Any] = Field(default_factory=dict)
     created_by: str = Field(default="api", alias="createdBy")
@@ -390,6 +421,37 @@ class DiscoveryVNextRollbackApplyPayload(BaseModel):
     rollback_group_id: str = Field(alias="rollbackGroupId")
     applied_by: str = Field(default="api", alias="appliedBy")
     confirm: bool = False
+
+
+class DiscoveryVNextSourceInventoryExplainPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source_inventory_id: str = Field(alias="sourceInventoryId")
+
+
+class DiscoveryVNextSourceInventoryResolveScopesPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source_inventory_ids: list[str] = Field(default_factory=list, alias="sourceInventoryIds")
+    limit: int = Field(default=25, ge=1, le=100)
+    apply: bool = False
+    created_by: str = Field(default="api", alias="createdBy")
+
+
+class DiscoveryVNextSourceInventoryActionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source_inventory_id: str = Field(alias="sourceInventoryId")
+    action: Literal[
+        "re_resolve",
+        "promote_resolved_scope",
+        "demote_to_context",
+        "move_to_adapter_backlog",
+        "confirm_scope",
+        "reject_scope",
+    ]
+    reason: str = ""
+    created_by: str = Field(default="api", alias="createdBy")
 
 
 def preview_brief(payload: DiscoveryVNextBriefPreviewPayload) -> dict[str, Any]:
@@ -773,11 +835,37 @@ def execute_probe_from_payload(payload: DiscoveryVNextProbeExecutePayload) -> di
     }
 
 
+def preview_scope_resolution(payload: DiscoveryVNextScopeResolvePayload) -> dict[str, Any]:
+    resolve_required_policy_payload({}, "discovery-probe")
+    return resolve_source_scope(
+        discovery_brief=payload.discovery_brief,
+        candidate=payload.candidate,
+        probe_report=payload.probe_report,
+        previous_memory=payload.previous_memory,
+    )
+
+
+def apply_scope_resolution(payload: DiscoveryVNextScopeResolvePayload) -> dict[str, Any]:
+    preview = preview_scope_resolution(payload)
+    scope_payload = _artifact_payload(preview) or preview.get("payload") or {}
+    artifact = create_artifact(
+        "SourceScopeResolution",
+        scope_payload,
+        vnext_run_id=payload.vnext_run_id or payload.run_id,
+        interest_id=payload.interest_id,
+        candidate_id=payload.candidate_id,
+        parent_artifact_ids=payload.parent_artifact_ids,
+        created_by=payload.created_by,
+    )
+    return {"sourceScopeResolutionArtifact": artifact}
+
+
 def preview_source_understanding(payload: DiscoveryVNextUnderstandPayload) -> dict[str, Any]:
     resolve_required_policy_payload({}, "discovery-routing")
     return synthesize_source_understanding(
         discovery_brief=payload.discovery_brief,
         probe_report=payload.probe_report,
+        source_scope_resolution=payload.source_scope_resolution,
         candidate=payload.candidate,
     )
 
@@ -880,6 +968,7 @@ def apply_routing_decision(payload: DiscoveryVNextRoutingApplyPayload) -> dict[s
         source_inventory_id=str(inventory["source_inventory_id"]),
         observation_kind="risk_signal",
         observation={
+            "sourceScopeResolutionArtifactId": source_understanding.get("sourceScopeResolutionArtifactId"),
             "sourceUnderstandingArtifactId": str(source_artifact["artifact_id"]),
             "routingDecisionArtifactId": str(routing_artifact["artifact_id"]),
             "decision": routing_decision["decision"],
@@ -888,6 +977,19 @@ def apply_routing_decision(payload: DiscoveryVNextRoutingApplyPayload) -> dict[s
             "sampleReviewReason": routing_decision.get("sampleReviewReason"),
         },
     )
+    scope_observation = None
+    if isinstance(source_understanding.get("sourceScopeResolution"), dict):
+        scope_observation = create_source_observation(
+            source_inventory_id=str(inventory["source_inventory_id"]),
+            observation_kind="scope_resolution",
+            observation={
+                "sourceScopeResolutionArtifactId": source_understanding.get("sourceScopeResolutionArtifactId"),
+                "candidateUrl": source_understanding["sourceScopeResolution"].get("candidateUrl"),
+                "resolvedSourceUrl": source_understanding["sourceScopeResolution"].get("resolvedSourceUrl"),
+                "sourceScopeType": source_understanding["sourceScopeResolution"].get("sourceScopeType"),
+                "sourceScopeConfidence": source_understanding["sourceScopeResolution"].get("sourceScopeConfidence"),
+            },
+        )
     backlog_item = None
     if routing_decision["decision"] == "adapter_backlog":
         backlog_item = create_adapter_backlog_item(
@@ -910,6 +1012,7 @@ def apply_routing_decision(payload: DiscoveryVNextRoutingApplyPayload) -> dict[s
         "sourceInventory": inventory,
         "monitoringState": monitoring_state,
         "sourceObservation": observation,
+        "scopeObservation": scope_observation,
         "adapterBacklogItem": backlog_item,
         "rollback": rollback_group,
     }
@@ -1018,8 +1121,15 @@ def upsert_source_inventory(
           source_identity_key,
           current_state,
           current_provider_type,
+          latest_source_scope_resolution_artifact_id,
           latest_source_understanding_artifact_id,
           latest_routing_decision_artifact_id,
+          seed_item_url,
+          resolved_source_url,
+          source_scope_type,
+          source_scope_confidence,
+          monitoring_entry_urls_json,
+          item_extraction_hints_json,
           source_voice,
           artifact_freshness_kind,
           signal_production_mode,
@@ -1029,15 +1139,22 @@ def upsert_source_inventory(
           risk_json,
           tags
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         on conflict (source_identity_key)
         do update set
           canonical_domain = excluded.canonical_domain,
           canonical_url = excluded.canonical_url,
           current_state = excluded.current_state,
           current_provider_type = excluded.current_provider_type,
+          latest_source_scope_resolution_artifact_id = excluded.latest_source_scope_resolution_artifact_id,
           latest_source_understanding_artifact_id = excluded.latest_source_understanding_artifact_id,
           latest_routing_decision_artifact_id = excluded.latest_routing_decision_artifact_id,
+          seed_item_url = excluded.seed_item_url,
+          resolved_source_url = excluded.resolved_source_url,
+          source_scope_type = excluded.source_scope_type,
+          source_scope_confidence = excluded.source_scope_confidence,
+          monitoring_entry_urls_json = excluded.monitoring_entry_urls_json,
+          item_extraction_hints_json = excluded.item_extraction_hints_json,
           source_voice = excluded.source_voice,
           artifact_freshness_kind = excluded.artifact_freshness_kind,
           signal_production_mode = excluded.signal_production_mode,
@@ -1060,8 +1177,25 @@ def upsert_source_inventory(
             payload.source_identity_key,
             inventory_state,
             payload.provider_type,
+            _uuid_or_none(payload.source_understanding.get("sourceScopeResolutionArtifactId")),
             source_artifact_id,
             routing_artifact_id,
+            payload.source_understanding.get("seedItemUrl"),
+            payload.source_understanding.get("sourceUrl"),
+            payload.source_understanding.get("sourceScopeType"),
+            payload.source_understanding.get("sourceScopeResolution", {}).get("sourceScopeConfidence")
+            if isinstance(payload.source_understanding.get("sourceScopeResolution"), dict)
+            else None,
+            Json(
+                payload.source_understanding.get("sourceScopeResolution", {}).get("monitoringEntryUrls")
+                if isinstance(payload.source_understanding.get("sourceScopeResolution"), dict)
+                else []
+            ),
+            Json(
+                payload.source_understanding.get("sourceScopeResolution", {}).get("itemExtractionHints")
+                if isinstance(payload.source_understanding.get("sourceScopeResolution"), dict)
+                else {}
+            ),
             payload.source_understanding.get("sourceVoice"),
             payload.source_understanding.get("artifactFreshnessKind"),
             payload.source_understanding.get("signalProductionMode"),
@@ -1081,7 +1215,9 @@ def create_adapter_backlog_item(
     source_inventory_id: str,
     reason: dict[str, Any],
 ) -> dict[str, Any]:
-    adapter_need = "auth_config" if payload.access_pattern == "requires_auth" else "custom_adapter"
+    adapter_need = str(reason.get("adapterNeed") or "")
+    if adapter_need not in {"api_key", "custom_adapter", "auth_config", "parser", "browser_support", "unsupported_format"}:
+        adapter_need = "auth_config" if payload.access_pattern == "requires_auth" else "custom_adapter"
     row = query_one(
         """
         insert into adapter_backlog (
@@ -1567,7 +1703,7 @@ def execute_run_steps(
         preview = preview_mega_loop(
             DiscoveryVNextMegaLoopPreviewPayload(
                 discoveryBrief=brief_payload,
-                maxBatches=int((request.get("maxBatches") or 5)),
+                maxBatches=int((request.get("maxBatches") or 11)),
                 locale=request.get("locale"),
             )
         )
@@ -1622,7 +1758,7 @@ def execute_run_steps(
         )
         _finish_run_step(str(full_step["run_step_id"]), "succeeded", full_result)
         result.update(full_result)
-        result["steps"].extend(["probe", "understand_route", "monitoring_handoff", "probation_handoff"])
+        result["steps"].extend(["probe", "scope_resolution", "understand_route", "monitoring_handoff", "probation_handoff"])
         return result
 
     if run_kind in {"probe", "full"} and isinstance(request.get("probePlan"), dict):
@@ -1678,6 +1814,7 @@ def execute_full_probe_understand_route(
 ) -> dict[str, Any]:
     selected = select_candidates_for_probe(candidates, request=request)
     probe_reports: list[dict[str, Any]] = []
+    scope_resolutions: list[dict[str, Any]] = []
     source_understandings: list[dict[str, Any]] = []
     routing_decisions: list[dict[str, Any]] = []
     handoff_results: list[dict[str, Any]] = []
@@ -1711,10 +1848,34 @@ def execute_full_probe_understand_route(
             _mark_candidate_status(candidate_id, "rejected")
             continue
         _mark_candidate_status(candidate_id, "probed")
+        scope = apply_scope_resolution(
+            DiscoveryVNextScopeResolvePayload(
+                discoveryBrief=brief_payload,
+                candidate={
+                    "candidateId": candidate_id,
+                    "canonicalUrl": canonical_url,
+                    "canonicalDomain": canonical_domain,
+                    "candidateKindGuess": kind_guess,
+                },
+                probeReport=probe_payload,
+                runId=run_id,
+                interestId=interest_id,
+                candidateId=candidate_id or None,
+                parentArtifactIds=[str(probe_artifact.get("artifact_id") or "")],
+                createdBy=created_by,
+            )
+        )
+        scope_resolutions.append(scope)
+        scope_artifact = scope.get("sourceScopeResolutionArtifact") if isinstance(scope.get("sourceScopeResolutionArtifact"), dict) else {}
+        scope_payload = _artifact_payload(scope_artifact)
+        if not scope_payload:
+            _mark_candidate_status(candidate_id, "rejected")
+            continue
         understanding = preview_source_understanding(
             DiscoveryVNextUnderstandPayload(
                 discoveryBrief=brief_payload,
                 probeReport=probe_payload,
+                sourceScopeResolution=scope_payload,
                 candidate={
                     "candidateId": candidate_id,
                     "canonicalUrl": canonical_url,
@@ -1728,6 +1889,7 @@ def execute_full_probe_understand_route(
         if not isinstance(source_payload, dict) or understanding.get("status") == "rejected":
             _mark_candidate_status(candidate_id, "rejected")
             continue
+        source_payload.setdefault("sourceScopeResolutionArtifactId", str(scope_artifact.get("artifact_id") or ""))
         source_payload = _with_optional_source_understanding_proposal(
             source_payload,
             run_id=run_id,
@@ -1736,18 +1898,20 @@ def execute_full_probe_understand_route(
         )
         provider_type = str(source_payload.get("suggestedProviderType") or "unknown")
         access_pattern = str(source_payload.get("accessPattern") or "unknown")
+        resolved_source_url = str(source_payload.get("sourceUrl") or canonical_url)
+        resolved_domain = _domain_from_url(resolved_source_url) or canonical_domain
         routing = apply_routing_decision(
             DiscoveryVNextRoutingApplyPayload(
                 sourceUnderstanding=source_payload,
-                canonicalUrl=canonical_url,
-                canonicalDomain=canonical_domain,
-                sourceIdentityKey=source_identity_key(canonical_url=canonical_url, provider_type=provider_type, source_understanding=source_payload),
+                canonicalUrl=resolved_source_url,
+                canonicalDomain=resolved_domain,
+                sourceIdentityKey=source_identity_key(canonical_url=resolved_source_url, provider_type=provider_type, source_understanding=source_payload),
                 providerType=provider_type,
                 accessPattern=access_pattern,
                 runId=run_id,
                 interestId=interest_id,
                 candidateId=candidate_id or None,
-                parentArtifactIds=[str(probe_artifact.get("artifact_id") or "")],
+                parentArtifactIds=[str(scope_artifact.get("artifact_id") or "")],
                 createdBy=created_by,
             )
         )
@@ -1773,15 +1937,17 @@ def execute_full_probe_understand_route(
         "selectedProbeCandidates": selected,
         "queryQualityReports": [_candidate_query_quality(candidate) for candidate in selected],
         "probeReports": probe_reports,
+        "sourceScopeResolutions": scope_resolutions,
         "sourceUnderstandings": source_understandings,
         "routingDecisions": routing_decisions,
         "handoffResults": handoff_results,
-        "summary": _full_run_summary(candidates, selected, routing_decisions, handoff_results),
+        "summary": _full_run_summary(candidates, selected, scope_resolutions, routing_decisions, handoff_results),
     }
 
 
 def select_candidates_for_probe(candidates: list[dict[str, Any]], *, request: dict[str, Any]) -> list[dict[str, Any]]:
     max_per_run = max(1, min(50, int(request.get("maxProbeCandidatesPerRun") or 8)))
+    max_per_lens = max(1, min(20, int(request.get("maxProbeCandidatesPerLens") or max(1, max_per_run // 3))))
     max_per_domain = max(1, min(10, int(request.get("maxProbeCandidatesPerDomain") or 2)))
     max_per_hypothesis = max(1, min(10, int(request.get("maxProbeCandidatesPerHypothesis") or 2)))
     ranked: list[tuple[int, int, dict[str, Any]]] = []
@@ -1803,7 +1969,7 @@ def select_candidates_for_probe(candidates: list[dict[str, Any]], *, request: di
             continue
         if hypothesis_counts.get(hypothesis_id, 0) >= max_per_hypothesis:
             continue
-        if lens and lens_counts.get(lens, 0) >= max(1, max_per_run // 2) and len(selected) < max_per_run // 2:
+        if lens and lens_counts.get(lens, 0) >= max_per_lens:
             continue
         selected.append(candidate)
         domain_counts[domain] = domain_counts.get(domain, 0) + 1
@@ -1947,7 +2113,8 @@ def source_identity_key(
         root = f"{parsed.scheme}://{host}{_first_path_segment(path)}"
     else:
         root = f"{parsed.scheme}://{host}{_source_section_path(path)}"
-    return f"{host}|{root.rstrip('/') or root}"
+    resolved = str(source_understanding.get("sourceUrl") or root).rstrip("/") or root
+    return f"{provider_type}|{host}|{resolved}"
 
 
 def _first_path_segment(path: str) -> str:
@@ -1967,18 +2134,31 @@ def _source_section_path(path: str) -> str:
 def _full_run_summary(
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    scope_resolutions: list[dict[str, Any]],
     routing_decisions: list[dict[str, Any]],
     handoff_results: list[dict[str, Any]],
-) -> dict[str, int]:
+) -> dict[str, Any]:
     decisions: list[str] = []
     for row in routing_decisions:
         artifact = row.get("routingDecisionArtifact") if isinstance(row.get("routingDecisionArtifact"), dict) else {}
         payload = _artifact_payload(artifact)
         if isinstance(payload, dict):
             decisions.append(str(payload.get("decision") or ""))
+    scope_counts: dict[str, int] = {}
+    for row in scope_resolutions:
+        artifact = row.get("sourceScopeResolutionArtifact") if isinstance(row.get("sourceScopeResolutionArtifact"), dict) else {}
+        payload = _artifact_payload(artifact)
+        scope_type = str(payload.get("sourceScopeType") or "unknown")
+        scope_counts[scope_type] = scope_counts.get(scope_type, 0) + 1
+    warnings = []
+    if not scope_resolutions and selected:
+        warnings.append({"code": "scope_resolution_missing", "message": "Probe candidates were selected but no SourceScopeResolution artifacts were produced."})
     return {
         "candidateCount": len(candidates),
         "probedCount": len(selected),
+        "probeCoverage": round(len(selected) / max(1, len(candidates)), 4),
+        "sourceScopeTypes": scope_counts,
+        "routingDecisionCounts": {decision: decisions.count(decision) for decision in sorted(set(decisions)) if decision},
         "inventoryCount": decisions.count("inventory"),
         "contextCount": decisions.count("inventory_context"),
         "cheapWatchCount": decisions.count("cheap_watch"),
@@ -1986,6 +2166,7 @@ def _full_run_summary(
         "manualReviewCount": decisions.count("manual_review"),
         "adapterBacklogCount": decisions.count("adapter_backlog"),
         "blockedCount": decisions.count("blocked"),
+        "warnings": warnings,
     }
 
 
@@ -2278,6 +2459,110 @@ def apply_rollback(payload: DiscoveryVNextRollbackApplyPayload) -> dict[str, Any
     return {"rollbackGroup": updated_group, "pausedChannel": paused_channel, "sourceInventory": inventory}
 
 
+def explain_source_inventory(payload: DiscoveryVNextSourceInventoryExplainPayload) -> dict[str, Any]:
+    inventory = get_vnext_record("source-inventory", payload.source_inventory_id)
+    artifact_ids = [
+        str(value)
+        for value in (
+            inventory.get("latest_source_scope_resolution_artifact_id"),
+            inventory.get("latest_source_understanding_artifact_id"),
+            inventory.get("latest_routing_decision_artifact_id"),
+        )
+        if value
+    ]
+    artifacts = []
+    if artifact_ids:
+        artifacts = query_all(
+            """
+            select artifact_id, artifact_type, status, parent_artifact_ids, candidate_id, payload_json, validation_json, created_at
+            from discovery_artifacts
+            where artifact_id = any(%s::uuid[])
+            order by created_at
+            """,
+            (artifact_ids,),
+        )
+    observations = query_all(
+        """
+        select observation_kind, observation_json, observed_at
+        from source_observations
+        where source_inventory_id = %s
+        order by observed_at desc
+        limit 50
+        """,
+        (payload.source_inventory_id,),
+    )
+    return {
+        "sourceInventory": inventory,
+        "lineage": {
+            "sourceScopeResolutionArtifactId": inventory.get("latest_source_scope_resolution_artifact_id"),
+            "sourceUnderstandingArtifactId": inventory.get("latest_source_understanding_artifact_id"),
+            "routingDecisionArtifactId": inventory.get("latest_routing_decision_artifact_id"),
+            "registeredChannelId": inventory.get("registered_channel_id"),
+        },
+        "artifacts": artifacts,
+        "observations": observations,
+    }
+
+
+def resolve_source_inventory_scopes(payload: DiscoveryVNextSourceInventoryResolveScopesPayload) -> dict[str, Any]:
+    rows = _source_inventory_rows_for_resolution(payload.source_inventory_ids, payload.limit)
+    previews: list[dict[str, Any]] = []
+    applied: list[dict[str, Any]] = []
+    for row in rows:
+        canonical_url = str(row.get("canonical_url") or row.get("resolved_source_url") or "")
+        probe_report = {
+            "candidateUrl": canonical_url,
+            "accessPattern": "public",
+            "technicalObservability": {
+                "observable": True,
+                "score": 0.35,
+                "feedValid": row.get("current_provider_type") == "rss",
+                "hasRecurringStructure": row.get("current_state") in {"cheap_watch", "probation_channel", "stable_channel"},
+                "providerFailuresAreTelemetryOnly": True,
+            },
+            "probeCost": {"requestsAttempted": 0, "bounded": True},
+            "observations": [],
+            "providerFailures": [],
+        }
+        preview = resolve_source_scope(
+            candidate={"canonicalUrl": canonical_url, "canonicalDomain": row.get("canonical_domain")},
+            probe_report=probe_report,
+        )
+        previews.append({"sourceInventoryId": row.get("source_inventory_id"), "preview": preview})
+        scope_payload = _artifact_payload(preview) or preview.get("payload") or {}
+        if payload.apply and scope_payload:
+            applied.append(_apply_inventory_scope_metadata(row, scope_payload, payload.created_by))
+    return {
+        "status": "applied" if payload.apply else "preview",
+        "count": len(previews),
+        "previews": previews,
+        "applied": applied,
+        "destructiveActions": [],
+        "destructiveConfirmationRequired": False,
+    }
+
+
+def apply_source_inventory_action(payload: DiscoveryVNextSourceInventoryActionPayload) -> dict[str, Any]:
+    if payload.action == "re_resolve":
+        return resolve_source_inventory_scopes(
+            DiscoveryVNextSourceInventoryResolveScopesPayload(
+                sourceInventoryIds=[payload.source_inventory_id],
+                limit=1,
+                apply=True,
+                createdBy=payload.created_by,
+            )
+        )
+    if payload.action == "promote_resolved_scope":
+        return _update_inventory_state_action(payload, "inventory")
+    if payload.action == "demote_to_context":
+        return _update_inventory_state_action(payload, "inventory_context")
+    if payload.action == "move_to_adapter_backlog":
+        return _update_inventory_state_action(payload, "adapter_backlog")
+    if payload.action in {"confirm_scope", "reject_scope"}:
+        return _confirm_inventory_scope_action(payload)
+    raise HTTPException(status_code=422, detail="Unsupported source inventory action.")
+
+
 def _create_rollback_action(
     rollback_group_id: str,
     action_type: str,
@@ -2300,6 +2585,156 @@ def _create_rollback_action(
         (rollback_group_id, action_type, target_type, target_id, Json(action)),
     )
     return row or {}
+
+
+def _source_inventory_rows_for_resolution(source_inventory_ids: list[str], limit: int) -> list[dict[str, Any]]:
+    ids = [str(item) for item in source_inventory_ids if str(item).strip()]
+    if ids:
+        return query_all(
+            """
+            select *
+            from source_inventory
+            where source_inventory_id::text = any(%s::text[])
+            order by updated_at desc
+            limit %s
+            """,
+            (ids, limit),
+        )
+    return query_all(
+        """
+        select *
+        from source_inventory
+        where current_state in ('inventory', 'inventory_context', 'cheap_watch', 'probation_channel', 'manual_review', 'adapter_backlog')
+        order by updated_at desc
+        limit %s
+        """,
+        (limit,),
+    )
+
+
+def _apply_inventory_scope_metadata(row: dict[str, Any], scope_payload: dict[str, Any], created_by: str) -> dict[str, Any]:
+    scope_type = str(scope_payload.get("sourceScopeType") or "unknown")
+    current_state = str(row.get("current_state") or "inventory")
+    next_state = "inventory_context" if scope_type in {"single_item", "context_page"} else current_state
+    updated = query_one(
+        """
+        update source_inventory
+        set current_state = %s,
+            seed_item_url = %s,
+            resolved_source_url = %s,
+            source_scope_type = %s,
+            source_scope_confidence = %s,
+            monitoring_entry_urls_json = %s,
+            item_extraction_hints_json = %s,
+            scope_confirmation_json = jsonb_build_object('mode', 'maintenance_re_resolution', 'createdBy', %s::text, 'appliedAt', now()),
+            updated_at = now()
+        where source_inventory_id = %s
+        returning *
+        """,
+        (
+            next_state,
+            scope_payload.get("seedItemUrl"),
+            scope_payload.get("resolvedSourceUrl"),
+            scope_type,
+            scope_payload.get("sourceScopeConfidence"),
+            Json(scope_payload.get("monitoringEntryUrls") or []),
+            Json(scope_payload.get("itemExtractionHints") or {}),
+            created_by,
+            row.get("source_inventory_id"),
+        ),
+    )
+    if updated:
+        create_source_observation(
+            source_inventory_id=str(updated["source_inventory_id"]),
+            observation_kind="scope_resolution",
+            observation={
+                "mode": "maintenance_re_resolution",
+                "candidateUrl": scope_payload.get("candidateUrl"),
+                "resolvedSourceUrl": scope_payload.get("resolvedSourceUrl"),
+                "sourceScopeType": scope_type,
+                "sourceScopeConfidence": scope_payload.get("sourceScopeConfidence"),
+            },
+        )
+    return updated or {}
+
+
+def _update_inventory_state_action(
+    payload: DiscoveryVNextSourceInventoryActionPayload,
+    current_state: str,
+) -> dict[str, Any]:
+    inventory = query_one(
+        """
+        update source_inventory
+        set current_state = %s,
+            scope_confirmation_json = coalesce(scope_confirmation_json, '{}'::jsonb)
+              || jsonb_build_object('lastAction', %s::text, 'reason', %s::text, 'createdBy', %s::text, 'appliedAt', now()),
+            updated_at = now()
+        where source_inventory_id = %s
+        returning *
+        """,
+        (
+            current_state,
+            payload.action,
+            payload.reason,
+            payload.created_by,
+            payload.source_inventory_id,
+        ),
+    )
+    if not inventory:
+        raise HTTPException(status_code=404, detail="Source inventory record was not found.")
+    observation = create_source_observation(
+        source_inventory_id=str(inventory["source_inventory_id"]),
+        observation_kind="scope_resolution",
+        observation={
+            "mode": "operator_action",
+            "action": payload.action,
+            "reason": payload.reason,
+            "createdBy": payload.created_by,
+            "currentState": current_state,
+        },
+    )
+    return {
+        "sourceInventory": inventory,
+        "sourceObservation": observation,
+        "destructiveConfirmationRequired": False,
+    }
+
+
+def _confirm_inventory_scope_action(payload: DiscoveryVNextSourceInventoryActionPayload) -> dict[str, Any]:
+    confirmation = "confirmed" if payload.action == "confirm_scope" else "rejected"
+    inventory = query_one(
+        """
+        update source_inventory
+        set scope_confirmation_json = coalesce(scope_confirmation_json, '{}'::jsonb)
+              || jsonb_build_object('scopeStatus', %s::text, 'reason', %s::text, 'createdBy', %s::text, 'appliedAt', now()),
+            updated_at = now()
+        where source_inventory_id = %s
+        returning *
+        """,
+        (
+            confirmation,
+            payload.reason,
+            payload.created_by,
+            payload.source_inventory_id,
+        ),
+    )
+    if not inventory:
+        raise HTTPException(status_code=404, detail="Source inventory record was not found.")
+    observation = create_source_observation(
+        source_inventory_id=str(inventory["source_inventory_id"]),
+        observation_kind="scope_resolution",
+        observation={
+            "mode": "operator_confirmation",
+            "scopeStatus": confirmation,
+            "reason": payload.reason,
+            "createdBy": payload.created_by,
+        },
+    )
+    return {
+        "sourceInventory": inventory,
+        "sourceObservation": observation,
+        "destructiveConfirmationRequired": False,
+    }
 
 
 def _insert_source_sync_event(channel_id: str) -> dict[str, Any]:
@@ -2720,6 +3155,16 @@ def _artifact_payload(artifact: Any) -> dict[str, Any]:
         return {}
     value = artifact.get("payload_json") or artifact.get("payload")
     return value if isinstance(value, dict) else {}
+
+
+def _uuid_or_none(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return str(UUID(text))
+    except ValueError:
+        return None
 
 
 def _queries_from_hypothesis_artifact(artifact: dict[str, Any]) -> list[dict[str, Any]]:

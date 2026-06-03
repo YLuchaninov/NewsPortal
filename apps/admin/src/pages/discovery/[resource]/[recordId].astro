@@ -8,6 +8,7 @@ import {
   readFlash,
   resolveAdminCurrentPath,
 } from "../../../lib/server/browser-flow";
+import { buildAdminActionToken } from "../../../lib/server/admin-action";
 
 export const prerender = false;
 
@@ -47,8 +48,23 @@ function text(value: unknown, fallback = "n/a"): string {
 }
 
 const payload = objectValue(record.payload_json ?? record.payload);
+const scopeResolution = objectValue(payload.sourceScopeResolution);
 const scoreComponents = objectValue(payload.scoreComponents);
 const risk = objectValue(payload.risk ?? record.risk_json);
+const discoveryActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: "/bff/admin/discovery",
+  scope: "discovery",
+});
+const sourceInventoryActions = [
+  ["re_resolve", "Re-resolve"],
+  ["confirm_scope", "Confirm"],
+  ["reject_scope", "Reject"],
+  ["promote_resolved_scope", "Promote"],
+  ["demote_to_context", "Context"],
+  ["move_to_adapter_backlog", "Backlog"],
+];
 ---
 
 <AdminShell title="Discovery vNext — Detail" session={session} flash={flash} activeNav="discovery">
@@ -68,6 +84,30 @@ const risk = objectValue(payload.risk ?? record.risk_json);
       <p class="mt-1 break-all text-sm text-muted-foreground">{recordId}</p>
     </div>
 
+    {resource === "source-inventory" && (
+      <section class="rounded-md border bg-card p-4">
+        <h2 class="text-base font-semibold tracking-normal">Operator Actions</h2>
+        <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {sourceInventoryActions.map(([actionValue, label]) => (
+            <form method="post" action="/bff/admin/discovery" class="grid gap-2">
+              <input type="hidden" name="actionToken" value={discoveryActionToken} />
+              <input type="hidden" name="intent" value="source-inventory-action" />
+              <input type="hidden" name="sourceInventoryId" value={recordId} />
+              <input type="hidden" name="action" value={actionValue} />
+              <input
+                name="reason"
+                placeholder="Reason"
+                class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+              />
+              <button class="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">
+                {label}
+              </button>
+            </form>
+          ))}
+        </div>
+      </section>
+    )}
+
     {(resource === "artifacts" || resource === "source-inventory") && (
       <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div class="rounded-md border bg-card p-3">
@@ -83,8 +123,8 @@ const risk = objectValue(payload.risk ?? record.risk_json);
           <div class="mt-2 break-words text-sm font-medium">{text(payload.signalProductionMode ?? record.signal_production_mode)}</div>
         </div>
         <div class="rounded-md border bg-card p-3">
-          <div class="text-xs font-medium uppercase text-muted-foreground">Routing confidence</div>
-          <div class="mt-2 break-words text-sm font-medium">{text(payload.routingConfidence ?? record.source_role_confidence)}</div>
+          <div class="text-xs font-medium uppercase text-muted-foreground">Source scope</div>
+          <div class="mt-2 break-words text-sm font-medium">{text(payload.sourceScopeType ?? scopeResolution.sourceScopeType ?? record.source_scope_type)}</div>
         </div>
       </section>
     )}
@@ -108,8 +148,18 @@ const risk = objectValue(payload.risk ?? record.risk_json);
       </div>
     </section>
 
-    {Object.keys(payload).length > 0 && (
+    {(Object.keys(payload).length > 0 || resource === "source-inventory") && (
       <section class="grid gap-4 xl:grid-cols-2">
+        <div class="rounded-md border bg-card p-4">
+          <h2 class="text-base font-semibold tracking-normal">Source Scope</h2>
+          <dl class="mt-3 grid gap-2 text-sm">
+            <div><dt class="text-muted-foreground">Candidate URL</dt><dd class="break-all">{text(scopeResolution.candidateUrl ?? record.canonical_url)}</dd></div>
+            <div><dt class="text-muted-foreground">Resolved source URL</dt><dd class="break-all">{text(scopeResolution.resolvedSourceUrl ?? record.resolved_source_url ?? payload.sourceUrl)}</dd></div>
+            <div><dt class="text-muted-foreground">Seed item URL</dt><dd class="break-all">{text(scopeResolution.seedItemUrl ?? record.seed_item_url ?? payload.seedItemUrl)}</dd></div>
+            <div><dt class="text-muted-foreground">Monitoring entries</dt><dd class="break-words">{text(scopeResolution.monitoringEntryUrls ?? record.monitoring_entry_urls_json)}</dd></div>
+            <div><dt class="text-muted-foreground">Resolution evidence</dt><dd class="break-words">{text(scopeResolution.resolutionEvidence ?? payload.sourceScopeEvidence)}</dd></div>
+          </dl>
+        </div>
         <div class="rounded-md border bg-card p-4">
           <h2 class="text-base font-semibold tracking-normal">Source Understanding</h2>
           <dl class="mt-3 grid gap-2 text-sm">

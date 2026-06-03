@@ -629,9 +629,29 @@ async function runDeterministicFlow({ skipBuild }) {
     );
     report.steps.push("probe-fetchers-boundary");
 
+    const scopeResolution = await apiPost("/maintenance/discovery/scope/resolve-apply", {
+      discoveryBrief: briefArtifact.payload_json,
+      probeReport,
+      candidate: {
+        candidateId,
+        canonicalUrl: fixtureUrl,
+        canonicalDomain: "127.0.0.1",
+        candidateKindGuess: "rss",
+      },
+      runId,
+      interestId,
+      candidateId,
+      parentArtifactIds: [String(probeExecution.json?.probeReportArtifact?.artifact_id ?? "")].filter(Boolean),
+      createdBy: actor,
+    });
+    const sourceScopeResolution = scopeResolution.json?.sourceScopeResolutionArtifact?.payload_json;
+    assert(sourceScopeResolution?.sourceScopeType === "feed", "Scope resolution must classify valid RSS fixture as feed.");
+    report.steps.push("scope-resolution");
+
     const understand = await apiPost("/maintenance/discovery/understand/preview", {
       discoveryBrief: briefArtifact.payload_json,
       probeReport,
+      sourceScopeResolution,
       candidate: {
         candidateId,
         canonicalUrl: fixtureUrl,
@@ -648,9 +668,9 @@ async function runDeterministicFlow({ skipBuild }) {
 
     const routing = await apiPost("/maintenance/discovery/routing-decisions/apply", {
       sourceUnderstanding,
-      canonicalUrl: fixtureUrl,
+      canonicalUrl: sourceScopeResolution.resolvedSourceUrl ?? fixtureUrl,
       canonicalDomain: "127.0.0.1",
-      sourceIdentityKey: `${namespace}:fixture-rss`,
+      sourceIdentityKey: `rss|127.0.0.1|${sourceScopeResolution.resolvedSourceUrl ?? fixtureUrl}`,
       providerType: "rss",
       accessPattern: "public",
       runId,

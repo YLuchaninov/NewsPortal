@@ -11,6 +11,7 @@ from services.api.app.routes.discovery_routes import register_discovery_routes
 from services.workers.app.discovery_vnext_artifacts import (
     validate_artifact_payload,
     validate_discovery_brief,
+    validate_source_scope_resolution,
     validate_source_understanding,
 )
 from services.workers.app.discovery_vnext_brief import compile_discovery_brief
@@ -21,6 +22,7 @@ from services.workers.app.discovery_vnext_megaloop import (
 )
 from services.workers.app.discovery_vnext_probe import build_probe_plan, execute_probe_plan
 from services.workers.app.discovery_vnext_routing import route_source_understanding
+from services.workers.app.discovery_vnext_scope_resolution import resolve_source_scope
 from services.workers.app.discovery_vnext_understanding import synthesize_source_understanding
 
 
@@ -40,6 +42,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             root / "services/workers/app/discovery_vnext_megaloop.py",
             root / "services/workers/app/discovery_vnext_candidates.py",
             root / "services/workers/app/discovery_vnext_probe.py",
+            root / "services/workers/app/discovery_vnext_scope_resolution.py",
             root / "services/workers/app/discovery_vnext_understanding.py",
             root / "services/workers/app/discovery_vnext_routing.py",
             root / "services/workers/app/discovery_vnext_handoff.py",
@@ -198,6 +201,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             {
                 "candidateId": "candidate-2",
                 "sourceUrl": "https://example.org/feed.xml",
+                "sourceScopeType": "feed",
                 "sourceRoleDescription": "Publishes recurring feed items.",
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "recurring_feed",
@@ -501,6 +505,56 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
 
         self.assertEqual(decision["decision"], "auto_register_probation")
 
+    def test_source_scope_resolution_resolves_item_url_to_section(self) -> None:
+        artifact = resolve_source_scope(
+            candidate={"canonicalUrl": "https://example.org/news/2026/05/signal-title"},
+            probe_report={
+                "candidateUrl": "https://example.org/news/2026/05/signal-title",
+                "accessPattern": "public",
+                "technicalObservability": {"observable": True, "score": 0.55, "hasRecurringStructure": False},
+                "probeCost": {"requestsAttempted": 1},
+                "observations": [],
+            },
+        )
+
+        self.assertTrue(artifact["validation"]["schemaValid"], artifact["validation"])
+        self.assertEqual(artifact["payload"]["sourceScopeType"], "section")
+        self.assertEqual(artifact["payload"]["resolvedSourceUrl"], "https://example.org/news/2026/05")
+        self.assertEqual(validate_source_scope_resolution(artifact["payload"]), [])
+
+    def test_scope_aware_understanding_blocks_single_item_auto_register(self) -> None:
+        brief = compile_discovery_brief({"name": "Public update signals", "description": "Track public updates."})
+        scope = resolve_source_scope(
+            candidate={"canonicalUrl": "https://example.org/file.pdf", "candidateKindGuess": "document"},
+            probe_report={
+                "candidateUrl": "https://example.org/file.pdf",
+                "accessPattern": "public",
+                "technicalObservability": {"observable": True, "score": 0.5},
+                "probeCost": {"requestsAttempted": 1},
+                "observations": [],
+            },
+        )["payload"]
+        understanding = synthesize_source_understanding(
+            discovery_brief=brief["payload"],
+            probe_report={
+                "candidateUrl": "https://example.org/file.pdf",
+                "accessPattern": "public",
+                "technicalObservability": {"observable": True, "score": 0.5},
+                "probeCost": {"requestsAttempted": 1},
+                "observations": [],
+            },
+            source_scope_resolution=scope,
+            candidate={"candidateKindGuess": "document"},
+        )["payload"]
+        decision = route_source_understanding(
+            understanding,
+            provider_type=understanding["suggestedProviderType"],
+            access_pattern=understanding["accessPattern"],
+        )
+
+        self.assertIn(understanding["sourceScopeType"], {"single_item", "document_collection"})
+        self.assertEqual(decision["decision"], "adapter_backlog")
+
     def test_static_vendor_page_routes_to_inventory_context(self) -> None:
         brief = compile_discovery_brief(
             {
@@ -678,7 +732,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             source_understanding={"probeSummary": {"validFeed": False}},
         )
 
-        self.assertTrue(key.startswith("example.org|https://example.org/updates"))
+        self.assertTrue(key.startswith("website|example.org|https://example.org/updates"))
         self.assertNotIn("run-1", key)
         self.assertNotIn("interest-1", key)
 
@@ -699,8 +753,8 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             source_understanding={"probeSummary": {"validFeed": True}},
         )
 
-        self.assertEqual(website_key, "example.org|https://example.org/news")
-        self.assertEqual(api_key, "api.example.org|https://api.example.org/v1")
+        self.assertEqual(website_key, "website|example.org|https://example.org/news")
+        self.assertEqual(api_key, "api|api.example.org|https://api.example.org/v1")
         self.assertIn("feed.xml", rss_key)
         self.assertNotIn("utm_source", rss_key)
         self.assertNotIn("run_id", api_key)
@@ -758,6 +812,25 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceInventory": {"source_inventory_id": "inventory-1"},
             }
 
+        def fake_apply_scope(payload):  # type: ignore[no-untyped-def]
+            calls.append("scope")
+            return {
+                "sourceScopeResolutionArtifact": {
+                    "artifact_id": "scope-artifact-1",
+                    "payload_json": {
+                        "candidateUrl": payload.probe_report["candidateUrl"],
+                        "resolvedSourceUrl": payload.probe_report["candidateUrl"],
+                        "sourceScopeType": "listing_page",
+                        "sourceScopeConfidence": 0.82,
+                        "seedItemUrl": None,
+                        "monitoringEntryUrls": [payload.probe_report["candidateUrl"]],
+                        "itemExtractionHints": {},
+                        "resolutionEvidence": ["listing"],
+                        "risk": {"overallRisk": "low"},
+                    },
+                }
+            }
+
         def fake_handoff(payload):  # type: ignore[no-untyped-def]
             calls.append("handoff")
             return {"status": "skipped", "reason": "dry_run"}
@@ -766,6 +839,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             patch.object(discovery_vnext_api, "get_required_active_policy", return_value={"definition_json": {"yieldIndependent": True}}),
             patch.object(discovery_vnext_api, "preview_probe_plan", side_effect=fake_probe_plan),
             patch.object(discovery_vnext_api, "execute_probe_from_payload", side_effect=fake_execute_probe),
+            patch.object(discovery_vnext_api, "apply_scope_resolution", side_effect=fake_apply_scope),
             patch.object(discovery_vnext_api, "apply_routing_decision", side_effect=fake_apply_routing),
             patch.object(discovery_vnext_api, "apply_probation_handoff_from_payload", side_effect=fake_handoff),
             patch.object(discovery_vnext_api, "_mark_candidate_status"),
@@ -786,7 +860,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 created_by="operator",
             )
 
-        self.assertEqual(calls, ["probe_plan", "probe_execute", "routing"])
+        self.assertEqual(calls, ["probe_plan", "probe_execute", "scope", "routing"])
         self.assertEqual(result["summary"]["candidateCount"], 1)
         self.assertEqual(result["summary"]["cheapWatchCount"], 1)
 
@@ -1027,12 +1101,32 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         preview = run_mega_loop_preview(brief["payload"], max_batches=4, locale="pl-PL")
 
         self.assertEqual(preview["artifactType"], "HypothesisMegaLoopPreview")
+        self.assertEqual(preview["status"], "completed_with_coverage_gap")
         self.assertEqual(preview["limits"]["actualBatches"], 4)
         self.assertGreaterEqual(len(preview["comparison"]["lensCoverage"]), 4)
+        self.assertTrue(preview["comparison"]["missingLenses"])
         for batch in preview["batches"]:
             self.assertEqual(batch["artifactType"], "HypothesisBatch")
             self.assertTrue(batch["validation"]["schemaValid"], batch["validation"])
             self.assertEqual(batch["status"], "validated")
+            for hypothesis in batch["payload"]["hypotheses"]:
+                self.assertIn("expectedSourceScopeTypes", hypothesis)
+                self.assertIn("badIfScopeIs", hypothesis)
+
+    def test_mega_loop_default_covers_all_universal_lenses(self) -> None:
+        brief = compile_discovery_brief(
+            {
+                "interestId": "interest-ml-full",
+                "name": "Universal public signals",
+                "description": "Track public updates, records, discussions, datasets and listings.",
+            }
+        )
+
+        preview = run_mega_loop_preview(brief["payload"], max_batches=11)
+
+        self.assertEqual(preview["status"], "completed")
+        self.assertEqual(len(preview["coveragePolicy"]["requiredLensCoverage"]), 11)
+        self.assertEqual(preview["comparison"]["missingLenses"], [])
 
     def test_hypothesis_comparator_marks_duplicate_source_roles(self) -> None:
         hypothesis = {
@@ -1085,6 +1179,8 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         self.assertEqual(rows[0]["acquisitionEvidence"]["paths"][0]["provider"], "fixture")
         self.assertEqual(rows[1]["candidateKindGuess"], "rss")
         self.assertEqual(report["observedResultMix"]["duplicates"], 1)
+        self.assertIn("primaryOrOwnerSources", report["observedResultMix"])
+        self.assertEqual(report["queryPurpose"], "find_direct_sources")
         self.assertEqual(report["quality"], "needs_refinement")
 
     def test_candidate_rows_preserve_live_provider_evidence(self) -> None:
@@ -1393,6 +1489,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             accessPattern="public",
             sourceUnderstanding={
                 "sourceUrl": "https://example.org/feed.xml",
+                "sourceScopeType": "feed",
                 "sourceRoleDescription": "Publishes recurring feed items.",
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "recurring_feed",

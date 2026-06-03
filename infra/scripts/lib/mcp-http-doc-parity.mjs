@@ -220,17 +220,51 @@ function classifyShippedEntry(name, coveredSet) {
   return coveredSet.has(name) ? COVERED_SHIPPED : SHIPPED_NOT_YET_TESTED;
 }
 
+const DISCOVERY_VNEXT_CANONICAL_ALIAS_NAMES = {
+  "discovery_vnext.preview_brief": "discovery.brief.preview",
+  "discovery_vnext.start_run": "discovery.runs.execute",
+  "discovery_vnext.list_artifacts": "discovery.artifacts.list",
+  "discovery_vnext.get_artifact": "discovery.artifacts.read",
+  "discovery_vnext.preview_mega_loop": "discovery.mega_loop.preview",
+  "discovery_vnext.normalize_candidates": "discovery.candidates.normalize",
+  "discovery_vnext.create_probe_plan": "discovery.probe.plan_preview",
+  "discovery_vnext.execute_probe": "discovery.probe.execute",
+  "discovery_vnext.preview_scope_resolution": "discovery.scope.resolve_preview",
+  "discovery_vnext.apply_scope_resolution": "discovery.scope.resolve_apply",
+  "discovery_vnext.preview_source_understanding": "discovery.understand.preview",
+  "discovery_vnext.apply_routing": "discovery.routing.apply",
+  "discovery_vnext.apply_probation_handoff": "discovery.probation.handoff",
+  "discovery_vnext.explain_source_inventory": "discovery.source_inventory.explain",
+  "discovery_vnext.resolve_source_inventory_scopes": "discovery.source_inventory.resolve_scopes",
+  "discovery_vnext.submit_feedback": "discovery.feedback.submit",
+  "discovery_vnext.prepare_rollback": "discovery.rollback.prepare",
+  "discovery_vnext.apply_rollback": "discovery.rollback.apply",
+};
+
+function canonicalToolName(name) {
+  if (DISCOVERY_VNEXT_CANONICAL_ALIAS_NAMES[name]) {
+    return DISCOVERY_VNEXT_CANONICAL_ALIAS_NAMES[name];
+  }
+  if (name.startsWith("discovery_vnext.")) {
+    return name.replace(/^discovery_vnext\./u, "discovery.");
+  }
+  return name;
+}
+
 function buildShippedEntries(kind, shippedValues, coveredValues, idField) {
   const coveredSet = toKeySet(coveredValues);
   return Array.from(shippedValues ?? [])
     .map((value) => String(value?.[idField] ?? "").trim())
     .filter(Boolean)
-    .map((name) => ({
-      kind,
-      [idField]: name,
-      classification: classifyShippedEntry(name, coveredSet),
-      source: "shipped-http-contract",
-    }));
+    .map((name) => {
+      const coverageName = kind === "tool" ? canonicalToolName(name) : name;
+      return {
+        kind,
+        [idField]: name,
+        classification: classifyShippedEntry(coverageName, coveredSet),
+        source: "shipped-http-contract",
+      };
+    });
 }
 
 function buildLegacyEntries(kind, shippedValues, legacyValues, idField) {
@@ -333,7 +367,8 @@ export function getUnexpectedUntestedShippedEntries(matrix) {
   };
   return getUntestedShippedEntries(matrix).filter((entry) => {
     const key = getExpectedUntestedKey(entry);
-    return !expected[entry.kind]?.has(key);
+    const expectedKey = entry.kind === "tool" ? canonicalToolName(key) : key;
+    return !expected[entry.kind]?.has(expectedKey);
   });
 }
 

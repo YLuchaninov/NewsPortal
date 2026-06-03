@@ -1205,6 +1205,11 @@ export function createHarness({ logPrefix = "mcp-http-proof" } = {}) {
         cookie: state.adminCookie,
       });
     },
+    async assertAdminHtmlAt(pathname, snippets) {
+      return await assertHtmlContains(`${adminBaseUrl}${pathname}`, snippets, {
+        cookie: state.adminCookie,
+      });
+    },
     async issueToken(payload) {
       const issued = await issueMcpToken(state.adminCookie, payload);
       tokenRecords.push({
