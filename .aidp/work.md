@@ -2,17 +2,123 @@
 
 ## Active Item
 
+- id: `NEWSPORTAL-PUBLIC-ALPHA-CLEANUP-SWEEP-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `public-alpha-audit-driven-cleanup`
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-04 to clean according to the operator-edited public alpha cleanup audit.
+- planning required: yes, because this is a destructive tracked-file cleanup across docs and proof scripts.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- accepted plan: operator-edited public alpha cleanup audit from 2026-06-04; the audit file itself was removed after the operator explicitly requested deleting it too.
+
+## Scope
+
+Clean the repository public-alpha surface according to the operator-edited cleanup audit.
+
+In scope:
+
+- remove tracked docs/scripts still listed as direct archive/remove candidates in the operator-edited audit;
+- update references that would otherwise point at removed public-alpha files;
+- preserve files the operator removed from the cleanup candidate list;
+- preserve scripts listed only for classification when they are backed by `package.json` or current architecture/proof docs;
+- clean ignored local `.DS_Store` clutter if present.
+
+Out of scope:
+
+- modifying product/source/config/test/runtime behavior;
+- dependency pruning;
+- changing public APIs, package interfaces, migrations, Docker/runtime surfaces or active proof commands.
+- deleting tests, glob-driven unit suites, package-script-backed proof harnesses, shared packages, compatibility code, data assets, `old_examples` or `aidp-monitor`.
+
+Allowed paths:
+
+- `.aidp/work.md`
+- `docs/documentation-inventory.md`
+- `docs/product/architecture/nonstandard-technical-decisions.md`
+- `docs/next step/discovery_vnext_system_completion_plan.md`
+- `docs/next step/discovery_vnext_system_configuration_playbook.md`
+- `docs/discovery_vnext_completion_blueprint.md`
+- `docs/discovery_vnext_p0_p1_plan.md`
+- `infra/scripts/run-live-website-outsourcing.mjs`
+- `infra/scripts/tune-worldbank-procurement-mcp-followup.mjs`
+- `infra/scripts/lib/outsource-example-c.bundle.mjs`
+- ignored local `.DS_Store` files
+
+Protected boundaries:
+
+- Product docs can explain cleanup outcomes, but `.aidp/*` remains the agent runtime owner.
+- Existing tests and compatibility code are not dead solely because they contain `legacy` strings or lack direct per-file references; glob-based runners and compatibility paths must be respected.
+- Discovery live proof scripts with package scripts remain active proof surfaces unless a separate proof-harness deprecation sweep removes them.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: audit route, pre-write active item and observation/canonicalization rules.
+- `.aidp/routes.md`: `sweep` route and pre-write active item rules.
+- `.aidp/blueprint.md`: product docs vs AIDP runtime truth, delivery/runtime and test/runtime boundaries.
+- `.aidp/engineering.md`: route-aware audit discipline, surgical changes, deprecation/compatibility rules.
+- `.aidp/verification.md`: sweep proof and behavior-preservation expectations.
+- `docs/documentation-inventory.md`: current docs classification and historical-example status.
+- `package.json`: root script and glob-based test/proof command map.
+- operator-edited public alpha cleanup audit: cleanup source for this sweep; removed from the working tree after implementation.
+
+## Implementation Expectations
+
+- Remove only files still directly listed as cleanup candidates or their now-orphaned private dependency.
+- Do not remove large data assets, `old_examples`, `aidp-monitor`, tests, shared packages, compatibility code or package-script-backed proof harnesses.
+- Keep docs and AIDP references coherent after removals.
+- Preserve behavior: this sweep must not modify runtime/source logic.
+
+## Proof Gates
+
+Required gates:
+
+- `pnpm check:test-layout`;
+- `pnpm check:runtime-artifacts`;
+- `pnpm check:scaffold`;
+- `git diff --check`.
+
+No runtime tests are required because this sweep removes public docs and unsupported/manual-only proof artifacts without changing product/source/config/test behavior.
+
+## Current Proof Status
+
+- passed locally on 2026-06-04 for `public-alpha-audit-driven-cleanup`:
+  - removed public-alpha cleanup candidates that remained in the operator-edited audit: historical Discovery plan docs, `docs/next step` plan docs, orphaned outsourcing website runner, its private bundle, and the unreferenced World Bank tuning follow-up script;
+  - removed the audit file itself after the operator explicitly requested it;
+  - retained tests, large data assets, `old_examples`, `aidp-monitor`, shared packages, compatibility code and package-script-backed Discovery live proof harnesses;
+  - updated `docs/product/architecture/nonstandard-technical-decisions.md` and this work state so active refs point at surviving Discovery docs/contracts rather than removed plan files;
+  - removed ignored local `.DS_Store` files;
+  - proof passed: `pnpm check:test-layout`, `pnpm check:runtime-artifacts`, `pnpm check:scaffold`, and `git diff --check`.
+
+## Cleanup Notes
+
+- Ignored local `.DS_Store` files were removed.
+- No runtime artifacts were created.
+
+## Parked Previous Item
+
+- id: `NEWSPORTAL-PUBLIC-ALPHA-CLEANUP-AUDIT-1`
+- lifecycle: `normal`
+- route: `audit`
+- status before parking: `done`
+- reason parked: operator edited the resulting audit and requested implementing cleanup according to the remaining candidates.
+- last known proof status: `git diff --check` passed locally on 2026-06-04 for the audit report item.
+
 - id: `NEWSPORTAL-DISCOVERY-VNEXT-COMPLETION-2`
 - lifecycle: `normal`
 - route: `capability`
 - route phase: `discovery-vnext-system-scope-resolution-completion`
 - status: `active`
+- parked status: `paused for public-alpha cleanup audit`
+- parked reason: operator requested the separate public alpha cleanup audit on 2026-06-04; resume this capability only after the audit report item is closed or explicitly superseded.
 - risk: `medium`
-- approval: approved by operator request on 2026-05-31 to implement the Discovery vNext Completion Plan from `docs/discovery_vnext_completion_blueprint.md`.
+- approval: approved by operator request on 2026-05-31 to implement the Discovery vNext completion plan; the public copy of the historical plan doc was removed by `NEWSPORTAL-PUBLIC-ALPHA-CLEANUP-SWEEP-1` and remains available through git history.
 - planning required: yes
 - planning source: `external-spec` + `tool-native`
 - planning status: `accepted-for-this-item`
-- accepted plan: `docs/discovery_vnext_completion_blueprint.md`, the operator-provided implementation plan on 2026-05-31, the tool-native `Discovery vNext Blueprint Completion Plan` accepted by operator request on 2026-05-31, `docs/next step/discovery_vnext_system_completion_plan.md`, the operator-requested `Discovery vNext System Completion Implementation Plan` accepted for implementation on 2026-06-03, the operator-requested `Plan implementation points 1-4 without destructive maintenance` accepted for implementation on 2026-06-03, and `docs/discovery_vnext_p0_p1_plan.md` plus the operator-requested `Discovery vNext P0-P1 Implementation Plan` accepted for implementation on 2026-06-03.
+- accepted plan: historical Discovery vNext completion and P0-P1 implementation plans accepted by operator requests on 2026-05-31 and 2026-06-03; public working-tree copies were removed by `NEWSPORTAL-PUBLIC-ALPHA-CLEANUP-SWEEP-1` and remain available through git history. Current active Discovery specification remains `docs/discovery_vnext_blueprint.md` plus `.aidp/contracts/discovery-agent.md`.
 
 ## Scope
 
@@ -31,7 +137,7 @@ In scope:
 - complete the remaining blueprint acceptance gaps: artifact lineage, MegaLoop memory wiring, policy-driven full-run candidate selection, QueryQuality persistence/feedback, deterministic eval suite, MCP aliases, admin manual review/policy surfaces and hard proof gates.
 - complete follow-up proof/closure items 1-4: final diff review and commit, deterministic MCP proof for scope tools, admin source-inventory visual/action smoke, and safe PDF/document extraction in fetchers.
 - calibrate the outsourcing client-signal funnel through MCP feedback/configuration and replay historical content with bounded `maintenance.reindex.request jobKind=backfill` chunks after the clean live verification exposed seller/service/SEO noise.
-- complete P0-P1 Discovery vNext hardening from `docs/discovery_vnext_p0_p1_plan.md`: authoritative structural `SourceScopeResolution`, resolved-scope handoff, fail-visible full-run quality gates, individual hypothesis-aware probe caps, generic item-level conversion foundations, canonical `SourceUnderstanding` v2, coverage-policy MegaLoop, post-scope QueryQuality, bounded source-scope re-resolution, and operator verification gates.
+- complete P0-P1 Discovery vNext hardening: authoritative structural `SourceScopeResolution`, resolved-scope handoff, fail-visible full-run quality gates, individual hypothesis-aware probe caps, generic item-level conversion foundations, canonical `SourceUnderstanding` v2, coverage-policy MegaLoop, post-scope QueryQuality, bounded source-scope re-resolution, and operator verification gates.
 - update `docs/product/architecture/nonstandard-technical-decisions.md` with repository-verified technical and business uniqueness details for the Discovery/source/selection/control-plane architecture.
 
 Out of scope:
@@ -46,8 +152,6 @@ Out of scope:
 Allowed paths:
 
 - `.aidp/**`
-- `docs/discovery_vnext_completion_blueprint.md`
-- `docs/discovery_vnext_p0_p1_plan.md`
 - `docs/product/architecture/nonstandard-technical-decisions.md`
 - `packages/contracts/**`
 - `database/migrations/**`
@@ -87,7 +191,7 @@ Protected boundaries:
 - `.aidp/contracts/feed-ingress-adapters.md`
 - `.aidp/contracts/mcp-control-plane.md`
 - `.aidp/contracts/test-access-and-fixtures.md`
-- `docs/discovery_vnext_completion_blueprint.md`
+- `docs/discovery_vnext_blueprint.md`
 - `packages/contracts/src/discovery-vnext.ts`
 - `services/workers/app/discovery_vnext_*.py`
 - `services/api/app/discovery_vnext_api.py`

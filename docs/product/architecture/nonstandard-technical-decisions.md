@@ -60,7 +60,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** the product can search widely for unusual source families without polluting the customer-facing feed. This is crucial for "hidden signal" use cases: the system can explore aggressively while only publishing signals that pass downstream gates.
 
-**Implemented around:** `docs/discovery_vnext_blueprint.md`, `docs/discovery_vnext_p0_p1_plan.md`, `services/api/app/discovery_vnext_api.py`, `services/workers/app/discovery_vnext_*.py`, `services/mcp/src/tools/discovery/vnext-tools.ts`, migrations `0056`-`0062`.
+**Implemented around:** `docs/discovery_vnext_blueprint.md`, `.aidp/contracts/discovery-agent.md`, `services/api/app/discovery_vnext_api.py`, `services/workers/app/discovery_vnext_*.py`, `services/mcp/src/tools/discovery/vnext-tools.ts`, migrations `0056`-`0062`.
 
 **Tradeoff:** more intermediate records and review steps; much better explainability, rollback and budget control.
 
@@ -204,7 +204,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** the platform is not just a vertical scraper. It can be configured for new signal markets without rebuilding the core each time.
 
-**Implemented around:** `services/workers/app/discovery_vnext_megaloop.py`, `services/workers/app/discovery_vnext_brief.py`, `services/workers/app/discovery_vnext_candidates.py`, `docs/discovery_vnext_p0_p1_plan.md`, `tests/unit/python/test_discovery_vnext_foundation.py`.
+**Implemented around:** `services/workers/app/discovery_vnext_megaloop.py`, `services/workers/app/discovery_vnext_brief.py`, `services/workers/app/discovery_vnext_candidates.py`, `docs/discovery_vnext_blueprint.md`, `tests/unit/python/test_discovery_vnext_foundation.py`.
 
 **Tradeoff:** domain pack design becomes important. Good results require calibrated interests, feedback and adapter coverage rather than hidden hardcode.
 
