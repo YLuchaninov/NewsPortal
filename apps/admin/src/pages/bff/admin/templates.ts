@@ -5,8 +5,8 @@ import {
   saveTemplateFromPayload,
   setTemplateActiveStateWithAudit,
   type TemplateKind,
-} from "@newsportal/control-plane";
-import { MCP_TEMPLATE_PAYLOAD_SCHEMAS, type JsonSchema } from "@newsportal/contracts";
+} from "@signalops/control-plane";
+import { MCP_TEMPLATE_PAYLOAD_SCHEMAS, type JsonSchema } from "@signalops/contracts";
 
 import {
   adminActionError,

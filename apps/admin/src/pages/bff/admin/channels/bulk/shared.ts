@@ -11,7 +11,7 @@ import {
   type BulkImportPlanItem,
   type BulkImportProviderBreakdown,
   type ParsedBulkImportChannel
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import { getPool } from "../../../../../lib/server/db";
 

@@ -11,7 +11,7 @@ import {
   type OnSelectionChangeFunc,
   type Viewport,
 } from "@xyflow/react";
-import { Card, CardContent } from "@newsportal/ui";
+import { Card, CardContent } from "@signalops/ui";
 
 import type { AutomationNodeData } from "../lib/automation-workspace";
 import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";

@@ -247,7 +247,7 @@ from .worker_queues import (
     SEQUENCE_QUEUE,
 )
 
-LOGGER = logging.getLogger("newsportal.workers")
+LOGGER = logging.getLogger("signalops.workers")
 
 # Compatibility exports for worker smoke helpers that import queue consumer names from main.
 WORKER_MAIN_COMPAT_EXPORTS = (

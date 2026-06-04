@@ -4,10 +4,10 @@ import {
   DEFAULT_PAGE_SIZE,
   RESOURCE_KINDS,
   type WebResourcePreview,
-} from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+} from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
@@ -41,7 +41,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 type ChannelRow = Record<string, unknown>;
 function readString(value: unknown): string {

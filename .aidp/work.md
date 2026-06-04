@@ -2,6 +2,137 @@
 
 ## Active Item
 
+- id: `SIGNALOPS-PROJECT-RENAME-SWEEP-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `project-identity-breaking-rename`
+- status: `done`
+- risk: `high`
+- approval: approved by operator request on 2026-06-04 to implement the accepted plan for a maximal former-identity to SignalOps rename without backward compatibility.
+- planning required: yes, because this is a broad breaking structural rename across package scope, env/runtime contracts, MCP URI/server identity, docs, proof harnesses and AIDP runtime truth.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- accepted plan: operator-provided project rename plan from 2026-06-04.
+
+## Scope
+
+Rename repository identity to SignalOps without legacy aliases or backward-compatible contract shims.
+
+In scope:
+
+- replace current project identifiers with SignalOps casing, `signalops` package/env/runtime identifiers and `@signalops/*` package scope;
+- update workspace manifests, package imports, lockfile, TypeScript path aliases, Playwright commands and Docker package filters;
+- update runtime/env defaults, compose, Docker Linux user/group, DB/user/password defaults, user agents, local domains and notification sender defaults;
+- update public/operator contracts without aliases: MCP server name, MCP URI scheme, MCP docs/client env vars, SDK exports/types, error taxonomy names, browser globals/events and localStorage keys;
+- update UI/product docs, fixtures, proof scripts, `/tmp` artifact prefixes and artifact kind strings;
+- update `.aidp/*` current canonical project identity and this active work item while preserving immutable historical proof references only when clearly historical.
+
+Out of scope:
+
+- physically renaming the repository folder path;
+- preserving former env vars, package scope, SDK exports, MCP server names or URI scheme resources as aliases;
+- production deployment or external-state migration;
+- changing product behavior beyond the intentional breaking identity rename.
+
+Allowed paths:
+
+- `.aidp/**`
+- `.env.example`
+- `.env.dev`
+- `package.json`
+- `pnpm-lock.yaml`
+- `pnpm-workspace.yaml`
+- `tsconfig*.json`
+- `playwright.config.mjs`
+- `apps/**`
+- `packages/**`
+- `services/**`
+- `infra/**`
+- `database/**`
+- `tests/**`
+- `docs/**`
+- `README.md`
+
+Protected boundaries:
+
+- PostgreSQL remains business source of truth; this rename may change local default database/user names but must not introduce schema/data ownership changes.
+- The MCP/control-plane contract is intentionally breaking and must consistently use `signalops://` and `signalops-mcp` after the sweep.
+- AIDP runtime truth stays in `.aidp/*`; root routers remain thin.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route, pre-write active item and canonicalization rules.
+- `.aidp/routes.md`: `sweep` route, high-risk approval and proof obligations.
+- `.aidp/blueprint.md`: project identity, runtime/delivery baseline, AIDP/process truth and durable boundaries.
+- `.aidp/engineering.md`: route-aware sweep discipline, breaking contract/deprecation rules and runtime/config naming discipline.
+- `.aidp/verification.md`: broad sweep proof, env/runtime guards and release verification gates.
+- accepted tool-native plan in the operator message from 2026-06-04.
+
+## Implementation Expectations
+
+- Perform a repo-wide mechanical rename, then repair semantic fallout around exported names, env lookup names, MCP resource constants, tests and docs.
+- Do not keep compatibility aliases for former project identity contracts.
+- Keep the worktree folder name unchanged.
+- Treat old AIDP proof artifact paths as historical evidence only; current commands and docs must use SignalOps naming.
+
+## Proof Gates
+
+Required gates:
+
+- static/name sweep for former project identity literals;
+- `pnpm install --lockfile-only` if workspace manifest/package scope changes require lockfile regeneration;
+- `pnpm check:env-sync`;
+- `pnpm check:scaffold`;
+- `pnpm check:runtime-artifacts`;
+- `pnpm check:test-layout`;
+- `pnpm check:secret-leaks`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm unit_tests`;
+- `pnpm test:migrations:smoke`;
+- `pnpm test:mcp:http:matrix`;
+- `pnpm test:product:local:core`;
+- `pnpm release:verify`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- passed locally on 2026-06-04 for `project-identity-breaking-rename`.
+- Implemented:
+  - workspace/package/runtime rename across manifests, lockfile, package imports, env defaults, Docker/compose user and DB defaults, SDK exports, MCP server identity, MCP URI scheme, docs, proof harness names and `/tmp/signalops-*` artifact prefixes;
+  - `.aidp/AGENTS.md`, `.aidp/os.yaml`, `.aidp/blueprint.md`, `.aidp/engineering.md`, `.aidp/verification.md` and `.aidp/contracts/**` current canonical identity updated to SignalOps;
+  - local Python unit blocker resolved by simplifying the two affected `tests/unit/python/test_interest_auto_repair.py` context-manager tests so local Python 3.12.3 no longer segfaults during compile;
+  - website compose blockers resolved by serving valid PDF fixtures in website proof harnesses and externalizing `pdfjs-dist` from the fetchers runtime bundle so worker resolution uses the installed package path.
+- Proof passed:
+  - `pnpm install --lockfile-only`;
+  - `pnpm install`;
+  - `pnpm check:env-sync`;
+  - `pnpm check:scaffold`;
+  - `pnpm check:runtime-artifacts`;
+  - `pnpm check:test-layout`;
+  - `pnpm check:secret-leaks`;
+  - `pnpm lint`;
+  - `pnpm typecheck` with existing Astro hints only and 0 errors;
+  - `pnpm unit_tests` (`pnpm unit_tests:ts` 417/417 and `pnpm unit_tests:py` 376/376);
+  - `pnpm test:migrations:smoke`;
+  - `pnpm test:mcp:http:matrix`, artifacts including `/tmp/signalops-mcp-http-deterministic-90e647fb-f3e8-4b27-a570-ff376ef648f3.json`;
+  - `pnpm test:website:compose`;
+  - `pnpm test:website:admin:compose`;
+  - `pnpm test:product:local:core`, artifacts `/tmp/signalops-product-local-core-b8dc3ca3.json` and `/tmp/signalops-product-local-core-b8dc3ca3.md`;
+  - `pnpm build:node-runtime`;
+  - `pnpm release:verify`, artifact directory `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-2cf1b3c9` and summary `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-2cf1b3c9/release-verify-summary.json`;
+  - full release proof included live website matrix artifact `/tmp/signalops-live-website-matrix-baseline-a8d22d17-a764-4cb6-917c-07c23dc2db0a.json`; external 403/captcha/block responses were recorded as truthful unsupported-or-blocked verdicts and did not fail the gate;
+  - static visible name sweep: no former-name hits outside hidden AIDP history;
+  - final hidden/static name sweep: remaining former-name hits are only in this `.aidp/work.md` historical archive as immutable past evidence;
+  - `git diff --check`.
+
+## Cleanup Notes
+
+- Existing local Docker/Postgres state using former defaults was treated as disposable and recreated during the rename proof.
+- New runtime proof artifacts use `/tmp/signalops-*` prefixes. Historical archive entries below may retain former-name artifact paths, package scopes and work item ids as immutable past evidence.
+
+## Historical Archive: Previous Completed Item
+
 - id: `NEWSPORTAL-PUBLIC-ALPHA-CLEANUP-SWEEP-1`
 - lifecycle: `normal`
 - route: `sweep`

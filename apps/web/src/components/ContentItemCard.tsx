@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Clock3, ExternalLink, ThumbsDown, ThumbsUp, User2 } from "lucide-react";
 
-import type { ContentItemPreview, UserContentStateView } from "@newsportal/contracts";
+import type { ContentItemPreview, UserContentStateView } from "@signalops/contracts";
 import { UserContentStateControls } from "./UserContentStateControls";
 
 interface ContentItemCardProps {

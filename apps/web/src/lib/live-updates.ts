@@ -67,13 +67,13 @@ export interface LiveUpdatesEventDetail {
   changes: LiveUpdateChanges;
 }
 
-export interface NewsPortalLiveUpdatesStore {
+export interface SignalOpsLiveUpdatesStore {
   snapshot: LiveUpdatesSnapshot | null;
   activeSurface: LiveUpdateSurface | null;
   forceRefresh?: () => void;
 }
 
-export const LIVE_UPDATES_EVENT = "newsportal:live-updates";
+export const LIVE_UPDATES_EVENT = "signalops:live-updates";
 export const LIVE_UPDATES_IDLE_POLL_MS = 15_000;
 export const LIVE_UPDATES_FAST_POLL_MS = 3_000;
 export const LIVE_UPDATES_MAX_BACKOFF_MS = 60_000;
@@ -206,6 +206,6 @@ export function serializeLiveUpdatesResponse(
 
 declare global {
   interface Window {
-    __newsportalLiveUpdates?: NewsPortalLiveUpdatesStore;
+    __signalopsLiveUpdates?: SignalOpsLiveUpdatesStore;
   }
 }

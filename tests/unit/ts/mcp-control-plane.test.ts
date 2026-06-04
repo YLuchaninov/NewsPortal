@@ -14,7 +14,7 @@ import {
   MCP_SCOPE_OPTIONS,
 } from "../../../packages/control-plane/src/mcp-tokens.ts";
 import { hydrateTemplateUpdatePayloadForSave } from "../../../packages/control-plane/src/templates.ts";
-import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
+import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
 import {
   buildToolResult,
   JsonRpcError,
@@ -1209,24 +1209,24 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(toolNames.includes("discovery.source_families.coverage"));
 
   const resourceUris = listMcpResources().map((entry) => entry.uri);
-  assert.ok(resourceUris.includes("newsportal://guide/server-overview"));
-  assert.ok(resourceUris.includes("newsportal://guide/operator-playbooks"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/sequences"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/discovery"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/system-interests"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/llm-templates"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/channels"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/article-diagnostics"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/observability"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/cleanup"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/funnel-calibration"));
-  assert.ok(resourceUris.includes("newsportal://guide/scenarios/discovery-live-gap-hunting"));
-  assert.ok(resourceUris.includes("newsportal://articles/residuals-summary"));
-  const resource = resolveMcpResource("newsportal://admin/summary");
+  assert.ok(resourceUris.includes("signalops://guide/server-overview"));
+  assert.ok(resourceUris.includes("signalops://guide/operator-playbooks"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/sequences"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/discovery"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/system-interests"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/llm-templates"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/channels"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/article-diagnostics"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/observability"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/cleanup"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/funnel-calibration"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/discovery-live-gap-hunting"));
+  assert.ok(resourceUris.includes("signalops://articles/residuals-summary"));
+  const resource = resolveMcpResource("signalops://admin/summary");
   assert.equal(resource.name, "admin.summary");
-  const guideResource = resolveMcpResource("newsportal://guide/server-overview");
+  const guideResource = resolveMcpResource("signalops://guide/server-overview");
   assert.equal(guideResource.name, "guide.server.overview");
-  const discoveryGuideResource = resolveMcpResource("newsportal://guide/scenarios/discovery");
+  const discoveryGuideResource = resolveMcpResource("signalops://guide/scenarios/discovery");
   assert.equal(discoveryGuideResource.name, "guide.scenarios.discovery");
   assert.ok(listMcpResources().length >= 14);
 
@@ -1254,7 +1254,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   });
   assert.match(
     orientationRendered.messages[0]?.content.text ?? "",
-    /newsportal:\/\/guide\/server-overview/i
+    /signalops:\/\/guide\/server-overview/i
   );
   const discoverySessionPrompt = resolveMcpPrompt("discovery.session.plan");
   const discoverySessionRendered = discoverySessionPrompt.render({
@@ -1262,7 +1262,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   });
   assert.match(
     discoverySessionRendered.messages[0]?.content.text ?? "",
-    /newsportal:\/\/guide\/scenarios\/discovery/i
+    /signalops:\/\/guide\/scenarios\/discovery/i
   );
   const funnelPrompt = resolveMcpPrompt("operator.funnel.calibrate");
   const funnelRendered = funnelPrompt.render({
@@ -1271,9 +1271,9 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     currentGap: "selected content is flat",
   });
   assert.match(funnelRendered.messages[0]?.content.text ?? "", /operator\.funnel\.audit/i);
-  const funnelGuide = resolveMcpResource("newsportal://guide/scenarios/funnel-calibration");
+  const funnelGuide = resolveMcpResource("signalops://guide/scenarios/funnel-calibration");
   assert.equal(funnelGuide.name, "guide.scenarios.funnel-calibration");
-  const liveGapGuide = resolveMcpResource("newsportal://guide/scenarios/discovery-live-gap-hunting");
+  const liveGapGuide = resolveMcpResource("signalops://guide/scenarios/discovery-live-gap-hunting");
   assert.equal(liveGapGuide.name, "guide.scenarios.discovery-live-gap-hunting");
   const liveGapPrompt = resolveMcpPrompt("discovery.live_gap_hunting.plan");
   const liveGapRendered = liveGapPrompt.render({
@@ -1288,7 +1288,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   });
   assert.match(
     observabilityRendered.messages[0]?.content.text ?? "",
-    /newsportal:\/\/guide\/scenarios\/observability/i
+    /signalops:\/\/guide\/scenarios\/observability/i
   );
   const systemInterestPolishPrompt = resolveMcpPrompt("system_interest.polish");
   const systemInterestPolishRendered = systemInterestPolishPrompt.render({
@@ -1297,7 +1297,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   });
   assert.match(
     systemInterestPolishRendered.messages[0]?.content.text ?? "",
-    /newsportal:\/\/guide\/scenarios\/article-diagnostics/i
+    /signalops:\/\/guide\/scenarios\/article-diagnostics/i
   );
   assert.ok(listMcpPrompts().length >= 10);
 
@@ -1315,7 +1315,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
 
 test("MCP read tools accept common report aliases for system interest read-back", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -1348,7 +1348,7 @@ test("MCP template duplicate audit separates system interests from LLM templates
   const pool = createFakeTemplateDuplicateAuditPool();
   const result = (await executeMcpTool(
     {
-      sdk: createNewsPortalSdk({ baseUrl: "http://api.example.test" }),
+      sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
       pool,
       token: WRITE_TEMPLATES_TOKEN,
     },
@@ -1372,7 +1372,7 @@ test("MCP template duplicate audit separates system interests from LLM templates
 test("MCP system interest compile status reports uncompiled active criteria blockers", async () => {
   const result = (await executeMcpTool(
     {
-      sdk: createNewsPortalSdk({ baseUrl: "http://api.example.test" }),
+      sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
       pool: createFakeTemplateDuplicateAuditPool(),
       token: WRITE_TEMPLATES_TOKEN,
     },
@@ -1391,7 +1391,7 @@ test("MCP system interest compile status reports uncompiled active criteria bloc
 });
 
 test("MCP operator funnel audit reports calibration drift without mutating", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("operator.funnel.audit should use the DB-backed pool");
@@ -1429,7 +1429,7 @@ test("MCP operator funnel audit reports calibration drift without mutating", asy
 });
 
 test("MCP funnel calibration report verify returns DB-backed drift counts", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("operator.report.verify should use the DB-backed pool");
@@ -1458,7 +1458,7 @@ test("MCP funnel calibration report verify returns DB-backed drift counts", asyn
 });
 
 test("MCP coverage-first funnel guidance retains noisy source inventory", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("coverage-first funnel tools should use the DB-backed pool");
@@ -1500,7 +1500,7 @@ test("MCP coverage-first funnel guidance retains noisy source inventory", async 
 test("MCP source family balance report verifies no auto-disable policy", async () => {
   const result = (await executeMcpTool(
     {
-      sdk: createNewsPortalSdk({ baseUrl: "http://api.example.test" }),
+      sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
       pool: createFakeSourceFamilyPool(),
       token: WRITE_DISCOVERY_TOKEN,
     },
@@ -1518,7 +1518,7 @@ test("MCP source family balance report verifies no auto-disable policy", async (
 });
 
 test("MCP hold quality tools and report verify expose tiered hold evidence", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("hold-quality tools should use the DB-backed pool");
@@ -1573,7 +1573,7 @@ test("MCP hold quality tools and report verify expose tiered hold evidence", asy
 });
 
 test("MCP selection precision audit buckets selected rows without a public gate split", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("operator.selection.precision_audit should use the DB-backed pool");
@@ -1617,7 +1617,7 @@ test("MCP selection precision audit buckets selected rows without a public gate 
 });
 
 test("MCP selection dashboard explains raw article totals versus selected signals", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1660,7 +1660,7 @@ test("MCP selection dashboard explains raw article totals versus selected signal
 });
 
 test("MCP selection reindex planner builds bounded replay buckets and request templates", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("operator.selection.reindex_plan should use the DB-backed pool");
@@ -1695,7 +1695,7 @@ test("MCP operator funnel audit rejects unknown arguments at schema boundary", a
     () =>
       executeMcpTool(
         {
-          sdk: createNewsPortalSdk({ baseUrl: "http://api.example.test" }),
+          sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
           pool: createFakeFunnelAuditPool(),
           token: WRITE_TEMPLATES_TOKEN,
         },
@@ -1714,7 +1714,7 @@ test("MCP operator funnel audit rejects unknown arguments at schema boundary", a
 });
 
 test("MCP channel active-state tool avoids full provider payload guessing", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("fetch should not be called by channels.set_active");
@@ -1749,7 +1749,7 @@ test("MCP channel active-state tool avoids full provider payload guessing", asyn
 
 test("MCP Discovery vNext artifact lists validate filters before API calls", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -1802,7 +1802,7 @@ test("MCP Discovery vNext artifact lists validate filters before API calls", asy
 
 test("MCP Discovery vNext write tools use strict schemas and vNext endpoints", async () => {
   const requests: Array<{ method: string | undefined; url: string; body?: string }> = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input, init) => {
       requests.push({
@@ -1881,7 +1881,7 @@ test("MCP Discovery vNext write tools use strict schemas and vNext endpoints", a
 
 test("MCP Discovery vNext read accepts artifact ids and rejects missing ids", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -1927,7 +1927,7 @@ test("MCP Discovery vNext read accepts artifact ids and rejects missing ids", as
 
 test("MCP Discovery vNext read tools expose artifact, inventory and run surfaces", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -1964,7 +1964,7 @@ test("MCP Discovery vNext read tools expose artifact, inventory and run surfaces
 
 test("MCP sequence and content read tools accept report aliases and UUID prefixes", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -2019,7 +2019,7 @@ test("MCP sequence and content read tools accept report aliases and UUID prefixe
 
 test("MCP sequence write tools reject malformed UUID ids before backend fetch", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -2089,7 +2089,7 @@ test("MCP sequence write tools reject malformed UUID ids before backend fetch", 
 
 test("MCP adjacent write tools reject malformed UUID ids before backend or DB work", async () => {
   const requests: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input) => {
       requests.push(String(input));
@@ -2186,7 +2186,7 @@ test("MCP adjacent write tools reject malformed UUID ids before backend or DB wo
 });
 
 test("MCP tool execution enforces scope and destructive confirmation before handler work", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("fetch should not be called when scope checks fail");
@@ -2262,7 +2262,7 @@ test("MCP tool execution enforces scope and destructive confirmation before hand
 });
 
 test("MCP tool execution validates declared input schemas before handler work", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("fetch should not be called when schema checks fail");
@@ -2321,7 +2321,7 @@ test("MCP tool execution validates declared input schemas before handler work", 
 
 test("MCP Discovery vNext route, policy, replay and rollback use vNext endpoints", async () => {
   const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input, init) => {
       requests.push({
@@ -2413,7 +2413,7 @@ test("MCP Discovery vNext route, policy, replay and rollback use vNext endpoints
 });
 
 test("MCP source-bottleneck report verify uses the shared channel read model", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("operator.report.verify should use the DB-backed pool");
@@ -2560,7 +2560,7 @@ test("MCP channels.alternatives.start respects bounded candidates", async () => 
 });
 
 test("MCP reindex request rejects unsupported indexName and jobKind at the boundary", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("fetch should not be called by maintenance.reindex.request");
@@ -2608,7 +2608,7 @@ test("MCP reindex request rejects unsupported indexName and jobKind at the bound
 });
 
 test("MCP reindex backfill stores selection replay defaults and read-back hints", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("fetch should not be called by maintenance.reindex.request");
@@ -2652,7 +2652,7 @@ test("MCP reindex backfill stores selection replay defaults and read-back hints"
 });
 
 test("MCP reindex backfill accepts bounded docId chunks and rejects runtime options", async () => {
-  const dummySdk = createNewsPortalSdk({
+  const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async () => {
       throw new Error("fetch should not be called by maintenance.reindex.request");
@@ -2766,7 +2766,7 @@ test("MCP tool metadata disambiguates selection replay from content analysis bac
 
 test("content analysis backfill response warns that final selection is not recomputed", async () => {
   const requests: Array<Record<string, unknown>> = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (_input, init) => {
       requests.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
@@ -2805,7 +2805,7 @@ test("content analysis backfill response warns that final selection is not recom
 
 test("SDK exposes Discovery vNext mutation routes needed by MCP parity", async () => {
   const requests = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input, init) => {
       requests.push({

@@ -8,7 +8,7 @@ import {
   serializeSourceChannelAuthConfig,
   type FeedIngressAdapterStrategy,
   type RssChannelConfig
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import {

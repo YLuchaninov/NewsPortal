@@ -1,4 +1,4 @@
-import { readRuntimeConfig, resolveAppHref } from "@newsportal/config";
+import { readRuntimeConfig, resolveAppHref } from "@signalops/config";
 
 export type FlashStatus = "success" | "error";
 

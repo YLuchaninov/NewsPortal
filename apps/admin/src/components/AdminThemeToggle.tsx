@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ThemeMode } from "@newsportal/config";
+import type { ThemeMode } from "@signalops/config";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 import { Check, Monitor, Moon, Sun } from "lucide-react";
 
 import {

@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import {
   parseWebsiteChannelConfig,
   type WebsiteChannelConfig
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import { validateAcquisitionUrl } from "./probe-url-guard";
 import {

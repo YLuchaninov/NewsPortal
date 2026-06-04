@@ -1,6 +1,6 @@
 ---
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
@@ -31,7 +31,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const [analysis, entities, labels, policies, filterResults, reindexJobs] = await Promise.all([
   sdk.listContentAnalysisResultsPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),
   sdk.listContentEntitiesPage<Record<string, unknown>>({ page: 1, pageSize: 10 }),

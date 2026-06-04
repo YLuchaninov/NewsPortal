@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@newsportal/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@signalops/ui";
 
 import {
   AUTOMATION_TEMPLATES,
@@ -77,7 +77,7 @@ export function AutomationOverviewBoard({
   const [liveOutbox, setLiveOutbox] = useState(outboxEvents);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (isAdminLiveSurfaceSnapshot(currentSnapshot, "automation") && currentSnapshot.sequenceId === null) {
       setLiveSummary({
         ...currentSnapshot.summary,

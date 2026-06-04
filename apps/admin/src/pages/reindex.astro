@@ -1,7 +1,7 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
 import { LiveReindexJobsSection } from "../components/LiveReindexJobsSection";
 import AdminShell from "../layouts/AdminShell.astro";
@@ -30,7 +30,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const reindexBffPath = appPath("/bff/admin/reindex");
 const reindexActionToken = buildAdminActionToken({
   request: Astro.request,

@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 interface AdminDesktopSidebarNavItem {
   href: string;

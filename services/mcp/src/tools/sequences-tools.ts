@@ -1,7 +1,7 @@
 import {
   MCP_SEQUENCE_ARGUMENT_SCHEMAS,
-} from "@newsportal/contracts";
-import { queueReindexJobWithSupersession } from "@newsportal/control-plane";
+} from "@signalops/contracts";
+import { queueReindexJobWithSupersession } from "@signalops/control-plane";
 
 import {
   createReadTool,

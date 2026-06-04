@@ -1,6 +1,6 @@
 # WEBSITE_SOURCES_TESTING.md — Готовые Website-source конфигурации и ручной тестовый handbook для `web_resources`
 
-> **Для кого этот документ:** для администратора, который уже поднял NewsPortal и хочет не просто проверить website ingest “вообще”, а целенаправленно прогонять `website` sources через `/admin/resources` и понимать, где норма, а где regression.
+> **Для кого этот документ:** для администратора, который уже поднял SignalOps и хочет не просто проверить website ingest “вообще”, а целенаправленно прогонять `website` sources через `/admin/resources` и понимать, где норма, а где regression.
 >
 > **Что этот документ покрывает:** primary operator-facing source для manual testing website channels, persisted `web_resources`, projected editorial rows, resource-only rows и bounded browser-assisted path.
 >
@@ -10,7 +10,7 @@
 >
 > **Как понять, что сценарий пройден успешно:** выбранный `website` channel дает ожидаемый mix `web_resources` и projections, а `/admin/resources` подтверждает честную границу между projected editorial rows и resource-only rows.
 
-> **Для широкого bounded live pass:** после того как локальный website proof зелёный, можно запустить `node infra/scripts/test-live-website-matrix.mjs`. Этот repo-owned harness прогоняет 16 primary public sites across `static_editorial`, `documents_downloads`, `public_changelog` и `browser_candidate`, сохраняет `/tmp/newsportal-live-website-matrix-<runId>.json`, и не заменяет deterministic compose acceptance.
+> **Для широкого bounded live pass:** после того как локальный website proof зелёный, можно запустить `node infra/scripts/test-live-website-matrix.mjs`. Этот repo-owned harness прогоняет 16 primary public sites across `static_editorial`, `documents_downloads`, `public_changelog` и `browser_candidate`, сохраняет `/tmp/signalops-live-website-matrix-<runId>.json`, и не заменяет deterministic compose acceptance.
 
 ---
 
@@ -201,7 +201,7 @@ Adaptive: true
 Max poll interval (s): 14400
 Request timeout (ms): 10000
 Total poll timeout (ms): 60000
-User agent: NewsPortalFetchers/0.1 (+https://newsportal.local)
+User agent: SignalOpsFetchers/0.1 (+https://signalops.local)
 Max resources per poll: 20
 Crawl delay (ms): 1000
 Sitemap discovery enabled: true
@@ -280,7 +280,7 @@ Authorization header: <leave empty>
 
 ```sh
 docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml \
-  exec -T fetchers pnpm --filter @newsportal/fetchers run:once <channelId>
+  exec -T fetchers pnpm --filter @signalops/fetchers run:once <channelId>
 ```
 
 4. Откройте `/admin/resources?channelId=<channelId>`.
@@ -331,7 +331,7 @@ Adaptive: true
 Max poll interval (s): 28800
 Request timeout (ms): 10000
 Total poll timeout (ms): 60000
-User agent: NewsPortalFetchers/0.1 (+https://newsportal.local)
+User agent: SignalOpsFetchers/0.1 (+https://signalops.local)
 Max resources per poll: 30
 Crawl delay (ms): 1000
 Sitemap discovery enabled: true
@@ -473,7 +473,7 @@ Adaptive: true
 Max poll interval (s): 14400
 Request timeout (ms): 12000
 Total poll timeout (ms): 70000
-User agent: NewsPortalFetchers/0.1 (+https://newsportal.local)
+User agent: SignalOpsFetchers/0.1 (+https://signalops.local)
 Max resources per poll: 20
 Crawl delay (ms): 1000
 Sitemap discovery enabled: true
@@ -595,7 +595,7 @@ pnpm dev:mvp:internal
 
 ```sh
 docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml \
-  exec -T fetchers pnpm --filter @newsportal/fetchers run:once <channelId>
+  exec -T fetchers pnpm --filter @signalops/fetchers run:once <channelId>
 ```
 
 6. Откройте `/admin/resources?channelId=<channelId>`
@@ -711,7 +711,7 @@ pnpm test:hard-sites:compose
 
 ### Почему я не даю здесь список “идеальных live URLs”?
 
-Потому что для этой подсистемы важнее **тип сайта и shape ресурсов**, чем конкретный домен. Реальные live websites меняют верстку, anti-bot behavior и section structure, а testing contract NewsPortal должен оставаться понятным даже при смене конкретных targets.
+Потому что для этой подсистемы важнее **тип сайта и shape ресурсов**, чем конкретный домен. Реальные live websites меняют верстку, anti-bot behavior и section structure, а testing contract SignalOps должен оставаться понятным даже при смене конкретных targets.
 
 Проще говоря:
 

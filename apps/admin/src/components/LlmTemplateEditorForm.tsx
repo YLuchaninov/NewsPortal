@@ -1,4 +1,4 @@
-import { FormField, Input, Textarea } from "@newsportal/ui";
+import { FormField, Input, Textarea } from "@signalops/ui";
 import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 
 export interface LlmTemplateEditorValue {

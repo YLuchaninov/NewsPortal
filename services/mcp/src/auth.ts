@@ -1,7 +1,7 @@
 import {
   resolveMcpAccessTokenBySecret,
   type McpAccessTokenRecord,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 import type { FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 

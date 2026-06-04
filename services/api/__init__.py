@@ -1,1 +1,1 @@
-"""API package for NewsPortal."""
+"""API package for SignalOps."""

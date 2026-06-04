@@ -29,7 +29,7 @@ export function LiveObservabilitySummary({
   const [llmBudget, setLlmBudget] = useState(initialBudget);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (isAdminLiveSurfaceSnapshot(currentSnapshot, "observability")) {
       setUsage24h(currentSnapshot.usage24h);
       setUsage7d(currentSnapshot.usage7d);

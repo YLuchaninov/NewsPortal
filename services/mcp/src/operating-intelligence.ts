@@ -5,7 +5,7 @@ import {
   getSourceFamilyCoverageWithPool,
   listChannelBottlenecksWithPool,
   summarizeChannelBottlenecksWithPool,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import { readOptionalInteger, readOptionalString } from "./protocol";
 import type { McpToolContext } from "./tools/shared";
@@ -41,10 +41,10 @@ export const OPERATING_REPORT_KINDS = [
 ] as const;
 
 export const OPERATIONAL_RESOURCE_URIS = [
-  "newsportal://ops/health",
-  "newsportal://ops/issues",
-  "newsportal://ops/tuning-backlog",
-  "newsportal://ops/recent-changes",
+  "signalops://ops/health",
+  "signalops://ops/issues",
+  "signalops://ops/tuning-backlog",
+  "signalops://ops/recent-changes",
 ] as const;
 
 type IssueSeverity = "info" | "warning" | "critical";
@@ -1760,7 +1760,7 @@ export function getOperatingModelGuide() {
       "Operational tools are read-only unless their normal MCP tool name already advertises a write scope.",
       "Diagnosis must state source-of-truth evidence and stale-data warnings.",
       "Tuning recommendations can include suggestedToolCalls, but they never execute them.",
-      "After writes, clients should read the affected entity plus newsportal://ops/health and newsportal://ops/issues.",
+      "After writes, clients should read the affected entity plus signalops://ops/health and signalops://ops/issues.",
     ],
     fallbackForLimitedClients: {
       notifications:
@@ -2034,8 +2034,8 @@ export async function buildSystemHealth(
     issues: issues.filter((entry) => domains.includes(entry.domain)),
     samples,
     nextReadBack: [
-      "newsportal://ops/health",
-      "newsportal://ops/issues",
+      "signalops://ops/health",
+      "signalops://ops/issues",
       "operator.report.verify",
     ],
   };
@@ -2430,8 +2430,8 @@ export async function recommendOperatorTuning(
     verificationPlan: [
       ...(guide?.readBackChecks ?? []),
       "operator.effect.verify",
-      "newsportal://ops/health",
-      "newsportal://ops/issues",
+      "signalops://ops/health",
+      "signalops://ops/issues",
     ],
     suggestedToolCalls: recommendations.suggestedToolCalls,
     mutationPolicy:
@@ -3203,14 +3203,14 @@ export function affectedOperationalResourcesForTool(toolName: string): string[] 
   if (toolName.startsWith("operator.") || toolName.endsWith(".list") || toolName.endsWith(".read")) {
     return [];
   }
-  return [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"];
+  return [...OPERATIONAL_RESOURCE_URIS, "signalops://admin/summary"];
 }
 
 export function nextReadBackForTool(toolName: string): Record<string, unknown> {
   if (toolName === "discovery.runs.create") {
     return {
       nextReadBack: {
-        resources: [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"],
+        resources: [...OPERATIONAL_RESOURCE_URIS, "signalops://admin/summary"],
         tools: [
           {
             name: "operator.report.verify",
@@ -3237,7 +3237,7 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
   if (toolName === "maintenance.reindex.request") {
     return {
       nextReadBack: {
-        resources: [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"],
+        resources: [...OPERATIONAL_RESOURCE_URIS, "signalops://admin/summary"],
         tools: [
           {
             name: "maintenance.reindex_jobs.list",
@@ -3258,7 +3258,7 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
   if (toolName === "content_analysis.backfill.request") {
     return {
       nextReadBack: {
-        resources: [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"],
+        resources: [...OPERATIONAL_RESOURCE_URIS, "signalops://admin/summary"],
         tools: [
           {
             name: "maintenance.reindex_jobs.list",
@@ -3279,7 +3279,7 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
   if (toolName === "channels.set_active") {
     return {
       nextReadBack: {
-        resources: [...OPERATIONAL_RESOURCE_URIS, "newsportal://admin/summary"],
+        resources: [...OPERATIONAL_RESOURCE_URIS, "signalops://admin/summary"],
         tools: [
           {
             name: "channels.read",

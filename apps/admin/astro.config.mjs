@@ -14,7 +14,7 @@ function toAllowedDomain(urlValue) {
 
 function buildAllowedDomains(defaultAppBaseUrl) {
   const candidateUrls = [
-    process.env.NEWSPORTAL_APP_BASE_URL,
+    process.env.SIGNALOPS_APP_BASE_URL,
     defaultAppBaseUrl,
     "http://127.0.0.1:4322/",
     "http://localhost:4322/",

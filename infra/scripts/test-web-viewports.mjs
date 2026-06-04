@@ -162,7 +162,7 @@ async function runViewportScenario({
     log(`Running ${viewport.name} viewport checks.`);
     const articleSearchParam = encodeURIComponent(articleTitle);
 
-    await openPage(page, `http://127.0.0.1:4321/?q=${articleSearchParam}`, "NewsPortal");
+    await openPage(page, `http://127.0.0.1:4321/?q=${articleSearchParam}`, "SignalOps");
     await waitForVisible(page.getByText(articleTitle), `collection article title on ${viewport.name}`);
     await assertVisibleAction(
       page,
@@ -282,7 +282,7 @@ async function main() {
   const runId = randomUUID().slice(0, 8);
   const allowlistEntries = readAllowlistEntries(env);
   const adminEmail = selectAdminEmail(allowlistEntries, runId, { prefix: "viewport-admin" });
-  const adminPassword = `NewsPortal!${runId}`;
+  const adminPassword = `SignalOps!${runId}`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
   const interestDescription = "AI policy changes in the European Union and Poland";
   const notificationEmail = `viewport-user-${runId}@example.test`;
@@ -433,7 +433,7 @@ async function main() {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once",
       channelId
     );

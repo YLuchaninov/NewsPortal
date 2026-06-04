@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   normalizeMaxPollIntervalSeconds,
   parseRssChannelConfig
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { PoolClient } from "pg";
 
 import {

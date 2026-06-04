@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@newsportal/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@signalops/ui";
 
 import {
   isSequenceRunCancellable,
@@ -61,7 +61,7 @@ export function AutomationExecutionsBoard({
   const [liveOutbox, setLiveOutbox] = useState(outboxEvents);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (
       isAdminLiveSurfaceSnapshot(currentSnapshot, "automation") &&
       currentSnapshot.sequenceId === readText(sequence.sequence_id, "")

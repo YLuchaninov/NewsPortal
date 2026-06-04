@@ -1,8 +1,8 @@
 ---
-import { DEFAULT_PAGE, type ContentItemDetail } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+import { DEFAULT_PAGE, type ContentItemDetail } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 
 import Shell from "../layouts/Shell.astro";
 import { ContentItemCard } from "../components/ContentItemCard";
@@ -21,7 +21,7 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
-const sdk = createNewsPortalSdk({
+const sdk = createSignalOpsSdk({
   baseUrl: runtimeConfig.apiBaseUrl,
   fetchImpl: fetch,
 });
@@ -68,7 +68,7 @@ function readStoryNote(contentItemId: string): string | null {
 ---
 
 <Shell
-  title="Following — NewsPortal"
+  title="Following — SignalOps"
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}

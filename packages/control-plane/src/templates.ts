@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 
-import { CRITERION_COMPILE_REQUESTED_EVENT } from "@newsportal/contracts";
+import { CRITERION_COMPILE_REQUESTED_EVENT } from "@signalops/contracts";
 
 import {
   deleteInterestTemplate,

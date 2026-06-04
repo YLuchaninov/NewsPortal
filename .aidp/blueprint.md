@@ -8,7 +8,7 @@
 
 ## Назначение системы
 
-NewsPortal — локальный MVP polyglot content-platform monorepo для приема источников, нормализации и дедупликации контента, zero-shot selection, personalization, operator/admin workflows, discovery source acquisition и локального single-host runtime через Docker Compose.
+SignalOps — локальный MVP polyglot content-platform monorepo для приема источников, нормализации и дедупликации контента, zero-shot selection, personalization, operator/admin workflows, discovery source acquisition и локального single-host runtime через Docker Compose.
 
 Система строится вокруг PostgreSQL как единственного source of truth. Redis + BullMQ используются как transport/runtime coordination, а HNSW индексы, snapshots, очереди и cache являются пересобираемым derived state.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/web",
+  "name": "@signalops/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,12 +11,12 @@
   "dependencies": {
     "@astrojs/node": "10.1.1",
     "@astrojs/react": "5.0.5",
-    "@newsportal/bff-server": "workspace:*",
-    "@newsportal/config": "workspace:*",
-    "@newsportal/content-safety": "workspace:*",
-    "@newsportal/contracts": "workspace:*",
-    "@newsportal/sdk": "workspace:*",
-    "@newsportal/ui": "workspace:*",
+    "@signalops/bff-server": "workspace:*",
+    "@signalops/config": "workspace:*",
+    "@signalops/content-safety": "workspace:*",
+    "@signalops/contracts": "workspace:*",
+    "@signalops/sdk": "workspace:*",
+    "@signalops/ui": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "astro": "6.3.5",
     "lucide-react": "^1.0.1",

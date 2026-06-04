@@ -177,10 +177,10 @@ const REQUIRED_TOOLS = [
 ];
 
 const REQUIRED_RESOURCES = [
-  "newsportal://guide/scenarios/discovery-live-gap-hunting",
-  "newsportal://guide/scenarios/discovery",
-  "newsportal://guide/scenarios/funnel-calibration",
-  "newsportal://guide/operating-model",
+  "signalops://guide/scenarios/discovery-live-gap-hunting",
+  "signalops://guide/scenarios/discovery",
+  "signalops://guide/scenarios/funnel-calibration",
+  "signalops://guide/operating-model",
 ];
 
 const REQUIRED_PROMPTS = [
@@ -521,7 +521,7 @@ function validateLiveEnv(report, env) {
 
 async function runProtocolPreflight(harness, token, report) {
   const initialize = await harness.mcpRpc(token, "initialize", {});
-  assert(String(initialize?.result?.serverInfo?.name ?? "") === "newsportal-mcp", "MCP initialize failed.");
+  assert(String(initialize?.result?.serverInfo?.name ?? "") === "signalops-mcp", "MCP initialize failed.");
   const toolsList = await harness.mcpRpc(token, "tools/list", {});
   const resourcesList = await harness.mcpRpc(token, "resources/list", {});
   const promptsList = await harness.mcpRpc(token, "prompts/list", {});
@@ -1293,13 +1293,13 @@ async function main() {
   } finally {
     if (report) {
       const artifacts = await harness.writeArtifacts(
-        "newsportal-discovery-vnext-mcp-live-gap-flow",
+        "signalops-discovery-vnext-mcp-live-gap-flow",
         report,
         buildMarkdown(report)
       );
       report.artifacts = artifacts;
       await harness.writeArtifacts(
-        "newsportal-discovery-vnext-mcp-live-gap-flow",
+        "signalops-discovery-vnext-mcp-live-gap-flow",
         report,
         buildMarkdown(report)
       );

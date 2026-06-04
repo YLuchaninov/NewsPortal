@@ -1,1 +1,1 @@
-"""Workers package for NewsPortal."""
+"""Workers package for SignalOps."""

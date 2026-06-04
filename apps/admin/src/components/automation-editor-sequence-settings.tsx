@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 interface AutomationEditorSequenceSettingsProps {
   title: string;

@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/contracts",
+  "name": "@signalops/contracts",
   "private": true,
   "type": "module",
   "exports": {

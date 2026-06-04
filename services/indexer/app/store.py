@@ -14,7 +14,7 @@ from ml.app.interfaces import HnswIndexStore, HnswSnapshotStore
 
 from .config import IndexerConfig, resolve_runtime_path
 
-LOGGER = logging.getLogger("newsportal.indexer")
+LOGGER = logging.getLogger("signalops.indexer")
 INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
 EVENT_CLUSTER_CENTROIDS_INDEX_NAME = "event_cluster_centroids"
 INTEREST_CENTROIDS_REBUILD_COMMAND = "pnpm index:rebuild:interest-centroids"

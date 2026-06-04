@@ -6,7 +6,7 @@ import {
 } from "@extractus/article-extractor";
 import type { Pool } from "pg";
 
-import type { ResourceKind } from "@newsportal/contracts";
+import type { ResourceKind } from "@signalops/contracts";
 
 import { AsyncSemaphore } from "./async-semaphore";
 import type { FetchersConfig } from "./config";

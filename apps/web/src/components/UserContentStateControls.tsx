@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { UserContentStateView } from "@newsportal/contracts";
+import type { UserContentStateView } from "@signalops/contracts";
 
 interface UserContentStateControlsProps {
   contentItemId: string;

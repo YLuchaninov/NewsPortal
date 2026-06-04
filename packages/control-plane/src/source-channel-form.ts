@@ -1,4 +1,4 @@
-import { parseSourceChannelAuthConfig } from "@newsportal/contracts";
+import { parseSourceChannelAuthConfig } from "@signalops/contracts";
 
 export type AuthorizationHeaderUpdateMode = "preserve" | "replace" | "clear" | "disabled";
 

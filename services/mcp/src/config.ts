@@ -1,4 +1,4 @@
-import { readRuntimeConfig } from "@newsportal/config";
+import { readRuntimeConfig } from "@signalops/config";
 
 export interface McpServiceConfig {
   mcpPort: number;
@@ -12,13 +12,13 @@ function buildDatabaseUrl(env: Record<string, string | undefined>): string {
     return env.DATABASE_URL;
   }
 
-  const user = env.POSTGRES_USER ?? "newsportal";
-  const password = env.POSTGRES_PASSWORD ?? "newsportal";
+  const user = env.POSTGRES_USER ?? "signalops";
+  const password = env.POSTGRES_PASSWORD ?? "signalops";
   const host = env.POSTGRES_HOST ?? "127.0.0.1";
   const port =
     env.POSTGRES_PORT ??
     (host === "127.0.0.1" || host === "localhost" ? "55432" : "5432");
-  const database = env.POSTGRES_DB ?? "newsportal";
+  const database = env.POSTGRES_DB ?? "signalops";
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 

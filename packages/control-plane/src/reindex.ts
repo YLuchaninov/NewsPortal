@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import type { PoolClient } from "pg";
 
-import { REINDEX_REQUESTED_EVENT } from "@newsportal/contracts";
+import { REINDEX_REQUESTED_EVENT } from "@signalops/contracts";
 
 const REINDEX_RUNTIME_OPTION_KEYS = new Set([
   "backfill",

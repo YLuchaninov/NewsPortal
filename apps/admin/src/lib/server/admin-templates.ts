@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { RESOURCE_KINDS } from "@newsportal/contracts";
+import { RESOURCE_KINDS } from "@signalops/contracts";
 import type { Pool, PoolClient } from "pg";
 import {
   normalizeCandidateSignalGroups,

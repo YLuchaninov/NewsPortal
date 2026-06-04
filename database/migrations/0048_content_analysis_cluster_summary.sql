@@ -18,7 +18,7 @@ values (
   'clustering',
   true,
   'observe',
-  'newsportal',
+  'signalops',
   'story-cluster-summary-v1',
   '1',
   '{}'::jsonb,

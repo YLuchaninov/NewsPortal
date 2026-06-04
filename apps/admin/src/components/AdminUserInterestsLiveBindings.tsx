@@ -127,7 +127,7 @@ export function AdminUserInterestsLiveBindings({
       applySnapshot(snapshot);
     }
 
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (isAdminLiveSurfaceSnapshot(currentSnapshot, "user-interests")) {
       maybeApplySnapshot(currentSnapshot);
     }

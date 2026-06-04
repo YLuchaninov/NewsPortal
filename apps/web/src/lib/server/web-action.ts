@@ -1,8 +1,8 @@
-import type { AuthSession } from "@newsportal/contracts";
+import type { AuthSession } from "@signalops/contracts";
 import {
   assertJsonSchema,
   type JsonSchema,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import {
@@ -186,7 +186,7 @@ function normalizeWebActionPath(value: string): string {
   const trimmed = String(value ?? "").trim() || "/";
   let pathname: string;
   try {
-    pathname = new URL(trimmed, "http://newsportal.local").pathname;
+    pathname = new URL(trimmed, "http://signalops.local").pathname;
   } catch {
     pathname = trimmed.split("?")[0]?.split("#")[0] ?? "/";
   }

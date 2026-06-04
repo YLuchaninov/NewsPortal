@@ -1,6 +1,6 @@
-import type { ContentItemDetail } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import type { ContentItemDetail } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import type { Pool } from "pg";
 
 import {
@@ -93,7 +93,7 @@ export async function resolveSavedDigestItemIds(
 }
 
 function createContentItemLoader() {
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: readRuntimeConfig(process.env, {
       defaultAppBaseUrl: "http://127.0.0.1:4321/",
     }).apiBaseUrl,

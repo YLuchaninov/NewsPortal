@@ -1,5 +1,5 @@
 import { Queue } from "bullmq";
-import { FOUNDATION_SMOKE_QUEUE } from "@newsportal/contracts";
+import { FOUNDATION_SMOKE_QUEUE } from "@signalops/contracts";
 
 import { loadRelayConfig } from "../../../services/relay/src/config";
 import { createPgPool, createRedisConnection } from "../../../services/relay/src/db";

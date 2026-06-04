@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Этот файл задает runtime-контракт AIDP для AI-работы в репозитории NewsPortal.
+Этот файл задает runtime-контракт AIDP для AI-работы в репозитории SignalOps.
 
 ## Назначение
 

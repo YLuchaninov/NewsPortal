@@ -6,7 +6,7 @@ import {
   parseApiChannelConfig,
   serializeSourceChannelAuthConfig,
   type ApiChannelConfig,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import {

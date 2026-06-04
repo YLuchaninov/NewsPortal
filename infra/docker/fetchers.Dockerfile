@@ -32,8 +32,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY services/fetchers/package.json services/fetchers/package.json
 
-RUN pnpm install --frozen-lockfile --prod --filter @newsportal/fetchers... \
-  && pnpm --filter @newsportal/fetchers exec playwright install --with-deps chromium \
+RUN pnpm install --frozen-lockfile --prod --filter @signalops/fetchers... \
+  && pnpm --filter @signalops/fetchers exec playwright install --with-deps chromium \
   && pnpm store prune
 
 COPY --from=builder --chown=node:node /workspace/services/fetchers/dist services/fetchers/dist

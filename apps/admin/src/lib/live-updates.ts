@@ -207,13 +207,13 @@ export interface AdminLiveUpdatesEventDetail {
   hasChanged: boolean;
 }
 
-export interface NewsPortalAdminLiveUpdatesStore {
+export interface SignalOpsAdminLiveUpdatesStore {
   snapshot: AdminLiveUpdatesSnapshot | null;
   activeSurface: AdminLiveUpdateSurface | null;
   forceRefresh?: () => void;
 }
 
-export const ADMIN_LIVE_UPDATES_EVENT = "newsportal:admin-live-updates";
+export const ADMIN_LIVE_UPDATES_EVENT = "signalops:admin-live-updates";
 export const ADMIN_LIVE_UPDATES_IDLE_POLL_MS = 15_000;
 export const ADMIN_LIVE_UPDATES_FAST_POLL_MS = 3_000;
 export const ADMIN_LIVE_UPDATES_MAX_BACKOFF_MS = 60_000;
@@ -280,6 +280,6 @@ export function serializeAdminLiveUpdatesResponse(
 
 declare global {
   interface Window {
-    __newsportalAdminLiveUpdates?: NewsPortalAdminLiveUpdatesStore;
+    __signalopsAdminLiveUpdates?: SignalOpsAdminLiveUpdatesStore;
   }
 }

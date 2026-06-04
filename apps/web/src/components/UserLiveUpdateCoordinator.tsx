@@ -82,12 +82,12 @@ export function UserLiveUpdateCoordinator({
 
   useEffect(() => {
     activeSurfaceRef.current = activeSurface;
-    window.__newsportalLiveUpdates = {
-      ...(window.__newsportalLiveUpdates ?? {
+    window.__signalopsLiveUpdates = {
+      ...(window.__signalopsLiveUpdates ?? {
         snapshot: snapshotRef.current,
       }),
       activeSurface,
-      forceRefresh: window.__newsportalLiveUpdates?.forceRefresh,
+      forceRefresh: window.__signalopsLiveUpdates?.forceRefresh,
     };
   }, [activeSurface]);
 
@@ -132,7 +132,7 @@ export function UserLiveUpdateCoordinator({
 
         if (!payload.sessionActive || !payload.snapshot) {
           snapshotRef.current = null;
-          window.__newsportalLiveUpdates = {
+          window.__signalopsLiveUpdates = {
             snapshot: null,
             activeSurface: activeSurfaceRef.current,
             forceRefresh,
@@ -147,7 +147,7 @@ export function UserLiveUpdateCoordinator({
         failureCountRef.current = 0;
         snapshotRef.current = nextSnapshot;
 
-        window.__newsportalLiveUpdates = {
+        window.__signalopsLiveUpdates = {
           snapshot: nextSnapshot,
           activeSurface: activeSurfaceRef.current,
           forceRefresh,
@@ -211,7 +211,7 @@ export function UserLiveUpdateCoordinator({
       }
     }
 
-    window.__newsportalLiveUpdates = {
+    window.__signalopsLiveUpdates = {
       snapshot: snapshotRef.current,
       activeSurface,
       forceRefresh,

@@ -2,8 +2,8 @@ FROM node:22-alpine AS builder
 
 WORKDIR /workspace
 
-ARG NEWSPORTAL_APP_BASE_URL=http://127.0.0.1:4322/
-ENV NEWSPORTAL_APP_BASE_URL=$NEWSPORTAL_APP_BASE_URL
+ARG SIGNALOPS_APP_BASE_URL=http://127.0.0.1:4322/
+ENV SIGNALOPS_APP_BASE_URL=$SIGNALOPS_APP_BASE_URL
 
 RUN npm install -g pnpm@10.11.0
 
@@ -35,17 +35,17 @@ COPY apps/admin/tsconfig.json apps/admin/tsconfig.json
 COPY apps/admin/src apps/admin/src
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @newsportal/admin build
+RUN pnpm --filter @signalops/admin build
 
 FROM node:22-alpine AS runtime
 
 WORKDIR /workspace
 
-ARG NEWSPORTAL_APP_BASE_URL=http://127.0.0.1:4322/
+ARG SIGNALOPS_APP_BASE_URL=http://127.0.0.1:4322/
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=4322
-ENV NEWSPORTAL_APP_BASE_URL=$NEWSPORTAL_APP_BASE_URL
+ENV SIGNALOPS_APP_BASE_URL=$SIGNALOPS_APP_BASE_URL
 
 RUN npm install -g pnpm@10.11.0
 
@@ -59,7 +59,7 @@ COPY packages/sdk/package.json packages/sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY apps/admin/package.json apps/admin/package.json
 
-RUN pnpm install --frozen-lockfile --prod --filter @newsportal/admin...
+RUN pnpm install --frozen-lockfile --prod --filter @signalops/admin...
 
 COPY --from=builder --chown=node:node /workspace/apps/admin/dist apps/admin/dist
 

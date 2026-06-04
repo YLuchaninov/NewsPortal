@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 import { formatUtcTimestamp, postJson, readText } from "./admin-client-helpers";
 import { ADMIN_HERO_CARD_CLASS } from "../lib/admin-ui-classes";

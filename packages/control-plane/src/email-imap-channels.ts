@@ -5,7 +5,7 @@ import {
   normalizeMaxPollIntervalSeconds,
   parseEmailImapChannelConfig,
   type EmailImapChannelConfig,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import { upsertIngressAdapterBindingForAdminChannel } from "./ingress-adapter-bindings";

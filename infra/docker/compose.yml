@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
     ports:
       - "55432:5432"
     volumes:
@@ -38,9 +38,9 @@ services:
       dockerfile: infra/docker/relay.Dockerfile
     command: ["node", "services/relay/dist/cli/migrate.mjs"]
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_HOST: redis
@@ -58,9 +58,9 @@ services:
       dockerfile: infra/docker/relay.Dockerfile
     command: ["node", "services/relay/dist/main.mjs"]
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_HOST: redis
@@ -92,9 +92,9 @@ services:
       dockerfile: infra/docker/fetchers.Dockerfile
     command: ["node", "services/fetchers/dist/main.mjs"]
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       FETCHERS_PORT: ${FETCHERS_PORT:-4100}
@@ -102,7 +102,7 @@ services:
       FETCHERS_BATCH_SIZE: ${FETCHERS_BATCH_SIZE:-100}
       FETCHERS_CONCURRENCY: ${FETCHERS_CONCURRENCY:-4}
       FETCHERS_REQUEST_TIMEOUT_MS: ${FETCHERS_REQUEST_TIMEOUT_MS:-10000}
-      FETCHERS_USER_AGENT: ${FETCHERS_USER_AGENT:-NewsPortalFetchers/0.1 (+https://newsportal.local)}
+      FETCHERS_USER_AGENT: ${FETCHERS_USER_AGENT:-SignalOpsFetchers/0.1 (+https://signalops.local)}
       FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST: ${FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST:-}
       IMAP_HOST: ${IMAP_HOST:-}
       IMAP_PORT: ${IMAP_PORT:-993}
@@ -133,9 +133,9 @@ services:
     volumes:
       - ../../data:/workspace/data
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_HOST: redis
@@ -170,12 +170,12 @@ services:
       FETCHERS_INTERNAL_TIMEOUT_SECONDS: ${FETCHERS_INTERNAL_TIMEOUT_SECONDS:-30}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       EMAIL_DIGEST_SMTP_URL: ${EMAIL_DIGEST_SMTP_URL:-}
-      EMAIL_DIGEST_FROM: ${EMAIL_DIGEST_FROM:-alerts@newsportal.local}
+      EMAIL_DIGEST_FROM: ${EMAIL_DIGEST_FROM:-alerts@signalops.local}
       WORKER_ENABLE_USER_DIGEST_SCHEDULER: ${WORKER_ENABLE_USER_DIGEST_SCHEDULER:-1}
       WORKER_USER_DIGEST_POLL_INTERVAL_SECONDS: ${WORKER_USER_DIGEST_POLL_INTERVAL_SECONDS:-5}
       WORKER_SEQUENCE_RUNNER_CONCURRENCY: ${WORKER_SEQUENCE_RUNNER_CONCURRENCY:-4}
       WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
-      WEB_PUSH_VAPID_SUBJECT: ${WEB_PUSH_VAPID_SUBJECT:-mailto:alerts@newsportal.local}
+      WEB_PUSH_VAPID_SUBJECT: ${WEB_PUSH_VAPID_SUBJECT:-mailto:alerts@signalops.local}
       LLM_REVIEW_ENABLED: ${LLM_REVIEW_ENABLED:-1}
     depends_on:
       postgres:
@@ -210,9 +210,9 @@ services:
     volumes:
       - ../../data:/workspace/data
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_HOST: redis
@@ -255,23 +255,23 @@ services:
       context: ../..
       dockerfile: infra/docker/web.Dockerfile
       args:
-        NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
+        SIGNALOPS_APP_BASE_URL: ${SIGNALOPS_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
     command: ["node", "apps/web/dist/server/entry.mjs"]
     environment:
       HOST: 0.0.0.0
       PORT: ${WEB_PORT:-4321}
       WEB_PORT: ${WEB_PORT:-4321}
-      NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
-      NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
-      NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
-      NEWSPORTAL_COOKIE_SECURE_POLICY: ${NEWSPORTAL_COOKIE_SECURE_POLICY:-auto}
+      SIGNALOPS_APP_BASE_URL: ${SIGNALOPS_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
+      SIGNALOPS_API_BASE_URL: ${SIGNALOPS_API_BASE_URL:-http://api:8000}
+      SIGNALOPS_PUBLIC_API_BASE_URL: ${SIGNALOPS_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+      SIGNALOPS_COOKIE_SECURE_POLICY: ${SIGNALOPS_COOKIE_SECURE_POLICY:-auto}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
       WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
       APP_SECRET: ${APP_SECRET:-}
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
     ports:
@@ -289,16 +289,16 @@ services:
       context: ../..
       dockerfile: infra/docker/admin.Dockerfile
       args:
-        NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
+        SIGNALOPS_APP_BASE_URL: ${SIGNALOPS_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
     command: ["node", "apps/admin/dist/server/entry.mjs"]
     environment:
       HOST: 0.0.0.0
       PORT: ${ADMIN_PORT:-4322}
       ADMIN_PORT: ${ADMIN_PORT:-4322}
-      NEWSPORTAL_APP_BASE_URL: ${NEWSPORTAL_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
-      NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
-      NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
-      NEWSPORTAL_COOKIE_SECURE_POLICY: ${NEWSPORTAL_COOKIE_SECURE_POLICY:-auto}
+      SIGNALOPS_APP_BASE_URL: ${SIGNALOPS_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
+      SIGNALOPS_API_BASE_URL: ${SIGNALOPS_API_BASE_URL:-http://api:8000}
+      SIGNALOPS_PUBLIC_API_BASE_URL: ${SIGNALOPS_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+      SIGNALOPS_COOKIE_SECURE_POLICY: ${SIGNALOPS_COOKIE_SECURE_POLICY:-auto}
       DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-0}
       DISCOVERY_CRON: ${DISCOVERY_CRON:-0 */6 * * *}
       DISCOVERY_SEARCH_PROVIDER: ${DISCOVERY_SEARCH_PROVIDER:-ddgs}
@@ -308,9 +308,9 @@ services:
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
       APP_SECRET: ${APP_SECRET:-}
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
     ports:
@@ -330,11 +330,11 @@ services:
     command: ["node", "services/mcp/dist/main.mjs"]
     environment:
       MCP_PORT: ${MCP_PORT:-4300}
-      NEWSPORTAL_API_BASE_URL: ${NEWSPORTAL_API_BASE_URL:-http://api:8000}
-      NEWSPORTAL_PUBLIC_API_BASE_URL: ${NEWSPORTAL_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
-      POSTGRES_DB: ${POSTGRES_DB:-newsportal}
-      POSTGRES_USER: ${POSTGRES_USER:-newsportal}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsportal}
+      SIGNALOPS_API_BASE_URL: ${SIGNALOPS_API_BASE_URL:-http://api:8000}
+      SIGNALOPS_PUBLIC_API_BASE_URL: ${SIGNALOPS_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
     depends_on:

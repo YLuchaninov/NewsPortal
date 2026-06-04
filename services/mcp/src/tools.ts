@@ -3,8 +3,8 @@ import {
   assertJsonSchema,
   validateJsonSchema,
   type JsonSchema,
-} from "@newsportal/contracts";
-import { buildProviderShapeValidation, getSourceFamilyCoverageWithPool } from "@newsportal/control-plane";
+} from "@signalops/contracts";
+import { buildProviderShapeValidation, getSourceFamilyCoverageWithPool } from "@signalops/control-plane";
 
 import { ADMIN_MCP_TOOLS } from "./tools/admin-tools";
 import { CHANNEL_MCP_TOOLS } from "./tools/channels-tools";

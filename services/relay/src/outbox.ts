@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { FOUNDATION_SMOKE_EVENT } from "@newsportal/contracts";
+import { FOUNDATION_SMOKE_EVENT } from "@signalops/contracts";
 import type { Pool } from "pg";
 
 interface InsertOutboxEventInput {

@@ -4,7 +4,7 @@
 
 ## Назначение
 
-Universal Task Engine is the sequence-based execution model for NewsPortal: declarative `TaskGraph`, single `q.sequence` runtime, plugin registry and run/task-run observability.
+Universal Task Engine is the sequence-based execution model for SignalOps: declarative `TaskGraph`, single `q.sequence` runtime, plugin registry and run/task-run observability.
 
 ## Current rollout truth
 

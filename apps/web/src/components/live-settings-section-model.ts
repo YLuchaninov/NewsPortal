@@ -2,7 +2,7 @@ import {
   DEFAULT_PAGE,
   type DigestCadence,
   type UserDigestSettingsView,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 export interface NotificationPreferencesState {
   webPush: boolean;

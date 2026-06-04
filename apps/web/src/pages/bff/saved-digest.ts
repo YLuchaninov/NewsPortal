@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import {
   assertJsonSchema,
   WEB_BFF_ACTION_PAYLOAD_SCHEMAS,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import { getPool } from "../../lib/server/db";
 import { prepareWebAction } from "../../lib/server/web-action";

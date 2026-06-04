@@ -7,9 +7,9 @@ import {
   parseEmailImapChannelConfig,
   parseRssChannelConfig,
   parseWebsiteChannelConfig,
-} from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+} from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import AdminShell from "../../../layouts/AdminShell.astro";
 import { AdminConfirmAction } from "../../../components/AdminConfirmAction";
 import { ChannelEditorForm } from "../../../components/ChannelEditorForm";
@@ -40,7 +40,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const channelId = String(Astro.params.channelId ?? "");
 type R = Record<string, unknown>;
 const channel = await sdk.getChannel<R>(channelId);
@@ -270,7 +270,7 @@ const bindingMaxEntryAgeHours =
               adaptiveEnabled: channel.adaptive_enabled !== false,
               maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 14400),
               requestTimeoutMs: websiteConfig?.requestTimeoutMs ?? 10000,
-              userAgent: websiteConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+              userAgent: websiteConfig?.userAgent ?? "SignalOpsFetchers/0.1",
               maxResourcesPerPoll: websiteConfig?.maxResourcesPerPoll ?? 50,
               totalPollTimeoutMs: websiteConfig?.totalPollTimeoutMs ?? 30000,
               crawlDelayMs: websiteConfig?.crawlDelayMs ?? 1000,
@@ -297,7 +297,7 @@ const bindingMaxEntryAgeHours =
                 adaptiveEnabled: channel.adaptive_enabled !== false,
                 maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 4800),
                 requestTimeoutMs: apiConfig?.requestTimeoutMs ?? 10000,
-                userAgent: apiConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+                userAgent: apiConfig?.userAgent ?? "SignalOpsFetchers/0.1",
                 maxItemsPerPoll: apiConfig?.maxItemsPerPoll ?? 20,
                 itemsPath: apiConfig?.itemsPath ?? "items",
                 titleField: apiConfig?.titleField ?? "title",
@@ -355,7 +355,7 @@ const bindingMaxEntryAgeHours =
                   adaptiveEnabled: channel.adaptive_enabled !== false,
                   maxPollIntervalSeconds: asInt(channel.max_poll_interval_seconds, 4800),
                   requestTimeoutMs: rssConfig?.requestTimeoutMs ?? 10000,
-                  userAgent: rssConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+                  userAgent: rssConfig?.userAgent ?? "SignalOpsFetchers/0.1",
                   maxItemsPerPoll: rssConfig?.maxItemsPerPoll ?? 20,
                   preferContentEncoded: rssConfig?.preferContentEncoded ?? true,
                   adapterStrategy: rssBindingStrategy ?? null,

@@ -3,7 +3,7 @@ import {
   resolveRssChannelMaxEntryAgeHours,
   type FeedIngressAdapterStrategy,
   type RssChannelConfig
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import { parseFeed, parseRedditSearchFeed, type ParsedFeed, type ParsedFeedEntry } from "./feed-parser/index";
 import { validateAcquisitionUrl } from "./probe-url-guard";

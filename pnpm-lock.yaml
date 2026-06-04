@@ -68,25 +68,25 @@ importers:
       '@astrojs/react':
         specifier: 5.0.5
         version: 5.0.5(@types/node@24.12.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(jiti@2.6.1)(lightningcss@1.32.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tsx@4.21.0)(yaml@2.9.0)
-      '@newsportal/bff-server':
+      '@signalops/bff-server':
         specifier: workspace:*
         version: link:../../packages/bff-server
-      '@newsportal/config':
+      '@signalops/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@newsportal/content-safety':
+      '@signalops/content-safety':
         specifier: workspace:*
         version: link:../../packages/content-safety
-      '@newsportal/contracts':
+      '@signalops/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@newsportal/control-plane':
+      '@signalops/control-plane':
         specifier: workspace:*
         version: link:../../packages/control-plane
-      '@newsportal/sdk':
+      '@signalops/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@newsportal/ui':
+      '@signalops/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tailwindcss/vite':
@@ -132,22 +132,22 @@ importers:
       '@astrojs/react':
         specifier: 5.0.5
         version: 5.0.5(@types/node@24.12.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(jiti@2.6.1)(lightningcss@1.32.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tsx@4.21.0)(yaml@2.9.0)
-      '@newsportal/bff-server':
+      '@signalops/bff-server':
         specifier: workspace:*
         version: link:../../packages/bff-server
-      '@newsportal/config':
+      '@signalops/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@newsportal/content-safety':
+      '@signalops/content-safety':
         specifier: workspace:*
         version: link:../../packages/content-safety
-      '@newsportal/contracts':
+      '@signalops/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@newsportal/sdk':
+      '@signalops/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@newsportal/ui':
+      '@signalops/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tailwindcss/vite':
@@ -204,7 +204,7 @@ importers:
 
   packages/control-plane:
     dependencies:
-      '@newsportal/contracts':
+      '@signalops/contracts':
         specifier: workspace:*
         version: link:../contracts
       pg:
@@ -291,7 +291,7 @@ importers:
       '@extractus/oembed-extractor':
         specifier: ^4.0.9
         version: 4.0.9
-      '@newsportal/contracts':
+      '@signalops/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       duck-duck-scrape:
@@ -324,16 +324,16 @@ importers:
 
   services/mcp:
     dependencies:
-      '@newsportal/config':
+      '@signalops/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@newsportal/contracts':
+      '@signalops/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@newsportal/control-plane':
+      '@signalops/control-plane':
         specifier: workspace:*
         version: link:../../packages/control-plane
-      '@newsportal/sdk':
+      '@signalops/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       fastify:
@@ -345,7 +345,7 @@ importers:
 
   services/relay:
     dependencies:
-      '@newsportal/contracts':
+      '@signalops/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       bullmq:

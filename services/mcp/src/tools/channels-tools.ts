@@ -10,13 +10,13 @@ import {
   setChannelActiveStateWithAudit,
   summarizeChannelBottlenecksWithPool,
   verifyChannelBulkOnboardingWithPool
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 import {
   ADMIN_CHANNEL_PAYLOAD_SCHEMAS,
   ADMIN_CHANNEL_PROVIDER_TYPES,
   validateAdminChannelPayload,
   type JsonSchema,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import {
   createReadTool,

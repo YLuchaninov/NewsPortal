@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 
-const defaultImage = process.env.PYTHON_RUNTIME_IMAGE ?? "newsportal-python-stage15-proof";
+const defaultImage = process.env.PYTHON_RUNTIME_IMAGE ?? "signalops-python-stage15-proof";
 const imageName = process.argv[2] ?? defaultImage;
 const maxBytes = Number.parseInt(
   process.env.PYTHON_RUNTIME_IMAGE_MAX_BYTES ?? "2500000000",

@@ -118,9 +118,9 @@ function clearCrawlPolicyCache(domain) {
     "postgres",
     "psql",
     "-U",
-    "newsportal",
+    "signalops",
     "-d",
-    "newsportal",
+    "signalops",
     "-c",
     `delete from crawl_policy_cache where domain = '${domain.replaceAll("'", "''")}';`
   );
@@ -135,6 +135,7 @@ const runId = process.argv[process.argv.length - 2];
 const statePath = process.argv[process.argv.length - 1];
 const editorialHtml = ${editorialHtml.toString()};
 const entityHtml = ${entityHtml.toString()};
+const textPdfFixture = ${textPdfFixture.toString()};
 const state = {
   pid: null,
   port: null,
@@ -286,7 +287,7 @@ const server = createServer((request, response) => {
     response.writeHead(200, {
       "content-type": "application/pdf",
     });
-    response.end(\`PDF fixture body \${runId} with enough text for deterministic document extraction.\`);
+    response.end(textPdfFixture());
     return;
   }
 
@@ -380,10 +381,49 @@ function entityHtml(title, runId) {
 </html>`;
 }
 
+function textPdfFixture() {
+  return new TextEncoder().encode(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 95 >>
+stream
+BT /F1 24 Tf 72 720 Td (RFP Document Title) Tj 0 -32 Td (Issuer City deadline June 30 2026) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Title (Procurement RFP Metadata Title) /CreationDate (D:20260601120000Z) >>
+endobj
+xref
+0 7
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000241 00000 n
+0000000311 00000 n
+0000000456 00000 n
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+548
+%%EOF`);
+}
+
 async function startFixtureServer(runId) {
-  const statePath = `/tmp/newsportal-website-admin-fixture-${runId}.json`;
-  const remoteScriptPath = `/tmp/newsportal-website-admin-fixture-${runId}.mjs`;
-  const localScriptPath = path.join("/tmp", `newsportal-website-admin-fixture-${runId}.mjs`);
+  const statePath = `/tmp/signalops-website-admin-fixture-${runId}.json`;
+  const remoteScriptPath = `/tmp/signalops-website-admin-fixture-${runId}.mjs`;
+  const localScriptPath = path.join("/tmp", `signalops-website-admin-fixture-${runId}.mjs`);
 
   await writeFile(localScriptPath, buildFixtureServerScript(), "utf8");
   try {
@@ -433,7 +473,7 @@ async function startFixtureServer(runId) {
         // best effort cleanup for detached fixture processes
       }
       try {
-        runCompose("exec", "-T", "fetchers", "rm", "-f", statePath, remoteScriptPath);
+        runCompose("exec", "-T", "-u", "root", "fetchers", "rm", "-f", statePath, remoteScriptPath);
       } catch {
         // best effort cleanup for copied fixture assets
       }
@@ -532,7 +572,7 @@ async function main() {
             maxPollIntervalSeconds: 4800,
             requestTimeoutMs: 5000,
             totalPollTimeoutMs: 20000,
-            userAgent: "NewsPortalFetchers/admin-website-bulk",
+            userAgent: "SignalOpsFetchers/admin-website-bulk",
             maxResourcesPerPoll: 14,
             crawlDelayMs: 250,
             sitemapDiscoveryEnabled: true,
@@ -574,7 +614,7 @@ async function main() {
             maxPollIntervalSeconds: 4800,
             requestTimeoutMs: 5000,
             totalPollTimeoutMs: 20000,
-            userAgent: "NewsPortalFetchers/admin-website-bulk",
+            userAgent: "SignalOpsFetchers/admin-website-bulk",
             maxResourcesPerPoll: 14,
             crawlDelayMs: 250,
             sitemapDiscoveryEnabled: true,
@@ -617,7 +657,7 @@ async function main() {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once",
       channelId
     );
@@ -652,7 +692,26 @@ async function main() {
             item.projected_article_id &&
             String(item.extraction_state ?? "") === "enriched" &&
             String(item.title ?? "").trim().length > 0
-        )
+        ),
+      {
+        describeLastValue: (payload) =>
+          JSON.stringify({
+            total: payload?.total ?? null,
+            items: Array.isArray(payload?.items)
+              ? payload.items.map((item) => ({
+                  resource_id: item.resource_id ?? null,
+                  url: item.url ?? null,
+                  resource_kind: item.resource_kind ?? null,
+                  extraction_state: item.extraction_state ?? null,
+                  extraction_error: item.extraction_error ?? item.extractionError ?? null,
+                  projection_state: item.projection_state ?? item.projectionState ?? null,
+                  projection_error: item.projection_error ?? item.projectionError ?? null,
+                  projected_article_id: item.projected_article_id ?? null,
+                  title: item.title ?? null,
+                }))
+              : payload?.items,
+          }).slice(0, 2400),
+      }
     );
     const latestResourcesPayload = await fetchJson(
       `http://127.0.0.1:8000/maintenance/web-resources?channelId=${encodeURIComponent(channelId)}&page=1&pageSize=20`

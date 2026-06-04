@@ -4,7 +4,7 @@ import {
   deleteRevokedMcpAccessToken,
   issueMcpAccessToken,
   revokeMcpAccessToken,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import {
   adminActionError,

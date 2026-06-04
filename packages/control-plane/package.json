@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/control-plane",
+  "name": "@signalops/control-plane",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@newsportal/contracts": "workspace:*",
+    "@signalops/contracts": "workspace:*",
     "pg": "^8.16.3"
   }
 }

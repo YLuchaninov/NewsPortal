@@ -1,6 +1,6 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type ContentItemDetail } from "@newsportal/contracts";
-import { PaginationNav } from "@newsportal/ui";
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE, type ContentItemDetail } from "@signalops/contracts";
+import { PaginationNav } from "@signalops/ui";
 
 import Shell from "../layouts/Shell.astro";
 import { ContentItemCard } from "../components/ContentItemCard";
@@ -53,7 +53,7 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
 ---
 
 <Shell
-  title="Saved — NewsPortal"
+  title="Saved — SignalOps"
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}

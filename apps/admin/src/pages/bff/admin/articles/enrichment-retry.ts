@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk, type NewsPortalSdkOptions } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk, type SignalOpsSdkOptions } from "@signalops/sdk";
 
 import {
   adminActionError,
@@ -14,7 +14,7 @@ import { getPool } from "../../../../lib/server/db";
 
 export const prerender = false;
 
-function buildSdkOptions(): NewsPortalSdkOptions {
+function buildSdkOptions(): SignalOpsSdkOptions {
   const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
   return {
     baseUrl: runtimeConfig.apiBaseUrl,
@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ request }) => {
     const { payload, session } = action.context;
     const docId = readRequiredAdminText(payload, "docId", "Article ID is required.");
 
-    const sdk = createNewsPortalSdk(buildSdkOptions());
+    const sdk = createSignalOpsSdk(buildSdkOptions());
     const run = await sdk.retryArticleEnrichment<Record<string, unknown>>(docId, {
       requestedBy: session.userId,
     });

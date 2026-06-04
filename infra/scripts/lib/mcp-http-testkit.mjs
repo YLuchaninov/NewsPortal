@@ -115,13 +115,13 @@ function inferSourceHint(url, contentType, bodyPreview, status) {
     return "external-upstream-challenge-likely";
   }
   if (gatewayResidualLikely) {
-    return localHost ? "newsportal-gateway-upstream-html" : "external-gateway-html";
+    return localHost ? "signalops-gateway-upstream-html" : "external-gateway-html";
   }
   if (localHost && normalizedContentType.includes("html")) {
-    return "newsportal-boundary-html";
+    return "signalops-boundary-html";
   }
   if (localHost) {
-    return "newsportal-boundary-json-or-text";
+    return "signalops-boundary-json-or-text";
   }
   return "external-upstream";
 }
@@ -426,6 +426,7 @@ export function extractCookie(setCookies) {
 }
 
 const adminActionTokenCache = new Map();
+const webActionTokenCache = new Map();
 const adminActionScopes = new Map([
   ["/bff/admin/articles/enrichment-retry", "articles.enrichment-retry"],
   ["/bff/admin/automation", "automation"],
@@ -485,6 +486,30 @@ function parseAdminActionTokens(html) {
   }
 }
 
+function parseJsonScriptById(html, id) {
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(
+    new RegExp(`<script[^>]*id=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/script>`, "i")
+  );
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[1] ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+function parseWebActionTokenBundle(html) {
+  const tokens = parseJsonScriptById(html, "web-action-tokens");
+  const targets = parseJsonScriptById(html, "web-action-token-targets");
+  return {
+    tokens: tokens && typeof tokens === "object" && !Array.isArray(tokens) ? tokens : {},
+    targets: Array.isArray(targets) ? targets : [],
+  };
+}
+
 async function readAdminActionToken(url, cookie, timeoutMs) {
   if (!cookie) {
     return "";
@@ -515,9 +540,60 @@ async function readAdminActionToken(url, cookie, timeoutMs) {
   return String(tokens[scope] ?? "").trim();
 }
 
+function normalizeWebActionPath(value) {
+  const pathname = new URL(value, "http://127.0.0.1").pathname;
+  const bffIndex = pathname.indexOf("/bff/");
+  return bffIndex >= 0 ? pathname.slice(bffIndex) : pathname;
+}
+
+function resolveWebActionScope(url, targets) {
+  const pathname = normalizeWebActionPath(url);
+  const exactTarget = targets.find(
+    (target) => !target?.routePrefix && pathname === target?.targetPath
+  );
+  if (exactTarget) {
+    return String(exactTarget.scope ?? "");
+  }
+  const prefixTarget = targets.find(
+    (target) => target?.routePrefix && pathname.startsWith(`${target.targetPath}/`)
+  );
+  return String(prefixTarget?.scope ?? "");
+}
+
+async function readWebActionToken(url, cookie, timeoutMs) {
+  if (!cookie) {
+    return "";
+  }
+  const target = new URL(url);
+  if (!normalizeWebActionPath(target.href).startsWith("/bff/")) {
+    return "";
+  }
+
+  const cacheKey = `${target.origin}|${cookie}`;
+  let bundle = webActionTokenCache.get(cacheKey);
+  if (!bundle) {
+    const response = await sendRequest(`${target.origin}/`, {
+      method: "GET",
+      headers: {
+        Accept: "text/html",
+        Cookie: cookie,
+      },
+      timeoutMs,
+    });
+    if (response.status < 200 || response.status >= 300) {
+      return "";
+    }
+    bundle = parseWebActionTokenBundle(response.text);
+    webActionTokenCache.set(cacheKey, bundle);
+  }
+  const scope = resolveWebActionScope(target.href, bundle.targets);
+  return scope ? String(bundle.tokens[scope] ?? "").trim() : "";
+}
+
 export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {}) {
   const target = new URL(url);
   const adminActionToken = await readAdminActionToken(url, cookie, timeoutMs);
+  const webActionToken = await readWebActionToken(url, cookie, timeoutMs);
   const body = new URLSearchParams(
     Object.entries(payload).map(([key, value]) => [key, String(value)])
   ).toString();
@@ -529,6 +605,7 @@ export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {})
       Referer: `${target.origin}/`,
       ...(cookie ? { Cookie: cookie } : {}),
       ...(adminActionToken ? { "x-admin-action-token": adminActionToken } : {}),
+      ...(webActionToken ? { "x-web-action-token": webActionToken } : {}),
       "Content-Type": "application/x-www-form-urlencoded",
       "Content-Length": Buffer.byteLength(body).toString(),
     },
@@ -549,6 +626,7 @@ export async function postJson(
 ) {
   const target = new URL(url);
   const adminActionToken = await readAdminActionToken(url, cookie, timeoutMs);
+  const webActionToken = await readWebActionToken(url, cookie, timeoutMs);
   const body = JSON.stringify(payload);
   const response = await sendRequest(url, {
     method: "POST",
@@ -559,6 +637,7 @@ export async function postJson(
       ...(cookie ? { Cookie: cookie } : {}),
       ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
       ...(adminActionToken ? { "x-admin-action-token": adminActionToken } : {}),
+      ...(webActionToken ? { "x-web-action-token": webActionToken } : {}),
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(body).toString(),
     },
@@ -713,7 +792,7 @@ export async function assertMcpSseHandshake(token, { timeoutMs = 10000 } = {}) {
               protocolVersion: "2025-06-18",
               capabilities: {},
               clientInfo: {
-                name: "newsportal-mcp-sse-proof",
+                name: "signalops-mcp-sse-proof",
                 version: "1.0.0",
               },
             },
@@ -751,7 +830,7 @@ export async function assertMcpSseHandshake(token, { timeoutMs = 10000 } = {}) {
             statusText: "OK",
             headers: response.headers,
           });
-          if (message?.id !== requestId || message?.result?.serverInfo?.name !== "newsportal-mcp") {
+          if (message?.id !== requestId || message?.result?.serverInfo?.name !== "signalops-mcp") {
             fail(new Error("MCP SSE initialize returned an unexpected message payload."));
             return;
           }
@@ -1348,9 +1427,9 @@ export function createHarness({ logPrefix = "mcp-http-proof" } = {}) {
           "postgres",
           "psql",
           "-U",
-          state.env?.POSTGRES_USER || "newsportal",
+          state.env?.POSTGRES_USER || "signalops",
           "-d",
-          state.env?.POSTGRES_DB || "newsportal",
+          state.env?.POSTGRES_DB || "signalops",
           "-At",
           "-F",
           "|",

@@ -1,4 +1,4 @@
-import { listMcpAccessTokens, summarizeMcpAccessTokens } from "@newsportal/control-plane";
+import { listMcpAccessTokens, summarizeMcpAccessTokens } from "@signalops/control-plane";
 
 import {
   MCP_SERVER_INSTRUCTIONS,
@@ -31,7 +31,7 @@ export interface McpResourceDefinition {
 
 export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
   {
-    uri: "newsportal://guide/operating-model",
+    uri: "signalops://guide/operating-model",
     name: "guide.operating.model",
     title: "Operating Model",
     description: "End-to-end operating model for returning after setup, diagnosing problems, tuning settings, and verifying effects.",
@@ -40,7 +40,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
   },
   ...OPERATING_DOMAIN_VALUES.flatMap((domain) => [
     {
-      uri: `newsportal://guide/diagnostics/${domain}`,
+      uri: `signalops://guide/diagnostics/${domain}`,
       name: `guide.diagnostics.${domain}`,
       title: `Diagnostics ${domain}`,
       description: `Operational diagnostics guide for ${domain}.`,
@@ -48,7 +48,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       read: async () => getDiagnosticsGuide(domain),
     },
     {
-      uri: `newsportal://guide/tuning/${domain}`,
+      uri: `signalops://guide/tuning/${domain}`,
       name: `guide.tuning.${domain}`,
       title: `Tuning ${domain}`,
       description: `Fine-tuning guide for ${domain}.`,
@@ -57,15 +57,15 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     },
   ] satisfies McpResourceDefinition[]),
   {
-    uri: "newsportal://ops/health",
+    uri: "signalops://ops/health",
     name: "ops.health",
     title: "Operational Health",
-    description: "Current DB/API-backed operational health for ongoing NewsPortal operation.",
+    description: "Current DB/API-backed operational health for ongoing SignalOps operation.",
     mimeType: "application/json",
     read: async (context) => buildSystemHealth(context, { sinceHours: 24 }),
   },
   {
-    uri: "newsportal://ops/issues",
+    uri: "signalops://ops/issues",
     name: "ops.issues",
     title: "Operational Issues",
     description: "Current operational issues and evidence samples derived from MCP-readable state.",
@@ -73,7 +73,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     read: async (context) => buildOpsIssuesResource(context),
   },
   {
-    uri: "newsportal://ops/tuning-backlog",
+    uri: "signalops://ops/tuning-backlog",
     name: "ops.tuning.backlog",
     title: "Tuning Backlog",
     description: "Read-only backlog of likely tuning opportunities based on current operational evidence.",
@@ -81,7 +81,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     read: async (context) => buildOpsTuningBacklogResource(context),
   },
   {
-    uri: "newsportal://ops/recent-changes",
+    uri: "signalops://ops/recent-changes",
     name: "ops.recent.changes",
     title: "Recent MCP Changes",
     description: "Recent MCP-visible requests to help operators understand what changed before diagnosing effects.",
@@ -89,15 +89,15 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     read: async (context) => buildOpsRecentChangesResource(context),
   },
   {
-    uri: "newsportal://guide/server-overview",
+    uri: "signalops://guide/server-overview",
     name: "guide.server.overview",
-    description: "Operator-facing overview of what the NewsPortal MCP server is for and how to start.",
+    description: "Operator-facing overview of what the SignalOps MCP server is for and how to start.",
     mimeType: "application/json",
     read: async () => ({
       purpose:
-        "NewsPortal MCP is a bounded remote operator control plane for admin/maintenance work over sequences, discovery, system interests, LLM templates, channels, and read-only observability.",
+        "SignalOps MCP is a bounded remote operator control plane for admin/maintenance work over sequences, discovery, system interests, LLM templates, channels, and read-only observability.",
       startHere: [
-        "Read newsportal://admin/summary first to understand current operator state.",
+        "Read signalops://admin/summary first to understand current operator state.",
         "Use list/read tools before write tools so mutations are grounded in current server truth.",
         "Use prompts to draft payloads or cleanup plans before mutating operator-owned entities.",
         "After any write, read the affected entity back through MCP to confirm the resulting state.",
@@ -140,12 +140,12 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         "MCP is a control-plane transport, not a second source of truth; do not reason as if it bypasses runtime owners.",
         "For old/historical article replay or current-interest selection recalculation, route to maintenance.reindex.request with jobKind=backfill rather than content_analysis.backfill.request.",
         "Use operator.report.verify before final human-facing reports for cleanup, onboarding, discovery-run, and selection claims.",
-        "For ongoing operations after setup, use operator.system.health and newsportal://ops/* resources before fine-tuning.",
+        "For ongoing operations after setup, use operator.system.health and signalops://ops/* resources before fine-tuning.",
       ],
     }),
   },
   {
-    uri: "newsportal://guide/client-contract",
+    uri: "signalops://guide/client-contract",
     name: "guide.client.contract",
     title: "MCP Client Contract",
     description: "Critical client guidance that should be used even when a client only exposes tools.",
@@ -170,7 +170,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         toolOnlyClients:
           "If resources/prompts are not available, rely on initialize.instructions, tool descriptions, inputSchema, outputSchema, and annotations.",
         resourceAwareClients:
-          "Read newsportal://guide/server-overview, newsportal://guide/operating-model, and the relevant newsportal://guide/scenarios/* or diagnostics/tuning resource before complex work.",
+          "Read signalops://guide/server-overview, signalops://guide/operating-model, and the relevant signalops://guide/scenarios/* or diagnostics/tuning resource before complex work.",
         promptAwareClients:
           "Use operator.session.start or a domain-specific *.session.plan prompt before multi-step operator changes.",
       },
@@ -187,17 +187,17 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/operator-playbooks",
+    uri: "signalops://guide/operator-playbooks",
     name: "guide.operator.playbooks",
-    description: "Suggested NewsPortal MCP workflows for common operator jobs.",
+    description: "Suggested SignalOps MCP workflows for common operator jobs.",
     mimeType: "application/json",
     read: async () => ({
       workflows: [
         {
           name: "sequence-maintenance",
-          guideResource: "newsportal://guide/scenarios/sequences",
+          guideResource: "signalops://guide/scenarios/sequences",
           steps: [
-            "Read newsportal://sequences or call sequences.list.",
+            "Read signalops://sequences or call sequences.list.",
             "Draft the bounded sequence or change with prompt sequence.draft if needed.",
             "Create or update the sequence.",
             "Run, poll, and only then cancel/retry/archive if evidence supports it.",
@@ -205,9 +205,9 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         },
         {
           name: "discovery-vnext-onboarding",
-          guideResource: "newsportal://guide/scenarios/discovery",
+          guideResource: "signalops://guide/scenarios/discovery",
           steps: [
-            "Read newsportal://discovery/runs, newsportal://discovery/artifacts, newsportal://discovery/candidates, newsportal://discovery/source-inventory, and newsportal://discovery/policies first.",
+            "Read signalops://discovery/runs, signalops://discovery/artifacts, signalops://discovery/candidates, signalops://discovery/source-inventory, and signalops://discovery/policies first.",
             "Create a vNext run and persist only schema-valid artifacts.",
             "Run bounded vNext brief, mega-loop, candidate, probe, understanding, and routing workflows, then read back artifacts, source inventory, adapter backlog, replay, and rollback state.",
             "Register probation only through vNext routing and the existing source_channels/outbox handoff.",
@@ -215,7 +215,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         },
         {
           name: "reference-bundle-funnel-calibration",
-          guideResource: "newsportal://guide/scenarios/funnel-calibration",
+          guideResource: "signalops://guide/scenarios/funnel-calibration",
           steps: [
             "When an operator references a manual/example bundle that worked before, read current interests, templates, channels, bottlenecks, residuals, and Discovery vNext inventory/artifacts before writing anything.",
             "Extract a portable funnel spec: objective, actor/buyer model, source capability classes, signal families, positive cues, near-miss negative cues, content-kind policy, LLM review scope, adapter/provider constraints, observation budget, and proof gates.",
@@ -226,9 +226,9 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         },
         {
           name: "article-diagnostics-and-tuning",
-          guideResource: "newsportal://guide/scenarios/article-diagnostics",
+          guideResource: "signalops://guide/scenarios/article-diagnostics",
           steps: [
-            "Read newsportal://articles/residuals-summary first to find the dominant downstream-loss buckets.",
+            "Read signalops://articles/residuals-summary first to find the dominant downstream-loss buckets.",
             "Inspect one blocker bucket at a time with articles.residuals.list, articles.read, and articles.explain.",
             "Compare the editorial observation with content_items.read/content_items.explain when selected/public truth matters.",
             "Tune one interest, template, or discovery target/coverage policy at a time and read the changed entity back after any mutation.",
@@ -236,7 +236,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         },
         {
           name: "configuration-maintenance",
-          guideResource: "newsportal://guide/scenarios/system-interests",
+          guideResource: "signalops://guide/scenarios/system-interests",
           steps: [
             "Read current templates, interests, or channels first.",
             "Use system_interest.create or discovery/sequence review prompts to draft bounded changes.",
@@ -246,15 +246,15 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         },
       ],
       scenarioResources: [
-        "newsportal://guide/scenarios/sequences",
-        "newsportal://guide/scenarios/discovery",
-        "newsportal://guide/scenarios/system-interests",
-        "newsportal://guide/scenarios/llm-templates",
-        "newsportal://guide/scenarios/channels",
-        "newsportal://guide/scenarios/funnel-calibration",
-        "newsportal://guide/scenarios/article-diagnostics",
-        "newsportal://guide/scenarios/observability",
-        "newsportal://guide/scenarios/cleanup",
+        "signalops://guide/scenarios/sequences",
+        "signalops://guide/scenarios/discovery",
+        "signalops://guide/scenarios/system-interests",
+        "signalops://guide/scenarios/llm-templates",
+        "signalops://guide/scenarios/channels",
+        "signalops://guide/scenarios/funnel-calibration",
+        "signalops://guide/scenarios/article-diagnostics",
+        "signalops://guide/scenarios/observability",
+        "signalops://guide/scenarios/cleanup",
       ],
       antiPatterns: [
         "Do not start with destructive tools.",
@@ -265,20 +265,20 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       ],
       clientNotes: [
         "Some MCP clients expose resources/prompts explicitly while others rely more on tool descriptions.",
-        "If the client does not auto-load resources, ask for newsportal://guide/server-overview and the relevant domain summary explicitly.",
+        "If the client does not auto-load resources, ask for signalops://guide/server-overview and the relevant domain summary explicitly.",
       ],
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/sequences",
+    uri: "signalops://guide/scenarios/sequences",
     name: "guide.scenarios.sequences",
     description: "Concrete MCP playbook for sequence drafting, execution, recovery, and archive decisions.",
     mimeType: "application/json",
     read: async () => ({
       objective:
-        "Use this scenario when the job is to create, update, run, inspect, retry, cancel, or archive automation sequences through the NewsPortal control plane.",
+        "Use this scenario when the job is to create, update, run, inspect, retry, cancel, or archive automation sequences through the SignalOps control plane.",
       startWith: [
-        "Read newsportal://admin/summary and newsportal://sequences first.",
+        "Read signalops://admin/summary and signalops://sequences first.",
         "If the sequence does not exist yet, draft it with prompt sequence.draft before calling write tools.",
         "Prefer one sequence at a time; do not bundle unrelated automation changes into one session.",
       ],
@@ -356,7 +356,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/discovery",
+    uri: "signalops://guide/scenarios/discovery",
     name: "guide.scenarios.discovery",
     description: "Concrete MCP playbook for Discovery vNext artifacts, inventory, policy, replay, and rollback.",
     mimeType: "application/json",
@@ -364,7 +364,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       objective:
         "Use this scenario for vNext source discovery through typed artifacts, candidate acquisition, probing, source understanding, deterministic routing, source inventory, replay, and rollback.",
       startWith: [
-        "Read newsportal://discovery/runs, newsportal://discovery/artifacts, newsportal://discovery/candidates, newsportal://discovery/source-inventory, and newsportal://discovery/policies first.",
+        "Read signalops://discovery/runs, signalops://discovery/artifacts, signalops://discovery/candidates, signalops://discovery/source-inventory, and signalops://discovery/policies first.",
         "Create a Discovery vNext run before persisting artifacts or candidates.",
         "Use prompts discovery.artifact.review, discovery.source_understanding.review, and discovery.yield.review when artifact quality, policy fit, or routing evidence is unclear.",
       ],
@@ -422,7 +422,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/discovery-live-gap-hunting",
+    uri: "signalops://guide/scenarios/discovery-live-gap-hunting",
     name: "guide.scenarios.discovery-live-gap-hunting",
     description: "MCP-only live Discovery vNext gap-hunting playbook for domain-neutral operator proofs.",
     mimeType: "application/json",
@@ -477,7 +477,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/funnel-calibration",
+    uri: "signalops://guide/scenarios/funnel-calibration",
     name: "guide.scenarios.funnel-calibration",
     description: "Concrete MCP playbook for turning a working manual/example bundle into generic product-funnel calibration.",
     mimeType: "application/json",
@@ -615,15 +615,15 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/system-interests",
+    uri: "signalops://guide/scenarios/system-interests",
     name: "guide.scenarios.system-interests",
     description: "Concrete MCP playbook for creating, refining, archiving, and deleting system interests.",
     mimeType: "application/json",
     read: async () => ({
       objective:
-        "Use this scenario for editorial/operator interest maintenance when NewsPortal needs a bounded monitoring intent for a topic, audience, or signal family.",
+        "Use this scenario for editorial/operator interest maintenance when SignalOps needs a bounded monitoring intent for a topic, audience, or signal family.",
       startWith: [
-        "Read newsportal://system-interests first to avoid duplicating an existing interest.",
+        "Read signalops://system-interests first to avoid duplicating an existing interest.",
         "Use prompt system_interest.create to draft the initial payload when the topic needs careful inclusion/exclusion framing.",
       ],
       recommendedTools: {
@@ -655,7 +655,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/llm-templates",
+    uri: "signalops://guide/scenarios/llm-templates",
     name: "guide.scenarios.llm-templates",
     description: "Concrete MCP playbook for LLM template drafting, bounded edits, archive, and delete decisions.",
     mimeType: "application/json",
@@ -663,7 +663,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       objective:
         "Use this scenario for operator-owned LLM template maintenance, especially when tuning prompt text, model settings, or template lifecycle state.",
       startWith: [
-        "Read newsportal://templates/llm first and inspect the current template before editing.",
+        "Read signalops://templates/llm first and inspect the current template before editing.",
         "Keep changes bounded to one template and one intent change per session whenever possible.",
       ],
       recommendedTools: {
@@ -686,12 +686,12 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       ],
       verifyAfterWrite: [
         "Read the updated template back through llm_templates.read.",
-        "Confirm list visibility or lifecycle status through newsportal://templates/llm.",
+        "Confirm list visibility or lifecycle status through signalops://templates/llm.",
       ],
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/channels",
+    uri: "signalops://guide/scenarios/channels",
     name: "guide.scenarios.channels",
     description: "Concrete MCP playbook for channel creation, tuning, verification, and removal.",
     mimeType: "application/json",
@@ -699,7 +699,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       objective:
         "Use this scenario for source-channel onboarding and maintenance, including Discovery vNext probation handoff follow-up, metadata correction, and bounded cleanup.",
       startWith: [
-        "Read newsportal://channels first to check whether the source already exists or overlaps with an existing channel.",
+        "Read signalops://channels first to check whether the source already exists or overlaps with an existing channel.",
         "When a channel comes from Discovery vNext probation handoff, preserve SourceUnderstanding, RoutingDecision, source inventory, and outbox evidence before making manual edits.",
       ],
       recommendedTools: {
@@ -736,12 +736,12 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         "Read the channel back through channels.read.",
         "For website channels, inspect web_resources with projection=all, then compare projection=resource_only and projection=projected.",
         "Do not treat projected-but-rejected rows as channel creation failure; that is downstream selection/filtering evidence.",
-        "Re-read newsportal://channels to confirm the catalog reflects the intended change.",
+        "Re-read signalops://channels to confirm the catalog reflects the intended change.",
       ],
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/article-diagnostics",
+    uri: "signalops://guide/scenarios/article-diagnostics",
     name: "guide.scenarios.article-diagnostics",
     description: "Concrete MCP playbook for article residual analysis and evidence-based tuning.",
     mimeType: "application/json",
@@ -749,7 +749,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       objective:
         "Use this scenario to understand why editorial observations did not reach selected content and to produce bounded tuning recommendations from article/content evidence.",
       startWith: [
-        "Read newsportal://articles/residuals-summary first to identify the dominant blocker buckets.",
+        "Read signalops://articles/residuals-summary first to identify the dominant blocker buckets.",
         "Use articles.residuals.list to inspect representative rows for one blocker at a time.",
         "Inspect the same case through articles.explain and, when relevant, content_items.explain to compare editorial observation truth with selected/public truth.",
       ],
@@ -800,7 +800,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/observability",
+    uri: "signalops://guide/scenarios/observability",
     name: "guide.scenarios.observability",
     description: "Concrete MCP playbook for read-only operator diagnosis across admin summary, budgets, web resources, and fetch runs.",
     mimeType: "application/json",
@@ -808,7 +808,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       objective:
         "Use this scenario for read-only operator diagnosis when the goal is to understand current system state, recent runtime behavior, or bounded evidence before deciding whether a write is needed.",
       startWith: [
-        "Read newsportal://admin/summary first.",
+        "Read signalops://admin/summary first.",
         "Pull only the relevant read surfaces for the suspected issue domain: sequences, discovery summary, web resources, fetch runs, or LLM budget.",
       ],
       recommendedTools: {
@@ -837,7 +837,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://guide/scenarios/cleanup",
+    uri: "signalops://guide/scenarios/cleanup",
     name: "guide.scenarios.cleanup",
     description: "Concrete MCP playbook for safe cleanup after experiments, tests, and bounded operator changes.",
     mimeType: "application/json",
@@ -909,9 +909,9 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     }),
   },
   {
-    uri: "newsportal://admin/summary",
+    uri: "signalops://admin/summary",
     name: "admin.summary",
-    description: "Current NewsPortal operator summary plus MCP token counts.",
+    description: "Current SignalOps operator summary plus MCP token counts.",
     mimeType: "application/json",
     read: async ({ sdk, pool }) => {
       const [dashboardSummary, tokens] = await Promise.all([
@@ -925,14 +925,14 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     },
   },
   {
-    uri: "newsportal://llm/budget-summary",
+    uri: "signalops://llm/budget-summary",
     name: "llm.budget.summary",
     description: "Current LLM budget summary from the maintenance surface.",
     mimeType: "application/json",
     read: async ({ sdk }) => sdk.getLlmBudgetSummary<Record<string, unknown>>(),
   },
   {
-    uri: "newsportal://discovery/runs",
+    uri: "signalops://discovery/runs",
     name: "discovery.runs",
     description: "First page of Discovery vNext runs.",
     mimeType: "application/json",
@@ -940,7 +940,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("runs", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/artifacts",
+    uri: "signalops://discovery/artifacts",
     name: "discovery.artifacts",
     description: "First page of Discovery vNext artifacts.",
     mimeType: "application/json",
@@ -948,7 +948,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("artifacts", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/candidates",
+    uri: "signalops://discovery/candidates",
     name: "discovery.candidates",
     description: "First page of Discovery vNext candidates.",
     mimeType: "application/json",
@@ -956,7 +956,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("candidates", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/source-inventory",
+    uri: "signalops://discovery/source-inventory",
     name: "discovery.source_inventory",
     description: "First page of Discovery vNext source inventory.",
     mimeType: "application/json",
@@ -964,7 +964,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("source-inventory", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/policies",
+    uri: "signalops://discovery/policies",
     name: "discovery.policies",
     description: "First page of Discovery vNext policies.",
     mimeType: "application/json",
@@ -972,7 +972,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("policies", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/adapter-backlog",
+    uri: "signalops://discovery/adapter-backlog",
     name: "discovery.adapter_backlog",
     description: "First page of Discovery vNext adapter backlog.",
     mimeType: "application/json",
@@ -980,7 +980,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("adapter-backlog", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/feedback",
+    uri: "signalops://discovery/feedback",
     name: "discovery.feedback",
     description: "First page of Discovery vNext feedback events.",
     mimeType: "application/json",
@@ -988,7 +988,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("feedback", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/replay-runs",
+    uri: "signalops://discovery/replay-runs",
     name: "discovery.replay_runs",
     description: "First page of Discovery vNext replay runs.",
     mimeType: "application/json",
@@ -996,7 +996,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("replay-runs", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/rollback-groups",
+    uri: "signalops://discovery/rollback-groups",
     name: "discovery.rollback_groups",
     description: "First page of Discovery vNext rollback groups.",
     mimeType: "application/json",
@@ -1004,7 +1004,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("rollback-groups", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://discovery/eval-runs",
+    uri: "signalops://discovery/eval-runs",
     name: "discovery.eval_runs",
     description: "First page of Discovery vNext eval run metadata.",
     mimeType: "application/json",
@@ -1012,7 +1012,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       sdk.listDiscoveryVNextRecords<Record<string, unknown>>("eval-runs", { page: 1, pageSize: 20 }),
   },
   {
-    uri: "newsportal://system-interests",
+    uri: "signalops://system-interests",
     name: "system.interests",
     description: "First page of current system interests.",
     mimeType: "application/json",
@@ -1023,7 +1023,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       }),
   },
   {
-    uri: "newsportal://templates/llm",
+    uri: "signalops://templates/llm",
     name: "llm.templates",
     description: "First page of current LLM templates.",
     mimeType: "application/json",
@@ -1034,7 +1034,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       }),
   },
   {
-    uri: "newsportal://channels",
+    uri: "signalops://channels",
     name: "channels",
     description: "First page of source channels.",
     mimeType: "application/json",
@@ -1045,7 +1045,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       }),
   },
   {
-    uri: "newsportal://sequences",
+    uri: "signalops://sequences",
     name: "sequences",
     description: "First page of sequences from the maintenance API.",
     mimeType: "application/json",
@@ -1056,7 +1056,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       }),
   },
   {
-    uri: "newsportal://web-resources",
+    uri: "signalops://web-resources",
     name: "web.resources",
     description: "First page of web resources.",
     mimeType: "application/json",
@@ -1067,14 +1067,14 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       }),
   },
   {
-    uri: "newsportal://fetch-runs",
+    uri: "signalops://fetch-runs",
     name: "fetch.runs",
     description: "Current fetch runs summary list.",
     mimeType: "application/json",
     read: async ({ sdk }) => sdk.listFetchRuns<Record<string, unknown>>(),
   },
   {
-    uri: "newsportal://articles/residuals-summary",
+    uri: "signalops://articles/residuals-summary",
     name: "articles.residuals.summary",
     description: "Aggregate article residual buckets for diagnostics and tuning sessions.",
     mimeType: "application/json",

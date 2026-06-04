@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { buildOutboxEventQueueMap, createHealthResponse } from "@newsportal/contracts";
+import { buildOutboxEventQueueMap, createHealthResponse } from "@signalops/contracts";
 
 import { loadRelayConfig } from "./config";
 import {

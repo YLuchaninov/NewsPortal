@@ -1,4 +1,4 @@
-# NewsPortal
+# SignalOps
 
 Локальный MVP polyglot content-platform monorepo.
 
@@ -282,7 +282,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - Enable browser assistance only for public `website` channels when static discovery misses real resources or the site is clearly JS-heavy. The relevant website config keys are `browserFallbackEnabled=true` and `maxBrowserFetchesPerPoll` (keep the current default `2` unless you have a bounded reason to change it).
 - When discovery recommends browser help for a website candidate, the registered provider must still remain `website`; hidden feeds remain hints only and must not silently convert the source into RSS.
 - For a dedicated operator-facing manual pass of `website` channels, `/admin/resources`, projected vs resource-only rows, and bounded live-site checks, use [docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md](docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md).
-- For the expanded repo-owned real-site matrix after local website proof is green, run `node infra/scripts/test-live-website-matrix.mjs`; it validates 16 primary public sites across static editorial, document/download-heavy, public changelog, and browser-candidate shapes and writes a JSON evidence bundle under `/tmp/newsportal-live-website-matrix-<runId>.json`.
+- For the expanded repo-owned real-site matrix after local website proof is green, run `node infra/scripts/test-live-website-matrix.mjs`; it validates 16 primary public sites across static editorial, document/download-heavy, public changelog, and browser-candidate shapes and writes a JSON evidence bundle under `/tmp/signalops-live-website-matrix-<runId>.json`.
 - Operator verification for this lane should include:
   - `pnpm test:hard-sites:compose`
   - `/admin/resources` and `/admin/resources/[resourceId]` to confirm browser provenance is visible
@@ -291,8 +291,8 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 ## Internal MVP Notes
 
 - `pnpm dev:mvp:internal` использует `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml`; `pnpm dev:mvp:internal:no-build` поднимает тот же stack без rebuild, а `pnpm dev:mvp:internal:stop`, `pnpm dev:mvp:internal:down`, `pnpm dev:mvp:internal:down:volumes` и `pnpm dev:mvp:internal:logs` закрывают повседневный lifecycle stack-а.
-- В compose-based SSR `NEWSPORTAL_API_BASE_URL` должен указывать на внутренний service DNS `http://api:8000`, а `NEWSPORTAL_PUBLIC_API_BASE_URL` остается host/browser-facing URL вроде `http://127.0.0.1:8000`.
-- Для Astro SSR/BFF теперь используются отдельные app base URLs: `NEWSPORTAL_WEB_APP_BASE_URL` и `NEWSPORTAL_ADMIN_APP_BASE_URL`; compose прокидывает их в контейнеры как `NEWSPORTAL_APP_BASE_URL`, чтобы redirects и trusted host reconstruction не деградировали в `http://localhost/`.
+- В compose-based SSR `SIGNALOPS_API_BASE_URL` должен указывать на внутренний service DNS `http://api:8000`, а `SIGNALOPS_PUBLIC_API_BASE_URL` остается host/browser-facing URL вроде `http://127.0.0.1:8000`.
+- Для Astro SSR/BFF теперь используются отдельные app base URLs: `SIGNALOPS_WEB_APP_BASE_URL` и `SIGNALOPS_ADMIN_APP_BASE_URL`; compose прокидывает их в контейнеры как `SIGNALOPS_APP_BASE_URL`, чтобы redirects и trusted host reconstruction не деградировали в `http://localhost/`.
 - `apps/web` и `apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
 - Browser/session routes `web` и `admin` больше не делят `/api/*` c Python API: public/read API остается на `/api/*`, а Astro BFF живет на `/bff/*`; через nginx admin surface доступен на `/admin/`, поэтому его browser/BFF paths снаружи имеют вид `/admin/bff/*`.
 - Admin now exposes the Discovery vNext control plane under `/admin/discovery` for runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, replay and rollback, while FastAPI keeps the canonical `/maintenance/discovery/*` read/action surface for SDK/BFF consumers.
@@ -303,7 +303,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - `web` keeps `/` as the global system-selected collection and exposes a separate `/matches` surface for per-user personalized matches.
 - Successful user-interest create/update/clone flows now compile first and then queue a scoped `repair` replay for historical system-selected content, without resending retro notifications.
 - Umbrella `pnpm integration_tests` acceptance все еще остается RSS-first ingest path, но website lane теперь имеет отдельные deterministic proofs через `pnpm test:website:compose` и `pnpm test:website:admin:compose`; текущий internal product contour intentionally keeps `api`, `email_imap` и Telegram ingestion parked outside mandatory acceptance.
-- Root product-local evidence commands now exist: `pnpm test:product:local:core`, `pnpm test:product:local:full` and `pnpm test:product:local:cleanup`. They write `/tmp/newsportal-product-local-<mode>-<runId>.json|md`.
+- Root product-local evidence commands now exist: `pnpm test:product:local:core`, `pnpm test:product:local:full` and `pnpm test:product:local:cleanup`. They write `/tmp/signalops-product-local-<mode>-<runId>.json|md`.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
 - `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
 - Admin surface показывает provider-agnostic scheduling health, append-only fetch history, website resource browse/detail observability via `/admin/resources`, и LLM usage/budget rollups; read-model API дополнена `/maintenance/fetch-runs`, `/maintenance/llm-reviews`, `/maintenance/llm-usage-summary`, `/maintenance/llm-budget-summary` и `/maintenance/web-resources*`.

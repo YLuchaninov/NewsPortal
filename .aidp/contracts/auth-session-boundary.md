@@ -21,7 +21,7 @@
 
 - Web session cookie: `np_web_session`; web refresh cookie: `np_web_refresh`.
 - Admin session cookie: `np_admin_session`.
-- Cookies в текущем коде server-side, HttpOnly и SameSite Strict. Cookie `Secure` управляется общей policy `NEWSPORTAL_COOKIE_SECURE_POLICY`: `auto` ставит `Secure` для HTTPS или `X-Forwarded-Proto: https`, `always` принудительно включает, `never` оставляет выключенным только для локального HTTP/debug.
+- Cookies в текущем коде server-side, HttpOnly и SameSite Strict. Cookie `Secure` управляется общей policy `SIGNALOPS_COOKIE_SECURE_POLICY`: `auto` ставит `Secure` для HTTPS или `X-Forwarded-Proto: https`, `always` принудительно включает, `never` оставляет выключенным только для локального HTTP/debug.
 - Mutating public web BFF actions use the shared web action kit to reject explicit cross-site browser metadata before session resolution or payload reads, then validate declared web BFF action payload schemas for routes that read payload through the kit. The guard treats mismatched `Origin`/absolute `Referer` and `Sec-Fetch-Site: cross-site` as CSRF failures while preserving local/scripted requests that do not send browser site metadata; `auth/bootstrap` and `auth/logout` are sessionless special cases but still use the metadata guard.
 - Admin mutating BFF actions that use the shared action kit reject explicit cross-site browser metadata before session resolution or payload reads. The guard treats mismatched `Origin`/absolute `Referer` and `Sec-Fetch-Site: cross-site` as CSRF failures while preserving local/scripted requests that do not send browser site metadata.
 - Mutating admin BFF routes that use the shared admin action kit require signed admin action tokens unless they are documented read-only exceptions. Tokens are HMAC-signed with `APP_SECRET`, short-lived, and bound to admin user id, normalized BFF target path and route-level action scope. AdminShell publishes the scoped token set for server-rendered forms and same-origin admin React-island POST requests; the BFF validates the route scope before handler work.
@@ -39,7 +39,7 @@
 
 ## Runtime и delivery concerns
 
-- Required env включает `FIREBASE_WEB_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_CONFIG`, `FIREBASE_ADMIN_CREDENTIALS`, `ADMIN_ALLOWLIST_EMAILS` и `APP_SECRET`; auth-cookie runtime также читает `NEWSPORTAL_COOKIE_SECURE_POLICY`.
+- Required env включает `FIREBASE_WEB_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_CONFIG`, `FIREBASE_ADMIN_CREDENTIALS`, `ADMIN_ALLOWLIST_EMAILS` и `APP_SECRET`; auth-cookie runtime также читает `SIGNALOPS_COOKIE_SECURE_POLICY`.
 - Admin bootstrap может назначать local `admin` role только после allowlist verification.
 - nginx должен сохранять `X-Forwarded-Prefix /admin` для admin routes.
 - Auth flows являются stateful tests, потому что создают или переиспользуют users/profiles/roles.

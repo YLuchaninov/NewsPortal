@@ -5,7 +5,7 @@ import { RssFetcherService } from "../../../services/fetchers/src/fetchers.ts";
 
 function createConfig() {
   return {
-    databaseUrl: "postgresql://newsportal:newsportal@127.0.0.1:55432/newsportal",
+    databaseUrl: "postgresql://signalops:signalops@127.0.0.1:55432/signalops",
     fetchersPort: 4100,
     fetchersPollIntervalMs: 5000,
     fetchersBatchSize: 10,

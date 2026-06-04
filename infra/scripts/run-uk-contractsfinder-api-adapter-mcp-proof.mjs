@@ -41,7 +41,7 @@ function adapterConfig() {
   return {
     maxItemsPerPoll: 20,
     requestTimeoutMs: 45_000,
-    userAgent: "NewsPortal MCP UK Contracts Finder outsourcing signal verification/1.0",
+    userAgent: "SignalOps MCP UK Contracts Finder outsourcing signal verification/1.0",
     responseFormat: "json",
     pagination: { mode: "none", maxPagesPerPoll: 1 },
     itemsPath: "releases",
@@ -358,8 +358,8 @@ async function main() {
     report.error = error instanceof Error ? error.message : String(error);
   } finally {
     report.finishedAt = new Date().toISOString();
-    const jsonPath = `/tmp/newsportal-uk-contractsfinder-mcp-proof-${RUN_ID}.json`;
-    const mdPath = `/tmp/newsportal-uk-contractsfinder-mcp-proof-${RUN_ID}.md`;
+    const jsonPath = `/tmp/signalops-uk-contractsfinder-mcp-proof-${RUN_ID}.json`;
+    const mdPath = `/tmp/signalops-uk-contractsfinder-mcp-proof-${RUN_ID}.md`;
     await writeFile(jsonPath, JSON.stringify(report, null, 2));
     await writeFile(
       mdPath,

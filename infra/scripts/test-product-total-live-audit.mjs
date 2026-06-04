@@ -138,7 +138,7 @@ function extractJsonArtifactPaths(output) {
     /JSON artifact:\s*(\/tmp\/\S+?\.json)/gu,
     /Wrote JSON evidence to\s*(\/tmp\/\S+?\.json)/gu,
     /"evidencePath"\s*:\s*"(\/tmp\/[^"]+?\.json)"/gu,
-    /(\/tmp\/newsportal-[^\s"']+?\.json)/gu,
+    /(\/tmp\/signalops-[^\s"']+?\.json)/gu,
   ];
   for (const pattern of patterns) {
     for (const match of String(output ?? "").matchAll(pattern)) {
@@ -245,7 +245,7 @@ function stripParsedArtifacts(commandResults) {
 
 function formatMarkdown(report) {
   const lines = [
-    `# NewsPortal Product Total Live Audit ${report.runId}`,
+    `# SignalOps Product Total Live Audit ${report.runId}`,
     "",
     `- Final verdict: \`${report.finalVerdict}\``,
     `- Runtime verdict: \`${report.runtimeVerdict}\``,
@@ -340,8 +340,8 @@ function preflightOnlyVerdicts() {
 }
 
 async function writeArtifacts(report) {
-  const jsonPath = `/tmp/newsportal-product-total-live-${report.runId}.json`;
-  const mdPath = `/tmp/newsportal-product-total-live-${report.runId}.md`;
+  const jsonPath = `/tmp/signalops-product-total-live-${report.runId}.json`;
+  const mdPath = `/tmp/signalops-product-total-live-${report.runId}.md`;
   const withArtifacts = {
     ...report,
     artifacts: {
@@ -404,7 +404,7 @@ async function main() {
     ...verdicts.failReasons,
   ];
   const report = await writeArtifacts({
-    kind: "newsportal-product-total-live-audit",
+    kind: "signalops-product-total-live-audit",
     runId,
     startedAt,
     finishedAt: new Date().toISOString(),

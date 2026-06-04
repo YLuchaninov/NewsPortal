@@ -20,7 +20,7 @@ import {
   type ResourceQueueJobPayload,
   type SequenceQueueJobPayload,
   type ThinQueueJobPayload
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type IORedis from "ioredis";
 import type { Pool } from "pg";
 import type {

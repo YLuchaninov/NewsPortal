@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/bff-server",
+  "name": "@signalops/bff-server",
   "private": true,
   "type": "module",
   "exports": {

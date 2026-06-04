@@ -1,9 +1,9 @@
 ---
-import { DEFAULT_PAGE } from "@newsportal/contracts";
-import type { ContentItemPreview, WebContentListSort } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+import { DEFAULT_PAGE } from "@signalops/contracts";
+import type { ContentItemPreview, WebContentListSort } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
 import { ContentItemCard } from "../components/ContentItemCard";
@@ -33,7 +33,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({
+const sdk = createSignalOpsSdk({
   baseUrl: readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" }).apiBaseUrl,
   fetchImpl: fetch,
 });
@@ -106,7 +106,7 @@ function readMatchNote(match: ContentItemPreview): string | null {
 ---
 
 <Shell
-  title="My Matches — NewsPortal"
+  title="My Matches — SignalOps"
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}

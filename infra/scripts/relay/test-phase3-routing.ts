@@ -6,7 +6,7 @@ import {
   CRITERION_COMPILE_REQUESTED_EVENT,
   INTEREST_COMPILE_REQUESTED_EVENT,
   SEQUENCE_QUEUE
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import { loadRelayConfig } from "../../../services/relay/src/config";

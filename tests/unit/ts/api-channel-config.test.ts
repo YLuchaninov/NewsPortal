@@ -64,7 +64,7 @@ test("parseApiChannelConfig rejects unsafe header ownership", () => {
           Authorization: "Bearer hidden",
         },
       }),
-    /managed by NewsPortal/,
+    /managed by SignalOps/,
   );
 });
 

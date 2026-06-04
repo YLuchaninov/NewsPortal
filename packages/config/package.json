@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/config",
+  "name": "@signalops/config",
   "private": true,
   "type": "module",
   "exports": {

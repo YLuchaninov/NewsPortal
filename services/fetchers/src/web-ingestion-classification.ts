@@ -1,4 +1,4 @@
-import { RESOURCE_KINDS, type ResourceKind } from "@newsportal/contracts";
+import { RESOURCE_KINDS, type ResourceKind } from "@signalops/contracts";
 
 import { collapseWhitespace, decodeHtmlEntities, stripHtmlTags } from "./rss";
 

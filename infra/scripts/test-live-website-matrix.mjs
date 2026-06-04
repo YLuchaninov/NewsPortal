@@ -518,9 +518,9 @@ function clearCrawlPolicyCache(domain) {
     "postgres",
     "psql",
     "-U",
-    "newsportal",
+    "signalops",
     "-d",
-    "newsportal",
+    "signalops",
     "-c",
     `delete from crawl_policy_cache where domain = '${domain.replaceAll("'", "''")}';`
   );
@@ -533,7 +533,7 @@ function triggerChannelRun(channelId) {
     "fetchers",
     "pnpm",
     "--filter",
-    "@newsportal/fetchers",
+    "@signalops/fetchers",
     "run:once",
     channelId
   );
@@ -1171,7 +1171,7 @@ async function main() {
     prefix: "live-website-matrix",
   });
   const adminPassword = `LiveWebsiteMatrix!${runId.slice(0, 10)}`;
-  const evidencePath = `/tmp/newsportal-live-website-matrix-${variantKey}-${runId}.json`;
+  const evidencePath = `/tmp/signalops-live-website-matrix-${variantKey}-${runId}.json`;
   const activeLiveGroups = selectLiveGroups(variantKey, filters);
 
   if (activeLiveGroups.length === 0) {

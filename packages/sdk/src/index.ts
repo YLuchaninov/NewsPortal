@@ -1,7 +1,7 @@
 import type { WebContentListQuery } from "../../contracts/src/content.ts";
 import type { PaginatedResponse, PaginationQuery } from "../../contracts/src/pagination.ts";
 
-export interface NewsPortalSdkOptions {
+export interface SignalOpsSdkOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
 }
@@ -148,7 +148,7 @@ async function buildRequestError(response: Response): Promise<Error> {
   return new Error(`Request failed with ${response.status} ${response.statusText}.${suffix}`);
 }
 
-export function createNewsPortalSdk(options: NewsPortalSdkOptions) {
+export function createSignalOpsSdk(options: SignalOpsSdkOptions) {
   const baseFetch = options.fetchImpl ?? fetch;
   const baseUrl = options.baseUrl.replace(/\/$/, "");
 

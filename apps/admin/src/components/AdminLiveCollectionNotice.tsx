@@ -61,7 +61,7 @@ export function AdminLiveCollectionNotice(
   const baselineRevisionRef = useRef(props.initialRevision);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (
       currentSnapshot &&
       isAdminLiveSurfaceSnapshot(currentSnapshot, props.surface)

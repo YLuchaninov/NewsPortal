@@ -138,11 +138,11 @@ function checkCompose() {
   const composeText = readText("infra/docker/compose.yml");
   for (const runtimeCommand of [
     `["pnpm", "db:migrate"]`,
-    `["pnpm", "--filter", "@newsportal/relay", "start"]`,
-    `["pnpm", "--filter", "@newsportal/fetchers", "start"]`,
-    `["pnpm", "--filter", "@newsportal/mcp", "start"]`,
-    `["pnpm", "--filter", "@newsportal/web", "start"]`,
-    `["pnpm", "--filter", "@newsportal/admin", "start"]`,
+    `["pnpm", "--filter", "@signalops/relay", "start"]`,
+    `["pnpm", "--filter", "@signalops/fetchers", "start"]`,
+    `["pnpm", "--filter", "@signalops/mcp", "start"]`,
+    `["pnpm", "--filter", "@signalops/web", "start"]`,
+    `["pnpm", "--filter", "@signalops/admin", "start"]`,
   ]) {
     if (composeText.includes(runtimeCommand)) {
       issues.push(
@@ -283,8 +283,8 @@ function checkPythonRuntimeImage() {
   if (!/\bARG\s+PYTHON_APP_UID=/im.test(finalStageText) || !/\bARG\s+PYTHON_APP_GID=/im.test(finalStageText)) {
     issues.push(`${file} final runtime stage must expose PYTHON_APP_UID/PYTHON_APP_GID build args.`);
   }
-  if (!/\bUSER\s+newsportal\b/im.test(finalStageText)) {
-    issues.push(`${file} final runtime stage must drop privileges with USER newsportal.`);
+  if (!/\bUSER\s+signalops\b/im.test(finalStageText)) {
+    issues.push(`${file} final runtime stage must drop privileges with USER signalops.`);
   }
   if (/\bUSER\s+root\b/im.test(finalStageText)) {
     issues.push(`${file} final runtime stage must not switch back to root.`);
@@ -301,7 +301,7 @@ function checkPythonRuntimeImage() {
   if (!/\bpip\s+install\b[^\n]*--no-index[^\n]*--find-links=\/tmp\/wheels/im.test(finalStageText)) {
     issues.push(`${file} final runtime stage must install Python dependencies from local wheels.`);
   }
-  if (!/\bchown\s+-R\s+newsportal:newsportal\s+\/workspace\b/im.test(finalStageText)) {
+  if (!/\bchown\s+-R\s+signalops:signalops\s+\/workspace\b/im.test(finalStageText)) {
     issues.push(`${file} final runtime stage must make /workspace owned by the non-root runtime user.`);
   }
 

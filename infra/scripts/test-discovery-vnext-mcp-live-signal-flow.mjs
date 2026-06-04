@@ -100,9 +100,9 @@ const REQUIRED_TOOLS = [
 ];
 
 const REQUIRED_RESOURCES = [
-  "newsportal://guide/scenarios/discovery-live-gap-hunting",
-  "newsportal://guide/scenarios/discovery",
-  "newsportal://guide/scenarios/funnel-calibration",
+  "signalops://guide/scenarios/discovery-live-gap-hunting",
+  "signalops://guide/scenarios/discovery",
+  "signalops://guide/scenarios/funnel-calibration",
 ];
 
 const REQUIRED_PROMPTS = ["discovery.live_gap_hunting.plan"];
@@ -312,8 +312,8 @@ async function runPreflight(harness, token, report, env, args) {
   }
 
   const initialize = await harness.mcpRpc(token, "initialize", {});
-  if (String(initialize?.result?.serverInfo?.name ?? "") !== "newsportal-mcp") {
-    failures.push("MCP initialize did not return newsportal-mcp.");
+  if (String(initialize?.result?.serverInfo?.name ?? "") !== "signalops-mcp") {
+    failures.push("MCP initialize did not return signalops-mcp.");
   }
 
   const [toolsList, resourcesList, promptsList] = await Promise.all([
@@ -801,8 +801,8 @@ function markdown(report) {
 
 async function persist(report) {
   report.finishedAt = new Date().toISOString();
-  const jsonPath = `/tmp/newsportal-discovery-vnext-mcp-live-signal-flow-${report.runId}.json`;
-  const mdPath = `/tmp/newsportal-discovery-vnext-mcp-live-signal-flow-${report.runId}.md`;
+  const jsonPath = `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-${report.runId}.json`;
+  const mdPath = `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-${report.runId}.md`;
   report.artifacts = { jsonPath, mdPath };
   await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   await writeFile(mdPath, markdown(report), "utf8");

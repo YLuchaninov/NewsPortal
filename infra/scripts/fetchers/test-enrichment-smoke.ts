@@ -105,7 +105,7 @@ async function startFixtureServer(runId: string): Promise<{
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Enrichment Smoke Feed ${runId}</title>
-    <link>https://newsportal.local/enrichment-smoke</link>
+    <link>https://signalops.local/enrichment-smoke</link>
     <description>Local enrichment smoke feed ${runId}</description>
     <language>en</language>
     <item>
@@ -237,7 +237,7 @@ async function seedChannel(pool: Pool, feedUrl: string): Promise<string> {
       JSON.stringify({
         maxItemsPerPoll: 10,
         requestTimeoutMs: 5000,
-        userAgent: "NewsPortalFetchers/EnrichmentSmoke",
+        userAgent: "SignalOpsFetchers/EnrichmentSmoke",
         preferContentEncoded: true,
       }),
     ]

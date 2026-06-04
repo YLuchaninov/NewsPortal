@@ -1,4 +1,4 @@
-import { FormField, Input } from "@newsportal/ui";
+import { FormField, Input } from "@signalops/ui";
 import { ADMIN_SECTION_CARD_CLASS } from "../lib/admin-ui-classes";
 
 import {

@@ -56,7 +56,7 @@ test("generic RSS adapter keeps guid permalink-only items", async () => {
     rssConfig: parseRssChannelConfig({
       maxItemsPerPoll: 5,
       requestTimeoutMs: 2000,
-      userAgent: "NewsPortalFetchers/Test",
+      userAgent: "SignalOpsFetchers/Test",
       preferContentEncoded: true
     }),
     fetchedAt: "2026-04-07T10:00:00.000Z",
@@ -91,7 +91,7 @@ test("Reddit adapter parses entity-heavy Atom feeds without the generic parser o
     rssConfig: parseRssChannelConfig({
       maxItemsPerPoll: 5,
       requestTimeoutMs: 2000,
-      userAgent: "NewsPortalFetchers/Test",
+      userAgent: "SignalOpsFetchers/Test",
       preferContentEncoded: true
     }),
     fetchedAt: "2026-04-07T10:00:00.000Z",
@@ -150,7 +150,7 @@ test("Hacker News adapter extracts outbound article URLs, preserves discussion p
     rssConfig: parseRssChannelConfig({
       maxItemsPerPoll: 10,
       requestTimeoutMs: 2000,
-      userAgent: "NewsPortalFetchers/Test",
+      userAgent: "SignalOpsFetchers/Test",
       preferContentEncoded: true
     }),
     fetchedAt: "2026-04-07T10:00:00.000Z",
@@ -218,7 +218,7 @@ test("Google News adapter resolves publisher URLs with a per-poll cache and keep
       rssConfig: parseRssChannelConfig({
         maxItemsPerPoll: 10,
         requestTimeoutMs: 2000,
-        userAgent: "NewsPortalFetchers/Test",
+        userAgent: "SignalOpsFetchers/Test",
         preferContentEncoded: true,
         adapterStrategy: "google_news_rss"
       }),

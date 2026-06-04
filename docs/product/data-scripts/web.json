@@ -15,7 +15,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -72,7 +72,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -126,7 +126,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -181,7 +181,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -235,7 +235,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -292,7 +292,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -345,7 +345,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -398,7 +398,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -450,7 +450,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -503,7 +503,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -555,7 +555,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -608,7 +608,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -665,7 +665,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -722,7 +722,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -778,7 +778,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -833,7 +833,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -889,7 +889,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -944,7 +944,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -999,7 +999,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -1054,7 +1054,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 1800,
       "maxPollIntervalSeconds": 28800,
@@ -1108,7 +1108,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1161,7 +1161,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1213,7 +1213,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1267,7 +1267,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1321,7 +1321,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1368,7 +1368,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1420,7 +1420,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1474,7 +1474,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1526,7 +1526,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,
@@ -1579,7 +1579,7 @@
     "recommendedConfig": {
       "adaptive": true,
       "crawlDelayMs": 1000,
-      "userAgent": "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+      "userAgent": "SignalOpsFetchers/0.1 (+https://signalops.local)",
       "authorizationHeader": "",
       "pollIntervalSeconds": 900,
       "maxPollIntervalSeconds": 14400,

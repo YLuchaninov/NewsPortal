@@ -28,7 +28,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY services/relay/package.json services/relay/package.json
 
-RUN pnpm install --frozen-lockfile --prod --filter @newsportal/relay...
+RUN pnpm install --frozen-lockfile --prod --filter @signalops/relay...
 
 COPY --from=builder --chown=node:node /workspace/services/relay/dist services/relay/dist
 COPY --chown=node:node database/migrations database/migrations

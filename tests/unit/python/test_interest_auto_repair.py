@@ -1089,15 +1089,15 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         cursor = _RecordingCursor()
         connection = _RecordingConnection(cursor)
 
-        with (
-            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
-            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
-            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
-            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
-            patch.object(
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)))
+            stack.enter_context(patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)))
+            stack.enter_context(patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)))
+            stack.enter_context(patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])))
+            stack.enter_context(patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)))
+            stack.enter_context(patch.object(
                 worker_main,
                 "get_llm_review_monthly_quota_snapshot",
                 AsyncMock(
@@ -1111,16 +1111,18 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                         "monthStart": "2026-04-01T00:00:00+00:00",
                     }
                 ),
-            ),
-            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
-            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.25)),
-            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
-            patch.object(worker_main, "semantic_prototype_score", return_value=0.0),
-            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
-            patch.object(worker_main, "compute_criterion_final_score", return_value=0.6),
-            patch.object(worker_main, "decide_criterion", return_value="gray_zone"),
-            patch.object(worker_main, "insert_outbox_event", AsyncMock()) as insert_outbox_event,
-            patch.object(
+            ))
+            stack.enter_context(patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)))
+            stack.enter_context(patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.25)))
+            stack.enter_context(patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])))
+            stack.enter_context(patch.object(worker_main, "semantic_prototype_score", return_value=0.0))
+            stack.enter_context(patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})))
+            stack.enter_context(patch.object(worker_main, "compute_criterion_final_score", return_value=0.6))
+            stack.enter_context(patch.object(worker_main, "decide_criterion", return_value="gray_zone"))
+            insert_outbox_event = stack.enter_context(
+                patch.object(worker_main, "insert_outbox_event", AsyncMock())
+            )
+            stack.enter_context(patch.object(
                 worker_main,
                 "upsert_system_feed_result",
                 AsyncMock(
@@ -1130,10 +1132,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                         "previous_eligible_for_feed": False,
                     }
                 ),
-            ),
-            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
-            patch.object(worker_main, "record_processed_event", AsyncMock()),
-        ):
+            ))
+            stack.enter_context(patch.object(worker_main, "should_dispatch_clustering", return_value=False))
+            stack.enter_context(patch.object(worker_main, "record_processed_event", AsyncMock()))
             result = await worker_main.process_match_criteria(
                 SimpleNamespace(
                     data={
@@ -1192,15 +1193,15 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         cursor = _RecordingCursor()
         connection = _RecordingConnection(cursor)
 
-        with (
-            patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
-            patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
-            patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
-            patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
-            patch.object(
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)))
+            stack.enter_context(patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)))
+            stack.enter_context(patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)))
+            stack.enter_context(patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])))
+            stack.enter_context(patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)))
+            stack.enter_context(patch.object(
                 worker_main,
                 "get_llm_review_monthly_quota_snapshot",
                 AsyncMock(
@@ -1214,15 +1215,15 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                         "monthStart": "2026-04-01T00:00:00+00:00",
                     }
                 ),
-            ),
-            patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
-            patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.22)),
-            patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])),
-            patch.object(worker_main, "semantic_prototype_score", side_effect=[0.28, 0.0]),
-            patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})),
-            patch.object(worker_main, "compute_criterion_final_score", return_value=0.445),
-            patch.object(worker_main, "decide_criterion", return_value="irrelevant"),
-            patch.object(
+            ))
+            stack.enter_context(patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)))
+            stack.enter_context(patch.object(worker_main, "compute_lexical_score", AsyncMock(return_value=0.22)))
+            stack.enter_context(patch.object(worker_main, "fetch_embedding_vectors_by_ids", AsyncMock(return_value=[])))
+            stack.enter_context(patch.object(worker_main, "semantic_prototype_score", side_effect=[0.28, 0.0]))
+            stack.enter_context(patch.object(worker_main, "compute_criterion_meta_score", return_value=(0.0, {})))
+            stack.enter_context(patch.object(worker_main, "compute_criterion_final_score", return_value=0.445))
+            stack.enter_context(patch.object(worker_main, "decide_criterion", return_value="irrelevant"))
+            stack.enter_context(patch.object(
                 worker_main,
                 "resolve_interest_filter_context",
                 AsyncMock(
@@ -1234,9 +1235,11 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                         "verificationState": "medium",
                     }
                 ),
-            ),
-            patch.object(worker_main, "insert_outbox_event", AsyncMock()) as insert_outbox_event,
-            patch.object(
+            ))
+            insert_outbox_event = stack.enter_context(
+                patch.object(worker_main, "insert_outbox_event", AsyncMock())
+            )
+            stack.enter_context(patch.object(
                 worker_main,
                 "upsert_system_feed_result",
                 AsyncMock(
@@ -1246,10 +1249,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                         "previous_eligible_for_feed": False,
                     }
                 ),
-            ),
-            patch.object(worker_main, "should_dispatch_clustering", return_value=False),
-            patch.object(worker_main, "record_processed_event", AsyncMock()),
-        ):
+            ))
+            stack.enter_context(patch.object(worker_main, "should_dispatch_clustering", return_value=False))
+            stack.enter_context(patch.object(worker_main, "record_processed_event", AsyncMock()))
             result = await worker_main.process_match_criteria(
                 SimpleNamespace(
                     data={

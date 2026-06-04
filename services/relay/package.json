@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/relay",
+  "name": "@signalops/relay",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@newsportal/contracts": "workspace:*",
+    "@signalops/contracts": "workspace:*",
     "bullmq": "5.76.10",
     "fastify": "5.8.5",
     "ioredis": "5.10.1",

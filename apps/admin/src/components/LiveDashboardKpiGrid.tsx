@@ -83,7 +83,7 @@ export function LiveDashboardKpiGrid({
   const [summary, setSummary] = useState(initialSummary);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (isAdminLiveSurfaceSnapshot(currentSnapshot, "dashboard")) {
       setSummary(currentSnapshot.summary);
     }

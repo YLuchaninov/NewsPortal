@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/mcp",
+  "name": "@signalops/mcp",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,10 +9,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@newsportal/config": "workspace:*",
-    "@newsportal/contracts": "workspace:*",
-    "@newsportal/control-plane": "workspace:*",
-    "@newsportal/sdk": "workspace:*",
+    "@signalops/config": "workspace:*",
+    "@signalops/contracts": "workspace:*",
+    "@signalops/control-plane": "workspace:*",
+    "@signalops/sdk": "workspace:*",
     "fastify": "5.8.5",
     "pg": "^8.16.3"
   }

@@ -12,21 +12,21 @@ import psycopg
 from psycopg.rows import dict_row
 
 HEURISTIC_NER_PROVIDER = "heuristic"
-HEURISTIC_NER_MODEL_KEY = "newsportal-titlecase-v1"
+HEURISTIC_NER_MODEL_KEY = "signalops-titlecase-v1"
 HEURISTIC_NER_MODEL_VERSION = "1"
-SYSTEM_LABEL_PROVIDER = "newsportal"
+SYSTEM_LABEL_PROVIDER = "signalops"
 SYSTEM_LABEL_MODEL_KEY = "interest-filter-projection"
 SYSTEM_LABEL_MODEL_VERSION = "1"
-CONTENT_FILTER_PROVIDER = "newsportal"
+CONTENT_FILTER_PROVIDER = "signalops"
 CONTENT_FILTER_MODEL_KEY = "content-filter-policy"
 CONTENT_FILTER_MODEL_VERSION = "1"
-SENTIMENT_PROVIDER = "newsportal"
+SENTIMENT_PROVIDER = "signalops"
 SENTIMENT_MODEL_KEY = "lexicon-sentiment-v1"
 SENTIMENT_MODEL_VERSION = "1"
-CATEGORY_PROVIDER = "newsportal"
+CATEGORY_PROVIDER = "signalops"
 CATEGORY_MODEL_KEY = "lexicon-taxonomy-v1"
 CATEGORY_MODEL_VERSION = "1"
-CLUSTER_SUMMARY_PROVIDER = "newsportal"
+CLUSTER_SUMMARY_PROVIDER = "signalops"
 CLUSTER_SUMMARY_MODEL_KEY = "story-cluster-summary-v1"
 CLUSTER_SUMMARY_MODEL_VERSION = "1"
 STRUCTURED_EXTRACTION_PROVIDER = "gemini"
@@ -71,14 +71,14 @@ def build_database_url() -> str:
     if os.getenv("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
 
-    user = os.getenv("POSTGRES_USER", "newsportal")
-    password = os.getenv("POSTGRES_PASSWORD", "newsportal")
+    user = os.getenv("POSTGRES_USER", "signalops")
+    password = os.getenv("POSTGRES_PASSWORD", "signalops")
     host = os.getenv("POSTGRES_HOST", "127.0.0.1")
     port = os.getenv(
         "POSTGRES_PORT",
         "55432" if host in {"127.0.0.1", "localhost"} else "5432",
     )
-    database = os.getenv("POSTGRES_DB", "newsportal")
+    database = os.getenv("POSTGRES_DB", "signalops")
     return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 

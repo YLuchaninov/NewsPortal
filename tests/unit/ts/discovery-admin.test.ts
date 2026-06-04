@@ -3,12 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { readRuntimeConfig } from "../../../packages/config/src/index.ts";
-import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
+import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
 import * as discoveryBff from "../../../apps/admin/src/pages/bff/admin/discovery.ts";
 
 test("listDiscoveryVNextRecords preserves vNext filters and pagination params", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -46,7 +46,7 @@ test("listDiscoveryVNextRecords preserves vNext filters and pagination params", 
 test("createDiscoveryVNextRun posts to the vNext runs endpoint", async () => {
   let requestedUrl = "";
   let requestedMethod = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -127,8 +127,8 @@ test("Discovery vNext admin workspace exposes full resources and detail links", 
 test("readRuntimeConfig keeps discovery runtime defaults and quota support", () => {
   const defaults = readRuntimeConfig(
     {
-      NEWSPORTAL_APP_BASE_URL: "http://127.0.0.1:4321/",
-      NEWSPORTAL_API_BASE_URL: "http://127.0.0.1:8000",
+      SIGNALOPS_APP_BASE_URL: "http://127.0.0.1:4321/",
+      SIGNALOPS_API_BASE_URL: "http://127.0.0.1:8000",
       GEMINI_MODEL: "gemini-legacy",
     },
     {}
@@ -142,8 +142,8 @@ test("readRuntimeConfig keeps discovery runtime defaults and quota support", () 
 
   const overridden = readRuntimeConfig(
     {
-      NEWSPORTAL_APP_BASE_URL: "http://127.0.0.1:4321/",
-      NEWSPORTAL_API_BASE_URL: "http://127.0.0.1:8000",
+      SIGNALOPS_APP_BASE_URL: "http://127.0.0.1:4321/",
+      SIGNALOPS_API_BASE_URL: "http://127.0.0.1:8000",
       DISCOVERY_SEARCH_PROVIDER: "stub",
       DISCOVERY_GEMINI_MODEL: "gemini-discovery",
       DISCOVERY_MONTHLY_BUDGET_CENTS: "2500",
@@ -163,7 +163,7 @@ test("readRuntimeConfig keeps discovery runtime defaults and quota support", () 
 
 test("getLlmBudgetSummary uses the maintenance endpoint", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);

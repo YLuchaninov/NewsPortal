@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { defaultMaxPollIntervalSeconds } from "@newsportal/contracts";
+import { defaultMaxPollIntervalSeconds } from "@signalops/contracts";
 import type { Pool, PoolClient } from "pg";
 
 import {

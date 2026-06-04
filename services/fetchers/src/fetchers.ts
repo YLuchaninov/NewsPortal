@@ -3,7 +3,7 @@ import {
   defaultMaxEntryAgeHoursForFeedIngressAdapter,
   ingressAdapterKeyToLegacyRssStrategy,
   type HealthResponse
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import { AsyncSemaphore } from "./async-semaphore";

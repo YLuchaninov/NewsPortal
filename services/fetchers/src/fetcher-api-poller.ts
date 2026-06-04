@@ -2,7 +2,7 @@ import {
   ingressAdapterKeyToLegacyApiAdapterKey,
   parseApiChannelConfig,
   resolveSourceChannelAuthorizationHeader
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import type { FetchersConfig } from "./config";
 import {

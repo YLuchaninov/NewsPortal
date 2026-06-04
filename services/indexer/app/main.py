@@ -10,7 +10,7 @@ from .store import InterestCentroidIndexer
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="NewsPortal phase-3 indexer tools")
+    parser = argparse.ArgumentParser(description="SignalOps phase-3 indexer tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("rebuild-interest-centroids")
     subparsers.add_parser("rebuild-event-cluster-centroids")

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { PaginationNav } from "@newsportal/ui";
+import { PaginationNav } from "@signalops/ui";
 
 import {
   ADMIN_LIVE_UPDATES_EVENT,
@@ -120,7 +120,7 @@ export function LiveReindexJobsSection({
   }, [hydratedInitialJobs, initialJobs]);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalAdminLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsAdminLiveUpdates?.snapshot;
     if (isAdminLiveSurfaceSnapshot(currentSnapshot, "reindex")) {
       setJobs(hydrateTimestampLabels(currentSnapshot.jobs));
       if (currentPage === 1) {

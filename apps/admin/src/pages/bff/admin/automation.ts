@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
-import { readRuntimeConfig } from "@newsportal/config";
-import { MCP_SEQUENCE_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { MCP_SEQUENCE_PAYLOAD_SCHEMAS } from "@signalops/contracts";
 
 import type { AdminActionContext } from "../../../lib/server/admin-action";
 import {

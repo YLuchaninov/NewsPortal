@@ -1,4 +1,4 @@
-import type { parseApiChannelConfig } from "@newsportal/contracts";
+import type { parseApiChannelConfig } from "@signalops/contracts";
 
 import {
   getByPath,

@@ -10,13 +10,13 @@ export default {
   reporter: process.env.CI ? [["dot"], ["html", { open: "never" }]] : "list",
   webServer: [
     {
-      command: "pnpm --filter @newsportal/web dev",
+      command: "pnpm --filter @signalops/web dev",
       url: new URL("/api/health", webBaseUrl).toString(),
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
-      command: "pnpm --filter @newsportal/admin dev",
+      command: "pnpm --filter @signalops/admin dev",
       url: new URL("/api/health", process.env.E2E_ADMIN_BASE_URL ?? "http://127.0.0.1:4322").toString(),
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

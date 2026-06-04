@@ -3,7 +3,7 @@ import type {
   PaginatedResponse,
   UserContentSavedState,
   UserContentStateView,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 const DEFAULT_PAGE = 1;

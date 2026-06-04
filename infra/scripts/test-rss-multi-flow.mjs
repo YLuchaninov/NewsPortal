@@ -119,7 +119,7 @@ function buildFixtureXml({ title, guid, url, summary, body, publishedAt }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>NewsPortal multi RSS fixture</title>
+    <title>SignalOps multi RSS fixture</title>
     <language>en-US</language>
     <item>
       <guid>${guid}</guid>
@@ -258,7 +258,7 @@ function buildBulkChannels(fixtures, port) {
     pollIntervalSeconds: 1,
     maxItemsPerPoll: 5,
     requestTimeoutMs: fixture.profile === "timeout" ? 250 : 4000,
-    userAgent: "NewsPortalFetchers/multi-flow-proof",
+    userAgent: "SignalOpsFetchers/multi-flow-proof",
     preferContentEncoded: fixture.profile !== "duplicate",
     isActive: true
   }));
@@ -301,7 +301,7 @@ async function main() {
   const adminEmail = selectAdminEmail(allowlistEntries, runId, {
     prefix: "rss-admin",
   });
-  const adminPassword = `NewsPortal!${runId}`;
+  const adminPassword = `SignalOps!${runId}`;
   const fixtures = buildFixtures(runId, options.channelCount, options.profiles);
   const { successfulFixtures, failedFixtures, successfulCount, failedCount } =
     collectExpectedCounts(fixtures);
@@ -398,7 +398,7 @@ async function main() {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once"
     );
 
@@ -608,7 +608,7 @@ async function main() {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once"
     );
 

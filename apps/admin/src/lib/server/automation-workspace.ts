@@ -1,5 +1,5 @@
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import {
   listRecentAutomationOutboxEvents,
@@ -15,7 +15,7 @@ function createAutomationSdk() {
   const runtimeConfig = readRuntimeConfig(process.env, {
     defaultAppBaseUrl: "http://127.0.0.1:4322/",
   });
-  return createNewsPortalSdk({
+  return createSignalOpsSdk({
     baseUrl: runtimeConfig.apiBaseUrl,
     fetchImpl: fetch,
   });

@@ -40,7 +40,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Diagnose this NewsPortal MCP error while trying to ${objective}: "${error}". ` +
+                `Diagnose this SignalOps MCP error while trying to ${objective}: "${error}". ` +
                 `First classify whether it is transport, authentication/scope, input schema, backend validation, or business-state related. ` +
                 `Use MCP read tools before shell/raw SQL, inspect tool inputSchema/outputSchema, and propose the smallest safe correction. ` +
                 `For cleanup/token lifecycle issues, use admin.mcp_tokens.list/revoke/delete_revoked when the token has the needed scopes. Do not bypass MCP with direct admin REST calls and do not guess mcp_access_tokens columns.`,
@@ -52,7 +52,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "operator.session.start",
-    description: "Starter guidance for understanding and safely using the NewsPortal MCP server.",
+    description: "Starter guidance for understanding and safely using the SignalOps MCP server.",
     arguments: [
       { name: "objective", description: "What the operator or agent wants to accomplish.", required: true },
       { name: "domain", description: "Primary MCP domain such as discovery, sequences, templates, channels, or system interests." },
@@ -61,15 +61,15 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
       const objective = readRequiredString(args.objective, "objective");
       const domain = readOptionalString(args.domain) ?? "the relevant operator domain";
       return {
-        description: "NewsPortal MCP operator orientation",
+        description: "SignalOps MCP operator orientation",
         messages: [
           {
             role: "user",
             content: {
               type: "text",
               text:
-                `You are starting a NewsPortal MCP operator session for objective "${objective}" in ${domain}. ` +
-                `First orient yourself with the guide resources newsportal://guide/server-overview and newsportal://guide/operator-playbooks, then read the current operator state through newsportal://admin/summary and the relevant domain list/read tools. ` +
+                `You are starting a SignalOps MCP operator session for objective "${objective}" in ${domain}. ` +
+                `First orient yourself with the guide resources signalops://guide/server-overview and signalops://guide/operator-playbooks, then read the current operator state through signalops://admin/summary and the relevant domain list/read tools. ` +
                 `Prefer bounded read-before-write workflow, use drafting prompts before complex writes, require explicit confirmation for destructive actions, and always verify resulting state after mutations.`,
             },
           },
@@ -93,8 +93,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP sequence session for objective "${objective}". ` +
-                `Read newsportal://guide/scenarios/sequences, newsportal://admin/summary, and newsportal://sequences first. ` +
+                `Plan a SignalOps MCP sequence session for objective "${objective}". ` +
+                `Read signalops://guide/scenarios/sequences, signalops://admin/summary, and signalops://sequences first. ` +
                 `If the sequence shape is non-trivial, draft it with sequence.draft before writes. ` +
                 `After create/update/run actions, read sequence and run state back before deciding to cancel, retry, or archive.`,
             },
@@ -119,8 +119,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP Discovery vNext session for objective "${objective}". ` +
-                `Read newsportal://guide/scenarios/discovery, newsportal://discovery/runs, newsportal://discovery/artifacts, newsportal://discovery/candidates, newsportal://discovery/source-inventory, newsportal://discovery/policies, and newsportal://discovery/eval-runs first. ` +
+                `Plan a SignalOps MCP Discovery vNext session for objective "${objective}". ` +
+                `Read signalops://guide/scenarios/discovery, signalops://discovery/runs, signalops://discovery/artifacts, signalops://discovery/candidates, signalops://discovery/source-inventory, signalops://discovery/policies, and signalops://discovery/eval-runs first. ` +
                 `If the operator references a manual/example bundle that worked before, run a funnel-calibration pass first: compare current system interests, LLM templates, channels, bottlenecks, residuals, vNext artifacts, source inventory, and policy state against the bundle's signal families, source capability classes, negative cues, and review policy, then produce a portable funnel spec before starting broad source expansion. ` +
                 `Unless the operator explicitly asks for manual approval, make the plan guarded-automation-first: create a vNext run, compile a DiscoveryBrief, run bounded mega-loop/candidate/probe steps, and rely on SourceUnderstanding, RoutingDecision, active policy, and replay proof where evidence is sufficient. ` +
                 `Use discovery.artifact.review, discovery.source_understanding.review, or discovery.policy.tune when hypothesis boundaries, provider choices, routing evidence, or policy fit need tightening. ` +
@@ -151,8 +151,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Calibrate a NewsPortal product funnel for objective "${objective}" using reference evidence "${referenceEvidence}" and current gap "${currentGap}". ` +
-                `Read newsportal://guide/scenarios/funnel-calibration and call operator.funnel.audit plus operator.funnel.autoplan first when available, then inspect system_interests.list/read, system_interests.compile_status.list, templates.duplicates.audit, llm_templates.list/read, channels.bottlenecks.summary/list, articles.residuals.summary, content_items.list, discovery.runs.list, discovery.artifacts.list, discovery.source_inventory.list, discovery.policies.list, and operator.report.verify before proposing writes. ` +
+                `Calibrate a SignalOps product funnel for objective "${objective}" using reference evidence "${referenceEvidence}" and current gap "${currentGap}". ` +
+                `Read signalops://guide/scenarios/funnel-calibration and call operator.funnel.audit plus operator.funnel.autoplan first when available, then inspect system_interests.list/read, system_interests.compile_status.list, templates.duplicates.audit, llm_templates.list/read, channels.bottlenecks.summary/list, articles.residuals.summary, content_items.list, discovery.runs.list, discovery.artifacts.list, discovery.source_inventory.list, discovery.policies.list, and operator.report.verify before proposing writes. ` +
                 `Extract reusable patterns from the reference into a portable funnel spec: objective, actor/buyer model, signal families, source capability mix, positive cues, near-miss negative cues, allowed content kinds, strictness/review policy, LLM review scope, provider/adapter requirements, observation budget, and expected read-back proof. ` +
                 `Separate recommendations by layer: source acquisition breadth, source-family balance, source technical health/repair, candidate or gray-zone recovery, final selected-content precision, and reporting/proof. Retain working noisy, low-yield, and negative-control useful channels unless the operator explicitly disables them; recommend labeling, measurement, cadence changes, or repair instead of auto-disabling semantically plausible working sources. ` +
                 `If the operator asks only to improve the system or generalize the approach, return rules, prompts, and product-flow recommendations without mutating domain configuration. If the operator asks to run a domain product test, then return a bounded MCP-only mutation plan: which interests/templates/channels and Discovery vNext artifacts or policies should be updated or created, which source classes need adapters rather than fake RSS/website rows, what reindex/backfill is needed, and how to verify precision and web-visible selected counts. ` +
@@ -185,9 +185,9 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal Discovery vNext live MCP gap-hunting run for objective "${objective}". ` +
+                `Plan a SignalOps Discovery vNext live MCP gap-hunting run for objective "${objective}". ` +
                 `Use scenario packs ${scenarioPacks} with ${budget}. ` +
-                `Read newsportal://guide/scenarios/discovery-live-gap-hunting, newsportal://guide/scenarios/discovery, newsportal://guide/scenarios/funnel-calibration and newsportal://guide/operating-model first. ` +
+                `Read signalops://guide/scenarios/discovery-live-gap-hunting, signalops://guide/scenarios/discovery, signalops://guide/scenarios/funnel-calibration and signalops://guide/operating-model first. ` +
                 `Use only MCP tools for product actions: create/read system interests, inspect recommendations, execute live discovery runs, poll diagnostics, apply probation handoff only when routing recommends it, submit feedback, replay persisted inputs, and verify reports. ` +
                 `Classify any failure as missing_mcp_surface, schema_gap, runtime_gap, diagnostic_gap, policy_gap, or provider_gap, then fix interface/runtime gaps before treating the proof as complete. ` +
                 `Keep live evidence for manual inspection unless the operator explicitly requests cleanup.`,
@@ -237,8 +237,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP system-interest session for topic "${topic}". ` +
-                `Read newsportal://guide/scenarios/system-interests and newsportal://system-interests first to avoid overlap. ` +
+                `Plan a SignalOps MCP system-interest session for topic "${topic}". ` +
+                `Read signalops://guide/scenarios/system-interests and signalops://system-interests first to avoid overlap. ` +
                 `Use system_interest.create to draft bounded signals before writes, prefer archive before delete when history matters, and always verify the resulting lifecycle state after mutation.`,
             },
           },
@@ -262,8 +262,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP LLM template session for intent "${templateIntent}". ` +
-                `Read newsportal://guide/scenarios/llm-templates and newsportal://templates/llm first, keep the change bounded to one template and one behavior goal, prefer archive before delete when lineage matters, and verify the updated template through read surfaces after mutation.`,
+                `Plan a SignalOps MCP LLM template session for intent "${templateIntent}". ` +
+                `Read signalops://guide/scenarios/llm-templates and signalops://templates/llm first, keep the change bounded to one template and one behavior goal, prefer archive before delete when lineage matters, and verify the updated template through read surfaces after mutation.`,
             },
           },
         ],
@@ -286,8 +286,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP channel session for source "${source}". ` +
-                `Read newsportal://guide/scenarios/channels and newsportal://channels first to detect overlap or duplication. ` +
+                `Plan a SignalOps MCP channel session for source "${source}". ` +
+                `Read signalops://guide/scenarios/channels and signalops://channels first to detect overlap or duplication. ` +
                 `If the channel originated from discovery, preserve the candidate evidence before manual edits. ` +
                 `Use delete only with explicit confirmation and verify catalog state after create/update/delete actions.`,
             },
@@ -312,8 +312,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Plan a NewsPortal MCP observability session for question "${question}". ` +
-                `Read newsportal://guide/scenarios/observability and newsportal://admin/summary first, then narrow to the relevant read surfaces such as fetch runs, web resources, sequence runs, discovery summary, or LLM budget. ` +
+                `Plan a SignalOps MCP observability session for question "${question}". ` +
+                `Read signalops://guide/scenarios/observability and signalops://admin/summary first, then narrow to the relevant read surfaces such as fetch runs, web resources, sequence runs, discovery summary, or LLM budget. ` +
                 `Keep the session read-only until the needed evidence is gathered and only then switch to a domain-specific write scenario if a change is truly needed.`,
             },
           },
@@ -323,7 +323,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "operations.daily_review",
-    description: "Run a daily read-only operational review of NewsPortal after setup.",
+    description: "Run a daily read-only operational review of SignalOps after setup.",
     arguments: [
       { name: "focus", description: "Optional focus such as channels, selection, discovery, or LLM budget." },
     ],
@@ -337,8 +337,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Review NewsPortal operational health for ${focus}. ` +
-                `Read newsportal://guide/operating-model, newsportal://ops/health, newsportal://ops/issues, and newsportal://ops/tuning-backlog. ` +
+                `Review SignalOps operational health for ${focus}. ` +
+                `Read signalops://guide/operating-model, signalops://ops/health, signalops://ops/issues, and signalops://ops/tuning-backlog. ` +
                 `Use operator.system.health for DB/API-backed counts. Report only verified state, separate normal low-yield states from failures, and recommend no mutations unless evidence points to a bounded tuning follow-up.`,
             },
           },
@@ -364,7 +364,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Triage NewsPortal symptom "${symptom}" with domain "${domain}". ` +
+                `Triage SignalOps symptom "${symptom}" with domain "${domain}". ` +
                 `Call operator.issue.explain with includeSamples=true, then inspect the listed source-of-truth rows using domain read/explain tools. ` +
                 `Classify whether this is normal policy behavior, stale async state, source acquisition failure, downstream selection/gating, budget pressure, or schema/client misuse. Do not mutate settings during triage.`,
             },
@@ -392,7 +392,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Prepare a read-first selection tuning plan for objective "${objective}" and residual pattern "${residualBucket}". ` +
-                `Read newsportal://guide/tuning/selection, articles.residuals.summary, representative articles.explain rows, and operator.tuning.recommend. ` +
+                `Read signalops://guide/tuning/selection, articles.residuals.summary, representative articles.explain rows, and operator.tuning.recommend. ` +
                 `Return suggested guarded MCP writes only as proposals, then require operator.effect.verify after any applied change.`,
             },
           },
@@ -416,8 +416,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Review NewsPortal channel health for ${channelId}. ` +
-                `Read newsportal://guide/diagnostics/channels, operator.system.health scoped to channels, channels.read/list, and fetch_runs.list. ` +
+                `Review SignalOps channel health for ${channelId}. ` +
+                `Read signalops://guide/diagnostics/channels, operator.system.health scoped to channels, channels.read/list, and fetch_runs.list. ` +
                 `Separate source fetch failures from downstream selection outcomes before recommending changes.`,
             },
           },
@@ -442,7 +442,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Review website pipeline behavior for ${channelId}. ` +
-                `Read newsportal://guide/diagnostics/website_pipeline, web_resources.list with projection=all, fetch_runs.list, and operator.issue.explain if resources are projected but rejected. ` +
+                `Read signalops://guide/diagnostics/website_pipeline, web_resources.list with projection=all, fetch_runs.list, and operator.issue.explain if resources are projected but rejected. ` +
                 `Explain resource_only, projected_to_common_pipeline, and final_selection rejected as separate states.`,
             },
           },
@@ -467,7 +467,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Review ${question}. ` +
-                `Read newsportal://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and article explains for representative gray-zone holds. ` +
+                `Read signalops://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and article explains for representative gray-zone holds. ` +
                 `Recommend cost tuning only through operator.tuning.recommend; do not edit templates or interests from one example alone.`,
             },
           },
@@ -494,7 +494,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Review Discovery vNext quality for run ${runId} and source inventory ${sourceInventoryId}. ` +
-                `Read newsportal://guide/diagnostics/discovery, discovery.runs.list, discovery.artifacts.list, discovery.candidates.list, discovery.source_inventory.list, discovery.policies.list, discovery.replay_runs.list, and discovery.rollback_groups.list. ` +
+                `Read signalops://guide/diagnostics/discovery, discovery.runs.list, discovery.artifacts.list, discovery.candidates.list, discovery.source_inventory.list, discovery.policies.list, discovery.replay_runs.list, and discovery.rollback_groups.list. ` +
                 `Explain routing by SourceUnderstanding, ProbeReport, RoutingDecision, active policy version, risk, observability, and adapter backlog state. Treat historical yield as telemetry only; never use it as a keep/drop reason.`,
             },
           },
@@ -520,7 +520,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Draft a NewsPortal system interest for topic "${topic}" aimed at ${audience}. ` +
+                `Draft a SignalOps system interest for topic "${topic}" aimed at ${audience}. ` +
                 `Return a concise interest payload with positive prototypes, near-miss negative prototypes, must-not terms, candidate uplift positive/negative cue groups, allowed content kinds, places, languages, strictness/review-policy recommendation, and priority. ` +
                 `For rare-signal funnels, keep must-have terms and time windows empty unless a marker is truly mandatory; prefer negative cues and LLM review to preserve recall while filtering near-miss noise.`,
             },
@@ -547,7 +547,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Use newsportal://guide/scenarios/article-diagnostics and the current article/content diagnostics to tune the system interest "${interestName}". ` +
+                `Use signalops://guide/scenarios/article-diagnostics and the current article/content diagnostics to tune the system interest "${interestName}". ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
                 `Return a bounded recommendation covering: what evidence suggests the current scope is too narrow or too broad, which positive/negative signals and candidate cue groups should change, whether short-form buyer/project evidence should recover items into gray/LLM/hold despite weak semantic similarity, whether hard gates such as must-have terms or time windows would harm recall for rare signals, what should stay unchanged, and what follow-up read-after-write checks an operator should perform. Do not auto-write changes.`,
             },
@@ -574,9 +574,9 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Use newsportal://guide/scenarios/article-diagnostics and current article/content residual evidence to tune the LLM template "${templateName}". ` +
+                `Use signalops://guide/scenarios/article-diagnostics and current article/content residual evidence to tune the LLM template "${templateName}". ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
-                `Return a bounded recommendation describing which prompt instructions, output expectations, or review thresholds should change, which reference-bundle guardrails should be preserved, which parts should remain stable, and how to verify the change through NewsPortal MCP after an operator applies it. Do not auto-write changes.`,
+                `Return a bounded recommendation describing which prompt instructions, output expectations, or review thresholds should change, which reference-bundle guardrails should be preserved, which parts should remain stable, and how to verify the change through SignalOps MCP after an operator applies it. Do not auto-write changes.`,
             },
           },
         ],
@@ -601,7 +601,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Use newsportal://guide/scenarios/article-diagnostics and the relevant Discovery vNext run, artifact, candidate, source inventory, policy, replay, and rollback reads to tune "${targetTitle}" from downstream evidence. ` +
+                `Use signalops://guide/scenarios/article-diagnostics and the relevant Discovery vNext run, artifact, candidate, source inventory, policy, replay, and rollback reads to tune "${targetTitle}" from downstream evidence. ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
                 `Return a bounded recommendation covering brief constraints, mega-loop budget, probe policy, source understanding evidence, routing policy, adapter backlog criteria, and what replay eval or follow-up checks should confirm the change. Preserve the invariant that downstream diagnostics inform operators but do not become direct auto-approval inputs. Do not auto-write changes.`,
             },
@@ -627,7 +627,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             role: "user",
             content: {
               type: "text",
-              text: `Review Discovery vNext item "${targetTitle}" for NewsPortal. Check whether the goal "${goal}" is bounded, whether DiscoveryBrief constraints, source capability expectations, provider capabilities, diversity budget, active policies, risk gates, and probation handoff criteria are proportional, and what should be adjusted before route, register, replay, or rollback.`,
+              text: `Review Discovery vNext item "${targetTitle}" for SignalOps. Check whether the goal "${goal}" is bounded, whether DiscoveryBrief constraints, source capability expectations, provider capabilities, diversity budget, active policies, risk gates, and probation handoff criteria are proportional, and what should be adjusted before route, register, replay, or rollback.`,
             },
           },
         ],
@@ -649,7 +649,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             role: "user",
             content: {
               type: "text",
-              text: `Draft a bounded NewsPortal sequence for objective "${objective}". Return a taskGraph outline, trigger recommendation, and safe operator notes before creating the sequence through MCP.`,
+              text: `Draft a bounded SignalOps sequence for objective "${objective}". Return a taskGraph outline, trigger recommendation, and safe operator notes before creating the sequence through MCP.`,
             },
           },
         ],
@@ -672,7 +672,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Prepare a safe cleanup checklist for NewsPortal MCP work covering "${scope}". ` +
+                `Prepare a safe cleanup checklist for SignalOps MCP work covering "${scope}". ` +
                 `Separate reversible actions, destructive actions that require confirmation, and artifacts that should remain for audit or acceptance proof. ` +
                 `Use MCP read tools before shell or raw SQL. For MCP token lifecycle, use admin.mcp_tokens.list/revoke/delete_revoked if scopes allow it; otherwise report the missing scope and do not call admin REST directly. ` +
                 `Do not guess mcp_access_tokens columns such as id, name, is_active, or is_revoked because those are not schema columns. Leave migration-owned default/adaptive/system sequences unchanged.`,

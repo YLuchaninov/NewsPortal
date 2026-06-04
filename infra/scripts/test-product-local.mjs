@@ -181,7 +181,7 @@ function buildCommandList(mode) {
 
 function buildCleanupChecklist() {
   return [
-    "Review /tmp/newsportal-*.json and /tmp/newsportal-*.md artifacts for the current run.",
+    "Review /tmp/signalops-*.json and /tmp/signalops-*.md artifacts for the current run.",
     "Confirm temporary Firebase admin identities from harnesses were deleted or recorded as residue.",
     "Confirm disposable MCP tokens were revoked by the MCP harness cleanup.",
     "Confirm temporary source channels, discovery profiles/candidates and notification rows are either acceptable local residue or reset with pnpm dev:mvp:internal:down:volumes.",
@@ -215,7 +215,7 @@ function buildIncludedLanes(mode) {
 
 function formatMarkdown(report) {
   const lines = [
-    `# NewsPortal Local Product Test ${report.runId}`,
+    `# SignalOps Local Product Test ${report.runId}`,
     "",
     `- Mode: \`${report.mode}\``,
     `- Status: \`${report.status}\``,
@@ -265,8 +265,8 @@ function formatMarkdown(report) {
 }
 
 async function writeArtifacts(report) {
-  const jsonPath = `/tmp/newsportal-product-local-${report.mode}-${report.runId}.json`;
-  const mdPath = `/tmp/newsportal-product-local-${report.mode}-${report.runId}.md`;
+  const jsonPath = `/tmp/signalops-product-local-${report.mode}-${report.runId}.json`;
+  const mdPath = `/tmp/signalops-product-local-${report.mode}-${report.runId}.md`;
   const reportWithArtifactPaths = {
     ...report,
     artifacts: {
@@ -324,7 +324,7 @@ async function main() {
         ? "preflight-passed"
         : "passed";
   const report = await writeArtifacts({
-    kind: "newsportal-local-product-test",
+    kind: "signalops-local-product-test",
     runId,
     mode: args.mode,
     status,

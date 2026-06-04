@@ -11,8 +11,8 @@
 ## Truth model
 
 - `services/fetchers` owns fetch/extract/enrichment handoff and raw/resource/article persistence.
-- Rendered article/resource HTML is untrusted provider content until passed through the shared server-side `@newsportal/content-safety` sanitizer allowlist.
-- Public/admin article and resource detail pages must not use local regex sanitizers for persisted provider HTML; they should call `sanitizeHtmlFragment` from `@newsportal/content-safety`. Inline admin SVG icons are trusted UI chrome only when sourced from static icon maps, not persisted/operator content.
+- Rendered article/resource HTML is untrusted provider content until passed through the shared server-side `@signalops/content-safety` sanitizer allowlist.
+- Public/admin article and resource detail pages must not use local regex sanitizers for persisted provider HTML; they should call `sanitizeHtmlFragment` from `@signalops/content-safety`. Inline admin SVG icons are trusted UI chrome only when sourced from static icon maps, not persisted/operator content.
 - `document_observations` are additive evidence and must not disappear because an early semantic gate rejects content.
 - `canonical_documents` are primary dedup/evidence units; duplicate article rows may exist and must preserve provenance.
 - `verification_results` express corroboration/evidence quality and are not the same as semantic match.

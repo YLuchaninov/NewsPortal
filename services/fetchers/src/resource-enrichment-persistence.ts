@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { ARTICLE_INGEST_REQUESTED_EVENT, type ResourceKind } from "@newsportal/contracts";
+import { ARTICLE_INGEST_REQUESTED_EVENT, type ResourceKind } from "@signalops/contracts";
 import type { Pool, PoolClient } from "pg";
 
 import type { FetchersConfig } from "./config";

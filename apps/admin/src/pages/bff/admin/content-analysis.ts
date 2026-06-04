@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import {
   adminActionError,
@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ request }) => {
   const runtimeConfig = readRuntimeConfig(process.env, {
     defaultAppBaseUrl: "http://127.0.0.1:4322/",
   });
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: runtimeConfig.apiBaseUrl,
     fetchImpl: fetch,
   });

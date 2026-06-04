@@ -10,10 +10,10 @@ import {
 test("MCP doc-parity matrix separates shipped coverage from deferred planning-doc entries", () => {
   const matrix = buildMcpDocParityMatrix({
     shippedTools: [{ name: "admin.summary.get" }, { name: "channels.create" }],
-    shippedResources: [{ uri: "newsportal://admin/summary" }],
+    shippedResources: [{ uri: "signalops://admin/summary" }],
     shippedPrompts: [{ name: "sequence.draft" }],
     coveredTools: ["admin.summary.get", "channels.create"],
-    coveredResources: ["newsportal://admin/summary"],
+    coveredResources: ["signalops://admin/summary"],
     coveredPrompts: ["sequence.draft"],
   });
 
@@ -24,7 +24,7 @@ test("MCP doc-parity matrix separates shipped coverage from deferred planning-do
     (entry) => entry.name === "system_interest.polish"
   );
   const deferredResource = matrix.legacy.resources.find(
-    (entry) => entry.uri === "newsportal://discovery/source-inventory"
+    (entry) => entry.uri === "signalops://discovery/source-inventory"
   );
   const nonHttpExample = matrix.legacy.examples.find(
     (entry) => entry.name === "stdio-first local MCP workflow"
@@ -38,16 +38,16 @@ test("MCP doc-parity matrix separates shipped coverage from deferred planning-do
 test("MCP doc-parity matrix reports shipped entries that were not exercised", () => {
   const matrix = buildMcpDocParityMatrix({
     shippedTools: [{ name: "admin.summary.get" }, { name: "channels.create" }],
-    shippedResources: [{ uri: "newsportal://admin/summary" }, { uri: "newsportal://channels" }],
+    shippedResources: [{ uri: "signalops://admin/summary" }, { uri: "signalops://channels" }],
     shippedPrompts: [{ name: "sequence.draft" }, { name: "cleanup.guidance" }],
     coveredTools: ["admin.summary.get"],
-    coveredResources: ["newsportal://admin/summary"],
+    coveredResources: ["signalops://admin/summary"],
     coveredPrompts: ["sequence.draft"],
   });
 
   const missing = getUntestedShippedEntries(matrix).map(
     (entry) => entry.name ?? entry.uri ?? "unknown"
   );
-  assert.deepEqual(missing.sort(), ["channels.create", "cleanup.guidance", "newsportal://channels"]);
+  assert.deepEqual(missing.sort(), ["channels.create", "cleanup.guidance", "signalops://channels"]);
   assert.throws(() => assertFullShippedCoverage(matrix), /without coverage/i);
 });

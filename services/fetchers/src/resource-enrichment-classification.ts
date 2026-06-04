@@ -1,4 +1,4 @@
-import type { ResourceKind } from "@newsportal/contracts";
+import type { ResourceKind } from "@signalops/contracts";
 
 import {
   asArray,

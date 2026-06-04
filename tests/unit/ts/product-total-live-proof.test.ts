@@ -23,7 +23,7 @@ function commandResult(key: string, status = "passed", parsedArtifacts: unknown[
 
 function passingMegaArtifact() {
   return {
-    kind: "newsportal-product-mega-flow-proof",
+    kind: "signalops-product-mega-flow-proof",
     finalVerdict: "pass",
     runtimeVerdict: "pass",
     yieldVerdict: "pass",
@@ -102,7 +102,7 @@ test("total-live returns weak when only live diagnostic lanes have classified re
     ...passingRequiredCommands(),
     commandResult("discovery-mega-compose", "failed", [
       {
-        kind: "newsportal-live-discovery-domain-matrix",
+        kind: "signalops-live-discovery-domain-matrix",
         runtimeVerdict: "pass",
         yieldVerdict: "weak",
         finalVerdict: "yield_weak",
@@ -115,7 +115,7 @@ test("total-live returns weak when only live diagnostic lanes have classified re
     ]),
     commandResult("website-matrix-compose", "passed", [
       {
-        evidencePath: "/tmp/newsportal-live-website-matrix-proof.json",
+        evidencePath: "/tmp/signalops-live-website-matrix-proof.json",
         summary: {
           verdictCounts: {
             accepted: 2,
@@ -150,7 +150,7 @@ test("total-live fails for unclassified diagnostic failures", () => {
       ...passingRequiredCommands(),
       commandResult("website-matrix-compose", "failed", [
         {
-          evidencePath: "/tmp/newsportal-live-website-matrix-proof.json",
+          evidencePath: "/tmp/signalops-live-website-matrix-proof.json",
           summary: {
             verdictCounts: {
               unexpected_failure: 1,

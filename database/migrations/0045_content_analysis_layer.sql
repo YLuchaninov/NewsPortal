@@ -259,7 +259,7 @@ values
     true,
     'observe',
     'heuristic',
-    'newsportal-titlecase-v1',
+    'signalops-titlecase-v1',
     '1',
     '{"maxTextChars": 50000}'::jsonb,
     'skip'
@@ -271,7 +271,7 @@ values
     'system_interest_label',
     true,
     'observe',
-    'newsportal',
+    'signalops',
     'interest-filter-projection',
     '1',
     '{"includeGrayZone": true, "includeNoMatch": false}'::jsonb,

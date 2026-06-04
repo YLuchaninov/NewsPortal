@@ -1,5 +1,5 @@
 ---
-import { type ContentItemDetail } from "@newsportal/contracts";
+import { type ContentItemDetail } from "@signalops/contracts";
 
 import Shell from "../../layouts/Shell.astro";
 import { getPool, queryOne } from "../../lib/server/db";
@@ -51,7 +51,7 @@ selectedItemIds.forEach((itemId) => exportUrl.searchParams.append("item", itemId
 ---
 
 <Shell
-  title="Saved Digest Preview — NewsPortal"
+  title="Saved Digest Preview — SignalOps"
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}

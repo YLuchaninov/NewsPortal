@@ -6,7 +6,7 @@
 
 ## Назначение
 
-NewsPortal больше не должен мыслить public surface как "только статьи". Public/domain слой использует universal content vocabulary, а legacy table names остаются implementation detail.
+SignalOps больше не должен мыслить public surface как "только статьи". Public/domain слой использует universal content vocabulary, а legacy table names остаются implementation detail.
 
 ## Канонические public terms
 

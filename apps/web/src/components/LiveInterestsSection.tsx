@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { PaginationNav } from "@newsportal/ui";
+import { PaginationNav } from "@signalops/ui";
 
 import { buildInterestPageState, replaceLiveInterestRecords, resolveInterestRepairState } from "../lib/live-interest-state";
 import { LIVE_UPDATES_EVENT, type LiveUpdatesEventDetail, type LiveUpdatesSnapshot } from "../lib/live-updates";
@@ -79,11 +79,11 @@ export function LiveInterestsSection({
 
   async function handleMutationSuccess(): Promise<void> {
     await refreshInterests();
-    window.__newsportalLiveUpdates?.forceRefresh?.();
+    window.__signalopsLiveUpdates?.forceRefresh?.();
   }
 
   useEffect(() => {
-    setLiveSnapshot(window.__newsportalLiveUpdates?.snapshot ?? null);
+    setLiveSnapshot(window.__signalopsLiveUpdates?.snapshot ?? null);
   }, []);
 
   useEffect(() => {

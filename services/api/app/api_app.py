@@ -11,7 +11,7 @@ from services.api.app.routes import register_api_routes
 @dataclass(frozen=True)
 class ApiAppContext:
     route_deps: ApiRouteDependencies
-    title: str = "NewsPortal API MVP"
+    title: str = "SignalOps API MVP"
 
 
 def create_api_app(context: ApiAppContext) -> FastAPI:

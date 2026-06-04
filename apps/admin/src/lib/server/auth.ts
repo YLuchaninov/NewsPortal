@@ -1,5 +1,5 @@
-import type { AuthIdentity, AuthSession } from "@newsportal/contracts";
-import { shouldMarkCookieSecure } from "@newsportal/config";
+import type { AuthIdentity, AuthSession } from "@signalops/contracts";
+import { shouldMarkCookieSecure } from "@signalops/config";
 
 import { queryRows, getPool } from "./db";
 

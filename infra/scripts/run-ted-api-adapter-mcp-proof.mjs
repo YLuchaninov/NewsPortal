@@ -39,7 +39,7 @@ function adapterConfig() {
   return {
     maxItemsPerPoll: 10,
     requestTimeoutMs: 45_000,
-    userAgent: "NewsPortal MCP TED procurement signal verification/1.0",
+    userAgent: "SignalOps MCP TED procurement signal verification/1.0",
     requestMethod: "POST",
     requestHeaders: {},
     requestBodyJson: {
@@ -504,8 +504,8 @@ async function main() {
     throw error;
   } finally {
     report.finishedAt = new Date().toISOString();
-    const jsonPath = `/tmp/newsportal-ted-api-adapter-mcp-proof-${RUN_ID}.json`;
-    const mdPath = `/tmp/newsportal-ted-api-adapter-mcp-proof-${RUN_ID}.md`;
+    const jsonPath = `/tmp/signalops-ted-api-adapter-mcp-proof-${RUN_ID}.json`;
+    const mdPath = `/tmp/signalops-ted-api-adapter-mcp-proof-${RUN_ID}.md`;
     await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     await writeFile(
       mdPath,

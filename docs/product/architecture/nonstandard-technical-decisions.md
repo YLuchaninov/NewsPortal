@@ -2,7 +2,7 @@
 
 Last researched against repository reality: 2026-06-04.
 
-This document explains the NewsPortal decisions that are more opinionated than a default CRUD/news app. It is a research and orientation document, not a runtime contract. For agent/runtime truth use `.aidp/*`; for implementation truth use code, migrations and tests.
+This document explains the SignalOps decisions that are more opinionated than a default CRUD/news app. It is a research and orientation document, not a runtime contract. For agent/runtime truth use `.aidp/*`; for implementation truth use code, migrations and tests.
 
 The framing is intentionally both technical and business-oriented:
 
@@ -252,7 +252,7 @@ Most news/content systems optimize for one of three simpler models:
 2. crawl/search broadly and show many matches;
 3. build custom scrapers for one vertical.
 
-NewsPortal's more unusual bet is different:
+SignalOps's more unusual bet is different:
 
 ```text
 discover possible source surfaces

@@ -1,4 +1,4 @@
-import { Card, CardContent, Input, ScrollArea } from "@newsportal/ui";
+import { Card, CardContent, Input, ScrollArea } from "@signalops/ui";
 
 import type {
   AutomationPaletteGroup,

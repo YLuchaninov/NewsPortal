@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   ARTICLE_INGEST_REQUESTED_EVENT,
   RESOURCE_INGEST_REQUESTED_EVENT
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool, PoolClient } from "pg";
 
 import { upsertArticleObservation } from "./document-observations";

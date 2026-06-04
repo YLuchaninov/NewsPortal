@@ -11,15 +11,15 @@ import {
 import { buildFlashRedirect as buildWebFlashRedirect } from "../../../apps/web/src/lib/server/browser-flow.ts";
 
 function withAppBaseUrl(appBaseUrl: string, run: () => void) {
-  const previousValue = process.env.NEWSPORTAL_APP_BASE_URL;
-  process.env.NEWSPORTAL_APP_BASE_URL = appBaseUrl;
+  const previousValue = process.env.SIGNALOPS_APP_BASE_URL;
+  process.env.SIGNALOPS_APP_BASE_URL = appBaseUrl;
   try {
     run();
   } finally {
     if (previousValue == null) {
-      delete process.env.NEWSPORTAL_APP_BASE_URL;
+      delete process.env.SIGNALOPS_APP_BASE_URL;
     } else {
-      process.env.NEWSPORTAL_APP_BASE_URL = previousValue;
+      process.env.SIGNALOPS_APP_BASE_URL = previousValue;
     }
   }
 }
@@ -30,7 +30,7 @@ test("resolveAppHref preserves root and admin base paths", () => {
     "/bff/auth/bootstrap"
   );
   assert.equal(
-    resolveAppHref("https://newsportal.local/admin/", "/bff/auth/sign-in"),
+    resolveAppHref("https://signalops.local/admin/", "/bff/auth/sign-in"),
     "/admin/bff/auth/sign-in"
   );
 });

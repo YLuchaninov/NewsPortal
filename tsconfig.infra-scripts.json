@@ -5,10 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {
-      "@newsportal/contracts": [
+      "@signalops/contracts": [
         "packages/contracts/src/index.ts"
       ],
-      "@newsportal/contracts/*": [
+      "@signalops/contracts/*": [
         "packages/contracts/src/*"
       ],
       "bullmq": [

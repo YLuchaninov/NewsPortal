@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/sdk",
+  "name": "@signalops/sdk",
   "private": true,
   "type": "module",
   "exports": {

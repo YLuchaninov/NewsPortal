@@ -1,4 +1,4 @@
-import { readRuntimeConfig } from "@newsportal/config";
+import { readRuntimeConfig } from "@signalops/config";
 
 export type FlashStatus = "success" | "error";
 

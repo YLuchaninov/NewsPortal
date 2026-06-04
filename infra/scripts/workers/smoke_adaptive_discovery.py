@@ -58,7 +58,7 @@ class _FakeDdgsClient:
 
 
 def stable_uuid(name: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"newsportal-smoke:{name}"))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"signalops-smoke:{name}"))
 
 
 @contextmanager

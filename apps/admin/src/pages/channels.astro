@@ -9,10 +9,10 @@ import {
   parseWebsiteChannelConfig,
   resolveRssChannelAdapterStrategy,
   resolveRssChannelMaxEntryAgeHours,
-} from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+} from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
 import AdminShell from "../layouts/AdminShell.astro";
@@ -55,7 +55,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 const bffPaths = {
   channels: appPath("/bff/admin/channels"),
@@ -154,10 +154,10 @@ const sourceChannels = channels.items.map((c) => {
         ? apiConfig?.requestTimeoutMs ?? 10000
         : rssConfig?.requestTimeoutMs ?? 10000,
     userAgent: rawProviderType === "website"
-      ? websiteConfig?.userAgent ?? "NewsPortalFetchers/0.1"
+      ? websiteConfig?.userAgent ?? "SignalOpsFetchers/0.1"
       : rawProviderType === "api"
-        ? apiConfig?.userAgent ?? "NewsPortalFetchers/0.1"
-        : rssConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+        ? apiConfig?.userAgent ?? "SignalOpsFetchers/0.1"
+        : rssConfig?.userAgent ?? "SignalOpsFetchers/0.1",
     lastFetchAt: String(c.last_fetch_at ?? ""),
     lastSuccessAt: String(c.last_success_at ?? ""),
     storedItemCount,
@@ -202,7 +202,7 @@ const sourceChannels = channels.items.map((c) => {
         ? {
             maxItemsPerPoll: apiConfig?.maxItemsPerPoll ?? 20,
             requestTimeoutMs: apiConfig?.requestTimeoutMs ?? 10000,
-            userAgent: apiConfig?.userAgent ?? "NewsPortalFetchers/0.1",
+            userAgent: apiConfig?.userAgent ?? "SignalOpsFetchers/0.1",
             itemsPath: apiConfig?.itemsPath ?? "items",
             titleField: apiConfig?.titleField ?? "title",
             leadField: apiConfig?.leadField ?? "lead",
@@ -653,7 +653,7 @@ const visibleChannels = sourceChannels.filter((channel) => {
                                 <input type="hidden" name="fetchUrl" value={channel.fetchUrl} />
                                 <input type="hidden" name="maxItemsPerPoll" value={String(channel.api?.maxItemsPerPoll ?? 20)} />
                                 <input type="hidden" name="requestTimeoutMs" value={String(channel.api?.requestTimeoutMs ?? 10000)} />
-                                <input type="hidden" name="userAgent" value={channel.api?.userAgent ?? "NewsPortalFetchers/0.1"} />
+                                <input type="hidden" name="userAgent" value={channel.api?.userAgent ?? "SignalOpsFetchers/0.1"} />
                                 <input type="hidden" name="itemsPath" value={channel.api?.itemsPath ?? "items"} />
                                 <input type="hidden" name="titleField" value={channel.api?.titleField ?? "title"} />
                                 <input type="hidden" name="leadField" value={channel.api?.leadField ?? "lead"} />

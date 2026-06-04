@@ -48,13 +48,13 @@ function buildPostgresUrl(): string {
     return process.env.DATABASE_URL;
   }
 
-  const user = process.env.POSTGRES_USER ?? "newsportal";
-  const password = process.env.POSTGRES_PASSWORD ?? "newsportal";
+  const user = process.env.POSTGRES_USER ?? "signalops";
+  const password = process.env.POSTGRES_PASSWORD ?? "signalops";
   const host = process.env.POSTGRES_HOST ?? "127.0.0.1";
   const port =
     process.env.POSTGRES_PORT ??
     (host === "127.0.0.1" || host === "localhost" ? "55432" : "5432");
-  const database = process.env.POSTGRES_DB ?? "newsportal";
+  const database = process.env.POSTGRES_DB ?? "signalops";
 
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
@@ -62,7 +62,7 @@ function buildPostgresUrl(): string {
 export function loadFetchersConfig(): FetchersConfig {
   const defaultUserAgent =
     process.env.FETCHERS_USER_AGENT ??
-    "NewsPortalFetchers/0.1 (+https://newsportal.local)";
+    "SignalOpsFetchers/0.1 (+https://signalops.local)";
   const fetchersConcurrency = Math.max(1, Math.floor(readNumber("FETCHERS_CONCURRENCY", 4)));
   const rssConcurrencyFallback = Math.max(1, Math.ceil(fetchersConcurrency / 2));
   const websiteConcurrencyFallback = Math.max(

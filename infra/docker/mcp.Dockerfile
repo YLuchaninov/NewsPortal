@@ -46,7 +46,7 @@ COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/sdk/package.json packages/sdk/package.json
 COPY services/mcp/package.json services/mcp/package.json
 
-RUN pnpm install --frozen-lockfile --prod --filter @newsportal/mcp...
+RUN pnpm install --frozen-lockfile --prod --filter @signalops/mcp...
 
 COPY --from=builder --chown=node:node /workspace/services/mcp/dist services/mcp/dist
 

@@ -4,7 +4,7 @@
 
 ## Назначение
 
-NewsPortal принимает noisy intake, сохраняет observations, canonicalize-ит documents, отделяет verification от semantic filtering и принимает final selection decisions as `selected`, `rejected`, or `gray_zone`.
+SignalOps принимает noisy intake, сохраняет observations, canonicalize-ит documents, отделяет verification от semantic filtering и принимает final selection decisions as `selected`, `rejected`, or `gray_zone`.
 
 ## Shipped baseline
 

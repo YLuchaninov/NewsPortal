@@ -35,6 +35,7 @@ const services = {
       "feedsmith",
       "htmlparser2",
       "imapflow",
+      "pdfjs-dist",
       "pg",
       "playwright",
     ],

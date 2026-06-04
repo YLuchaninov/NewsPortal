@@ -1,4 +1,4 @@
-export const NEWSPORTAL_ERROR_DOMAINS = [
+export const SIGNALOPS_ERROR_DOMAINS = [
   "acquisition_url",
   "provider_fetch",
   "feed_parse",
@@ -12,30 +12,30 @@ export const NEWSPORTAL_ERROR_DOMAINS = [
   "unknown",
 ] as const;
 
-export type NewsPortalErrorDomain = (typeof NEWSPORTAL_ERROR_DOMAINS)[number];
+export type SignalOpsErrorDomain = (typeof SIGNALOPS_ERROR_DOMAINS)[number];
 
-export const NEWSPORTAL_ERROR_SEVERITIES = ["info", "warning", "error"] as const;
+export const SIGNALOPS_ERROR_SEVERITIES = ["info", "warning", "error"] as const;
 
-export type NewsPortalErrorSeverity = (typeof NEWSPORTAL_ERROR_SEVERITIES)[number];
+export type SignalOpsErrorSeverity = (typeof SIGNALOPS_ERROR_SEVERITIES)[number];
 
-export const NEWSPORTAL_RETRY_HINTS = [
+export const SIGNALOPS_RETRY_HINTS = [
   "none",
   "retry",
   "after_operator_fix",
   "after_budget_reset",
 ] as const;
 
-export type NewsPortalRetryHint = (typeof NEWSPORTAL_RETRY_HINTS)[number];
+export type SignalOpsRetryHint = (typeof SIGNALOPS_RETRY_HINTS)[number];
 
-export interface NewsPortalErrorDiagnostic {
+export interface SignalOpsErrorDiagnostic {
   code: string;
-  domain: NewsPortalErrorDomain;
-  severity: NewsPortalErrorSeverity;
-  retry_hint: NewsPortalRetryHint;
+  domain: SignalOpsErrorDomain;
+  severity: SignalOpsErrorSeverity;
+  retry_hint: SignalOpsRetryHint;
   message?: string;
 }
 
-export const NEWSPORTAL_ERROR_CODES = {
+export const SIGNALOPS_ERROR_CODES = {
   acquisitionUrlBlocked: "acquisition_url.blocked",
   acquisitionUrlFinalBlocked: "acquisition_url.final_blocked",
   providerFetchFailed: "provider_fetch.failed",
@@ -48,70 +48,70 @@ export const NEWSPORTAL_ERROR_CODES = {
   taskPluginFailed: "task_plugin.failed",
 } as const;
 
-export type NewsPortalKnownErrorCode =
-  (typeof NEWSPORTAL_ERROR_CODES)[keyof typeof NEWSPORTAL_ERROR_CODES];
+export type SignalOpsKnownErrorCode =
+  (typeof SIGNALOPS_ERROR_CODES)[keyof typeof SIGNALOPS_ERROR_CODES];
 
 const ERROR_CODE_DEFAULTS: Record<
-  NewsPortalKnownErrorCode,
-  Omit<NewsPortalErrorDiagnostic, "code" | "message">
+  SignalOpsKnownErrorCode,
+  Omit<SignalOpsErrorDiagnostic, "code" | "message">
 > = {
-  [NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked]: {
+  [SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked]: {
     domain: "acquisition_url",
     severity: "warning",
     retry_hint: "after_operator_fix",
   },
-  [NEWSPORTAL_ERROR_CODES.acquisitionUrlFinalBlocked]: {
+  [SIGNALOPS_ERROR_CODES.acquisitionUrlFinalBlocked]: {
     domain: "acquisition_url",
     severity: "warning",
     retry_hint: "after_operator_fix",
   },
-  [NEWSPORTAL_ERROR_CODES.providerFetchFailed]: {
+  [SIGNALOPS_ERROR_CODES.providerFetchFailed]: {
     domain: "provider_fetch",
     severity: "warning",
     retry_hint: "retry",
   },
-  [NEWSPORTAL_ERROR_CODES.providerFetchTooLarge]: {
+  [SIGNALOPS_ERROR_CODES.providerFetchTooLarge]: {
     domain: "provider_fetch",
     severity: "warning",
     retry_hint: "after_operator_fix",
   },
-  [NEWSPORTAL_ERROR_CODES.feedProbeNoValidFeed]: {
+  [SIGNALOPS_ERROR_CODES.feedProbeNoValidFeed]: {
     domain: "feed_parse",
     severity: "warning",
     retry_hint: "none",
   },
-  [NEWSPORTAL_ERROR_CODES.feedProbeFailed]: {
+  [SIGNALOPS_ERROR_CODES.feedProbeFailed]: {
     domain: "feed_parse",
     severity: "warning",
     retry_hint: "retry",
   },
-  [NEWSPORTAL_ERROR_CODES.taskPluginOutputTooManyKeys]: {
+  [SIGNALOPS_ERROR_CODES.taskPluginOutputTooManyKeys]: {
     domain: "task_plugin",
     severity: "error",
     retry_hint: "after_operator_fix",
   },
-  [NEWSPORTAL_ERROR_CODES.taskPluginOutputTooLarge]: {
+  [SIGNALOPS_ERROR_CODES.taskPluginOutputTooLarge]: {
     domain: "task_plugin",
     severity: "error",
     retry_hint: "after_operator_fix",
   },
-  [NEWSPORTAL_ERROR_CODES.taskPluginOutputNotSerializable]: {
+  [SIGNALOPS_ERROR_CODES.taskPluginOutputNotSerializable]: {
     domain: "task_plugin",
     severity: "error",
     retry_hint: "after_operator_fix",
   },
-  [NEWSPORTAL_ERROR_CODES.taskPluginFailed]: {
+  [SIGNALOPS_ERROR_CODES.taskPluginFailed]: {
     domain: "task_plugin",
     severity: "error",
     retry_hint: "retry",
   },
 };
 
-export function classifyNewsPortalErrorCode(
+export function classifySignalOpsErrorCode(
   code: string,
-): Omit<NewsPortalErrorDiagnostic, "code" | "message"> {
+): Omit<SignalOpsErrorDiagnostic, "code" | "message"> {
   return (
-    ERROR_CODE_DEFAULTS[code as NewsPortalKnownErrorCode] ?? {
+    ERROR_CODE_DEFAULTS[code as SignalOpsKnownErrorCode] ?? {
       domain: "unknown",
       severity: "error",
       retry_hint: "none",
@@ -119,14 +119,14 @@ export function classifyNewsPortalErrorCode(
   );
 }
 
-export function createNewsPortalErrorDiagnostic(input: {
+export function createSignalOpsErrorDiagnostic(input: {
   code: string;
   message?: string | null;
-  domain?: NewsPortalErrorDomain;
-  severity?: NewsPortalErrorSeverity;
-  retry_hint?: NewsPortalRetryHint;
-}): NewsPortalErrorDiagnostic {
-  const defaults = classifyNewsPortalErrorCode(input.code);
+  domain?: SignalOpsErrorDomain;
+  severity?: SignalOpsErrorSeverity;
+  retry_hint?: SignalOpsRetryHint;
+}): SignalOpsErrorDiagnostic {
+  const defaults = classifySignalOpsErrorCode(input.code);
   return {
     code: input.code,
     domain: input.domain ?? defaults.domain,

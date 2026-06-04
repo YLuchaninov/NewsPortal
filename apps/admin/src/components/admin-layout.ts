@@ -1,4 +1,4 @@
-export const ADMIN_SIDEBAR_STORAGE_KEY = "newsportal-admin-sidebar";
+export const ADMIN_SIDEBAR_STORAGE_KEY = "signalops-admin-sidebar";
 
 export const ADMIN_SIDEBAR_MODES = ["expanded", "compact"] as const;
 export type AdminSidebarMode = (typeof ADMIN_SIDEBAR_MODES)[number];
@@ -51,9 +51,9 @@ export function clampAdminPaneWidth(
 }
 
 export function buildAdminPaneStateStorageKey(paneId: string): string {
-  return `newsportal-admin-pane:${paneId}:state`;
+  return `signalops-admin-pane:${paneId}:state`;
 }
 
 export function buildAdminPaneWidthStorageKey(paneId: string): string {
-  return `newsportal-admin-pane:${paneId}:width`;
+  return `signalops-admin-pane:${paneId}:width`;
 }

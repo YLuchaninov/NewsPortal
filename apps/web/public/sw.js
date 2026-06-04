@@ -1,6 +1,6 @@
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "NewsPortal alert",
+    title: "SignalOps alert",
     body: "A new update is available."
   };
 
@@ -14,7 +14,7 @@ self.addEventListener("push", (event) => {
     }
   } catch {
     payload = {
-      title: "NewsPortal alert",
+      title: "SignalOps alert",
       body: event.data ? String(event.data.text()) : "A new update is available."
     };
   }

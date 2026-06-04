@@ -15,7 +15,7 @@ DEFAULT_HASH_DIMENSIONS = 384
 DEFAULT_HASH_MODEL_KEY = f"hash://deterministic/{DEFAULT_HASH_DIMENSIONS}"
 DEFAULT_EMBEDDING_BACKEND = "hash"
 
-LOGGER = logging.getLogger("newsportal.ml.embedding")
+LOGGER = logging.getLogger("signalops.ml.embedding")
 
 
 def normalize_vector(values: Sequence[float]) -> list[float]:

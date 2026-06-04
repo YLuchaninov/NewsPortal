@@ -9,7 +9,7 @@
     "maxPollIntervalSeconds": 3600,
     "maxItemsPerPoll": 20,
     "requestTimeoutMs": 5000,
-    "userAgent": "NewsPortalFetchers/manual-mvp",
+    "userAgent": "SignalOpsFetchers/manual-mvp",
     "preferContentEncoded": true,
     "isActive": true
   },
@@ -23,7 +23,7 @@
     "maxPollIntervalSeconds": 259200,
     "maxItemsPerPoll": 20,
     "requestTimeoutMs": 5000,
-    "userAgent": "NewsPortalFetchers/manual-mvp",
+    "userAgent": "SignalOpsFetchers/manual-mvp",
     "preferContentEncoded": true,
     "isActive": true
   },
@@ -37,7 +37,7 @@
     "maxPollIntervalSeconds": 604800,
     "maxItemsPerPoll": 20,
     "requestTimeoutMs": 5000,
-    "userAgent": "NewsPortalFetchers/manual-mvp",
+    "userAgent": "SignalOpsFetchers/manual-mvp",
     "preferContentEncoded": true,
     "isActive": true
   }

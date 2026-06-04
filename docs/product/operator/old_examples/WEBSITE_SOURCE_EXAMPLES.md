@@ -10,7 +10,7 @@
 >
 > **Дата подбора примеров:** 15 апреля 2026. Все URL ниже были подобраны как актуальные публичные страницы официальных сайтов на эту дату.
 >
-> **Prerequisites:** локальный NewsPortal stack, доступ в admin, working `website` channel flow и готовность принимать, что live public sites могут измениться после даты подбора.
+> **Prerequisites:** локальный SignalOps stack, доступ в admin, working `website` channel flow и готовность принимать, что live public sites могут измениться после даты подбора.
 >
 > **Как понять, что пример сработал:** channel создался, `web_resources` появились с ожидаемыми `resource_kind`/projection, и вы можете интерпретировать успех или честный gap без подмены resource-only truth article-only ожиданиями.
 
@@ -29,7 +29,7 @@
 node infra/scripts/test-live-website-matrix.mjs
 ```
 
-Он прогоняет 16 primary public sites по четырем ingress shapes и пишет JSON evidence bundle в `/tmp/newsportal-live-website-matrix-<runId>.json`.
+Он прогоняет 16 primary public sites по четырем ingress shapes и пишет JSON evidence bundle в `/tmp/signalops-live-website-matrix-<runId>.json`.
 
 Current primary matrix on 16 April 2026:
 
@@ -569,7 +569,7 @@ pnpm dev:mvp:internal
 
 ```sh
 docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml \
-  exec -T fetchers pnpm --filter @newsportal/fetchers run:once <channelId>
+  exec -T fetchers pnpm --filter @signalops/fetchers run:once <channelId>
 ```
 
 5. Откройте:

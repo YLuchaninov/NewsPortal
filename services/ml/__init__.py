@@ -1,1 +1,1 @@
-"""Shared ML package for NewsPortal workers."""
+"""Shared ML package for SignalOps workers."""

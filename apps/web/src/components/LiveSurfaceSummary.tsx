@@ -53,7 +53,7 @@ export function LiveSurfaceSummary({
   const baselineRevisionRef = useRef(initialRevision);
 
   useEffect(() => {
-    const currentSnapshot = window.__newsportalLiveUpdates?.snapshot;
+    const currentSnapshot = window.__signalopsLiveUpdates?.snapshot;
     if (currentSnapshot) {
       const metric = readMetricTotal(currentSnapshot, surface);
       setCount(metric.total);

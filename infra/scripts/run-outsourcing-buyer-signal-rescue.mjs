@@ -692,12 +692,12 @@ async function preflight(client, token, report) {
     "operator.effect.verify",
   ];
   const requiredResources = [
-    "newsportal://guide/scenarios/funnel-calibration",
-    "newsportal://guide/scenarios/discovery-live-gap-hunting",
-    "newsportal://articles/residuals-summary",
+    "signalops://guide/scenarios/funnel-calibration",
+    "signalops://guide/scenarios/discovery-live-gap-hunting",
+    "signalops://articles/residuals-summary",
   ];
   const failures = [];
-  if (String(initialize?.result?.serverInfo?.name ?? "") !== "newsportal-mcp") failures.push("MCP initialize did not return newsportal-mcp.");
+  if (String(initialize?.result?.serverInfo?.name ?? "") !== "signalops-mcp") failures.push("MCP initialize did not return signalops-mcp.");
   for (const tool of requiredTools) if (!tools.has(tool)) failures.push(`Missing MCP tool: ${tool}`);
   for (const resource of requiredResources) if (!resources.has(resource)) failures.push(`Missing MCP resource: ${resource}`);
   report.preflight = { tools: tools.size, resources: resources.size, prompts: prompts.size, failures };
@@ -1199,8 +1199,8 @@ function markdown(report) {
 
 async function persist(report) {
   report.finishedAt = new Date().toISOString();
-  const jsonPath = `/tmp/newsportal-outsourcing-buyer-signal-rescue-${report.runId}.json`;
-  const mdPath = `/tmp/newsportal-outsourcing-buyer-signal-rescue-${report.runId}.md`;
+  const jsonPath = `/tmp/signalops-outsourcing-buyer-signal-rescue-${report.runId}.json`;
+  const mdPath = `/tmp/signalops-outsourcing-buyer-signal-rescue-${report.runId}.md`;
   report.artifacts = { jsonPath, mdPath };
   const serializable = {
     ...report,

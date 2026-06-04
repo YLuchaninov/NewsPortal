@@ -428,7 +428,7 @@ async function seedRssChannel(
       JSON.stringify({
         maxItemsPerPoll: 10,
         requestTimeoutMs: 5000,
-        userAgent: "NewsPortalFetchers/ChannelAuthSmoke",
+        userAgent: "SignalOpsFetchers/ChannelAuthSmoke",
         preferContentEncoded: true
       }),
       JSON.stringify(
@@ -485,7 +485,7 @@ async function seedWebsiteChannel(
         maxResourcesPerPoll: 10,
         requestTimeoutMs: 5000,
         totalPollTimeoutMs: 30000,
-        userAgent: "NewsPortalFetchers/ChannelAuthSmoke",
+        userAgent: "SignalOpsFetchers/ChannelAuthSmoke",
         sitemapDiscoveryEnabled: input.sitemapDiscoveryEnabled ?? true,
         feedDiscoveryEnabled: input.feedDiscoveryEnabled ?? true,
         collectionDiscoveryEnabled: true,

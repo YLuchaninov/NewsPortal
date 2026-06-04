@@ -16,7 +16,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 import {
   buildEditorStateFromNodes,

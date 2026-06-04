@@ -1,6 +1,6 @@
 ---
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import AdminShell from "../../../../layouts/AdminShell.astro";
 import { AdminConfirmAction } from "../../../../components/AdminConfirmAction";
 import { LlmTemplateEditorForm } from "../../../../components/LlmTemplateEditorForm";
@@ -25,7 +25,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 type R = Record<string, unknown>;
 const promptTemplateId = String(Astro.params.promptTemplateId ?? "");
 const template = await sdk.getLlmTemplate<R>(promptTemplateId);

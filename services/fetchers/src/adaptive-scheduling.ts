@@ -2,7 +2,7 @@ import {
   defaultMaxPollIntervalSeconds,
   type NormalizedFetchOutcome,
   type SourceChannelRuntimeState
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 export const ADAPTIVE_MULTIPLIERS = [1, 2, 4, 8, 16] as const;
 const HARD_FAILURE_REPAIR_MULTIPLIERS = [4, 8, 16, 32, 64, 96] as const;

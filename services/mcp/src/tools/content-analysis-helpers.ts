@@ -1,6 +1,6 @@
 import {
   type JsonSchema,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import {
   normalizePayloadStringListFields,

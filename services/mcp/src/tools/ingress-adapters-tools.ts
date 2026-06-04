@@ -1,4 +1,4 @@
-import type { JsonSchema } from "@newsportal/contracts";
+import type { JsonSchema } from "@signalops/contracts";
 
 import {
   createReadTool,

@@ -690,7 +690,7 @@ async function runLiveSelectionReplayProof(discoveryReport) {
 
 function formatMarkdown(report) {
   const lines = [
-    `# NewsPortal Product Mega Flow ${report.runId}`,
+    `# SignalOps Product Mega Flow ${report.runId}`,
     "",
     `- Final verdict: \`${report.finalVerdict}\``,
     `- Runtime verdict: \`${report.runtimeVerdict}\``,
@@ -750,8 +750,8 @@ function formatMarkdown(report) {
 }
 
 async function writeArtifacts(report) {
-  const jsonPath = `/tmp/newsportal-product-mega-flow-${report.runId}.json`;
-  const mdPath = `/tmp/newsportal-product-mega-flow-${report.runId}.md`;
+  const jsonPath = `/tmp/signalops-product-mega-flow-${report.runId}.json`;
+  const mdPath = `/tmp/signalops-product-mega-flow-${report.runId}.md`;
   const withArtifacts = {
     ...report,
     artifacts: {
@@ -805,7 +805,7 @@ async function main() {
       await ensureComposeStack(log, { rebuild: !args.skipStackBuild });
       discoveryResult = await withDiscoveryParentEnv(() =>
         runLiveDiscoveryExamplesReport({
-          artifactPrefix: "newsportal-product-mega-flow-discovery",
+          artifactPrefix: "signalops-product-mega-flow-discovery",
           throwOnError: false,
           closePool: false,
         })
@@ -855,7 +855,7 @@ async function main() {
   ];
   const strippedCommands = stripParsedArtifacts(commandResults);
   const report = await writeArtifacts({
-    kind: "newsportal-product-mega-flow-proof",
+    kind: "signalops-product-mega-flow-proof",
     runId,
     startedAt,
     finishedAt: new Date().toISOString(),

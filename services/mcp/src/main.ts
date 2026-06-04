@@ -6,8 +6,8 @@ import {
   recordMcpRequestLog,
   touchMcpAccessTokenUsage,
   type McpAccessTokenRecord,
-} from "@newsportal/control-plane";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+} from "@signalops/control-plane";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import { authenticateMcpRequest } from "./auth";
 import { loadMcpServiceConfig } from "./config";
@@ -28,7 +28,7 @@ import { affectedOperationalResourcesForTool } from "./operating-intelligence";
 
 const config = loadMcpServiceConfig(process.env);
 const pool = createPgPool(config);
-const sdk = createNewsPortalSdk({
+const sdk = createSignalOpsSdk({
   baseUrl: config.apiBaseUrl,
 });
 const app = Fastify({
@@ -49,7 +49,7 @@ const sseSessions = new Map<string, SseSession>();
 
 function buildServerInfo() {
   return {
-    name: "newsportal-mcp",
+    name: "signalops-mcp",
     version: "0.1.0",
     transport: "http-jsonrpc+streamable-http+sse",
   };

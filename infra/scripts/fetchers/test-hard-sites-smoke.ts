@@ -297,7 +297,7 @@ async function seedWebsiteChannel(
         maxResourcesPerPoll: 10,
         requestTimeoutMs: 5000,
         totalPollTimeoutMs: 30000,
-        userAgent: "NewsPortalFetchers/HardSiteSmoke",
+        userAgent: "SignalOpsFetchers/HardSiteSmoke",
         sitemapDiscoveryEnabled: false,
         feedDiscoveryEnabled: false,
         collectionDiscoveryEnabled: true,

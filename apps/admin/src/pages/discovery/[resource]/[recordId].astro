@@ -1,6 +1,6 @@
 ---
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import AdminShell from "../../../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../../../lib/server/auth";
 import {
@@ -24,7 +24,7 @@ const recordId = String(Astro.params.recordId ?? "");
 const runtimeConfig = readRuntimeConfig(process.env, {
   defaultAppBaseUrl: "http://127.0.0.1:4322/",
 });
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const flash = readFlash(Astro.url);
 const record = await sdk.getDiscoveryVNextRecord<Record<string, unknown>>(resource, recordId);
 const pretty = JSON.stringify(record, null, 2);

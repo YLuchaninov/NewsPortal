@@ -1,6 +1,6 @@
 ---
-import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import { AdminLiveCollectionNotice } from "../components/AdminLiveCollectionNotice";
 import { LiveDashboardKpiGrid } from "../components/LiveDashboardKpiGrid";
 import { ADMIN_CONTINUE_ACTIONS } from "../lib/admin-ia";
@@ -24,7 +24,7 @@ export const prerender = false;
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4322/" });
 const session = await resolveAdminSession(Astro.request);
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
 if (!session) {
   return Astro.redirect(

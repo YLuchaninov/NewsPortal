@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import type { DigestCadence, UserDigestSettingsView } from "@newsportal/contracts";
-import { PaginationNav } from "@newsportal/ui";
+import type { DigestCadence, UserDigestSettingsView } from "@signalops/contracts";
+import { PaginationNav } from "@signalops/ui";
 
 import { LIVE_UPDATES_EVENT, type LiveUpdatesEventDetail } from "../lib/live-updates";
 import {
@@ -98,7 +98,7 @@ export function LiveSettingsSection({
   }
 
   function requestLiveRefresh(): void {
-    window.__newsportalLiveUpdates?.forceRefresh?.();
+    window.__signalopsLiveUpdates?.forceRefresh?.();
   }
 
   async function submitPreferences(successMessage: string): Promise<void> {
@@ -251,7 +251,7 @@ export function LiveSettingsSection({
 
   return (
     <div className="grid gap-6 max-w-3xl">
-      <SettingsCard title="Appearance" description="Choose how NewsPortal looks to you">
+      <SettingsCard title="Appearance" description="Choose how SignalOps looks to you">
         <div className="p-6">
           <form
             className="flex items-end gap-3"

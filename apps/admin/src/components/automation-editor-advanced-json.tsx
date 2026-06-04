@@ -2,7 +2,7 @@ import {
   Button,
   ScrollArea,
   Textarea,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 interface AutomationEditorAdvancedJsonProps {
   advancedJson: string;

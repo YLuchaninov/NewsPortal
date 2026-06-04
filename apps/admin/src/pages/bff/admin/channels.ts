@@ -3,7 +3,7 @@ import type { APIRoute } from "astro";
 import {
   deleteChannelWithAudit,
   saveChannelFromPayload,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import {
   adminActionError,

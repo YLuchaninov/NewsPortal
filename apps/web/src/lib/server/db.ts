@@ -1,12 +1,12 @@
-import { getBffPool, queryBffOne, queryBffRows } from "@newsportal/bff-server";
+import { getBffPool, queryBffOne, queryBffRows } from "@signalops/bff-server";
 import type { Pool, QueryResultRow } from "pg";
 
 declare global {
-  var __newsportalWebPool: Pool | undefined;
+  var __signalopsWebPool: Pool | undefined;
 }
 
 export function getPool(): Pool {
-  return getBffPool("__newsportalWebPool");
+  return getBffPool("__signalopsWebPool");
 }
 
 export async function queryRows<T extends QueryResultRow>(

@@ -1,4 +1,4 @@
-import { ingressAdapterKeyToLegacyApiAdapterKey, parseApiChannelConfig } from "@newsportal/contracts";
+import { ingressAdapterKeyToLegacyApiAdapterKey, parseApiChannelConfig } from "@signalops/contracts";
 
 import { validateAcquisitionUrl } from "../probe-url-guard";
 import { executeDeclarativeApiRuntime } from "./declarative-api-runtime";

@@ -1,7 +1,7 @@
 import type {
   ResourceKind,
   WebsiteChannelConfig
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import { canonicalizeUrl, collapseWhitespace, decodeHtmlEntities, stripHtmlTags } from "./rss";
 import {

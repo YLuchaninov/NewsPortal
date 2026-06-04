@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { NEWSPORTAL_ERROR_CODES } from "../../../packages/contracts/src/index.ts";
+import { SIGNALOPS_ERROR_CODES } from "../../../packages/contracts/src/index.ts";
 import { probeFeedsForDiscovery } from "../../../services/fetchers/src/feed-probe.ts";
 import { normalizeProbeUrl, validateAcquisitionUrl } from "../../../services/fetchers/src/probe-url-guard.ts";
 import { validateUrlsForDiscovery } from "../../../services/fetchers/src/url-validation.ts";
@@ -75,13 +75,13 @@ test("validateUrlsForDiscovery rejects unsafe inputs before fetch", async () => 
   try {
     const result = await validateUrlsForDiscovery({
       urls: ["http://169.254.169.254/latest/meta-data"],
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
     assert.equal(fetchCalled, false);
     assert.equal(result.validated_urls[0]?.status, null);
-    assert.equal(result.validated_urls[0]?.error_code, NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked);
+    assert.equal(result.validated_urls[0]?.error_code, SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked);
     assert.equal(result.validated_urls[0]?.error_diagnostic?.domain, "acquisition_url");
     assert.match(result.validated_urls[0]?.error_text ?? "", /not allowed/i);
   } finally {
@@ -102,12 +102,12 @@ test("validateUrlsForDiscovery revalidates final redirect targets", async () => 
   try {
     const result = await validateUrlsForDiscovery({
       urls: ["https://example.com/start"],
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
     assert.equal(result.validated_urls[0]?.status, 200);
-    assert.equal(result.validated_urls[0]?.error_code, NEWSPORTAL_ERROR_CODES.acquisitionUrlFinalBlocked);
+    assert.equal(result.validated_urls[0]?.error_code, SIGNALOPS_ERROR_CODES.acquisitionUrlFinalBlocked);
     assert.equal(result.validated_urls[0]?.error_diagnostic?.retry_hint, "after_operator_fix");
     assert.match(result.validated_urls[0]?.error_text ?? "", /not allowed/i);
   } finally {
@@ -140,7 +140,7 @@ test("probeFeedsForDiscovery returns normalized feed samples and diagnostics", a
     const result = await probeFeedsForDiscovery({
       urls: ["https://example.com/feed.xml"],
       sampleCount: 1,
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
@@ -182,7 +182,7 @@ test("probeFeedsForDiscovery discovers alternate feeds from HTML origins", async
     const result = await probeFeedsForDiscovery({
       urls: ["https://example.com/"],
       sampleCount: 1,
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
@@ -221,7 +221,7 @@ test("probeFeedsForDiscovery resolves HTML alternates against base href", async 
     const result = await probeFeedsForDiscovery({
       urls: ["https://example.com/blog/page"],
       sampleCount: 1,
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
@@ -259,7 +259,7 @@ test("probeFeedsForDiscovery discovers feeds from HTTP Link headers", async () =
     const result = await probeFeedsForDiscovery({
       urls: ["https://example.com/news"],
       sampleCount: 1,
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
@@ -301,14 +301,14 @@ test("probeFeedsForDiscovery uses parsed HTML alternates and rejects unsafe redi
         "http://127.0.0.1/feed.xml",
       ],
       sampleCount: 1,
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
     });
 
     assert.equal(result.probed_feeds.length, 2);
     assert.equal(result.probed_feeds[0]?.feed_title, "Parsed Feed");
     assert.equal(result.probed_feeds[1]?.is_valid_rss, false);
-    assert.equal(result.probed_feeds[1]?.error_code, NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked);
+    assert.equal(result.probed_feeds[1]?.error_code, SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked);
     assert.equal(result.probed_feeds[1]?.error_diagnostic?.domain, "acquisition_url");
     assert.match(result.probed_feeds[1]?.error_text ?? "", /not allowed/i);
   } finally {

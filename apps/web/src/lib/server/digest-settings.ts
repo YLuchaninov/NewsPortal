@@ -1,4 +1,4 @@
-import type { DigestCadence, UserDigestSettingsView } from "@newsportal/contracts";
+import type { DigestCadence, UserDigestSettingsView } from "@signalops/contracts";
 import type { Pool } from "pg";
 
 const DIGEST_CADENCES: DigestCadence[] = ["daily", "every_3_days", "weekly", "monthly"];

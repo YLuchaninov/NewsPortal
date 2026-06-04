@@ -1,4 +1,4 @@
-# План внедрения Ingress Adapter Catalog для NewsPortal
+# План внедрения Ingress Adapter Catalog для SignalOps
 
 > **Current status:** this document is retained as design/implementation notes. The active runtime model now uses `ingress_adapter_catalog` plus `source_channel_adapter_binding`; legacy `config_json.adapterStrategy` and API `adapterKey` values are diagnostics/migration evidence, not runtime-selection truth.
 

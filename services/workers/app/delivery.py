@@ -73,7 +73,7 @@ def send_email_digest(
     port = parsed.port or (465 if scheme == "smtps" else 587)
     message = EmailMessage()
     message["Subject"] = title[:255]
-    message["From"] = os.getenv("EMAIL_DIGEST_FROM", username or "newsportal@example.test")
+    message["From"] = os.getenv("EMAIL_DIGEST_FROM", username or "signalops@example.test")
     message["To"] = recipient
     message.set_content(body)
     if body_html:
@@ -108,7 +108,7 @@ def send_web_push(config_json: dict[str, Any], title: str, body: str) -> Deliver
         return DeliveryAttempt(status="failed", detail="Web push subscription is missing.")
 
     vapid_private_key = os.getenv("WEB_PUSH_VAPID_PRIVATE_KEY", "").strip()
-    vapid_subject = os.getenv("WEB_PUSH_VAPID_SUBJECT", "mailto:admin@newsportal.local").strip()
+    vapid_subject = os.getenv("WEB_PUSH_VAPID_SUBJECT", "mailto:admin@signalops.local").strip()
     if not vapid_private_key:
         return DeliveryAttempt(status="failed", detail="WEB_PUSH_VAPID_PRIVATE_KEY is missing.")
 

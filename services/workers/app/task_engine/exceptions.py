@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from services.workers.app.error_taxonomy import (
-    NewsPortalErrorDiagnostic,
-    NewsPortalErrorDomain,
-    NewsPortalRetryHint,
+    SignalOpsErrorDiagnostic,
+    SignalOpsErrorDomain,
+    SignalOpsRetryHint,
     create_error_diagnostic,
 )
 
@@ -17,8 +17,8 @@ class TaskExecutionError(Exception):
         *,
         retryable: bool = False,
         error_code: str | None = None,
-        error_domain: NewsPortalErrorDomain = "task_plugin",
-        retry_hint: NewsPortalRetryHint | None = None,
+        error_domain: SignalOpsErrorDomain = "task_plugin",
+        retry_hint: SignalOpsRetryHint | None = None,
     ):
         super().__init__(message)
         self.retryable = retryable
@@ -26,7 +26,7 @@ class TaskExecutionError(Exception):
         self.error_domain = error_domain
         self.retry_hint = retry_hint or ("retry" if retryable else None)
 
-    def to_diagnostic(self) -> NewsPortalErrorDiagnostic:
+    def to_diagnostic(self) -> SignalOpsErrorDiagnostic:
         return create_error_diagnostic(
             code=self.error_code,
             message=str(self),

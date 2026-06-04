@@ -1,6 +1,6 @@
 # Firebase Setup
 
-NewsPortal использует Firebase как identity layer. После входа локальная PostgreSQL-модель users/roles решает authorization.
+SignalOps использует Firebase как identity layer. После входа локальная PostgreSQL-модель users/roles решает authorization.
 
 Для локального MVP нужны:
 

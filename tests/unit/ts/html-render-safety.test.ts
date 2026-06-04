@@ -15,7 +15,7 @@ test("content detail pages render persisted HTML only through shared sanitizer",
   const adminResource = readWorkspaceFile("apps/admin/src/pages/resources/[resourceId].astro");
 
   for (const source of [publicContent, adminArticle, adminResource]) {
-    assert.match(source, /@newsportal\/content-safety/);
+    assert.match(source, /@signalops\/content-safety/);
     assert.match(source, /sanitizeHtmlFragment\(/);
     assert.doesNotMatch(source, /replace\(\s*\/<script/i);
   }

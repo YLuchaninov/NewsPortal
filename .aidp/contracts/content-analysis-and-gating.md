@@ -26,7 +26,7 @@ PostgreSQL remains source of truth. Queue context, SDK response fields, UI chips
 
 ## Initial rollout truth
 
-- Stage 1 ships deterministic heuristic NER as `provider=heuristic`, `model_key=newsportal-titlecase-v1`.
+- Stage 1 ships deterministic heuristic NER as `provider=heuristic`, `model_key=signalops-titlecase-v1`.
 - Stage 1 ships system-interest label projection from existing `interest_filter_results`; it does not re-run interest matching.
 - Stage 1 ships a default recent-content gate policy as `dry_run`, not enforce-by-default.
 - Stage 2 ships queued content-analysis backfill through `reindex_jobs.job_kind = content_analysis`; it replays existing articles/resources, writes progress into `options_json.progress` and skips retro notifications.

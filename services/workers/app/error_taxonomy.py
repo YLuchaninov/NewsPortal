@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-NewsPortalErrorDomain = Literal[
+SignalOpsErrorDomain = Literal[
     "acquisition_url",
     "provider_fetch",
     "feed_parse",
@@ -17,19 +17,19 @@ NewsPortalErrorDomain = Literal[
     "control_plane",
     "unknown",
 ]
-NewsPortalErrorSeverity = Literal["info", "warning", "error"]
-NewsPortalRetryHint = Literal["none", "retry", "after_operator_fix", "after_budget_reset"]
+SignalOpsErrorSeverity = Literal["info", "warning", "error"]
+SignalOpsRetryHint = Literal["none", "retry", "after_operator_fix", "after_budget_reset"]
 
 
-class NewsPortalErrorDiagnostic(BaseModel):
+class SignalOpsErrorDiagnostic(BaseModel):
     code: str
-    domain: NewsPortalErrorDomain
-    severity: NewsPortalErrorSeverity
-    retry_hint: NewsPortalRetryHint
+    domain: SignalOpsErrorDomain
+    severity: SignalOpsErrorSeverity
+    retry_hint: SignalOpsRetryHint
     message: str | None = None
 
 
-ERROR_CODE_DEFAULTS: dict[str, tuple[NewsPortalErrorDomain, NewsPortalErrorSeverity, NewsPortalRetryHint]] = {
+ERROR_CODE_DEFAULTS: dict[str, tuple[SignalOpsErrorDomain, SignalOpsErrorSeverity, SignalOpsRetryHint]] = {
     "acquisition_url.blocked": ("acquisition_url", "warning", "after_operator_fix"),
     "acquisition_url.final_blocked": ("acquisition_url", "warning", "after_operator_fix"),
     "provider_fetch.failed": ("provider_fetch", "warning", "retry"),
@@ -47,15 +47,15 @@ def create_error_diagnostic(
     *,
     code: str,
     message: str | None = None,
-    domain: NewsPortalErrorDomain | None = None,
-    severity: NewsPortalErrorSeverity | None = None,
-    retry_hint: NewsPortalRetryHint | None = None,
-) -> NewsPortalErrorDiagnostic:
+    domain: SignalOpsErrorDomain | None = None,
+    severity: SignalOpsErrorSeverity | None = None,
+    retry_hint: SignalOpsRetryHint | None = None,
+) -> SignalOpsErrorDiagnostic:
     default_domain, default_severity, default_retry_hint = ERROR_CODE_DEFAULTS.get(
         code,
         ("unknown", "error", "none"),
     )
-    return NewsPortalErrorDiagnostic(
+    return SignalOpsErrorDiagnostic(
         code=code,
         domain=domain or default_domain,
         severity=severity or default_severity,

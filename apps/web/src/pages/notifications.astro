@@ -1,8 +1,8 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
 import { LiveSurfaceSummary } from "../components/LiveSurfaceSummary";
@@ -20,7 +20,7 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 const pageBaseUrl = new URL(Astro.url);
 if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
@@ -56,7 +56,7 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
 ---
 
 <Shell
-  title="Notifications — NewsPortal"
+  title="Notifications — SignalOps"
   session={session}
   themeClass={themeClass}
   currentTheme={themePreference}

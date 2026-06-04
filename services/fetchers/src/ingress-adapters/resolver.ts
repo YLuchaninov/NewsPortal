@@ -3,7 +3,7 @@ import {
   type IngressAdapterOutputMode,
   type IngressAdapterRuntimeKind,
   type SourceProviderType,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import type { SourceChannelRow } from "../fetcher-persistence";

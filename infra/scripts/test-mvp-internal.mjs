@@ -45,6 +45,7 @@ function readHeader(headers, name) {
 }
 
 const adminActionTokenCache = new Map();
+const webActionTokenCache = new Map();
 const adminActionScopes = new Map([
   ["/bff/admin/articles/enrichment-retry", "articles.enrichment-retry"],
   ["/bff/admin/automation", "automation"],
@@ -104,6 +105,30 @@ function parseAdminActionTokens(html) {
   }
 }
 
+function parseJsonScriptById(html, id) {
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(
+    new RegExp(`<script[^>]*id=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/script>`, "i")
+  );
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[1] ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+function parseWebActionTokenBundle(html) {
+  const tokens = parseJsonScriptById(html, "web-action-tokens");
+  const targets = parseJsonScriptById(html, "web-action-token-targets");
+  return {
+    tokens: tokens && typeof tokens === "object" && !Array.isArray(tokens) ? tokens : {},
+    targets: Array.isArray(targets) ? targets : [],
+  };
+}
+
 async function readAdminActionToken(url, cookie) {
   if (!cookie) {
     return "";
@@ -132,6 +157,55 @@ async function readAdminActionToken(url, cookie) {
     adminActionTokenCache.set(cacheKey, tokens);
   }
   return String(tokens[scope] ?? "").trim();
+}
+
+function normalizeWebActionPath(value) {
+  const pathname = new URL(value, "http://127.0.0.1").pathname;
+  const bffIndex = pathname.indexOf("/bff/");
+  return bffIndex >= 0 ? pathname.slice(bffIndex) : pathname;
+}
+
+function resolveWebActionScope(url, targets) {
+  const pathname = normalizeWebActionPath(url);
+  const exactTarget = targets.find(
+    (target) => !target?.routePrefix && pathname === target?.targetPath
+  );
+  if (exactTarget) {
+    return String(exactTarget.scope ?? "");
+  }
+  const prefixTarget = targets.find(
+    (target) => target?.routePrefix && pathname.startsWith(`${target.targetPath}/`)
+  );
+  return String(prefixTarget?.scope ?? "");
+}
+
+async function readWebActionToken(url, cookie) {
+  if (!cookie) {
+    return "";
+  }
+  const target = new URL(url);
+  if (!normalizeWebActionPath(target.href).startsWith("/bff/")) {
+    return "";
+  }
+
+  const cacheKey = `${target.origin}|${cookie}`;
+  let bundle = webActionTokenCache.get(cacheKey);
+  if (!bundle) {
+    const response = await sendRequest(`${target.origin}/`, {
+      method: "GET",
+      headers: {
+        Accept: "text/html",
+        Cookie: cookie,
+      },
+    });
+    if (response.status < 200 || response.status >= 300) {
+      return "";
+    }
+    bundle = parseWebActionTokenBundle(response.text);
+    webActionTokenCache.set(cacheKey, bundle);
+  }
+  const scope = resolveWebActionScope(target.href, bundle.targets);
+  return scope ? String(bundle.tokens[scope] ?? "").trim() : "";
 }
 
 function assertLocationSearchParams(location, searchParams = {}) {
@@ -228,6 +302,7 @@ function assertExpiredCookie(response, cookieName) {
 async function postBrowserForm(url, payload, { cookie } = {}) {
   const target = new URL(url);
   const adminActionToken = await readAdminActionToken(url, cookie);
+  const webActionToken = await readWebActionToken(url, cookie);
   const body = new URLSearchParams(
     Object.entries(payload).map(([key, value]) => [key, String(value)])
   ).toString();
@@ -241,6 +316,7 @@ async function postBrowserForm(url, payload, { cookie } = {}) {
       "Sec-Fetch-Mode": "navigate",
       ...(cookie ? { Cookie: cookie } : {}),
       ...(adminActionToken ? { "x-admin-action-token": adminActionToken } : {}),
+      ...(webActionToken ? { "x-web-action-token": webActionToken } : {}),
       "Content-Type": "application/x-www-form-urlencoded",
       "Content-Length": Buffer.byteLength(body).toString()
     },
@@ -793,7 +869,7 @@ async function main() {
   const adminEmail = selectAdminEmail(allowlistEntries, runId, {
     prefix: "internal-admin",
   });
-  const adminPassword = `NewsPortal!${runId}`;
+  const adminPassword = `SignalOps!${runId}`;
   const notificationEmail = `internal-user-${runId}@example.test`;
   const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
   const articleSourceUrl = `https://example.test/content/${encodeURIComponent(`editorial:${runId}`)}`;
@@ -1476,7 +1552,7 @@ async function main() {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once",
       adminChannelId
     );
@@ -2052,7 +2128,7 @@ async function main() {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once",
       adminFreshChannelId
     );

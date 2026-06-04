@@ -1,4 +1,4 @@
-import { parseWebsiteChannelConfig } from "@newsportal/contracts";
+import { parseWebsiteChannelConfig } from "@signalops/contracts";
 
 import type { FetchersConfig } from "./config";
 import { ChannelFetchError } from "./fetcher-channel-helpers";

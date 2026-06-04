@@ -1,9 +1,9 @@
-import { MCP_TEMPLATE_ARGUMENT_SCHEMAS } from "@newsportal/contracts";
+import { MCP_TEMPLATE_ARGUMENT_SCHEMAS } from "@signalops/contracts";
 import {
   deleteTemplateWithAudit,
   saveTemplateFromPayload,
   setTemplateActiveStateWithAudit,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import {
   createReadTool,

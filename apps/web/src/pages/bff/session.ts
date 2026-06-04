@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { jsonBffSessionResponse } from "@newsportal/bff-server";
+import { jsonBffSessionResponse } from "@signalops/bff-server";
 
 import { resolveWebSession } from "../../lib/server/auth";
 

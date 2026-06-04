@@ -47,7 +47,7 @@ test("planFeedAlternativesForDiscovery validates HTML alternate feeds and keeps 
     const result = await planFeedAlternativesForDiscovery({
       urls: ["https://example.com/news"],
       sampleCount: 1,
-      userAgent: "NewsPortalTest/0.1",
+      userAgent: "SignalOpsTest/0.1",
       timeoutMs: 1000,
       maxCandidatesPerUrl: 20,
     });

@@ -1,4 +1,4 @@
-import { Button } from "@newsportal/ui";
+import { Button } from "@signalops/ui";
 
 interface AutomationEditorHeaderProps {
   status: string;

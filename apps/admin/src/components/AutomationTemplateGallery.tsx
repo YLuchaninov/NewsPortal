@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@newsportal/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@signalops/ui";
 
 import {
   AUTOMATION_TEMPLATES,

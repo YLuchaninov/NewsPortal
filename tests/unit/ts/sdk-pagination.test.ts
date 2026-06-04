@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createNewsPortalSdk } from "../../../packages/sdk/src/index.ts";
+import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
 
 test("listSystemSelectedContentItems sends pagination, sort, and search params", async () => {
   let requestedUrl = "";
@@ -15,7 +15,7 @@ test("listSystemSelectedContentItems sends pagination, sort, and search params",
     hasPrev: true,
   };
 
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -42,7 +42,7 @@ test("listSystemSelectedContentItems sends pagination, sort, and search params",
 
 test("listSystemSelectedContentItems omits empty pagination params and blank search", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test/",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -71,7 +71,7 @@ test("listSystemSelectedContentItems omits empty pagination params and blank sea
 
 test("listMatchesPage sends pagination, sort, and search params", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -118,7 +118,7 @@ test("listArticlesPage sends pagination params to the admin article list", async
     hasPrev: true,
   };
 
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -140,7 +140,7 @@ test("listArticlesPage sends pagination params to the admin article list", async
 
 test("listContentItemsPage preserves search and sort params", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -177,7 +177,7 @@ test("listContentItemsPage preserves search and sort params", async () => {
 
 test("article residual endpoints preserve filters and pagination params", async () => {
   const requestedUrls = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrls.push(String(input));
@@ -230,7 +230,7 @@ test("article residual endpoints preserve filters and pagination params", async 
 
 test("listFetchRunsPage preserves filters while sending pagination params", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -266,7 +266,7 @@ test("listFetchRunsPage preserves filters while sending pagination params", asyn
 
 test("listWebResourcesPage preserves website filters while sending pagination params", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -305,7 +305,7 @@ test("listWebResourcesPage preserves website filters while sending pagination pa
 
 test("listNotificationsPage targets the user-specific notification path", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -334,7 +334,7 @@ test("listNotificationsPage targets the user-specific notification path", async 
 
 test("listClustersPage sends pagination params", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -365,7 +365,7 @@ test("retryArticleEnrichment posts to the dedicated maintenance route", async ()
   let requestedUrl = "";
   let requestedMethod = "";
   let requestedBody = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -398,7 +398,7 @@ test("retryArticleEnrichment posts to the dedicated maintenance route", async ()
 
 test("getArticleSelectionSummary reads the raw-versus-selected count endpoint", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -431,7 +431,7 @@ test("getArticleSelectionSummary reads the raw-versus-selected count endpoint", 
 
 test("listSequencesPage sends pagination params to sequence maintenance", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -462,7 +462,7 @@ test("requestSequenceRun posts to the sequence run route", async () => {
   let requestedUrl = "";
   let requestedMethod = "";
   let requestedBody = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -499,7 +499,7 @@ test("cancelSequenceRun posts cancel reason to the dedicated route", async () =>
   let requestedUrl = "";
   let requestedMethod = "";
   let requestedBody = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -534,7 +534,7 @@ test("retrySequenceRun posts retry payload to the dedicated route", async () => 
   let requestedUrl = "";
   let requestedMethod = "";
   let requestedBody = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrl = String(input);
@@ -570,7 +570,7 @@ test("retrySequenceRun posts retry payload to the dedicated route", async () => 
 
 test("listOutboxEvents preserves explicit limit", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -588,7 +588,7 @@ test("listOutboxEvents preserves explicit limit", async () => {
 
 test("listOutboxEvents sends aggregate filters", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);
@@ -615,7 +615,7 @@ test("listOutboxEvents sends aggregate filters", async () => {
 
 test("listLlmTemplatesPage and listSystemInterestsPage send independent pagination params", async () => {
   const requestedUrls: string[] = [];
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrls.push(String(input));
@@ -648,7 +648,7 @@ test("listLlmTemplatesPage and listSystemInterestsPage send independent paginati
 
 test("listInterestsPage targets the user-specific interests path", async () => {
   let requestedUrl = "";
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
       requestedUrl = String(input);

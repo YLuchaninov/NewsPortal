@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 
-import { parseEmailImapChannelConfig } from "@newsportal/contracts";
+import { parseEmailImapChannelConfig } from "@signalops/contracts";
 import { ImapFlow } from "imapflow";
 
 import {

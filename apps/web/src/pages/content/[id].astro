@@ -1,8 +1,8 @@
 ---
-import type { ContentItemDetail } from "@newsportal/contracts";
-import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
-import { sanitizeHtmlFragment } from "@newsportal/content-safety";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import type { ContentItemDetail } from "@signalops/contracts";
+import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@signalops/config";
+import { sanitizeHtmlFragment } from "@signalops/content-safety";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import Shell from "../../layouts/Shell.astro";
 import { UserContentStateControls } from "../../components/UserContentStateControls";
@@ -16,7 +16,7 @@ export const prerender = false;
 const session = await resolveWebSession(Astro.request);
 const flash = readFlash(Astro.url);
 const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
-const sdk = createNewsPortalSdk({
+const sdk = createSignalOpsSdk({
   baseUrl: runtimeConfig.apiBaseUrl,
   fetchImpl: fetch,
 });

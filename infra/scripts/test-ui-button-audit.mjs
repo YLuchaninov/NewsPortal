@@ -309,7 +309,7 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
       "fetchers",
       "pnpm",
       "--filter",
-      "@newsportal/fetchers",
+      "@signalops/fetchers",
       "run:once",
       channelId
     );
@@ -1459,7 +1459,7 @@ async function main() {
   log(`Run id ${runId}`);
   const allowlistEntries = readAllowlistEntries(env);
   const adminEmail = selectAdminEmail(allowlistEntries, runId, { prefix: "button-audit" });
-  const adminPassword = `NewsPortal!${runId}`;
+  const adminPassword = `SignalOps!${runId}`;
   let adminCreated = false;
 
   await ensureComposeStack();

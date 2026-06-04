@@ -5,7 +5,7 @@ import {
   revokeMcpAccessToken,
   summarizeMcpAccessTokens,
   type McpAccessTokenRecord,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import {
   createReadTool,

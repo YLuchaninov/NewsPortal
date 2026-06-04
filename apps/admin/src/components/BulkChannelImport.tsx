@@ -20,7 +20,7 @@ import {
   CollapsibleTrigger,
   FormField,
   Textarea
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 export type BulkChannelImportExampleMode =
   | "mixed"
@@ -308,7 +308,7 @@ const BULK_IMPORT_VIEW_MODELS: Record<
           maxPollIntervalSeconds: 14400,
           requestTimeoutMs: 10000,
           totalPollTimeoutMs: 60000,
-          userAgent: "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+          userAgent: "SignalOpsFetchers/0.1 (+https://signalops.local)",
           maxResourcesPerPoll: 20,
           crawlDelayMs: 1000,
           sitemapDiscoveryEnabled: true,

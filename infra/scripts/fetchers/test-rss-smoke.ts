@@ -174,7 +174,7 @@ async function seedSmokeChannel(pool: Pool, fetchUrl: string): Promise<string> {
       JSON.stringify({
         maxItemsPerPoll: 10,
         requestTimeoutMs: 5000,
-        userAgent: "NewsPortalFetchers/SmokeTest",
+        userAgent: "SignalOpsFetchers/SmokeTest",
         preferContentEncoded: true
       })
     ]

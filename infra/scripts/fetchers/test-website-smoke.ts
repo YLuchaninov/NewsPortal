@@ -11,6 +11,8 @@ import { ResourceEnrichmentService } from "../../../services/fetchers/src/resour
 interface WaitOptions {
   timeoutMs: number;
   pollIntervalMs: number;
+  describeLastValue?: () => string | Promise<string>;
+  timeoutMessage?: string;
 }
 
 interface WebResourceRow {
@@ -20,6 +22,7 @@ interface WebResourceRow {
   resourceKind: string;
   discoverySource: string;
   extractionState: string;
+  extractionError: string | null;
   projectedArticleId: string | null;
   documentsCount: number;
   mediaCount: number;
@@ -91,7 +94,12 @@ async function waitForCondition(
     await sleep(options.pollIntervalMs);
   }
 
-  throw new Error("Timed out waiting for website smoke assertions.");
+  const details = options.describeLastValue ? await options.describeLastValue() : "";
+  throw new Error(
+    `${options.timeoutMessage ?? "Timed out waiting for website smoke assertions."}${
+      details ? ` Last observed state: ${details}` : ""
+    }`
+  );
 }
 
 function editorialHtml(title: string, runId: string, label: string, imageUrl: string): string {
@@ -146,6 +154,45 @@ function entityHtml(title: string, runId: string): string {
     </main>
   </body>
 </html>`;
+}
+
+function textPdfFixture(): Uint8Array {
+  return new TextEncoder().encode(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 95 >>
+stream
+BT /F1 24 Tf 72 720 Td (RFP Document Title) Tj 0 -32 Td (Issuer City deadline June 30 2026) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Title (Procurement RFP Metadata Title) /CreationDate (D:20260601120000Z) >>
+endobj
+xref
+0 7
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000241 00000 n
+0000000311 00000 n
+0000000456 00000 n
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+548
+%%EOF`);
 }
 
 async function startFixtureServer(runId: string): Promise<{
@@ -324,7 +371,7 @@ async function startFixtureServer(runId: string): Promise<{
       response.writeHead(200, {
         "content-type": "application/pdf",
       });
-      response.end(`PDF fixture body ${runId} with enough text for deterministic document extraction.`);
+      response.end(textPdfFixture());
       return;
     }
 
@@ -408,7 +455,7 @@ async function seedWebsiteChannel(pool: Pool, siteUrl: string): Promise<string> 
         maxResourcesPerPoll: 10,
         requestTimeoutMs: 5000,
         totalPollTimeoutMs: 30000,
-        userAgent: "NewsPortalFetchers/WebsiteSmoke",
+        userAgent: "SignalOpsFetchers/WebsiteSmoke",
         sitemapDiscoveryEnabled: true,
         feedDiscoveryEnabled: true,
         collectionDiscoveryEnabled: true,
@@ -448,6 +495,7 @@ async function fetchResourceRows(pool: Pool, channelId: string): Promise<WebReso
         resource_kind as "resourceKind",
         discovery_source as "discoverySource",
         extraction_state as "extractionState",
+        extraction_error as "extractionError",
         projected_article_id::text as "projectedArticleId",
         jsonb_array_length(documents_json)::int as "documentsCount",
         jsonb_array_length(media_json)::int as "mediaCount",
@@ -709,6 +757,7 @@ async function assertWebsiteRows(
   runId: string,
   resourceEnrichmentService: ResourceEnrichmentService
 ): Promise<void> {
+  let lastObservedState = "no website smoke observations collected";
   await waitForCondition(
     async () => {
       await enrichDiscoveredResources(pool, resourceEnrichmentService, channelId, 4);
@@ -730,6 +779,26 @@ async function assertWebsiteRows(
         countResourceSequenceRuns(pool, resourceIds),
         countArticleSequenceRuns(pool, articleIds),
       ]);
+      lastObservedState = JSON.stringify({
+        resources: resources.map((resource) => ({
+          url: resource.url,
+          kind: resource.resourceKind,
+          source: resource.discoverySource,
+          state: resource.extractionState,
+          error: resource.extractionError,
+          projected: Boolean(resource.projectedArticleId),
+        })),
+        articles: articles.map((article) => ({
+          url: article.url,
+          kind: article.contentKind,
+          enrichmentState: article.enrichmentState,
+          processingState: article.processingState,
+        })),
+        publishedResourceEvents,
+        publishedArticleEvents,
+        resourceSequenceRuns,
+        articleSequenceRuns,
+      });
 
       return (
         resources.length === 4 &&
@@ -745,6 +814,7 @@ async function assertWebsiteRows(
     {
       timeoutMs: 90000,
       pollIntervalMs: 1000,
+      describeLastValue: () => lastObservedState,
     }
   );
 

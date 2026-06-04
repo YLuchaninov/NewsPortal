@@ -1,7 +1,7 @@
 import {
   normalizeMaxPollIntervalSeconds,
   type SourceProviderType
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 import type { Pool } from "pg";
 
 const ALLOWED_PROVIDER_TYPES: SourceProviderType[] = [

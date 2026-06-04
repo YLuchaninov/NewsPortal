@@ -52,7 +52,7 @@ pnpm test:product:mega-flow:compose
 - Example B: developer news discovery;
 - Example C: outsourcing / procurement discovery.
 
-Команда пишет `/tmp/newsportal-product-mega-flow-<runId>.json|md`. После Discovery vNext cutover она проверяет только текущие product/runtime/provider/read-surface gates; отдельный live-yield proof для старой discovery модели удален.
+Команда пишет `/tmp/signalops-product-mega-flow-<runId>.json|md`. После Discovery vNext cutover она проверяет только текущие product/runtime/provider/read-surface gates; отдельный live-yield proof для старой discovery модели удален.
 
 ## Total Live Product Audit
 
@@ -62,7 +62,7 @@ pnpm test:product:total-live:compose
 
 Это самый широкий local/live audit layer. Он запускает strict A/B/C mega-flow как hard gate, затем расширяет proof на website/admin, automation admin, relay phases, worker smokes, browser UI audit, MCP and live diagnostic lanes.
 
-Команда пишет `/tmp/newsportal-product-total-live-<runId>.json|md`. Возможные итоговые состояния:
+Команда пишет `/tmp/signalops-product-total-live-<runId>.json|md`. Возможные итоговые состояния:
 
 - `pass`: strict A/B/C mega-flow, required core/runtime/provider/surface lanes and deterministic provider fixtures passed;
 - `weak`: required lanes passed, but live-internet diagnostic lanes have classified residuals;

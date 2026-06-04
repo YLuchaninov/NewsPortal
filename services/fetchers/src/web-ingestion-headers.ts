@@ -1,7 +1,7 @@
 import {
   parseSourceChannelAuthConfig,
   resolveSourceChannelAuthorizationHeader,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 export interface WebsiteAuthContext {
   channelUrl: string;

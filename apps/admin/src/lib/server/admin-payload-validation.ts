@@ -2,7 +2,7 @@ import {
   validateAdminChannelPayload,
   validateJsonSchema,
   type JsonSchema,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 const ADMIN_META_FIELDS = new Set(["intent", "redirectTo"]);
 

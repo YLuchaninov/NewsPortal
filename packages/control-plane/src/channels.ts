@@ -1,4 +1,4 @@
-import { assertAdminChannelPayload } from "@newsportal/contracts";
+import { assertAdminChannelPayload } from "@signalops/contracts";
 import type { Pool } from "pg";
 
 import {

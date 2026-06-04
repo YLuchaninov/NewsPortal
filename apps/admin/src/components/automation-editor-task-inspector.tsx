@@ -9,7 +9,7 @@ import {
   SelectValue,
   Switch,
   Textarea,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 import type {
   AutomationNodeData,

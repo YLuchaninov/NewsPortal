@@ -1,34 +1,34 @@
-# NewsPortal MCP Client Setup Examples
+# SignalOps MCP Client Setup Examples
 
-These examples assume the NewsPortal server is already running and that you have already issued an MCP token from the admin UI.
+These examples assume the SignalOps server is already running and that you have already issued an MCP token from the admin UI.
 
 Quick framing:
 
-- Audience: operator or developer wiring a real MCP client to NewsPortal.
+- Audience: operator or developer wiring a real MCP client to SignalOps.
 - Covers: concrete config snippets for supported clients and the minimum checks that prove the client sees the server.
-- Out of scope: server implementation internals, token issuance policy design, and non-NewsPortal MCP servers.
+- Out of scope: server implementation internals, token issuance policy design, and non-SignalOps MCP servers.
 - Prerequisites: reachable `/mcp` endpoint and a valid bearer token from `/automation/mcp`.
-- Expected result: the client lists or connects to the `newsportal` server without hardcoded secrets in config files.
+- Expected result: the client lists or connects to the `signalops` server without hardcoded secrets in config files.
 
 ## Shared variables
 
 For local testing:
 
 ```bash
-export NEWSPORTAL_MCP_URL="http://127.0.0.1:8080/mcp"
-export NEWSPORTAL_MCP_TOKEN="npmcp_replace_with_real_token"
+export SIGNALOPS_MCP_URL="http://127.0.0.1:8080/mcp"
+export SIGNALOPS_MCP_TOKEN="npmcp_replace_with_real_token"
 ```
 
 For a remote or shared environment, replace the URL with the deployed HTTPS endpoint:
 
 ```bash
-export NEWSPORTAL_MCP_URL="https://newsportal.example.com/mcp"
-export NEWSPORTAL_MCP_TOKEN="npmcp_replace_with_real_token"
+export SIGNALOPS_MCP_URL="https://signalops.example.com/mcp"
+export SIGNALOPS_MCP_TOKEN="npmcp_replace_with_real_token"
 ```
 
 Recommended naming:
 
-- server name: `newsportal`
+- server name: `signalops`
 - auth header: `Authorization: Bearer <token>`
 
 ## Codex
@@ -36,9 +36,9 @@ Recommended naming:
 Preferred setup: add the server with the CLI and let Codex read the bearer token from an environment variable.
 
 ```bash
-codex mcp add newsportal \
-  --url "$NEWSPORTAL_MCP_URL" \
-  --bearer-token-env-var NEWSPORTAL_MCP_TOKEN
+codex mcp add signalops \
+  --url "$SIGNALOPS_MCP_URL" \
+  --bearer-token-env-var SIGNALOPS_MCP_TOKEN
 ```
 
 Verify:
@@ -47,10 +47,10 @@ Verify:
 codex mcp list
 ```
 
-If you also want the agent to prefer this server when the task is about NewsPortal admin or maintenance operations, add an instruction like this to your local rules:
+If you also want the agent to prefer this server when the task is about SignalOps admin or maintenance operations, add an instruction like this to your local rules:
 
 ```md
-Use the NewsPortal MCP server for NewsPortal admin and maintenance work before falling back to guesses or manual API exploration.
+Use the SignalOps MCP server for SignalOps admin and maintenance work before falling back to guesses or manual API exploration.
 Start with read surfaces and scenario guides before writes.
 ```
 
@@ -73,13 +73,13 @@ Project-level example:
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "newsportal": {
+    "signalops": {
       "type": "remote",
-      "url": "{env:NEWSPORTAL_MCP_URL}",
+      "url": "{env:SIGNALOPS_MCP_URL}",
       "enabled": true,
       "oauth": false,
       "headers": {
-        "Authorization": "Bearer {env:NEWSPORTAL_MCP_TOKEN}"
+        "Authorization": "Bearer {env:SIGNALOPS_MCP_TOKEN}"
       }
     }
   }
@@ -88,16 +88,16 @@ Project-level example:
 
 Why `oauth: false`:
 
-- NewsPortal MCP uses admin-issued bearer tokens, not OAuth.
+- SignalOps MCP uses admin-issued bearer tokens, not OAuth.
 
 Useful OpenCode checks:
 
 ```bash
 opencode mcp list
-opencode mcp debug newsportal
+opencode mcp debug signalops
 ```
 
-If you have many MCP servers enabled in OpenCode, keep `newsportal` scoped to the agents that actually need it so it does not add unnecessary tool context to unrelated sessions.
+If you have many MCP servers enabled in OpenCode, keep `signalops` scoped to the agents that actually need it so it does not add unnecessary tool context to unrelated sessions.
 
 Sources:
 
@@ -111,10 +111,10 @@ Project-scoped example in `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "newsportal": {
-      "url": "${env:NEWSPORTAL_MCP_URL}",
+    "signalops": {
+      "url": "${env:SIGNALOPS_MCP_URL}",
       "headers": {
-        "Authorization": "Bearer ${env:NEWSPORTAL_MCP_TOKEN}"
+        "Authorization": "Bearer ${env:SIGNALOPS_MCP_TOKEN}"
       }
     }
   }
@@ -133,13 +133,13 @@ Useful Cursor checks:
 
 ```bash
 cursor-agent mcp list
-cursor-agent mcp list-tools newsportal
+cursor-agent mcp list-tools signalops
 ```
 
 Recommended project instruction snippet:
 
 ```md
-Use the `newsportal` MCP server for NewsPortal operator work.
+Use the `signalops` MCP server for SignalOps operator work.
 Start with `GET /mcp`-discoverable resources, prompts, and read tools before any write action.
 ```
 
@@ -159,17 +159,17 @@ Example using a secure prompt for the token:
   "inputs": [
     {
       "type": "promptString",
-      "id": "newsportal-mcp-token",
-      "description": "NewsPortal MCP bearer token",
+      "id": "signalops-mcp-token",
+      "description": "SignalOps MCP bearer token",
       "password": true
     }
   ],
   "servers": {
-    "newsportal": {
+    "signalops": {
       "type": "http",
       "url": "http://127.0.0.1:8080/mcp",
       "headers": {
-        "Authorization": "Bearer ${input:newsportal-mcp-token}"
+        "Authorization": "Bearer ${input:signalops-mcp-token}"
       }
     }
   }
@@ -181,8 +181,8 @@ For a remote environment, replace the URL with the deployed HTTPS endpoint.
 Recommended VS Code workflow:
 
 1. Open Copilot Chat in Agent mode.
-2. Enable the `newsportal` server in the MCP tools picker.
-3. Ask the agent to start with NewsPortal MCP guide resources and read tools.
+2. Enable the `signalops` server in the MCP tools picker.
+3. Ask the agent to start with SignalOps MCP guide resources and read tools.
 
 Source:
 
@@ -195,8 +195,8 @@ Claude Code supports project-scoped `.mcp.json` and CLI-based registration.
 CLI example:
 
 ```bash
-claude mcp add --transport http newsportal "$NEWSPORTAL_MCP_URL" \
-  --header "Authorization: Bearer ${NEWSPORTAL_MCP_TOKEN}"
+claude mcp add --transport http signalops "$SIGNALOPS_MCP_URL" \
+  --header "Authorization: Bearer ${SIGNALOPS_MCP_TOKEN}"
 ```
 
 Project-scoped `.mcp.json` example:
@@ -204,11 +204,11 @@ Project-scoped `.mcp.json` example:
 ```json
 {
   "mcpServers": {
-    "newsportal": {
+    "signalops": {
       "type": "http",
-      "url": "${NEWSPORTAL_MCP_URL:-http://127.0.0.1:8080/mcp}",
+      "url": "${SIGNALOPS_MCP_URL:-http://127.0.0.1:8080/mcp}",
       "headers": {
-        "Authorization": "Bearer ${NEWSPORTAL_MCP_TOKEN}"
+        "Authorization": "Bearer ${SIGNALOPS_MCP_TOKEN}"
       }
     }
   }
@@ -219,7 +219,7 @@ Useful Claude Code checks:
 
 ```bash
 claude mcp list
-claude mcp get newsportal
+claude mcp get signalops
 ```
 
 Inside Claude Code:
@@ -236,17 +236,17 @@ Sources:
 
 ## Claude Desktop
 
-NewsPortal MCP is a remote HTTP server, so treat Claude Desktop differently depending on how you want to use it:
+SignalOps MCP is a remote HTTP server, so treat Claude Desktop differently depending on how you want to use it:
 
-- Remote NewsPortal MCP:
+- Remote SignalOps MCP:
   add it through Claude's connector flow, not through `claude_desktop_config.json`
 - Local stdio MCP servers:
-  use Claude Desktop extensions or local config only if you are packaging a local MCP server, which is not how NewsPortal ships
+  use Claude Desktop extensions or local config only if you are packaging a local MCP server, which is not how SignalOps ships
 
 Important remote note:
 
 - Anthropic's remote MCP guidance says remote connectors are configured through Claude's connector flow and accessed from Anthropic-managed infrastructure.
-- That means a private NewsPortal deployment behind VPN-only access will not work there unless it is made reachable according to Anthropic's remote connector requirements.
+- That means a private SignalOps deployment behind VPN-only access will not work there unless it is made reachable according to Anthropic's remote connector requirements.
 
 Sources:
 

@@ -300,7 +300,7 @@ export type ParsedSourceChannelConfig =
 const DEFAULT_RSS_CHANNEL_CONFIG: RssChannelConfig = {
   maxItemsPerPoll: 20,
   requestTimeoutMs: 10000,
-  userAgent: "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+  userAgent: "SignalOpsFetchers/0.1 (+https://signalops.local)",
   preferContentEncoded: true,
   adapterStrategy: null,
   maxEntryAgeHours: null
@@ -310,7 +310,7 @@ const DEFAULT_WEBSITE_CHANNEL_CONFIG: WebsiteChannelConfig = {
   maxResourcesPerPoll: 20,
   requestTimeoutMs: 10000,
   totalPollTimeoutMs: 60000,
-  userAgent: "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+  userAgent: "SignalOpsFetchers/0.1 (+https://signalops.local)",
   sitemapDiscoveryEnabled: true,
   feedDiscoveryEnabled: true,
   collectionDiscoveryEnabled: true,
@@ -347,7 +347,7 @@ const DEFAULT_WEBSITE_CHANNEL_CONFIG: WebsiteChannelConfig = {
 const DEFAULT_API_CHANNEL_CONFIG: ApiChannelConfig = {
   maxItemsPerPoll: 20,
   requestTimeoutMs: 10000,
-  userAgent: "NewsPortalFetchers/0.1 (+https://newsportal.local)",
+  userAgent: "SignalOpsFetchers/0.1 (+https://signalops.local)",
   requestMethod: "GET",
   requestHeaders: {},
   requestBodyJson: null,
@@ -811,7 +811,7 @@ function readApiRequestHeaders(value: unknown): Record<string, string> {
       throw new Error('Source channel config field "requestHeaders" must not include empty names.');
     }
     if (API_REQUEST_HEADER_BLOCKLIST.has(name)) {
-      throw new Error(`Source channel config request header "${rawName}" is managed by NewsPortal.`);
+      throw new Error(`Source channel config request header "${rawName}" is managed by SignalOps.`);
     }
     if (typeof rawValue !== "string") {
       throw new Error(`Source channel config request header "${rawName}" must be a string.`);

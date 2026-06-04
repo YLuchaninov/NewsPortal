@@ -279,9 +279,9 @@ const REQUIRED_TOOLS = [
 ];
 
 const REQUIRED_RESOURCES = [
-  "newsportal://guide/scenarios/discovery-live-gap-hunting",
-  "newsportal://guide/scenarios/funnel-calibration",
-  "newsportal://guide/operating-model",
+  "signalops://guide/scenarios/discovery-live-gap-hunting",
+  "signalops://guide/scenarios/funnel-calibration",
+  "signalops://guide/operating-model",
 ];
 
 const REQUIRED_PROMPTS = [
@@ -574,8 +574,8 @@ async function runPreflight(client, token, report, env, args) {
   }
 
   const initialize = await client.mcpRpc(token, "initialize", {});
-  if (String(initialize?.result?.serverInfo?.name ?? "") !== "newsportal-mcp") {
-    failures.push("MCP initialize did not return newsportal-mcp.");
+  if (String(initialize?.result?.serverInfo?.name ?? "") !== "signalops-mcp") {
+    failures.push("MCP initialize did not return signalops-mcp.");
   }
 
   const [toolsList, resourcesList, promptsList] = await Promise.all([
@@ -1321,8 +1321,8 @@ function markdown(report) {
 
 async function persist(report) {
   report.finishedAt = new Date().toISOString();
-  const jsonPath = `/tmp/newsportal-discovery-vnext-mcp-outsourcing-verification-${report.runId}.json`;
-  const mdPath = `/tmp/newsportal-discovery-vnext-mcp-outsourcing-verification-${report.runId}.md`;
+  const jsonPath = `/tmp/signalops-discovery-vnext-mcp-outsourcing-verification-${report.runId}.json`;
+  const mdPath = `/tmp/signalops-discovery-vnext-mcp-outsourcing-verification-${report.runId}.md`;
   report.artifacts = { jsonPath, mdPath };
   const serializable = {
     ...report,

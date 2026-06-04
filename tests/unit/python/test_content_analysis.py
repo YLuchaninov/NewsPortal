@@ -228,7 +228,7 @@ class ContentAnalysisTests(unittest.TestCase):
             module="cluster_summary",
             enabled=True,
             mode="observe",
-            provider="newsportal",
+            provider="signalops",
             model_key="story-cluster-summary-v1",
             model_version="1",
             config={},

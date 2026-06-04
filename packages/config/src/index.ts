@@ -11,7 +11,7 @@ export interface BrandConfig {
 export const THEME_MODES: ThemeMode[] = ["light", "dark", "system"];
 
 export const DEFAULT_BRAND_CONFIG: BrandConfig = {
-  productName: "NewsPortal",
+  productName: "SignalOps",
   tagline: "Internal local MVP for clustered news alerts",
   accentColor: "#c45c2f",
   surfaceColor: "#f8f1e8",
@@ -81,7 +81,7 @@ function readFirstHeaderValue(request: Request | null | undefined, name: string)
 export function readCookieSecurePolicy(
   env: Record<string, string | undefined> = {}
 ): CookieSecurePolicy {
-  const normalized = String(env.NEWSPORTAL_COOKIE_SECURE_POLICY ?? "auto")
+  const normalized = String(env.SIGNALOPS_COOKIE_SECURE_POLICY ?? "auto")
     .trim()
     .toLowerCase();
   if (normalized === "always" || normalized === "never" || normalized === "auto") {
@@ -119,13 +119,13 @@ export function readRuntimeConfig(
   options: RuntimeConfigOptions = {}
 ): RuntimeConfig {
   const appBaseUrl = normalizeBaseUrl(
-    env.NEWSPORTAL_APP_BASE_URL ?? options.defaultAppBaseUrl ?? "http://127.0.0.1:4321/"
+    env.SIGNALOPS_APP_BASE_URL ?? options.defaultAppBaseUrl ?? "http://127.0.0.1:4321/"
   );
-  const apiBaseUrl = env.NEWSPORTAL_API_BASE_URL ?? options.defaultApiBaseUrl ?? "http://127.0.0.1:8000";
+  const apiBaseUrl = env.SIGNALOPS_API_BASE_URL ?? options.defaultApiBaseUrl ?? "http://127.0.0.1:8000";
   return {
     appBaseUrl,
     apiBaseUrl,
-    publicApiBaseUrl: env.NEWSPORTAL_PUBLIC_API_BASE_URL ?? apiBaseUrl,
+    publicApiBaseUrl: env.SIGNALOPS_PUBLIC_API_BASE_URL ?? apiBaseUrl,
     firebaseProjectId: env.FIREBASE_PROJECT_ID ?? "",
     firebaseWebApiKey: env.FIREBASE_WEB_API_KEY ?? "",
     webPushVapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "",

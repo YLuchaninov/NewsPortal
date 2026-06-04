@@ -1,6 +1,6 @@
-# NewsPortal MCP HTTP Smoke Examples
+# SignalOps MCP HTTP Smoke Examples
 
-These examples exercise the shipped NewsPortal MCP server directly over HTTP, including the article/content diagnostics layer used for evidence-based tuning.
+These examples exercise the shipped SignalOps MCP server directly over HTTP, including the article/content diagnostics layer used for evidence-based tuning.
 
 Quick framing:
 
@@ -13,23 +13,23 @@ Quick framing:
 ## Shared environment
 
 ```bash
-export NEWSPORTAL_MCP_URL="http://127.0.0.1:8080/mcp"
-export NEWSPORTAL_MCP_TOKEN="npmcp_replace_with_real_token"
+export SIGNALOPS_MCP_URL="http://127.0.0.1:8080/mcp"
+export SIGNALOPS_MCP_TOKEN="npmcp_replace_with_real_token"
 ```
 
 Remote variant:
 
 ```bash
-export NEWSPORTAL_MCP_URL="https://newsportal.example.com/mcp"
-export NEWSPORTAL_MCP_TOKEN="npmcp_replace_with_real_token"
+export SIGNALOPS_MCP_URL="https://signalops.example.com/mcp"
+export SIGNALOPS_MCP_TOKEN="npmcp_replace_with_real_token"
 ```
 
 ## 1. Server metadata over `GET /mcp`
 
 ```bash
 curl -sS \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
-  "$NEWSPORTAL_MCP_URL" | jq
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 Expected shape:
@@ -45,14 +45,14 @@ Expected shape:
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "init-1",
     "method": "initialize",
     "params": {}
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 Expected shape:
@@ -66,14 +66,14 @@ Expected shape:
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "tools-1",
     "method": "tools/list",
     "params": {}
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 4. List resources
@@ -81,14 +81,14 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "resources-1",
     "method": "resources/list",
     "params": {}
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 5. Read the built-in server overview
@@ -96,16 +96,16 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "resource-read-1",
     "method": "resources/read",
     "params": {
-      "uri": "newsportal://guide/server-overview"
+      "uri": "signalops://guide/server-overview"
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 6. Read a scenario guide
@@ -113,16 +113,16 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "resource-read-2",
     "method": "resources/read",
     "params": {
-      "uri": "newsportal://guide/scenarios/discovery"
+      "uri": "signalops://guide/scenarios/discovery"
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 7. List prompts
@@ -130,14 +130,14 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "prompts-1",
     "method": "prompts/list",
     "params": {}
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 8. Render a prompt
@@ -145,7 +145,7 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "prompt-get-1",
@@ -158,7 +158,7 @@ curl -sS \
       }
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 9. Call a safe read-only tool
@@ -166,7 +166,7 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "tool-call-1",
@@ -176,7 +176,7 @@ curl -sS \
       "arguments": {}
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 10. Read article residual diagnostics
@@ -184,7 +184,7 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "tool-call-articles-summary-1",
@@ -194,7 +194,7 @@ curl -sS \
       "arguments": {}
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 Expected shape:
@@ -209,7 +209,7 @@ Expected shape:
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "tool-call-articles-list-1",
@@ -223,7 +223,7 @@ curl -sS \
       }
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 12. Render a tuning prompt from residual evidence
@@ -231,7 +231,7 @@ curl -sS \
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "prompt-get-article-tune-1",
@@ -244,7 +244,7 @@ curl -sS \
       }
     }
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## 13. Failure checks
@@ -252,7 +252,7 @@ curl -sS \
 Missing token:
 
 ```bash
-curl -i -sS "$NEWSPORTAL_MCP_URL"
+curl -i -sS "$SIGNALOPS_MCP_URL"
 ```
 
 Malformed token:
@@ -260,7 +260,7 @@ Malformed token:
 ```bash
 curl -i -sS \
   -H "Authorization: Bearer npmcp_invalid.invalid" \
-  "$NEWSPORTAL_MCP_URL"
+  "$SIGNALOPS_MCP_URL"
 ```
 
 Unknown JSON-RPC method:
@@ -268,14 +268,14 @@ Unknown JSON-RPC method:
 ```bash
 curl -sS \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEWSPORTAL_MCP_TOKEN" \
+  -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "id": "bad-method-1",
     "method": "unknown.method",
     "params": {}
   }' \
-  "$NEWSPORTAL_MCP_URL" | jq
+  "$SIGNALOPS_MCP_URL" | jq
 ```
 
 ## Safe next step after smoke
@@ -284,5 +284,5 @@ After the read-only smoke passes:
 
 1. read the scenario guide for the target domain;
 2. render the matching session-start prompt if useful;
-3. if the job is tuning-related, inspect `newsportal://articles/residuals-summary` and `newsportal://guide/scenarios/article-diagnostics`;
+3. if the job is tuning-related, inspect `signalops://articles/residuals-summary` and `signalops://guide/scenarios/article-diagnostics`;
 4. only then try bounded write actions with a narrow-scope token.

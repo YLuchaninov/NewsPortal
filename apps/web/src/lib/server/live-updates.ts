@@ -1,6 +1,6 @@
-import { DEFAULT_PAGE } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { DEFAULT_PAGE } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import {
   buildLiveRevision,
@@ -100,7 +100,7 @@ export async function loadLiveUpdatesSnapshot(
   const runtimeConfig = readRuntimeConfig(process.env, {
     defaultAppBaseUrl: "http://127.0.0.1:4321/",
   });
-  const sdk = createNewsPortalSdk({
+  const sdk = createSignalOpsSdk({
     baseUrl: runtimeConfig.apiBaseUrl,
     fetchImpl: fetch,
   });

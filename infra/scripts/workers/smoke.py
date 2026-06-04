@@ -3261,7 +3261,7 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
                     reset_discovery_runtime()
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="NewsPortal worker smoke commands")
+    parser = argparse.ArgumentParser(description="SignalOps worker smoke commands")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("normalize-dedup")
     subparsers.add_parser("embed")

@@ -1,8 +1,8 @@
 import {
-  createNewsPortalErrorDiagnostic,
-  NEWSPORTAL_ERROR_CODES,
-  type NewsPortalErrorDiagnostic,
-} from "@newsportal/contracts";
+  createSignalOpsErrorDiagnostic,
+  SIGNALOPS_ERROR_CODES,
+  type SignalOpsErrorDiagnostic,
+} from "@signalops/contracts";
 import { parseDocument } from "htmlparser2";
 
 import { parseFeed, type ParsedFeedDiagnostic } from "./feed-parser/index";
@@ -32,7 +32,7 @@ export interface FeedProbeResult {
   discovered_feed_urls: string[];
   diagnostics: ParsedFeedDiagnostic[];
   error_code: string | null;
-  error_diagnostic: NewsPortalErrorDiagnostic | null;
+  error_diagnostic: SignalOpsErrorDiagnostic | null;
   error_text: string | null;
 }
 
@@ -58,8 +58,8 @@ class FeedProbeError extends Error {
   }
 }
 
-function diagnostic(code: string, message: string): NewsPortalErrorDiagnostic {
-  return createNewsPortalErrorDiagnostic({ code, message });
+function diagnostic(code: string, message: string): SignalOpsErrorDiagnostic {
+  return createSignalOpsErrorDiagnostic({ code, message });
 }
 
 function resultErrorFields(errorCode: string, errorText: string): Pick<FeedProbeResult, "error_code" | "error_diagnostic" | "error_text"> {
@@ -158,7 +158,7 @@ async function fetchText(url: string, input: Pick<FeedProbeInput, "userAgent" | 
   const guardedInitialUrl = await validateAcquisitionUrl(url, { resolveDns: true });
   if (!guardedInitialUrl.url) {
     throw new FeedProbeError(
-      NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked,
+      SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked,
       guardedInitialUrl.error ?? "Feed probe URL is not allowed.",
     );
   }
@@ -172,24 +172,24 @@ async function fetchText(url: string, input: Pick<FeedProbeInput, "userAgent" | 
   });
   if (!response.ok) {
     throw new FeedProbeError(
-      NEWSPORTAL_ERROR_CODES.providerFetchFailed,
+      SIGNALOPS_ERROR_CODES.providerFetchFailed,
       `Feed probe fetch failed with ${response.status} ${response.statusText}.`,
     );
   }
   const guardedFinalUrl = await validateAcquisitionUrl(response.url || url, { resolveDns: true });
   if (!guardedFinalUrl.url) {
     throw new FeedProbeError(
-      NEWSPORTAL_ERROR_CODES.acquisitionUrlFinalBlocked,
+      SIGNALOPS_ERROR_CODES.acquisitionUrlFinalBlocked,
       guardedFinalUrl.error ?? "Feed probe final URL is not allowed.",
     );
   }
   const contentLength = Number(response.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > MAX_FEED_PROBE_BODY_BYTES) {
-    throw new FeedProbeError(NEWSPORTAL_ERROR_CODES.providerFetchTooLarge, "Feed probe response body is too large.");
+    throw new FeedProbeError(SIGNALOPS_ERROR_CODES.providerFetchTooLarge, "Feed probe response body is too large.");
   }
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength > MAX_FEED_PROBE_BODY_BYTES) {
-    throw new FeedProbeError(NEWSPORTAL_ERROR_CODES.providerFetchTooLarge, "Feed probe response body is too large.");
+    throw new FeedProbeError(SIGNALOPS_ERROR_CODES.providerFetchTooLarge, "Feed probe response body is too large.");
   }
   return {
     finalUrl: guardedFinalUrl.url,
@@ -243,7 +243,7 @@ export async function probeFeedsForDiscovery(input: FeedProbeInput): Promise<{ p
         sample_entries: [],
         discovered_feed_urls: [],
         diagnostics: [],
-        ...resultErrorFields(NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked, errorText),
+        ...resultErrorFields(SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked, errorText),
       });
       continue;
     }
@@ -317,13 +317,13 @@ export async function probeFeedsForDiscovery(input: FeedProbeInput): Promise<{ p
             sample_entries: [],
             discovered_feed_urls: discovered,
             diagnostics: [],
-            ...resultErrorFields(NEWSPORTAL_ERROR_CODES.feedProbeNoValidFeed, errorText),
+            ...resultErrorFields(SIGNALOPS_ERROR_CODES.feedProbeNoValidFeed, errorText),
           });
         }
       }
     } catch (error) {
       const errorText = error instanceof Error ? error.message : "Feed probe failed.";
-      const errorCode = error instanceof FeedProbeError ? error.code : NEWSPORTAL_ERROR_CODES.feedProbeFailed;
+      const errorCode = error instanceof FeedProbeError ? error.code : SIGNALOPS_ERROR_CODES.feedProbeFailed;
       results.push({
         url: normalizedUrl.url,
         feed_url: normalizedUrl.url,

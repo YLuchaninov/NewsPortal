@@ -3,12 +3,12 @@ import {
   writeAuditLog,
   type McpAccessTokenRecord,
   type McpScope,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 import {
   MUTATION_RESULT_SCHEMA,
   type JsonSchema,
-} from "@newsportal/contracts";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+} from "@signalops/contracts";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import type { Pool } from "pg";
 
 import {
@@ -25,12 +25,12 @@ export {
   readOptionalString,
   readRequiredString,
 } from "../protocol";
-export type { McpAccessTokenRecord, McpScope } from "@newsportal/control-plane";
+export type { McpAccessTokenRecord, McpScope } from "@signalops/control-plane";
 
-export type NewsPortalSdk = ReturnType<typeof createNewsPortalSdk>;
+export type SignalOpsSdk = ReturnType<typeof createSignalOpsSdk>;
 
 export interface McpToolContext {
-  sdk: NewsPortalSdk;
+  sdk: SignalOpsSdk;
   pool: Pool;
   token: McpAccessTokenRecord;
 }

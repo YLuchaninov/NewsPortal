@@ -1,4 +1,4 @@
-import { FormField, Input } from "@newsportal/ui";
+import { FormField, Input } from "@signalops/ui";
 
 import type { ChannelEditorFormValue } from "./channel-editor-form-model";
 

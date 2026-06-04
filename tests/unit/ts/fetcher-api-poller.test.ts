@@ -105,7 +105,7 @@ test("pollApiProviderChannel supports POST next_url pagination and relative item
       "2026-05-01T10:10:00.000Z",
       {
         config: {
-          defaultUserAgent: "NewsPortalTest/0.1",
+          defaultUserAgent: "SignalOpsTest/0.1",
         } as never,
         loadCursorMap: async () => ({}),
         persistInputsWithPreflight: async (_channelId, inputs) => {

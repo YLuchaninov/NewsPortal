@@ -8,7 +8,7 @@ export const PRODUCT_TOTAL_LIVE_STATUSES = {
 export const PRODUCT_TOTAL_LIVE_REQUIRED_COMMANDS = [
   command("product-mega-flow-compose", "strict-live-product", ["test:product:mega-flow:compose", "--skip-stack-build"], {
     proves: ["a-b-c-live-selected-product-flow"],
-    requiredArtifactKind: "newsportal-product-mega-flow-proof",
+    requiredArtifactKind: "signalops-product-mega-flow-proof",
   }),
   command("providers-compose", "provider-fixtures", ["test:providers:compose"], {
     proves: ["api-fixture-ingestion", "email-imap-fixture-ingestion"],
@@ -243,7 +243,7 @@ function classifyDiagnosticCommand(commandResult) {
 
 function megaFlowEvidence(commandResults) {
   const commandResult = findCommand(commandResults, "product-mega-flow-compose");
-  const artifact = findArtifact(commandResult, (item) => item?.kind === "newsportal-product-mega-flow-proof");
+  const artifact = findArtifact(commandResult, (item) => item?.kind === "signalops-product-mega-flow-proof");
   if (!artifact) {
     return {
       status: commandResult?.status === "passed"

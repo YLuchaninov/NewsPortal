@@ -209,7 +209,7 @@ async function seedApiChannel(
       JSON.stringify({
         maxItemsPerPoll: 5,
         requestTimeoutMs: 5000,
-        userAgent: "NewsPortalFetchers/ProviderUniversalitySmoke",
+        userAgent: "SignalOpsFetchers/ProviderUniversalitySmoke",
         requestMethod: "POST",
         requestHeaders: {
           "x-provider-fixture": input.customHeader,

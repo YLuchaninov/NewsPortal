@@ -50,9 +50,9 @@ function psql(sql, { allowFailure = false } = {}) {
       "postgres",
       "psql",
       "-U",
-      "newsportal",
+      "signalops",
       "-d",
-      "newsportal",
+      "signalops",
       "-v",
       "ON_ERROR_STOP=1",
       "-q",
@@ -184,9 +184,9 @@ server.listen(0, "127.0.0.1", () => {
 }
 
 async function startFixtureServer(namespace) {
-  const statePath = `/tmp/newsportal-discovery-vnext-flow-${namespace}.json`;
-  const remoteScriptPath = `/tmp/newsportal-discovery-vnext-flow-${namespace}.mjs`;
-  const localScriptPath = path.join("/tmp", `newsportal-discovery-vnext-flow-${namespace}.mjs`);
+  const statePath = `/tmp/signalops-discovery-vnext-flow-${namespace}.json`;
+  const remoteScriptPath = `/tmp/signalops-discovery-vnext-flow-${namespace}.mjs`;
+  const localScriptPath = path.join("/tmp", `signalops-discovery-vnext-flow-${namespace}.mjs`);
 
   await writeFile(localScriptPath, buildFixtureServerScript(), "utf8");
   try {
@@ -877,14 +877,14 @@ async function runDeterministicFlow({ skipBuild }) {
 
     report.status = "succeeded";
     report.completedAt = new Date().toISOString();
-    const reportPath = path.join("/tmp", `newsportal-discovery-vnext-flow-${namespace}.json`);
+    const reportPath = path.join("/tmp", `signalops-discovery-vnext-flow-${namespace}.json`);
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     log(`Discovery vNext deterministic flow passed. Report: ${reportPath}`);
   } catch (error) {
     report.status = "failed";
     report.error = error instanceof Error ? error.message : String(error);
     report.completedAt = new Date().toISOString();
-    const reportPath = path.join("/tmp", `newsportal-discovery-vnext-flow-${namespace}.json`);
+    const reportPath = path.join("/tmp", `signalops-discovery-vnext-flow-${namespace}.json`);
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     throw error;
   } finally {

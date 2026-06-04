@@ -8,7 +8,7 @@
 
 ## Назначение
 
-Этот файл описывает долговечную инженерную дисциплину NewsPortal. Он не является backlog, proof log или историей. Архитектурный смысл живет в `.aidp/blueprint.md`, machine-readable команды — в `.aidp/os.yaml`, proof policy — в `.aidp/verification.md`.
+Этот файл описывает долговечную инженерную дисциплину SignalOps. Он не является backlog, proof log или историей. Архитектурный смысл живет в `.aidp/blueprint.md`, machine-readable команды — в `.aidp/os.yaml`, proof policy — в `.aidp/verification.md`.
 
 ## Общие принципы
 
@@ -94,7 +94,7 @@ Document Intake / Requirement Intake lives inside `docs-operator`; Memory consol
 
 ## Архитектурный quality bar
 
-NewsPortal должен развиваться как профессиональная, гибкая и масштабируемая система. Это означает:
+SignalOps должен развиваться как профессиональная, гибкая и масштабируемая система. Это означает:
 
 - high cohesion: модуль имеет одну понятную причину меняться и один основной уровень абстракции;
 - low coupling: модуль знает минимум о чужих data shapes, env, SQL details, queues and UI assumptions;

@@ -1,1 +1,1 @@
-export { insertOutboxEvent } from "@newsportal/bff-server";
+export { insertOutboxEvent } from "@signalops/bff-server";

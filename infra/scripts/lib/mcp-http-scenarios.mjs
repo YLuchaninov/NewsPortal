@@ -479,7 +479,7 @@ async function scenarioProtocolDiscovery(harness) {
 
   const initialize = await harness.mcpRpc(token, "initialize", {});
   assert(
-    String(initialize?.result?.serverInfo?.name ?? "") === "newsportal-mcp",
+    String(initialize?.result?.serverInfo?.name ?? "") === "signalops-mcp",
     "MCP initialize should return the expected server name."
   );
   const initializeInstructions = String(initialize?.result?.instructions ?? "");
@@ -496,7 +496,7 @@ async function scenarioProtocolDiscovery(harness) {
   );
   const sseInitialize = await assertMcpSseHandshake(token);
   assert(
-    sseInitialize.serverName === "newsportal-mcp",
+    sseInitialize.serverName === "signalops-mcp",
     "MCP SSE initialize should return the expected server name."
   );
 
@@ -543,13 +543,13 @@ async function scenarioProtocolDiscovery(harness) {
     "tools/list should expose read-only operating intelligence tools for returning operators."
   );
   const clientContractResource = resourcesList.result.resources.find(
-    (resource) => resource.uri === "newsportal://guide/client-contract"
+    (resource) => resource.uri === "signalops://guide/client-contract"
   );
   const operatingModelResource = resourcesList.result.resources.find(
-    (resource) => resource.uri === "newsportal://guide/operating-model"
+    (resource) => resource.uri === "signalops://guide/operating-model"
   );
   const opsHealthResource = resourcesList.result.resources.find(
-    (resource) => resource.uri === "newsportal://ops/health"
+    (resource) => resource.uri === "signalops://ops/health"
   );
   assert(
     clientContractResource?.annotations?.priority >= 0.9 &&
@@ -654,7 +654,7 @@ async function scenarioTemplateInterestChannelFlows(harness) {
   assert(interestTemplateId, "system_interests.create must return an interest template id.");
   assert(
     Array.isArray(interest.nextReadBack?.resources) &&
-      interest.nextReadBack.resources.includes("newsportal://ops/health"),
+      interest.nextReadBack.resources.includes("signalops://ops/health"),
     "Mutation responses should include nextReadBack ops resources for clients without resource subscriptions."
   );
   harness.rememberEntity("interestTemplateId", interestTemplateId);
@@ -2577,7 +2577,7 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
       id: `${harness.runId}-unknown-resource`,
       method: "resources/read",
       params: {
-        uri: "newsportal://unknown/resource",
+        uri: "signalops://unknown/resource",
       },
     },
     {

@@ -1,8 +1,8 @@
 ---
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
@@ -39,7 +39,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 
 const bffPaths = { moderation: appPath("/bff/admin/moderation") };
 const pagePaths = { dashboard: appPath("/") };

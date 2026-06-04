@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/content-safety",
+  "name": "@signalops/content-safety",
   "private": true,
   "type": "module",
   "exports": {

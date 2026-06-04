@@ -1,6 +1,6 @@
-import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import {
   loadAutomationExecutionsData,
@@ -67,7 +67,7 @@ function createSdk() {
   const runtimeConfig = readRuntimeConfig(process.env, {
     defaultAppBaseUrl: "http://127.0.0.1:4322/",
   });
-  return createNewsPortalSdk({
+  return createSignalOpsSdk({
     baseUrl: runtimeConfig.apiBaseUrl,
     fetchImpl: fetch,
   });

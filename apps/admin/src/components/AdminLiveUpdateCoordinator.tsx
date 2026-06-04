@@ -46,12 +46,12 @@ export function AdminLiveUpdateCoordinator({
 
   useEffect(() => {
     activeSurfaceRef.current = activeSurface;
-    window.__newsportalAdminLiveUpdates = {
-      ...(window.__newsportalAdminLiveUpdates ?? {
+    window.__signalopsAdminLiveUpdates = {
+      ...(window.__signalopsAdminLiveUpdates ?? {
         snapshot: snapshotRef.current,
       }),
       activeSurface,
-      forceRefresh: window.__newsportalAdminLiveUpdates?.forceRefresh,
+      forceRefresh: window.__signalopsAdminLiveUpdates?.forceRefresh,
     };
   }, [activeSurface]);
 
@@ -96,7 +96,7 @@ export function AdminLiveUpdateCoordinator({
 
         if (!payload.sessionActive || !payload.snapshot) {
           snapshotRef.current = null;
-          window.__newsportalAdminLiveUpdates = {
+          window.__signalopsAdminLiveUpdates = {
             snapshot: null,
             activeSurface: activeSurfaceRef.current,
             forceRefresh,
@@ -114,7 +114,7 @@ export function AdminLiveUpdateCoordinator({
         failureCountRef.current = 0;
         snapshotRef.current = nextSnapshot;
 
-        window.__newsportalAdminLiveUpdates = {
+        window.__signalopsAdminLiveUpdates = {
           snapshot: nextSnapshot,
           activeSurface: activeSurfaceRef.current,
           forceRefresh,
@@ -159,7 +159,7 @@ export function AdminLiveUpdateCoordinator({
       }
     }
 
-    window.__newsportalAdminLiveUpdates = {
+    window.__signalopsAdminLiveUpdates = {
       snapshot: snapshotRef.current,
       activeSurface,
       forceRefresh,

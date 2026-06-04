@@ -4,7 +4,7 @@ import {
   resolveRssChannelAdapterStrategy,
   type FeedIngressAdapterStrategy,
   type SourceProviderType,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 type Queryable = {
   query(sql: string, params?: unknown[]): Promise<unknown>;

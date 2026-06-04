@@ -1,5 +1,5 @@
 {
-  "name": "@newsportal/ui",
+  "name": "@signalops/ui",
   "private": true,
   "type": "module",
   "exports": {

@@ -1,1 +1,1 @@
-"""Shared indexer package for NewsPortal maintenance tooling."""
+"""Shared indexer package for SignalOps maintenance tooling."""

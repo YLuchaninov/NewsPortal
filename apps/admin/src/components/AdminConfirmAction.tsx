@@ -11,7 +11,7 @@ import {
   AlertDialogTrigger,
   buttonVariants,
   cn,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 import { submitAdminForm } from "./admin-form-submit";
 
 interface HiddenField {

@@ -76,12 +76,12 @@ async function main() {
     const markdown = formatDeterministicReportMarkdown({
       ...report,
       artifacts: {
-        jsonPath: `/tmp/newsportal-mcp-http-deterministic-${harness.runId}.json`,
-        mdPath: `/tmp/newsportal-mcp-http-deterministic-${harness.runId}.md`,
+        jsonPath: `/tmp/signalops-mcp-http-deterministic-${harness.runId}.json`,
+        mdPath: `/tmp/signalops-mcp-http-deterministic-${harness.runId}.md`,
       },
     });
     const artifacts = await harness.writeArtifacts(
-      "newsportal-mcp-http-deterministic",
+      "signalops-mcp-http-deterministic",
       report,
       markdown
     );

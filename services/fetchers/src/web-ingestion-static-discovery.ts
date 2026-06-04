@@ -1,4 +1,4 @@
-import type { WebsiteChannelConfig } from "@newsportal/contracts";
+import type { WebsiteChannelConfig } from "@signalops/contracts";
 
 import { parseFeed } from "./feed-parser/index";
 import { inferResourceKindsFromUrl } from "./web-ingestion-classification";

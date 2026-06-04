@@ -6,7 +6,7 @@ import path from "node:path";
 
 const repoRoot = process.cwd();
 const runId = crypto.randomUUID().slice(0, 8);
-const artifactDir = path.join(os.tmpdir(), `newsportal-release-verify-${runId}`);
+const artifactDir = path.join(os.tmpdir(), `signalops-release-verify-${runId}`);
 const steps = [
   {
     name: "compliance",

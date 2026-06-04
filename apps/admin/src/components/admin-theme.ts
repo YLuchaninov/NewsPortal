@@ -1,6 +1,6 @@
-import { THEME_MODES, type ThemeMode } from "@newsportal/config";
+import { THEME_MODES, type ThemeMode } from "@signalops/config";
 
-export const ADMIN_THEME_STORAGE_KEY = "newsportal-admin-theme";
+export const ADMIN_THEME_STORAGE_KEY = "signalops-admin-theme";
 
 export function isThemeMode(value: string | null | undefined): value is ThemeMode {
   return THEME_MODES.includes(String(value ?? "") as ThemeMode);

@@ -1,1 +1,1 @@
-"""NewsPortal service packages."""
+"""SignalOps service packages."""

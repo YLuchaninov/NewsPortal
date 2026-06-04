@@ -1,8 +1,8 @@
 ---
-import type { ArticleDetail, ArticleMediaAsset } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { sanitizeHtmlFragment } from "@newsportal/content-safety";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import type { ArticleDetail, ArticleMediaAsset } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { sanitizeHtmlFragment } from "@signalops/content-safety";
+import { createSignalOpsSdk } from "@signalops/sdk";
 
 import AdminShell from "../../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../../lib/server/auth";
@@ -36,7 +36,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const docId = String(Astro.params.docId ?? "").trim();
 
 if (!docId) {

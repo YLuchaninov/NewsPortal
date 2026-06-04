@@ -1,6 +1,6 @@
 ---
 import "../styles/globals.css";
-import { DEFAULT_BRAND_CONFIG } from "@newsportal/config";
+import { DEFAULT_BRAND_CONFIG } from "@signalops/config";
 import { AdminLiveUpdateCoordinator } from "../components/AdminLiveUpdateCoordinator";
 import { AdminFlashToast } from "../components/AdminFlashToast";
 import AdminDesktopSidebarNav from "../components/AdminDesktopSidebarNav";
@@ -427,7 +427,7 @@ const desktopNavSections = ADMIN_NAV_SECTIONS.map((group) => ({
       const closeBtn = document.getElementById("close-mobile-sidebar");
       const sidebarToggle = document.getElementById("admin-sidebar-toggle");
       const sidebarToggleLabel = document.getElementById("admin-sidebar-toggle-label");
-      const sidebarStorageKey = "newsportal-admin-sidebar";
+      const sidebarStorageKey = "signalops-admin-sidebar";
       const root = document.documentElement;
 
       const applySidebarMode = (mode: "expanded" | "compact") => {

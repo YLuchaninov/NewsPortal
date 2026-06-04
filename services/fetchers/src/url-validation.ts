@@ -1,8 +1,8 @@
 import {
-  createNewsPortalErrorDiagnostic,
-  NEWSPORTAL_ERROR_CODES,
-  type NewsPortalErrorDiagnostic,
-} from "@newsportal/contracts";
+  createSignalOpsErrorDiagnostic,
+  SIGNALOPS_ERROR_CODES,
+  type SignalOpsErrorDiagnostic,
+} from "@signalops/contracts";
 
 import { validateAcquisitionUrl } from "./probe-url-guard";
 
@@ -21,7 +21,7 @@ export interface DiscoveryUrlValidationResult {
   is_website_candidate: boolean;
   source_type_hint: "rss" | "website" | "unknown";
   error_code: string | null;
-  error_diagnostic: NewsPortalErrorDiagnostic | null;
+  error_diagnostic: SignalOpsErrorDiagnostic | null;
   error_text: string | null;
 }
 
@@ -46,8 +46,8 @@ function classifySourceType(
   };
 }
 
-function diagnostic(code: string, message: string): NewsPortalErrorDiagnostic {
-  return createNewsPortalErrorDiagnostic({ code, message });
+function diagnostic(code: string, message: string): SignalOpsErrorDiagnostic {
+  return createSignalOpsErrorDiagnostic({ code, message });
 }
 
 async function validateOneUrl(
@@ -63,8 +63,8 @@ async function validateOneUrl(
       content_type: null,
       final_url: rawUrl,
       ...classifySourceType(rawUrl, null),
-      error_code: NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked,
-      error_diagnostic: diagnostic(NEWSPORTAL_ERROR_CODES.acquisitionUrlBlocked, errorText),
+      error_code: SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked,
+      error_diagnostic: diagnostic(SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked, errorText),
       error_text: errorText,
     };
   }
@@ -88,8 +88,8 @@ async function validateOneUrl(
         content_type: response.headers.get("content-type"),
         final_url: response.url || guarded.url,
         ...classifySourceType(response.url || guarded.url, response.headers.get("content-type")),
-        error_code: NEWSPORTAL_ERROR_CODES.acquisitionUrlFinalBlocked,
-        error_diagnostic: diagnostic(NEWSPORTAL_ERROR_CODES.acquisitionUrlFinalBlocked, errorText),
+        error_code: SIGNALOPS_ERROR_CODES.acquisitionUrlFinalBlocked,
+        error_diagnostic: diagnostic(SIGNALOPS_ERROR_CODES.acquisitionUrlFinalBlocked, errorText),
         error_text: errorText,
       };
     }
@@ -112,8 +112,8 @@ async function validateOneUrl(
       content_type: null,
       final_url: guarded.url,
       ...classifySourceType(guarded.url, null),
-      error_code: NEWSPORTAL_ERROR_CODES.providerFetchFailed,
-      error_diagnostic: diagnostic(NEWSPORTAL_ERROR_CODES.providerFetchFailed, errorText),
+      error_code: SIGNALOPS_ERROR_CODES.providerFetchFailed,
+      error_diagnostic: diagnostic(SIGNALOPS_ERROR_CODES.providerFetchFailed, errorText),
       error_text: errorText,
     };
   }

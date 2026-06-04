@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   Textarea,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 interface AutomationEditorRunDialogProps {
   open: boolean;

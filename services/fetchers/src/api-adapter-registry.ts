@@ -1,4 +1,4 @@
-import type { ApiAdapterKey, ApiChannelConfig } from "@newsportal/contracts";
+import type { ApiAdapterKey, ApiChannelConfig } from "@signalops/contracts";
 
 import type { SourceChannelRow } from "./fetcher-persistence";
 import { normalizeWhitespace } from "./fetcher-channel-helpers";

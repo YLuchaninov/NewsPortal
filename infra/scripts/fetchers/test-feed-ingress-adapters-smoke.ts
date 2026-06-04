@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { parseRssChannelConfig } from "@newsportal/contracts";
+import { parseRssChannelConfig } from "@signalops/contracts";
 
 import { adaptFeedIngress } from "../../../services/fetchers/src/feed-ingress-adapters";
 
@@ -25,7 +25,7 @@ async function run(): Promise<void> {
     rssConfig: parseRssChannelConfig({
       maxItemsPerPoll: 5,
       requestTimeoutMs: 2000,
-      userAgent: "NewsPortalFetchers/Smoke",
+      userAgent: "SignalOpsFetchers/Smoke",
       preferContentEncoded: true,
     }),
     fetchedAt: "2026-04-07T10:00:00.000Z",
@@ -68,7 +68,7 @@ async function run(): Promise<void> {
     rssConfig: parseRssChannelConfig({
       maxItemsPerPoll: 10,
       requestTimeoutMs: 2000,
-      userAgent: "NewsPortalFetchers/Smoke",
+      userAgent: "SignalOpsFetchers/Smoke",
       preferContentEncoded: true,
     }),
     fetchedAt: "2026-04-07T10:00:00.000Z",
@@ -111,7 +111,7 @@ async function run(): Promise<void> {
       rssConfig: parseRssChannelConfig({
         maxItemsPerPoll: 5,
         requestTimeoutMs: 2000,
-        userAgent: "NewsPortalFetchers/Smoke",
+        userAgent: "SignalOpsFetchers/Smoke",
         preferContentEncoded: true,
         adapterStrategy: "google_news_rss",
       }),

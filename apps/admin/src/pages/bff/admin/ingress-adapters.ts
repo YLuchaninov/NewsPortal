@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { readRuntimeConfig } from "@newsportal/config";
+import { readRuntimeConfig } from "@signalops/config";
 
 import {
   adminActionError,

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { randomUUID } from "node:crypto";
-import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@signalops/contracts";
 
 import {
   buildFlashRedirect,

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   NOTIFICATION_FEEDBACK_RECORDED_EVENT,
   WEB_BFF_ACTION_PAYLOAD_SCHEMAS,
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 import {
   buildFlashRedirect,

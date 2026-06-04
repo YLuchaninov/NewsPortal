@@ -1,13 +1,13 @@
 ---
-import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@newsportal/config";
+import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@signalops/config";
 import {
   DEFAULT_PAGE,
   type ContentItemPreview,
   type PaginatedResponse,
   type WebContentListSort,
-} from "@newsportal/contracts";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+} from "@signalops/contracts";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
 import { ContentItemCard } from "../components/ContentItemCard";
@@ -32,7 +32,7 @@ function isWebContentListSort(value: string | null): value is WebContentListSort
 
 const session = await resolveWebSession(Astro.request);
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({
+const sdk = createSignalOpsSdk({
   baseUrl: readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" }).apiBaseUrl,
   fetchImpl: fetch,
 });

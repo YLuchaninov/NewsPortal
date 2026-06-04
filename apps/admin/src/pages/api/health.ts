@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { createHealthResponse } from "@newsportal/contracts";
+import { createHealthResponse } from "@signalops/contracts";
 
 export const prerender = false;
 export const GET: APIRoute = async () => {

@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@newsportal/contracts";
+import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@signalops/contracts";
 
 import { getPool } from "../../lib/server/db";
 import { resolveWebSession } from "../../lib/server/auth";

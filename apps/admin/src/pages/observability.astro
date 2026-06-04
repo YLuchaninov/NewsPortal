@@ -1,9 +1,9 @@
 ---
-import { DEFAULT_PAGE } from "@newsportal/contracts";
-import { readRuntimeConfig } from "@newsportal/config";
-import { summarizeChannelBottlenecksWithPool } from "@newsportal/control-plane";
-import { createNewsPortalSdk } from "@newsportal/sdk";
-import { PaginationNav } from "@newsportal/ui";
+import { DEFAULT_PAGE } from "@signalops/contracts";
+import { readRuntimeConfig } from "@signalops/config";
+import { summarizeChannelBottlenecksWithPool } from "@signalops/control-plane";
+import { createSignalOpsSdk } from "@signalops/sdk";
+import { PaginationNav } from "@signalops/ui";
 import { AdminLiveCollectionNotice } from "../components/AdminLiveCollectionNotice";
 import { LiveObservabilitySummary } from "../components/LiveObservabilitySummary";
 import AdminShell from "../layouts/AdminShell.astro";
@@ -36,7 +36,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const pagePaths = { dashboard: appPath("/") };
 const FETCH_RUNS_PAGE_SIZE = 25;
 const LLM_REVIEWS_PAGE_SIZE = 25;

@@ -1,4 +1,4 @@
-import type { NormalizedFetchOutcome } from "@newsportal/contracts";
+import type { NormalizedFetchOutcome } from "@signalops/contracts";
 
 import type { ChannelPollCompletion, CursorUpdateInput } from "./fetcher-persistence";
 import {

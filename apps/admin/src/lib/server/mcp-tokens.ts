@@ -3,7 +3,7 @@ import {
   listMcpAccessTokens,
   type McpAccessTokenRecord,
   type McpScope,
-} from "@newsportal/control-plane";
+} from "@signalops/control-plane";
 
 import { getPool } from "./db";
 

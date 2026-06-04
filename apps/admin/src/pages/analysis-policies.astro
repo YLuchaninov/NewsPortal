@@ -1,6 +1,6 @@
 ---
-import { readRuntimeConfig } from "@newsportal/config";
-import { createNewsPortalSdk } from "@newsportal/sdk";
+import { readRuntimeConfig } from "@signalops/config";
+import { createSignalOpsSdk } from "@signalops/sdk";
 import { AdminConfirmSubmitButton } from "../components/AdminConfirmSubmitButton";
 import AdminShell from "../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../lib/server/auth";
@@ -29,7 +29,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const sdk = createNewsPortalSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
+const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: fetch });
 const policies = await sdk.listContentAnalysisPoliciesPage<Record<string, unknown>>({
   page: 1,
   pageSize: 80,
@@ -209,7 +209,7 @@ const policyViews = policies.items.map((policy) => ({
         <div class="grid gap-3 lg:grid-cols-3">
           <label class="grid gap-1.5 text-sm font-medium">
             Provider
-            <input name="provider" placeholder="newsportal" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
+            <input name="provider" placeholder="signalops" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm" />
           </label>
           <label class="grid gap-1.5 text-sm font-medium">
             Model key

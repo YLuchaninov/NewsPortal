@@ -51,14 +51,14 @@ const runtimeImages = [
     image: "docker-api",
     service: "api",
     maxBytes: 700 * mib,
-    expectedUser: "newsportal",
+    expectedUser: "signalops",
     expectedCmd: ["python", "-m", "app.main"],
   },
   {
     image: "docker-worker",
     service: "worker",
     maxBytes: 700 * mib,
-    expectedUser: "newsportal",
+    expectedUser: "signalops",
     expectedCmd: ["python", "-m", "app.main"],
   },
 ];

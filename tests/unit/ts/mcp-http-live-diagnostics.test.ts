@@ -34,7 +34,7 @@ test("MCP live HTTP diagnostics preserve useful metadata for non-JSON HTML respo
       assert.equal(diagnostics?.contentType, "text/html; charset=utf-8");
       assert.equal(diagnostics?.bodyKind, "html");
       assert.equal(diagnostics?.server, "nginx/1.27.0");
-      assert.equal(diagnostics?.sourceHint, "newsportal-gateway-upstream-html");
+      assert.equal(diagnostics?.sourceHint, "signalops-gateway-upstream-html");
       assert.match(String(diagnostics?.bodyPreview), /502 Bad Gateway/i);
       return true;
     }
@@ -58,7 +58,7 @@ test("MCP live HTTP diagnostics classify local HTML without gateway signals as b
   );
 
   assert.equal(diagnostics.bodyKind, "html");
-  assert.equal(diagnostics.sourceHint, "newsportal-boundary-html");
+  assert.equal(diagnostics.sourceHint, "signalops-boundary-html");
   assert.match(String(diagnostics.bodyPreview), /Internal Server Error/i);
 });
 

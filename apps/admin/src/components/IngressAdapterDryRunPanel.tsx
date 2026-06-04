@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { Button, FormField, Input } from "@newsportal/ui";
+import { Button, FormField, Input } from "@signalops/ui";
 
 import { postJson, readText } from "./admin-client-helpers";
 import { channelEditorInputClassName, channelEditorTextareaClassName } from "./channel-editor-form-model";

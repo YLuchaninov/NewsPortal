@@ -7,7 +7,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@newsportal/ui";
+} from "@signalops/ui";
 
 import type {
   AutomationNodeData,

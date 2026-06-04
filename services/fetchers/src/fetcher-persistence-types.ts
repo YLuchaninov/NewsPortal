@@ -1,7 +1,7 @@
 import type {
   NormalizedFetchOutcome,
   SourceProviderType
-} from "@newsportal/contracts";
+} from "@signalops/contracts";
 
 export interface SourceChannelRow {
   channelId: string;

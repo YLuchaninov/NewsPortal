@@ -1,8 +1,8 @@
-# AI Dev Process OS runtime schema для NewsPortal
+# AI Dev Process OS runtime schema для SignalOps
 package_version: 1.8.12
 schema_version: 44
 mode: Minimal
-runtime_profile: compact-strict-anti-drift-newsportal
+runtime_profile: compact-strict-anti-drift-signalops
 initialized: true
 core:
   style: compact-strict-polished-blueprint-capability-planning-anti-drift
@@ -102,7 +102,7 @@ planning_policy:
     - multi_artifact_delivery
     - publishing_signing_or_deployment_like_behavior
 project:
-  name: news-portal
+  name: signalops
   placeholder_values_present: false
   excluded_paths:
     - aidp-monitor/**

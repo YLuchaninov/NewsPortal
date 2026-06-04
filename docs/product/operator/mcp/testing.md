@@ -1,22 +1,22 @@
-# Testing NewsPortal MCP Locally And Remotely
+# Testing SignalOps MCP Locally And Remotely
 
 This guide separates three different things that are easy to blur together:
 
 Quick framing:
 
-- Audience: operator or developer choosing the right MCP proof lane for local, shared, or remote NewsPortal environments.
+- Audience: operator or developer choosing the right MCP proof lane for local, shared, or remote SignalOps environments.
 - Covers: deterministic local compose proof, direct HTTP smoke, and bounded remote/shared-environment checks.
 - Out of scope: agent-runtime process rules, production rollout policy, and open-ended write exploration against shared environments.
-- Prerequisites: reachable NewsPortal stack plus the auth/env requirements for the chosen lane.
+- Prerequisites: reachable SignalOps stack plus the auth/env requirements for the chosen lane.
 - Expected result: you can choose one honest proof contour, run it, and know what green evidence should look like.
 
-- local compose verification of the shipped NewsPortal stack;
+- local compose verification of the shipped SignalOps stack;
 - direct HTTP smoke against a reachable MCP endpoint;
 - bounded remote or shared-environment checks where you must be much more conservative with writes.
 
 ## 1. Local compose baseline
 
-Use this path when you want the canonical NewsPortal proof contour.
+Use this path when you want the canonical SignalOps proof contour.
 
 ### Prerequisites
 
@@ -51,7 +51,7 @@ Recommended first checks:
 1. `GET /mcp`
 2. `initialize`
 3. `tools/list`
-4. `resources/read` for `newsportal://guide/server-overview`
+4. `resources/read` for `signalops://guide/server-overview`
 5. `tools/call` for `admin.summary.get`
 
 ### Canonical deterministic proof
@@ -87,7 +87,7 @@ Provider-backed MCP evidence now comes from targeted provider/fetcher and vNext 
 
 ## 3. Non-local or shared-environment smoke
 
-Use this path for staging or another deployed NewsPortal environment.
+Use this path for staging or another deployed SignalOps environment.
 
 ### Rules first
 
@@ -103,8 +103,8 @@ Use this path for staging or another deployed NewsPortal environment.
 Set the deployed endpoint and a token:
 
 ```bash
-export NEWSPORTAL_MCP_URL="https://newsportal.example.com/mcp"
-export NEWSPORTAL_MCP_TOKEN="npmcp_replace_with_real_token"
+export SIGNALOPS_MCP_URL="https://signalops.example.com/mcp"
+export SIGNALOPS_MCP_TOKEN="npmcp_replace_with_real_token"
 ```
 
 Then run:
@@ -113,8 +113,8 @@ Then run:
 2. `initialize`
 3. `tools/list`
 4. `resources/read` for:
-   - `newsportal://guide/server-overview`
-   - `newsportal://guide/scenarios/<target-domain>`
+   - `signalops://guide/server-overview`
+   - `signalops://guide/scenarios/<target-domain>`
 5. `tools/call` for `admin.summary.get`
 
 Only after that should you attempt writes.
@@ -143,7 +143,7 @@ For article/content diagnostics in shared environments:
 
 - token accepted by `GET /mcp`
 - JSON-RPC discovery methods succeed
-- built-in NewsPortal guide resources read successfully
+- built-in SignalOps guide resources read successfully
 - article/content diagnostics and residual buckets can be read successfully
 - at least one safe read-only tool succeeds
 - any bounded write is read back and verified
@@ -151,7 +151,7 @@ For article/content diagnostics in shared environments:
 
 ## 4. What not to do
 
-- do not point Anthropic remote connectors at a private NewsPortal deployment unless network reachability requirements are actually satisfied;
+- do not point Anthropic remote connectors at a private SignalOps deployment unless network reachability requirements are actually satisfied;
 - do not reuse browser cookies as MCP auth;
 - do not hardcode tokens into committed config files;
 - do not run the local compose proof scripts and assume they are exercising a remote shared deployment;

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { INTEREST_COMPILE_REQUESTED_EVENT } from "@newsportal/contracts";
+import { INTEREST_COMPILE_REQUESTED_EVENT } from "@signalops/contracts";
 
 import type { PoolClient } from "pg";
 

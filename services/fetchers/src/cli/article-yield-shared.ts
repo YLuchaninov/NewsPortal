@@ -65,7 +65,7 @@ function timestampForPath(date = new Date()): string {
 }
 
 export async function createArticleYieldPackRoot(): Promise<string> {
-  const rootDir = path.join("/tmp", `newsportal-article-yield-${timestampForPath()}`);
+  const rootDir = path.join("/tmp", `signalops-article-yield-${timestampForPath()}`);
   await mkdir(rootDir, { recursive: true });
   return rootDir;
 }
