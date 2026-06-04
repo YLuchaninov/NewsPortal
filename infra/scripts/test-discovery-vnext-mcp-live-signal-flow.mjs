@@ -81,6 +81,8 @@ const REQUIRED_TOOLS = [
   "discovery.candidates.list",
   "discovery.probe.plan_preview",
   "discovery.probe.execute",
+  "discovery.scope.resolve_preview",
+  "discovery.scope.resolve_apply",
   "discovery.understand.preview",
   "discovery.routing.apply",
   "discovery.probation.handoff",
@@ -157,6 +159,27 @@ function canonicalDomain(candidate) {
   return String(valueFrom(candidate, ["canonical_domain", "canonicalDomain", "domain"]) ?? "");
 }
 
+function channelUrl(channel) {
+  return String(valueFrom(channel, ["url", "fetch_url", "fetchUrl", "source_url", "sourceUrl", "feed_url", "feedUrl"]) ?? "");
+}
+
+function channelProviderType(channel) {
+  return String(valueFrom(channel, ["provider_type", "providerType"]) ?? "");
+}
+
+function fetchRunSummary(fetchRun) {
+  return {
+    fetchRunId: idFrom(fetchRun, ["fetch_run_id", "fetchRunId", "id"]),
+    channelId: idFrom(fetchRun, ["channel_id", "channelId"]),
+    providerType: String(valueFrom(fetchRun, ["provider_type", "providerType"]) ?? ""),
+    adapterKey: valueFrom(fetchRun, ["adapter_key", "adapterKey"]) ?? null,
+    status: valueFrom(fetchRun, ["status", "run_status", "runStatus"]) ?? null,
+    fetchedItemCount: Number(valueFrom(fetchRun, ["fetched_item_count", "fetchedItemCount"]) ?? 0),
+    newArticleCount: Number(valueFrom(fetchRun, ["new_article_count", "newArticleCount"]) ?? 0),
+    errorMessage: valueFrom(fetchRun, ["error_message", "errorMessage"]) ?? null,
+  };
+}
+
 function stringifyEvidence(value, depth = 0) {
   if (value == null || depth > 3) return "";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -191,6 +214,32 @@ function extractChannelId(handoff) {
     if (channelId) return channelId;
   }
   return null;
+}
+
+function isFeedBackedFetchRun(fetchRun) {
+  const providerType = String(valueFrom(fetchRun, ["provider_type", "providerType"]) ?? "").toLowerCase();
+  const adapterKey = String(valueFrom(fetchRun, ["adapter_key", "adapterKey"]) ?? "").toLowerCase();
+  return providerType === "rss" || adapterKey.startsWith("rss.");
+}
+
+function downstreamFailureKind(packReport) {
+  if ((packReport.fetchRuns ?? []).some(isFeedBackedFetchRun) && (packReport.articles ?? []).length === 0) {
+    return "rss_feed_not_productive";
+  }
+  return "no_fetched_content";
+}
+
+async function readDownstreamEvidence(report, harness, token, channelId) {
+  const [resourcesPage, articlesPage] = await Promise.all([
+    mcp(report, harness, token, "web_resources.list", { channelId, page: 1, pageSize: 20 }, { optional: true }),
+    mcp(report, harness, token, "articles.list", { channelId, page: 1, pageSize: 20 }, { optional: true }),
+  ]);
+  return {
+    resourcesPage,
+    articlesPage,
+    resources: rows(resourcesPage),
+    articles: rows(articlesPage),
+  };
 }
 
 function buildInterestPayload(pack, namespace) {
@@ -423,7 +472,7 @@ async function routeCandidate(harness, token, report, packReport, candidate) {
   }, { timeoutMs: 180000, gapCategory: "provider_gap" });
   const probeReport = probe?.probeReportArtifact?.payload_json ?? probe?.probeReportArtifact?.payloadJson;
   if (!probeReport) return null;
-  const understanding = await mcp(report, harness, token, "discovery.understand.preview", {
+  const scopeResolveArgs = {
     discoveryBrief: packReport.brief,
     probeReport,
     candidate: {
@@ -432,13 +481,44 @@ async function routeCandidate(harness, token, report, packReport, candidate) {
       canonicalDomain: canonicalDomain(candidate),
       candidateKindGuess: String(valueFrom(candidate, ["candidate_kind_guess", "candidateKindGuess"]) ?? "website"),
     },
+    runId: packReport.runId,
+    interestId: packReport.interestId,
+    candidateId,
+    createdBy: `discovery-live-signal:${report.runId}`,
+  };
+  const scope = await mcp(report, harness, token, "discovery.scope.resolve_apply", scopeResolveArgs);
+  const sourceScopeResolutionArtifact = scope?.sourceScopeResolutionArtifact ?? {};
+  const sourceScopeResolution =
+    sourceScopeResolutionArtifact.payload_json ??
+    sourceScopeResolutionArtifact.payloadJson ??
+    sourceScopeResolutionArtifact.payload ??
+    scope?.payload ??
+    scope;
+  const sourceScopeResolutionArtifactId = idFrom(sourceScopeResolutionArtifact, ["artifact_id", "artifactId"]);
+  if (sourceScopeResolutionArtifactId && sourceScopeResolution && typeof sourceScopeResolution === "object") {
+    sourceScopeResolution.sourceScopeResolutionArtifactId = sourceScopeResolutionArtifactId;
+  }
+  const understanding = await mcp(report, harness, token, "discovery.understand.preview", {
+    discoveryBrief: packReport.brief,
+    probeReport,
+    sourceScopeResolution,
+    candidate: {
+      candidateId,
+      canonicalUrl: candidateUrl,
+      canonicalDomain: canonicalDomain(candidate),
+      candidateKindGuess: String(valueFrom(candidate, ["candidate_kind_guess", "candidateKindGuess"]) ?? "website"),
+    },
   });
   const sourceUnderstanding = understanding?.payload ?? understanding?.sourceUnderstanding?.payload ?? understanding?.sourceUnderstanding ?? understanding;
+  if (sourceScopeResolutionArtifactId && sourceUnderstanding && typeof sourceUnderstanding === "object") {
+    sourceUnderstanding.sourceScopeResolutionArtifactId ??= sourceScopeResolutionArtifactId;
+  }
+  const operationalUrl = String(sourceScopeResolution?.resolvedSourceUrl ?? sourceUnderstanding?.sourceUrl ?? candidateUrl);
   const routing = await mcp(report, harness, token, "discovery.routing.apply", {
     sourceUnderstanding,
-    canonicalUrl: candidateUrl,
+    canonicalUrl: operationalUrl,
     canonicalDomain: canonicalDomain(candidate),
-    sourceIdentityKey: `live-signal:${report.runId}:${packReport.key}:${candidateUrl}`,
+    sourceIdentityKey: `${String(sourceUnderstanding?.suggestedProviderType ?? "website")}|${canonicalDomain(candidate)}|${operationalUrl}`,
     providerType: String(sourceUnderstanding?.suggestedProviderType ?? "website"),
     accessPattern: String(sourceUnderstanding?.accessPattern ?? "public"),
     runId: packReport.runId,
@@ -463,8 +543,8 @@ async function routeCandidate(harness, token, report, packReport, candidate) {
     packReport.routingAttempts.at(-1).handoffStatus = handoff?.status ?? "missing_channel";
     return null;
   }
-  await mcp(report, harness, token, "channels.read", { channelId });
-  return { candidateId, candidateUrl, sourceInventoryId, routingDecision, sourceUnderstanding, handoff, channelId };
+  const channel = await mcp(report, harness, token, "channels.read", { channelId });
+  return { candidateId, candidateUrl, sourceInventoryId, routingDecision, sourceUnderstanding, handoff, channelId, channel };
 }
 
 async function proveContentTail(harness, token, report, pack, packReport, routed) {
@@ -495,16 +575,17 @@ async function proveContentTail(harness, token, report, pack, packReport, routed
     return fetched.length > 0 ? page : null;
   }, { timeoutMs: 5 * 60 * 1000, intervalMs: 10000 });
   packReport.fetchRuns = rows(fetchRunsPage);
+  packReport.fetchRunSummaries = packReport.fetchRuns.map(fetchRunSummary);
 
-  const resourcesPage = await waitFor(`web resources for ${channelId}`, async () => {
-    const page = await mcp(report, harness, token, "web_resources.list", { channelId, page: 1, pageSize: 20 }, { optional: true });
-    const fetched = rows(page);
-    return fetched.length > 0 ? page : null;
+  const feedBacked = packReport.fetchRuns.some(isFeedBackedFetchRun);
+  const downstreamEvidence = await waitFor(`downstream evidence for ${channelId}`, async () => {
+    const evidence = await readDownstreamEvidence(report, harness, token, channelId);
+    if (feedBacked) return evidence.articles.length > 0 ? evidence : null;
+    return evidence.resources.length > 0 || evidence.articles.length > 0 ? evidence : null;
   }, { timeoutMs: 5 * 60 * 1000, intervalMs: 10000 });
-  packReport.webResources = rows(resourcesPage);
+  packReport.webResources = downstreamEvidence.resources;
+  packReport.articles = downstreamEvidence.articles;
 
-  const articlesPage = await mcp(report, harness, token, "articles.list", { channelId, page: 1, pageSize: 20 }, { optional: true });
-  packReport.articles = rows(articlesPage);
   const docIds = packReport.articles.map((article) => idFrom(article, ["doc_id", "docId"])).filter(Boolean).slice(0, 20);
   if (docIds.length > 0) {
     await mcp(report, harness, token, "maintenance.reindex.request", {
@@ -555,6 +636,7 @@ async function runPack(harness, token, report, pack) {
     routingAttempts: [],
     outboxEvents: [],
     fetchRuns: [],
+    fetchRunSummaries: [],
     webResources: [],
     articles: [],
     contentItems: [],
@@ -577,12 +659,15 @@ async function runPack(harness, token, report, pack) {
     if (!routed) continue;
     packReport.routed = {
       channelId: routed.channelId,
+      channelUrl: channelUrl(routed.channel),
+      channelProviderType: channelProviderType(routed.channel),
       candidateId: routed.candidateId,
       candidateUrl: routed.candidateUrl,
       sourceInventoryId: routed.sourceInventoryId,
     };
     packReport.outboxEvents = [];
     packReport.fetchRuns = [];
+    packReport.fetchRunSummaries = [];
     packReport.webResources = [];
     packReport.articles = [];
     packReport.contentItems = [];
@@ -590,7 +675,7 @@ async function runPack(harness, token, report, pack) {
     try {
       await proveContentTail(harness, token, report, pack, packReport, routed);
     } catch (error) {
-      packReport.routingAttempts.at(-1).fetchStatus = "no_fetched_content";
+      packReport.routingAttempts.at(-1).fetchStatus = downstreamFailureKind(packReport);
       packReport.routingAttempts.at(-1).fetchError =
         error instanceof Error ? error.message : String(error);
       continue;
@@ -683,8 +768,11 @@ function markdown(report) {
       `- candidates: ${pack.candidates.length}`,
       `- routingAttempts: ${pack.routingAttempts.length}`,
       `- channelId: ${pack.routed?.channelId ?? "n/a"}`,
+      `- channelUrl: ${pack.routed?.channelUrl || "n/a"}`,
+      `- channelProviderType: ${pack.routed?.channelProviderType || "n/a"}`,
       `- outboxEvents: ${pack.outboxEvents.length}`,
       `- fetchRuns: ${pack.fetchRuns.length}`,
+      `- fetchRunSummaries: ${JSON.stringify(pack.fetchRunSummaries ?? [])}`,
       `- webResources: ${pack.webResources.length}`,
       `- articles: ${pack.articles.length}`,
       `- contentItems: ${pack.contentItems.length}`,

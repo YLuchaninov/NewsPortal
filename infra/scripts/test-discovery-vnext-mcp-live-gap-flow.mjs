@@ -163,6 +163,8 @@ const REQUIRED_TOOLS = [
   "discovery.candidates.list",
   "discovery.probe.plan_preview",
   "discovery.probe.execute",
+  "discovery.scope.resolve_preview",
+  "discovery.scope.resolve_apply",
   "discovery.understand.preview",
   "discovery.routing.apply",
   "discovery.probation.handoff",
@@ -790,6 +792,37 @@ async function probeAndRouteCandidate(harness, token, report, packReport, discov
     recordGap(report, "diagnostic_gap", `Probe did not return a ProbeReport payload for ${packReport.key}.`, { probe });
     return;
   }
+  const scope = await safeMcp(
+    report,
+    `discovery.scope.resolve_apply ${packReport.key}`,
+    () =>
+      harness.mcpToolCall(token, "discovery.scope.resolve_apply", {
+        discoveryBrief,
+        probeReport,
+        candidate: {
+          candidateId,
+          canonicalUrl: candidateUrl,
+          canonicalDomain: canonicalDomain(candidate),
+          candidateKindGuess: String(valueFrom(candidate, ["candidate_kind_guess", "candidateKindGuess"]) ?? "unknown"),
+        },
+        runId: packReport.runId,
+        interestId: packReport.interestTemplateId,
+        candidateId,
+        createdBy: `discovery-live-gap:${report.runId}`,
+      }),
+    "schema_gap"
+  );
+  const sourceScopeResolutionArtifact = scope?.sourceScopeResolutionArtifact ?? {};
+  const sourceScopeResolution =
+    sourceScopeResolutionArtifact.payload_json ??
+    sourceScopeResolutionArtifact.payloadJson ??
+    sourceScopeResolutionArtifact.payload ??
+    scope?.payload ??
+    scope;
+  const sourceScopeResolutionArtifactId = idFrom(sourceScopeResolutionArtifact, ["artifact_id", "artifactId"]);
+  if (sourceScopeResolutionArtifactId && sourceScopeResolution && typeof sourceScopeResolution === "object") {
+    sourceScopeResolution.sourceScopeResolutionArtifactId = sourceScopeResolutionArtifactId;
+  }
   const understanding = await safeMcp(
     report,
     `discovery.understand.preview ${packReport.key}`,
@@ -797,6 +830,7 @@ async function probeAndRouteCandidate(harness, token, report, packReport, discov
       harness.mcpToolCall(token, "discovery.understand.preview", {
         discoveryBrief,
         probeReport,
+        sourceScopeResolution,
         candidate: {
           candidateId,
           canonicalUrl: candidateUrl,
@@ -811,15 +845,19 @@ async function probeAndRouteCandidate(harness, token, report, packReport, discov
   if (!sourceUnderstanding) {
     return;
   }
+  if (sourceScopeResolutionArtifactId && sourceUnderstanding && typeof sourceUnderstanding === "object") {
+    sourceUnderstanding.sourceScopeResolutionArtifactId ??= sourceScopeResolutionArtifactId;
+  }
+  const operationalUrl = String(sourceScopeResolution?.resolvedSourceUrl ?? sourceUnderstanding.sourceUrl ?? candidateUrl);
   const routing = await safeMcp(
     report,
     `discovery.routing.apply ${packReport.key}`,
     () =>
       harness.mcpToolCall(token, "discovery.routing.apply", {
         sourceUnderstanding,
-        canonicalUrl: candidateUrl,
+        canonicalUrl: operationalUrl,
         canonicalDomain: canonicalDomain(candidate),
-        sourceIdentityKey: `live-gap:${report.runId}:${packReport.key}:${candidateUrl}`,
+        sourceIdentityKey: `${String(sourceUnderstanding.suggestedProviderType ?? valueFrom(candidate, ["candidate_kind_guess", "candidateKindGuess"]) ?? "unknown")}|${canonicalDomain(candidate)}|${operationalUrl}`,
         providerType: String(sourceUnderstanding.suggestedProviderType ?? valueFrom(candidate, ["candidate_kind_guess", "candidateKindGuess"]) ?? "unknown"),
         accessPattern: String(sourceUnderstanding.accessPattern ?? "public"),
         runId: packReport.runId,

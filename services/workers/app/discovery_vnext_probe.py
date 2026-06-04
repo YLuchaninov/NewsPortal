@@ -316,12 +316,18 @@ def _observations(
 ) -> list[dict[str, Any]]:
     observations: list[dict[str, Any]] = []
     for item in feed_results:
+        sample_entries = item.get("sample_entries") if isinstance(item.get("sample_entries"), list) else []
         observations.append(
             {
                 "kind": "feed_probe",
                 "url": item.get("url") or item.get("feed_url"),
+                "feedUrl": item.get("feed_url"),
+                "finalUrl": item.get("final_url") or item.get("feed_url") or item.get("url"),
+                "feedTitle": item.get("feed_title"),
                 "valid": bool(item.get("is_valid_rss")),
-                "sampleEntryCount": len(item.get("sample_entries") or []),
+                "productive": bool(item.get("is_valid_rss")) and len(sample_entries) > 0,
+                "sampleEntryCount": len(sample_entries),
+                "diagnostics": item.get("diagnostics") or [],
                 "errorText": item.get("error_text"),
             }
         )
@@ -348,8 +354,8 @@ def _observations(
 def _observed_artifacts(feed_results: list[dict[str, Any]], website_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     artifacts: list[dict[str, Any]] = []
     for item in feed_results:
-        if bool(item.get("is_valid_rss")):
-            entries = item.get("sample_entries") if isinstance(item.get("sample_entries"), list) else []
+        entries = item.get("sample_entries") if isinstance(item.get("sample_entries"), list) else []
+        if bool(item.get("is_valid_rss")) and entries:
             artifacts.append(
                 {
                     "artifactType": "article",
@@ -400,7 +406,14 @@ def _technical_observability(
     *,
     browser_recommended: bool,
 ) -> dict[str, Any]:
-    feed_score = 0.85 if any(bool(item.get("is_valid_rss")) for item in feed_results) else 0.0
+    feed_sample_entry_count = sum(
+        len(item.get("sample_entries") if isinstance(item.get("sample_entries"), list) else [])
+        for item in feed_results
+        if bool(item.get("is_valid_rss"))
+    )
+    feed_valid = any(bool(item.get("is_valid_rss")) for item in feed_results)
+    productive_feed = feed_sample_entry_count > 0
+    feed_score = 0.85 if productive_feed else 0.35 if feed_valid else 0.0
     website_score = max((_website_score(item) for item in website_results), default=0.0)
     provider_failure_penalty = 0.0 if (feed_results or website_results) else min(0.2, len(provider_failures) * 0.1)
     score = max(0.0, max(feed_score, website_score) - provider_failure_penalty)
@@ -409,15 +422,37 @@ def _technical_observability(
     return {
         "observable": score >= 0.35,
         "score": round(score, 2),
-        "feedValid": feed_score > 0,
+        "feedValid": feed_valid,
+        "productiveFeed": productive_feed,
+        "feedSampleEntryCount": feed_sample_entry_count,
+        "feedFinalUrl": _first_feed_value(feed_results, "final_url", "feed_url", "url"),
+        "feedDiagnostics": _feed_diagnostics(feed_results),
         "staticWebsiteSignals": website_score > 0,
         "hasStableUrls": any(_sample_urls(item) for item in website_results),
         "hasDateOrVersionSignals": any(_has_date_or_version_signal(item) for item in website_results),
-        "hasRecurringStructure": any(int(item.get("listing_count_estimate") or 0) > 0 for item in website_results) or feed_score > 0,
+        "hasRecurringStructure": any(int(item.get("listing_count_estimate") or 0) > 0 for item in website_results) or productive_feed,
         "challengeDetected": any(bool(item.get("challenge_kind")) for item in website_results),
         "providerFailureCount": len(provider_failures),
         "providerFailuresAreTelemetryOnly": True,
     }
+
+
+def _first_feed_value(feed_results: list[dict[str, Any]], *keys: str) -> str | None:
+    for item in feed_results:
+        for key in keys:
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _feed_diagnostics(feed_results: list[dict[str, Any]]) -> list[Any]:
+    diagnostics: list[Any] = []
+    for item in feed_results:
+        raw = item.get("diagnostics")
+        if isinstance(raw, list):
+            diagnostics.extend(raw)
+    return diagnostics[:10]
 
 
 def _probe_cost(

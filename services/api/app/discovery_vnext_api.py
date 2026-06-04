@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
 from typing import Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -236,6 +236,9 @@ class DiscoveryVNextMegaLoopPreviewPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     discovery_brief: dict[str, Any] = Field(alias="discoveryBrief")
+    loop_strategy: str = Field(default="universal_broad_coverage", alias="loopStrategy")
+    coverage_policy: dict[str, Any] = Field(default_factory=dict, alias="coveragePolicy")
+    adaptive_policy: dict[str, Any] = Field(default_factory=dict, alias="adaptivePolicy")
     max_batches: int = Field(default=11, ge=1, le=12, alias="maxBatches")
     locale: str | None = None
     previous_hypotheses: list[dict[str, Any]] = Field(default_factory=list, alias="previousHypotheses")
@@ -251,6 +254,8 @@ class DiscoveryVNextCandidateNormalizePayload(BaseModel):
     query_attempt_id: str | None = Field(default=None, alias="queryAttemptId")
     query: str = ""
     query_family_intent: str = Field(default="", alias="queryFamilyIntent")
+    lens: str | None = None
+    memory_mode: str | None = Field(default=None, alias="memoryMode")
     run_id: str | None = Field(default=None, alias="runId")
     vnext_run_id: str | None = Field(default=None, alias="vnextRunId")
     interest_id: str | None = Field(default=None, alias="interestId")
@@ -655,7 +660,7 @@ def preview_route(payload: DiscoveryVNextRoutePreviewPayload) -> dict[str, Any]:
     issues = validate_artifact_envelope(
         {
             "artifactType": "SourceUnderstanding",
-            "schemaVersion": "1.0",
+            "schemaVersion": "2.0",
             "status": "generated",
             "payload": source_understanding,
         }
@@ -688,6 +693,8 @@ def preview_mega_loop(payload: DiscoveryVNextMegaLoopPreviewPayload) -> dict[str
     return run_mega_loop_preview(
         payload.discovery_brief,
         max_batches=max_batches,
+        coverage_policy=payload.coverage_policy,
+        adaptive_policy=payload.adaptive_policy,
         locale=payload.locale,
         previous_hypotheses=payload.previous_hypotheses or memory["previousHypotheses"],
         source_inventory=payload.source_inventory or memory["sourceInventory"],
@@ -753,6 +760,8 @@ def normalize_candidates(payload: DiscoveryVNextCandidateNormalizePayload) -> di
         hypothesis_id=payload.hypothesis_id,
         query_attempt_id=payload.query_attempt_id,
         results=payload.results,
+        lens=payload.lens,
+        memory_mode=payload.memory_mode,
     )
     return {
         "candidates": candidates,
@@ -1055,11 +1064,12 @@ def create_artifact(
           payload_json,
           validation_json
         )
-        values (%s, '1.0', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning *
         """,
         (
             artifact_type,
+            "2.0" if artifact_type == "SourceUnderstanding" else "1.0",
             vnext_run_id,
             interest_id,
             candidate_id,
@@ -1950,6 +1960,7 @@ def select_candidates_for_probe(candidates: list[dict[str, Any]], *, request: di
     max_per_lens = max(1, min(20, int(request.get("maxProbeCandidatesPerLens") or max(1, max_per_run // 3))))
     max_per_domain = max(1, min(10, int(request.get("maxProbeCandidatesPerDomain") or 2)))
     max_per_hypothesis = max(1, min(10, int(request.get("maxProbeCandidatesPerHypothesis") or 2)))
+    max_per_scope_type = max(1, min(20, int(request.get("maxProbeCandidatesPerScopeType") or max_per_run)))
     ranked: list[tuple[int, int, dict[str, Any]]] = []
     for index, candidate in enumerate(candidates):
         if not isinstance(candidate, dict):
@@ -1961,21 +1972,26 @@ def select_candidates_for_probe(candidates: list[dict[str, Any]], *, request: di
     domain_counts: dict[str, int] = {}
     hypothesis_counts: dict[str, int] = {}
     lens_counts: dict[str, int] = {}
+    scope_type_counts: dict[str, int] = {}
     for _score, _index, candidate in ranked:
         domain = str(candidate.get("canonical_domain") or candidate.get("canonicalDomain") or _domain_from_url(str(candidate.get("canonical_url") or candidate.get("canonicalUrl") or "")))
-        hypothesis_id = str(candidate.get("hypothesis_artifact_id") or candidate.get("hypothesisArtifactId") or candidate.get("hypothesisId") or "unknown")
+        hypothesis_id = str(candidate.get("hypothesis_id") or candidate.get("hypothesisId") or "unknown")
         lens = _candidate_lens(candidate)
+        scope_type_guess = str(candidate.get("source_scope_type") or candidate.get("sourceScopeType") or candidate.get("candidate_kind_guess") or candidate.get("candidateKindGuess") or "unknown")
         if domain_counts.get(domain, 0) >= max_per_domain:
             continue
         if hypothesis_counts.get(hypothesis_id, 0) >= max_per_hypothesis:
             continue
         if lens and lens_counts.get(lens, 0) >= max_per_lens:
             continue
+        if scope_type_counts.get(scope_type_guess, 0) >= max_per_scope_type:
+            continue
         selected.append(candidate)
         domain_counts[domain] = domain_counts.get(domain, 0) + 1
         hypothesis_counts[hypothesis_id] = hypothesis_counts.get(hypothesis_id, 0) + 1
         if lens:
             lens_counts[lens] = lens_counts.get(lens, 0) + 1
+        scope_type_counts[scope_type_guess] = scope_type_counts.get(scope_type_guess, 0) + 1
         if len(selected) >= max_per_run:
             break
     return selected
@@ -2045,11 +2061,42 @@ def _with_optional_source_understanding_proposal(
             createdBy=created_by,
         )
     )
+    proposed_patch = proposal.get("result") if isinstance(proposal.get("result"), dict) else {}
+    candidate_payload = {**source_payload, **proposed_patch} if isinstance(proposed_patch, dict) else source_payload
+    validation_issues = validate_artifact_payload("SourceUnderstanding", candidate_payload)
+    conflict_reasons = _source_understanding_patch_conflicts(source_payload, proposed_patch)
+    if not validation_issues and not conflict_reasons:
+        return {
+            **candidate_payload,
+            "llmPatchProposal": proposed_patch,
+            "llmPatchAccepted": True,
+            "llmProposalMode": "validated_patch_deterministic_classifier_authoritative",
+        }
     return {
         **source_payload,
-        "llmProposal": proposal.get("result") or {},
-        "llmProposalMode": "structured_proposal_deterministic_classifier_authoritative",
+        "llmPatchProposal": proposed_patch,
+        "llmPatchAccepted": False,
+        "llmPatchRejectionReasons": conflict_reasons or [issue.message for issue in validation_issues[:5]],
+        "llmProposalMode": "validated_patch_deterministic_classifier_authoritative",
     }
+
+
+def _source_understanding_patch_conflicts(source_payload: dict[str, Any], patch: dict[str, Any]) -> list[str]:
+    if not isinstance(patch, dict) or not patch:
+        return ["empty_patch"]
+    reasons: list[str] = []
+    if source_payload.get("sourceScopeType") in {"blocked_or_unusable", "single_item", "context_page"}:
+        for key in ("sourceScopeType", "accessPattern", "suggestedProviderType", "adapterRequired"):
+            if key in patch and patch.get(key) != source_payload.get(key):
+                reasons.append(f"structural_evidence_wins:{key}")
+    source_technical = source_payload.get("technicalObservability") if isinstance(source_payload.get("technicalObservability"), dict) else {}
+    if source_technical.get("requiresAuth") is True:
+        for key in ("accessPattern", "technicalObservability"):
+            if key in patch and patch.get(key) != source_payload.get(key):
+                reasons.append(f"access_evidence_wins:{key}")
+    if patch.get("yieldIndependent") is False:
+        reasons.append("yield_dependent_patch_forbidden")
+    return reasons
 
 
 def _candidate_probe_score(candidate: dict[str, Any]) -> int:
@@ -2077,11 +2124,15 @@ def _query_quality_probe_bonus(candidate: dict[str, Any]) -> int:
     if not quality:
         evidence = candidate.get("acquisition_json") or candidate.get("acquisitionEvidence") or {}
         if isinstance(evidence, dict):
-            quality = str(evidence.get("queryQuality") or evidence.get("quality") or "")
+            quality_obj = evidence.get("queryQuality")
+            if isinstance(quality_obj, dict):
+                quality = str(quality_obj.get("quality") or "")
+            else:
+                quality = str(quality_obj or evidence.get("quality") or "")
     return {
-        "useful_for_acquisition": 4,
+        "useful_for_source_acquisition": 4,
+        "useful_for_item_discovery": 5,
         "useful_for_query_expansion": 2,
-        "needs_refinement": 1,
         "noisy": -3,
         "exhausted": -4,
     }.get(quality, 0)
@@ -2102,19 +2153,29 @@ def source_identity_key(
     provider_type: str,
     source_understanding: dict[str, Any],
 ) -> str:
+    del source_understanding
     parsed = urlparse(canonical_url)
     host = (parsed.hostname or "").lower()
     if host.startswith("www."):
         host = host[4:]
     path = parsed.path or "/"
-    if provider_type == "rss" and (source_understanding.get("probeSummary") or {}).get("validFeed"):
-        root = f"{parsed.scheme}://{host}{path}"
-    elif provider_type == "api":
-        root = f"{parsed.scheme}://{host}{_first_path_segment(path)}"
-    else:
-        root = f"{parsed.scheme}://{host}{_source_section_path(path)}"
-    resolved = str(source_understanding.get("sourceUrl") or root).rstrip("/") or root
+    query = _source_identity_query(parsed.query)
+    resolved = f"{parsed.scheme}://{host}{path}{query}".rstrip("/")
     return f"{provider_type}|{host}|{resolved}"
+
+
+def _source_identity_query(query: str) -> str:
+    if not query:
+        return ""
+    blocked = {"run_id", "runid", "interest_id", "interestid", "hypothesis_id", "hypothesisid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
+    pairs = []
+    for key, values in parse_qs(query, keep_blank_values=True).items():
+        if key.lower() in blocked:
+            continue
+        for value in values:
+            pairs.append((key, value))
+    encoded = urlencode(pairs)
+    return f"?{encoded}" if encoded else ""
 
 
 def _first_path_segment(path: str) -> str:
@@ -2151,12 +2212,37 @@ def _full_run_summary(
         scope_type = str(payload.get("sourceScopeType") or "unknown")
         scope_counts[scope_type] = scope_counts.get(scope_type, 0) + 1
     warnings = []
+    probe_coverage = round(len(selected) / max(1, len(candidates)), 4)
+    if candidates and probe_coverage < 0.25:
+        warnings.append({"code": "probe_coverage_too_low", "message": "Probe coverage is below the fail-visible quality threshold."})
     if not scope_resolutions and selected:
         warnings.append({"code": "scope_resolution_missing", "message": "Probe candidates were selected but no SourceScopeResolution artifacts were produced."})
+    low_confidence_count = sum(
+        1
+        for row in scope_resolutions
+        if float((_artifact_payload(row.get("sourceScopeResolutionArtifact") if isinstance(row.get("sourceScopeResolutionArtifact"), dict) else {}).get("sourceScopeConfidence") or 0) < 0.65)
+    )
+    if low_confidence_count:
+        warnings.append({"code": "scope_resolution_low_confidence", "message": "One or more source scopes resolved below confidence threshold.", "count": low_confidence_count})
+    forbidden_handoffs = [
+        item
+        for item in handoff_results
+        if isinstance(item, dict) and str(item.get("reason") or item.get("statusReason") or "").startswith("source_scope_not_channel_eligible")
+    ]
+    if forbidden_handoffs:
+        warnings.append({"code": "handoff_attempted_from_forbidden_scope_type", "message": "Handoff guard blocked forbidden source scope channel creation.", "count": len(forbidden_handoffs)})
+    if decisions.count("adapter_backlog") and not handoff_results:
+        warnings.append({"code": "adapter_conversion_missing", "message": "Sources reached adapter backlog but no item-level conversion proof is present in this run summary."})
+    status = "passed_mechanical"
+    if warnings:
+        status = "passed_with_quality_gap"
+    if decisions and decisions.count("adapter_backlog") == len(decisions):
+        status = "partially_proven"
     return {
+        "status": status,
         "candidateCount": len(candidates),
         "probedCount": len(selected),
-        "probeCoverage": round(len(selected) / max(1, len(candidates)), 4),
+        "probeCoverage": probe_coverage,
         "sourceScopeTypes": scope_counts,
         "routingDecisionCounts": {decision: decisions.count(decision) for decision in sorted(set(decisions)) if decision},
         "inventoryCount": decisions.count("inventory"),
@@ -2190,6 +2276,9 @@ def execute_candidate_acquisition(
     candidates: list[dict[str, Any]] = []
     for artifact in hypothesis_artifacts[:max_attempts]:
         hypothesis_artifact_id = str(artifact.get("artifact_id") or "")
+        hypothesis_payload = _artifact_payload(artifact)
+        artifact_lens = str(artifact.get("lens") or hypothesis_payload.get("lens") or "") or None
+        artifact_memory_mode = str(artifact.get("memory_mode") or hypothesis_payload.get("memoryMode") or "") or None
         for query_row in _queries_from_hypothesis_artifact(artifact):
             if len(attempts) >= max_attempts:
                 break
@@ -2221,11 +2310,13 @@ def execute_candidate_acquisition(
                 normalized = DiscoveryVNextCandidateCreatePayload(
                     runId=run_id,
                     interestId=interest_id,
-                    hypothesisId=hypothesis_artifact_id or str(query_row.get("hypothesisId") or "hypothesis"),
+                    hypothesisId=str(query_row.get("hypothesisId") or "unknown"),
                     hypothesisArtifactId=hypothesis_artifact_id or None,
                     queryAttemptId=str(attempt["query_attempt_id"]),
                     query=query_text,
                     queryFamilyIntent=str(query_row.get("intent") or ""),
+                    lens=artifact_lens,
+                    memoryMode=artifact_memory_mode,
                     results=enriched_results,
                     createdBy=created_by,
                 )
@@ -2532,12 +2623,17 @@ def resolve_source_inventory_scopes(payload: DiscoveryVNextSourceInventoryResolv
         scope_payload = _artifact_payload(preview) or preview.get("payload") or {}
         if payload.apply and scope_payload:
             applied.append(_apply_inventory_scope_metadata(row, scope_payload, payload.created_by))
+    destructive_actions = [
+        item
+        for item in applied
+        if isinstance(item, dict) and isinstance(item.get("pausedChannel"), dict)
+    ]
     return {
         "status": "applied" if payload.apply else "preview",
         "count": len(previews),
         "previews": previews,
         "applied": applied,
-        "destructiveActions": [],
+        "destructiveActions": destructive_actions,
         "destructiveConfirmationRequired": False,
     }
 
@@ -2615,7 +2711,42 @@ def _source_inventory_rows_for_resolution(source_inventory_ids: list[str], limit
 def _apply_inventory_scope_metadata(row: dict[str, Any], scope_payload: dict[str, Any], created_by: str) -> dict[str, Any]:
     scope_type = str(scope_payload.get("sourceScopeType") or "unknown")
     current_state = str(row.get("current_state") or "inventory")
-    next_state = "inventory_context" if scope_type in {"single_item", "context_page"} else current_state
+    next_state = {
+        "single_item": "inventory_context",
+        "context_page": "inventory_context",
+        "document_collection": "adapter_backlog",
+        "api_endpoint": "adapter_backlog",
+        "search_endpoint": "adapter_backlog",
+        "blocked_or_unusable": "blocked",
+        "unknown": "manual_review",
+    }.get(scope_type, current_state)
+    should_pause_projection = bool(row.get("registered_channel_id")) and (
+        scope_type in {"single_item", "context_page", "blocked_or_unusable"}
+        or _looks_like_document_url(str(row.get("canonical_url") or row.get("resolved_source_url") or ""))
+    )
+    rollback_group = None
+    paused_channel = None
+    if should_pause_projection:
+        rollback_group = prepare_rollback(
+            DiscoveryVNextRollbackPreparePayload(
+                sourceInventoryId=str(row["source_inventory_id"]),
+                reason=f"Auto-pausing forbidden Discovery projection after scope re-resolution: {scope_type}.",
+                createdBy=created_by,
+            )
+        )
+        paused_channel = query_one(
+            """
+            update source_channels
+            set is_active = false,
+                updated_at = now()
+            where channel_id = %s
+              and is_active = true
+            returning channel_id, is_active
+            """,
+            (row.get("registered_channel_id"),),
+        )
+        if paused_channel:
+            _insert_source_sync_event(str(paused_channel["channel_id"]))
     updated = query_one(
         """
         update source_inventory
@@ -2649,13 +2780,46 @@ def _apply_inventory_scope_metadata(row: dict[str, Any], scope_payload: dict[str
             observation_kind="scope_resolution",
             observation={
                 "mode": "maintenance_re_resolution",
+                "reasonCode": _reresolve_reason_code(scope_type, should_pause_projection),
+                "beforeState": {
+                    "currentState": current_state,
+                    "registeredChannelId": str(row.get("registered_channel_id") or "") or None,
+                    "canonicalUrl": row.get("canonical_url"),
+                    "resolvedSourceUrl": row.get("resolved_source_url"),
+                    "sourceScopeType": row.get("source_scope_type"),
+                },
+                "afterState": {
+                    "currentState": next_state,
+                    "registeredChannelId": str(updated.get("registered_channel_id") or "") or None,
+                    "resolvedSourceUrl": scope_payload.get("resolvedSourceUrl"),
+                    "sourceScopeType": scope_type,
+                    "pausedChannel": paused_channel,
+                },
+                "rollbackGroupId": (rollback_group or {}).get("rollbackGroup", {}).get("rollback_group_id"),
                 "candidateUrl": scope_payload.get("candidateUrl"),
                 "resolvedSourceUrl": scope_payload.get("resolvedSourceUrl"),
                 "sourceScopeType": scope_type,
                 "sourceScopeConfidence": scope_payload.get("sourceScopeConfidence"),
             },
         )
-    return updated or {}
+    return {
+        "sourceInventory": updated or {},
+        "pausedChannel": paused_channel,
+        "rollback": rollback_group,
+        "reasonCode": _reresolve_reason_code(scope_type, should_pause_projection),
+    }
+
+
+def _looks_like_document_url(url: str) -> bool:
+    return bool(re.search(r"\.(pdf|docx?|xlsx?|pptx?|rtf)(?:$|\?)", url.lower()))
+
+
+def _reresolve_reason_code(scope_type: str, paused: bool) -> str:
+    if paused:
+        return f"auto_paused_forbidden_scope:{scope_type}"
+    if scope_type in {"document_collection", "api_endpoint", "search_endpoint"}:
+        return f"moved_to_adapter_backlog:{scope_type}"
+    return f"scope_metadata_refreshed:{scope_type}"
 
 
 def _update_inventory_state_action(
@@ -2770,6 +2934,10 @@ def upsert_candidate(
           vnext_run_id,
           interest_id,
           hypothesis_artifact_id,
+          hypothesis_id,
+          hypothesis_batch_artifact_id,
+          lens,
+          memory_mode,
           query_quality_artifact_id,
           canonical_url,
           canonical_domain,
@@ -2778,9 +2946,13 @@ def upsert_candidate(
           rediscovery_count,
           status
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'new')
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'new')
         on conflict (vnext_run_id, canonical_url) where vnext_run_id is not null
         do update set
+          hypothesis_id = excluded.hypothesis_id,
+          hypothesis_batch_artifact_id = excluded.hypothesis_batch_artifact_id,
+          lens = coalesce(excluded.lens, discovery_candidates.lens),
+          memory_mode = coalesce(excluded.memory_mode, discovery_candidates.memory_mode),
           query_quality_artifact_id = excluded.query_quality_artifact_id,
           acquisition_json = discovery_candidates.acquisition_json || excluded.acquisition_json,
           rediscovery_count = discovery_candidates.rediscovery_count + excluded.rediscovery_count,
@@ -2795,6 +2967,10 @@ def upsert_candidate(
             candidate.get("runId"),
             candidate.get("interestId"),
             hypothesis_artifact_id,
+            str(candidate.get("hypothesisId") or "unknown"),
+            hypothesis_artifact_id,
+            candidate.get("lens"),
+            candidate.get("memoryMode"),
             query_quality_artifact_id or None,
             candidate["canonicalUrl"],
             candidate["canonicalDomain"],

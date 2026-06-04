@@ -60,7 +60,7 @@ def synthesize_source_understanding(
     issues = validate_source_understanding(payload)
     return {
         "artifactType": "SourceUnderstanding",
-        "schemaVersion": "1.0",
+        "schemaVersion": "2.0",
         "status": "validated" if not issues else "rejected",
         "payload": payload,
         "validation": validation_json(issues),
@@ -89,12 +89,13 @@ def build_source_understanding_payload(
         or ""
     )
     role_context = _role_context(probe_report, candidate, scope_payload)
-    technical_observability = _technical_score(probe_report)
+    technical_observability_score = _technical_score(probe_report)
+    technical_observability = _technical_observability(probe_report, scope_payload, technical_observability_score)
     access_pattern = str(probe_report.get("accessPattern") or "unknown")
     artifact_fit = _artifact_fit(discovery_brief, probe_report, role_context)
     evidence_directness = _evidence_directness(probe_report, role_context)
     risk = _risk(probe_report, scope_payload)
-    signals = _signals(discovery_brief, probe_report, role_context, artifact_fit, technical_observability, risk)
+    signals = _signals(discovery_brief, probe_report, role_context, artifact_fit, technical_observability_score, risk)
     payload = {
         "candidateId": candidate.get("candidateId") or candidate.get("candidate_id"),
         "sourceUrl": source_url,
@@ -105,9 +106,12 @@ def build_source_understanding_payload(
         "sourceScopeEvidence": scope_payload.get("resolutionEvidence") or [],
         "sourceRoleDescription": _source_role_description(source_url, role_context),
         "sourceVoice": role_context["sourceVoice"],
+        "sourceVoiceEvidence": _role_evidence("sourceVoice", role_context, scope_payload),
         "artifactProducingBehavior": _artifact_behavior(probe_report, role_context),
         "artifactFreshnessKind": role_context["artifactFreshnessKind"],
+        "artifactFreshnessEvidence": _role_evidence("artifactFreshnessKind", role_context, scope_payload),
         "signalProductionMode": role_context["signalProductionMode"],
+        "signalProductionEvidence": _role_evidence("signalProductionMode", role_context, scope_payload),
         "observedArtifactTypes": role_context["observedArtifactTypes"],
         "canProduceSignals": signals,
         "notExpectedToProduce": _not_expected_to_produce(discovery_brief, role_context),
@@ -118,7 +122,7 @@ def build_source_understanding_payload(
         "sourceRoleConfidence": role_context["sourceRoleConfidence"],
         "risk": risk,
         "routingConfidence": _routing_confidence(
-            technical_observability,
+            technical_observability_score,
             artifact_fit,
             evidence_directness,
             role_context["sourceRoleConfidence"],
@@ -189,6 +193,8 @@ def _fallback_scope_from_probe(probe_report: dict[str, Any], candidate: dict[str
     scope_type = "feed" if valid_feed else "listing_page" if listing else "unknown"
     return {
         "candidateUrl": candidate_url,
+        "canonicalCandidateUrl": candidate_url,
+        "originalCandidateUrl": candidate_url,
         "resolvedSourceUrl": candidate_url,
         "sourceScopeType": scope_type,
         "sourceScopeConfidence": 0.65 if scope_type != "unknown" else 0.35,
@@ -196,7 +202,10 @@ def _fallback_scope_from_probe(probe_report: dict[str, Any], candidate: dict[str
         "monitoringEntryUrls": [candidate_url] if candidate_url else [],
         "itemExtractionHints": {},
         "resolutionEvidence": ["Fallback scope inferred from probe evidence."],
+        "normalizationEvidence": ["Fallback scope used probe candidate URL without resolver normalization."],
         "notMonitoringReason": None,
+        "scopeCandidates": [],
+        "warnings": ["fallback_scope_resolution_used"],
         "risk": {},
     }
 
@@ -204,8 +213,10 @@ def _fallback_scope_from_probe(probe_report: dict[str, Any], candidate: dict[str
 def _probe_evidence(probe_report: dict[str, Any]) -> list[str]:
     evidence: list[str] = []
     technical = probe_report.get("technicalObservability")
-    if isinstance(technical, dict) and technical.get("feedValid"):
-        evidence.append("Fetchers feed probe observed a valid recurring feed.")
+    if isinstance(technical, dict) and technical.get("productiveFeed"):
+        evidence.append("Fetchers feed probe observed a productive recurring feed.")
+    elif isinstance(technical, dict) and technical.get("feedValid"):
+        evidence.append("Fetchers feed probe observed parseable feed metadata without sample entries.")
     if isinstance(technical, dict) and technical.get("staticWebsiteSignals"):
         evidence.append("Fetchers website probe observed static source artifacts.")
     for artifact in probe_report.get("observedArtifacts") or []:
@@ -237,7 +248,7 @@ def _artifact_fit(discovery_brief: dict[str, Any], probe_report: dict[str, Any],
     score = 0.25
     if expectations and expectations.intersection(observed_types):
         score = max(score, 0.78)
-    if any(isinstance(item, dict) and item.get("valid") for item in observations):
+    if any(isinstance(item, dict) and int(item.get("sampleEntryCount") or 0) > 0 for item in observations):
         score = max(score, 0.82 if "article" in expectations or "changelog" in expectations else 0.72)
     if any(isinstance(item, dict) and int(item.get("listingCountEstimate") or 0) > 0 for item in observations):
         score = max(score, 0.78 if "listing" in expectations else 0.62)
@@ -255,6 +266,27 @@ def _technical_score(probe_report: dict[str, Any]) -> float:
     if isinstance(technical, dict):
         return round(clamp_score(technical.get("score")), 2)
     return 0.0
+
+
+def _technical_observability(probe_report: dict[str, Any], scope_payload: dict[str, Any], score: float) -> dict[str, Any]:
+    technical = probe_report.get("technicalObservability") if isinstance(probe_report.get("technicalObservability"), dict) else {}
+    scope_type = str(scope_payload.get("sourceScopeType") or "unknown")
+    access_pattern = str(probe_report.get("accessPattern") or "unknown")
+    return {
+        "score": score,
+        "canPollCheaply": scope_type in {"feed", "listing_page", "section"} and access_pattern == "public",
+        "hasStableUrls": bool(scope_payload.get("resolvedSourceUrl")),
+        "hasDatesOrVersions": bool((scope_payload.get("itemExtractionHints") or {}).get("dateOrVersionObserved")),
+        "hasListingsOrFeeds": scope_type in {"feed", "listing_page", "section", "document_collection"} or bool(technical.get("feedValid")),
+        "requiresBrowser": access_pattern == "requires_browser",
+        "requiresAuth": access_pattern in {"requires_auth", "captcha_blocked", "blocked"},
+        "feedValid": bool(technical.get("feedValid")),
+        "productiveFeed": bool(technical.get("productiveFeed")),
+        "feedSampleEntryCount": int(technical.get("feedSampleEntryCount") or 0),
+        "feedFinalUrl": technical.get("feedFinalUrl"),
+        "feedDiagnostics": technical.get("feedDiagnostics") if isinstance(technical.get("feedDiagnostics"), list) else [],
+        "observable": bool(technical.get("observable")) if "observable" in technical else score >= 0.35,
+    }
 
 
 def _evidence_directness(probe_report: dict[str, Any], role_context: dict[str, Any]) -> float:
@@ -341,6 +373,16 @@ def _routing_confidence(
     return round(max(0.0, min(1.0, confidence - risk_drag + 0.12)), 2)
 
 
+def _role_evidence(kind: str, role_context: dict[str, Any], scope_payload: dict[str, Any]) -> list[str]:
+    value = str(role_context.get(kind) or "unknown")
+    evidence = [f"{kind} classified as {value} from structural probe and source-scope evidence."]
+    for item in scope_payload.get("resolutionEvidence") or []:
+        if isinstance(item, str) and item:
+            evidence.append(item)
+            break
+    return evidence
+
+
 def _source_role_description(source_url: str, role_context: dict[str, Any]) -> str:
     host = urlparse(source_url).hostname or "source"
     voice = str(role_context["sourceVoice"]).replace("_", " ")
@@ -352,8 +394,10 @@ def _source_role_description(source_url: str, role_context: dict[str, Any]) -> s
 def _artifact_behavior(probe_report: dict[str, Any], role_context: dict[str, Any]) -> str:
     summary = _probe_summary(probe_report)
     behaviors = []
-    if summary["validFeed"]:
+    if summary["productiveFeed"]:
         behaviors.append("valid feed entries")
+    elif summary["validFeed"]:
+        behaviors.append("parseable feed metadata")
     if summary["listingSignals"]:
         behaviors.append("listing resources")
     if summary["documentSignals"]:
@@ -364,8 +408,15 @@ def _artifact_behavior(probe_report: dict[str, Any], role_context: dict[str, Any
 
 def _probe_summary(probe_report: dict[str, Any]) -> dict[str, Any]:
     observations = probe_report.get("observations") if isinstance(probe_report.get("observations"), list) else []
+    feed_observations = [item for item in observations if isinstance(item, dict) and item.get("kind") == "feed_probe"]
+    feed_sample_entry_count = sum(int(item.get("sampleEntryCount") or 0) for item in feed_observations)
+    technical = probe_report.get("technicalObservability") if isinstance(probe_report.get("technicalObservability"), dict) else {}
     return {
-        "validFeed": any(isinstance(item, dict) and item.get("valid") for item in observations),
+        "validFeed": any(isinstance(item, dict) and item.get("valid") for item in feed_observations),
+        "productiveFeed": feed_sample_entry_count > 0,
+        "feedSampleEntryCount": feed_sample_entry_count,
+        "feedFinalUrl": _first_observation_value(feed_observations, "finalUrl", "feedUrl", "url") or technical.get("feedFinalUrl"),
+        "feedDiagnostics": _feed_diagnostics(feed_observations, technical),
         "listingSignals": any(isinstance(item, dict) and int(item.get("listingCountEstimate") or 0) > 0 for item in observations),
         "documentSignals": any(isinstance(item, dict) and int(item.get("documentCountEstimate") or 0) > 0 for item in observations),
         "observedArtifacts": probe_report.get("observedArtifacts") if isinstance(probe_report.get("observedArtifacts"), list) else [],
@@ -374,6 +425,27 @@ def _probe_summary(probe_report: dict[str, Any]) -> dict[str, Any]:
         "accessPattern": probe_report.get("accessPattern") or "unknown",
         "browserProbeAttempted": bool(probe_report.get("browserProbeAttempted")),
     }
+
+
+def _first_observation_value(observations: list[dict[str, Any]], *keys: str) -> str | None:
+    for observation in observations:
+        for key in keys:
+            value = observation.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _feed_diagnostics(observations: list[dict[str, Any]], technical: dict[str, Any]) -> list[Any]:
+    diagnostics: list[Any] = []
+    for observation in observations:
+        raw = observation.get("diagnostics")
+        if isinstance(raw, list):
+            diagnostics.extend(raw)
+    raw_technical = technical.get("feedDiagnostics")
+    if isinstance(raw_technical, list):
+        diagnostics.extend(raw_technical)
+    return diagnostics[:10]
 
 
 def _suggested_provider_type(candidate: dict[str, Any], probe_report: dict[str, Any], source_scope_resolution: dict[str, Any] | None = None) -> str:
@@ -490,7 +562,7 @@ def _observed_artifact_types(probe_report: dict[str, Any]) -> list[str]:
     for observation in probe_report.get("observations") or []:
         if not isinstance(observation, dict):
             continue
-        if observation.get("valid") or int(observation.get("sampleEntryCount") or 0) > 0:
+        if int(observation.get("sampleEntryCount") or 0) > 0:
             observed.append("article")
         if int(observation.get("listingCountEstimate") or 0) > 0:
             observed.append("listing")
@@ -532,7 +604,7 @@ def _source_voice(hints: dict[str, bool], probe_report: dict[str, Any], candidat
 
 def _artifact_freshness(hints: dict[str, bool], observed_types: list[str], probe_report: dict[str, Any]) -> str:
     technical = probe_report.get("technicalObservability") if isinstance(probe_report.get("technicalObservability"), dict) else {}
-    if technical.get("feedValid"):
+    if technical.get("productiveFeed"):
         return "recurring_feed"
     if hints.get("recurringListingLikely") or "listing" in observed_types:
         return "recurring_listing"
@@ -553,7 +625,7 @@ def _artifact_freshness(hints: dict[str, bool], observed_types: list[str], probe
 
 def _signal_production_mode(source_voice: str, freshness: str, hints: dict[str, bool], probe_report: dict[str, Any]) -> str:
     technical = probe_report.get("technicalObservability") if isinstance(probe_report.get("technicalObservability"), dict) else {}
-    if technical.get("feedValid") and freshness == "recurring_feed":
+    if technical.get("productiveFeed") and freshness == "recurring_feed":
         return "direct_event_feed"
     if freshness == "recurring_listing":
         return "direct_request_or_listing"

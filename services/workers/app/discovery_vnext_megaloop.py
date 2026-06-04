@@ -56,13 +56,19 @@ def run_mega_loop_preview(
     discovery_brief: dict[str, Any],
     *,
     max_batches: int = 5,
+    coverage_policy: dict[str, Any] | None = None,
+    adaptive_policy: dict[str, Any] | None = None,
     locale: str | None = None,
     previous_hypotheses: list[dict[str, Any]] | None = None,
     source_inventory: list[dict[str, Any]] | None = None,
     feedback_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    coverage_policy = _coverage_policy(max_batches=max_batches)
-    configs = DEFAULT_GENERATOR_CONFIGS[: max(1, min(max_batches, len(DEFAULT_GENERATOR_CONFIGS)))]
+    coverage_policy = _coverage_policy(max_batches=max_batches, requested=coverage_policy)
+    adaptive_policy = _adaptive_policy(adaptive_policy)
+    required_lenses = [lens for lens in coverage_policy["requiredLensCoverage"] if lens in UNIVERSAL_LENSES]
+    config_by_lens = {config["lens"]: config for config in DEFAULT_GENERATOR_CONFIGS}
+    configs = [config_by_lens[lens] for lens in required_lenses if lens in config_by_lens]
+    configs = configs[: max(1, min(max_batches, len(configs)))]
     batches = [
         generate_hypothesis_batch(discovery_brief, config["memoryMode"], config["lens"], locale=locale)
         for config in configs
@@ -90,6 +96,7 @@ def run_mega_loop_preview(
         "batches": batches,
         "comparison": {**comparison, "missingLenses": missing_lenses, "warnings": warnings},
         "coveragePolicy": coverage_policy,
+        "adaptivePolicy": adaptive_policy,
         "warnings": warnings,
         "limits": {
             "maxBatches": max_batches,
@@ -99,14 +106,28 @@ def run_mega_loop_preview(
     }
 
 
-def _coverage_policy(*, max_batches: int) -> dict[str, Any]:
+def _coverage_policy(*, max_batches: int, requested: dict[str, Any] | None = None) -> dict[str, Any]:
+    requested = requested if isinstance(requested, dict) else {}
+    required = requested.get("requiredLensCoverage") if isinstance(requested.get("requiredLensCoverage"), list) else UNIVERSAL_LENSES
     return {
         "loopStrategy": "universal_broad_coverage",
-        "requiredLensCoverage": UNIVERSAL_LENSES,
-        "minHypothesesPerLens": 5,
-        "minQueriesPerHypothesis": 3,
-        "minProbeCandidatesPerLens": 5,
+        "requiredLensCoverage": [str(lens) for lens in required],
+        "minHypothesesPerLens": int(requested.get("minHypothesesPerLens") or 5),
+        "minQueriesPerHypothesis": int(requested.get("minQueriesPerHypothesis") or 3),
+        "minProbeCandidatesPerLens": int(requested.get("minProbeCandidatesPerLens") or 5),
         "maxBatches": max_batches,
+    }
+
+
+def _adaptive_policy(requested: dict[str, Any] | None = None) -> dict[str, Any]:
+    requested = requested if isinstance(requested, dict) else {}
+    return {
+        "allocateExtraBudgetTo": requested.get("allocateExtraBudgetTo")
+        if isinstance(requested.get("allocateExtraBudgetTo"), list)
+        else ["highNovelty", "highSourceScopeConfidence", "underCoveredLens", "highQueryQuality", "adapterBacklogOpportunity"],
+        "stopWhen": requested.get("stopWhen")
+        if isinstance(requested.get("stopWhen"), list)
+        else ["lowNoveltyAcrossThreeBatches", "mostlyDuplicateCandidates", "mostlyBlockedOrContextOnly", "budgetExhausted"],
     }
 
 

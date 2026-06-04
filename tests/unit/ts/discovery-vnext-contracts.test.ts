@@ -76,6 +76,8 @@ test("SourceUnderstanding payload requires yieldIndependent flag", () => {
 test("SourceScopeResolution payload schema accepts resolved source scope", () => {
   const issues = validateDiscoveryVNextPayload("SourceScopeResolution", {
     candidateUrl: "https://example.org/news/2026/launch",
+    canonicalCandidateUrl: "https://example.org/news/2026/launch",
+    originalCandidateUrl: "https://example.org/news/2026/launch?utm_source=test",
     resolvedSourceUrl: "https://example.org/news",
     sourceScopeType: "section",
     sourceScopeConfidence: 0.82,
@@ -89,7 +91,17 @@ test("SourceScopeResolution payload schema accepts resolved source scope", () =>
       documentLinksObserved: false,
     },
     resolutionEvidence: ["Candidate URL looks like an item detail page."],
+    normalizationEvidence: ["Removed tracking query parameter utm_source."],
     notMonitoringReason: null,
+    scopeCandidates: [
+      {
+        url: "https://example.org/news",
+        type: "section",
+        score: 0.82,
+        selected: true,
+      },
+    ],
+    warnings: [],
     risk: { overallRisk: "low" },
   });
 
@@ -153,8 +165,8 @@ test("QueryQualityReport payload schema accepts result-mix quality values", () =
     query: "public updates",
     queryFamilyIntent: "Find official update sources.",
     queryPurpose: "find_official_owners",
-    observedResultMix: { primaryOrOwnerSources: 2, officialSources: 2, duplicates: 0 },
-    quality: "useful_for_acquisition",
+    observedResultMix: { official_or_owner_sources: 2, feeds: 1, duplicates: 0 },
+    quality: "useful_for_source_acquisition",
     recommendedNextAction: "probe_top_candidates",
   });
 

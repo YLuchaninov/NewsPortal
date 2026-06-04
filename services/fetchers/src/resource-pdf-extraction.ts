@@ -1,10 +1,4 @@
 import {
-  getDocument,
-  VerbosityLevel,
-  version as pdfjsVersion,
-} from "pdfjs-dist/legacy/build/pdf.mjs";
-
-import {
   normalizeText,
   readOptionalString,
   summarizeBody,
@@ -43,6 +37,68 @@ export interface PdfExtractionResult {
 }
 
 type PdfInfoRecord = Record<string, unknown>;
+type PdfJsModule = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+
+let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
+class PdfTextExtractionDOMMatrix {
+  a = 1;
+  b = 0;
+  c = 0;
+  d = 1;
+  e = 0;
+  f = 0;
+
+  constructor(init?: unknown) {
+    if (Array.isArray(init)) {
+      [this.a, this.b, this.c, this.d, this.e, this.f] = [
+        Number(init[0] ?? 1),
+        Number(init[1] ?? 0),
+        Number(init[2] ?? 0),
+        Number(init[3] ?? 1),
+        Number(init[4] ?? 0),
+        Number(init[5] ?? 0),
+      ];
+    }
+  }
+
+  multiplySelf(): this {
+    return this;
+  }
+
+  preMultiplySelf(): this {
+    return this;
+  }
+
+  translate(): this {
+    return this;
+  }
+
+  scale(): this {
+    return this;
+  }
+
+  invertSelf(): this {
+    return this;
+  }
+}
+
+function ensurePdfJsNodeGlobals(): void {
+  const mutableGlobals = globalThis as unknown as Record<string, unknown>;
+  mutableGlobals.DOMMatrix ??= PdfTextExtractionDOMMatrix;
+  mutableGlobals.ImageData ??= class PdfTextExtractionImageData {};
+  mutableGlobals.Path2D ??= class PdfTextExtractionPath2D {
+    addPath(): void {
+      // Rendering is disabled for PDF text extraction.
+    }
+  };
+}
+
+async function loadPdfJs(): Promise<PdfJsModule> {
+  ensurePdfJsNodeGlobals();
+  pdfJsModulePromise ??= import("pdfjs-dist/legacy/build/pdf.mjs");
+  return await pdfJsModulePromise;
+}
 
 function readPdfInfoValue(info: PdfInfoRecord, keys: readonly string[]): string | null {
   for (const key of keys) {
@@ -110,7 +166,8 @@ export async function extractPdfDocument(
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
   const maxTextChars = options.maxTextChars ?? DEFAULT_MAX_TEXT_CHARS;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const parser = { name: "pdfjs-dist" as const, version: pdfjsVersion };
+  const pdfjs = await loadPdfJs();
+  const parser = { name: "pdfjs-dist" as const, version: pdfjs.version };
 
   if (pdfBytes.byteLength > maxBytes) {
     return {
@@ -130,9 +187,9 @@ export async function extractPdfDocument(
     };
   }
 
-  const loadingTask = getDocument({
+  const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(pdfBytes),
-    verbosity: VerbosityLevel.ERRORS,
+    verbosity: pdfjs.VerbosityLevel.ERRORS,
     useWorkerFetch: false,
     useSystemFonts: false,
     useWasm: false,

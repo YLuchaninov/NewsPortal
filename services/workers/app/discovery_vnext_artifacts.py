@@ -15,7 +15,7 @@ ARTIFACT_TYPES = {
     "QueryQualityReport",
 }
 ARTIFACT_STATUSES = {"draft", "generated", "validated", "rejected", "superseded", "applied", "expired"}
-MEMORY_MODES = {"blind", "thin", "gap_only", "locale", "artifact_lens", "adversarial", "full", "full_evaluator_only"}
+MEMORY_MODES = {"blind", "thin", "gap_only", "locale", "artifact_lens", "adversarial", "full_evaluator_only"}
 FRESHNESS_NEEDS = {"fast", "normal", "slow", "rare", "unknown"}
 DIRECTNESS_VALUES = {"direct", "indirect", "precursor", "contextual"}
 CAPABILITY_VALUES = {"high", "medium", "low", "unknown"}
@@ -61,6 +61,8 @@ ARTIFACT_FRESHNESS_KINDS = {
     "documentation_or_guide",
     "dataset_or_registry",
     "community_thread",
+    "search_or_category_wrapper",
+    "profile_or_homepage",
     "unknown",
 }
 SIGNAL_PRODUCTION_MODES = {
@@ -159,8 +161,10 @@ def validate_artifact_envelope(artifact: dict[str, Any]) -> list[ValidationIssue
     artifact_type = artifact.get("artifactType") or artifact.get("artifact_type")
     if artifact_type not in ARTIFACT_TYPES:
         _push(issues, "$.artifactType", "invalid_enum", "artifactType is unsupported.")
-    if artifact.get("schemaVersion") not in {None, "1.0"} and artifact.get("schema_version") not in {None, "1.0"}:
-        _push(issues, "$.schemaVersion", "invalid_schema_version", "schemaVersion must be 1.0.")
+    schema_version = artifact.get("schemaVersion") or artifact.get("schema_version")
+    allowed_versions = {"1.0", "2.0"} if artifact_type == "SourceUnderstanding" else {"1.0"}
+    if schema_version is not None and schema_version not in allowed_versions:
+        _push(issues, "$.schemaVersion", "invalid_schema_version", "schemaVersion is unsupported for this artifact type.")
 
     status = artifact.get("status", "generated")
     _enum(status, ARTIFACT_STATUSES, issues, "$.status")
@@ -324,6 +328,8 @@ def validate_probe_report(payload: dict[str, Any]) -> list[ValidationIssue]:
 def validate_source_scope_resolution(payload: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     _require_string(payload, "candidateUrl", issues)
+    _require_string(payload, "canonicalCandidateUrl", issues)
+    _require_string(payload, "originalCandidateUrl", issues)
     _require_string(payload, "resolvedSourceUrl", issues)
     _enum(payload.get("sourceScopeType"), SOURCE_SCOPE_TYPES, issues, "$.sourceScopeType")
     if payload.get("sourceScopeConfidence") is None:
@@ -334,8 +340,16 @@ def validate_source_scope_resolution(payload: dict[str, Any]) -> list[Validation
         _push(issues, "$.itemExtractionHints", "required", "itemExtractionHints must be an object.")
     if not _list(payload.get("resolutionEvidence")):
         _push(issues, "$.resolutionEvidence", "required", "resolutionEvidence must be a non-empty list.")
+    if not isinstance(payload.get("normalizationEvidence"), list):
+        _push(issues, "$.normalizationEvidence", "required", "normalizationEvidence must be a list.")
+    if "notMonitoringReason" not in payload:
+        _push(issues, "$.notMonitoringReason", "required", "notMonitoringReason must be present.")
     if not _is_record(payload.get("risk")):
         _push(issues, "$.risk", "required", "risk must be an object.")
+    if not isinstance(payload.get("scopeCandidates"), list):
+        _push(issues, "$.scopeCandidates", "required", "scopeCandidates must be a list.")
+    if not isinstance(payload.get("warnings"), list):
+        _push(issues, "$.warnings", "required", "warnings must be a list.")
     return issues
 
 
@@ -355,6 +369,8 @@ def validate_source_understanding(payload: dict[str, Any]) -> list[ValidationIss
     _require_list(payload, "canProduceSignals", issues)
     _require_string(payload, "reasonToKeep", issues)
     _require_string(payload, "reasonNotToAutoRegister", issues)
+    if not _is_record(payload.get("technicalObservability")):
+        _push(issues, "$.technicalObservability", "required", "SourceUnderstanding technicalObservability must be an object.")
     if payload.get("yieldIndependent") is not True:
         _push(issues, "$.yieldIndependent", "yield_dependent", "SourceUnderstanding must be yield-independent.")
     if not _is_record(payload.get("risk")):
@@ -423,9 +439,9 @@ def validate_query_quality_report(payload: dict[str, Any]) -> list[ValidationIss
     _enum(
         payload.get("quality"),
         {
-            "useful_for_acquisition",
+            "useful_for_source_acquisition",
+            "useful_for_item_discovery",
             "useful_for_query_expansion",
-            "needs_refinement",
             "noisy",
             "exhausted",
         },

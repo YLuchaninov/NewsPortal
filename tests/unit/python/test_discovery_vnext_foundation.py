@@ -34,6 +34,18 @@ def _unwrap_json_param(value):  # type: ignore[no-untyped-def]
     return value
 
 
+def _tech(score: float) -> dict[str, object]:
+    return {
+        "score": score,
+        "canPollCheaply": score >= 0.5,
+        "hasStableUrls": True,
+        "hasDatesOrVersions": True,
+        "hasListingsOrFeeds": score >= 0.5,
+        "requiresBrowser": False,
+        "requiresAuth": False,
+    }
+
+
 class DiscoveryVNextFoundationTests(unittest.TestCase):
     def test_core_vnext_modules_do_not_hardcode_eval_domains(self) -> None:
         root = Path(__file__).resolve().parents[3]
@@ -145,7 +157,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.8,
-                "technicalObservability": 0.7,
+                "technicalObservability": _tech(0.7),
                 "evidenceDirectness": 0.7,
                 "sourceRoleConfidence": 0.8,
                 "risk": {"overallRisk": "low"},
@@ -178,7 +190,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.8,
-                "technicalObservability": 0.7,
+                "technicalObservability": _tech(0.7),
                 "evidenceDirectness": 0.7,
                 "sourceRoleConfidence": 0.8,
                 "risk": {"overallRisk": "low", "riskScore": 0.2},
@@ -217,14 +229,19 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.9,
-                "technicalObservability": 0.85,
+                "technicalObservability": _tech(0.85),
                 "evidenceDirectness": 0.8,
                 "sourceRoleConfidence": 0.8,
                 "risk": {"overallRisk": "low", "riskScore": 0.15},
                 "routingConfidence": 0.9,
                 "accessPattern": "public",
                 "suggestedProviderType": "rss",
-                "probeSummary": {"validFeed": True},
+                "probeSummary": {
+                    "validFeed": True,
+                    "productiveFeed": True,
+                    "feedSampleEntryCount": 2,
+                    "feedFinalUrl": "https://feeds.example.org/updates.xml",
+                },
                 "yieldIndependent": True,
             },
             provider_type="rss",
@@ -233,6 +250,44 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
 
         self.assertEqual(decision["decision"], "auto_register_probation")
         self.assertEqual(decision["actions"][1]["actionType"], "create_probation_channel")
+
+    def test_parseable_empty_rss_cannot_enter_probation(self) -> None:
+        decision = route_source_understanding(
+            {
+                "candidateId": "candidate-empty-feed",
+                "sourceUrl": "https://example.org/feed.xml",
+                "sourceScopeType": "feed",
+                "sourceRoleDescription": "Publishes feed metadata.",
+                "sourceVoice": "owner_or_operator",
+                "artifactFreshnessKind": "recurring_feed",
+                "signalProductionMode": "direct_event_feed",
+                "observedArtifactTypes": ["unknown"],
+                "canProduceSignals": [
+                    {
+                        "signalDescription": "Public update",
+                        "capability": "high",
+                        "capabilityScore": 0.9,
+                        "directness": "direct",
+                        "evidenceFromProbe": ["Probe observed parseable feed metadata."],
+                    }
+                ],
+                "artifactFit": 0.9,
+                "technicalObservability": _tech(0.85),
+                "evidenceDirectness": 0.8,
+                "sourceRoleConfidence": 0.8,
+                "risk": {"overallRisk": "low", "riskScore": 0.15},
+                "routingConfidence": 0.9,
+                "accessPattern": "public",
+                "suggestedProviderType": "rss",
+                "probeSummary": {"validFeed": True, "productiveFeed": False, "feedSampleEntryCount": 0},
+                "yieldIndependent": True,
+            },
+            provider_type="rss",
+            access_pattern="public",
+        )
+
+        self.assertEqual(decision["decision"], "manual_review")
+        self.assertFalse(decision["allowChannelCreation"])
 
     def test_auth_and_captcha_route_to_safe_exception_paths(self) -> None:
         base = {
@@ -252,7 +307,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 }
             ],
             "artifactFit": 0.9,
-            "technicalObservability": 0.8,
+            "technicalObservability": _tech(0.8),
             "evidenceDirectness": 0.8,
             "sourceRoleConfidence": 0.8,
             "risk": {"overallRisk": "low", "riskScore": 0.2},
@@ -370,9 +425,44 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         self.assertTrue(report["validation"]["schemaValid"], report["validation"])
         self.assertEqual(report["payload"]["accessPattern"], "public")
         self.assertEqual(report["payload"]["technicalObservability"]["providerFailureCount"], 1)
+        self.assertTrue(report["payload"]["technicalObservability"]["feedValid"])
+        self.assertTrue(report["payload"]["technicalObservability"]["productiveFeed"])
+        self.assertEqual(report["payload"]["technicalObservability"]["feedSampleEntryCount"], 1)
         self.assertTrue(
             report["payload"]["negativeEvidencePolicy"]["providerFailuresDoNotPunishSource"]
         )
+
+    def test_parseable_empty_feed_is_not_productive_probe_evidence(self) -> None:
+        class EmptyFeedAdapter:
+            def probe_feeds(self, *, urls, sample_count, timeout_seconds=None):  # type: ignore[no-untyped-def]
+                return [
+                    {
+                        "url": urls[0],
+                        "feed_url": urls[0],
+                        "final_url": urls[0],
+                        "is_valid_rss": True,
+                        "feed_title": "Updates",
+                        "sample_entries": [],
+                    }
+                ]
+
+        class EmptyWebsiteAdapter:
+            def probe_websites(self, *, urls, sample_count, allow_browser=None):  # type: ignore[no-untyped-def]
+                return []
+
+        plan = build_probe_plan(candidate_url="https://example.org/feed.xml", candidate_kind_guess="rss")
+        report = execute_probe_plan(
+            plan["payload"],
+            feed_probe_adapter=EmptyFeedAdapter(),
+            website_probe_adapter=EmptyWebsiteAdapter(),
+        )
+        payload = report["payload"]
+
+        self.assertTrue(payload["technicalObservability"]["feedValid"])
+        self.assertFalse(payload["technicalObservability"]["productiveFeed"])
+        self.assertEqual(payload["technicalObservability"]["feedSampleEntryCount"], 0)
+        self.assertEqual(payload["observations"][0]["sampleEntryCount"], 0)
+        self.assertEqual(payload["observedArtifacts"], [])
 
     def test_api_probe_execute_persists_plan_and_report_artifacts(self) -> None:
         calls: list[tuple[str, tuple[object, ...]]] = []
@@ -390,9 +480,9 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 return {
                     "artifact_id": artifact_ids.get(params[0], "33333333-3333-4333-8333-333333333333"),
                     "artifact_type": params[0],
-                    "status": params[9],
-                    "payload_json": _unwrap_json_param(params[10]),
-                    "validation_json": _unwrap_json_param(params[11]),
+                    "status": params[10],
+                    "payload_json": _unwrap_json_param(params[11]),
+                    "validation_json": _unwrap_json_param(params[12]),
                 }
             raise AssertionError(f"Unexpected SQL: {sql}")
 
@@ -441,6 +531,8 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "observable": True,
                 "score": 0.85,
                 "feedValid": True,
+                "productiveFeed": True,
+                "feedSampleEntryCount": 3,
                 "staticWebsiteSignals": False,
             },
             "probeCost": {"requestsAttempted": 1, "browserRequestsAttempted": 0},
@@ -484,7 +576,13 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             probe_report={
                 "candidateUrl": "https://example.org/feed.xml",
                 "accessPattern": "public",
-                "technicalObservability": {"observable": True, "score": 0.86, "feedValid": True},
+                "technicalObservability": {
+                    "observable": True,
+                    "score": 0.86,
+                    "feedValid": True,
+                    "productiveFeed": True,
+                    "feedSampleEntryCount": 4,
+                },
                 "probeCost": {"requestsAttempted": 1},
                 "observations": [
                     {
@@ -519,7 +617,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
 
         self.assertTrue(artifact["validation"]["schemaValid"], artifact["validation"])
         self.assertEqual(artifact["payload"]["sourceScopeType"], "section")
-        self.assertEqual(artifact["payload"]["resolvedSourceUrl"], "https://example.org/news/2026/05")
+        self.assertEqual(artifact["payload"]["resolvedSourceUrl"], "https://example.org/news")
         self.assertEqual(validate_source_scope_resolution(artifact["payload"]), [])
 
     def test_scope_aware_understanding_blocks_single_item_auto_register(self) -> None:
@@ -700,7 +798,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                         }
                     ],
                     "artifactFit": 0.8,
-                    "technicalObservability": 0.8,
+                    "technicalObservability": _tech(0.8),
                     "evidenceDirectness": 0.8,
                     "sourceRoleConfidence": 0.8,
                     "risk": {"overallRisk": "low", "riskScore": 0.2},
@@ -724,6 +822,51 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "rss_feed_not_validated")
+
+    def test_probation_handoff_refuses_parseable_empty_rss_provider(self) -> None:
+        result = discovery_vnext_api.apply_probation_handoff_from_payload(
+            discovery_vnext_api.DiscoveryVNextProbationHandoffPayload(
+                sourceUnderstanding={
+                    "sourceUrl": "https://example.org/feed",
+                    "sourceRoleDescription": "Guessed feed.",
+                    "sourceVoice": "owner_or_operator",
+                    "artifactFreshnessKind": "recurring_feed",
+                    "signalProductionMode": "direct_event_feed",
+                    "observedArtifactTypes": ["article"],
+                    "canProduceSignals": [
+                        {
+                            "signalDescription": "Public update",
+                            "capability": "high",
+                            "capabilityScore": 0.8,
+                            "directness": "direct",
+                            "evidenceFromProbe": ["Feed probe parsed metadata but returned no sample entries."],
+                        }
+                    ],
+                    "artifactFit": 0.8,
+                    "technicalObservability": _tech(0.8),
+                    "evidenceDirectness": 0.8,
+                    "sourceRoleConfidence": 0.8,
+                    "risk": {"overallRisk": "low", "riskScore": 0.2},
+                    "routingConfidence": 0.8,
+                    "yieldIndependent": True,
+                    "reasonToKeep": "Retain guessed feed.",
+                    "reasonNotToAutoRegister": "Feed probe not productive.",
+                    "accessPattern": "public",
+                    "suggestedProviderType": "rss",
+                    "probeSummary": {"validFeed": True, "productiveFeed": False, "feedSampleEntryCount": 0},
+                },
+                routingDecision={
+                    "decision": "auto_register_probation",
+                    "policyVersion": "discovery-routing-vnext-1",
+                    "actions": [{"actionType": "create_probation_channel", "providerType": "rss"}],
+                },
+                sourceInventoryId="inventory-1",
+                providerType="rss",
+            )
+        )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "rss_feed_not_productive")
 
     def test_source_identity_key_excludes_run_interest_and_hypothesis_context(self) -> None:
         key = discovery_vnext_api.source_identity_key(
@@ -750,11 +893,11 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         rss_key = discovery_vnext_api.source_identity_key(
             canonical_url="https://www.example.org/feed.xml?utm_source=test",
             provider_type="rss",
-            source_understanding={"probeSummary": {"validFeed": True}},
+            source_understanding={"probeSummary": {"validFeed": True, "productiveFeed": True, "feedSampleEntryCount": 2}},
         )
 
-        self.assertEqual(website_key, "website|example.org|https://example.org/news")
-        self.assertEqual(api_key, "api|api.example.org|https://api.example.org/v1")
+        self.assertEqual(website_key, "website|example.org|https://example.org/news/item-1")
+        self.assertEqual(api_key, "api|api.example.org|https://api.example.org/v1/events/123")
         self.assertIn("feed.xml", rss_key)
         self.assertNotIn("utm_source", rss_key)
         self.assertNotIn("run_id", api_key)
@@ -871,6 +1014,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "canonical_url": "https://seller.example.org/services",
                 "canonical_domain": "seller.example.org",
                 "hypothesis_artifact_id": "hypothesis-a",
+                "hypothesis_id": "hypothesis-1",
                 "queryQuality": {"quality": "noisy"},
                 "rediscovery_count": 1,
             },
@@ -879,7 +1023,8 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "canonical_url": "https://authority.example.gov/updates",
                 "canonical_domain": "authority.example.gov",
                 "hypothesis_artifact_id": "hypothesis-a",
-                "queryQuality": {"quality": "useful_for_acquisition"},
+                "hypothesis_id": "hypothesis-1",
+                "queryQuality": {"quality": "useful_for_source_acquisition"},
                 "rediscovery_count": 1,
             },
             {
@@ -887,7 +1032,8 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "canonical_url": "https://authority.example.gov/news",
                 "canonical_domain": "authority.example.gov",
                 "hypothesis_artifact_id": "hypothesis-a",
-                "queryQuality": {"quality": "useful_for_acquisition"},
+                "hypothesis_id": "hypothesis-1",
+                "queryQuality": {"quality": "useful_for_source_acquisition"},
                 "rediscovery_count": 1,
             },
             {
@@ -895,6 +1041,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "canonical_url": "https://registry.example.org/directory",
                 "canonical_domain": "registry.example.org",
                 "hypothesis_artifact_id": "hypothesis-b",
+                "hypothesis_id": "hypothesis-2",
                 "queryQuality": {"quality": "useful_for_query_expansion"},
                 "rediscovery_count": 2,
             },
@@ -963,7 +1110,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.85,
-                "technicalObservability": 0.85,
+                "technicalObservability": _tech(0.85),
                 "evidenceDirectness": 0.8,
                 "sourceRoleConfidence": 0.8,
                 "risk": {"overallRisk": "low", "riskScore": 0.2},
@@ -973,7 +1120,12 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "reasonNotToAutoRegister": "No blocker.",
                 "accessPattern": "public",
                 "suggestedProviderType": "rss",
-                "probeSummary": {"validFeed": True},
+                "probeSummary": {
+                    "validFeed": True,
+                    "productiveFeed": True,
+                    "feedSampleEntryCount": 2,
+                    "feedFinalUrl": "https://feeds.example.org/updates.xml",
+                },
             },
             routingDecision={
                 "decision": "auto_register_probation",
@@ -994,6 +1146,8 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         self.assertEqual(result["status"], "applied")
         self.assertEqual(result["sourceInventory"]["registered_channel_id"], "channel-1")
         self.assertEqual(registrar.calls[0]["provider_type"], "rss")
+        self.assertEqual(registrar.calls[0]["sources"][0]["url"], "https://feeds.example.org/updates.xml")
+        self.assertEqual(registrar.calls[0]["sources"][0]["feed_url"], "https://feeds.example.org/updates.xml")
         self.assertTrue(registrar.calls[0]["enabled"])
         self.assertFalse(registrar.calls[0]["dry_run"])
 
@@ -1034,7 +1188,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.7,
-                "technicalObservability": 0.7,
+                "technicalObservability": _tech(0.7),
                 "evidenceDirectness": 0.7,
                 "sourceRoleConfidence": 0.7,
                 "risk": {"overallRisk": "low", "riskScore": 0.2},
@@ -1179,9 +1333,9 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         self.assertEqual(rows[0]["acquisitionEvidence"]["paths"][0]["provider"], "fixture")
         self.assertEqual(rows[1]["candidateKindGuess"], "rss")
         self.assertEqual(report["observedResultMix"]["duplicates"], 1)
-        self.assertIn("primaryOrOwnerSources", report["observedResultMix"])
+        self.assertIn("official_or_owner_sources", report["observedResultMix"])
         self.assertEqual(report["queryPurpose"], "find_direct_sources")
-        self.assertEqual(report["quality"], "needs_refinement")
+        self.assertEqual(report["quality"], "useful_for_source_acquisition")
 
     def test_candidate_rows_preserve_live_provider_evidence(self) -> None:
         rows = build_candidate_rows(
@@ -1220,7 +1374,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             )
 
         self.assertEqual(len(result["candidates"]), 1)
-        self.assertEqual(result["queryQualityReport"]["quality"], "needs_refinement")
+        self.assertEqual(result["queryQualityReport"]["quality"], "useful_for_source_acquisition")
 
     def test_live_acquisition_ranking_filters_ads_and_requires_interest_cues(self) -> None:
         ranked = discovery_vnext_api._rank_search_results(
@@ -1259,17 +1413,17 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 return {
                     "artifact_id": "quality-artifact",
                     "artifact_type": params[0],
-                    "status": params[9],
-                    "payload_json": _unwrap_json_param(params[10]),
-                    "validation_json": _unwrap_json_param(params[11]),
+                    "status": params[10],
+                    "payload_json": _unwrap_json_param(params[11]),
+                    "validation_json": _unwrap_json_param(params[12]),
                 }
             if normalized.startswith("insert into discovery_candidates"):
                 return {
                     "candidate_id": "candidate-1",
-                    "canonical_url": params[4],
-                    "canonical_domain": params[5],
-                    "query_quality_artifact_id": params[3],
-                    "rediscovery_count": params[8],
+                    "canonical_url": params[8],
+                    "canonical_domain": params[9],
+                    "query_quality_artifact_id": params[7],
+                    "rediscovery_count": params[12],
                 }
             raise AssertionError(f"Unexpected SQL: {sql}")
 
@@ -1338,9 +1492,9 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             return {
                 "artifact_id": "artifact-1",
                 "artifact_type": params[0],
-                "status": params[9],
-                "payload_json": _unwrap_json_param(params[10]),
-                "validation_json": _unwrap_json_param(params[11]),
+                "status": params[10],
+                "payload_json": _unwrap_json_param(params[11]),
+                "validation_json": _unwrap_json_param(params[12]),
             }
 
         payload = discovery_vnext_api.DiscoveryVNextArtifactCreatePayload(
@@ -1378,13 +1532,13 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             return {
                 "artifact_id": "artifact-2",
                 "artifact_type": params[0],
-                "parent_artifact_ids": params[4],
-                "memory_mode": params[6],
-                "lens": params[7],
-                "policy_version": params[8],
-                "status": params[9],
-                "payload_json": _unwrap_json_param(params[10]),
-                "validation_json": _unwrap_json_param(params[11]),
+                "parent_artifact_ids": params[5],
+                "memory_mode": params[7],
+                "lens": params[8],
+                "policy_version": params[9],
+                "status": params[10],
+                "payload_json": _unwrap_json_param(params[11]),
+                "validation_json": _unwrap_json_param(params[12]),
             }
 
         payload = discovery_vnext_api.DiscoveryVNextArtifactCreatePayload(
@@ -1452,9 +1606,9 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 return {
                     "artifact_id": artifact_ids.get(artifact_type, "33333333-3333-4333-8333-333333333333"),
                     "artifact_type": artifact_type,
-                    "status": params[9],
-                    "payload_json": _unwrap_json_param(params[10]),
-                    "validation_json": _unwrap_json_param(params[11]),
+                    "status": params[10],
+                    "payload_json": _unwrap_json_param(params[11]),
+                    "validation_json": _unwrap_json_param(params[12]),
                 }
             if normalized.startswith("insert into source_inventory"):
                 return {
@@ -1505,7 +1659,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.9,
-                "technicalObservability": 0.85,
+                "technicalObservability": _tech(0.85),
                 "evidenceDirectness": 0.8,
                 "sourceRoleConfidence": 0.8,
                 "risk": {"overallRisk": "low", "riskScore": 0.15},
@@ -1515,7 +1669,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "reasonNotToAutoRegister": "No blocker.",
                 "accessPattern": "public",
                 "suggestedProviderType": "rss",
-                "probeSummary": {"validFeed": True},
+                "probeSummary": {"validFeed": True, "productiveFeed": True, "feedSampleEntryCount": 2},
             },
             createdBy="operator",
         )
@@ -1544,9 +1698,9 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 return {
                     "artifact_id": artifact_ids.get(params[0], "33333333-3333-4333-8333-333333333333"),
                     "artifact_type": params[0],
-                    "status": params[9],
-                    "payload_json": _unwrap_json_param(params[10]),
-                    "validation_json": _unwrap_json_param(params[11]),
+                    "status": params[10],
+                    "payload_json": _unwrap_json_param(params[11]),
+                    "validation_json": _unwrap_json_param(params[12]),
                 }
             if normalized.startswith("insert into source_inventory"):
                 return {"source_inventory_id": "inventory-2", "current_state": params[3]}
@@ -1597,7 +1751,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "artifactFit": 0.8,
-                "technicalObservability": 0.7,
+                "technicalObservability": _tech(0.7),
                 "evidenceDirectness": 0.7,
                 "sourceRoleConfidence": 0.7,
                 "risk": {"overallRisk": "low", "riskScore": 0.2},

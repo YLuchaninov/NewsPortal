@@ -123,6 +123,9 @@ const megaLoopPreviewSchema = {
   required: ["discoveryBrief"],
   properties: {
     discoveryBrief: { type: "object", additionalProperties: true },
+    loopStrategy: { type: "string" },
+    coveragePolicy: { type: "object", additionalProperties: true },
+    adaptivePolicy: { type: "object", additionalProperties: true },
     maxBatches: { type: "number" },
     locale: { type: "string" },
     previousHypotheses: { type: "array", items: { type: "object", additionalProperties: true } },
@@ -141,6 +144,8 @@ const candidatesNormalizeSchema = {
     queryAttemptId: { type: "string" },
     query: { type: "string" },
     queryFamilyIntent: { type: "string" },
+    lens: { type: "string" },
+    memoryMode: { type: "string" },
     vnextRunId: { type: "string" },
     runId: { type: "string" },
     interestId: { type: "string" },
@@ -579,7 +584,7 @@ export const DISCOVERY_VNEXT_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "discovery.source_inventory.resolve_scopes",
-    "Preview or apply non-destructive SourceScopeResolution metadata for bounded source inventory rows.",
+    "Preview or apply bounded SourceScopeResolution metadata for source inventory rows; apply may reversible-pause invalid vNext channel projections.",
     "write.discovery",
     sourceInventoryResolveScopesSchema,
     async ({ sdk, token }, args) =>
@@ -680,6 +685,7 @@ export const DISCOVERY_VNEXT_CANONICAL_ALIAS_MCP_TOOLS: readonly McpToolDefiniti
   aliasTool(toolByName("discovery.probation.handoff"), "discovery_vnext.apply_probation_handoff", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.source_inventory.explain"), "discovery_vnext.explain_source_inventory", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.source_inventory.resolve_scopes"), "discovery_vnext.resolve_source_inventory_scopes", "Canonical vNext alias for"),
+  aliasTool(toolByName("discovery.source_inventory.resolve_scopes"), "maintenance.discovery.source_scope_reresolve", "Canonical maintenance alias for"),
   aliasTool(toolByName("discovery.feedback.submit"), "discovery_vnext.submit_feedback", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.rollback.prepare"), "discovery_vnext.prepare_rollback", "Canonical vNext alias for"),
   aliasTool(toolByName("discovery.rollback.apply"), "discovery_vnext.apply_rollback", "Canonical vNext alias for"),

@@ -65,9 +65,50 @@ function interpolateUrlTemplate(template: string, record: Record<string, unknown
 function getByFirstPath(record: Record<string, unknown>, path: string | string[]): unknown {
   const paths = Array.isArray(path) ? path : [path];
   for (const candidate of paths) {
-    const value = getByPath(record, candidate);
+    const value = getVirtualField(record, candidate) ?? getByPath(record, candidate);
     if (value != null && String(value).trim() !== "") {
       return value;
+    }
+  }
+  return undefined;
+}
+
+function getVirtualField(record: Record<string, unknown>, path: string): unknown {
+  if (path === "firstDocumentUrl") {
+    return firstStringFrom(record, [
+      "document.url",
+      "document.href",
+      "documents.0.url",
+      "documents.0.href",
+      "attachments.0.url",
+      "attachments.0.href",
+      "files.0.url",
+      "links.documents.0.url",
+    ]);
+  }
+  if (path === "firstItemUrl") {
+    return firstStringFrom(record, ["url", "href", "link", "links.0.url", "items.0.url", "detail.url", "detail.href"]);
+  }
+  if (path === "firstIssuerName") {
+    return firstStringFrom(record, [
+      "issuer.name",
+      "issuer",
+      "owner.name",
+      "owner",
+      "buyer.name",
+      "buyer",
+      "entity.name",
+      "organization.name",
+    ]);
+  }
+  return undefined;
+}
+
+function firstStringFrom(record: Record<string, unknown>, paths: string[]): string | undefined {
+  for (const path of paths) {
+    const value = getByPath(record, path);
+    if (value != null && String(value).trim() !== "") {
+      return String(value).trim();
     }
   }
   return undefined;
@@ -145,6 +186,8 @@ export async function executeDeclarativeApiRuntime(input: {
         continue;
       }
       const publishedAt = String(getByFirstPath(record, input.apiConfig.publishedAtField) ?? input.fetchedAt);
+      const documentUrl = String(getVirtualField(record, "firstDocumentUrl") ?? "").trim() || null;
+      const issuerOrOwner = String(getVirtualField(record, "firstIssuerName") ?? "").trim() || null;
       latestPublishedAt = (latestPublishedAt ?? "") > publishedAt ? latestPublishedAt : publishedAt;
       items.push({
         externalArticleId:
@@ -162,6 +205,25 @@ export async function executeDeclarativeApiRuntime(input: {
           fetchedAt: input.fetchedAt,
           pageIndex,
           sourceItem: record,
+          itemObservation: {
+            title: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.titleField) ?? "Untitled article")),
+            source_url: input.fetchUrl,
+            item_url: resolveApiItemUrl(rawUrl, page.finalUrl),
+            document_url: documentUrl,
+            issuer_or_owner: issuerOrOwner,
+            published_at: publishedAt,
+            deadline_or_end_date: firstStringFrom(record, ["deadline", "deadlineAt", "endDate", "closingDate", "expiresAt"]) ?? null,
+            body_or_scope: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.bodyField) ?? "")),
+            evidence_snippets: [
+              normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.titleField) ?? "")),
+              normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.leadField) ?? "")),
+            ].filter(Boolean),
+            language: String(getByFirstPath(record, input.apiConfig.languageField) ?? input.channelLanguage ?? "").trim() || null,
+            geo: firstStringFrom(record, ["geo", "location", "country", "region"]) ?? null,
+            raw_payload_json: record,
+            source_scope_artifact_id: null,
+            source_understanding_artifact_id: null,
+          },
         },
       });
     }

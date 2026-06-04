@@ -31,16 +31,20 @@ def build_probation_source_candidate(
         if isinstance(source_understanding.get("sourceScopeResolution"), dict)
         else {}
     )
-    source_url = str(scope_resolution.get("resolvedSourceUrl") or routing_decision.get("resolvedSourceUrl") or source_understanding.get("sourceUrl") or "").strip()
-    seed_item_url = str(scope_resolution.get("seedItemUrl") or routing_decision.get("seedItemUrl") or source_understanding.get("seedItemUrl") or "").strip() or None
     probe_summary = (
         source_understanding.get("probeSummary")
         if isinstance(source_understanding.get("probeSummary"), dict)
         else {}
     )
+    rss_feed_url = str(probe_summary.get("feedFinalUrl") or "").strip()
+    source_url = str(scope_resolution.get("resolvedSourceUrl") or routing_decision.get("resolvedSourceUrl") or source_understanding.get("sourceUrl") or "").strip()
+    if selected_provider_type == "rss" and rss_feed_url:
+        source_url = rss_feed_url
+    seed_item_url = str(scope_resolution.get("seedItemUrl") or routing_decision.get("seedItemUrl") or source_understanding.get("seedItemUrl") or "").strip() or None
     return {
         "url": source_url,
         "source_url": source_url,
+        "feed_url": source_url if selected_provider_type == "rss" else None,
         "provider_type": selected_provider_type,
         "title": source_understanding.get("sourceRoleDescription") or source_url,
         "created_by": created_by,
@@ -147,8 +151,11 @@ def _handoff_guard(
         return "access_pattern_not_public"
     if scope_type in {"single_item", "context_page", "api_endpoint", "document_collection", "blocked_or_unusable", "search_endpoint"}:
         return f"source_scope_not_channel_eligible:{scope_type}"
-    if provider_type == "rss" and summary.get("validFeed") is not True:
-        return "rss_feed_not_validated"
+    if provider_type == "rss":
+        if summary.get("validFeed") is not True:
+            return "rss_feed_not_validated"
+        if summary.get("productiveFeed") is not True:
+            return "rss_feed_not_productive"
     if decision == "cheap_watch" and routing_decision.get("allowChannelCreation") is not True:
         return "cheap_watch_channel_creation_not_enabled"
     if decision == "auto_register_probation":

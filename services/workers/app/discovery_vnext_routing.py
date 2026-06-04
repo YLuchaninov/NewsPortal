@@ -76,7 +76,7 @@ def score_components(source_understanding: dict[str, Any]) -> dict[str, float]:
     return {
         "capabilityFit": round(sum(capabilities) / max(1, len(capabilities)), 4),
         "artifactFit": round(clamp_score(source_understanding.get("artifactFit")), 4),
-        "technicalObservability": round(clamp_score(source_understanding.get("technicalObservability")), 4),
+        "technicalObservability": round(_technical_observability_score(source_understanding.get("technicalObservability")), 4),
         "evidenceDirectness": round(clamp_score(source_understanding.get("evidenceDirectness")), 4),
         "riskScore": round(_risk_score(risk), 4),
         "routingConfidence": round(clamp_score(source_understanding.get("routingConfidence")), 4),
@@ -105,6 +105,12 @@ def _risk_label_score(value: Any) -> float:
         "high": 0.9,
         "unknown": 0.65,
     }.get(str(value or "unknown"), 0.65)
+
+
+def _technical_observability_score(value: Any) -> float:
+    if isinstance(value, dict):
+        return clamp_score(value.get("score"))
+    return clamp_score(value)
 
 
 def route_source_understanding(
@@ -306,7 +312,7 @@ def _is_auto_register_eligible_source_mode(
 def _provider_validated_for_auto_register(source_understanding: dict[str, Any], provider_type: str) -> bool:
     summary = source_understanding.get("probeSummary") if isinstance(source_understanding.get("probeSummary"), dict) else {}
     if provider_type == "rss":
-        return summary.get("validFeed") is True
+        return summary.get("productiveFeed") is True
     if provider_type in {"website", "document_portal"}:
         hints = summary.get("pageRoleHints") if isinstance(summary.get("pageRoleHints"), dict) else {}
         return bool(
@@ -320,7 +326,7 @@ def _provider_validated_for_auto_register(source_understanding: dict[str, Any], 
 
 
 def _is_cheap_watch_eligible(source_understanding: dict[str, Any]) -> bool:
-    if str(source_understanding.get("sourceScopeType") or "") in {"blocked_or_unusable", "api_endpoint", "single_item", "context_page"}:
+    if str(source_understanding.get("sourceScopeType") or "") in {"blocked_or_unusable", "api_endpoint", "single_item", "context_page", "search_endpoint"}:
         return False
     mode = str(source_understanding.get("signalProductionMode") or "unknown")
     return mode in {
@@ -342,9 +348,13 @@ def _scope_gate_decision(source_understanding: dict[str, Any]) -> str | None:
         source_understanding.get("adapterRequired") and provider_type in {"api", "document_portal"}
     ):
         return "adapter_backlog"
+    if scope_type == "single_item" and (source_understanding.get("adapterRequired") or provider_type == "document_portal"):
+        return "adapter_backlog"
     if scope_type in {"single_item", "context_page"}:
         return "inventory_context"
     if scope_type == "feed" and (provider_type != "rss" or summary.get("validFeed") is not True):
+        return "manual_review"
+    if scope_type == "feed" and summary.get("productiveFeed") is not True:
         return "manual_review"
     if scope_type == "search_endpoint" and not summary.get("listingSignals"):
         return "manual_review"
@@ -359,6 +369,8 @@ def _adapter_need(decision: str, source_understanding: dict[str, Any], provider_
         return "custom_adapter"
     if scope_type == "document_collection":
         return "parser"
+    if scope_type == "search_endpoint":
+        return "list_detail_adapter"
     if str(source_understanding.get("accessPattern") or "") == "requires_auth":
         return "auth_config"
     return "custom_adapter"
